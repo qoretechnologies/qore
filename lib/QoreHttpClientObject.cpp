@@ -5402,6 +5402,16 @@ QoreStringNode* QoreHttpClientObject::getProxyURL()  {
     return http_priv->proxy_connection.get_url();
 }
 
+QoreStringNode* QoreHttpClientObject::getProxyURL(int code)  {
+    SafeLocker sl(priv->m);
+
+    if (!http_priv->proxy_connection.has_url()) {
+        return nullptr;
+    }
+
+    return http_priv->proxy_connection.get_url(code);
+}
+
 QoreStringNode* QoreHttpClientObject::getSafeProxyURL()  {
     SafeLocker sl(priv->m);
 

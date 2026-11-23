@@ -840,7 +840,11 @@ object sub lookalike() {
         # brackets in the userinfo do not make the host bracketed
         HttpClientCreatorProof r80 = HttpClientCreatorProof::get("http://[::1]:80/");
         assertFalse(r80.allowsUrl("http://[x]:p@::1:80/"), "an IPv6 host without brackets after bracketed userinfo");
-        assertTrue(r80.allowsUrl("http://u:p@[::1]:80/"), "a bracketed IPv6 host after userinfo");
+        # a checked URL with user information allows nothing (its credentials can make it read as another target;
+        # the gate's callers give the target without them, qore#7236), but a proof's own URL can have them
+        assertFalse(r80.allowsUrl("http://u:p@[::1]:80/"), "a checked URL with user information");
+        assertTrue(HttpClientCreatorProof::get("http://u:p@[::1]:80/").allowsUrl("http://[::1]:80/"),
+            "a proof of a bracketed IPv6 host after userinfo");
         assertFalse(HttpClientCreatorProof::get("http://::1:8080/").allowsUrl("http://::1:8080/"),
             "a proof of an IPv6 host without brackets");
         HttpClientCreatorProof r6p = HttpClientCreatorProof::get("http://h/", {"proxy": "http://[::1]:3128"});

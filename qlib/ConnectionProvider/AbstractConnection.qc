@@ -1398,7 +1398,9 @@ conn.checkSandboxAccess(True);
         that was lent the connection may connect only to the connection's own target, as with the clients that
         @ref get() and @ref getAsync() create for it (qore#7262): the origin of \a url (TLS or not, host, port) and the
         proxy must be the ones that the proof that the connection took from the code that created it is bound to; a
-        connection without a proof, or another target, is refused before any connection is attempted.
+        connection without a proof, or another target, is refused before any connection is attempted.  A URL whose
+        IPv6 host is not in brackets is ambiguous and refused as well.  A UNIX domain socket target is compared by its
+        socket path.
 
         @param url the URL that the client connects to (an \c http or \c https URL)
         @param proxy_url the URL of the client's proxy, if any
@@ -1419,6 +1421,46 @@ conn.checkSandboxAccess(True);
                 "functional domain and may connect only to the target of a connection that unrestricted code created "
                 "and lent to it", name);
         }
+    }
+
+    #! Returns the target of a configured URL (its scheme, host and port), without its user information and path
+    /** For a check with checkLentNetworkTarget() of a URL or proxy URL that the connection's client parses as it is (a
+        configured URL, which can hold credentials): the target is rebuilt from what parse_url() gives, which is what
+        the client connects to: an IPv6 address in brackets, and a UNIX domain socket path as \c "socket=" followed by
+        the path with every reserved character encoded
+
+        @param url the configured URL
+
+        @return the URL of its target
+
+        @throw PERMISSION-DENIED the URL cannot be parsed or has no host, so its target cannot be checked
+
+        @since %ConnectionProvider 3.1
+    */
+    final private string getLentTargetUrl(string url) {
+        try {
+            hash<UrlInfo> u = parse_url(url);
+            # a host (not a socket path) with "?", "#", "/" or white space is not rebuilt: a client can read the host of
+            # such a URL otherwise than parse_url() reads the URL (qore#7236)
+            if (u.host.val() && (u.host =~ /^\// || u.host !~ /[?#\/\s]/)) {
+                string rv = (u.protocol ?? "http") + "://";
+                if (u.host =~ /^\//) {
+                    if (!u.port) {
+                        return rv + "socket=" + encode_url(u.host, True);
+                    }
+                } else {
+                    rv += u.host =~ /:/ ? "[" + u.host + "]" : u.host;
+                    if (u.port) {
+                        rv += ":" + u.port;
+                    }
+                    return rv;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # refused below
+        }
+        throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the NETWORK functional "
+            "domain, and the target of a URL of the connection cannot be checked", name);
     }
 
     #! Marks the connection up after a connection was made successfully with get(), unless a failed ping marked it down

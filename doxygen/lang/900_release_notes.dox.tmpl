@@ -2782,6 +2782,11 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref Qore::HTTPClient::getURL() "HTTPClient::getURL()", @ref Qore::HTTPClient::getProxyURL() "getProxyURL()"
+      and @ref Qore::HTTPClient::getSafeProxyURL() "getSafeProxyURL()" give an IPv6 host in brackets and the path of a
+      UNIX domain socket with every reserved character encoded; the URL was ambiguous without them, and
+      @ref Qore::HTTPClient::getProxyURL() "getProxyURL()" takes the parts of the URL to give, as \c getURL() does
+      (<a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>)
     - an operation on a container that raises an exception after changing it, such as a hash merge that stores a
       key before it refuses another one, keeps the object counts of the containers above it and is seen by the
       @ref garbage_collection "garbage collector", which collects a cycle that it made (issue #7322)

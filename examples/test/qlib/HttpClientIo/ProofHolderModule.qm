@@ -1,0 +1,28 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# a module whose class static holds an HTTP client creator proof, as a module's cache of shared clients does
+
+%modern
+
+%requires HttpClientIo
+
+module ProofHolderModule {
+    version = "1.0";
+    desc = "test module holding a creator proof in a class static";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace ProofHolderModule {
+public class ProofHolder {
+    public {
+        static *HttpClientIo::HttpClientCreatorProof proof;
+    }
+
+    static hold(string url) {
+        proof = HttpClientIo::HttpClientCreatorProof::get(url);
+    }
+}
+}
