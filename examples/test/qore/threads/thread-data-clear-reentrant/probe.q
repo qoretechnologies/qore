@@ -10,6 +10,15 @@
 # thread do not use global variables
 Queue events();
 
+# saves a value in the thread data; a save that is refused is an event
+sub save(Queue events, string key, auto value) {
+    try {
+        save_thread_data(key, value);
+    } catch (hash<ExceptionInfo> ex) {
+        events.push(sprintf("save %s: %s", key, ex.err));
+    }
+}
+
 class D {
     private {
         string mode;
@@ -25,14 +34,14 @@ class D {
         switch (mode) {
             # a value saved to a key that the clearing has passed, whose destructor adds members
             case "A":
-                save_thread_data("p0", new D("D1", events));
+                save(events, "p0", new D("D1", events));
                 break;
             case "D1":
-                save_thread_data("Q", new D("noop", events));
+                save(events, "Q", new D("noop", events));
                 for (int i = 0; i < 40; ++i) {
-                    save_thread_data("q" + i, i);
+                    save(events, "q" + i, i);
                 }
-                save_thread_data("R", new D("readQ", events));
+                save(events, "R", new D("readQ", events));
                 break;
             # a later destructor looks up the members that an earlier one added
             case "readQ": {
@@ -46,7 +55,7 @@ class D {
                     }
                 }
                 events.push(sprintf("readQ: %d", n));
-                save_thread_data("late", 1);
+                save(events, "late", 1);
                 break;
             }
         }
@@ -82,7 +91,7 @@ class T {
                 break;
             case "add":
                 for (int i = 0; i < 50; ++i) {
-                    save_thread_data("new-" + i, i);
+                    save(events, "new-" + i, i);
                 }
                 break;
         }
@@ -95,6 +104,30 @@ class T {
         hash<auto> all = get_all_thread_data();
         # the values of the 60 keys "p<n>" that are not freed yet, the keys and the value of the key after its own
         events.push(sprintf("%s: values %d, keys %d, after %y", mode, n, all.size(), all.after));
+    }
+}
+
+# a value whose destructor saves a new value of its class to its own key (mode "same") or to a new key (mode "new")
+class Resave {
+    private {
+        string mode;
+        int n;
+        Queue events;
+    }
+
+    constructor(string mode, int n, Queue events) {
+        self.mode = mode;
+        self.n = n;
+        self.events = events;
+    }
+
+    destructor() {
+        events.push(sprintf("resave %d freed", n));
+        # bounded, so that a clearing that does not end shows as the bound, not as a hang: a refused save frees the new
+        # value at once, and its destructor saves another one, which is refused in turn, so the chain is recursive
+        if (n < 10) {
+            save(events, mode == "same" ? "r" : "r" + (n + 1), new Resave(mode, n + 1, events));
+        }
     }
 }
 
@@ -146,6 +179,16 @@ foreach string how in ("direct", "pool") {
             }
         });
         show(mode + " " + how);
+    }
+}
+# destructors that save values again and again: the clearing ends, as nothing can be saved while the values saved
+# during the release are freed
+foreach string how in ("direct", "pool") {
+    foreach string mode in ("same", "new") {
+        run(how, sub () {
+            save_thread_data("r", new Resave(mode, 0, events));
+        });
+        show("resave " + mode + " " + how);
     }
 }
 # the thread data of this thread is empty after the clearing

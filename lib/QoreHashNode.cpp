@@ -95,45 +95,72 @@ const TypedHashDecl* qore_hash_private::getInheritingHashDecl(const TypedHashDec
 }
 
 void qore_hash_private::clear(ExceptionSink* xsink, bool reverse) {
-    // the keys (and their hashes) of the members with values, in the order in which their values are freed: a member
-    // is looked up again before its value is freed, as the code that freed the values before can have deleted it
-    std::vector<std::pair<std::string, size_t>> keys;
-    while (true) {
-        keys.clear();
-        keys.reserve(member_list.size());
-        auto add_key = [&keys](const HashMember* m) {
-            if (!m->val.isNothing()) {
-                keys.emplace_back(m->key, m->hash);
+    // the first phase: the keys (and their hashes) of the members with values when the clearing starts, in the order
+    // in which their values are freed; each member is looked up again before its value is freed, as the code that
+    // freed the values before can have deleted it
+    {
+        std::vector<std::pair<std::string, size_t>> keys;
+        bool have_keys = true;
+        try {
+            keys.reserve(member_list.size());
+            auto add_key = [&keys](const HashMember* m) {
+                if (!m->val.isNothing()) {
+                    keys.emplace_back(m->key, m->hash);
+                }
+            };
+            if (reverse) {
+                for (qhlist_t::reverse_iterator i = member_list.rbegin(), e = member_list.rend(); i != e; ++i) {
+                    add_key(*i);
+                }
+            } else {
+                for (HashMember* m : member_list) {
+                    add_key(m);
+                }
             }
-        };
-        if (reverse) {
-            for (qhlist_t::reverse_iterator i = member_list.rbegin(), e = member_list.rend(); i != e; ++i) {
-                add_key(*i);
-            }
-        } else {
-            for (qhlist_t::iterator i = member_list.begin(), e = member_list.end(); i != e; ++i) {
-                add_key(*i);
-            }
+        } catch (std::bad_alloc&) {
+            // all values are freed in the second phase, which allocates nothing
+            have_keys = false;
         }
-        if (keys.empty()) {
-            break;
-        }
-        for (const std::pair<std::string, size_t>& k : keys) {
-            HashMember* m = findMember(qore_hash_lookup_key(k.first.c_str(), k.first.size(), k.second));
-            if (!m || m->val.isNothing()) {
-                continue;
+        if (have_keys) {
+            for (const std::pair<std::string, size_t>& k : keys) {
+                HashMember* m = findMember(qore_hash_lookup_key(k.first.c_str(), k.first.size(), k.second));
+                if (m && !m->val.isNothing()) {
+                    freeMemberValue(m, xsink);
+                }
             }
-            // the value is taken from its member before it is freed
-            QoreValue v = m->val;
-            m->val = QoreValue();
-            if (needs_scan(v)) {
-                incScanCount(-1);
-            }
-            v.discard(xsink);
         }
     }
+
+    // the second phase: the values saved in the first, while nothing can be saved, so that no value is left
+    {
+        struct RefuseSavesHelper {
+            qore_hash_private& h;
+            bool old;
+
+            RefuseSavesHelper(qore_hash_private& h) : h(h), old(h.refuse_saves) {
+                h.refuse_saves = true;
+            }
+
+            ~RefuseSavesHelper() {
+                h.refuse_saves = old;
+            }
+        } rsh(*this);
+        while (HashMember* m = firstMemberWithValue(reverse)) {
+            freeMemberValue(m, xsink);
+        }
+    }
+
     // no member has a value, so no code runs when the members are deleted
     freeMembers(xsink);
+}
+
+int qore_hash_private::checkClearingSave(ExceptionSink* xsink) const {
+    if (refuse_saves) {
+        xsink->raiseException("DESTRUCTOR-ERROR", "illegal save of thread-local data while the values saved during "
+            "the release of thread-local data are freed");
+        return -1;
+    }
+    return 0;
 }
 
 HashMember* qore_hash_private::createMemberKnownAbsent(const char* key) {

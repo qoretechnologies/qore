@@ -15,9 +15,10 @@
 /** Thread-local data is cleared by delete_all_thread_data(), at the end of a thread and at the end of a pool task;
     the destructors of its values can use it.  The probe's destructors add values to keys that the clearing has
     passed (and the destructors of those add more members, which a later destructor looks up), delete and remove
-    their own key and a later key, clear all thread data and add many keys, and read the keys freed before and after
-    them.  A destructor reads the values not freed yet and never a freed member; the output must be the expected one
-    in every execution mode.  The children run with the macOS allocator scribbling freed memory, so that a read of a
+    their own key and a later key, clear all thread data and add many keys, read the keys freed before and after
+    them, and save new values again and again.  A destructor reads the values not freed yet and never a freed member,
+    and the values saved during the release are freed while nothing can be saved, so that the release ends; the
+    output must be the expected one in every execution mode.  The children run with the macOS allocator scribbling freed memory, so that a read of a
     freed member shows.
 */
 class ThreadDataClearReentrantTest inherits QUnit::Test {
@@ -40,19 +41,23 @@ class ThreadDataClearReentrantTest inherits QUnit::Test {
     }
 
     testClear() {
-        # the expected output has the results that the clearing is about: a destructor reads the 30 values after
-        # its own and the key after it, also when it deleted or removed its own key, and not the key after it when it
-        # deleted that; the values added while the data is cleared are freed, and the data is empty after it
-        assertTrue(expected =~ /^self-delete pool: \[\x22self-delete: values 30, keys 61, after \\\x22x\\\x22\x22\]$/m);
-        assertTrue(expected =~ /^self-remove direct: \[\x22self-remove: values 30, keys 61, after \\\x22x\\\x22\x22\]$/m);
-        assertTrue(expected =~ /^next-delete direct: \[\x22next-delete: values 30, keys 61, after null\x22\]$/m);
-        assertTrue(expected =~ /^all pool: \[\x22all: values 0, keys 0, after null\x22\]$/m);
-        assertTrue(expected =~ /^phase2 pool: \[\x22readQ: 0\x22\]$/m);
-        assertTrue(expected =~ /^main keys: \[\]$/m);
         string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_JIT_SYNC_COMPILE=1 MallocScribble=1 "
             "MallocPreScribble=1", libqore_dir, libqore_dir);
         foreach string mode in (ExecModes) {
-            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, probe)), mode);
+            string out = backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, probe));
+            assertEq(expected, out, mode);
+            # the results that the clearing is about: a destructor reads the 30 values after its own and the key after
+            # it, also when it deleted or removed its own key, and not the key after it when it deleted that
+            assertTrue(out =~ /^self-delete pool: \[\x22self-delete: values 30, keys 61, after \\\x22x\\\x22\x22\]$/m,
+                mode + " self-delete");
+            assertTrue(out =~ /^next-delete direct: \[\x22next-delete: values 30, keys 61, after null\x22\]$/m,
+                mode + " next-delete");
+            # a destructor that saves a value again and again: the value saved during the release is freed, and its
+            # destructor cannot save another one, so the release ends
+            assertTrue(out =~ /^resave same pool: \[\x22resave 0 freed\x22, \x22resave 1 freed\x22, \x22save r: DESTRUCTOR-ERROR\x22, /m,
+                mode + " resave");
+            # the thread data of the main thread is empty after its clearing
+            assertTrue(out =~ /^main keys: \[\]$/m, mode + " main keys");
         }
     }
 }

@@ -242,6 +242,9 @@ public:
     //! true if the weak holders of the hash hold one reference of their own since its free started (see
     //! QoreContainerWeakRefs)
     bool weak_hold = false;
+    //! true while the values that were saved in a hash of thread-local data during its release are freed: nothing can
+    //! be saved in it then (see clear() and checkClearingSave())
+    bool refuse_saves = false;
     //! the estimated memory of the members (see sbMemberSize()); always kept, so that it is right when charged
     size_t sb_bytes = 0;
     //! the sandbox memory charge of the members (see design/sandbox-resource-limits.md); synced with sb_bytes
@@ -1046,14 +1049,53 @@ public:
         thread-local data of a pooled thread, reject changes, and made its eventual release look like the release of
         a freed hash.
 
-        Code that runs when a value is freed (a destructor) can read and change the hash (ex: thread-local data):
-        the values are freed one at a time in the order of the members, each taken from its member first, while the
-        values not freed yet can still be read; no iterator of the member list is held while a value is freed, and no
-        member is deleted while it is in the key map, which reads the hashes of the members in a bucket when it is
-        searched (see hm_hm_t; qore#7265).  The values that code adds while the hash is cleared are freed in the
-        same way, and the members are deleted when no member has a value.
+        Code that runs when a value is freed (a destructor) can read and change the hash (ex: thread-local data), in
+        two phases (qore#7265):
+        - first the values that the hash has when the clearing starts are freed, one at a time in the order of the
+          members, each taken from its member first: their destructors can read the values not freed yet and save
+          values in the hash;
+        - then the values saved in the first phase are freed in the same way, while nothing can be saved in the hash
+          (checkClearingSave()): the clearing ends also when destructors save values again and again, as the release
+          of thread_local variables does (see thread_local_vars_finalizing()).
+
+        No iterator of the member list is held while a value is freed, and no member is deleted while it is in the key
+        map, which reads the hashes of the members in a bucket when it is searched (see hm_hm_t); the members are
+        deleted when no member has a value.  If the keys of the first phase cannot be allocated, all values are freed
+        in the second phase.
     */
     DLLLOCAL void clear(ExceptionSink* xsink, bool reverse);
+
+    //! raises \c DESTRUCTOR-ERROR and returns -1 if nothing can be saved in this hash of thread-local data now (see
+    //! clear())
+    DLLLOCAL int checkClearingSave(ExceptionSink* xsink) const;
+
+    //! returns the first member (or the last, if \a reverse) that has a value, or nullptr
+    DLLLOCAL HashMember* firstMemberWithValue(bool reverse) const {
+        if (reverse) {
+            for (qhlist_t::const_reverse_iterator i = member_list.rbegin(), e = member_list.rend(); i != e; ++i) {
+                if (!(*i)->val.isNothing()) {
+                    return *i;
+                }
+            }
+        } else {
+            for (HashMember* m : member_list) {
+                if (!m->val.isNothing()) {
+                    return m;
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    //! takes the value of the member \a m and frees it; code that runs can change the hash
+    DLLLOCAL void freeMemberValue(HashMember* m, ExceptionSink* xsink) {
+        QoreValue v = m->val;
+        m->val = QoreValue();
+        if (needs_scan(v)) {
+            incScanCount(-1);
+        }
+        v.discard(xsink);
+    }
 
     DLLLOCAL size_t size() const {
         return member_list.size();
