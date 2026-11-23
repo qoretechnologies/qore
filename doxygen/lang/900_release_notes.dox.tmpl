@@ -2927,7 +2927,7 @@
       the closed socket; it now fails as closed
       (<a href="https://github.com/qoretechnologies/qore/issues/7003">issue 7003</a>)
     - a UNIX socket connection of a @ref Qore::Socket "Socket" closed by another thread while it was being made could
-      still use the descriptor's number or give the closed socket a descriptor; the connection now fails as closed
+      still use the closed socket; it now fails as closed
       (<a href="https://github.com/qoretechnologies/qore/issues/7156">issue 7156</a>)
     - the internal state and helpers of the data provider index classes (@ref providerindexutilintro
       "ProviderIndexUtil" and @ref providerindexintro "ProviderIndex") are not visible to subclasses; see

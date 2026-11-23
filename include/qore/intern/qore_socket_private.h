@@ -4148,15 +4148,28 @@ public:
 
     //! Sets the state of a UNIX socket connection, if the socket was not closed since it had the given descriptor
     //! generation; returns false if it was (qore#7156)
-    /** Set with @ref close_m held, where a close reads and clears the socket's path
+    /** The state (the socket's path and family), where the connection leads, and the connected event are set and sent
+        with @ref close_m held, where a close reads and clears them: a close after it comes after the connection, and
+        its events after the connected event
     */
-    DLLLOCAL bool setUnixConnectedIfGeneration(uint32_t gen, const char* path) {
+    DLLLOCAL bool setUnixConnectedIfGeneration(uint32_t gen, const char* path,
+            std::shared_ptr<const QoreConnectionDestinations> dests) {
         CloseLockHelper cl(*this);
         if (sock == QORE_INVALID_SOCKET || fd_generation != gen) {
             return false;
         }
         socketname = path;
         sfamily = AF_UNIX;
+        listening = false;
+        resetCloseInterrupt();
+        // the destinations' lock nests in close_m, as in the close
+        setConnectedDestinations(std::move(dests));
+        // the connected event is sent with close_m held, as the close sends its closed event, which orders them (no
+        // connected event after a closed one); it takes only the event queue's locks (event_queue_m, then the
+        // Queue's own lock), calls no user code and does not block: pushAndTakeRef() ignores a size limit and only
+        // signals waiters, and an event refused by a deleted queue is released while the socket still references
+        // its argument, so no destructor runs
+        do_connected_event();
         return true;
     }
 
@@ -5610,6 +5623,11 @@ DLLLOCAL extern std::atomic<void (*)(int)> qore_dbg_unix_connect_before_check;
 /** For the C++ unit tests of a close of the socket by another thread at that point (qore#7156)
 */
 DLLLOCAL extern std::atomic<void (*)()> qore_dbg_unix_connect_before_connected;
+
+//! Debug builds: if set, called by a UNIX socket connection after its state was set
+/** For the C++ unit tests of a close of the socket by another thread at that point (qore#7156)
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_unix_connect_after_connected;
 
 //! Debug builds: if set, called by a happy-eyeballs connection after the socket took the winner's descriptor and
 //! before the connection's state is set

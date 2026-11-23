@@ -10090,6 +10090,7 @@ std::atomic<void (*)()> qore_dbg_before_close_wakes{nullptr};
 std::atomic<void (*)()> qore_dbg_unix_connect_before_adopt{nullptr};
 std::atomic<void (*)(int)> qore_dbg_unix_connect_before_check{nullptr};
 std::atomic<void (*)()> qore_dbg_unix_connect_before_connected{nullptr};
+std::atomic<void (*)()> qore_dbg_unix_connect_after_connected{nullptr};
 
 //! Calls the hook that a test sets to run right before a connection gives the socket a descriptor
 static void qore_socket_dbg_before_adopt(int where) {
@@ -10352,20 +10353,21 @@ int SocketConnectUnixPollState::checkConnection(ExceptionSink* xsink) {
         hook();
     }
 #endif
-    // connected: the connection's state is set with the socket's close lock held, only if the socket was not closed
-    // since the connection gave it its descriptor; otherwise the connection fails as closed (qore#7156)
-    if (!sock->setUnixConnectedIfGeneration(sock_gen, addr.sun_path)) {
+    // connected: the connection's state, destinations and connected event are set with the socket's close lock
+    // held, only if the socket was not closed since the connection gave it its descriptor; otherwise the connection
+    // fails as closed (qore#7156)
+    std::shared_ptr<QoreConnectionDestinations> d = std::make_shared<QoreConnectionDestinations>();
+    d->add(name.c_str(), reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr), QSEC_NET_UNIX);
+    if (!sock->setUnixConnectedIfGeneration(sock_gen, addr.sun_path, std::move(d))) {
         qore_socket_raise_canceled("connect", xsink);
         return -1;
     }
-    {
-        std::shared_ptr<QoreConnectionDestinations> d = std::make_shared<QoreConnectionDestinations>();
-        d->add(name.c_str(), reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr), QSEC_NET_UNIX);
-        sock->setConnectedDestinations(std::move(d));
+#ifdef DEBUG
+    // a test closes the socket here, as another thread can after the connection was made
+    if (void (*hook)() = qore_dbg_unix_connect_after_connected.load(std::memory_order_acquire)) {
+        hook();
     }
-    sock->resetCloseInterrupt();
-    sock->listening = false;
-    sock->do_connected_event();
+#endif
     return 0;
 }
 #endif
