@@ -2808,6 +2808,8 @@
       @ref callref_type "call reference" whose declared return type the function behind it does not honor, no longer
       runs on a value of another type in any execution mode; the method of the name is called for the value's own type
       or the usual exception is raised (<a href="https://github.com/qoretechnologies/qore/issues/7363">issue 7363</a>)
+    - Type mismatch and member access errors identify same-named classes by their @ref namespace_paths "namespace
+      paths", including a program's root class and a class in a Qore sub-namespace (issue #7378).
     - @ref Qore::HTTPClient::getURL() "HTTPClient::getURL()", @ref Qore::HTTPClient::getProxyURL() "getProxyURL()"
       and @ref Qore::HTTPClient::getSafeProxyURL() "getSafeProxyURL()" give an IPv6 host in brackets and the path of a
       UNIX domain socket with every reserved character encoded; the URL was ambiguous without them, and
