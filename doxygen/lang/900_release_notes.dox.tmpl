@@ -2873,6 +2873,9 @@
       splice or extract), through a @ref weak_assignment_operator "weak reference" to the list or hash, no longer lets
       an object that is still referenced be collected
       (<a href="https://github.com/qoretechnologies/qore/issues/7373">issue 7373</a>)
+    - <tt>-=</tt> on a variable that holds a @ref weak_assignment_operator "weak reference" to an object removes the
+      members from the object and keeps the weak reference, instead of replacing it with an integer
+      (<a href="https://github.com/qoretechnologies/qore/issues/7368">issue 7368</a>)
     - @ref httpserverintro "HttpServer" answers a handler's informational response (1xx) other than 101 with an error
       instead of sending it as the final response
       (<a href="https://github.com/qoretechnologies/qore/issues/7222">issue 7222</a>)
