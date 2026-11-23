@@ -48,6 +48,8 @@ class FastEntryTakeOverTest inherits QUnit::Test {
         addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
         addTestCase("qcc executables print the output of the AST", \testCompiled());
         addTestCase("qcc code calls the entry that takes the arguments over", \testOwnedEntry());
+        addTestCase("a compiled module calls its own method with an owning argument", \testModuleCall());
+        addTestCase("a later JIT batch calls the owning entry", \testLaterJitBatch());
         addTestCase("a stack overflow in an entry that takes its arguments over", \testStackOverflow());
         addTestCase("the stack check of the large frame of an entry that takes its arguments over",
             \testFrameCheck());
@@ -71,6 +73,28 @@ class FastEntryTakeOverTest inherits QUnit::Test {
             testSkip("qcc is not available");
         }
         return qcc_bin;
+    }
+
+    testLaterJitBatch() {
+        TmpDir tmp();
+        string dump = tmp.path + "/jit.ll";
+        int rc;
+        # Inspect the call before LLVM can inline the owning entry.
+        string out = backquote(sprintf("%s QORE_JIT_OPT_LEVEL=0 QORE_JIT_TIMING=1 QORE_JIT_SYNC_COMPILE=1 QORE_DUMP_LLVM_IR=1 %s -b "
+            "--exec-mode=jit %s/jit-cross-batch.q 2>%s", env, qore_bin, dir, dump), \rc);
+        assertEq(0, rc, out);
+        assertEq("release first\ncleared\nexit\nrelease second\ncleared\nexit\nexit\nrelease second\n"
+            "caught CONSUME-ERROR\n2 2 -1\n", out);
+        string ir = ReadOnlyFile::readTextFile(dump);
+        list<string> batches = ir.split("; ModuleID = ");
+        list<string> first = select batches, $1.startsWith("'qore_jit_batch_firstCaller@");
+        list<string> second = select batches, $1.startsWith("'qore_jit_batch_secondCaller@");
+        assertEq((1, 1), (first.size(), second.size()), "the callers were compiled in separate modules");
+        assertTrue(first[0] =~ /^define [^\n]*@"consume@/m, "the first module defines the callee");
+        assertTrue(second[0] =~ /\bcall [^@\n]*@"consume@[^"]*\.own\.10"\(/,
+            "the later caller hands its temporary to the existing callee");
+        assertTrue(ir =~ /compiled 'secondCaller@[^']+' and promoted to JIT tier/,
+            "the module containing the owning entry and its handler installed successfully");
     }
 
     testAst() {
@@ -163,6 +187,33 @@ class FastEntryTakeOverTest inherits QUnit::Test {
         }
     }
 
+    testModuleCall() {
+        string compiler = qcc();
+        TmpDir tmp("qore-owned-method-module-");
+        string image = tmp.path + "/OwnedMethodModule.qmod";
+        string dump = tmp.path + "/module.ll";
+        int rc;
+        string out = backquote(sprintf("%s QORE_DUMP_IR_BEFORE_OPT=1 %s -O3 -m -o %s %s/OwnedMethodModule.qm "
+            "2>%s", env, compiler, image, dir, dump), \rc);
+        assertEq(0, rc, out);
+        string ir = ReadOnlyFile::readTextFile(dump);
+        assertTrue(ir =~ /call [^@\n]*@"?[^ ("\n]*Box__length_[^ ("]*\.own\.1"?\(/,
+            "the call in the module hands its temporary to the method");
+        list<string> bodies = ir =~ x/^define [^\n@]*@"?[^ ("\n]*FinalBox__nested_[^\n]*\n([\s\S]*?)^\}/gm;
+        assertTrue(bodies.size() > 0, "the module contains the caller");
+        foreach string body in (bodies) {
+            list<string> calls = body =~ x/\b(call [^@\n]*@"?[^ ("\n]*FinalBox__replaceArg_[^ ("]*\.own\.1"?\()/g;
+            assertEq(2, calls.size(), "the direct and invoking self calls both hand over their temporaries");
+            assertTrue(body =~ /call [^@\n]*@"?[^ ("\n]*FinalBox___static_forgetArg_[^ ("]*\.own\.1"?\(/,
+                "the static call keeps its ownership check in the try block");
+        }
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s QORE_MODULE_DIR_ONLY=1 "
+            "QORE_MODULE_DIR=%s %s -b %s/module-owner.q", env, tmp.path, qore_bin, dir));
+        assertEq(0, r.rc, r.out);
+        assertEq("released\nreplaced\nreleased\nreplaced\nreleased\n6\n", r.stdout,
+            "the compiled methods release their parameter at its assignment");
+    }
+
     testOwnedEntry() {
         string qcc_bin = qcc();
         TmpDir tmp("qore-fast-entry-take-over-ir-");
@@ -187,5 +238,19 @@ class FastEntryTakeOverTest inherits QUnit::Test {
         # reads and borrows (the call releases it when it returns), w2b() that of its written second parameter
         assertRegex("(?m)^define [^@]*@\"?w2_list_auto__list_auto_[^ (\"]*\\.own\\.10\"?\\(", ir, "w2()");
         assertRegex("(?m)^define [^@]*@\"?w2b_list_auto__list_auto_[^ (\"]*\\.own\\.01\"?\\(", ir, "w2b()");
+        # outside_try calls the same static method, so only inspect calls emitted for in_try.
+        list<string> bodies = ir =~ x/^define [^\n@]*@"?in_try_[^\n]*\n([\s\S]*?)^\}/gm;
+        string in_try_body = bodies.join("\n");
+        assertTrue(in_try_body.size() > 0, "the dump includes the caller");
+        assertEq((True, True), (in_try_body =~ /call [^@\n]*@"?C___static_s_list_auto_[^ ("]*\.own\.1"?\(/,
+            in_try_body =~ /call [^@\n]*@"?C__m_list_auto_[^ ("]*\.own\.1"?\(/),
+            "C::s() and c.m() inside try hand over their temporaries");
+        assertTrue(ir =~ /call [^@\n]*@"?Owner__consume_[^ ("]*\.own\.10"?\(/,
+            "the method that reads self runs with an owning parameter");
+        assertTrue(ir =~ /call [^@\n]*@"?FinalOwner__consume_[^ ("]*\.own\.1"?\(/,
+            "a method of a final class runs with the explicit receiver");
+        assertTrue(ir =~ /^declare extern_weak [^@\n]*@qore_rt_try_enter_native_method_v1\(/m
+            && ir =~ /^declare extern_weak [^@\n]*@qore_rt_leave_native_method_v1\(/m,
+            "eager loaders can reach the version check on an older runtime");
     }
 }

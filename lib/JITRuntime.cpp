@@ -13505,6 +13505,35 @@ extern "C" DLLEXPORT void qore_rt_pop_native_function_context_v1(void* storage) 
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
+namespace {
+struct QoreRtReceiverTypeInfoGuard {
+    const QoreTypeInfo* old = nullptr;
+    bool restore = false;
+    bool unsafe = false;
+
+    explicit QoreRtReceiverTypeInfoGuard(const QoreTypeInfo* ti) {
+        if (ti) {
+            old = runtime_set_receiver_type_info(ti);
+            restore = true;
+            // a parameterized receiver: the frame holds types read through it (issue #6419)
+            if (QoreParameterizedClassTypeInfo::isUnsafeReceiver(ti)) {
+                unsafe = true;
+                qore_type_unsafe_frame_add(1);
+            }
+        }
+    }
+
+    ~QoreRtReceiverTypeInfoGuard() {
+        if (restore) {
+            runtime_set_receiver_type_info(old);
+            if (unsafe) {
+                qore_type_unsafe_frame_add(-1);
+            }
+        }
+    }
+};
+}
+
 /** Handle body local instantiation before JIT execution and deopt/cleanup after.
 
     Before the JIT call: instantiates body locals unless all are IR-only.
@@ -13587,32 +13616,7 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     QoreJITStackLocation jit_stack_loc(call_name, call_loc ? call_loc : parse_loc, uvb->getStatementBlock(),
         caller_pgm ? caller_pgm : runtime_pgm);
 
-    struct ReceiverTypeInfoGuard {
-        const QoreTypeInfo* old = nullptr;
-        bool restore = false;
-        bool unsafe = false;
-
-        ReceiverTypeInfoGuard(const QoreTypeInfo* ti) {
-            if (ti) {
-                old = runtime_set_receiver_type_info(ti);
-                restore = true;
-                // a parameterized receiver: the frame holds types read through it (issue #6419)
-                if (QoreParameterizedClassTypeInfo::isUnsafeReceiver(ti)) {
-                    unsafe = true;
-                    qore_type_unsafe_frame_add(1);
-                }
-            }
-        }
-
-        ~ReceiverTypeInfoGuard() {
-            if (restore) {
-                runtime_set_receiver_type_info(old);
-                if (unsafe) {
-                    qore_type_unsafe_frame_add(-1);
-                }
-            }
-        }
-    } receiver_guard(receiver_type_info);
+    QoreRtReceiverTypeInfoGuard receiver_guard(receiver_type_info);
 
     // Swap in the callee variant's parse options, keeping the caller's statement for body cleanup. When the
     // caller's program has different parse options than the callee's (e.g. the
@@ -14049,6 +14053,36 @@ static inline __attribute__((always_inline)) const QoreFunction* qore_rt_method_
     return method ? qore_method_private::get(*method)->getFunction() : nullptr;
 }
 
+// A single already-bound argument can move directly from its caller cleanup into the
+// parameter. Calls that require evaluation, conversion or overload retry use the usual binder.
+static bool takeExactMethodParam(const UserSignature* sig, unsigned num_params, int nargs,
+        const uint64_t* args, uint64_t** arg_cleanups, const QoreTypeInfo* receiver_type_info) {
+    if (num_params != 1 || nargs != 1 || !arg_cleanups || !arg_cleanups[0]
+            || !args[0] || *arg_cleanups[0] != args[0]) {
+        return false;
+    }
+    QoreValue val = fromBits(args[0]);
+    if (val.needsEval() || sig->lv[0]->isNoNarrowContainer()) {
+        return false;
+    }
+    const QoreTypeInfo* type = sig->getParamTypeInfo(0);
+    if (receiver_type_info) {
+        type = qore_substitute_type_params_if_needed(type, receiver_type_info);
+    }
+    if (QoreTypeInfo::hasType(type)) {
+        // A list<auto> parameter accepts every concrete list unchanged (QTS_COMPLEXLIST).
+        if (!(type == autoListTypeInfo && val.getType() == NT_LIST)
+                && !type->acceptsRuntimeValueWithoutFilter(val)) {
+            return false;
+        }
+    } else if (QoreTypeInfo::mayRequireFilter(type, val)) {
+        return false;
+    }
+    *arg_cleanups[0] = 0;
+    sig->lv[0]->instantiate(val, type);
+    return true;
+}
+
 //! Instantiate parameter locals from NaN-boxed args with default argument evaluation
 /** \return 0 on success, -1 on error (already-instantiated params are cleaned up on error,
     but caller must handle selfid cleanup and return value)
@@ -14179,6 +14213,99 @@ static bool qore_rt_method_fast_call_eligible(const AbstractQoreFunctionVariant*
         ? mvb->isStaticallyFastMethodCallEligible()
         : qore_rt_user_fast_call_eligible(variant);
 }
+
+// Keep the context for owning native calls in JITRuntimeTakeOver.cpp. Adding its location guard to the
+// single compilation unit makes GCC outline the location restore on ordinary interpreter calls (#6860).
+#ifdef QORE_JIT_RUNTIME_TAKE_OVER_UNIT
+namespace {
+struct QoreNativeMethodContext {
+    // Reflective code called by the method sees a distinct local-variable frame, just as in the ordinary binder.
+    struct LocalFrame {
+        LocalFrame() { thread_push_frame_boundary(); }
+        ~LocalFrame() { thread_pop_frame_boundary(); }
+    };
+    [[no_unique_address]] LocalFrame local_frame;
+    ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env{nullptr};
+    ObjectSubstitutionHelper receiver;
+    ArgvContextHelper implicit_args;
+    QoreRtUserCallOverrideHelper options;
+    QoreRtReceiverTypeInfoGuard receiver_type;
+    std::optional<QoreProgramLocationHelper> body_options;
+
+    QoreNativeMethodContext(QoreObject* obj, const MethodVariantBase* method, const UserVariantBase* uvb,
+            QoreProgram* pgm, const QoreTypeInfo* receiver_ti, ExceptionSink* xsink)
+        : receiver(obj, method->getClassPriv()), implicit_args(nullptr, xsink), options(pgm, uvb, pgm),
+          receiver_type(receiver_ti) {
+        if (uvb->getUserSignature()->getParseLocation()) {
+            body_options.emplace(nullptr, uvb->getParseOptions(qore_program_private::getParseOptions(*pgm)));
+        }
+    }
+};
+static_assert(sizeof(QoreNativeMethodContext) <= QORE_RT_NATIVE_METHOD_STATE_SIZE);
+static_assert(alignof(QoreNativeMethodContext) <= QORE_RT_NATIVE_METHOD_STATE_ALIGN);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_enter_native_method_v1(void* storage, QoreAOTContext* ctx, int32_t slot,
+        const void* expected_entry, uint64_t receiver, ExceptionSink* xsink) {
+    if (!ctx || !ctx->call_targets || slot < 0 || slot >= ctx->num_exprs) {
+        return 0;
+    }
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    const auto* variant = target.variant;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    const MethodVariantBase* method = variant ? variant->getMethodVariantBase() : nullptr;
+    if (!method || !uvb || !target.method || !expected_entry || target.is_pseudo
+            || target.explicit_type_param_instantiation || QoreTypeInfo::getParameterizedClassType(target.receiver_type_info)
+            || reinterpret_cast<const void*>(uvb->getCachedAOTFunction()) != expected_entry
+            || !method->isStaticallyFastMethodCallEligible() || qore_rt_debugger_attached(uvb)) {
+        return 0;
+    }
+    QoreProgram* pgm = getProgram();
+    if (!pgm || pgm != uvb->pgm || pgm != ctx->pgm || qore_program_private::isSandboxed(pgm)
+            || (qore_program_private::hasThreadEntryHandlers(*pgm) && thread_entry_pending(pgm))) {
+        return 0;
+    }
+    QoreSourceProgramHolder holder(nullptr);
+    QoreProgram* owner = qore_get_method_pgm_context(*target.method->getClass(), holder);
+    if ((owner && owner != pgm) || holder.sourceDeleted()) {
+        return 0;
+    }
+    QoreObject* obj = nullptr;
+    const QoreTypeInfo* receiver_ti = target.receiver_type_info;
+    if (receiver) {
+        QoreValue value = fromBits(receiver);
+        if (value.getType() != NT_OBJECT || target.method->isStatic()) {
+            return 0;
+        }
+        obj = value.get<QoreObject>();
+    } else if (!target.method->isStatic()) {
+        if (!target.is_self_method) {
+            return 0;
+        }
+        RuntimeConfig& rc = rc_get_current_ref();
+        obj = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
+        if (!obj) {
+            return 0;
+        }
+    }
+    if (obj) {
+        if (!obj->isValid() || obj->getClass() != target.qc || qore_object_private::get(*obj)->sandbox_provenance
+                || target.method->getNameStr() == "copy") {
+            return 0;
+        }
+        receiver_ti = qore_get_object_receiver_type_info(obj);
+        if (QoreTypeInfo::getParameterizedClassType(receiver_ti)) {
+            return 0;
+        }
+    }
+    new (storage) QoreNativeMethodContext(obj, method, uvb, pgm, receiver_ti, xsink);
+    return 1;
+}
+
+extern "C" DLLEXPORT void qore_rt_leave_native_method_v1(void* storage) {
+    static_cast<QoreNativeMethodContext*>(storage)->~QoreNativeMethodContext();
+}
+#endif
 
 static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig,
         const QoreTypeInfo* receiver_type_info) {
@@ -22262,7 +22389,8 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
 
     if (!use_direct_params) {
         // Standard path: push params to TLS
-        int bind_rc = instantiateFastCallParams(sig, num_params, nargs, args, xsink, receiver_type_info);
+        int bind_rc = CONSUME && takeExactMethodParam(sig, num_params, nargs, args, arg_cleanups, receiver_type_info)
+            ? 0 : instantiateFastCallParams(sig, num_params, nargs, args, xsink, receiver_type_info);
         if (bind_rc < 0) {
             if (selfid_instantiated) {
                 selfid->uninstantiateSelf();
@@ -24033,7 +24161,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_static_method_direct_impl
     ThreadFrameBoundaryHelper tfbh(true);
 
     // Instantiate parameter locals directly from NaN-boxed args
-    int bind_rc = instantiateFastCallParams(sig, num_params, nargs, args, xsink, receiver_type_info);
+    int bind_rc = CONSUME && takeExactMethodParam(sig, num_params, nargs, args, arg_cleanups, receiver_type_info)
+            ? 0 : instantiateFastCallParams(sig, num_params, nargs, args, xsink, receiver_type_info);
     if (bind_rc < 0) {
         // one exit, as without the mismatch case, so that the fast path keeps its code
         return bind_rc == QORE_FAST_CALL_PARAM_MISMATCH

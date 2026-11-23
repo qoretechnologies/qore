@@ -174,9 +174,9 @@ static bool qore_aot_fast_entry_param_takes_ref(const BatchCalleeInfo& info, con
 bool QoreIRToLLVM::callCanTakeOverToFastEntry(const QoreIRInstruction* inst, int arg_start,
         const AbstractQoreFunctionVariant* variant, const BatchCalleeInfo& info) const {
     static constinit QoreEnvFlag disable_env("QORE_DISABLE_AOT_OWNED_FAST_ENTRY");
-    if (!aot_mode || info.cross_module || info.preloaded_fast_entry || !info.approach_b_eligible
+    if (info.cross_module || info.preloaded_fast_entry || (!info.approach_b_eligible && !info.guarded_method_entry)
             || arg_start < 0 || disable_env.get()
-            || !qore_ir_fast_entry_refuses_given_args(true, variant)) {
+            || (!info.local_method_takes_args && !qore_ir_fast_entry_refuses_given_args(true, variant))) {
         return false;
     }
     const UserVariantBase* uvb = variant->getUserVariantBase();
@@ -222,10 +222,14 @@ QoreIRToLLVM::FastEntryTakeOver QoreIRToLLVM::fastEntryTakeOverSlots(const Abstr
     return rv;
 }
 
+bool QoreIRToLLVM::FastEntryTakeOver::hasOwnedSlot() const {
+    return std::any_of(slots.begin(), slots.end(), [](llvm::Value* slot) { return slot != nullptr; });
+}
+
 // documented in QoreIRToLLVM.h
 llvm::Function* QoreIRToLLVM::ownedFastEntry(llvm::Function* fast_fn, const FastEntryTakeOver& take_over,
         llvm::Module& module, bool& releases_given) const {
-    if (std::none_of(take_over.slots.begin(), take_over.slots.end(), [](llvm::Value* v) { return v != nullptr; })) {
+    if (!take_over.hasOwnedSlot()) {
         return nullptr;
     }
     releases_given = take_over.releases_given;
@@ -246,8 +250,8 @@ llvm::Function* QoreIRToLLVM::ownedFastEntry(llvm::Function* fast_fn, const Fast
 }
 
 // documented in QoreIRToLLVM.h
-llvm::Value* QoreIRToLLVM::emitOwnedFastEntryCall(llvm::Function* owned_fn, const FastEntryTakeOver& take_over,
-        const std::vector<llvm::Value*>& call_args) {
+llvm::CallInst* QoreIRToLLVM::emitOwnedFastEntryCall(llvm::Function* owned_fn, const FastEntryTakeOver& take_over,
+        llvm::ArrayRef<llvm::Value*> call_args) {
     // the entry takes over the references of the temporaries whose slots are cleared here: it releases them when the
     // parameters are written or when it returns, and the caller's landing pad finds the slots empty if it raises an
     // exception

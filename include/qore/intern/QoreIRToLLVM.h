@@ -377,6 +377,8 @@ private:
     std::unordered_map<int32_t, std::pair<llvm::Value*, llvm::Value*>> aot_cross_module_targets;
     // The buffer of the state of a call of another module's function, in the function's entry block
     llvm::AllocaInst* cross_module_call_state_storage = nullptr;
+    // Calls in the same activation reuse the buffer after the preceding method returns.
+    llvm::AllocaInst* native_method_context_storage = nullptr;
 
     // Exact-class checks for stable local receivers, materialized once in the
     // logical function entry. Object validity remains guarded at each call.
@@ -725,8 +727,8 @@ private:
     DLLLOCAL void emitFastEntryEarlyExitReleases(llvm::Module& module, llvm::BasicBlock* stack_overflow_bb);
     //! Emits the call of the fast entry \a owned_fn that takes over the arguments of \a take_over: the slots that it
     //! hands over are cleared right before the call (issue #6105)
-    DLLLOCAL llvm::Value* emitOwnedFastEntryCall(llvm::Function* owned_fn, const FastEntryTakeOver& take_over,
-            const std::vector<llvm::Value*>& call_args);
+    DLLLOCAL llvm::CallInst* emitOwnedFastEntryCall(llvm::Function* owned_fn, const FastEntryTakeOver& take_over,
+            llvm::ArrayRef<llvm::Value*> call_args);
 
     // Boxed IR-only locals that are neither fast-entry params nor backed by a
     // pre-instantiated cleanup slot. Their alloca owns the current value and
@@ -1359,9 +1361,9 @@ private:
     bool callGivesArgs(const QoreIRInstruction* inst) const;
     //! Returns true if the call \a inst of \a variant, which gives its callee arguments (callGivesArgs()), can call
     //! the fast entry of \a info that takes its arguments over (ownedFastEntry(), issue #6105)
-    /** Only in AOT code, for a callee whose fast entry refuses the arguments that a call gives
-        (qore_ir_fast_entry_refuses_given_args()) and is defined in the module (not of another module or a sibling
-        artifact), and for a call that gives only the cleanup slots of temporaries (no slot of a read through a
+    /** For a local callee whose fast entry refuses the arguments that a call gives
+        (qore_ir_fast_entry_refuses_given_args()). A JIT batch can lower its body again when an earlier batch
+        owns the ordinary entry. The AOT entry must belong to this image. The call must give only the cleanup slots of temporaries (no slot of a read through a
         reference, whose value is known at run time only: givenReferenceReadSlot()), at least one of them to a
         parameter whose fast entry takes a reference of its own (qore_aot_fast_entry_param_takes_ref())
     */
@@ -1375,6 +1377,7 @@ private:
         //! true if the call gives a slot that it does not hand over (the slot of an argument of a borrowed
         //! parameter), which it releases when the call returns
         bool releases_given = false;
+        bool hasOwnedSlot() const;
     };
     //! Returns the cleanup slots that a call of the fast entry of \a info that takes its arguments over hands over
     /** \a given_slots are the slots of the temporaries that the call gives, by argument (buildArgCleanupArray())
@@ -2751,7 +2754,7 @@ private:
     */
     llvm::CallInst* emitNativeCall(llvm::FunctionCallee fn, llvm::ArrayRef<llvm::Value*> args,
             const AbstractQoreFunctionVariant* callee, llvm::Module& module, llvm::Function* llvm_func,
-            const llvm::Twine& name = "", llvm::Value* arg_cleanups = nullptr, int nargs = 0);
+            const llvm::Twine& name = "", llvm::Value* arg_cleanups = nullptr, int nargs = 0, const FastEntryTakeOver* take_over = nullptr);
 
     //! Emits a call that AOT-compiled code makes directly to a native entry of user code, with its frame
     /** As emitNativeCall(); the callee is the call target of \a target_slot in this function's context, and the

@@ -7633,6 +7633,13 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                                 reinterpret_cast<const void*>(linst->local))) {
                         return false;
                     }
+                    // A boxed parameter store can coerce through a slot in the callee's AOT context.
+                    // The native JIT resolves the same type directly.
+                    if (inst->opcode == QoreIROpcode::StoreLocal
+                            && flag == &BatchCalleeInfo::context_independent_fast_entry
+                            && qore_ir_get_scalar_local_kind(linst->local) == BatchCalleeParamKind::Boxed) {
+                        return false;
+                    }
                     break;
                 }
                 case QoreIROpcode::IncrementLocalInt: {
@@ -7697,7 +7704,8 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
 bool qore_ir_body_is_context_free(const AbstractQoreFunctionVariant* variant, const QoreIRFunction& ir_func) {
     // no batch callees: a body that makes a call is not proven free of the context
     static const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo> no_callees;
-    return qore_aot_fast_entry_is_context_independent(variant, ir_func, no_callees);
+    return qore_aot_fast_entry_is_context_independent(variant, ir_func, no_callees, nullptr,
+        &BatchCalleeInfo::context_free_body);
 }
 
 bool qore_ir_function_runs_without_context(const QoreIRFunction& ir_func) {
@@ -16962,7 +16970,7 @@ static bool refreshAOTBatchFastEntryDeclarations(llvm::LLVMContext& ctx, llvm::M
             assert(old_fn->use_empty());
             old_fn->eraseFromParent();
         }
-        if (!info.approach_b_eligible) {
+        if (!info.approach_b_eligible && !info.guarded_method_entry) {
             continue;
         }
         std::vector<llvm::Type*> params;
@@ -17185,7 +17193,8 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
     std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>> context_candidates;
     std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>
         effect_only_candidates;
-    std::unordered_set<const AbstractQoreFunctionVariant*> exact_class_only_methods;
+    // Local fast entries can require their method context even when the method is final.
+    std::unordered_map<const AbstractQoreFunctionVariant*, bool> method_requires_exact_class;
 
     // Walk functions
     size_t func_i = 0;
@@ -17478,14 +17487,18 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
                     info.body_contract_qore_path = aotRelocMethodDisplayKey(qc, meth->getName(), variant);
                     info.approach_b_eligible = true;
                     info.implicit_self_method = implicit_self;
+                    // A separately compiled module need not publish its method IR to the runtime variant.
+                    // Use the body that supplied this local entry's ABI to decide whether it takes arguments.
+                    if (!uvb->getCachedIR()) {
+                        info.local_method_takes_args = qore_ir_collect_take_over_params(*ir_func,
+                            sig->lv.data(), num_params, nullptr);
+                    }
                     info.fast_name = fast_entry_name;
                     info.num_params = num_params;
                     info.param_kinds = std::move(param_kinds);
                     info.param_rejects_nothing = std::move(param_rejects_nothing);
                     aot_batch_callee_map[variant] = std::move(info);
-                    if (!isAOTNonOverridableMethodTarget(qc, variant)) {
-                        exact_class_only_methods.insert(variant);
-                    }
+                    method_requires_exact_class.emplace(variant, !isAOTNonOverridableMethodTarget(qc, variant));
                     context_candidates.emplace_back(variant,
                         std::unique_ptr<QoreIRFunction>(ir_func));
                     ir_func = nullptr;
@@ -17638,7 +17651,7 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
     }
     resolveAOTBatchContextIndependentFastEntries(context_candidates, aot_batch_callee_map);
     size_t exact_method_i = 0;
-    for (const auto* variant : exact_class_only_methods) {
+    for (const auto& [variant, needs_exact_class] : method_requires_exact_class) {
         if (exact_method_i++ && !(exact_method_i % 100)
                 && qore_check_cancel(nullptr,
                     "AOT speculative method fast-entry pruning")) {
@@ -17647,7 +17660,12 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
         auto info = aot_batch_callee_map.find(variant);
         if (info != aot_batch_callee_map.end()
                 && !info->second.context_independent_fast_entry) {
-            info->second.approach_b_eligible = false;
+            // An explicit receiver can differ from the caller's self even when the method is final.
+            info->second.guarded_method_entry = true;
+            if (needs_exact_class) {
+                // Ordinary implicit-self and summary calls cannot speculate on an overridable target.
+                info->second.approach_b_eligible = false;
+            }
         }
     }
     if (!finalizeAOTBatchFastEntrySymbols(module, aot_batch_callee_map)
@@ -22634,7 +22652,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     if (aot_batch_callee_map) {
                         auto analyzed = aot_batch_callee_map->find(variant);
                         analyzed_fast_entry_eligible = analyzed != aot_batch_callee_map->end()
-                            && analyzed->second.approach_b_eligible;
+                            && (analyzed->second.approach_b_eligible || analyzed->second.guarded_method_entry);
                         if (analyzed != aot_batch_callee_map->end()) {
                             analyzed_fast_entry = &analyzed->second;
                         }
