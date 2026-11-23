@@ -859,6 +859,13 @@ private:
 DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollOperationInfo;
 DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollResultInfo;
 
+#ifdef DEBUG
+//! Debug builds: if true, the close wakes of registration holds cannot record their socket, as when there is no
+//! memory (see AsyncIoControllerPriv::makeCloseWake()); for the C++ unit tests of the fallback that wakes all of the
+//! I/O thread's operations
+DLLLOCAL extern std::atomic<bool> qore_dbg_close_wake_push_fails;
+#endif
+
 //! C++ async I/O controller - direct translation of AsyncSocketIoController.qc
 /** This class implements the core async I/O event loop used by HTTP/2 server,
     HTTP/2 client multiplexing, WebSocket, and SSE.
