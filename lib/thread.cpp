@@ -4469,7 +4469,6 @@ static void publish_popped_stack_location(ThreadData* td, const QoreStackLocatio
     AutoLocker al(td->stack_walk_lck);
 }
 
-// called when pushing a new location on the stack
 //! Returns the Program of the code that makes a call whose frame is pushed in the initialization of a module's
 //! Program (qore#7289; see QoreModuleInitFrames)
 /** The Program that was current before the call: the one that the call's Program context helper replaced if the call
@@ -4484,6 +4483,7 @@ static QORE_INTERN_NOINLINE QoreProgram* qore_module_init_frame_caller(ThreadDat
     return td->current_pgm;
 }
 
+// called when pushing a new location on the stack
 const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* stack_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm, QoreProgram* frame_pgm) {
     ThreadData* td = thread_data.get();
