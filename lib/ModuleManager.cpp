@@ -2527,6 +2527,16 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
         if (init_barrier.failed()) {
             xsink.outOfMemory();
         } else {
+            // the module's initialization runs under this barrier, not under the one of its load, which recorded
+            // the module's own Program: it is recorded on this one too, so that a closure that the module's code
+            // creates while only that code runs is a module-init closure, as for a module loaded from source; only
+            // for a barrier of library code and a module Program that is library code (qore#7335)
+            if (isTrusted()) {
+                QoreProgram* mpgm = getModuleProgram();
+                if (mpgm && qore_program_is_library_module(mpgm)) {
+                    qore_module_init_set_program(mpgm);
+                }
+            }
             // an AOT module merges its namespace under its own fence and must not hold the write lock
             // across the deferred initialization that follows the merge; see qore_aot_module_ns_init_impl()
             module_ns_init(rns, qns, xsink);
@@ -7112,6 +7122,23 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         if (xsink) {
             return nullptr;
         }
+        // a compiled module's own Program is library code only if its own load is, as for a module loaded from source
+        // (see loadUserModuleFromPath()): its initialization marked it by the module initialization that the thread
+        // is in, which is that of library code that loads it also when the module itself is not library code (loaded
+        // by its path from outside the module path, or linked into the program); no code of the module has run yet,
+        // as it is initialized when it is applied to a Program (qore#7361)
+        if (mod_info.is_aot && qore_is_aot_user_module(name)) {
+            const QoreModuleLoadFrame* f = module_load_frame;
+            // the innermost load in this thread is the module's own (see addModule())
+            bool own_trusted = f && f->trusted
+                && (!strcmp(name, f->feature) || (feature && !strcmp(feature, f->feature)));
+            QoreProgram* aot_pgm = qore_aot_get_module_pgm(name);
+            if (aot_pgm && !own_trusted) {
+                qore_program_private::get(*aot_pgm)->library_module = false;
+                // nor are the closures of its initialization module-init closures
+                qore_module_init_unset_program(aot_pgm);
+            }
+        }
         init_classes.commit();
         plugin_scope.commit(&xsink);
         if (xsink) {
@@ -7233,9 +7260,19 @@ void QoreModuleManager::delUser() {
             // onComplete() and references enter the Programs of other modules, also of those whose teardown barrier
             // has passed: that work ends before the next module's Program is waited for (qore#6928)
             qore_module_cleanup_drain_work();
+            // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
+            // the modules: they are left as they are (see qore_cleanup(), qore#7239)
+            if (qore_module_cleanup_abandoned()) {
+                return;
+            }
         }
         qore_aot_clear_all_module_namespace_data(xsink);
         qore_module_cleanup_drain_work();
+        // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
+        // the modules: they are left as they are (see qore_cleanup(), qore#7239)
+        if (qore_module_cleanup_abandoned()) {
+            return;
+        }
 
         // break the cycles held up by opaque references ('@=') that user module programs own while all module
         // programs are still alive: such a cycle survives the namespace data cleared above, and an object that a
@@ -7252,6 +7289,11 @@ void QoreModuleManager::delUser() {
         // AOT user modules are binary modules, deleted after all user modules in cleanup()
         qore_aot_clear_all_module_opaque_targets(xsink);
         qore_module_cleanup_drain_work();
+        // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
+        // the modules: they are left as they are (see qore_cleanup(), qore#7239)
+        if (qore_module_cleanup_abandoned()) {
+            return;
+        }
     }
 
     // Phase 2 - delete the user modules and the native binary modules in dependency order
@@ -7271,6 +7313,11 @@ void QoreModuleManager::delUser() {
         // the work that the deletion of the last module handed over ends before the next module is deleted
         // (qore#6928)
         qore_module_cleanup_drain_work();
+        // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
+        // the modules: they are left as they are (see qore_cleanup(), qore#7239)
+        if (qore_module_cleanup_abandoned()) {
+            return;
+        }
         if (deleteUnrequiredNativeModule()) {
             continue;
         }
@@ -7313,6 +7360,11 @@ void QoreModuleManager::delUser() {
     }
     // the work that the deletion of the last module handed over
     qore_module_cleanup_drain_work();
+    // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
+    // the modules: they are left as they are (see qore_cleanup(), qore#7239)
+    if (qore_module_cleanup_abandoned()) {
+        return;
+    }
 
 #ifdef DEBUG
     // the work that the test hook still holds runs now, after the user modules have been deleted (qore#6928)

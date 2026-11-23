@@ -36,6 +36,8 @@
 #include "qore/QoreThreadLock.h"
 
 #include <atomic>
+#include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -171,6 +173,31 @@ DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closur
 //! client grants no flow-control credit; set by dbg_quic_hold_stream_data()
 DLLLOCAL bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id);
 
+//! the stateless resets that the QUIC listeners of the process sent and that its QUIC clients received (qore#6931);
+//! see dbg_quic_stateless_reset_counts()
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent;
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_stateless_resets_received;
+
+//! the number of threads waiting in dbg_quic_wait_idle(); a QUIC session wakes them only while it is not 0
+DLLLOCAL extern std::atomic<int> qore_dbg_quic_idle_waiters;
+
+//! wakes the threads waiting in dbg_quic_wait_idle(); called by a QUIC session when it has read packets, which can
+//! acknowledge the data that it has in flight (issue #7354)
+/** Takes only the lock of the waiters, so that a session can call it with its own lock held
+*/
+DLLLOCAL void qore_dbg_quic_notify_idle_waiters();
+
+class QuicSession;
+
+//! records a QUIC server session, so that dbg_quic_wait_idle() can find it by its ID (issue #7354)
+/** Only a weak reference is kept; the record is removed by qore_dbg_quic_unregister_session() when the session is
+    destroyed.  A session that cannot be recorded works all the same.
+*/
+DLLLOCAL void qore_dbg_quic_register_session(const std::shared_ptr<QuicSession>& session) noexcept;
+
+//! removes the record of a QUIC session made by qore_dbg_quic_register_session(), if any
+DLLLOCAL void qore_dbg_quic_unregister_session(int64_t session_id) noexcept;
+
 //! Returns True if dbg_http2_hold_stream_data() holds the buffered data of this HTTP/2 stream back
 DLLLOCAL bool qore_dbg_h2_stream_data_held(int32_t stream_id);
 
@@ -180,6 +207,10 @@ DLLLOCAL size_t qore_dbg_registered_qore_ops();
 
 //! Returns True if dbg_http3_client_hide_error() makes the HTTP/3 client poll operations report no error
 DLLLOCAL bool qore_dbg_h3_client_error_hidden();
+
+//! Counts a call of Socket::isHttp2() made off the I/O thread that queried the TLS state with a poll operation, as no
+//! negotiation result was recorded (qore#7223); read with dbg_is_http2_poll_count()
+DLLLOCAL void qore_dbg_note_is_http2_poll();
 
 //! Returns the bytes of progress that dbg_quic_simulate_stream_progress() adds to the acknowledged byte count of a
 //! stream for this read of the count (0 when no progress is simulated for the stream)

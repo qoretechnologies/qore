@@ -273,7 +273,10 @@ public:
 
     DLLLOCAL int checkValid(ExceptionSink* xsink) {
         if (!valid) {
-            xsink->raiseException("HASH-ERROR", "Cannot modify a hash that has already gone out of scope");
+            // as qore_list_private::checkValid(): a caller can have no exception sink (the merge of the public API)
+            if (xsink) {
+                xsink->raiseException("HASH-ERROR", "Cannot modify a hash that has already gone out of scope");
+            }
             return -1;
         }
         return 0;
@@ -580,6 +583,25 @@ public:
 
     DLLLOCAL QoreValue takeKeyValueIntern(const char* key, qore_object_private* obj = nullptr);
 
+    //! Takes the value of a key for delete or remove (qore#7306)
+    /** a hash freed under a weak reference and a copy of one (qore#7163) are empty: the key is not found, and
+        HASH-ERROR is raised then, which costs nothing when the key is removed; the hash can be shared (the hash of a
+        weak reference), so its uniqueness is not asserted
+
+        @return the value of the key, or NOTHING if it does not exist or an exception was raised
+    */
+    DLLLOCAL QoreValue takeRemovedKey(const char* key, ExceptionSink* xsink);
+
+    //! Raises HASH-ERROR for delete or remove that removes nothing from a hash freed under a weak reference or from a
+    //! copy of one (qore#7163), which is empty; the removers call it only when they remove nothing (qore#7306)
+    /** @return -1 if the hash cannot be changed and HASH-ERROR was raised, 0 if not
+    */
+    DLLLOCAL int checkRemovalValid(ExceptionSink* xsink) {
+        // a hash whose last reference was released is empty, and so is a copy of it
+        assert(valid || hm.empty());
+        return checkValid(xsink);
+    }
+
     DLLLOCAL QoreValue takeKeyValueIntern(const char* key, bool& exists) {
         assert(key);
 
@@ -700,6 +722,8 @@ public:
         return rv;
     }
 
+    //! returns a copy of the hash converted to another type: a new hash, which can be changed also when this hash was
+    //! freed under a weak reference (qore#7199; see copyFreedState())
     DLLLOCAL QoreHashNode* copy(const QoreTypeInfo* newComplexTypeInfo) const {
         QoreHashNode* h = new QoreHashNode;
         h->priv->complexTypeInfo = newComplexTypeInfo;
@@ -735,7 +759,9 @@ public:
     /** A hash freed under weak references is held by its weak holders (see QoreContainerWeakRefs), so a new
         reference to it is never its only one, and changing the hash through that reference copies it; the copy reads
         as empty, as the hash does, and changing it raises \c HASH-ERROR, as changing the hash itself does.  A value
-        computed from it (its sum with another hash) is a new hash.
+        computed from it (its sum with another hash) is a new hash, and so are its conversion to another hash type (a
+        cast or the hash given to a variable or parameter of another type: getPlainHash(), newComplexHashFromHash())
+        and a new expression made from it (makeNewValid()), which can be changed (qore#7199).
 
         The copy is not freed: it is freed as any other hash when its last reference is released.
     */
@@ -743,6 +769,19 @@ public:
         if (!valid) {
             h.valid = false;
         }
+    }
+
+    //! returns a new hash with the members of this one, which can be changed also when this hash was freed
+    /** For a value computed from the hash (ex: <tt>h - "key"</tt>, <tt>h + obj</tt>), which is a new hash, as the sum
+        with another hash is (copyCheckNewType()); copy() keeps the freed state, for a copy that stands for the hash
+        itself (qore#7199)
+
+        @param strip true to copy without type information, as copy() does
+    */
+    DLLLOCAL QoreHashNode* copyValue(bool strip = false) const {
+        QoreHashNode* h = copy(strip);
+        h->priv->valid = true;
+        return h;
     }
 
     DLLLOCAL void copyIntern(qore_hash_private& h) const {
@@ -1012,13 +1051,34 @@ public:
         return rv;
     }
 
+    //! Returns the hash that a new expression gives (new hash<...>(h)): a new hash, which can be changed also when the
+    //! hash it is made from was freed under a weak reference (qore#7199)
+    /** @param h the hash made by the new expression, which the caller owns, or nullptr if an exception was raised;
+        a hash that cannot be changed is the hash made from or a copy of it: it is copied if another holder shares it
+    */
+    DLLLOCAL static QoreHashNode* makeNewValid(QoreHashNode* h) {
+        if (!h || h->priv->valid) [[likely]] {
+            return h;
+        }
+        if (!h->is_unique()) {
+            ReferenceHolder<QoreHashNode> holder(h, nullptr);
+            h = h->priv->copy();
+        }
+        h->priv->valid = true;
+        return h;
+    }
+
     DLLLOCAL static QoreHashNode* getPlainHash(QoreHashNode* h) {
         if (!h->priv->hashdecl && !h->priv->complexTypeInfo) {
             return h;
         }
         // no exception is possible
         ReferenceHolder<QoreHashNode> holder(h, nullptr);
-        return h->priv->copy(true);
+        // the hash converted to a plain hash is a new hash, which can be changed also when the hash was freed under
+        // a weak reference (qore#7199; see copyFreedState())
+        QoreHashNode* rv = h->priv->copy(true);
+        rv->priv->valid = true;
+        return rv;
     }
 
     DLLLOCAL static QoreHashNode* newHashDecl(const TypedHashDecl* hd) {

@@ -1608,10 +1608,9 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
     QoreValue rv = takeMemberValue(odata, key, declared, exists ? *exists : found);
 
     bool scan_value_removed = needs_scan(rv);
+    // the container or object holding this object counts it whatever its members hold (needs_scan() is true for an
+    // object), so its count does not change (qore#7348)
     if (scan_value_removed) {
-        if (!getScanCount()) {
-            lvh.setDelta(-1);
-        }
         // the removal can take a reference out of this object's recursive set
         clearRSetClosed();
     }
@@ -1687,7 +1686,6 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
         return;
     }
 
-    unsigned old_count = getScanCount();
     bool scan_value_removed = false;
 
     QoreHashNode* id = nullptr;
@@ -1736,9 +1734,7 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
         assert(!*lvh.vl.xsink);
     }
 
-    if (old_count && !getScanCount()) {
-        lvh.setDelta(-1);
-    }
+    // the container or object holding this object counts it whatever its members hold (qore#7348)
     if (scan_value_removed) {
         // the removal can take a reference out of this object's recursive set
         clearRSetClosed();
@@ -1772,6 +1768,10 @@ template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeDataToHashIntern(QoreHashNode* hash, SafeDerefHelper& sdh,
         ExceptionSink* xsink, LexicalSemanticPolicy policy, const qore_class_private* class_ctx,
         const qore_class_private* storage_ctx) const {
+    // a hash freed under a weak reference cannot be changed, as by the other changes (qore#7199)
+    if (qore_hash_private::get(*hash)->checkValid(xsink)) {
+        return;
+    }
     if (status == OS_DELETED) {
         makeAccessDeletedObjectException(xsink, theclass->getName());
         return;

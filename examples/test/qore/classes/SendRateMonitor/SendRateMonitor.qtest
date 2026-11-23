@@ -1,0 +1,356 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# SendRateMonitor: the average rate at which a peer takes data while a sender waits for it, over a sliding window
+# (qore#7280); the time is given to each update, so no case depends on a clock
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SendRateMonitorTest
+
+class SendRateMonitorTest inherits QUnit::Test {
+    constructor() : Test("SendRateMonitorTest", "1.0") {
+        addTestCase("arguments and accessors", \argTest());
+        addTestCase("a rate of 0 disables the check", \disabledTest());
+        addTestCase("below the rate over a whole window", \belowTest());
+        addTestCase("at and above the rate", \aboveTest());
+        addTestCase("time without a wait does not count", \idleTest());
+        addTestCase("data taken without a wait is no credit", \creditTest());
+        addTestCase("the window slides: old progress ages out", \slideTest());
+        addTestCase("the window is kept across sends", \acrossSendsTest());
+        addTestCase("an unknown count is no progress", \unknownTest());
+        addTestCase("a clock that does not advance", \clockTest());
+        addTestCase("copy and reset", \copyResetTest());
+        addTestCase("large values do not overflow", \largeTest());
+        addTestCase("the monotonic clock variant", \monotonicTest());
+        addTestCase("progress in steps: a healthy peer", \stepsHealthyTest());
+        addTestCase("progress in steps: a stalled peer", \stepsStalledTest());
+        addTestCase("progress in steps: a drip after a large step", \stepsDripTest());
+        addTestCase("progress in steps: reset", \stepsResetTest());
+        addTestCase("progress in steps: a large first step", \stepsLargeFirstStepTest());
+        addTestCase("progress in steps: learned without a wait", \stepsLearnedWithoutWaitTest());
+        addTestCase("progress in steps: a repeated verdict", \stepsRepeatedVerdictTest());
+        addTestCase("progress in steps: the delay of the sender", \stepsMaxWaitChargeTest());
+        addTestCase("progress in steps: a verdict at the end of a wait", \stepsVerdictAtWaitEndTest());
+        addTestCase("progress in steps: a steady peer below the rate", \stepsSteadyBelowTest());
+        addTestCase("progress in steps: a tiny rate", \stepsTinyRateTest());
+        addTestCase("progress in steps: a rate too large to compute", \stepsOverflowTest());
+        addTestCase("a rate too large to compute", \overflowTest());
+        set_return_value(main());
+    }
+
+    argTest() {
+        assertThrows("SEND-RATE-ERROR", "negative", sub () { SendRateMonitor m(-1, 1s); });
+        assertThrows("SEND-RATE-ERROR", "must be positive", sub () { SendRateMonitor m(1, 0); });
+        SendRateMonitor m(1024, 16s);
+        assertEq(1024, m.getMinRate());
+        assertEq(16000, m.getWindow());
+        assertEq(1000, m.getCheckInterval());
+        assertTrue(m.enabled());
+        assertEq(1, (new SendRateMonitor(1, 1)).getCheckInterval(), "the interval is never 0");
+    }
+
+    disabledTest() {
+        SendRateMonitor m(0, 0);
+        assertFalse(m.enabled());
+        assertFalse(m.update(0, True, 0));
+        assertFalse(m.update(0, True, 1000000));
+    }
+
+    belowTest() {
+        SendRateMonitor m(1024, 10s);
+        assertFalse(m.update(0, True, 0));
+        assertFalse(m.update(100, True, 5000));
+        assertFalse(m.update(100, True, 9999), "not before a whole window");
+        assertTrue(m.update(100, True, 10000), "below the rate over the window");
+    }
+
+    #! a peer at 1310 bytes/s seen in steps of 128 KiB every 100 s is never below the rate of 1024
+    stepsHealthyTest() {
+        SendRateMonitor m(1024, 10s);
+        m.enableProgressSteps();
+        m.update(0, True, 0);
+        int total = 0;
+        for (int t = 10000; t <= 2000000; t += 10000) {
+            if (!(t % 100000)) {
+                total += 128 * 1024;
+            }
+            assertFalse(m.update(total, True, t), sprintf("at %d ms", t));
+        }
+    }
+
+    #! a peer that takes nothing is reported when a step at the minimum rate has passed
+    stepsStalledTest() {
+        SendRateMonitor m(1024, 10s);
+        m.enableProgressSteps();
+        m.update(0, True, 0);
+        assertFalse(m.update(0, True, 127999));
+        assertTrue(m.update(0, True, 128000));
+    }
+
+    #! a large step gains at most the capped time: a drip after it does not keep the peer alive
+    stepsDripTest() {
+        SendRateMonitor m(1024, 10s);
+        m.enableProgressSteps();
+        m.update(0, True, 0);
+        m.update(1024, True, 10000);
+        int total = 1024 + 1024 * 1024;
+        assertFalse(m.update(total, True, 20000));
+        bool below;
+        int t;
+        for (t = 21000; t <= 20000 + 602000; t += 1000) {
+            total += 1;
+            if (m.update(total, True, t)) {
+                below = True;
+                break;
+            }
+        }
+        assertTrue(below, "the drip was reported");
+        assertGe(20000 + 590000, t, "after the capped credit");
+    }
+
+    #! what a peer takes without a wait shows the size of its step, but pays for no wait
+    stepsLearnedWithoutWaitTest() {
+        SendRateMonitor m(1024, 10s);
+        m.enableProgressSteps();
+        m.update(0, False, 0);
+        # its receive buffer fills during sends that do not wait
+        m.update(2 * 1024 * 1024, False, 500);
+        m.update(2 * 1024 * 1024, True, 1000);
+        # the first step arrives after 400 s, which is more than the initial step allows
+        assertFalse(m.update(2 * 1024 * 1024, True, 401000));
+        assertFalse(m.update(2 * 1024 * 1024 + 512 * 1024, True, 401001));
+        # data taken without a wait is no credit: a peer that then takes nothing is reported when the credit is gone
+        SendRateMonitor n(1024, 10s);
+        n.enableProgressSteps();
+        n.update(0, False, 0);
+        n.update(64 * 1024, False, 500);
+        n.update(64 * 1024, True, 1000);
+        assertFalse(n.update(64 * 1024, True, 128999));
+        assertTrue(n.update(64 * 1024, True, 129000));
+    }
+
+    #! a wait that uses up the credit between two checks is reported by the update that ends it
+    stepsVerdictAtWaitEndTest() {
+        SendRateMonitor m(1024, 10s);
+        m.enableProgressSteps();
+        m.update(0, True, 0);
+        assertFalse(m.update(0, True, 127000));
+        assertTrue(m.update(0, False, 130000), "the wait ended with the credit gone");
+        # the same history with the wait ending in time leaves the credit
+        SendRateMonitor n(1024, 10s);
+        n.enableProgressSteps();
+        n.update(0, True, 0);
+        assertFalse(n.update(0, False, 127000));
+        n.update(64 * 1024, False, 3727000);
+        assertFalse(n.update(64 * 1024, True, 3727001));
+        assertFalse(n.update(64 * 1024, True, 3727001), "no time was waited");
+    }
+
+    #! a long delay of the sender between two updates is charged only up to the limit
+    stepsMaxWaitChargeTest() {
+        SendRateMonitor m(1024, 10s);
+        m.enableProgressSteps();
+        m.setMaxWaitCharge(1250);
+        m.update(0, True, 0);
+        assertFalse(m.update(0, True, 3600000), "the delay of the sender is not the peer's");
+        # the credit of 128 s less the 1.25 s charged, used up in updates within the limit
+        int t = 3600000;
+        for (int i = 0; i < 126; ++i) {
+            t += 1000;
+            assertFalse(m.update(0, True, t), sprintf("update %d", i));
+        }
+        # 0.75 s of credit is left, which the next second uses up
+        t += 1000;
+        assertTrue(m.update(0, True, t), "a peer that takes nothing is still reported");
+        # the limit survives reset(), and a negative limit is an error
+        m.reset();
+        m.update(0, True, 0);
+        assertFalse(m.update(0, True, 3600000));
+        assertThrows("SEND-RATE-ERROR", "negative", \m.setMaxWaitCharge(), -1);
+    }
+
+    #! the verdict does not change while the peer takes nothing more
+    stepsRepeatedVerdictTest() {
+        SendRateMonitor m(1024, 10s);
+        m.enableProgressSteps();
+        m.update(0, True, 0);
+        assertTrue(m.update(0, True, 128000));
+        assertTrue(m.update(0, True, 128000));
+        assertTrue(m.update(0, True, 128001));
+    }
+
+    #! a peer whose first step is larger than the initial step is not reported before that step arrives
+    stepsLargeFirstStepTest() {
+        SendRateMonitor m(1024, 10s);
+        m.enableProgressSteps();
+        m.update(0, True, 0);
+        # the receive buffer fills at once: the first delivery shows how large a step can be
+        assertFalse(m.update(2 * 1024 * 1024, True, 1000));
+        int total = 2 * 1024 * 1024;
+        # 512 KiB every 400 s is 1310 bytes/s
+        for (int t = 11000; t <= 4000000; t += 10000) {
+            if (!((t - 1000) % 400000)) {
+                total += 512 * 1024;
+            }
+            assertFalse(m.update(total, True, t), sprintf("at %d ms", t));
+        }
+    }
+
+    #! a steady peer below the rate is reported even when the check interval is longer than a step takes
+    stepsSteadyBelowTest() {
+        foreach float factor in (0.30, 0.375, 0.45, 0.9) {
+            SendRateMonitor m(64 * 1024, 64s);
+            m.enableProgressSteps();
+            m.update(0, True, 0);
+            bool below;
+            for (int t = 4000; t <= 3600000; t += 4000) {
+                if (m.update((64 * 1024 * factor * t / 1000).toInt(), True, t)) {
+                    below = True;
+                    break;
+                }
+            }
+            assertTrue(below, sprintf("%y of the rate", factor));
+        }
+    }
+
+    #! at a tiny rate a peer that takes nothing is still reported within the cap
+    stepsTinyRateTest() {
+        SendRateMonitor m(1, 10s);
+        m.enableProgressSteps();
+        m.update(0, True, 0);
+        assertFalse(m.update(0, True, 599999));
+        assertTrue(m.update(0, True, 600000));
+    }
+
+    #! a rate too large to compute with steps
+    stepsOverflowTest() {
+        SendRateMonitor m(MAXINT, 10s);
+        m.enableProgressSteps();
+        m.update(0, True, 0);
+        assertFalse(m.update(0, True, 9999));
+        assertTrue(m.update(0, True, 10000));
+    }
+
+    #! reset() keeps the setting
+    stepsResetTest() {
+        SendRateMonitor m(1024, 10s);
+        m.enableProgressSteps();
+        m.reset();
+        m.update(0, True, 0);
+        assertFalse(m.update(0, True, 10000), "the step still applies");
+    }
+
+    #! a rate too large to compute is not a rate that every peer meets
+    overflowTest() {
+        SendRateMonitor m(MAXINT, 10s);
+        m.update(0, True, 0);
+        assertTrue(m.update(0, True, 10000));
+    }
+
+    aboveTest() {
+        SendRateMonitor m(1024, 10s);
+        m.update(0, True, 0);
+        assertFalse(m.update(10240, True, 10000), "exactly the rate");
+        SendRateMonitor m1(1024, 10s);
+        m1.update(0, True, 0);
+        assertTrue(m1.update(10239, True, 10000), "one byte less");
+    }
+
+    idleTest() {
+        SendRateMonitor m(1024, 10s);
+        assertFalse(m.update(0, False, 0));
+        assertFalse(m.update(0, False, 1000000), "no wait, whatever the time");
+        assertFalse(m.update(0, True, 1000000));
+        assertFalse(m.update(0, True, 1009999));
+        assertTrue(m.update(0, True, 1010000));
+    }
+
+    creditTest() {
+        SendRateMonitor m(1024, 10s);
+        m.update(0, False, 0);
+        # accepted by the transport with no wait: the first send buffer's worth
+        assertFalse(m.update(1048576, True, 1000));
+        assertTrue(m.update(1048576, True, 11000), "that data is no credit for the wait");
+    }
+
+    slideTest() {
+        SendRateMonitor m(1000, 10s);
+        m.update(0, True, 0);
+        assertFalse(m.update(20000, True, 1000));
+        bool below;
+        int t = 1000;
+        while (t < 13000 && !below) {
+            t += 500;
+            below = m.update(20000, True, t);
+            if (t <= 10000) {
+                assertFalse(below, "the burst covers the first window at " + t);
+            }
+        }
+        assertTrue(below, "the burst ages out of the window");
+        assertGt(10000, t);
+    }
+
+    acrossSendsTest() {
+        SendRateMonitor m(1024, 10s);
+        m.update(0, True, 0);
+        # the send ended, and the next one starts: the window goes on
+        assertFalse(m.update(0, False, 5000));
+        assertFalse(m.update(0, False, 7000));
+        assertFalse(m.update(0, True, 7000));
+        assertTrue(m.update(0, True, 12000), "two waits of 5 s are one window");
+    }
+
+    unknownTest() {
+        SendRateMonitor m(1024, 10s);
+        m.update(5000, True, 0);
+        assertFalse(m.update(-1, True, 5000));
+        assertTrue(m.update(-1, True, 10000), "no progress with no count");
+        SendRateMonitor m1(1024, 10s);
+        m1.update(-1, True, 0);
+        assertFalse(m1.update(20000, True, 10000), "a count that becomes known counts from 0");
+    }
+
+    clockTest() {
+        SendRateMonitor m(1024, 10s);
+        m.update(0, True, 5000);
+        assertFalse(m.update(0, True, 5000));
+        assertFalse(m.update(0, True, 4000), "a clock going back adds no time");
+        assertFalse(m.update(0, True, 13999));
+        assertTrue(m.update(0, True, 14000));
+    }
+
+    copyResetTest() {
+        SendRateMonitor m(1024, 10s);
+        m.update(0, True, 0);
+        m.update(0, True, 9000);
+        SendRateMonitor c = m.copy();
+        assertTrue(c.update(0, True, 10000), "the copy keeps the state");
+        m.reset();
+        assertFalse(m.update(0, True, 10000));
+        assertFalse(m.update(0, True, 19999));
+        assertTrue(m.update(0, True, 20000));
+        assertFalse(c.update(MAXINT / 4, True, 10001), "a copy is independent");
+    }
+
+    largeTest() {
+        int rate = 1024 * 1024 * 1024 * 1024;
+        SendRateMonitor m(rate, 3600s);
+        m.update(0, True, 0);
+        assertFalse(m.update(rate * 3600, True, 3600000));
+        SendRateMonitor m1(rate, 3600s);
+        m1.update(0, True, 0);
+        assertTrue(m1.update(rate * 3600 - 1, True, 3600000));
+    }
+
+    monotonicTest() {
+        SendRateMonitor m(1, 1h);
+        assertFalse(m.update(0, True));
+        assertFalse(m.update(1, False));
+    }
+}

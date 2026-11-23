@@ -103,6 +103,27 @@ public enum HttpVersionMode : string {
     H3 = "h3",
 }
 
+#! Releases a handle of work of the module cleanup that was handed over to code that is destroyed without being run
+/** See HttpAsyncSocketIoController::wrapCleanupHandover() (qore#7239); releasing a handle again has no effect, so the
+    release when the code has run (AsyncIoController::runModuleCleanupWork()) and the release here do not conflict
+*/
+class ModuleCleanupHandoverGuard {
+    public {
+        #! the handle
+        int handle;
+    }
+
+    #! Creates the object with the handle that it releases when it is destroyed
+    constructor(int handle) {
+        self.handle = handle;
+    }
+
+    #! Releases the handle if it is still held
+    destructor() {
+        AsyncIoController::releaseModuleCleanupWork(handle);
+    }
+}
+
 #! HTTP-aware async I/O controller for managing HTTP connections
 /** This controller manages HTTP connections through their lifecycle:
 
@@ -5163,6 +5184,10 @@ public class HttpAsyncSocketIoController {
     /** For code that must run exactly once, such as the end of a stream.
     */
     private:internal runOnHandlerPool(*HttpAsyncTarget target, code<nothing()> c) {
+        # work of the module cleanup that runs this code on another thread hands itself over to it (qore#7239); code
+        # that cannot run on another thread (qore#7056) is then refused here, in the caller, which passes only code of
+        # this module
+        c = wrapCleanupHandover(c, "HttpAsyncSocketIoController");
         if (target) {
             try {
                 submitToHandlerPool(target, c);
@@ -5179,8 +5204,45 @@ public class HttpAsyncSocketIoController {
         }
     }
 
+    #! Returns code that runs \a c, holding a handle of the work of the module cleanup that the current thread runs
+    /** At the end of the process, the module cleanup waits for the work that it counts before it deletes the modules;
+        code that such work leaves to another thread (a thread of its own, a thread of the handler pool) is waited for
+        too, until it has run (see
+        @ref Qore::AsyncIoController::holdModuleCleanupWork() "AsyncIoController::holdModuleCleanupWork()",
+        qore#7239); outside of such work \a c is returned as it is.  If the returned code is discarded without being
+        run (a pool that drops its queued tasks, a caller that refuses it), the handle is released when the code is
+        destroyed, so that the cleanup does not wait for it
+
+        @param c the code to run on another thread
+        @param what the name of the caller for the error raised if \a c cannot be run on another thread
+
+        @return the code to run on the other thread
+
+        @throw PERMISSION-DENIED \a c cannot be run on another thread (see @ref Qore::check_thread_callable())
+
+        @since HttpServerAsyncIo 1.0
+    */
+    static code<nothing()> wrapCleanupHandover(code<nothing()> c, string what) {
+        int handle = AsyncIoController::holdModuleCleanupWork();
+        if (!handle) {
+            return c;
+        }
+        # releases the handle if the code returned is destroyed without being run
+        ModuleCleanupHandoverGuard guard(handle);
+        # the code runs on another thread: code that cannot start threads cannot have its code run there (qore#7056);
+        # checked here, as the code below runs it in a closure of this module
+        check_thread_callable(c, what);
+        return sub () {
+            AsyncIoController::runModuleCleanupWork(guard.handle, c);
+        };
+    }
+
     #! Runs code on a thread of its own, or in the calling thread if no thread can be started
     private:internal runOnThreadOfItsOwn(code<nothing()> c) {
+        # work of the module cleanup that runs this code on another thread hands itself over to it (qore#7239); code
+        # that cannot run on another thread (qore#7056) is then refused here, in the caller, which passes only code of
+        # this module
+        c = wrapCleanupHandover(c, "HttpAsyncSocketIoController");
         try {
             background c();
         } catch () {
@@ -5784,23 +5846,43 @@ public class HttpAsyncSocketIoController {
         };
 
         # Continue reading on h2op immediately — the CONNECT stream coexists
-        # with other streams on the same connection
-        dispatch_h2op.continueReading();
-        hash<HttpActiveConnectionInfo> new_cinfo;
-        {
-            AutoWriteLock al(m);
-            # Check if connection still exists
-            if (!connections.hasKey(dispatch_uh)) {
-                try { dispatch_sock.close(); } catch () {}
-                return;
+        # with other streams on the same connection.  The handler of another stream can have resumed reading
+        # already, after the request was taken (resumeMultiplexedReading()): continueReading() then raises
+        # HTTP2-STATE-ERROR, as the operation is active again, and the request is dispatched all the same; the I/O
+        # thread is woken to apply the registration of the stream above (qoretechnologies/qore#7354)
+        bool resumed;
+        try {
+            dispatch_h2op.continueReading();
+            resumed = True;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "HTTP2-STATE-ERROR") {
+                rethrow;
             }
-            # Cast to typed hash to update fields and assign back
-            hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{dispatch_uh});
-            conn_info.stream_op = dispatch_h2op;
-            conn_info.state = HttpConnectionState::Http2;
-            new_cinfo = (connections{dispatch_uh} @= (draining ? withDrainToken(dispatch_uh, conn_info) : conn_info));
+            log(LoggerLevel::DEBUG, "HTTP/2 extended CONNECT: %y stream=%d: reading was resumed already: %s",
+                dispatch_uh, dispatch_stream_id, ex.desc);
         }
-        submitConnectionOp(dispatch_uh, new_cinfo);
+        if (resumed) {
+            hash<HttpActiveConnectionInfo> new_cinfo;
+            {
+                AutoWriteLock al(m);
+                # Check if connection still exists
+                if (!connections.hasKey(dispatch_uh)) {
+                    try { dispatch_sock.close(); } catch () {}
+                    return;
+                }
+                # Cast to typed hash to update fields and assign back
+                hash<HttpActiveConnectionInfo> conn_info =
+                    cast<hash<HttpActiveConnectionInfo>>(connections{dispatch_uh});
+                conn_info.stream_op = dispatch_h2op;
+                conn_info.state = HttpConnectionState::Http2;
+                new_cinfo = (connections{dispatch_uh} @= (draining
+                    ? withDrainToken(dispatch_uh, conn_info)
+                    : conn_info));
+            }
+            submitConnectionOp(dispatch_uh, new_cinfo);
+        } else {
+            wakeSocketIfPresent(dispatch_sock, dispatch_uh, "HTTP/2 extended CONNECT after a concurrent resume");
+        }
 
         # Build header hash
         # the fields are given under "headers", and at the top level unless the listener turned it off (the accepted

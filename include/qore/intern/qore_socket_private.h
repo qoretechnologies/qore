@@ -5119,6 +5119,9 @@ public:
         sock.priv->getUsageInfo(h, *s.priv);
     }
 
+    //! Returns the bytes in the send buffer of \a fd that the peer has not acknowledged, or 0 if unknown
+    DLLLOCAL static int64 getUnacknowledgedBytes(int fd);
+
     DLLLOCAL static qore_socket_private* get(QoreSocket& sock) {
         return sock.priv;
     }
