@@ -16702,9 +16702,12 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 bool safe_to_bypass_name_dispatch = base_analysis_type
                     && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
                     && !qore_ir_type_may_require_dot_eval_name_dispatch(base_analysis_type);
+                // the value of a call through a call reference has the declared return type of the reference only if
+                // the code behind it honors it, which nothing checks: its size is that of the value it has (qore#7363)
                 if (pseudo_method && pseudo_method->getClass()
                         && !strcmp(pseudo_method->getClass()->getName(), "<list>")
-                        && !strcmp(method_name, "size")) {
+                        && !strcmp(method_name, "size")
+                        && !dynamic_cast<const CallReferenceCallNode*>(base_expr.getInternalNode())) {
                     return builder.createListSize(base_val, op->loc)->result;
                 }
                 if (pseudo_method && pseudo_method->getClass() == QC_PSEUDOVALUE

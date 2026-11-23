@@ -158,6 +158,15 @@ const QoreClass* qore_pseudo_get_class(qore_type_t t) {
     return pseudo_get_class(t);
 }
 
+bool qore_pseudo_receiver_accepts(const QoreClass* qc, const QoreValue n) {
+    if (qc == QC_PSEUDOVALUE || qc == pseudo_get_class(n.getType())) {
+        return true;
+    }
+    // a comparison of untyped operands is typed bool by the parser, but gives the elementwise buffer<bool> with a
+    // buffer operand: the method of the parse type (bool) is called on it (qore#6356)
+    return n.getType() == NT_BUFFER && qc == po_list[NT_BOOLEAN];
+}
+
 const QoreClass* qore_pseudo_get_class(const QoreTypeInfo* t) {
     ValueHolder v(QoreTypeInfo::getDefaultQoreValue(t), nullptr);
     qore_type_t nt = v->getType();
