@@ -4497,7 +4497,8 @@ static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_module_init_frame_ca
 
 // The frame push is inlined in the call path (CodeEvaluationHelper) where the caller is in the same compilation unit:
 // the module initialization check (qore#7289) put it over the compiler's inlining limit, which made every call pay for
-// an out-of-line call.  The attribute is on the definitions only, without "inline", so that callers in other
+// an out-of-line call.  The check itself costs about 4 instructions per frame push; it is made here, at the one point
+// where every frame gets its Program, rather than by each code that reads the Program of a frame.  The attribute is on the definitions only, without "inline", so that callers in other
 // compilation units (a build without a single compilation unit, or its chunks) call the external definition; GCC warns
 // that such a function "might not be inlinable", which is expected here.
 #if defined(__GNUC__)
