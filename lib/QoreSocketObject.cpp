@@ -6462,6 +6462,10 @@ void qore_socket_object_private::dbgForceSslErrorSslAtNextWrite() {
     qore_socket_private::get(*priv->socket)->dbg_force_ssl_error_ssl.store(true, std::memory_order_release);
 }
 
+void qore_socket_object_private::dbgForceStagedWriteFailure() {
+    qore_socket_private::get(*priv->socket)->dbg_force_staged_write_failure.store(true, std::memory_order_release);
+}
+
 QoreHashNode* qore_socket_object_private::dbgGetStreamRecordCounts(int64_t session_id, ExceptionSink* xsink) {
     if (session_id) {
         std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(so, session_id);
@@ -7629,4 +7633,10 @@ void my_socket_priv::shutdownAllQuicStreamReads() {
     for (auto& sess : sessions) {
         sess->shutdownStreamReads();
     }
+}
+
+int64 qore_socket_object_private::getUnacknowledgedSendBytes() const {
+    // the lock keeps another thread from closing the descriptor, or from its number being reused, during the query
+    AutoLocker al(priv->m);
+    return qore_socket_private::getUnacknowledgedBytes(qore_socket_private::get(*priv->socket)->sock);
 }

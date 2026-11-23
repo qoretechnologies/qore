@@ -5846,23 +5846,43 @@ public class HttpAsyncSocketIoController {
         };
 
         # Continue reading on h2op immediately — the CONNECT stream coexists
-        # with other streams on the same connection
-        dispatch_h2op.continueReading();
-        hash<HttpActiveConnectionInfo> new_cinfo;
-        {
-            AutoWriteLock al(m);
-            # Check if connection still exists
-            if (!connections.hasKey(dispatch_uh)) {
-                try { dispatch_sock.close(); } catch () {}
-                return;
+        # with other streams on the same connection.  The handler of another stream can have resumed reading
+        # already, after the request was taken (resumeMultiplexedReading()): continueReading() then raises
+        # HTTP2-STATE-ERROR, as the operation is active again, and the request is dispatched all the same; the I/O
+        # thread is woken to apply the registration of the stream above (qoretechnologies/qore#7354)
+        bool resumed;
+        try {
+            dispatch_h2op.continueReading();
+            resumed = True;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "HTTP2-STATE-ERROR") {
+                rethrow;
             }
-            # Cast to typed hash to update fields and assign back
-            hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{dispatch_uh});
-            conn_info.stream_op = dispatch_h2op;
-            conn_info.state = HttpConnectionState::Http2;
-            new_cinfo = (connections{dispatch_uh} @= (draining ? withDrainToken(dispatch_uh, conn_info) : conn_info));
+            log(LoggerLevel::DEBUG, "HTTP/2 extended CONNECT: %y stream=%d: reading was resumed already: %s",
+                dispatch_uh, dispatch_stream_id, ex.desc);
         }
-        submitConnectionOp(dispatch_uh, new_cinfo);
+        if (resumed) {
+            hash<HttpActiveConnectionInfo> new_cinfo;
+            {
+                AutoWriteLock al(m);
+                # Check if connection still exists
+                if (!connections.hasKey(dispatch_uh)) {
+                    try { dispatch_sock.close(); } catch () {}
+                    return;
+                }
+                # Cast to typed hash to update fields and assign back
+                hash<HttpActiveConnectionInfo> conn_info =
+                    cast<hash<HttpActiveConnectionInfo>>(connections{dispatch_uh});
+                conn_info.stream_op = dispatch_h2op;
+                conn_info.state = HttpConnectionState::Http2;
+                new_cinfo = (connections{dispatch_uh} @= (draining
+                    ? withDrainToken(dispatch_uh, conn_info)
+                    : conn_info));
+            }
+            submitConnectionOp(dispatch_uh, new_cinfo);
+        } else {
+            wakeSocketIfPresent(dispatch_sock, dispatch_uh, "HTTP/2 extended CONNECT after a concurrent resume");
+        }
 
         # Build header hash
         # the fields are given under "headers", and at the top level unless the listener turned it off (the accepted

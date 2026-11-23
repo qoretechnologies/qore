@@ -1,0 +1,6 @@
+broken range remove: [3, 2] src [1, 4]
+broken range past the end: [4, null, null, null] src [1]
+freed copy remove c[0]: LIST-ERROR
+freed copy remove c[0..-1]: LIST-ERROR
+freed weak remove wl[0..-1]: LIST-ERROR
+end

@@ -8336,6 +8336,17 @@ static bool qore_module_init_runs_only_module_code(ThreadData* td, const ThreadD
     return !mib.ctx;
 }
 
+void qore_module_init_unset_program(const QoreProgram* pgm) {
+    ThreadData* td = thread_data.get();
+    if (!pgm || !td || td->module_init_barriers.empty()) {
+        return;
+    }
+    ThreadData::ModuleInitBarrier& mib = td->module_init_barriers.back();
+    if (mib.module_pgm == pgm) {
+        mib.module_pgm = nullptr;
+    }
+}
+
 bool qore_module_init_closure_creation(const QoreProgram* pgm) {
     ThreadData* td = thread_data.get();
     if (!pgm || !td || td->module_init_barriers.empty()) {

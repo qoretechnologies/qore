@@ -844,6 +844,14 @@ protected:
         if (current_value->is_unique()) {
             return;
         }
+        // the references that the helper itself holds to a container that it reached through a weak reference
+        // earlier on its path do not make the container shared: a copy would leave the weak references on the
+        // original, which the helper then releases (qore#7352).  The lvalue holds the container now, so the helper
+        // releases them, and the container is unique
+        if (holds_weak_locks && releaseOwnWeakLocks(current_value)) [[unlikely]] {
+            assert(current_value->is_unique());
+            return;
+        }
         if (qv) {
             // a value stored in a container can be held through an opaque reference: the copy keeps its
             // representation, and the value replaced is released as it is held (see qore_value_copy_on_write())
@@ -856,6 +864,13 @@ protected:
         assignNodeIntern(current_value->realCopy());
         saveTemp(old);
     }
+
+    //! if the only references to \a n other than that of the lvalue holding it are the ones that the helper holds
+    //! in its temporaries (the references it took as it locked \a n at weak steps of its path, or the original that
+    //! a copy-on-write step of the path replaced), releases them and returns true (qore#7352)
+    /** The lvalue holds \a n, under its lock, so \a n is not freed; nothing is allocated and nothing throws
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE bool releaseOwnWeakLocks(AbstractQoreNode* n);
 
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove);
     //! raises the exception of a negative index of a list or a buffer and returns -1; returns -1 without an exception
@@ -968,6 +983,8 @@ private:
     ocvec_t ocvec;
     //! true if a container of ocvec was reached through a weak reference (qore#7321)
     bool path_has_weak_step = false;
+    //! true if the helper locked a list or a hash at a weak step of its path (see releaseOwnWeakLocks(), qore#7352)
+    bool holds_weak_locks = false;
 
     // flag if the changed value was a container before the assignment
     bool before = false;
@@ -1369,7 +1386,7 @@ public:
     /** Only a node held by the storage can be or contain an object; a scalar held inline is not read, as
         QoreLValue::getValue() boxes a large integer or a special float in a new node that the caller must release
     */
-    DLLLOCAL void removedValue(const QoreLValueGeneric& v) {
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE void removedValue(const QoreLValueGeneric& v) {
         removedValue(QoreValue(static_cast<const AbstractQoreNode*>(v.getInternalNode())));
     }
 
@@ -1396,19 +1413,21 @@ public:
         any, list, list<auto>, list<*int>), and RUNTIME-TYPE-ERROR is raised if it requires elements that are not
         NOTHING (list<int>, softlist<int>).  A list held in a list or a hash of the path (not an object member or a
         hashdecl member), whose type comes from the value, is decided by the declared type of the lvalue holding the
-        outermost such container, and the containers are retyped for the widened list (qore#6435).
+        outermost such container, and the containers are retyped for the widened list (qore#6435).  A list reached
+        through a weak reference that the lvalue holds (\a weak) is shared with its owners and keeps its type:
+        RUNTIME-TYPE-ERROR is raised for it (qore#7306).
 
         @return -1 if an exception was raised, 0 if not
 
         @note defined inline in Variable.cpp, so only usable there
     */
-    DLLLOCAL inline int prepareListElementRemoval(QoreListNode& l, size_t ind, bool for_del);
+    DLLLOCAL inline int prepareListElementRemoval(QoreListNode& l, size_t ind, bool for_del, bool weak);
 
     //! records a hash key created while navigating to the lvalue target
     DLLLOCAL void trackVivifiedKey(qore_hash_private* h, const char* key);
 
     //! prepareListElementRemoval() for a list whose element type does not take NOTHING
-    DLLLOCAL int prepareTypedListElementRemoval(qore_list_private& l, size_t ind, bool for_del);
+    DLLLOCAL int prepareTypedListElementRemoval(qore_list_private& l, size_t ind, bool for_del, bool weak);
 
     //! records the size a list had before it was extended while navigating to the lvalue target
     DLLLOCAL void trackVivifiedListSize(qore_list_private* l, size_t size);
@@ -1517,6 +1536,9 @@ public:
     //! Returns the list of the weak reference that the lvalue holds, with a reference that the helper holds until it
     //! is destroyed, or a new empty list that cannot be changed if the list was freed (qore#7198)
     DLLLOCAL __attribute__((cold)) QoreListNode* lockWeakList();
+
+    //! keeps the reference \a n that lockWeakList() or lockWeakHash() took until the helper releases its temporaries
+    DLLLOCAL void holdWeakLock(AbstractQoreNode* n);
 
     //! Returns the hash of the weak reference that the lvalue holds, as lockWeakList() returns a list
     DLLLOCAL __attribute__((cold)) QoreHashNode* lockWeakHash();
@@ -1854,6 +1876,78 @@ public:
         assert(!rdt);
         rdt = dt;
     }
+
+    //! Returns the type of the container that a delete or remove of an element, a key, a slice or a range changes
+    /** a list or a hash that the lvalue holds through a weak reference is changed itself, as an element or a key
+        assigned through the weak reference is (qore#7306): NT_WEAKREF_LIST gives NT_LIST and NT_WEAKREF_HASH gives
+        NT_HASH; getRemovalList() and getRemovalHash() give the container
+
+        @param t the type of the lvalue (getType()), which the removers read once
+    */
+    DLLLOCAL static qore_type_t getRemovalType(qore_type_t t) {
+        // one test for both: the type values are adjacent
+        static_assert(NT_WEAKREF_LIST == NT_WEAKREF_HASH + 1, "NT_WEAKREF_HASH and NT_WEAKREF_LIST are adjacent");
+        if (static_cast<unsigned>(t - NT_WEAKREF_HASH) <= 1) [[unlikely]] {
+            return t == NT_WEAKREF_LIST ? NT_LIST : NT_HASH;
+        }
+        return t;
+    }
+
+    //! Returns the list that a delete or remove changes when getRemovalType() is NT_LIST
+    /** @param t the type of the lvalue (getType())
+
+        @return the lvalue's own list, made unique, or the list of the weak reference that the lvalue holds, which the
+        helper holds until it is destroyed and which is changed in place (qore#7306); nullptr if the list of the weak
+        reference was freed, in which case LIST-ERROR was raised
+
+        A list freed under a weak reference and a copy of one (qore#7163) are empty: the removers check the lvalue's
+        own list only when they remove nothing from it (qore_list_private::checkRemovalValid()), which costs nothing
+        when they remove an element; inlined explicitly, as the code it replaced on the paths of the removers is (the
+        callgrind rows rl, rh and dh)
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreListNode* getRemovalList(qore_type_t t) {
+        assert(t == getType());
+        if (t == NT_WEAKREF_LIST) [[unlikely]] {
+            return getWeakRemovalList();
+        }
+        assert(t == NT_LIST);
+        ensureUnique();
+        return getValue().get<QoreListNode>();
+    }
+
+    //! Returns the hash that a delete or remove changes when getRemovalType() is NT_HASH; see getRemovalList()
+    /** @param t the type of the lvalue (getType())
+
+        @return the lvalue's own hash, made unique, or the hash of the weak reference that the lvalue holds; nullptr
+        if the hash of the weak reference was freed, in which case HASH-ERROR was raised
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreHashNode* getRemovalHash(qore_type_t t) {
+        assert(t == getType());
+        if (t == NT_WEAKREF_HASH) [[unlikely]] {
+            return getWeakRemovalHash();
+        }
+        assert(t == NT_HASH);
+        ensureUnique();
+        return getValue().get<QoreHashNode>();
+    }
+
+    //! setDelta() for a container that a delete or remove changed (getRemovalList(), getRemovalHash())
+    /** the container of a weak reference (\a weak) is not counted by the lvalue that holds the weak reference, so its
+        change is not one of the lvalue's (qore#7306); the counts of the container's own holders are not known here
+        (#7318)
+    */
+    DLLLOCAL void setRemovalDelta(int dt, bool weak) {
+        if (!weak) {
+            setDelta(dt);
+        }
+    }
+
+private:
+    //! getRemovalList() for a weak reference to a list
+    DLLLOCAL __attribute__((cold)) QoreListNode* getWeakRemovalList();
+
+    //! getRemovalHash() for a weak reference to a hash
+    DLLLOCAL __attribute__((cold)) QoreHashNode* getWeakRemovalHash();
 };
 
 class LValueRemoveHelper {
