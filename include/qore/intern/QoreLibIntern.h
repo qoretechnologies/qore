@@ -365,6 +365,35 @@ private:
     int pflag;
 };
 
+//! Scope of the parse of the code that a foreach statement or an operator runs for each element, which sets its own
+//! implicit index (\c $#) (qore#7270)
+/** A \c $# in the code reads the index of the statement or operator that runs it, not that of the code around it:
+    the reads counted in QoreParseContext::implicit_element_reads in the scope are not counted for the code around
+    it when the scope ends, so that an enclosing foreach statement, context statement or find expression whose code
+    reads \c $# only in such nested code does not set or read the thread's implicit index for it.
+*/
+class QoreParseImplicitElementScope {
+public:
+    DLLLOCAL QoreParseImplicitElementScope(QoreParseContext& parse_context) : parse_context(parse_context),
+            reads(parse_context.implicit_element_reads) {
+    }
+
+    DLLLOCAL ~QoreParseImplicitElementScope() {
+        parse_context.implicit_element_reads = reads;
+    }
+
+    //! returns true if a \c $# parsed in the scope so far reads the index of the statement or operator
+    DLLLOCAL bool readsImplicitElement() const {
+        assert(parse_context.implicit_element_reads >= reads);
+        return parse_context.implicit_element_reads != reads;
+    }
+
+private:
+    QoreParseContext& parse_context;
+    //! the number of reads when the scope started
+    unsigned reads;
+};
+
 //! Sets one parse flag while in scope and restores only that flag: unlike QoreParseContextFlagHelper, it keeps the
 //! flags that the code parsed in its scope sets for the code around it (ex: PF_NARROWED_TYPE)
 class QoreParseContextFlagScope {
