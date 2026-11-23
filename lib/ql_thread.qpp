@@ -393,8 +393,9 @@ save_thread_data(h);
     is an object that goes out of scope, then such an object could throw an exception in its destructor
 
     @note When thread-local data is released (by delete_all_thread_data() and at the end of a task of a thread pool),
-    the destructors of its values can save data in it; nothing can be saved while the values saved by those
-    destructors are freed then, so that the release ends
+    the destructors of its values read the values not freed yet (the keys of the values freed before are gone) and
+    can save data in it; nothing can be saved while the values saved by those destructors are freed then, so that
+    the release ends
 
     @throw DESTRUCTOR-ERROR the function was called while the values saved during the release of thread-local data
     are freed
@@ -425,8 +426,9 @@ save_thread_data("key1", value);
     is an object that goes out of scope, then such an object could throw an exception in its destructor
 
     @note When thread-local data is released (by delete_all_thread_data() and at the end of a task of a thread pool),
-    the destructors of its values can save data in it; nothing can be saved while the values saved by those
-    destructors are freed then, so that the release ends
+    the destructors of its values read the values not freed yet (the keys of the values freed before are gone) and
+    can save data in it; nothing can be saved while the values saved by those destructors are freed then, so that
+    the release ends
 
     @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
     @throw DESTRUCTOR-ERROR the function was called while the values saved during the release of thread-local data
@@ -550,10 +552,11 @@ delete_all_thread_data();
 
     @note This function does not throw any exceptions, however if an object is deleted from the thread-local data hash, then it could throw an exception in its destructor
 
-    @note The destructors of the values can use the thread-local data: they read the values not freed yet, and they
-    can save values, which are freed after the values that the data had; while those are freed, nothing can be
-    saved (save_thread_data() raises \c DESTRUCTOR-ERROR), so that the release ends also when destructors save
-    values again and again; the same holds at the end of a task of a thread pool
+    @note The destructors of the values can use the thread-local data: they read the values not freed yet (the keys
+    of the values freed before are gone), and they can save values, which are freed after the values that the data
+    had; while those are freed, nothing can be saved (save_thread_data() raises \c DESTRUCTOR-ERROR), so that the
+    release ends also when destructors save values again and again; the same holds at the end of a task of a
+    thread pool
 */
 nothing delete_all_thread_data() [dom=THREAD_CONTROL;flags=OWN_PROGRAM_STATE] {
     qore_program_private::get(*getProgram())->clearThreadData(xsink);

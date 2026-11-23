@@ -104,7 +104,7 @@ void qore_hash_private::clear(ExceptionSink* xsink) {
         }
     }
     if (!runs_code) {
-        freeMembers(xsink);
+        freeMembersOutOfLine(xsink);
         return;
     }
 
@@ -137,6 +137,10 @@ void qore_hash_private::clear(ExceptionSink* xsink) {
     }
 
     // no member is left; this resets the accounting of the hash
+    freeMembersOutOfLine(xsink);
+}
+
+void qore_hash_private::freeMembersOutOfLine(ExceptionSink* xsink) {
     freeMembers(xsink);
 }
 

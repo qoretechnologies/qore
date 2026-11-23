@@ -135,8 +135,9 @@ struct DLLLOCAL qore_hash_member_key_eq {
 
 //! The key map of a hash: each member to its place in the member list
 /** The map refers to the member, whose key and hash are not changed while the member is in the hash; a member is
-    removed from the map before it is deleted, as the map reads the hash of the members in a bucket when it searches
-    it (qore#7194, qore#7265)
+    removed from the map before it is deleted while code can search the map, as the map reads the hash of the members
+    in a bucket when it searches it; when no code can (the release of a hash), the map is cleared after the members
+    are deleted (qore#7194, qore#7265)
 
     HashMember and the hash and comparison types are hidden (DLLLOCAL), so that the code of the map is not exported
     from the library: its calls are direct, not through the PLT, and can be optimized for their callers
@@ -946,11 +947,14 @@ public:
     }
 
     //! Frees all members; the hash itself stays valid (see clear())
-    /** Only for a hash that no code can reach any more (see clear()): the key map is cleared before the members are
-        deleted, as it reads the hashes of the members in a bucket when it is searched (see hm_hm_t)
+    /** Only for a hash that no code can reach any more, or whose values' release runs no code (see clear()): no code
+        searches the key map while the members are deleted, so it is cleared after them, in one pass
     */
+    // always inline, as before qore#7265, in the release of a hash and of an object's members
+#if defined(__GNUC__) || defined(__clang__)
+    __attribute__((always_inline))
+#endif
     DLLLOCAL void freeMembers(ExceptionSink* xsink, bool reverse = false) {
-        hm.clear();
         if (reverse) {
             for (qhlist_t::reverse_iterator i = member_list.rbegin(), e = member_list.rend(); i != e; ++i) {
                 (*i)->val.discard(xsink);
@@ -964,9 +968,7 @@ public:
         }
 
         member_list.clear();
-        // the key map was cleared above (clearing an empty map would set its buckets again); no code can add to the
-        // hash, which no code can reach, or which has no member left (see clear())
-        assert(hm.empty());
+        hm.clear();
         obj_count = 0;
         sbClear();
     }
@@ -991,10 +993,6 @@ public:
         if (p->member_list.empty()) {
             return false;
         }
-        // the key map is cleared before the first member is deleted (see freeMembers())
-        if (!p->hm.empty()) {
-            p->hm.clear();
-        }
         HashMember* member = p->member_list.front();
         p->member_list.pop_front();
         qore_container_free_helper::freeEntry(member->val, xsink);
@@ -1006,8 +1004,7 @@ public:
     DLLLOCAL static void finishFree(QoreHashNode& h) {
         qore_hash_private* p = h.priv;
         assert(p->member_list.empty());
-        // the key map was cleared before the first member was deleted (see freeNextMember())
-        assert(p->hm.empty());
+        p->hm.clear();
         p->obj_count = 0;
         p->sbClear();
         finishFreeMembers(h);
@@ -1077,6 +1074,13 @@ public:
     //! returns true if freeing \a v runs no code (a destructor): a value without a node, or a string, date, binary,
     //! number or null (see clear())
     DLLLOCAL static bool freeRunsNoCode(const QoreValue& v);
+
+    //! freeMembers() for clear(), not inline, so that freeMembers() stays inline in its other callers (the release
+    //! of a hash and of an object's members)
+#if defined(__GNUC__) || defined(__clang__)
+    __attribute__((noinline))
+#endif
+    DLLLOCAL void freeMembersOutOfLine(ExceptionSink* xsink);
 
     //! deletes the member at \a li from the key map and the member list (see clear())
     DLLLOCAL void deleteMemberForClear(qhlist_t::iterator li);
