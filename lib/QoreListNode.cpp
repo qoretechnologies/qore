@@ -525,9 +525,11 @@ QORE_INTERN_ALWAYS_INLINE QoreListNode* qore_list_private::newComplexListFromVal
     ValueHolder holder(init, xsink);
 
     QoreListNode* l;
+    // the type of the list converted, if any
+    const QoreTypeInfo* lti = nullptr;
     if (init.getType() == NT_LIST) {
         l = init.get<QoreListNode>();
-        const QoreTypeInfo* lti = qore_list_private::get(*l)->complexTypeInfo;
+        lti = qore_list_private::get(*l)->complexTypeInfo;
         if (lti && (QoreTypeInfo::equal(typeInfo, lti) || qore_list_keeps_typed_callables(typeInfo, lti))) {
             return holder.release().get<QoreListNode>();
         }
@@ -600,6 +602,13 @@ QORE_INTERN_ALWAYS_INLINE QoreListNode* qore_list_private::newComplexListFromVal
 
     // mark new hash with new type
     assert(l->is_unique());
+    // the list converted to another type is a new list, which can be changed also when the list it was converted
+    // from was freed under a weak reference (qore#7199; see copyFreedState()); a list that keeps its type, also as the
+    // or-nothing type of an or-nothing cast (qore#6174), is the same list
+    if (!l->priv->valid && (!lti || !QoreTypeInfo::equal(get_or_nothing_type_check(lti),
+            get_or_nothing_type_check(typeInfo)))) {
+        l->priv->valid = true;
+    }
     l->priv->complexTypeInfo = typeInfo;
     return holder.release().get<QoreListNode>();
 }

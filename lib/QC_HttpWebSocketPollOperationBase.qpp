@@ -38,6 +38,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/ql_websocket.h"
 #include "qore/intern/SocketPollEventsOps.h"
@@ -96,6 +97,41 @@ bool HttpWebSocketPollOperationPriv::goalReached() const {
     return ws_state == WsState::CLOSED || ws_state == WsState::ERROR;
 }
 
+int HttpWebSocketPollOperationPriv::checkSendProgress(ExceptionSink* xsink) {
+    bool rate = send_rate.enabled();
+    if (send_op_start_ms <= 0 || (send_timeout_ms <= 0 && !rate)) {
+        return 0;
+    }
+    int64 now_ms = monotonicMs();
+    send_op_waited = true;
+    send_rate_sample_ms = now_ms;
+    int64 op_bytes = static_cast<int64>(send_op->getBytesSent());
+    // progress is what the peer acknowledged: a write only shows room in the local send buffer
+    int64 progress = send_bytes_done + op_bytes - qore_socket_object_private(sock).getUnacknowledgedSendBytes();
+    if (progress > send_delivered_last) {
+        send_delivered_last = progress;
+        send_op_start_ms = now_ms;
+    }
+    if (progress < 0) {
+        progress = 0;
+    }
+    int64 elapsed = now_ms - send_op_start_ms;
+    int64 timeout_ms = getEffectiveSendTimeout();
+    if (send_timeout_ms > 0 && elapsed > timeout_ms) {
+        xsink->raiseException("SOCKET-TIMEOUT", "send operation made no progress for " QLLD " ms (timeout: " QLLD
+            " ms)", elapsed, timeout_ms);
+        setError(xsink);
+        return -1;
+    }
+    if (send_rate.update(progress, true, now_ms)) {
+        xsink->raiseException("SOCKET-TIMEOUT", "the peer took less than the minimum rate of " QLLD " bytes/s",
+            send_rate.getMinRate());
+        setError(xsink);
+        return -1;
+    }
+    return 0;
+}
+
 QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink) {
     // Serialize against user-thread abort()/cleanup() that may concurrently
     // null + deref send_op / recv_op.  Held for the entire body so the inner
@@ -120,17 +156,6 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
 
     // --- Phase 1: Drive active send operation ---
     if (send_op) {
-        // Check send timeout
-        if (send_timeout_ms > 0 && send_op_start_ms > 0) {
-            int64 elapsed = monotonicMs() - send_op_start_ms;
-            if (elapsed > send_timeout_ms) {
-                xsink->raiseException("SOCKET-TIMEOUT",
-                    "send operation timed out after " QLLD " ms (timeout: " QLLD " ms)",
-                    elapsed, send_timeout_ms);
-                setError(xsink);
-                return nullptr;
-            }
-        }
         int send_events = qore_socket_poll_events_ops::continuePollEvents(send_op, xsink);
         if (*xsink) {
             setError(xsink);
@@ -140,6 +165,13 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
             // Send complete or failed
             if (send_op->goalReached()) {
                 releaseSendOp(xsink);
+                if (send_rate_below) {
+                    send_rate_below = false;
+                    xsink->raiseException("SOCKET-TIMEOUT", "the peer took less than the minimum rate of " QLLD
+                        " bytes/s", send_rate.getMinRate());
+                    setError(xsink);
+                    return nullptr;
+                }
             } else {
                 // Send failed
                 releaseSendOp(xsink);
@@ -149,6 +181,10 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
         } else {
             // TLS can require the opposite direction to finish this operation.
             poll_events |= send_events;
+            // checked after the attempt to send, so that a late wakeup is not charged to a peer that has made room
+            if (checkSendProgress(xsink)) {
+                return nullptr;
+            }
         }
     }
 
@@ -304,6 +340,10 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
             } else {
                 // TLS can require the opposite direction to finish this operation.
                 poll_events |= send_events;
+                // the send now waits for the peer, even if it ends at its first wakeup
+                if (checkSendProgress(xsink)) {
+                    return nullptr;
+                }
             }
         }
     }
@@ -328,10 +368,14 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
     if (result) {
         int64 poll_timeout = 0;
         if (send_op && send_timeout_ms > 0 && send_op_start_ms > 0) {
-            poll_timeout = send_timeout_ms - (monotonicMs() - send_op_start_ms);
+            poll_timeout = getEffectiveSendTimeout() - (monotonicMs() - send_op_start_ms);
             if (poll_timeout <= 0) {
                 poll_timeout = 1;
             }
+        }
+        // the minimum rate is checked while the send waits, also when the socket is never ready
+        if (send_op && send_rate.enabled() && (!poll_timeout || poll_timeout > send_rate.getCheckIntervalMs())) {
+            poll_timeout = send_rate.getCheckIntervalMs();
         }
         if (heartbeat_interval_ms > 0 && ws_state == WsState::CONNECTED && last_recv_activity_ms > 0) {
             // Measure from the most recent "ping-pacing anchor" — whichever
@@ -991,6 +1035,21 @@ void HttpWebSocketPollOperationPriv::releaseSendOp(ExceptionSink* xsink) {
     send_op = nullptr;
     send_op_start_ms = 0;
     if (op) {
+        // the time until the next send is not time waiting for the peer
+        send_bytes_done += static_cast<int64>(op->getBytesSent());
+        // a send that never waited is sampled only now and then, to learn how much the peer's buffers hold: this is
+        // the path of every message
+        if (send_rate.enabled()) {
+            int64 now_ms = monotonicMs();
+            if (send_op_waited || now_ms - send_rate_sample_ms >= SendRateSampleMs) {
+                send_rate_sample_ms = now_ms;
+                int64 delivered = send_bytes_done - qore_socket_object_private(sock).getUnacknowledgedSendBytes();
+                // a wait that used up the credit between two checks is decided here, so that no verdict is left
+                // for a later send
+                send_rate_below = send_rate.update(delivered > 0 ? delivered : 0, false, now_ms);
+            }
+        }
+        send_op_waited = false;
         op->deref(xsink);
     }
 }
@@ -1504,13 +1563,51 @@ nothing HttpWebSocketPollOperationBase::setFrameCallback(*code callback) [flags=
 }
 
 //! Sets the send timeout in milliseconds
-/** When a send operation exceeds this timeout, a SOCKET-TIMEOUT exception is raised
+/** When a send operation makes no progress for this time, a SOCKET-TIMEOUT exception is raised
     and the connection transitions to ERROR state.
 
     @param timeout_ms the timeout in milliseconds (0 = no timeout)
 */
 nothing HttpWebSocketPollOperationBase::setSendTimeout(int timeout_ms) [flags=NAMED_ARGS] {
     priv->setSendTimeout(static_cast<int64>(timeout_ms));
+}
+
+//! Sets whether the send timeout is a default that allows for a progress step at the minimum rate
+/** A TCP sender can see no progress from a client reading steadily at a low rate for as long as one step of its
+    receive window takes at that rate.  With \a scaled set, the send timeout is at least that time; without it, the
+    send timeout is exact.
+
+    @param scaled @ref True if the send timeout is a default rather than a value set explicitly
+
+    @since %Qore 3.0
+*/
+nothing HttpWebSocketPollOperationBase::setSendTimeoutScaled(bool scaled) [flags=NAMED_ARGS] {
+    priv->setSendTimeoutScaled(scaled);
+}
+
+//! Sets the minimum average rate at which the peer must take data while a send waits for it
+/** The time spent waiting for the peer is measured across the sends on the connection, against a credit of at least
+    \a window that the bytes taken by the peer renew (see @ref Qore::SendRateMonitor::enableProgressSteps()); a send to
+    a peer below it raises \c SOCKET-TIMEOUT and the connection transitions to the ERROR state.
+
+    @param min_rate the minimum rate in bytes per second; 0 disables the check
+    @param window the length of the sliding window
+
+    @throw SEND-RATE-ERROR \a min_rate is negative, or \a window is not positive with a non-zero \a min_rate
+
+    @since %Qore 3.0
+*/
+nothing HttpWebSocketPollOperationBase::setSendMinRate(int min_rate, timeout window) [flags=NAMED_ARGS] {
+    if (min_rate < 0) {
+        xsink->raiseException("SEND-RATE-ERROR", "the minimum rate " QLLD " is negative", min_rate);
+        return QoreValue();
+    }
+    if (min_rate > 0 && window <= 0) {
+        xsink->raiseException("SEND-RATE-ERROR", "the window of a minimum rate must be positive; got " QLLD " ms",
+            (int64)window);
+        return QoreValue();
+    }
+    priv->setSendMinRate(min_rate, window);
 }
 
 //! Returns the send timeout in milliseconds

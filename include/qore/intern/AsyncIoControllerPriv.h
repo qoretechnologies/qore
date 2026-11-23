@@ -469,8 +469,12 @@ public:
     //! Creates the dispatcher
     /** @param max_workers maximum number of Qore worker threads; 0 = auto (min(hardware_concurrency, 32))
         @param controller the owning AsyncIoControllerPriv for logging (may be nullptr)
+        @param marked_programs the Programs whose asynchronous work is being canceled
+            (AsyncIoControllerPriv::cancelByProgram()), which the dispatcher is created marked for (see
+            markProgramShuttingDown()), as the dispatcher that it replaces was (qore#7311)
     */
-    DLLLOCAL QoreCallDispatcher(int max_workers = 0, AsyncIoControllerPriv* controller = nullptr);
+    DLLLOCAL QoreCallDispatcher(int max_workers = 0, AsyncIoControllerPriv* controller = nullptr,
+        const std::unordered_map<QoreProgram*, int>* marked_programs = nullptr);
 
     //! Destructor — does NOT stop workers; call stop() first
     DLLLOCAL ~QoreCallDispatcher();
@@ -697,6 +701,16 @@ public:
         in the Program (its parse options, and counted in its threads), as a worker releases a release item
     */
     DLLLOCAL void clearProgramShuttingDown(QoreProgram* pgm, ExceptionSink* xsink);
+
+    //! Releases the release items parked for a Program in that Program, as clearProgramShuttingDown() and stop() do
+    /** Each release runs in the Program (its parse options, and counted in its threads) with an empty exception sink;
+        the exceptions are given to \a xsink at the end.  The caller does not hold the lock.
+
+        @param pgm the Program whose items are released
+        @param items the items; empty on return
+        @param xsink for exceptions
+    */
+    DLLLOCAL void releaseParkedItems(QoreProgram* pgm, std::vector<AsyncWorkItem>& items, ExceptionSink* xsink);
 
     //! Wait for in-flight callbacks belonging to a specific program to complete
     /** Unlike waitForIdle() which waits for ALL callbacks, this only waits for
@@ -2971,6 +2985,34 @@ private:
     */
     DLLLOCAL void takeProgramSubmitsLocked(IoThreadContext& tp, QoreProgram* pgm, std::vector<PollInfo>& out);
 
+    //! Takes the submissions that a thread that reads no commands keeps (qore#7225) and that \a match selects
+    /** The caller holds the lock; the operations are appended to \a out, to be canceled by the caller, and the other
+        submissions keep their order.  Used by the cancellations of a key, an owner and a Program, which find these
+        submissions nowhere else: the thread admits them when it starts again (qore#7311).
+
+        @param tp the thread
+        @param match selects the submissions to take
+        @param out the operations taken
+
+        @return the number of operations taken
+    */
+    DLLLOCAL size_t takeKeptSubmitsLocked(IoThreadContext& tp, const std::function<bool(const Command&)>& match,
+        std::vector<PollInfo>& out);
+
+    //! Cancels the operations taken from the submissions that threads keep (see takeKeptSubmitsLocked())
+    /** Their results are delivered as for admitted operations that are canceled; the caller does not hold the lock.
+
+        @param pinfos the operations taken; empty on return
+        @param key if not empty, the key whose waiters are woken (see signalCancelLocked())
+        @param xsink for exceptions
+    */
+    DLLLOCAL void cancelTakenSubmits(std::vector<PollInfo>& pinfos, const std::string& key, ExceptionSink* xsink);
+
+    //! Returns true if the calling code, with the given restriction, may cancel the submitted operation (qore#7010)
+    DLLLOCAL static bool submitInProgram(const Command& cmd, const AioAppRestriction& restrict_app) {
+        return !restrict_app.restricted || cmd.submit_app_id == restrict_app.app_id;
+    }
+
 
     //! Dispatches the notifications of the streams of an HTTP/2 or HTTP/3 operation: onStreamData() for the streams that
     //! have data or ended, and the transmission results of watched responses
@@ -3051,6 +3093,13 @@ private:
         would run the callbacks of the operations that the call cancels (qore#6703)
     */
     int active_program_cancels = 0;
+    //! The Programs whose cancelByProgram() is in progress on any thread, with the number of such calls (guarded by
+    //! \c m)
+    /** A dispatcher that a stop() made during such a call (by a destructor that the call runs) replaces is created
+        marked for them, so that no worker runs an item of such a Program before the call marks the new dispatcher
+        again (qore#7311)
+    */
+    std::unordered_map<QoreProgram*, int> canceling_programs;
     //! The cancelByProgram() calls in progress on the threads that are waiting in stop() (guarded by \c m)
     /** Such a call cannot end before its thread returns from stop(), so stop() does not wait for it
     */

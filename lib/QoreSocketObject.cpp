@@ -7630,3 +7630,9 @@ void my_socket_priv::shutdownAllQuicStreamReads() {
         sess->shutdownStreamReads();
     }
 }
+
+int64 qore_socket_object_private::getUnacknowledgedSendBytes() const {
+    // the lock keeps another thread from closing the descriptor, or from its number being reused, during the query
+    AutoLocker al(priv->m);
+    return qore_socket_private::getUnacknowledgedBytes(qore_socket_private::get(*priv->socket)->sock);
+}

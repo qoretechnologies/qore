@@ -365,6 +365,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_Serializable.qpp
     lib/QC_AbstractPollableIoObject.qpp
     lib/QC_AbstractPollableIoObjectBase.qpp
+    lib/QC_SendRateMonitor.qpp
     lib/QC_AbstractPollOperation.qpp
     lib/QC_SocketPollOperationBase.qpp
     lib/QC_SocketPollOperation.qpp
@@ -2472,6 +2473,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_Serializable.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractPollableIoObject.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractPollableIoObjectBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SendRateMonitor.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractPollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperation.cpp\"
