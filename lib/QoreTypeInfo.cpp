@@ -6549,6 +6549,26 @@ bool QoreTypeSpec::operator!=(const QoreTypeSpec& other) const {
 }
 
 
+//! a reference to the list or hash of a weak reference that the type match reads, released when it is taken only
+//! (qore#7375): the match of any other value costs no exception sink
+template <typename T>
+struct qore_weak_target_ref {
+    T* target = nullptr;
+
+    DLLLOCAL qore_weak_target_ref() = default;
+    qore_weak_target_ref(const qore_weak_target_ref&) = delete;
+    qore_weak_target_ref& operator=(const qore_weak_target_ref&) = delete;
+
+    DLLLOCAL ~qore_weak_target_ref() {
+        if (target) [[unlikely]] {
+            // the release of a last reference raises its destructors' exceptions here, as
+            // WeakListReferenceNode::getAsBoolImpl() does
+            ExceptionSink xsink;
+            target->deref(&xsink);
+        }
+    }
+};
+
 qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool exact, bool fold) const {
     return runtimeAcceptsValueImpl(n, exact, fold, DefaultTypeMatchPolicy{});
 }
@@ -6674,12 +6694,16 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
         case QTS_COMPLEXHASH: {
             const QoreTypeInfo* ti = nullptr;
             const QoreHashNode* h = nullptr;
+            // the hash of a weak reference is read with a reference of its own, as another thread can free it
+            // meanwhile (qore#7375)
+            qore_weak_target_ref<QoreHashNode> weak_target;
             if (ot == NT_HASH) {
                 h = n.get<const QoreHashNode>();
                 ti = h->getValueTypeInfo();
-            } else if (ot == NT_WEAKREF_HASH) {
-                // its type and its size, which reads as empty once it is freed (see WeakHashReferenceNode::borrow())
-                h = n.get<const WeakHashReferenceNode>()->borrow();
+            } else if (ot == NT_WEAKREF_HASH) [[unlikely]] {
+                // its type and its size, which reads as empty once it is freed (see WeakHashReferenceNode::lock())
+                weak_target.target = n.get<const WeakHashReferenceNode>()->lock();
+                h = weak_target.target;
                 ti = h->getValueTypeInfo();
             }
             if (!h) {
@@ -6719,12 +6743,16 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
         case QTS_COMPLEXSOFTLIST: {
             const QoreTypeInfo* ti = nullptr;
             const QoreListNode* l = nullptr;
+            // the list of a weak reference is read with a reference of its own, as another thread can free it
+            // meanwhile (qore#7375)
+            qore_weak_target_ref<QoreListNode> weak_target;
             if (ot == NT_LIST) {
                 l = n.get<const QoreListNode>();
                 ti = l->getValueTypeInfo();
-            } else if (ot == NT_WEAKREF_LIST) {
-                // its type and its size, which reads as empty once it is freed (see WeakListReferenceNode::borrow())
-                l = n.get<const WeakListReferenceNode>()->borrow();
+            } else if (ot == NT_WEAKREF_LIST) [[unlikely]] {
+                // its type and its size, which reads as empty once it is freed (see WeakListReferenceNode::lock())
+                weak_target.target = n.get<const WeakListReferenceNode>()->lock();
+                l = weak_target.target;
                 ti = l->getValueTypeInfo();
             }
             if (l) {

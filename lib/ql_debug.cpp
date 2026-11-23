@@ -27913,6 +27913,45 @@ static QoreValue f_dbg_hold_deref_last(const QoreListNode* params, RuntimeConfig
         xsink);
 }
 
+//! returns the reads of the size of the list or hash of the weak reference in the first entry of a list, given as
+//! it is held (qore#7375)
+/** The language reads a weak reference that it evaluates through its target; native code can give the weak reference
+    itself to the boolean conversion and to the complex type match, which read the size of its container.
+
+    @param holder a list whose first entry is a weak reference to a list or a hash
+
+    @return a hash: \c bool: the non-strict boolean conversion; \c "list<int>", \c "list<string>",
+    \c "hash<string, int>", \c "hash<string, string>": whether the value matches the type (an empty container with
+    no type matches any complex type of its kind)
+
+    @throw DBG-ARGUMENT-ERROR the first entry is not a weak reference to a list or a hash
+    @throw DEBUG-ERROR the build is not a debug build
+*/
+static QoreValue f_dbg_weak_reference_reads(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    const QoreListNode* holder = get_hard_value_param(params, 0).get<const QoreListNode>();
+    QoreValue v = holder->retrieveEntry(0);
+    if (v.getType() != NT_WEAKREF_LIST && v.getType() != NT_WEAKREF_HASH) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the first entry is a value of type '%s', not a weak reference to "
+            "a list or a hash", v.getFullTypeName());
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("bool", LexicalSemanticPolicy::getAsBoolDefault(v), xsink);
+    auto matches = [&](const char* name, const QoreTypeInfo* ti) {
+        rv->setKeyValue(name, QoreTypeInfo::runtimeAcceptsValue(ti, v) != QTI_NOT_EQUAL, xsink);
+    };
+    matches("list<int>", qore_get_complex_list_type(bigIntTypeInfo));
+    matches("list<string>", qore_get_complex_list_type(stringTypeInfo));
+    matches("hash<string, int>", qore_get_complex_hash_type(bigIntTypeInfo));
+    matches("hash<string, string>", qore_get_complex_hash_type(stringTypeInfo));
+    return rv.release();
+#else
+    xsink->raiseException("DEBUG-ERROR", "dbg_weak_reference_reads() is available in debug builds only");
+    return QoreValue();
+#endif
+}
+
 //! holds the next thread that starts to free a list or hash that has weak holders (qore#7198)
 /** The hold is taken once, in QoreListNode::derefImpl() or QoreHashNode::derefImpl(), when the last reference to a
     list or hash that weak references (":=") hold has been released and before its entries are freed; a reference
@@ -32202,6 +32241,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
+    qns.addBuiltinVariant("dbg_weak_reference_reads", f_dbg_weak_reference_reads, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 1, listTypeInfo, QORE_PARAM_NO_ARG, "holder");
     qns.addBuiltinVariant("dbg_hold_container_free", f_dbg_hold_container_free,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "type_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,

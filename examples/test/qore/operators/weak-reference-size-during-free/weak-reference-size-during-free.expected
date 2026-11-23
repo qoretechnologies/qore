@@ -1,0 +1,14 @@
+list as a boolean: False
+hash as a boolean: False
+list as a condition: empty
+hash as a condition: empty
+list instanceof list<int>: True
+hash instanceof hash<string, int>: True
+live: True True False False
+live empty: False True
+raw list: {bool: False, list<int>: True, list<string>: True, hash<string, int>: False, hash<string, string>: False}
+raw hash: {bool: False, list<int>: False, list<string>: False, hash<string, int>: True, hash<string, string>: True}
+raw list<string>: {bool: False, list<int>: False, list<string>: True, hash<string, int>: False, hash<string, string>: False}
+raw hash<string, int>: {bool: False, list<int>: False, list<string>: False, hash<string, int>: True, hash<string, string>: False}
+raw live list<string>: {bool: True, list<int>: False, list<string>: True, hash<string, int>: False, hash<string, string>: False}
+raw live empty list: {bool: False, list<int>: True, list<string>: True, hash<string, int>: False, hash<string, string>: False}
