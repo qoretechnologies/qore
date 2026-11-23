@@ -407,7 +407,8 @@ static QoreValue f_dbg_generic_cache_counts(const QoreListNode* params, RuntimeC
     component)
 */
 static QoreValue f_dbg_module_path_trust(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    HARD_QORE_VALUE_PARAM(path, const QoreStringNode, params, 0);
+    // the string values can be inline short strings (issue #7038)
+    QoreStringDataHelper path(get_param_value(params, 0));
     QoreValue dir_val = get_param_value(params, 1);
     QoreValue rel_val = get_param_value(params, 2);
     if ((dir_val.getType() == NT_STRING) != (rel_val.getType() == NT_STRING)) {
@@ -417,7 +418,9 @@ static QoreValue f_dbg_module_path_trust(const QoreListNode* params, RuntimeConf
     std::string load_path;
     bool trusted;
     if (dir_val.getType() == NT_STRING) {
-        std::string rel = rel_val.get<const QoreStringNode>()->c_str();
+        QoreStringDataHelper rel_str(rel_val);
+        QoreStringDataHelper dir_str(dir_val);
+        std::string rel(rel_str.c_str(), rel_str.size());
         // only names that the module search makes: the module manager asserts it
         bool clean = !rel.empty() && rel[0] != '/';
         for (size_t start = 0; clean;) {
@@ -436,10 +439,10 @@ static QoreValue f_dbg_module_path_trust(const QoreListNode* params, RuntimeConf
                 rel.c_str());
             return QoreValue();
         }
-        QoreModuleFoundIn found_in{dir_val.get<const QoreStringNode>()->c_str(), rel};
-        trusted = QMM.isTrustedModulePath(path->c_str(), &load_path, &found_in);
+        QoreModuleFoundIn found_in{dir_str.c_str(), rel};
+        trusted = QMM.isTrustedModulePath(path.c_str(), &load_path, &found_in);
     } else {
-        trusted = QMM.isTrustedModulePath(path->c_str(), &load_path);
+        trusted = QMM.isTrustedModulePath(path.c_str(), &load_path);
     }
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
     h->setKeyValue("trusted", trusted, xsink);

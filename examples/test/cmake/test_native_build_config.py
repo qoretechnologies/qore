@@ -229,7 +229,9 @@ int main() {
                 ExceptionSink xsink;
                 RetryManager manager(&xsink, error, reused);
                 bool closed = strcmp(error, "HTTP1-CAPACITY-ERROR");
-                int expected = closed && reused && strcmp(method, "POST") ? 2 : 1;
+                // a request that a closed connection refused at its submit was never sent, so it is repeated once on
+                // a new connection whatever its method (RFC 9110 section 9.2.2, qore#7385)
+                int expected = closed && reused ? 2 : 1;
                 ReferenceHolder<QoreHashNode> result(manager.request(method, "http", "127.0.0.1", 1, "/",
                     nullptr, nullptr, 0, 100, &xsink), &xsink);
                 bool passed = !result && xsink && manager.acquired == expected && manager.released == expected
