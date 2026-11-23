@@ -215,6 +215,10 @@ DLLLOCAL void qore_dbg_note_is_http2_poll();
 //! Returns the bytes of progress that dbg_quic_simulate_stream_progress() adds to the acknowledged byte count of a
 //! stream for this read of the count (0 when no progress is simulated for the stream)
 DLLLOCAL int64_t qore_dbg_quic_simulated_stream_progress(int64_t stream_id);
+
+//! Returns the progress that dbg_http_ws_simulate_send_progress() simulates for the sends of the HTTP/1.1 WebSocket
+//! server connections at the given time of the monotonic clock in milliseconds, or -1 when none is simulated
+DLLLOCAL int64_t qore_dbg_ws_simulated_send_progress(int64_t now_ms);
 //! the accounting of the stream credit that the HTTP/2 and HTTP/3 clients defer until the application consumes the
 //! data (issue #5820), for dbg_http_stream_credit_stats(): after every stream has ended, deferred == credited +
 //! settled (a byte is credited when it is consumed, or settled with its stream when the stream or its session ends

@@ -29545,6 +29545,54 @@ int64_t qore_dbg_quic_simulated_stream_progress(int64_t stream_id) {
     return dbg_quic_progress_added.load(std::memory_order_acquire);
 }
 
+namespace {
+//! the rate in bytes per second, the length of a step in ms and the start (monotonic ms) of the progress that
+//! dbg_http_ws_simulate_send_progress() simulates
+std::atomic<int64_t> dbg_ws_sim_rate{0};
+std::atomic<int64_t> dbg_ws_sim_step_ms{0};
+std::atomic<int64_t> dbg_ws_sim_start_ms{0};
+}
+
+int64_t qore_dbg_ws_simulated_send_progress(int64_t now_ms) {
+    int64_t rate = dbg_ws_sim_rate.load(std::memory_order_acquire);
+    if (rate <= 0) {
+        return -1;
+    }
+    int64_t step_ms = dbg_ws_sim_step_ms.load(std::memory_order_acquire);
+    int64_t steps = (now_ms - dbg_ws_sim_start_ms.load(std::memory_order_acquire)) / step_ms;
+    return steps > 0 ? steps * (rate * step_ms / 1000) : 0;
+}
+
+//! simulates a peer of the HTTP/1.1 WebSocket server connections that takes their data steadily, seen in steps
+/** While it is set, the progress that the send of an HTTP/1.1 WebSocket server connection measures while it waits
+    (the bytes that the peer acknowledged; see HttpWebSocketPollOperationPriv::checkSendProgress()) is the progress of
+    a peer that takes \a rate bytes per second since this call, seen once per \a step_ms: one step of
+    rate * step_ms / 1000 bytes at the end of each step.  The progress is derived from the monotonic clock that the
+    checks read, so that it does not depend on when the threads of the process run.
+
+    @param rate the rate of the simulated peer in bytes per second; zero or less ends the simulation
+    @param step_ms the length of a step in milliseconds; must be positive when \a rate is
+*/
+static QoreValue f_dbg_http_ws_simulate_send_progress(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64_t rate = get_param_value(params, 0).getAsBigInt();
+    int64_t step_ms = get_param_value(params, 1).getAsBigInt();
+    if (rate <= 0) {
+        dbg_ws_sim_rate.store(0, std::memory_order_release);
+        return QoreValue();
+    }
+    if (step_ms <= 0) {
+        xsink->raiseException("DBG-HTTP-WS-SIMULATE-ERROR", "the step must be positive; got " QLLD " ms", step_ms);
+        return QoreValue();
+    }
+    dbg_ws_sim_rate.store(0, std::memory_order_release);
+    dbg_ws_sim_step_ms.store(step_ms, std::memory_order_release);
+    int64_t now_ms = q_clock_getmicros_monotonic() / 1000;
+    dbg_ws_sim_start_ms.store(now_ms > 0 ? now_ms : 1, std::memory_order_release);
+    dbg_ws_sim_rate.store(rate, std::memory_order_release);
+    return QoreValue();
+}
+
 //! simulates a peer that takes the data of an HTTP/2 or HTTP/3 client stream a little at a time
 /** The next \a reads reads of the stream's progress count (Socket::getQuicClientStreamAckedBytes() or
     Socket::getHttp2StreamTakenBytes(), which a send waiting for a full send buffer to drain makes at the start and
@@ -32466,6 +32514,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_http2_simulate_stream_progress", f_dbg_quic_simulate_stream_progress,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "reads");
+    qns.addBuiltinVariant("dbg_http_ws_simulate_send_progress", f_dbg_http_ws_simulate_send_progress,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "rate",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "step_ms");
     qns.addBuiltinVariant("dbg_quic_simulate_stream_progress", f_dbg_quic_simulate_stream_progress,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "reads");

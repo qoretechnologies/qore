@@ -108,6 +108,12 @@ int HttpWebSocketPollOperationPriv::checkSendProgress(ExceptionSink* xsink) {
     int64 op_bytes = static_cast<int64>(send_op->getBytesSent());
     // progress is what the peer acknowledged: a write only shows room in the local send buffer
     int64 progress = send_bytes_done + op_bytes - qore_socket_object_private(sock).getUnacknowledgedSendBytes();
+#ifdef DEBUG
+    // tests simulate a peer that takes the data steadily, seen in steps, on the clock of the checks
+    if (int64 sim = qore_dbg_ws_simulated_send_progress(now_ms); sim >= 0) {
+        progress = sim;
+    }
+#endif
     if (progress > send_delivered_last) {
         send_delivered_last = progress;
         send_op_start_ms = now_ms;
