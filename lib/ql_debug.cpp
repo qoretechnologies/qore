@@ -9790,6 +9790,10 @@ public:
         runCase(c, false);
         drainedCancelCase(c);
         failedRestartCase(c);
+        for (CancelBy by : {CancelBy::Key, CancelBy::KeyOnAllThreads, CancelBy::Owner, CancelBy::ModuleCleanup}) {
+            keptCancelCase(c, by, false);
+            keptCancelCase(c, by, true);
+        }
     }
 
 private:
@@ -9897,6 +9901,105 @@ private:
         ValueHolder result(queue->shift(&xsink, 1000, &timed_out), &xsink);
         return !timed_out && result->getType() == NT_HASH
             && result->get<QoreHashNode>()->getKeyValue("canceled").getAsBool();
+    }
+
+    //! the cancellations other than cancelByProgram()
+    enum class CancelBy {
+        Key,
+        KeyOnAllThreads,
+        Owner,
+        //! the cancel round of the module cleanup at its deadline, for an operation that work of the cleanup submitted
+        ModuleCleanup,
+    };
+
+    //! a key or owner cancellation cancels the submission that a thread that reads no commands keeps (qore#7311)
+    /** The thread is held past its last command drain, or (\a stopped) it has stopped and failed to start again; the
+        submission that it keeps until it starts again is canceled by the cancellation, which delivers its result, and
+        not admitted when the thread starts.  Before, these cancellations looked only at the caches and the command
+        queues of the threads, and the submission was admitted when the thread started again.
+    */
+    static void keptCancelCase(UnitTestCounters& c, CancelBy by, bool stopped) {
+        std::string what = std::string(by == CancelBy::Key ? "cancelByKey()"
+            : (by == CancelBy::KeyOnAllThreads ? "cancelByKeyOnAllThreads()"
+                : (by == CancelBy::Owner ? "cancelByOwner()" : "cancelModuleCleanupUncounted()")))
+            + (stopped ? ", stopped thread" : ", thread past its last drain");
+        ExceptionSink xsink;
+        Ctrl* ctrl = startCtrl(c, xsink);
+        CtrlStop cs{ctrl, xsink};
+        if (xsink) {
+            return;
+        }
+        ReferenceHolder<QoreObject> sock_obj(&xsink);
+        ReferenceHolder<QoreObject> queue_obj(&xsink);
+        holdStopping(*ctrl, false, true);
+        int idx = submitRunning(*ctrl, sock_obj, queue_obj, xsink);
+        UT_ASSERT(c, idx == 0 && !xsink, ("an operation is submitted to the stopping thread: " + what).c_str());
+        if (idx != 0 || xsink) {
+            return;
+        }
+        std::string key;
+        {
+            AutoLocker al(ctrl->m);
+            Ctrl::IoThreadContext& t = *ctrl->io_threads[0];
+            UT_ASSERT(c, t.preserved_submits.size() == 1, ("the thread keeps the submission: " + what).c_str());
+            if (t.preserved_submits.size() != 1) {
+                return;
+            }
+            key = t.preserved_submits[0].key;
+            if (by == CancelBy::ModuleCleanup) {
+                // the operation is work that the module cleanup waits for, as one that work of the cleanup submits
+                t.preserved_submits[0].submit_sandbox_ctx = std::make_shared<QoreSandboxContext>(nullptr,
+                    QoreSandboxContext::ModuleCleanupWork::Submitted);
+            }
+            if (stopped) {
+                // the thread stops and fails to start again
+                ctrl->dbg_fail_io_thread_start = true;
+                t.dbg_hold_after_drain = false;
+                t.dbg_cond.broadcast();
+                AsyncIoStoppingThreadTest::waitStoppedLocked(*ctrl, t);
+            }
+        }
+        switch (by) {
+            case CancelBy::Key: {
+                SimpleRefHolder<QoreStringNode> k(new QoreStringNode(key));
+                UT_ASSERT(c, ctrl->cancelByKey(*k, &xsink), ("the cancellation finds the submission: " + what).c_str());
+                break;
+            }
+            case CancelBy::KeyOnAllThreads:
+                UT_ASSERT(c, ctrl->cancelByKeyOnAllThreads(key, &xsink, nullptr, AioAppRestriction()),
+                    ("the cancellation finds the submission: " + what).c_str());
+                break;
+            case CancelBy::Owner: {
+                SimpleRefHolder<QoreStringNode> owner(new QoreStringNode("preserved"));
+                UT_ASSERT_EQ(c, 1, ctrl->cancelByOwner(*owner, &xsink),
+                    ("the cancellation counts the submission: " + what).c_str());
+                break;
+            }
+            case CancelBy::ModuleCleanup:
+                UT_ASSERT_EQ(c, 1, (int)ctrl->cancelModuleCleanupUncounted(true, nullptr, &xsink),
+                    ("the cancellation counts the submission: " + what).c_str());
+                break;
+        }
+        UT_ASSERT(c, !xsink, ("the cancellation succeeds: " + what).c_str());
+        xsink.clear();
+        UT_ASSERT(c, canceledResult(*queue_obj, xsink), ("the cancellation delivers a canceled result: " + what).c_str());
+        xsink.clear();
+        // the thread is released, or can start again: it is started for whatever it still keeps
+        {
+            AutoLocker al(ctrl->m);
+            ctrl->dbg_fail_io_thread_start = false;
+            ctrl->io_threads[0]->dbg_hold_after_drain = false;
+            ctrl->io_threads[0]->dbg_cond.broadcast();
+        }
+        ctrl->start(&xsink);
+        bool processed = !xsink && ctrl->waitForProcessing(5000, &xsink);
+        UT_ASSERT(c, processed && !xsink, ("the thread processes its commands after the cancellation: " + what).c_str());
+        xsink.clear();
+        UT_ASSERT_EQ(c, 0, ctrl->getCacheSize(), ("the canceled submission is not admitted: " + what).c_str());
+        {
+            AutoLocker al(ctrl->m);
+            UT_ASSERT(c, ctrl->io_threads[0]->preserved_submits.empty(), ("no submission is kept: " + what).c_str());
+        }
     }
 
     //! a cancellation queued to the stopping thread before its last drain, with the submission: the drain finds both
@@ -10136,6 +10239,8 @@ public:
         otherThreadCase(c);
         stopWaiterCase(c);
         forkedScopeCase(c);
+        stopParkedCase(c);
+        bornMarkedCase(c);
     }
 
 private:
@@ -10211,6 +10316,82 @@ private:
         UT_ASSERT_EQ(c, 1, released, "the clear releases the parked release item");
         UT_ASSERT_EQ(c, 0, (int)cd->dbgParkedReleases(pgm), "no release item is left parked");
         UT_ASSERT(c, !xsink, "the mark and the clear raise no exception");
+    }
+
+    //! a dispatcher that replaces the marked one during cancelByProgram() is created marked for the Program
+    /** (qore#7311): before, it was marked only by the call's next mark, after a delivery that a destructor made, so a
+        worker of the new dispatcher could run an item of the Program that was queued on it meanwhile.  A release run
+        by the call's mark stops the controller and creates the new dispatcher, as a destructor that a delivery runs
+        can, and checks the new dispatcher at once, before the call marks it again.
+    */
+    static void bornMarkedCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        Disp* cd1 = ctrl->call_dispatcher.load();
+        QoreProgram* pgm = getProgram();
+        Disp* cd2 = nullptr;
+        bool cd2_marked = false;
+        bool done = false;
+        Disp::dbgSetReleaseHook([&]() {
+            if (done) {
+                return;
+            }
+            done = true;
+            ExceptionSink stop_xsink;
+            ctrl->stop(&stop_xsink);
+            ctrl->ensureCallDispatcher();
+            cd2 = ctrl->call_dispatcher.load();
+            cd2_marked = cd2 && cd2 != cd1 && marked(cd2, pgm);
+        });
+        queueItem(cd1, Disp::DT_NATIVE_TASK, pgm);
+        ctrl->cancelByProgram(pgm, &xsink);
+        Disp::dbgSetReleaseHook(std::function<void()>());
+        UT_ASSERT(c, cd2 && cd2 != cd1, "the release replaced the dispatcher");
+        UT_ASSERT(c, cd2_marked, "the new dispatcher is created marked for the canceled Program");
+        cd2 = ctrl->call_dispatcher.load();
+        UT_ASSERT(c, cd2 && !marked(cd2, pgm), "the end of the cancellation clears the mark");
+        UT_ASSERT(c, !xsink, "the cancellation raises no exception");
+        {
+            AutoLocker al(ctrl->m);
+            UT_ASSERT(c, ctrl->canceling_programs.empty(), "no Program is recorded as canceled after the call");
+        }
+    }
+
+    //! a dispatcher that is stopped while it holds release items parked for a Program releases them in that Program
+    /** as the clear of the Program's mark does (qore#7311): a stop() made while the Program is canceled (a destructor
+        that a delivery of cancelByProgram() runs can stop the controller) released them outside of it, in the
+        stopping thread's Program.  The items are parked for a Program other than this test's, so that the Program
+        that the release runs in shows where it was made.
+    */
+    static void stopParkedCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        // released after the controller's dispatcher, which holds a reference of it for its parked item
+        ReferenceHolder<QoreProgram> pgm(new QoreProgram(QoreParseOptions(PO_DEFAULT)), &xsink);
+        {
+            Ctrl* ctrl = newCtrl(xsink);
+            CtrlRelease cr{ctrl, xsink};
+            Disp* cd = ctrl->call_dispatcher.load();
+            int released = 0;
+            int released_in_program = 0;
+            QoreProgram* p = *pgm;
+            Disp::dbgSetReleaseHook([&released, &released_in_program, p]() {
+                ++released;
+                if (getProgram() == p) {
+                    ++released_in_program;
+                }
+            });
+            queueItem(cd, Disp::DT_RELEASE, p, "o7311");
+            cd->markProgramShuttingDown(p, &xsink);
+            UT_ASSERT_EQ(c, 1, (int)cd->dbgParkedReleases(p), "the mark parks the release item");
+            ctrl->stop(&xsink);
+            UT_ASSERT_EQ(c, 1, released, "the stop of the dispatcher releases the parked release item");
+            UT_ASSERT_EQ(c, 1, released_in_program, "the parked release item is released in its Program");
+            UT_ASSERT(c, !xsink, "the mark and the stop raise no exception");
+            xsink.clear();
+        }
+        pgm.release()->waitForTerminationAndDeref(&xsink);
+        xsink.clear();
     }
 
     //! 2: a mark whose allocation fails changes nothing
