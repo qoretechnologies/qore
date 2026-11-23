@@ -62,8 +62,9 @@ class DatasourceSensitiveDbNameTest inherits QUnit::Test {
         assertEq("****", mask_datasource_hash(h, Show).db);
         assertEq("dbhost", mask_datasource_hash(h, Show).host);
         assertEq("dbitestsensitivedb:****/****@****%dbhost", mask_datasource(h, Show));
-        # driver names are matched without case, as the DBI layer matches them
-        assertEq("****", mask_datasource_hash(h + {"type": "DBITESTSENSITIVEDB"}, Show).db);
+        # driver names are matched as the DBI layer matches them, with case: another name is not the loaded driver
+        # (its capability is not known, as for a driver that is not loaded)
+        assertEq(Plain, mask_datasource_hash(h + {"type": "DBITESTSENSITIVEDB"}, Show).db);
         # a driver that does not declare it: a plain database name is shown
         h.type = "dbitest";
         assertEq(Plain, mask_datasource_hash(h, Show).db);
