@@ -3958,11 +3958,8 @@ static QoreStringNode* qore_socket_object_exec_read_http_header_string(QoreSocke
 }
 
 static size_t qore_socket_object_exec_http_line_payload_size(const QoreStringNode& line) {
-    size_t len = line.size();
-    while (len && (line.c_str()[len - 1] == '\r' || line.c_str()[len - 1] == '\n')) {
-        --len;
-    }
-    return len;
+    // the line is taken as every reader of a chunked body takes it (issue 7417)
+    return my_socket_priv::httpLinePayloadSize(line.c_str(), line.size());
 }
 
 static bool qore_socket_object_exec_http_blank_line(const QoreStringNode& line) {

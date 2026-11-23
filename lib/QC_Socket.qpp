@@ -1574,15 +1574,8 @@ static bool socket_exec_is_data_available(QoreObject* self, QoreSocketObject* s,
 }
 
 static size_t socket_exec_http_line_payload_size(const QoreStringNode& line) {
-    size_t len = line.size();
-    const char* str = line.c_str();
-    if (len >= 2 && str[len - 2] == '\r' && str[len - 1] == '\n') {
-        return len - 2;
-    }
-    if (len && str[len - 1] == '\n') {
-        return len - 1;
-    }
-    return len;
+    // the line is taken as every reader of a chunked body takes it (issue 7417)
+    return my_socket_priv::httpLinePayloadSize(line.c_str(), line.size());
 }
 
 static bool socket_exec_http_blank_line(const QoreStringNode& line) {
@@ -3449,6 +3442,10 @@ AbstractPollOperation<auto> Socket::startPollLingeringClose(int max_discard = 0)
     \c getOutput() returns the accumulated body as a binary value
 
     @throw SOCKET-STARTPOLLREADHTTPBODY-ERROR invalid parameter combination
+    @throw READ-HTTP-CHUNK-ERROR (raised by the operation) a chunked body with an invalid chunk size (not
+    hexadecimal digits), chunk data not followed by a line end, or data that ended before the end of the body; a
+    chunked body that is not read to its end leaves the socket unable to read an HTTP header (see
+    unfinishedHttpChunkedBody())
 
     @since %Qore 3.0
 */

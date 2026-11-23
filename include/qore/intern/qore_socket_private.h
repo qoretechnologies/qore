@@ -5098,6 +5098,20 @@ public:
         return -1;
     }
 
+    //! Returns the size of a line of a chunked body read up to its line end, without the line end
+    /** Exactly one line end is removed (CRLF, or a bare LF), so that every reader of a chunked body takes a line in
+        the same way: any other CR or LF stays in the line, where it is refused (issue 7417)
+    */
+    DLLLOCAL static size_t httpLinePayloadSize(const char* str, size_t len) {
+        if (len >= 2 && str[len - 2] == '\r' && str[len - 1] == '\n') {
+            return len - 2;
+        }
+        if (len && str[len - 1] == '\n') {
+            return len - 1;
+        }
+        return len;
+    }
+
     //! Parses the size of a chunk from its chunk size line without the line end (RFC 9112 section 7.1)
     /** The size is one or more hexadecimal digits, which whitespace and a chunk extension can follow; any other
         value is refused, as a reader that took it otherwise than the sender's other readers would find the end of

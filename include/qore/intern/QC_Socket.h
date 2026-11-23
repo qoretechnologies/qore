@@ -615,6 +615,9 @@ public:
     //! connection stopped before its end (issue 7417)
     DLLLOCAL int checkHttpChunkedBodyFinished(ExceptionSink* xsink) const;
 
+    //! Returns the size of a line of a chunked body read up to its line end, without the line end
+    DLLLOCAL static size_t httpLinePayloadSize(const char* str, size_t len);
+
     //! Parses the size of a chunk from its chunk size line without the line end (RFC 9112 section 7.1)
     DLLLOCAL static int parseHttpChunkSize(const char* line, size_t len, int64_t& chunk_size, ExceptionSink* xsink);
 
