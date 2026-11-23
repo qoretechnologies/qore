@@ -8001,8 +8001,8 @@ static QoreValue newComplexFromOperand(IRValueSlots& values, IRCleanupSlots& cle
     interpreter gives the operand's reference to the lvalue (doPlusEqualsOnLValue()), and a local variable that takes
     it moves it as from an assignment.  Any other value stays in its temporary until the end of the statement: the
     result holds it then, but its temporary is released at the same point as in the AST interpreter.
-*/
-/** The caller calls it only when the result is the node of the operand (addAssignGaveOperand()).
+
+    The caller calls it only when the result is the node of the operand (addAssignGaveOperand()).
 */
 static QORE_INTERN_NOINLINE __attribute__((cold)) void releaseAddAssignOperand(const QoreIRFunction& func,
         IRValueSlots& values, IRCleanupSlots& cleanup, QoreIRValue operand, const QoreValue& res,

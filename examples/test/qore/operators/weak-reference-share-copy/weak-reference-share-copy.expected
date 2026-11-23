@@ -16,6 +16,8 @@ move call result: wf: {a: 1, b: 2}
 copy on write: src: [[9, 2], 4], b: [[9, 2], 3]
 copy on write hash: hsrc: {x: {y: 9}, z: {q: 2}}, hb: {x: {y: 9}}
 move into a local: {a: 1, b: 2}
+move into a typed local that is only read: {a: 1}, {a: 1}
+move into a typed local assigned after its declaration: {a: 1, b: 2}
 move by += into an empty local: {a: 1, b: 2}
 move of a list by += into an empty local: [9]
 move by += into an empty local in a try block: {a: 1, b: 2}

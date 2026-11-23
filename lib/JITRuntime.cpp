@@ -243,6 +243,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_take_store_value", reinterpret_cast<void*>(&qore_rt_take_store_value) },
     { "qore_rt_add_assign_release_operand", reinterpret_cast<void*>(&qore_rt_add_assign_release_operand) },
     { "qore_rt_weak_share_param", reinterpret_cast<void*>(&qore_rt_weak_share_param) },
+    { "qore_rt_own_store_value", reinterpret_cast<void*>(&qore_rt_own_store_value) },
     { "qore_rt_weak_share_borrowed_param", reinterpret_cast<void*>(&qore_rt_weak_share_borrowed_param) },
     { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
     { "qore_rt_take_param", reinterpret_cast<void*>(&qore_rt_take_param) },
@@ -2611,11 +2612,44 @@ extern "C" DLLEXPORT void qore_rt_add_assign_release_operand(uint64_t value, uin
     assert(!xsink);
 }
 
+//! returns \a value with a reference that a store to a local of native code that keeps it in its cache owns (qore#7342)
+/** For a list or hash that a weak reference designates, the reference of \a slot_a or \a slot_b (each optional: the
+    cleanup slot of the store's conversion and that of the operand's temporary, whose last use is the store) that
+    holds it is taken and the slot cleared, and a second slot that holds it too is released, which the reference taken
+    keeps from freeing it: the local then holds the only reference to a container that nothing else holds, which it
+    takes as moved, as the interpreters give the reference of a temporary to the store (see qore_rt_take_store_value());
+    any other value is given a reference of its own, and its slots are released at the end of the statement
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_own_store_value(uint64_t value, uint64_t* slot_a, uint64_t* slot_b) {
+    QoreValue v = fromBits(value);
+    if (v.isPlainPointer() && qore_weak_designated_container(v.getPtr())) {
+        bool taken = false;
+        ExceptionSink xsink;
+        for (uint64_t* slot : {slot_a, slot_b}) {
+            if (!slot || *slot != value) {
+                continue;
+            }
+            *slot = toBits(QoreValue());
+            if (!taken) {
+                taken = true;
+            } else {
+                v.discard(&xsink);
+                assert(!xsink);
+            }
+        }
+        if (taken) {
+            return value;
+        }
+    }
+    return toBits(v.refSelf());
+}
+
 //! takes \a value, the argument that the fast entry of native code binds to a parameter, and returns it, or a copy of
 //! its own for a list or hash that a weak reference designates, as LocalVar::instantiateIntern() binds it (qore#7342)
 extern "C" DLLEXPORT uint64_t qore_rt_weak_share_param(uint64_t value) {
     QoreValue v = fromBits(value);
     if (qore_weak_shared(v)) [[unlikely]] {
+        // releasing the argument's reference runs no destructor and raises nothing: the caller still holds it
         return toBits(qore_weak_share_copy(v, nullptr));
     }
     return value;
@@ -2626,6 +2660,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_weak_share_param(uint64_t value) {
 extern "C" DLLEXPORT uint64_t qore_rt_weak_share_borrowed_param(uint64_t value) {
     QoreValue v = fromBits(value);
     if (qore_weak_shared(v)) [[unlikely]] {
+        // the reference taken here is released by the copy, which runs no destructor: the caller holds another
         return toBits(qore_weak_share_copy(v.refSelf(), nullptr));
     }
     return toBits(QoreValue());

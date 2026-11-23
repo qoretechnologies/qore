@@ -1773,6 +1773,8 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_weak_share_param",
             llvm::FunctionType::get(i64_type, {i64_type}, false));
+    module.getOrInsertFunction("qore_rt_own_store_value",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_weak_share_borrowed_param",
             llvm::FunctionType::get(i64_type, {i64_type}, false));
 
@@ -22168,6 +22170,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (steal_cleanup) {
                     takeOrRefCleanupSlot(boxed, steal_cleanup, module, llvm_func);
                     owned_boxed = boxed;
+                } else if (consumed_cleanup && linst->mode == AssignmentMode::Normal
+                        && !weak_store_results.count(inst->operands[0].id)
+                        && irValueMayBeContainer(inst->operands[0].id)) {
+                    // the value that a conversion gave holds the reference of the conversion's cleanup slot, and
+                    // the operand's temporary, whose last use is the store, its own: a weakly designated container
+                    // that nothing else holds is taken from them, so that the share check below moves it, as the
+                    // interpreters do (qore#7342)
+                    llvm::Value* operand_slot = nullptr;
+                    auto uses_it = operand_remaining_uses.find(inst->operands[0].id);
+                    if (uses_it == operand_remaining_uses.end() || uses_it->second <= 1) {
+                        auto alloca_it = invoke_alloca_map.find(inst->operands[0].id);
+                        if (alloca_it != invoke_alloca_map.end()) {
+                            operand_slot = alloca_it->second ? alloca_it->second
+                                : promoteSsaEntryToAlloca(inst->operands[0].id, module, llvm_func);
+                        }
+                    }
+                    llvm::Value* null_ptr = llvm::ConstantPointerNull::get(
+                        llvm::PointerType::getUnqual(module.getContext()));
+                    auto own_fn = module.getOrInsertFunction("qore_rt_own_store_value",
+                            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
+                    owned_boxed = builder->CreateCall(own_fn, {boxed, consumed_cleanup,
+                        operand_slot ? operand_slot : null_ptr});
                 } else {
                     owned_boxed = emitHelperRef(module, boxed);
                 }

@@ -248,6 +248,15 @@ sub share_points_of_moves() {
     local.b = 2;
     printf("move into a local: %y\n", gw);
 
+    # a typed local converts the value it is given, and keeps it when nothing else holds it; also when only read
+    hash<auto> read_only = mk();
+    printf("move into a typed local that is only read: %y, %y\n", gw, read_only);
+
+    hash<auto> later;
+    later = mk();
+    later.b = 2;
+    printf("move into a typed local assigned after its declaration: %y\n", gw);
+
     # += on a local without a value assigns the value added, which a local takes as from an assignment
     auto ax;
     ax += mk();

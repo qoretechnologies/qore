@@ -2581,9 +2581,9 @@ if (x || y)
     <tt>w[0] = 9</tt> changes \c src but not \c b):
     <ul><li>a local variable that is assigned it (also the variable of a @ref foreach "foreach" loop, and a variable
       declared without a type that has no value or @ref null and that @ref plus_equals_operator "+=" adds it to) takes
-      a copy of its own while another holder holds it; one that nothing else holds (the value of @ref remove "remove", @ref shift "shift" or @ref pop "pop",
-      or of a call that gives a container that nothing else holds) is moved into the variable, and the weak reference
-      designates it there</li>
+      a copy of its own while another holder holds it; one that nothing else holds (the value of
+      @ref remove "remove", @ref shift "shift" or @ref pop "pop", or of a call that gives a container that nothing
+      else holds) is moved into the variable, and the weak reference designates it there</li>
     <li>a parameter, a list element (also an element of the list that @ref extract "extract" returns), a hash key, an
       object member, a global or thread-local variable, a class static variable, and a local variable that a closure
       captures or that a @ref lvalue_references "reference" is made to anywhere in its scope, that are given it always
