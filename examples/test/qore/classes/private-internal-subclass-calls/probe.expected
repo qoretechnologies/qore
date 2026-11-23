@@ -75,6 +75,18 @@ A9 adyn: integer: N9::m(int); string: A9::m(string); bool: RUNTIME-OVERLOAD-ERRO
 A9 typed: N9::m(int)
 Root10 outside: integer: X10::m(int); string: Root10::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
 Root10 variants: RUNTIME-OVERLOAD-ERROR: X10::m(int) listed 1 time(s)
+R11 outside: integer: RUNTIME-OVERLOAD-ERROR; string: R11::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
+R11 xd: integer: B11::m(int); string: R11::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
+R11 yd: integer: B11::m(int); string: R11::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
+R12 outside: integer: RUNTIME-OVERLOAD-ERROR; string: R12::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
+R12 zd: integer: B11::m(int); string: R12::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
+R12 xd: integer: B11::m(int); string: R12::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
+R12 yd: integer: B11::m(int); string: R12::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
+R13 outside: integer: RUNTIME-OVERLOAD-ERROR; string: R13::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
+R13 ka: integer: C13a::m(int); string: R13::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
+R13 kb: integer: C13a::m(int); string: R13::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
+R13 kc: integer: C13a::m(int); string: R13::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
+R13 rd: integer: RUNTIME-OVERLOAD-ERROR; string: R13::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
 Other L2: integer: RUNTIME-OVERLOAD-ERROR; string: L2::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
 Other L3: integer: RUNTIME-OVERLOAD-ERROR; string: L2::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
 Other M2: integer: RUNTIME-OVERLOAD-ERROR; string: M2::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
@@ -83,3 +95,5 @@ Other Two: integer: RUNTIME-OVERLOAD-ERROR; string: Two::m(string); bool: RUNTIM
 Other K7: integer: RUNTIME-OVERLOAD-ERROR; string: K7::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
 Other A8: integer: RUNTIME-OVERLOAD-ERROR; string: A8::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
 Other A9: integer: N9::m(int); string: A9::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
+Other R11: integer: RUNTIME-OVERLOAD-ERROR; string: R11::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
+Other R13: integer: RUNTIME-OVERLOAD-ERROR; string: R13::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR

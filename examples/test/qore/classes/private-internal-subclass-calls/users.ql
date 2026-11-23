@@ -133,6 +133,30 @@ class Root10 inherits K10a, K10b, P10 {
     string m(string s) { return "Root10::m(string)"; }
     string variants() { return K10b::variants(self); }
 }
+# classes whose private:internal paths merge before the class of the method: the code of each class of a
+# private:internal edge on a path calls it
+class B11 { string m(int i) { return "B11::m(int)"; } }
+class A11 inherits B11 {}
+class K11 inherits A11 {}
+class X11 inherits private:internal K11 { string xd(auto a) { object o = self; return o.m(a); } }
+class Y11 inherits private:internal A11 { string yd(auto a) { object o = self; return o.m(a); } }
+class Z11 inherits private:internal B11 { string zd(auto a) { object o = self; return o.m(a); } }
+class R11 inherits X11, Y11 { string m(string s) { return "R11::m(string)"; } }
+class R12 inherits Z11, X11, Y11 { string m(string s) { return "R12::m(string)"; } }
+# classes that inherit their own classes with private:internal access, each of which inherits a common chain
+class C13a { string m(int i) { return "C13a::m(int)"; } }
+class C13b inherits C13a {}
+class C13c inherits C13b {}
+class I13a inherits C13c {}
+class I13b inherits C13c {}
+class I13c inherits C13b {}
+class K13a inherits private:internal I13a { string ka(auto a) { object o = self; return o.m(a); } }
+class K13b inherits private:internal I13b { string kb(auto a) { object o = self; return o.m(a); } }
+class K13c inherits private:internal I13c { string kc(auto a) { object o = self; return o.m(a); } }
+class R13 inherits K13a, K13b, K13c {
+    string m(string s) { return "R13::m(string)"; }
+    string rd(auto a) { object o = self; return o.m(a); }
+}
 # an unrelated class
 class Other {
     string call(object o, auto a) { return o.m(a); }
@@ -270,8 +294,24 @@ sub show_outside(string label, object o) {
     show_outside("Root10", r10);
     printf("Root10 variants: %s\n", r10.variants());
 
+    R11 r11();
+    show_outside("R11", r11);
+    foreach string m in ("xd", "yd") {
+        show("R11", r11, m);
+    }
+    R12 r12();
+    show_outside("R12", r12);
+    foreach string m in ("zd", "xd", "yd") {
+        show("R12", r12, m);
+    }
+    R13 r13();
+    show_outside("R13", r13);
+    foreach string m in ("ka", "kb", "kc", "rd") {
+        show("R13", r13, m);
+    }
+
     Other other();
-    foreach object o in ((l2, l3, m2, h2, two, k7, a8, a9)) {
+    foreach object o in ((l2, l3, m2, h2, two, k7, a8, a9, r11, r13)) {
         printf("Other %s: %s\n", o.className(), results(auto sub (auto a) { return other.call(o, a); }));
     }
 }

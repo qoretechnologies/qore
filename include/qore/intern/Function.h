@@ -2524,20 +2524,228 @@ public:
 //! returns the copy of a class made when its Program's classes were copied (the class's \c new_copy)
 DLLLOCAL const qore_class_private* qore_class_private_get_new_copy(const qore_class_private* qc);
 
-// inheritance node
-struct INode {
-    QoreFunction* func;
-    ClassAccess access;
-    //! the class whose private:internal inheritance limits the function to its code, set only if \a access is Internal
-    /** The child class of the private:internal edge of the path from the list's class to the function's class (a
-        path with two such edges gives the function Inaccessible access); only the code of this class can call the
-        function's variants through the list (qore#7410)
-    */
-    const qore_class_private* internal_cls;
+//! The classes of the private:internal edges of the paths in a class hierarchy, indexed for the sets of them
+//! (InternalOwnerSet) computed for the hierarchy of a class (qore#7410)
+/** A class has the index of its class ID, so that a class and its copies (which keep the ID) have the same one, as
+    qore_class_private::sameClass() compares them
+*/
+struct InternalOwnerIndex {
+    //! the classes by index: the first one of each class ID
+    std::vector<const qore_class_private*> classes;
+    //! the index of each class ID
+    std::unordered_map<qore_classid_t, size_t> ids;
+    //! the indexes of the classes for which another class is injected
+    std::vector<size_t> injected;
 
-    DLLLOCAL INode(QoreFunction* f, ClassAccess a, const qore_class_private* ic = nullptr) : func(f), access(a),
-            internal_cls(ic) {
-        assert((a == Internal) == (ic != nullptr));
+    //! returns the index of the class, which it is given if it has none
+    DLLLOCAL size_t get(const qore_class_private* qc);
+};
+
+//! The classes whose private:internal inheritance makes an ancestor of a method accessible to their code (qore#7410)
+/** The child classes of the private:internal edges of the paths from the list's class to the ancestor's class (a path
+    with two such edges gives the ancestor Inaccessible access), as bits of an index shared by the sets of one
+    hierarchy: a union of two sets takes one operation for each 64 classes of the index
+*/
+struct InternalOwnerSet {
+    //! the index of the classes
+    std::shared_ptr<InternalOwnerIndex> index;
+    //! the bits of the indexes of the classes of the set
+    std::vector<uint64_t> bits;
+
+    DLLLOCAL InternalOwnerSet(std::shared_ptr<InternalOwnerIndex> i) : index(std::move(i)) {
+    }
+
+    //! adds a reference
+    DLLLOCAL void ref() const {
+        refs.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    //! removes a reference; deletes the set with the last one
+    DLLLOCAL void deref() const {
+        if (refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+            delete this;
+        }
+    }
+
+    //! returns true if the set has the class, by identity (qore#7036): as qore_class_private::sameClass()
+    /** Constant time apart from injected classes, as it is checked by the run-time search of a call's variant for
+        each entry of the list that it passes
+    */
+    DLLLOCAL bool contains(const qore_class_private& qc) const;
+
+    //! returns true if the set has the class of the given index
+    DLLLOCAL bool test(size_t i) const {
+        size_t w = i / 64;
+        return w < bits.size() && (bits[w] & (uint64_t(1) << (i % 64)));
+    }
+
+    //! adds the class of the given index
+    DLLLOCAL void add(size_t i) {
+        size_t w = i / 64;
+        if (w >= bits.size()) {
+            bits.resize(w + 1);
+        }
+        bits[w] |= uint64_t(1) << (i % 64);
+    }
+
+    //! adds the classes of another set of the same index
+    DLLLOCAL void add(const InternalOwnerSet& o) {
+        assert(o.index == index);
+        if (o.bits.size() > bits.size()) {
+            bits.resize(o.bits.size());
+        }
+        for (size_t w = 0, e = o.bits.size(); w < e; ++w) {
+            bits[w] |= o.bits[w];
+        }
+    }
+
+private:
+    //! the references: of the entries of the lists and of the sets being computed
+    mutable std::atomic<unsigned> refs{0};
+};
+
+//! A reference to an InternalOwnerSet
+class owner_set_t {
+public:
+    DLLLOCAL owner_set_t() = default;
+
+    DLLLOCAL explicit owner_set_t(InternalOwnerSet* s) : p(s) {
+        if (p) {
+            p->ref();
+        }
+    }
+
+    DLLLOCAL owner_set_t(const owner_set_t& o) : p(o.p) {
+        if (p) {
+            p->ref();
+        }
+    }
+
+    DLLLOCAL owner_set_t(owner_set_t&& o) noexcept : p(o.p) {
+        o.p = nullptr;
+    }
+
+    DLLLOCAL ~owner_set_t() {
+        if (p) {
+            p->deref();
+        }
+    }
+
+    DLLLOCAL owner_set_t& operator=(owner_set_t o) noexcept {
+        std::swap(p, o.p);
+        return *this;
+    }
+
+    DLLLOCAL InternalOwnerSet* get() const {
+        return p;
+    }
+
+    DLLLOCAL InternalOwnerSet* operator->() const {
+        assert(p);
+        return p;
+    }
+
+    DLLLOCAL InternalOwnerSet& operator*() const {
+        assert(p);
+        return *p;
+    }
+
+    DLLLOCAL explicit operator bool() const {
+        return p != nullptr;
+    }
+
+    DLLLOCAL bool operator==(const owner_set_t& o) const {
+        return p == o.p;
+    }
+
+    DLLLOCAL bool operator!=(const owner_set_t& o) const {
+        return p != o.p;
+    }
+
+private:
+    InternalOwnerSet* p = nullptr;
+};
+
+//! returns a new set of the classes of private:internal edges of the given index
+DLLLOCAL inline owner_set_t make_owner_set(std::shared_ptr<InternalOwnerIndex> index) {
+    return owner_set_t(new InternalOwnerSet(std::move(index)));
+}
+
+//! An entry of the inheritance list of a method: an ancestor and its access, as small as a pointer and its access
+//! (qore#7410)
+struct INode {
+    //! the ancestor
+    QoreFunction* func;
+
+    DLLLOCAL INode(QoreFunction* f, ClassAccess a, const owner_set_t& o = owner_set_t()) : func(f) {
+        assert((a == Internal) == (bool)o);
+        set(a, o.get());
+    }
+
+    DLLLOCAL INode(const INode& o) : func(o.func), tag(o.tag) {
+        if (owners()) {
+            owners()->ref();
+        }
+    }
+
+    DLLLOCAL INode(INode&& o) noexcept : func(o.func), tag(o.tag) {
+        o.tag = Public;
+    }
+
+    DLLLOCAL ~INode() {
+        if (owners()) {
+            owners()->deref();
+        }
+    }
+
+    DLLLOCAL INode& operator=(const INode& o) {
+        if (this != &o) {
+            INode t(o);
+            swap(t);
+        }
+        return *this;
+    }
+
+    DLLLOCAL INode& operator=(INode&& o) noexcept {
+        swap(o);
+        return *this;
+    }
+
+    //! the access of the ancestor in the list
+    DLLLOCAL ClassAccess access() const {
+        return (ClassAccess)(tag & TagMask);
+    }
+
+    //! the classes whose code can call the ancestor's variants through the list, set only if its access is Internal
+    DLLLOCAL InternalOwnerSet* owners() const {
+        return reinterpret_cast<InternalOwnerSet*>(tag & ~TagMask);
+    }
+
+    //! replaces the classes; the access is unchanged
+    DLLLOCAL void setOwners(const owner_set_t& o) {
+        assert(access() == Internal && o);
+        INode t(func, Internal, o);
+        swap(t);
+    }
+
+private:
+    static constexpr uintptr_t TagMask = 3;
+    static_assert(alignof(InternalOwnerSet) > TagMask, "the access is kept in the low bits of the set's address");
+    static_assert(Inaccessible <= TagMask, "the access is kept in the low bits of the set's address");
+
+    //! the set of the classes (with a reference) and the access in its low bits
+    uintptr_t tag;
+
+    DLLLOCAL void set(ClassAccess a, InternalOwnerSet* o) {
+        if (o) {
+            o->ref();
+        }
+        tag = reinterpret_cast<uintptr_t>(o) | (uintptr_t)a;
+    }
+
+    DLLLOCAL void swap(INode& o) noexcept {
+        std::swap(func, o.func);
+        std::swap(tag, o.tag);
     }
 };
 
@@ -2556,9 +2764,9 @@ struct IList : public ilist_t {
         @return the function found, or nullptr if no ancestor after \a aqfi is accessible (\a aqfi is then \a aqfe)
 
         An inaccessible ancestor does not end the search: the ancestors after it are searched (qore#7381).  An ancestor
-        reached through private:internal inheritance is accessible only to the code of the class whose
-        private:internal inheritance it is reached through (INode::internal_cls), not to the code of the other
-        classes of the hierarchy (qore#7410)
+        reached through private:internal inheritance is accessible only to the code of the classes whose
+        private:internal inheritance it is reached through (INode::owners), not to the code of the other classes of
+        the hierarchy (qore#7410)
     */
     DLLLOCAL QoreFunction* getFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
         const_iterator& aqfi, const_iterator aqfe, bool& internal_access) const;
@@ -2788,71 +2996,23 @@ public:
         return qc->getNamespacePath(true);
     }
 
-    //! adds an ancestor to the inheritance list
-    /** @param internal_cls the class whose private:internal inheritance gives the ancestor Internal access, if it has
-        it (INode::internal_cls)
+    //! adds an ancestor to the inheritance list; returns its position in the list
+    /** @param owners the classes whose code can call the ancestor's variants if \a access is Internal
     */
-    DLLLOCAL void addAncestor(QoreFunction* ancestor, ClassAccess access,
-            const qore_class_private* internal_cls = nullptr) {
-        ilist.push_back(INode(ancestor, access, internal_cls));
+    DLLLOCAL size_t addAncestor(QoreFunction* ancestor, ClassAccess access, owner_set_t owners = owner_set_t()) {
+        ilist.push_back(INode(ancestor, access, std::move(owners)));
         noteAncestor(*ancestor);
+        return ilist.size() - 1;
     }
 
-    //! adds an ancestor to the inheritance list if it is not in it yet; as addAncestor()
-    DLLLOCAL void addNewAncestor(QoreFunction* ancestor, ClassAccess access,
-            const qore_class_private* internal_cls = nullptr) {
-        for (ilist_t::iterator i = ilist.begin(), e = ilist.end(); i != e; ++i) {
-            if ((*i).func == ancestor) {
-                return;
+    //! adds an ancestor to the inheritance list if it is not in it yet; returns its position in the list
+    DLLLOCAL size_t addNewAncestor(QoreFunction* ancestor, ClassAccess access, owner_set_t owners = owner_set_t()) {
+        for (size_t i = 0, e = ilist.size(); i < e; ++i) {
+            if (ilist[i].func == ancestor) {
+                return i;
             }
         }
-        ilist.push_back(INode(ancestor, access, internal_cls));
-        noteAncestor(*ancestor);
-    }
-
-    //! gives an ancestor in the inheritance list the access of another path to its class if it is less restrictive
-    /** A class reached through several paths of the hierarchy has the access of the least restrictive one (qore#6498);
-        an ancestor reached through the private:internal paths of several classes has an entry for each of them
-        (INode::internal_cls; qore#7410), after its first one
-    */
-    DLLLOCAL void lowerAncestorAccess(const QoreFunction* ancestor, ClassAccess access,
-            const qore_class_private* internal_cls = nullptr) {
-        assert((access == Internal) == (internal_cls != nullptr));
-        INode* first = nullptr;
-        for (INode& i : ilist) {
-            if (i.func != ancestor) {
-                continue;
-            }
-            if (!first) {
-                first = &i;
-            }
-            if (access == Internal && i.access == Internal && i.internal_cls == internal_cls) {
-                return;
-            }
-        }
-        assert(first);
-        if (access < first->access) {
-            QoreFunction* f = first->func;
-            first->access = access;
-            first->internal_cls = internal_cls;
-            // the entries of the private:internal paths of other classes are not needed with a less restrictive one
-            if (access < Internal) {
-                for (ilist_t::iterator i = ilist.begin(), e = ilist.end(); i != e;) {
-                    if (i->func == f && &*i != first) {
-                        assert(i->access == Internal);
-                        i = ilist.erase(i);
-                        e = ilist.end();
-                    } else {
-                        ++i;
-                    }
-                }
-            }
-            return;
-        }
-        if (access == Internal && first->access == Internal) {
-            INode n(first->func, Internal, internal_cls);
-            ilist.push_back(n);
-        }
+        return addAncestor(ancestor, access, std::move(owners));
     }
 
     //! removes the ancestors from the inheritance list, so that it can be built again
@@ -3615,12 +3775,15 @@ public:
             //printd(5, "resolving %p %s::%s() base method %p %s::%s() from %p -> %p\n", qc, qc->getName(), getName(), mfb->qc, mfb->qc->getName(), getName(), mfb, mfb->new_copy);
 #endif
             (*i).func = mfb->new_copy;
-            // the class of a private:internal path is in the hierarchy, which is copied with the class (qore#7410)
-            if ((*i).internal_cls) {
-                (*i).internal_cls = qore_class_private_get_new_copy((*i).internal_cls);
-            }
         }
+        resolveOwnerCopies();
     }
+
+    //! makes the sets of the classes of the private:internal paths of the inheritance list sets of their copies
+    /** The classes are in the hierarchy, which is copied with the class; a set shared by several entries is copied
+        once (qore#7410)
+    */
+    DLLLOCAL void resolveOwnerCopies();
 
     DLLLOCAL const MethodFunctionBase* findVariantOwnerFunction(const AbstractQoreFunctionVariant* variant) const {
         for (ilist_t::const_iterator ai = ilist.begin(), ae = ilist.end(); ai != ae; ++ai) {

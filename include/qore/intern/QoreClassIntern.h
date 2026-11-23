@@ -2835,6 +2835,28 @@ typedef std::vector<BCNode*> bclist_t;
 //  note that this data structure cannot be modified even if the class is
 //  copied to a subprogram object and extended
 //  this class is a QoreReferenceCounter so it won't be copied when the class is copied
+//! The access of the ancestors of a class, computed once for the inheritance lists of several of its methods
+//! (qore#7410)
+/** It depends only on the hierarchy, not on the method; a caller that builds the lists of several methods of a class
+    passes one to each of the walks, which computes it on the first one
+*/
+struct AncestorAccessCache {
+    //! an ancestor of the class
+    struct Entry {
+        //! the class
+        qore_class_private* cls;
+        //! the access of its methods in the lists
+        ClassAccess access;
+        //! the classes whose code can call its methods through the lists if \a access is Internal
+        owner_set_t owners;
+    };
+
+    //! true if the access has been computed
+    bool valid = false;
+    //! the ancestors in the order of the lists
+    std::vector<Entry> entries;
+};
+
 class BCList : public bclist_t {
 protected:
 public:
@@ -2954,11 +2976,12 @@ public:
     DLLLOCAL bool inAccessHierarchy(const qore_class_private& qc, ClassAccess& n_access) const;
 
     DLLLOCAL void addNewAncestors(QoreMethod* m);
-    DLLLOCAL void addAncestors(QoreMethod* m);
+    //! @param cache the access of the ancestors, computed once for the methods of a class (qore#7410)
+    DLLLOCAL void addAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr);
     DLLLOCAL void addNewStaticAncestors(QoreMethod* m);
-    DLLLOCAL void addStaticAncestors(QoreMethod* m);
-    DLLLOCAL void parseAddAncestors(QoreMethod* m);
-    DLLLOCAL void parseAddStaticAncestors(QoreMethod* m);
+    DLLLOCAL void addStaticAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr);
+    DLLLOCAL void parseAddAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr);
+    DLLLOCAL void parseAddStaticAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr);
 
     DLLLOCAL void parseResolveAbstract();
 
@@ -5037,16 +5060,20 @@ public:
     }
 
     //! adds the static methods of the base classes that the method overrides, to the most distant base class
-    DLLLOCAL void parseAddStaticAncestors(QoreMethod* m) {
+    /** @param cache the access of the ancestors, computed once for the methods of the class (qore#7410)
+    */
+    DLLLOCAL void parseAddStaticAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr) {
         if (!scl) {
             return;
         }
 
-        scl->parseAddStaticAncestors(m);
+        scl->parseAddStaticAncestors(m, cache);
     }
 
     //! adds the methods of the base classes that the method overrides, to the most distant base class
-    DLLLOCAL void parseAddAncestors(QoreMethod* m) {
+    /** @param cache the access of the ancestors, computed once for the methods of the class (qore#7410)
+    */
+    DLLLOCAL void parseAddAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr) {
         //printd(5, "qore_class_private::parseAddAncestors(%p %s) this: %p cls: %p %s scl: %p\n", m, m->getName(), this, cls, name.c_str(), scl);
         assert(strcmp(m->getName(), "constructor"));
 
@@ -5054,7 +5081,7 @@ public:
             return;
         }
 
-        scl->parseAddAncestors(m);
+        scl->parseAddAncestors(m, cache);
     }
 
     DLLLOCAL int initMembers(QoreObject& o, bool& need_scan, ExceptionSink* xsink) const;
