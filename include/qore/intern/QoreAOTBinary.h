@@ -652,6 +652,9 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      - no format change, but the code that a v50 compiler wrote differs (an image must be rebuilt): string literals
 //!        that an earlier compiler folded with the encoding of the source tagged as the default encoding are
 //!        materialized as UTF-8 CONST_STRING values, as the source is decoded as UTF-8 (qore#6816, qore#6815)
+//! v52 (the reader refuses v51 and older images, including images embedded in executables):
+//!      - wildcard bounds in type paths record the declaring type parameter owner and index recursively;
+//!        older readers cannot safely restore these bounds (qore#7184)
 //! The shared format version for the changes in batch AL (see v48 above).
 constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
 //! The shared format version for the changes in batch AM (see v49 above).
@@ -660,6 +663,8 @@ constexpr uint16_t QORE_AOT_BATCH_AM_VERSION = 49;
 constexpr uint16_t QORE_AOT_BATCH_AN_VERSION = 50;
 //! The shared format version for the changes in batch AO (see v51 above).
 constexpr uint16_t QORE_AOT_BATCH_AO_VERSION = 51;
+//! First format version that resolves owner-qualified type parameters inside wildcard bounds.
+constexpr uint16_t QORE_AOT_WILDCARD_BOUND_VERSION = 52;
 //! First format version whose static method call references record the class that declares their method (see v49
 //! above, qore#6679): the method name of a STATIC_METHOD_REF or EN_STATIC_METH_REF expression, and the name that
 //! native code passes to qore_rt_create_static_method_call_ref_aot(), is followed by a newline and the class
@@ -668,10 +673,11 @@ constexpr uint16_t QORE_AOT_BATCH_AO_VERSION = 51;
 constexpr uint16_t QORE_AOT_STATIC_METHOD_REF_TARGET_VERSION = 49;
 static_assert(QORE_AOT_STATIC_METHOD_REF_TARGET_VERSION == QORE_AOT_BATCH_AM_VERSION,
     "the format changes of batch AM share one format version (v49)");
-//! Old compiled artifacts must be rebuilt (see v51 above): the reader refuses older images, the program image of a qcc
-//! executable included (qore_aot_run_v4() reads it before anything else); the reader of a v51 image always has the temp
-//! scopes of its IR (qore#6742) and the local unwind locations of its IR functions (qore#6672)
-constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AO_VERSION;
+//! Old compiled artifacts must be rebuilt (see v52 above): the reader refuses older images, the program image of a qcc
+//! executable included (qore_aot_run_v4() reads it before anything else), before it reads any type path; the reader of
+//! a v52 image always has the temp scopes of its IR (qore#6742), the local unwind locations of its IR functions
+//! (qore#6672) and the owner-qualified wildcard bounds of its type paths (qore#7184)
+constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_WILDCARD_BOUND_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
 //! Variant-flags bit of FUNCTIONS and METHODS records (QORE_AOT_FEAT_METHOD_SYNC): the variant is synchronized
@@ -811,7 +817,7 @@ static_assert(QORE_AOT_TEMP_SCOPES_VERSION == QORE_AOT_BATCH_AN_VERSION,
 constexpr uint16_t QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION = 51;
 static_assert(QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION == QORE_AOT_BATCH_AO_VERSION,
     "the format changes of batch AO share one format version (v51)");
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AO_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_WILDCARD_BOUND_VERSION;
 
 //! The tag of the runtime location of a serialized IR instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
 enum class QoreAOTStmtLocTag : uint8_t {
