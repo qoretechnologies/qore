@@ -752,6 +752,84 @@ int ObjCountRec::getDifference() {
     return before ? -1 : 0;
 }
 
+bool LValueHelper::weakPathEdge(size_t c, const AbstractQoreNode* leaf) const {
+    // a weak reference does not count for the container that holds it, so no change crosses a weak step
+    if (ocvec[c].shared) {
+        return false;
+    }
+    const AbstractQoreNode* holder = ocvec[c - 1].con;
+    const AbstractQoreNode* con = ocvec[c].con;
+    // the change of the value of the lvalue was written to the last container of the path, which holds it: a
+    // container on the path that is that value, in that container, was reached again through a weak reference (ex:
+    // remove c.holder.inner.wk.inner.k, which removes from inner)
+    if (leaf && con == leaf && holder == ocvec.back().con) {
+        return false;
+    }
+    // the path reached the holder again through a weak reference, then came down through containers it had passed
+    // before (ex: c.holder.inner.wk.inner.k, where wk is a weak reference to c.holder): the first entry stands for
+    // the edge
+    for (size_t i = 1; i < c; ++i) {
+        if (!ocvec[i].shared && ocvec[i - 1].con == holder && ocvec[i].con == con) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void LValueHelper::writeWeakPathChanges(const AbstractQoreNode* leaf) {
+    // each edge from a holder to a container that it holds strongly is written once (weakPathEdge()); a container's
+    // change is final once the changes of the containers that it holds on the path were written to it, so the edges
+    // are written from the bottom up.  A container has one strong holder, so the edges form a tree.  No memory is
+    // allocated: the entries record which edges were written
+    size_t left = 0;
+    for (size_t c = 1, e = ocvec.size(); c < e; ++c) {
+        ocvec[c].edge_written = !weakPathEdge(c, leaf);
+        if (!ocvec[c].edge_written) {
+            ++left;
+        }
+    }
+    while (left) {
+        bool progress = false;
+        for (size_t c = 1, e = ocvec.size(); c < e; ++c) {
+            if (ocvec[c].edge_written) {
+                continue;
+            }
+            const AbstractQoreNode* con = ocvec[c].con;
+            bool ready = true;
+            for (size_t m = 1; m < e; ++m) {
+                if (!ocvec[m].edge_written && ocvec[m - 1].con == con) {
+                    ready = false;
+                    break;
+                }
+            }
+            if (!ready) {
+                continue;
+            }
+            int dt = ocvec[c].getDifference();
+            if (dt) {
+                inc_container_obj(ocvec[c - 1].con, dt);
+            }
+            ocvec[c].edge_written = true;
+            --left;
+            progress = true;
+        }
+        if (!progress) {
+            // strong containment has no cycle: the edges left are written from the end of the path
+            assert(false);
+            for (size_t c = ocvec.size(); c-- > 1;) {
+                if (!ocvec[c].edge_written) {
+                    int dt = ocvec[c].getDifference();
+                    if (dt) {
+                        inc_container_obj(ocvec[c - 1].con, dt);
+                    }
+                    ocvec[c].edge_written = true;
+                }
+            }
+            break;
+        }
+    }
+}
+
 LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
@@ -897,7 +975,8 @@ LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink
 }
 
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
-        ref_pgms(std::move(o.ref_pgms)), ocvec(std::move(o.ocvec)), before(o.before),
+        ref_pgms(std::move(o.ref_pgms)), ocvec(std::move(o.ocvec)), path_has_weak_step(o.path_has_weak_step),
+        before(o.before),
         removal_objects(std::move(o.removal_objects)), removed_objects(std::move(o.removed_objects)), rdt(o.rdt),
         vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
         assignment_only(o.assignment_only), read_access(o.read_access),
@@ -1115,7 +1194,11 @@ LValueHelper::~LValueHelper() {
     bool obj_chg = before;
     bool obj_ref = false;
 
-    if (!(*vl.xsink) && (val || qv)) {
+    // the object counts and the scan follow the values that the lvalue's containers hold now, also when the operation
+    // raised an exception: one that raised after changing a container, such as a merge that stored a key before it
+    // refused another one, leaves the change in place, and the containers above it, and the recursive set of the
+    // object holding them, must count it (qore#7322)
+    if (val || qv) {
         // see if we have any object count changes
         if (!ocvec.empty()) {
             // v && qv could be nullptr if the constructor taking QoreObject& was used (to scan objects after initialization)
@@ -1142,7 +1225,10 @@ LValueHelper::~LValueHelper() {
             }
 
             // write changes to container hierarchy
-            if (ocvec.size() > 1) {
+            if (path_has_weak_step) [[unlikely]] {
+                // a path that crosses a weak reference can reach containers that are already on it (qore#7321)
+                writeWeakPathChanges(qv ? qv->getInternalNode() : nullptr);
+            } else if (ocvec.size() > 1) {
                 for (int i = ocvec.size() - 2; i >= 0; --i) {
                     int dt = ocvec[i + 1].getDifference();
                     if (dt) {
