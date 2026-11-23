@@ -99,7 +99,10 @@ class ConnectSendStallTest inherits QUnit::Test {
     }
 
     globalTearDown() {
-        call_function("dbg_quic_release_stream_data");
+        # the hook exists only in a debug build, where the test cases ran (setUp() skips them otherwise)
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            call_function("dbg_quic_release_stream_data");
+        }
         delete server;
     }
 

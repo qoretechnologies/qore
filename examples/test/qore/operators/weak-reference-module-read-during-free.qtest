@@ -45,6 +45,9 @@ class WeakReferenceModuleReadDuringFreeTest inherits QUnit::Test {
     }
 
     testModes() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the free is held with dbg_hold_container_free(), which only a library debug build has");
+        }
         string expected = ReadOnlyFile::readTextFile(dir + "/" + Program + ".expected");
         foreach string mode in (Modes) {
             hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "

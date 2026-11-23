@@ -10729,6 +10729,10 @@ static QORE_INTERN_NOINLINE int qore_ir_run_lvalue_path_ternary(const QoreIRLVal
         // a string enum lvalue refuses the plain string that the operation leaves, as in the AST interpreter
         // (qore#6195)
         return -1;
+    } else if (vt == NT_LIST
+            && qore_list_private::get(*lvh.getValue().get<QoreListNode>())->checkValid(xsink)) {
+        // a list freed under a weak reference cannot be changed, as by the other changes (qore#7199)
+        return -1;
     } else {
         size_t offset = static_cast<size_t>(offset_val.getAsBigInt());
         if (path_inst->ternary_op == LVTernaryOp::Splice) {

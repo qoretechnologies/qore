@@ -181,6 +181,10 @@ DLLLOCAL size_t qore_dbg_registered_qore_ops();
 //! Returns True if dbg_http3_client_hide_error() makes the HTTP/3 client poll operations report no error
 DLLLOCAL bool qore_dbg_h3_client_error_hidden();
 
+//! Counts a call of Socket::isHttp2() made off the I/O thread that queried the TLS state with a poll operation, as no
+//! negotiation result was recorded (qore#7223); read with dbg_is_http2_poll_count()
+DLLLOCAL void qore_dbg_note_is_http2_poll();
+
 //! Returns the bytes of progress that dbg_quic_simulate_stream_progress() adds to the acknowledged byte count of a
 //! stream for this read of the count (0 when no progress is simulated for the stream)
 DLLLOCAL int64_t qore_dbg_quic_simulated_stream_progress(int64_t stream_id);

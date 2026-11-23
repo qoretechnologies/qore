@@ -214,7 +214,8 @@ sub main() {
                 on_exit done.dec();
                 load_module("ReportLoadFail");
             }();
-            if (!dbg_module_load_waiters("ReportLoadFail", 1, 60000)) {
+            # called by name: the hook exists only in a debug build of the library, where the test runs this case
+            if (!call_function("dbg_module_load_waiters", "ReportLoadFail", 1, 60000)) {
                 throw "TEST-ERROR", "the host's thread did not wait for the load";
             }
             ReportGate::Gate::go.dec();
@@ -264,7 +265,8 @@ sub main() {
             Promise pr();
             Future f = pr.getFuture();
             bool host = mode == "host-completion";
-            object op = dbg_completion_reject_op(server, pr, host ? "HOST-ERR" : "TENANT-ERR",
+            # called by name: the hook exists only in a debug build of the library, where the test runs these cases
+            object op = call_function("dbg_completion_reject_op", server, pr, host ? "HOST-ERR" : "TENANT-ERR",
                 host ? "host line" : "tenant line" + chr(10) + "forged line", mode == "completion-worker");
             if (host) {
                 # the host's own operation: its completion's rejection is not marked
