@@ -424,6 +424,21 @@ Debug builds count the scans started by lvalue operations per thread (`dbg_get_l
 `examples/test/qore/misc/dgc-remove-scan/dgc-remove-scan.qtest` uses it to check every removal kind in each
 execution mode and from a compiled module, along with cycle collection after removals that skipped the scan.
 
+### Object counts up the lvalue path
+
+`~LValueHelper` writes the change of the target's object count to the container holding it, and the change of each
+container's count to the container before it on the path (`ocvec`), then scans from `robj`. It does so from the
+values that the containers hold when it runs, also when the operation raised an exception: an operation can raise
+after it changed a container (a hash or list merge that stores an element, then refuses the next one), and the change
+stays, so the counts above it and the recursive set of the object holding them must follow it (issue #7322).
+
+A weak reference does not count for the container that holds it (`needs_scan()` is false for it), so the change of a
+container reached through a weak reference (`ObjCountRec::shared`) is not written to the entry before it, which can
+even be the container itself (`c.holder.wk.k = 1`, where `wk` is a weak reference to `c.holder`: issue #7321). When
+the container is also on the path through strong references, its strong entry carries the change up the path. The
+containers that hold it strongly but are not on the path do not see a change made through the weak reference
+(issue #7318).
+
 ### A write inside a set that a real reference holds
 
 A write at an object X that has no real reference itself scans from X, which walks X's whole recursive set - in

@@ -600,12 +600,14 @@ struct ObjCountRec {
     const AbstractQoreNode* con;
     // initial count (true = possible recursive cycle, false = no cycle possible)
     bool before;
+    // true if the container was reached through a weak reference, which does not count for the container that holds
+    // it: the change of its count is not written to the entry before it, which can even be the container itself
+    // (qore#7321); a path resolved for delete or remove does not retype it, as it is shared
+    bool shared = false;
     // the following members are set only when the path is resolved for delete or remove (see
     // LValueHelper::pushPathContainer()), except declared_members for an object, which is always set (qore#6435)
     // true if the types of the container's members are declared: an object or a hashdecl hash
     bool declared_members;
-    // true if the container was reached through a weak reference: it is shared, so it is not retyped
-    bool shared;
     // the declared type of the lvalue holding the container
     const QoreTypeInfo* holder_type;
     // the declared type of a reference naming the container, if any
@@ -1415,14 +1417,16 @@ public:
     */
     DLLLOCAL void rollbackVivification();
 
-    //! adds a list or a hash of the path to ocvec; for delete or remove (\a for_remove), with the declared type of
-    //! the lvalue holding it, the type of a reference naming it, whether its members have declared types and whether
-    //! it was reached through a weak reference (\a shared); see prepareTypedListElementRemoval() (qore#6435)
+    //! adds a list or a hash of the path to ocvec, with whether it was reached through a weak reference (\a shared,
+    //! qore#7321); for delete or remove (\a for_remove), with the declared type of the lvalue holding it, the type of a
+    //! reference naming it and whether its members have declared types; see prepareTypedListElementRemoval()
+    //! (qore#6435)
     template <typename T>
     DLLLOCAL void pushPathContainer(const T* c, bool shared, bool for_remove) {
         static_assert(std::is_same<T, QoreListNode>::value || std::is_same<T, QoreHashNode>::value,
             "the path containers are lists and hashes");
         ocvec.emplace_back(c);
+        ocvec.back().shared = shared;
         if (for_remove) {
             setPathInfo(containerHasDeclaredMembers(c), shared);
         }

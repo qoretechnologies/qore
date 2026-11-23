@@ -1115,7 +1115,11 @@ LValueHelper::~LValueHelper() {
     bool obj_chg = before;
     bool obj_ref = false;
 
-    if (!(*vl.xsink) && (val || qv)) {
+    // the object counts and the scan follow the values that the lvalue's containers hold now, also when the operation
+    // raised an exception: one that raised after changing a container, such as a merge that stored a key before it
+    // refused another one, leaves the change in place, and the containers above it, and the recursive set of the
+    // object holding them, must count it (qore#7322)
+    if (val || qv) {
         // see if we have any object count changes
         if (!ocvec.empty()) {
             // v && qv could be nullptr if the constructor taking QoreObject& was used (to scan objects after initialization)
@@ -1144,6 +1148,11 @@ LValueHelper::~LValueHelper() {
             // write changes to container hierarchy
             if (ocvec.size() > 1) {
                 for (int i = ocvec.size() - 2; i >= 0; --i) {
+                    // a container reached through a weak reference is not counted by the container that holds the
+                    // weak reference, which can be the container itself (qore#7321)
+                    if (ocvec[i + 1].shared) {
+                        continue;
+                    }
                     int dt = ocvec[i + 1].getDifference();
                     if (dt) {
                         inc_container_obj(ocvec[i].con, dt);

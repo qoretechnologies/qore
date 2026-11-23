@@ -1,0 +1,10 @@
+same container twice: null
+added through the weak step: "added"
+scans after the object was removed: 0
+failed merge: HASHDECL-KEY-ERROR, k: True
+failed merge making a cycle: HASHDECL-KEY-ERROR, cycle: True
+the cycle is collected: 1
+failed list merge: RUNTIME-TYPE-ERROR, size: 1
+failed hash<string, object> merge: RUNTIME-TYPE-ERROR, size: 1
+failed merge without a change: HASHDECL-KEY-ERROR, k: "kept"
+done
