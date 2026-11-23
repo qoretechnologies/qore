@@ -1229,7 +1229,9 @@ LValueHelper::~LValueHelper() {
             // write changes to container hierarchy
             if (path_has_weak_step) [[unlikely]] {
                 // a path that crosses a weak reference can reach containers that are already on it (qore#7321)
-                writeWeakPathChanges(qv ? qv->getInternalNode() : nullptr);
+                // the storage of an lvalue left unchanged is not read (it can have been freed, qore#7402), and its
+                // change was not written to the last container of the path
+                writeWeakPathChanges(qv && !unchanged_lvalue ? qv->getInternalNode() : nullptr);
             } else if (ocvec.size() > 1) {
                 for (int i = ocvec.size() - 2; i >= 0; --i) {
                     int dt = ocvec[i + 1].getDifference();
@@ -1582,8 +1584,9 @@ void LValueHelper::startContainerRemoval() {
 
 bool LValueHelper::removalKeptGraph() const {
     // a container copied by ensureUnique() is a new node that the recursive sets do not know yet; the node it
-    // replaced is still held in tvec here, so its address cannot have been reused
-    if (removal_no_skip || !removal_container || getInternalNode() != removal_container) {
+    // replaced is still held in tvec here, so its address cannot have been reused; the storage of an lvalue left
+    // unchanged is not read: it can have been freed (qore#7402)
+    if (removal_no_skip || !removal_container || unchanged_lvalue || getInternalNode() != removal_container) {
         return false;
     }
     switch (removal_container->getType()) {
@@ -1835,6 +1838,9 @@ QoreListNode* LValueHelper::getWeakRemovalList() {
     ensureUnique();
     // held by the helper while the change through the weak reference is made (qore#7198)
     QoreListNode* l = lockWeakList();
+    // the lvalue keeps the weak reference, and its storage can be an entry of the list, which the removal frees or
+    // moves: it is not read again (qore#7402)
+    leaveUnchangedLValue();
     // a list freed under the weak reference cannot be changed (qore#7163)
     if (qore_list_private::get(*l)->checkValid(vl.xsink)) {
         return nullptr;
@@ -1846,6 +1852,8 @@ QoreHashNode* LValueHelper::getWeakRemovalHash() {
     assert(getType() == NT_WEAKREF_HASH);
     ensureUnique();
     QoreHashNode* h = lockWeakHash();
+    // as for a list: the lvalue's storage can be a key of the hash (qore#7402)
+    leaveUnchangedLValue();
     if (qore_hash_private::get(*h)->checkValid(vl.xsink)) {
         return nullptr;
     }
