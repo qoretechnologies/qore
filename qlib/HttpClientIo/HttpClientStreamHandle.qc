@@ -891,6 +891,12 @@ public class HttpClientStreamHandle {
                     || HttpClientIo::HttpClientConnectionManager::isRefusedRequestErrorStatic(ex.err)) {
                 rethrow;
             }
+            # a request that was not written on a connection taken from the pool (data that the server sent as it
+            # closed the idle connection, such as a 408) is sent again by the connection manager (qore#7345); on a
+            # connection created for the request, the same error is wrapped as before
+            if (connection_reused && HttpClientIo::HttpClientConnectionManager::isUnsentRequestErrorStatic(ex)) {
+                rethrow;
+            }
             # a response body over the limit is reported with the same error as by the futures and HTTPClient
             if (ex.err == "HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE") {
                 rethrow;
