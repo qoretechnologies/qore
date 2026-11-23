@@ -2554,6 +2554,32 @@ static bool hasCleanupEntry(const IRCleanupSlots& cleanup, uint32_t id) {
 }
 
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
+//! Takes the reference that the container operand \a vid of a container store owns
+/** Called before releaseContainerBookkeepingRefs() clears the operand slot: an lvalue load of a local that holds a weak
+    reference to a list or hash reads the container with a reference of its own (qore#7198), which keeps the container
+    until the store has changed it; the caller releases it after the store.  An operand that borrows its value (every
+    other lvalue load) and the value of the local's initializer (\a container_slot_id) give nothing.
+
+    Out of line, as the frame of QoreIRInterpreter::execute() is on the stack at every level of a recursion of
+    interpreted code: as a lambda of execute() with its holds in the scope of the opcode, it made that frame 48 B larger
+    (qore#7355)
+*/
+static QORE_INTERN_NOINLINE QoreValue qore_ir_take_owned_container_operand(IRCallFrame& frame,
+        uint32_t container_slot_id, uint32_t vid) {
+    if (vid >= frame.values.size()
+            || (container_slot_id != UINT32_MAX && container_slot_id < frame.local_init_slots.size()
+                && frame.local_init_slots[container_slot_id] == vid)
+            || !removeCleanupEntry(frame.cleanup, vid)) {
+        return QoreValue();
+    }
+    QoreValue rv = frame.values[vid];
+    frame.values[vid] = QoreValue();
+    if (vid < frame.load_slot_registered.size()) {
+        frame.load_slot_registered[vid] = false;
+    }
+    return rv;
+}
+
 // Sets a value slot without discarding the previous value. Only use this for
 // scalar or borrowed values; owned node values in loop-reexecuted slots must
 // use setValueSlot() so the previous iteration's value is released.
@@ -11761,25 +11787,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         discardContainerValueSlot(operand_slot_id, container_slot_id, false);
     };
-    // Takes the reference that the container operand of a container store owns, before
-    // releaseContainerBookkeepingRefs() clears the operand slot: an lvalue load of a local that holds a weak reference
-    // to a list or hash reads the container with a reference of its own (qore#7198), which keeps the container until
-    // the store has changed it; the caller releases it after the store.  An operand that borrows its value (every
-    // other lvalue load) and the value of the local's initializer give nothing.
-    auto holdOwnedContainerOperand = [&](uint32_t container_slot_id, uint32_t vid) -> QoreValue {
-        if (vid >= values.size()
-                || (container_slot_id != UINT32_MAX && container_slot_id < local_init_slots.size()
-                    && local_init_slots[container_slot_id] == vid)
-                || !removeCleanupEntry(cleanup, vid)) {
-            return QoreValue();
-        }
-        QoreValue rv = values[vid];
-        values[vid] = QoreValue();
-        if (vid < load_slot_registered.size()) {
-            load_slot_registered[vid] = false;
-        }
-        return rv;
-    };
 
     struct LocalInstantiationCleanup {
         std::vector<const LocalVar*>& locals_ordered;
@@ -15070,13 +15077,15 @@ load_local_done:
                 QoreValue hash_val = getIRValue(values, hks_inst->operands[0]);
                 QoreValue val      = getIRValue(values, hks_inst->operands[1]);
                 ValueHolder val_holder(val.refSelf(), xsink);
-                // this frame's own reference to a hash read through a weak reference that the local holds, which
-                // keeps the hash until the store has changed it (see holdOwnedContainerOperand())
-                ValueHolder weak_container_hold(xsink);
                 // every error exit of the store returns from this lambda, so that the exception is dispatched to an
                 // enclosing catch block by the common tail below; a false return aborts without an exception
                 auto store_key = [&]() -> bool {
                     if (hash_val.getType() == NT_HASH) {
+                        // this frame's own reference to a hash read through a weak reference that the local
+                        // holds, which keeps the hash until the store has changed it (see
+                        // qore_ir_take_owned_container_operand()); in the scope of the store, not of the opcode, so
+                        // that it takes no stack in the frame of execute() (qore#7355)
+                        ValueHolder weak_container_hold(xsink);
                         QoreHashNode* h = hash_val.get<QoreHashNode>();
 
                         // Drop this frame's bookkeeping refs to the container before the
@@ -15085,8 +15094,8 @@ load_local_done:
                         // and the non-closure restriction
                         if ((hks_inst->container_lv || hks_inst->container)
                                 && !isClosureContainer(hks_inst->container_lv, hks_inst->container)) {
-                            weak_container_hold = holdOwnedContainerOperand(hks_inst->container_slot_id,
-                                hks_inst->operands[0].id);
+                            weak_container_hold = qore_ir_take_owned_container_operand(frame,
+                                hks_inst->container_slot_id, hks_inst->operands[0].id);
                             releaseContainerBookkeepingRefs(hks_inst->container_slot_id,
                                 hks_inst->operands[0].id);
                         }
@@ -15250,9 +15259,6 @@ load_local_done:
                 qore_check_lvalue_key_not_slice(key_val, xsink);
                 // hash keys are stored in the default encoding
                 QoreHashKeyHelper key_str(key_val, xsink);
-                // this frame's own reference to a hash read through a weak reference that the local holds, which
-                // keeps the hash until the store has changed it (see holdOwnedContainerOperand())
-                ValueHolder weak_container_hold(xsink);
                 // every error exit of the store returns from this function, so that the exception is dispatched to an
                 // enclosing catch block below
                 auto store_dynamic_key = [&]() {
@@ -15260,6 +15266,11 @@ load_local_done:
                         return;
                     }
                     if (hash_val.getType() == NT_HASH) {
+                        // this frame's own reference to a hash read through a weak reference that the local
+                        // holds, which keeps the hash until the store has changed it (see
+                        // qore_ir_take_owned_container_operand()); in the scope of the store, not of the opcode, so
+                        // that it takes no stack in the frame of execute() (qore#7355)
+                        ValueHolder weak_container_hold(xsink);
                         QoreHashNode* h = hash_val.get<QoreHashNode>();
 
                         // Drop this frame's bookkeeping refs to the container before the
@@ -15268,8 +15279,8 @@ load_local_done:
                         // and the non-closure restriction
                         if ((hksd_inst->container_lv || hksd_inst->container)
                                 && !isClosureContainer(hksd_inst->container_lv, hksd_inst->container)) {
-                            weak_container_hold = holdOwnedContainerOperand(hksd_inst->container_slot_id,
-                                hksd_inst->operands[0].id);
+                            weak_container_hold = qore_ir_take_owned_container_operand(frame,
+                                hksd_inst->container_slot_id, hksd_inst->operands[0].id);
                             releaseContainerBookkeepingRefs(hksd_inst->container_slot_id,
                                 hksd_inst->operands[0].id);
                         }
@@ -15424,11 +15435,12 @@ load_local_done:
                 // routes the exception to the instruction's exception target (i.e. the enclosing catch block).
                 // Returning directly from an error path here would make the exception bypass any enclosing
                 // try/catch in the same function
-                // this frame's own reference to a list read through a weak reference that the local holds, which
-                // keeps the list until the store has changed it (see holdOwnedContainerOperand())
-                ValueHolder weak_container_hold(xsink);
                 do {
                     if (list_val.getType() == NT_LIST) {
+                        // this frame's own reference to a list read through a weak reference that the local
+                        // holds, which keeps the list until the store has changed it (see
+                        // qore_ir_take_owned_container_operand()); in the scope of the store (qore#7355)
+                        ValueHolder weak_container_hold(xsink);
                         QoreListNode* l = list_val.get<QoreListNode>();
 
                         // Drop this frame's bookkeeping refs to the container before the
@@ -15437,8 +15449,8 @@ load_local_done:
                         // and the non-closure restriction
                         if ((lis_inst->container_lv || lis_inst->container)
                                 && !isClosureContainer(lis_inst->container_lv, lis_inst->container)) {
-                            weak_container_hold = holdOwnedContainerOperand(lis_inst->container_slot_id,
-                                lis_inst->operands[0].id);
+                            weak_container_hold = qore_ir_take_owned_container_operand(frame,
+                                lis_inst->container_slot_id, lis_inst->operands[0].id);
                             releaseContainerBookkeepingRefs(lis_inst->container_slot_id,
                                 lis_inst->operands[0].id);
                         }
