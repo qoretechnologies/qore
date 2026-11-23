@@ -5040,7 +5040,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out,
             *HttpHandlerThreadContexts thread_contexts) {
         # the socket of an HTTP/1.x request ends on every path, at the latest when the request is handled (qore#7305)
-        on_exit request_helper.endHandlerSocket();
+        on_exit if (request_helper.h1_view) {
+            request_helper.endHandlerSocket();
+        }
+        # the state of the response that the handler of the previous request on the object sent
+        request_helper.h1_state = 0;
         remove cx."response-sent";
         # the listener object of the handlers (qore#6921), read once per request
         HttpServer::HttpListenerInterface hview = listener.getHandlerView();
@@ -5230,9 +5234,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 handler_socket_view = SandboxManager::isFromSandboxedProgram(handler);
             }
             if (handler_socket_view && !is_multiplexed && !request_helper.handler_sock) {
-                HandlerSocketState hs_state = request_helper.h1State();
+                HandlerSocketState hs_state = request_helper.hs_state
+                    ?? (request_helper.hs_state = new HandlerSocketState());
                 request_helper.handler_sock = new Http1HandlerSocket(s, hs_state,
-                    hs_state.h1Start(s, head, hdr.http_version == "1.0"));
+                    hs_state.h1Reset(s, head, hdr.http_version == "1.0"));
+                request_helper.h1_view = True;
             }
 
             # on the thread of a dedicated persistent connection, the request runs with the thread context of its
@@ -5437,7 +5443,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # a response that the handler sent through the socket of its HTTP/1.x request, or a part of it:
                     # the server sends no other response, and closes the connection after an incomplete one
                     # (qore#7305)
-                    if (int st = request_helper.endHandlerSocket()) {
+                    if (int st = request_helper.h1_view ? request_helper.endHandlerSocket() : 0) {
                         rv.reply_sent = True;
                         if (st != Http1ResponseState::Complete) {
                             cx.close = True;
@@ -5509,7 +5515,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             "streaming": True,
                             "stream_type": rv.stream_type,
                         };
-                    } else if (request_helper.isStreamResponseStarted()) {
+                    } else if (request_helper.hs_state && request_helper.hs_state.stream_response_started) {
                         # the handler submitted the response on its own stream itself: the controller sends no
                         # other response on the stream, which would be a second response, a malformed message that
                         # makes an HTTP/3 client fail the stream (qoretechnologies/qore#7212)
@@ -5576,7 +5582,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
             # a response that the handler sent through the socket of its HTTP/1.x request, or a part of it: the server
             # sends no error response after it, and closes the connection (qore#7305)
-            if (request_helper.endHandlerSocket()) {
+            if (request_helper.h1_view ? request_helper.endHandlerSocket() : request_helper.h1_state) {
                 cx."response-sent" = True;
                 cx.close = True;
                 logError("%s", str);
@@ -10074,12 +10080,19 @@ Socket sub http_handler_socket(Socket s, *hash<auto> header_info, *RequestHelper
     if (s instanceof Http3HandlerSocket || s instanceof Http2HandlerSocket) {
         return s;
     }
+    # the state of the request's socket, which the server holds: the response of the request's own stream has not
+    # started
+    *HandlerSocketState st;
+    if (rh && (s.isQuic() || header_info.http2)) {
+        st = rh.hs_state ?? (rh.hs_state = new HandlerSocketState());
+        st.stream_response_started = False;
+    }
     if (s.isQuic()) {
         if (!exists header_info.session_id || !exists header_info.stream_id) {
             throw "HTTP3-HANDLER-SOCKET-ERROR", "the socket of an HTTP/3 request is given to its handler only for "
                 "its own session and stream";
         }
-        return new Http3HandlerSocket(s, header_info.session_id, header_info.stream_id, rh ? rh.streamState() : NOTHING);
+        return new Http3HandlerSocket(s, header_info.session_id, header_info.stream_id, st);
     }
     # an HTTP/2 connection's requests share its socket (qore#7214); decided by the server's own header information of
     # the request, made by the connection's HTTP/2 transport: Socket::isHttp2() queries the connection's TLS state,
@@ -10089,7 +10102,7 @@ Socket sub http_handler_socket(Socket s, *hash<auto> header_info, *RequestHelper
             throw "HTTP2-HANDLER-SOCKET-ERROR", "the socket of an HTTP/2 request is given to its handler only for "
                 "its own stream";
         }
-        return new Http2HandlerSocket(s, header_info.stream_id, rh ? rh.streamState() : NOTHING);
+        return new Http2HandlerSocket(s, header_info.stream_id, st);
     }
     return s;
 }
@@ -10977,7 +10990,7 @@ enum Http1ResponseState : int {
     Broken = 4,
 }
 
-#! The kinds of the sends that start the response of an HTTP/1.x request (see RequestHelper::h1StartResponse())
+#! The kinds of the sends that start the response of an HTTP/1.x request (see HandlerSocketState::h1StartResponse())
 enum Http1ResponseSend : int {
     #! a complete response with a Content-Length that the socket adds
     Full = 0,
@@ -11058,6 +11071,8 @@ class Http1HandlerSocket inherits Qore::Socket {
         HandlerSocketState rh;
         #! the generation of the request on the server's object: the object ends when it is no longer the current one
         int gen;
+        #! the object's own character encoding, once it was set; the connection's until then
+        *string enc;
         #! the timeout of the object's sends that are given none; -1 for the connection's
         int send_to = -1;
         #! the timeout of the object's reads that are given none; -1 for the connection's
@@ -11067,14 +11082,25 @@ class Http1HandlerSocket inherits Qore::Socket {
     #! Creates the object for the current request on the connection's socket
     /** @param real the connection's socket
         @param rh the state of the request's socket, which the server holds
-        @param gen the generation of the request's socket in the state (see HandlerSocketState::h1Start())
+        @param gen the generation of the request's socket in the state (see HandlerSocketState::h1Reset())
     */
     constructor(Socket real, HandlerSocketState rh, int gen) {
         self.real = real;
         self.rh = rh;
         self.gen = gen;
-        # the object's own encoding, initially the connection's
-        Socket::setEncoding(real.getEncoding());
+    }
+
+    #! Returns the object's own character encoding: the connection's until setEncoding() is called
+    string getEncoding() {
+        return enc ?? real.getEncoding();
+    }
+
+    #! Sets the object's own character encoding, of the strings that it sends and reads; the connection's does not
+    #! change
+    nothing setEncoding(string encoding) {
+        # the name is checked as the socket checks it
+        Socket::setEncoding(encoding);
+        enc = Socket::getEncoding();
     }
 
     #! Raises an exception: the object is the request's own and cannot be copied
@@ -12933,6 +12959,18 @@ class RequestHelper {
         */
         *HttpServerAsyncIo::HttpPersistentRequestEnd persistent_end;
 
+        #! True while the current HTTP/1.x request has a socket of its request (an Http1HandlerSocket) that is not
+        #! ended (qore#7305); read by the server's code without a call
+        bool h1_view = False;
+
+        #! The state of the response that the handler of the current HTTP/1.x request sent through the socket of its
+        #! request, when the socket ended (an Http1ResponseState value; qore#7305)
+        int h1_state = 0;
+
+        #! The state of the socket of the request's handler, which its socket references (qore#7305); made when it is
+        #! first needed; never given to handler code
+        *HandlerSocketState hs_state;
+
         #! The socket that the handler of the current request gets (qore#6953, qore#7305)
         /** An Http3HandlerSocket, an Http2HandlerSocket or an Http1HandlerSocket, made by the listener from its own
             header information of the request, before any handler code runs, and kept here, where no handler code can
@@ -12955,9 +12993,7 @@ class RequestHelper {
         #! True while the request counts in the active WaitGroup (c); see releaseForStop()
         bool counted = True;
 
-        #! the state of the socket of the request's handler, which its socket references (qore#7305); made when it is
-        #! first needed
-        *HandlerSocketState hs_state;
+
     }
 
     /**
@@ -12979,22 +13015,17 @@ class RequestHelper {
         }
     }
 
-    #! Returns the state of the socket of the request's handler, made at the first call (qore#7305)
-    private HandlerSocketState getHandlerSocketState() {
-        return hs_state ?? (hs_state = new HandlerSocketState());
-    }
-
-    #! Starts the socket of a new HTTP/1.x request; returns its state and generation (see HandlerSocketState::h1Start())
-    HandlerSocketState h1State() {
-        return getHandlerSocketState();
-    }
 
     #! Ends the socket of the current HTTP/1.x request (see HandlerSocketState::endHandlerSocket())
     /** @return the state of the response that the handler sent through the socket of the current request, also
         after a previous call ended it; Http1ResponseState::None if the request has no such socket
     */
     int endHandlerSocket() {
-        return (handler_sock instanceof Http1HandlerSocket) ? hs_state.endHandlerSocket() : Http1ResponseState::None;
+        if (h1_view) {
+            h1_state = hs_state.endHandlerSocket();
+            h1_view = False;
+        }
+        return h1_state;
     }
 
     #! Sets the rest of the body of the current HTTP/1.x request that the server did not read
@@ -13004,22 +13035,13 @@ class RequestHelper {
         }
     }
 
-    #! Records that the response of the request of an HTTP/2 or HTTP/3 stream was started
+    #! Records that the server started the response of the request of an HTTP/2 or HTTP/3 stream
     markStreamResponseStarted() {
-        getHandlerSocketState().markStreamResponseStarted();
+        HandlerSocketState st = hs_state ?? (hs_state = new HandlerSocketState());
+        st.stream_response_started = True;
     }
 
-    #! Returns True if the response of the request of an HTTP/2 or HTTP/3 stream was started
-    bool isStreamResponseStarted() {
-        return hs_state ? hs_state.isStreamResponseStarted() : False;
-    }
 
-    #! Starts the state of the socket of the request of an HTTP/2 or HTTP/3 stream; returns it
-    HandlerSocketState streamState() {
-        HandlerSocketState st = getHandlerSocketState();
-        st.resetStream();
-        return st;
-    }
 
     #! Destructor ensures counter is decremented and socket is cleaned up if needed
     /**
@@ -13143,6 +13165,12 @@ class RequestHelper {
     keeps keeps this object only, not the server's per-request object.
 */
 class HandlerSocketState {
+    public {
+        #! True once the handler of the request of an HTTP/2 or HTTP/3 stream started its response on the stream
+        #! through its socket, or the server did (qore#7214, qore#7212, qore#7305); reset by the server for each request
+        bool stream_response_started = False;
+    }
+
     private {
         # the state of the socket of the current HTTP/1.x request (an Http1HandlerSocket; qore#7305): only the server's
         # code and the request's own socket, which keeps this object in a private:internal member, reach it
@@ -13166,25 +13194,8 @@ class HandlerSocketState {
         *Counter h1_ops;
         #! the connection's socket of the current request, which the server keeps; never given to handler code
         *Socket h1_real;
-
-        #! True once the handler of the request of an HTTP/2 or HTTP/3 stream started its response on the stream
-        #! through its socket, or the server did (qore#7214, qore#7212, qore#7305)
-        bool stream_response_started = False;
     }
 
-    #! Starts the socket of a new HTTP/1.x request, after the end of the socket of the previous one (qore#7305)
-    /** @param head True for a HEAD request
-        @param http10 True for an HTTP/1.0 request
-
-        @return the generation of the new request's socket
-    */
-    int h1Start(Socket real, bool head, bool http10) {
-        if (h1_live) {
-            endHandlerSocket();
-        }
-        # the socket is made when the handler of the request is known
-        return h1Reset(real, head, http10);
-    }
 
     #! Ends the socket of the current HTTP/1.x request (qore#7305)
     /** The server calls it before it sends a response for the request or reads the next request; a later call only
@@ -13196,8 +13207,8 @@ class HandlerSocketState {
         @return the state of the response that the handler sent through the socket (an Http1ResponseState value)
     */
     int endHandlerSocket() {
-        bool ended;
-        *Counter c = h1EndLocked(\ended);
+        int state;
+        *Counter c = h1EndLocked(\state);
         if (c && c.getCount()) {
             # a send or read of another thread in progress: the response is broken whatever it does
             h1Broken();
@@ -13207,8 +13218,9 @@ class HandlerSocketState {
             } catch (hash<ExceptionInfo> ex) {
                 # the connection has already ended
             }
+            return h1ResponseState();
         }
-        return h1ResponseState();
+        return state;
     }
 
     #! Admits a send or read of the socket of the given generation; refused if that request ended
@@ -13455,18 +13467,18 @@ class HandlerSocketState {
     }
 
     #! Ends the socket of the current HTTP/1.x request; returns its counter of sends and reads, if any
-    private synchronized *Counter h1EndLocked(reference<bool> ended) {
+    private synchronized *Counter h1EndLocked(reference<int> state) {
+        state = h1_resp;
         if (!h1_live) {
             return;
         }
-        ended = True;
         h1_live = False;
         ++h1_gen;
         return h1_ops;
     }
 
-    #! Resets the state for the socket of a new HTTP/1.x request; returns its generation
-    private synchronized int h1Reset(Socket real, bool head, bool http10) {
+    #! Resets the state for the socket of a new HTTP/1.x request, whose previous socket ended; returns its generation
+    synchronized int h1Reset(Socket real, bool head, bool http10) {
         h1_real = real;
         h1_live = True;
         h1_body = 0;
@@ -13483,9 +13495,5 @@ class HandlerSocketState {
         throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): %s", method, why);
     }
 
-    #! Resets the state for the request of an HTTP/2 or HTTP/3 stream
-    synchronized resetStream() {
-        stream_response_started = False;
-    }
 }
 }
