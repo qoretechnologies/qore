@@ -112,20 +112,23 @@ QoreValue QoreShiftOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
         return QoreValue();
 
     // value is not a list, so throw exception
-    if (val.getType() != NT_LIST) {
+    if (!val.holdsList()) {
         // only throw a runtime exception if %strict-args is in effect
         if (runtime_check_parse_option(PO_STRICT_ARGS))
             xsink->raiseException("SHIFT-ERROR", "the lvalue argument to shift is type \"%s\"; expecting \"list\"", val.getTypeName());
         return QoreValue();
     }
 
-    // no exception can occur here
-    val.ensureUnique();
-
-    QoreListNode* l = val.getValue().get<QoreListNode>();
+    // a weak reference to a list: its list is changed, and the lvalue keeps the weak reference (qore#7297)
+    QoreListNode* l = val.getListForChange();
+    if (!l) {
+        return QoreValue();
+    }
 
     printd(5, "QoreShiftOperatorNode::evalImpl() about to call QoreListNode::shift() on list node %p (%d)\n", l, (int)(l->size()));
     // the list reference will now be the reference for the return value
     // therefore no need to reference again
-    return l->shift();
+    QoreValue rv = l->shift();
+    val.changedScannedValue(rv);
+    return rv;
 }
