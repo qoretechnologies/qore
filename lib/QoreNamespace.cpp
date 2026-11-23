@@ -3318,6 +3318,22 @@ void qore_root_ns_private::parseCheckHashDeclShadowedByQore(const QoreProgramLoc
     }
 }
 
+void qore_root_ns_private::parseCheckTypedefShadowedByQore(const QoreProgramLocation* loc, const char* name,
+        const qore_ns_private* declaring_ns) {
+    const qore_ns_private* qore_ns = getQore();
+    if (!qore_ns || isUnderQoreNamespace(declaring_ns, qore_ns)) {
+        return;
+    }
+    const qore_ns_private* qns = nullptr;
+    if (parseFindQoreTypedefIntern(name, &qns)) {
+        // The declaration enabled this warning, even if a later directive disabled it.
+        ParseWarnOptions opts = qore_program_private::getParseWarnOptions(getProgram());
+        opts.warn_mask |= QP_WARN_LANGUAGE_TRAPS;
+        ParseWarnHelper wh(opts);
+        parseWarnShadowedByQoreSymbol(loc, "typedef", name, declaring_ns, qns);
+    }
+}
+
 void qore_root_ns_private::parseCheckGlobalVarShadowedByQore(const QoreProgramLocation* loc, const char* vname,
         const qore_ns_private* declaring_ns) {
     if (!parseShadowWarningEnabled(declaring_ns)) {
@@ -3871,6 +3887,10 @@ int qore_ns_private::parseInitTypedefs() {
         if (i == typedefMap.end()) {
             continue;
         }
+        if (i->second->check_shadow) {
+            i->second->check_shadow = false;
+            getRootNS()->rpriv->parseCheckTypedefShadowedByQore(i->second->loc, tdname.c_str(), this);
+        }
         int terr = 0;
         i->second->parseResolve(tdname.c_str(), terr);
         if (terr) {
@@ -4226,6 +4246,11 @@ TypedefEntry* qore_ns_private::parseAddTypedef(const QoreProgramLocation* loc, c
     entry->parse_ns = this;
     typedefMap[tdname] = entry;
     pending_typedef_names.push_back(tdname);
+    if (!imported) {
+        if (RootQoreNamespace* root = getRootNS()) {
+            entry->check_shadow = root->rpriv->parseShadowWarningEnabled(this);
+        }
+    }
     return entry;
 }
 
