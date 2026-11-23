@@ -23,9 +23,9 @@
     or as a reference released with the temporaries of the statement, so a negative NaN, a double whose bits collide
     with a value tag or an integer outside the inline range was a node that a later write to the local (or the end of
     its scope) released before the member was read.  The scenario runs in every tier, in the IR tier alone and as a
-    compiled executable, and must print what the AST tier prints.  In a debug build, the native code generator asserts that
-    every such read is native (QoreIRToLLVM::assertNativeLocalReadsUnboxed()), which the compiles of the scenario
-    (qcc, jit and tiered) fail every time without the fix.
+    compiled executable, and must print what the AST tier prints.  In a debug build, the native code generator
+    asserts that every such read is native (QoreIRToLLVM::assertNativeLocalReadsUnboxed()), which the compiles of the
+    scenario (qcc, jit and tiered) fail every time without the fix.
 */
 class IRForwardedLocalReadTest inherits QUnit::Test {
     private {

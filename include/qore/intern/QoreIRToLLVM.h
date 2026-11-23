@@ -571,10 +571,10 @@ private:
     // that can (qore_ir_specialize_bounded_typed_list_reads()), and the read itself is used only in the loop: that
     // function does not check it, but it holds by construction, as a use after the loop takes the value through a
     // Phi, and a Phi never has an entry here (entries are added only by the lowering of ListGetInt and
-    // ListGetFloat); and in a functional operator (map, select, foldl, foldr, map with select), from its input list, which is held for all
-    // its iterations (a read of a local that the operator's expressions can assign takes a reference of its own,
-    // see qore_ir_find_local_reads_overwritten_before_use()), whose results are new values or Phis of native
-    // values, not the read itself
+    // ListGetFloat); and in a functional operator (map, select, foldl, foldr, map with select), from its input
+    // list, which is held for all its iterations (a read of a local that the operator's expressions can assign
+    // takes a reference of its own, see qore_ir_find_local_reads_overwritten_before_use()), whose results are new
+    // values or Phis of native values, not the read itself
     std::unordered_map<uint32_t, llvm::Value*> native_boxed_sources;
     //! The native arguments of fast entries that QORE_AOT_DEBUG reported as needing no NOTHING guard (see
     //! fastEntryArgumentNeedsNothingGuard()), so that each is reported once
