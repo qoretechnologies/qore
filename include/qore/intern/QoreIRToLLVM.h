@@ -1252,6 +1252,9 @@ private:
     //! from the local cache is borrowed from it, so each of these takes a reference of its own, released as a
     //! temporary's
     std::unordered_set<uint32_t> overwritten_local_reads;
+    //! The reads of a local whose value has a native representation (NativeInt or NativeFloat facts) and is used after
+    //! the end of the statement that reads it (see findNativeLocalReadsUsedAfterStatement())
+    std::unordered_set<uint32_t> native_local_reads_used_after_statement;
 
     // Locals assigned through the weak assignment operator. Loads must go
     // through LocalVar::eval() so weak refs are resolved to the current target
@@ -2925,6 +2928,29 @@ private:
     // is true when the uses of the call's operands have not been consumed yet (in an invoke lowerer).  Returns true
     // if any was released, as releasing can raise an exception
     bool releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::Module& module, bool use_pending);
+
+    //! Finds the reads of locals that have a native representation and are used after the statement that reads them
+    /** Fills native_local_reads_used_after_statement with the LoadLocal results whose facts are NativeInt or
+        NativeFloat (assigned, never NOTHING) and that an instruction of another temporary scope, or a Phi, uses: the
+        IR gives such a value no owner in the statement (see design/qore-ir-spec.md), and the fixed-aggregate scalar
+        replacement forwards it to the statements that read the members (qore#7372).  A use in another scope is taken
+        as a use after the statement; this includes a use in a scope nested in the statement's, for which the native
+        value is not needed but is correct.
+
+        @return false if the analysis was cancelled
+    */
+    bool findNativeLocalReadsUsedAfterStatement(const QoreIRFunction& func);
+
+#ifndef NDEBUG
+    //! Asserts that no operand of the instruction is a boxed native read of a local made by another statement
+    /** A read of a local whose value is boxed here is borrowed from the local, or holds a reference that is released
+        with the temporaries of its statement: a later write to the local, or the end of its statement, can release
+        it.  The native reads of locals used after their statement (native_local_reads_used_after_statement) must
+        therefore have their native value where a Phi or an instruction of another temporary scope uses them
+        (qore#7372).
+    */
+    void assertLocalReadsKeptInStatement(const QoreIRInstruction* inst) const;
+#endif
 
     // Releases the object that the load of a weak-assigned local kept for the call \a inst whose receiver it is
     // (weak_receiver_holds) when the call returns, after its arguments, as the AST interpreter releases the object of a

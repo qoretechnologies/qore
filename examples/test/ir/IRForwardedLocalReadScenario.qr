@@ -1,0 +1,334 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The scenario of IRForwardedLocalRead.qtest (qore#7372): a local hash or list with a fixed layout is built from the
+# value of a local int or float, the local is then written (a compound assignment, an increment, an assignment, a write
+# through a reference or by a closure) or goes out of scope, and a later statement reads the member.  The members hold
+# values that are boxed nodes in a QoreValue (a negative NaN, a double whose bits collide with a value tag, an integer
+# outside the inline range) and inline values.  Every call runs three times, so that tiered execution runs it on the AST
+# tier, the IR tier and as native code.
+
+%modern
+
+hashdecl ForwardedReadMember {
+    float f;
+    int i;
+}
+
+# prints a value through a call, which reads it in a statement after the one that built the aggregate
+sub show(string label, auto v) {
+    printf("%s: %y\n", label, v);
+}
+
+# a try statement whose handler runs: after it, the read of a local is not the value that its store forwards
+sub thr() {
+    throw "ERR";
+}
+
+sub setFloat(reference<float> r) {
+    r = 2.5;
+}
+
+sub setInt(reference<int> r) {
+    r = 9;
+}
+
+int sub plusOne(int i) {
+    return i + 1;
+}
+
+# a compound assignment after the aggregate
+sub floatMul(float fv) {
+    float f = fv;
+    try {
+        thr();
+    } catch () {
+    }
+    hash<auto> h = {"f": f};
+    f *= 2.0;
+    show("floatMul", (h.f, f));
+}
+
+sub floatAdd(float fv) {
+    float f = fv;
+    try {
+        thr();
+    } catch () {
+    }
+    hash<auto> h = {"f": f};
+    f += 1.0;
+    show("floatAdd", (h.f, f));
+}
+
+sub floatSub(float fv) {
+    float f = fv;
+    try {
+        thr();
+    } catch () {
+    }
+    hash<auto> h = {"f": f};
+    f -= 1.0;
+    show("floatSub", (h.f, f));
+}
+
+sub floatDiv(float fv) {
+    float f = fv;
+    try {
+        thr();
+    } catch () {
+    }
+    hash<auto> h = {"f": f};
+    f /= 2.0;
+    show("floatDiv", (h.f, f));
+}
+
+# increments and decrements
+sub floatIncDec(float fv) {
+    float f = fv;
+    try {
+        thr();
+    } catch () {
+    }
+    hash<auto> h = {"f": f};
+    ++f;
+    f++;
+    --f;
+    show("floatIncDec", (h.f, f));
+}
+
+# a plain assignment
+sub floatAssign(float fv) {
+    float f = fv;
+    try {
+        thr();
+    } catch () {
+    }
+    hash<auto> h = {"f": f};
+    f = 2.0;
+    show("floatAssign", (h.f, f));
+}
+
+# writes in a loop and in a branch
+sub floatLoop(float fv) {
+    float f = fv;
+    try {
+        thr();
+    } catch () {
+    }
+    hash<auto> h = {"f": f};
+    for (int n = 0; n < 2; ++n) {
+        f *= 2.0;
+    }
+    show("floatLoop", (h.f, f));
+}
+
+sub floatBranch(float fv, bool write) {
+    float f = fv;
+    try {
+        thr();
+    } catch () {
+    }
+    hash<auto> h = {"f": f};
+    if (write) {
+        f *= 2.0;
+    }
+    show("floatBranch", (h.f, f));
+}
+
+# a parameter needs no try statement: its read is never a value that a store forwards
+sub floatParam(float fv) {
+    hash<auto> h = {"f": fv};
+    fv *= 2.0;
+    show("floatParam", (h.f, fv));
+}
+
+sub floatParamInc(float fv) {
+    hash<auto> h = {"f": fv};
+    fv++;
+    show("floatParamInc", (h.f, fv));
+}
+
+# other aggregates
+sub floatList(float fv) {
+    float f = fv;
+    try {
+        thr();
+    } catch () {
+    }
+    list<float> l = (f, 1.0);
+    f *= 2.0;
+    show("floatList", (l[0], f));
+}
+
+sub floatParamList(float fv) {
+    list<float> l = (fv, 1.0);
+    fv *= 2.0;
+    show("floatParamList", (l[0], fv));
+}
+
+sub typedHash(float fv) {
+    float f = fv;
+    try {
+        thr();
+    } catch () {
+    }
+    hash<string, float> h = {"f": f};
+    f *= 2.0;
+    show("typedHash", (h.f, f));
+}
+
+sub hashDecl(float fv, int iv) {
+    float f = fv;
+    int i = iv;
+    try {
+        thr();
+    } catch () {
+    }
+    hash<ForwardedReadMember> h = <ForwardedReadMember>{"f": f, "i": i};
+    f *= 2.0;
+    i *= 3;
+    show("hashDecl", (h.f, h.i, f, i));
+}
+
+# a member changed in a loop: the value of the read reaches the loop through a Phi
+sub loopCarried(float fv, int iv) {
+    float f = fv;
+    int i = iv;
+    try {
+        thr();
+    } catch () {
+    }
+    hash<auto> h = {"f": f, "i": i};
+    for (int n = 0; n < 2; ++n) {
+        h.f *= 1.0;
+        h.i += 0;
+    }
+    f *= 2.0;
+    i *= 3;
+    show("loopCarried", (h.f, h.i, f, i));
+}
+
+# integers
+sub intOps(int iv) {
+    int i = iv;
+    try {
+        thr();
+    } catch () {
+    }
+    hash<auto> h = {"i": i};
+    i *= 3;
+    ++i;
+    i--;
+    i <<= 1;
+    i = plusOne(i);
+    show("intOps", (h.i, i));
+}
+
+sub intList(int iv) {
+    int i = iv;
+    try {
+        thr();
+    } catch () {
+    }
+    list<int> l = (i, 1);
+    for (int n = 0; n < 2; ++n) {
+        i *= 3;
+        i = plusOne(i);
+    }
+    show("intList", (l[0], i));
+}
+
+sub intParam(int iv) {
+    hash<auto> h = {"i": iv};
+    iv /= 3;
+    iv = plusOne(iv);
+    show("intParam", (h.i, iv));
+}
+
+# a write through a reference
+sub referenceWrite(float fv, int iv) {
+    float f = fv;
+    int i = iv;
+    try {
+        thr();
+    } catch () {
+    }
+    hash<auto> h = {"f": f, "i": i};
+    setFloat(\f);
+    setInt(\i);
+    show("referenceWrite", (h.f, h.i, f, i));
+}
+
+# a write by a closure
+sub closureWrite(float fv, int iv) {
+    float f = fv;
+    int i = iv;
+    code c = sub () {
+        f = 3.5;
+        i = 11;
+    };
+    try {
+        thr();
+    } catch () {
+    }
+    hash<auto> h = {"f": f, "i": i};
+    c();
+    show("closureWrite", (h.f, h.i, f, i));
+}
+
+# the local goes out of scope before the member is read
+sub scopeEnd(float fv, int iv) {
+    hash<auto> h;
+    {
+        float f = fv;
+        int i = iv;
+        try {
+            thr();
+        } catch () {
+        }
+        h = {"f": f, "i": i};
+    }
+    show("scopeEnd", (h.f, h.i));
+}
+
+# a negative NaN, a double whose bits collide with a value tag, an inline double; integers outside and inside the
+# inline range
+const Floats = (-@nan@, -4e307, 1.5);
+const Ints = ((1 << 60) + 3, -(1 << 61) - 5, 7);
+
+sub run(code call) {
+    for (int n = 0; n < 3; ++n) {
+        call();
+    }
+}
+
+foreach float fv in (Floats) {
+    run(sub () { floatMul(fv); });
+    run(sub () { floatAdd(fv); });
+    run(sub () { floatSub(fv); });
+    run(sub () { floatDiv(fv); });
+    run(sub () { floatIncDec(fv); });
+    run(sub () { floatAssign(fv); });
+    run(sub () { floatLoop(fv); });
+    run(sub () { floatBranch(fv, True); });
+    run(sub () { floatBranch(fv, False); });
+    run(sub () { floatParam(fv); });
+    run(sub () { floatParamInc(fv); });
+    run(sub () { floatList(fv); });
+    run(sub () { floatParamList(fv); });
+    run(sub () { typedHash(fv); });
+    foreach int iv in (Ints) {
+        run(sub () { hashDecl(fv, iv); });
+        run(sub () { loopCarried(fv, iv); });
+        run(sub () { referenceWrite(fv, iv); });
+        run(sub () { closureWrite(fv, iv); });
+        run(sub () { scopeEnd(fv, iv); });
+    }
+}
+foreach int iv in (Ints) {
+    run(sub () { intOps(iv); });
+    run(sub () { intList(iv); });
+    run(sub () { intParam(iv); });
+}
