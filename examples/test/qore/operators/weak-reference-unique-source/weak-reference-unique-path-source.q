@@ -22,6 +22,34 @@ class Holder {
     }
 }
 
+#! the result of a typed list or hash lookup can be an object or NOTHING (qore#7390)
+sub membersAfterLookup() {
+    hash<auto> shared = {"old": 0};
+    list<Holder> items = (new Holder(), new Holder());
+    hash<string, Holder> by_name = {"item": new Holder()};
+    items[1].h = shared;
+    by_name.item.h = shared;
+
+    hash<auto> w;
+    w := items[1].h;
+    items[1].h.value = 11;
+    printf("list object member: weak %y other owner %y\n", w.value, shared.value);
+    w := by_name.item.h;
+    by_name.item.h.value = 22;
+    printf("hash object member: weak %y other owner %y\n", w.value, shared.value);
+
+    hash<auto> dynamic = {"item": new Holder()};
+    dynamic.item.h = shared;
+    w := dynamic.item.h;
+    dynamic.item.h.value = 33;
+    printf("dynamic hash object member: weak %y other owner %y\n", w.value, shared.value);
+
+    auto missing;
+    *Holder absent;
+    printf("absent object members: %y %y %y; sizes %d %d\n", (missing := absent.h), (missing := items[8].h),
+        (missing := by_name.missing.h), items.size(), by_name.size());
+}
+
 #! returns a literal of the program (the AST interpreter returns the literal itself)
 list<auto> sub lit() {
     return ({"x": 0}, {"x": 1});
@@ -348,3 +376,4 @@ no_value_paths();
 indexes();
 negative_paths();
 remove_delete();
+membersAfterLookup();

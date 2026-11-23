@@ -61,3 +61,7 @@ after: l [[1, 2], [3]] src [[1], [2]]
 remove -5: NEGATIVE-LIST-INDEX
 delete -5: NEGATIVE-LIST-INDEX
 remove -1: 2 l [1, null]
+list object member: weak 11 other owner null
+hash object member: weak 22 other owner null
+dynamic hash object member: weak 33 other owner null
+absent object members: null null null; sizes 2 1
