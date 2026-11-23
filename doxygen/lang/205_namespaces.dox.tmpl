@@ -28,6 +28,10 @@
     Symbols (@ref constants "constants", @ref qore_classes "classes", @ref qore_functions "functions", @ref our "global variables", @ref hashdecl "hashdecls", @ref enums "enums", and namespaces themselves) can be resolved either by giving an explicit @ref namespace_paths "namespace path" to the symbol desired, or by leaving out the namespace path and allowing the system to search for the symbol.  The two cases use different algorithms, described in the following sections.\n\n
     Both algorithms are ordered by <b>namespace depth</b>.  The depth of a namespace is the number of namespaces between it and the root namespace, so a namespace declared directly in the root namespace has a depth of 1, a namespace declared inside that namespace has a depth of 2, and so on.  When more than one namespace can provide a match, <b>the match in the shallowest namespace wins</b>.
 
+    When two classes share a short name, type mismatch and member access diagnostics use the namespace paths to
+    distinguish them. For example, an assignment can expect <tt>object&lt;::Gate&gt;</tt> and receive
+    <tt>object&lt;Qore::Thread::Gate&gt;</tt>.
+
     @anchor unqualified_symbol_resolution
     @par Unqualified Symbol Resolution
     When a symbol is used with no namespace path, the following steps are made in order; the first step that produces a match determines the result:

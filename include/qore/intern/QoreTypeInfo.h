@@ -896,6 +896,12 @@ public:
             str.sprintf("no value");
     }
 
+    //! Describes both types in a diagnostic, qualifying class names when their short forms collide.
+    DLLLOCAL static void describeTypeComparison(QoreString& str, const QoreTypeInfo* left, const char* separator,
+        const QoreTypeInfo* right);
+    DLLLOCAL static bool diagnosticNamesCollide(const QoreTypeInfo* left, const QoreTypeInfo* right);
+    DLLLOCAL static std::string diagnosticTypePath(const QoreTypeInfo* ti);
+
     // static version of method, checking for null pointer; inlined explicitly: the fast path of the parameters of
     // every call, whose inlining depended on the size of the libqore unit (qore#6494; tools/hot-inlining.txt)
     DLLLOCAL QORE_INTERN_ALWAYS_INLINE static void acceptInputParam(const QoreTypeInfo* ti, int param_num,
@@ -1711,7 +1717,7 @@ protected:
             bool& may_not_match, bool& may_need_filter, bool& t_no_match, bool& ok, qore_type_result_e& max_result,
             bool known_initial_assignment);
 
-    DLLLOCAL static void getNodeType(QoreString& str, const QoreValue& n);
+    DLLLOCAL void describeTypeMismatch(QoreString& str, const QoreValue& n) const;
 
     DLLLOCAL static void ptext(QoreString& str, const char* arg_type, int param_num, const char* param_name);
 

@@ -6206,6 +6206,23 @@ int64 QoreClass::getDomain() const {
     return priv->domain;
 }
 
+const char* qore_class_private::memberDiagnosticName() const {
+    QoreProgram* pgm = getProgram();
+    if (pgm) {
+        const auto* root = qore_root_ns_private::get(*pgm->getRootNS());
+        qore_root_ns_private::RuntimeNamespaceReadLocker lock(root);
+        ConstAllNamespacesIterator i(root->nsmap);
+        while (i.next()) {
+            // Formatting an error must not invoke a namespace's class handler.
+            const QoreClass* other = qore_ns_private::get(*i.get())->classList.find(name.c_str());
+            if (other && path != other->getPath()) {
+                return diagnosticPath(*cls);
+            }
+        }
+    }
+    return name.c_str();
+}
+
 const char* QoreClass::getName() const {
     return priv->name.c_str();
 }
@@ -11963,9 +11980,8 @@ int UserCopyVariant::parseInit(QoreFunction* f) {
                 // raise parse exception if parse exceptions have not been suppressed
                 if (qore_program_ops(getProgram()).getParseExceptionSink()) {
                     QoreStringNode* desc = new QoreStringNode("the copy constructor will be passed ");
-                    QoreTypeInfo::getThisType(parent_class.getTypeInfo(), *desc);
-                    desc->concat(", but the object's parameter was defined expecting ");
-                    QoreTypeInfo::getThisType(typeInfo, *desc);
+                    QoreTypeInfo::describeTypeComparison(*desc, parent_class.getTypeInfo(),
+                        ", but the object's parameter was defined expecting ", typeInfo);
                     desc->concat(" instead");
                     qore_program_private::makeParseException(getProgram(), *signature.getParseLocation(),
                         "PARSE-TYPE-ERROR", desc);
@@ -13248,9 +13264,8 @@ int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
             if (qore_program_ops(getProgram()).getParseExceptionSink()) {
                 QoreStringNode* desc = new QoreStringNode("initialization expression for ");
                 desc->sprintf("%s member '%s' returns ", privpub(access), name);
-                QoreTypeInfo::getThisType(argTypeInfo, *desc);
-                desc->concat(", but the member was declared as ");
-                QoreTypeInfo::getThisType(typeInfo, *desc);
+                QoreTypeInfo::describeTypeComparison(*desc, argTypeInfo, ", but the member was declared as ",
+                    typeInfo);
                 qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
             }
             if (!err) {
@@ -13325,9 +13340,8 @@ int QoreVarInfo::parseInit(const char* name) {
             if (qore_program_ops(getProgram()).getParseExceptionSink()) {
                 QoreStringNode* desc = new QoreStringNode("initialization expression for ");
                 desc->sprintf("%s class static variable '%s' returns ", privpub(access), name);
-                QoreTypeInfo::getThisType(argTypeInfo, *desc);
-                desc->concat(", but the variable was declared as ");
-                QoreTypeInfo::getThisType(typeInfo, *desc);
+                QoreTypeInfo::describeTypeComparison(*desc, argTypeInfo, ", but the variable was declared as ",
+                    typeInfo);
                 qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
             }
             if (!err) {

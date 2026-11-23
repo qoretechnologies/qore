@@ -4857,13 +4857,11 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
             bool priv;
             const QoreClass* tc = oc->getClass(*qc, priv);
             if (!tc) {
-                xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from class '%s' to class '%s'",
-                    obj->getClassName(), qc->getName());
+                qore_class_private::raiseCastError(xsink, *oc, *qc, false);
                 return toBits(QoreValue());
             }
             if (priv && !qore_class_private::runtimeCheckPrivateClassAccess(*tc)) {
-                xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from class '%s' to "
-                    "privately-accessible class '%s' in this context", obj->getClassName(), qc->getName());
+                qore_class_private::raiseCastError(xsink, *oc, *qc, true);
                 return toBits(QoreValue());
             }
         }

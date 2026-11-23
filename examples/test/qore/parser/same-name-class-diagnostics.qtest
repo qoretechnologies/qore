@@ -1,0 +1,78 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class SameNameClassDiagnostics
+
+class SameNameClassDiagnostics inherits QUnit::Test {
+    constructor() : Test("Class paths in diagnostics", "1.0", \ARGV) {
+        addTestCase("assignment names both classes", \assignment());
+        addTestCase("member errors identify the receiver", \members());
+        addTestCase("runtime assignment identifies both classes", \runtimeAssignment());
+        addTestCase("nested list element classes", \listElements());
+        addTestCase("generic class arguments survive qualification", \generic());
+        addTestCase("runtime member errors identify the receiver", \runtimeMember());
+        addTestCase("runtime cast identifies both classes", \runtimeCast());
+        set_return_value(main());
+    }
+
+    private string error(string src, bool execute = False) {
+        Program p(PO_MODERN | PO_NO_NETWORK);
+        try {
+            p.parse("class Gate { }\n" + src, "same-name-classes", 0);
+            if (execute) {
+                p.run();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.desc;
+        }
+        return "no exception";
+    }
+
+    assignment() {
+        assertRegex("expects object<::Gate>, but right-hand side is object<Qore::Thread::Gate>",
+            error("::Gate g = new Qore::Thread::Gate();"));
+    }
+
+    members() {
+        foreach string path in ("::Gate", "Qore::Thread::Gate") {
+            assertRegex("member 'absent' of class '" + path + "'",
+                error(path + " g(); auto x = g.absent;"));
+        }
+    }
+
+    runtimeAssignment() {
+        assertRegex("expects type 'object<::Gate>', but got an object of class 'Qore::Thread::Gate'",
+            error("sub take(auto v) { ::Gate g = v; } take(new Qore::Thread::Gate());", True));
+    }
+
+    listElements() {
+        string src = "namespace A { class Box { public { int x; } } } "
+            "namespace B { class Box { public { int y; } } } "
+            "list<A::Box> boxes = (new B::Box(),);";
+        assertRegex("list<object<::A::Box>>.*list<object<::B::Box>>", error(src));
+    }
+
+    generic() {
+        string src = "namespace A { class Box<T> { public { T x; } } } "
+            "namespace B { class Box<T> { public { T y; } } } "
+            "sub take(auto v) { A::Box<int> box = v; } take(new B::Box<string>());";
+        assertRegex("object<::A::Box<int>>.*class 'B::Box'", error(src, True));
+    }
+
+    runtimeMember() {
+        string src = "namespace A { class Box { public { int x; } } } "
+            "namespace B { class Box { public { int y; } } } "
+            "sub read(auto v) { auto x = v.absent; } read(new A::Box());";
+        assertRegex("member of class 'A::Box'", error(src, True));
+    }
+
+    runtimeCast() {
+        string src = "sub consume(auto v) { auto g = cast<Qore::Thread::Gate>(v); } consume(new ::Gate());";
+        assertRegex("cannot cast from class '::Gate' to class 'Qore::Thread::Gate'", error(src, True));
+    }
+}
