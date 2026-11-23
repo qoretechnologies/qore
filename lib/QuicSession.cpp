@@ -704,6 +704,21 @@ int qore_quic_test_send_error(int fd) {
     return hook ? (*hook)(fd) : 0;
 }
 
+//! Set while the thread sends the datagrams of Socket::flushQuicPendingData(); see QuicTestFlushSending
+static thread_local bool quic_test_flush_sending = false;
+
+bool qore_quic_test_flush_sending() {
+    return quic_test_flush_sending;
+}
+
+QuicTestFlushSending::QuicTestFlushSending() {
+    quic_test_flush_sending = true;
+}
+
+QuicTestFlushSending::~QuicTestFlushSending() {
+    quic_test_flush_sending = false;
+}
+
 void qore_quic_test_set_send_hook(std::function<int(int)> hook) {
     std::shared_ptr<const std::function<int(int)>> h;
     if (hook) {
@@ -2950,7 +2965,51 @@ void QuicSession::armPeerResponseDeadlineLocked() {
 
 ngtcp2_tstamp QuicSession::getExpiry() const {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
-    return getExpiryLocked();
+    ngtcp2_tstamp expiry = getExpiryLocked();
+    // the datagrams kept after ENOBUFS are sent again at their time (qore#7414)
+    if (!unsent_.empty() && send_backoff_.retryAt() && send_backoff_.retryAt() < expiry) {
+        expiry = send_backoff_.retryAt();
+    }
+    return expiry;
+}
+
+ngtcp2_tstamp QuicSession::getSendRetryAt() const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    return !unsent_.empty() && send_backoff_.retryAt() ? send_backoff_.retryAt() : UINT64_MAX;
+}
+
+QuicSendResult QuicSession::sendPackets(int fd, QuicPacketBatch& batch, const struct sockaddr* addr,
+        socklen_t addrlen, const struct sockaddr* local_addr, socklen_t local_addrlen) {
+    // the backoff is read and set under the lock; the datagrams are sent without it, as they are only sent on the I/O
+    // thread of the session's socket
+    QuicSendBackoff backoff;
+    {
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
+        backoff = send_backoff_;
+    }
+    QuicSendResult rc = sendQuicPacketsKeepingUnsent(fd, batch, backoff, timestamp(), addr, addrlen, local_addr,
+        local_addrlen);
+    // the caller reads errno after an error
+    int send_errno = errno;
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    send_backoff_ = backoff;
+    if (rc == QuicSendResult::Error) {
+        batch.clear();
+        errno = send_errno;
+        return rc;
+    }
+    // processTimerAndWrite() took the datagrams kept before, so none are kept now; were any kept, those of this send
+    // would follow them
+    assert(unsent_.empty());
+    if (unsent_.empty()) {
+        unsent_.swap(batch);
+    } else {
+        for (int i = 0; i < batch.size(); ++i) {
+            unsent_.addPacket(batch.packetData(i), batch.packetLen(i));
+        }
+    }
+    batch.clear();
+    return rc;
 }
 
 int QuicSession::handleExpiryLocked(ExceptionSink* xsink) {
@@ -3150,6 +3209,21 @@ QuicTimerWriteResult QuicSession::processTimerAndWrite(QuicPacketBatch& packets,
     std::lock_guard<std::recursive_mutex> lock(mtx_);
 
     QuicTimerWriteResult result;
+
+    // the datagrams that earlier sends did not send come first, so that they are sent before any written after them
+    // (qore#7414)
+    if (!unsent_.empty()) {
+        result.kept = unsent_.size();
+        if (packets.empty()) {
+            packets.swap(unsent_);
+        } else {
+            for (int i = 0; i < packets.size(); ++i) {
+                unsent_.addPacket(packets.packetData(i), packets.packetLen(i));
+            }
+            packets.swap(unsent_);
+            unsent_.clear();
+        }
+    }
 
 #ifdef DEBUG
     // test hook: hold the extended-CONNECT response back so it coalesces with the first
@@ -4847,6 +4921,20 @@ uint64_t QuicSession::getBytesInFlight() const {
     ngtcp2_conn_get_conn_info(conn_, &cinfo);
     return cinfo.bytes_in_flight;
 }
+
+#ifdef DEBUG
+bool QuicSession::getPacketCounts(uint64_t& sent, uint64_t& lost) const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (!conn_) {
+        return false;
+    }
+    ngtcp2_conn_info cinfo;
+    ngtcp2_conn_get_conn_info(conn_, &cinfo);
+    sent = cinfo.pkt_sent;
+    lost = cinfo.pkt_lost;
+    return true;
+}
+#endif
 
 bool QuicSession::cleanupStream(int64_t stream_id) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
