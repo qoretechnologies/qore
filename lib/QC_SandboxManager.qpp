@@ -2065,39 +2065,6 @@ static bool SandboxManager::canShareObjects() {
     return qore_caller_may_share_objects();
 }
 
-//! Returns @ref True if the code that called the calling method or function is sandboxed
-/** A method of a library class whose objects are shared by every %Program (see shareObject()) tells with it whether
-    the data that it is given comes from sandboxed code, which must not decide what the shared object keeps (such as
-    the keys of a cache), or from trusted code, including the library's own code that builds what the object keeps
-    for a sandboxed caller.  It is called directly in the method, as the method's own code: the decision is made from
-    the %Program of the code that called the method (its own sandbox manager, or the flag of a %Program that sandboxed
-    code created), not from sandboxed callers further up the call stack, so trusted code that passes on data that
-    sandboxed code gave it is responsible for it.  Code that sandboxed code created (a closure or call reference, or
-    a method of an object that sandboxed code created) runs with the provenance of its sandbox also when trusted code
-    calls it; while such code runs, the method's caller counts as sandboxed.
-
-    @return @ref True if the code that called the calling method or function is sandboxed; also @ref True if it is
-    not called directly by the code of a method or function (it fails closed)
-
-    @par Example:
-    @code{.py}
-AbstractDataProviderType getType(string spec) {
-    # a type built for a sandboxed caller from its own specification is kept for its Program only
-    if (SandboxManager::isSharedObject(self) && SandboxManager::isCalledBySandboxedCode()) {
-        return getCallerType(spec);
-    }
-    return getCachedType(spec);
-}
-    @endcode
-
-    @see isSharedObject()
-
-    @since %Qore 3.0
-*/
-static bool SandboxManager::isCalledBySandboxedCode() {
-    return qore_method_caller_is_sandboxed();
-}
-
 //! Returns a value that the given object keeps in the per-%Program cache of the calling code, or @ref nothing
 /** see setProgramCacheValue()
 

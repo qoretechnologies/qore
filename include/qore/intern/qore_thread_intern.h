@@ -625,16 +625,6 @@ DLLLOCAL bool qore_scope_creator_is_sandboxed();
 */
 DLLLOCAL const char* thread_capability_call_refusal(const char* call_name);
 
-//! Returns true if the code that called the method or function calling this builtin is sandboxed
-/** For a builtin that Qore code calls directly: the frame of the calling method or function records the Program of
-    the code that called it, which is judged by its own sandbox (a sandbox manager or the flag of a Program that
-    sandboxed code created), not by sandboxed callers further up the stack, or by the provenance of code that sandboxed
-    code created and that runs on the thread; see SandboxManager::isCalledBySandboxedCode().
-    Fails closed: true if the frames are not those of a direct call; for a method called from native code (with no
-    frame of its caller), the code that runs on the thread decides (qore_caller_is_sandboxed())
-*/
-DLLLOCAL bool qore_method_caller_is_sandboxed();
-
 //! Returns true if the code that calls this builtin is sandboxed: the Program that its frame records, or the Program
 //! running on the thread; fails closed: true if the builtin's frame is not the innermost one
 DLLLOCAL bool qore_builtin_caller_is_sandboxed();

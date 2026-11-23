@@ -7271,39 +7271,6 @@ QoreProgram* qore_builtin_caller_program() {
     return own->getProgram();
 }
 
-bool qore_method_caller_is_sandboxed() {
-    ThreadData* td = thread_data.get();
-    if (!td) {
-        return false;
-    }
-    // the innermost frame is the builtin's own frame, whose Program is that of the method or function that calls it;
-    // fails closed without it
-    const QoreStackLocation* own = td->current_stack_location.load(std::memory_order_relaxed);
-    if (!own || own->getCallType() != CT_BUILTIN) {
-        return true;
-    }
-    // the frame of that method or function, which records the Program of the code that called it (a call from native
-    // code has none: the code that runs on the thread decides)
-    const QoreStackLocation* method = own->getNext();
-    if (!method) {
-        return qore_caller_is_sandboxed();
-    }
-    if (method->getCallType() != CT_USER) {
-        return true;
-    }
-    if (qore_program_private::isSandboxed(method->getProgram())) {
-        return true;
-    }
-    // code that sandboxed code created (a closure or call reference of a sandboxed Program, a method of an object
-    // that sandboxed code created) can run in the Program of the trusted code that calls it, whose frames then record
-    // that Program: such code runs with the provenance of its sandbox (see visit_thread_provenance()), and then the
-    // method's caller can be such code, so it fails closed
-    auto any = [](QoreSandboxManager*) -> bool {
-        return false;
-    };
-    return !visit_thread_provenance(td, false, false, any);
-}
-
 bool qore_caller_is_untrusted() {
     // the in-module domain only marks the Programs of modules
     static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
