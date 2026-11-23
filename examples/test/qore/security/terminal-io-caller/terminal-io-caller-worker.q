@@ -43,11 +43,23 @@ bool sub via_module() { return TermCheck::allowed(); }
 # the connection providers name a module that cannot be loaded; checks only that nothing is written for the caller
 # live-provider-optin: the providers' module cannot be loaded, so no credential is read
 *hash<auto> sub connections() { return ConnectionProvider::get_connections(True); }
-class Term inherits TelnetClient {
-    constructor() : TelnetClient(\"localhost:1\") {}
-    hash<auto> size() { return getWindowSize(); }
+# the window size that TelnetClient sends: its public windowSizeUpdated() reads it and sends it, which its debug log
+# reports (the client is not connected, so the send fails after the log)
+hash<auto> sub window_size() {
+    list<string> log;
+    TelnetClient t(\"localhost:1\", NOTHING, sub (string fmt) { log += vsprintf(fmt, argv); });
+    try {
+        t.windowSizeUpdated();
+    } catch (hash<ExceptionInfo> ex) {
+    }
+    foreach string line in (log) {
+        *list<*string> m = (line =~ x/WindowSize \\[([0-9]+), ([0-9]+), ([0-9]+), ([0-9]+)\\]/);
+        if (m) {
+            return {\"rows\": m[2].toInt() * 256 + m[3].toInt(), \"columns\": m[0].toInt() * 256 + m[1].toInt()};
+        }
+    }
+    return {\"log\": log};
 }
-hash<auto> sub window_size() { return (new Term()).size(); }
 string sub use(string how) { return TermCheck::use(how); }
 # a module object that this code creates runs the code given: the host's (written) and this code's own (refused)
 string sub run_host(code host_code) { return (new TermCheck::Runner(host_code)).run(); }
@@ -131,6 +143,17 @@ check("host-module", True, TermCheck::allowed());
     Program p = make_program(PO_MODERN, new SandboxManager());
     check("sandboxed-direct", True, p.callFunction("direct"));
     check("sandboxed-module", True, p.callFunction("via_module"));
+    # a class that sandboxed code declares has no private access to a class that trusted code declares (qore#6843)
+    string err;
+    try {
+        p.parse("class SandboxedTerm inherits TelnetClient {
+    constructor() : TelnetClient(\"localhost:1\") {}
+    hash<auto> size() { return getWindowSize(); }
+}", "private-window-size");
+    } catch (hash<ExceptionInfo> ex) {
+        err = ex.err;
+    }
+    check("sandboxed-private-window-size", "PARSE-ERROR", err);
 }
 
 map printf("%s\n", $1), results;
