@@ -17,10 +17,11 @@
 %exec-class IRAssignmentConversionTest
 
 #! Regression coverage for qore#7372: the value of a local whose type converts the value assigned to it
-/** A local whose type converts the value assigned to it (an int assigned to a union<float, string>, a float, a
-    softfloat, a number or a *float local, or to a member or element of such a type) holds the converted value, and
-    its reads must not take the type of the assigned value.  The scenario runs in every tier, in the IR tier alone and
-    as a compiled executable, and must print what the AST tier prints.
+/** A local whose type converts the value assigned to it (any declared type that is not the plain type of the value:
+    an int assigned to a union<float, string>, a float, a softfloat, a number, a softstring, a *float, *number or
+    *softfloat local, a float to a number, or a member or element of such a type) holds the converted value, and its
+    reads, and the values built from them, must not take the type of the assigned value.  The scenario runs in every
+    tier, in the IR tier alone and as a compiled executable, and must print what the AST tier prints.
 */
 class IRAssignmentConversionTest inherits QUnit::Test {
     private {
@@ -49,6 +50,17 @@ class IRAssignmentConversionTest inherits QUnit::Test {
             "union-assign: float 4.0",
             "union-addassign: float 4.0",
             "union-loop: float 9.0",
+            "softstring-int: string \"3\"",
+            "optnumber-int: number 3",
+            "optsoftfloat-int: float 3.0",
+            "number-float: number 2.5",
+            "assign-expr: float 3.0",
+            "assign-expr-auto: float 3.0",
+            "ret-local: float 3.0",
+            "ret-auto: float 3.0",
+            "hash-from-union: float 3.0",
+            "list-from-union: float 3.0",
+            "union-arith: float 4.0",
         );
     }
 

@@ -4,9 +4,10 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 #
 # The scenario of IRAssignmentConversion.qtest (qore#7372): values assigned to locals, members, elements, return values
-# and parameters whose types convert them (an int to a union<float, string>, a float, a softfloat, a number or a
-# *float; a float or a string to a softint), read in a later statement.  Every call runs three times, so that tiered
-# execution runs it on the AST tier, the IR tier and as native code.
+# and parameters whose types convert them (an int to a union<float, string>, a float, a softfloat, a number, a
+# softstring or a *float, *number or *softfloat; a float to a number; a float or a string to a softint), read in a later
+# statement, and the values built from them.  Every call runs three times, so that tiered execution runs it on the AST
+# tier, the IR tier and as native code.
 
 %modern
 
@@ -106,6 +107,42 @@ sub other(int i) {
     show("union-loop", acc);
 }
 
+# the value of the assignment expression, a return of a converted local, aggregates and arithmetic built from one
+union<float, string> sub retLocal(int i) {
+    union<float, string> x = i;
+    return x;
+}
+
+auto sub retAuto(int i) {
+    union<float, string> x = i;
+    return x;
+}
+
+sub uses(int i, float fl) {
+    softstring ss = i;
+    show("softstring-int", ss);
+    *number on = i;
+    show("optnumber-int", on);
+    *softfloat osf = i;
+    show("optsoftfloat-int", osf);
+    number nf = fl;
+    show("number-float", nf);
+    union<float, string> fs;
+    show("assign-expr", (fs = i));
+    auto v = (fs = i);
+    show("assign-expr-auto", v);
+    show("ret-local", retLocal(i));
+    show("ret-auto", retAuto(i));
+    union<float, string> m = i;
+    hash<auto> h = {"k": m};
+    show("hash-from-union", h.k);
+    list<auto> l = (m,);
+    show("list-from-union", l[0]);
+    union<float, string> u3 = i;
+    auto x = u3 + 1;
+    show("union-arith", x);
+}
+
 sub run(code call) {
     for (int n = 0; n < 3; ++n) {
         call();
@@ -115,3 +152,4 @@ sub run(code call) {
 run(sub () { locals(3, 2.5, "7"); });
 run(sub () { containers(3); });
 run(sub () { other(3); });
+run(sub () { uses(3, 2.5); });

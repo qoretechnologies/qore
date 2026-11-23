@@ -16930,9 +16930,11 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
                             == QoreIRValueRepresentation::NativeFloat
                         || facts->representation
                             == QoreIRValueRepresentation::NativeBool);
-                // the local holds the stored value only if its type keeps it unchanged: a type that converts it on
-                // assignment (an int stored in a union<float, string>, a float, a softfloat or a number local holds
-                // the converted value) gives its reads the facts of its own type, not those of the stored value
+                // the local holds the stored value only if its type keeps it unchanged: the local has no type, or its
+                // value type is the plain type of the stored value's representation; any other declared type can
+                // convert it on assignment (an int stored in a union<float | number, ...>, a number or softnumber, a
+                // *float, *number or *softfloat, or a softstring local, a float stored in a number local), and the
+                // local then holds the converted value, so its reads do not take the facts of the stored value
                 // (qore#7372)
                 if (native && store->local) {
                     const QoreTypeInfo* local_type = store->local->getTypeInfo();
