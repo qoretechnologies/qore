@@ -46,6 +46,9 @@ public class Http3StreamContext inherits AbstractStreamContext {
         #! True once the end of the stream has been sent
         bool ended = False;
 
+        #! True once the stream has been reset by abort()
+        bool reset = False;
+
         Socket sock;
         int session_id;
         int stream_id;
@@ -349,6 +352,32 @@ public class Http3StreamContext inherits AbstractStreamContext {
         ended = True;
         try {
             sock.submitQuicStreamData(session_id, stream_id, NOTHING, True);
+            if (wake_callback) {
+                wake_callback();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "SOCKET-NOT-OPEN" && ex.err != "QUIC-ERROR"
+                    && ex.err != "QUIC-HTTP3-ERROR") {
+                rethrow;
+            }
+        }
+    }
+
+    #! Aborts the stream with \c RESET_STREAM and \c STOP_SENDING and releases its state and the data not yet sent
+    /** Also for a stream that was ended already: an end of the stream (\c FIN) that is staged behind data that the
+        peer acknowledges none of never reaches it (qore#7325).  The stream is reset once; the errors of a stream or
+        session that has ended already are ignored.
+
+        @since AsyncSocketIo 1.0
+    */
+    abort() {
+        if (reset) {
+            return;
+        }
+        reset = True;
+        ended = True;
+        try {
+            sock.cancelQuicStream(session_id, stream_id);
             if (wake_callback) {
                 wake_callback();
             }
