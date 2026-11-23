@@ -5501,6 +5501,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                                 cx.close = True;
                             }
                         }
+                        # a chunked body that the socket of the request did not read to its end: the rest of it is
+                        # not read as the next request
+                        if (request_helper.hs_state.h1_chunk_open) {
+                            cx.close = True;
+                        }
                     }
 
                     # manage persistent handler info, if applicable
@@ -5644,6 +5649,12 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 cx.close = True;
                 logError("%s", str);
                 return;
+            }
+            # a chunked body that the socket of the request did not read to its end: the rest of it is not read as the
+            # next request (qore#7305)
+            if (!is_multiplexed && request_helper.handler_sock && request_helper.hs_state
+                    && request_helper.hs_state.h1_chunk_open) {
+                cx.close = True;
             }
 
             # if there is a pending chunked body that has not yet been read on exit, then read it and discard before sending any response
@@ -11725,6 +11736,8 @@ class Http1HandlerSocket inherits Qore::Socket {
     hash<auto> readHTTPChunkedBody(timeout timeout_ms = -1) {
         enterChunkedRead("readHTTPChunkedBody");
         on_exit rh.h1Leave();
+        # the body was read to its end only if the read returns
+        on_success rh.h1_chunk_open = False;
         # the connection's socket decodes the body in the object's encoding
         if (ownEncoding()) {
             useOwnEncoding();
@@ -11737,18 +11750,24 @@ class Http1HandlerSocket inherits Qore::Socket {
     hash<auto> readHTTPChunkedBodyBinary(timeout timeout_ms = -1) {
         enterChunkedRead("readHTTPChunkedBodyBinary");
         on_exit rh.h1Leave();
+        # the body was read to its end only if the read returns
+        on_success rh.h1_chunk_open = False;
         return real.readHTTPChunkedBodyBinary(recvTimeout(timeout_ms));
     }
 
     hash<auto> readHTTPChunkedBodyToOutputStream(OutputStream output_stream, timeout timeout_ms = -1) {
         enterChunkedRead("readHTTPChunkedBodyToOutputStream");
         on_exit rh.h1Leave();
+        # the body was read to its end only if the read returns
+        on_success rh.h1_chunk_open = False;
         return real.readHTTPChunkedBodyToOutputStream(output_stream, recvTimeout(timeout_ms));
     }
 
     nothing readHTTPChunkedBodyWithCallback(code receive_callback, timeout timeout_ms = -1) {
         enterChunkedRead("readHTTPChunkedBodyWithCallback");
         on_exit rh.h1Leave();
+        # the body was read to its end only if the read returns
+        on_success rh.h1_chunk_open = False;
         # the connection's socket decodes the chunks in the object's encoding
         if (ownEncoding()) {
             useOwnEncoding();
@@ -11762,6 +11781,8 @@ class Http1HandlerSocket inherits Qore::Socket {
     nothing readHTTPChunkedBodyBinaryWithCallback(code receive_callback, timeout timeout_ms = -1) {
         enterChunkedRead("readHTTPChunkedBodyBinaryWithCallback");
         on_exit rh.h1Leave();
+        # the body was read to its end only if the read returns
+        on_success rh.h1_chunk_open = False;
         real.readHTTPChunkedBodyBinaryWithCallback(receive_callback, recvTimeout(timeout_ms));
     }
 
@@ -13269,6 +13290,12 @@ class RequestHelper {
 */
 class HandlerSocketState {
     public {
+        #! True while the chunked body of the current HTTP/1.x request was taken by the socket of the request and not
+        #! read to its end: a read of it failed (its callback or output stream threw, or it timed out), or none
+        #! returned; the server then closes the connection after the response, as the rest of the body cannot be
+        #! told apart from the next request (qore#7305)
+        bool h1_chunk_open = False;
+
         #! True once the handler of the request of an HTTP/2 or HTTP/3 stream started its response on the stream
         #! through its socket, or the server did (qore#7214, qore#7212, qore#7305); reset by the server for each request
         bool stream_response_started = False;
@@ -13413,6 +13440,7 @@ class HandlerSocketState {
             return False;
         }
         h1_chunk_taken = True;
+        h1_chunk_open = True;
         return True;
     }
 
@@ -13613,6 +13641,7 @@ class HandlerSocketState {
         h1_live = True;
         h1_body = 0;
         h1_chunk_taken = False;
+        h1_chunk_open = False;
         h1_resp = Http1ResponseState::None;
         h1_resp_left = 0;
         h1_head = head;

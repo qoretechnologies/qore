@@ -23,6 +23,7 @@
 %requires Logger
 %requires RestSchemaValidator
 %requires yaml
+%requires reflection
 %requires ../../TestCertificates.qm
 
 %exec-class HttpServerHttp1HandlerSocketTest
@@ -686,6 +687,8 @@ class TenantHttpHandler inherits AbstractHttpRequestHandler {
 
     public {
         Queue ended();
+        #! the socket of the last request of the paths that read in the socket's own encoding
+        *Socket last;
     }
 
     bool isPersistent() {
@@ -770,6 +773,24 @@ class TenantHttpHandler inherits AbstractHttpRequestHandler {
                 return <HttpResponseInfo>{\"code\": 200};
             case \"upgrade\":
                 return <HttpResponseInfo>{\"code\": 101, \"hdr\": {\"Upgrade\": \"x\", \"Connection\": \"Upgrade\"}};
+            case \"enc-throw\":
+            case \"enc-timeout\": {
+                # a chunked read in the socket's own encoding whose callback throws, or that times out
+                last = s;
+                s.setEncoding(\"ISO-8859-2\");
+                string err = try_it(sub () {
+                    s.readHTTPChunkedBodyWithCallback(sub (hash<auto> v) {
+                        if (hdr.path == \"enc-throw\" && v.data) {
+                            throw \"TENANT-ERROR\", \"in the middle of the body\";
+                        }
+                    }, -1);
+                });
+                ended.push(err);
+                return makeResponse(200, \"err=\" + err);
+            }
+            case \"enc-report\":
+                # the encoding of the socket of the request: the connection's
+                return makeResponse(200, \"encoding=\" + s.getEncoding());
             case \"blocked\":
             case \"blocked-long\":
                 # a thread of the handler that outlives its request, blocked in a read of the socket of the request
@@ -885,6 +906,7 @@ nothing sub run_code(code c) {
         addTestCase("a chunked body", \chunkedTest());
         addTestCase("a chunked body read with a callback", \chunkedCallbackTest());
         addTestCase("a chunked body in the socket's own encoding", \chunkedEncodingTest());
+        addTestCase("sandboxed code's own encoding ends with each read", \sandboxedEncodingRestoreTest());
         addTestCase("other methods", \otherTest());
         addTestCase("the socket ends with its request", \staleTest());
         addTestCase("the handler's own response", \selfResponseTest());
@@ -1706,6 +1728,62 @@ class NoView inherits AbstractHttpRequestHandler {
             on_exit c2.close();
             c2.send("GET /class HTTP/1.1\r\nHost: localhost\r\n\r\n");
             assertEq("class=Http1HandlerSocket", readResponse(c2), path + ": the server serves another connection");
+        }
+    }
+
+    #! a chunked read of a sandboxed handler in the socket's own encoding gives the connection's socket that encoding
+    #! for the read only: also when the read's callback throws in the middle of the body and when the read times out
+    #! (at the server's handler_socket_max_timeout), the next request's socket has the connection's encoding
+    sandboxedEncodingRestoreTest() {
+        Program p = getTenantProgram();
+        Queue entered();
+        Queue release();
+        AbstractHttpRequestHandler handler = p.callFunction("get_http_handler", entered, release);
+        HttpServer srv(<HttpServerOptionInfo>{"handler_socket_max_timeout": 1s});
+        on_exit delete srv;
+        srv.setHandler("tenant", "^enc-", NOTHING, handler);
+        int srv_port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        srv.waitForAsyncIo();
+
+        string conn_enc;
+        {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("GET /enc-report HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            conn_enc = parse(readResponse(c)).encoding;
+        }
+        assertNeq("ISO-8859-2", conn_enc);
+
+        # the callback throws in the middle of the body; the read times out in the middle of the body (the client
+        # sends the rest of the body after it)
+        foreach string path in (("enc-throw", "enc-timeout")) {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("POST /" + path + " HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n"
+                "1\r\na\r\n" + (path == "enc-throw" ? "1\r\nb\r\n0\r\n\r\n" : ""));
+            string err = cast<object>(handler).ended.get(HangGuard);
+            assertEq(path == "enc-throw" ? "TENANT-ERROR" : "SOCKET-TIMEOUT", err, path + ": the read's error");
+            # the connection's own socket has its encoding again
+            Socket view = cast<object>(handler).last;
+            Socket real = cast<NormalMember>(Class::getClass(view).getMember("real")).getValue(view);
+            assertEq(conn_enc, real.getEncoding(), path + ": the connection's socket has its encoding again");
+            if (path == "enc-timeout") {
+                c.send("1\r\nb\r\n0\r\n\r\n");
+            }
+            # the rest of the body is not read as the next request: the connection closes after the response
+            hash<auto> h = c.readHTTPHeader(HangGuard);
+            assertEq("err=" + err, c.recv(h."content-length".toInt(), HangGuard), path);
+            assertEq("close", h.connection.lwr(), path + ": the connection closes");
+            c.send("GET /enc-report HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            string rest = "";
+            try {
+                rest = c.recv(-1, HangGuard).toString();
+            } catch (hash<ExceptionInfo> ex) {
+                rest = ex.err;
+            }
+            assertFalse(rest =~ /HTTP\/1.1 [0-9]/, path + ": no response to a request after the body: " + rest);
         }
     }
 
