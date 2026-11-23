@@ -974,10 +974,9 @@ LValueHelper::LValueHelper(QoreObject& self, ExceptionSink* xsink, ObjectScan) :
 LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink), assignment_only(for_assignment) {
 }
 
-LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)),
-        weak_locked(std::move(o.weak_locked)), lvid_set(o.lvid_set),
+LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
         ref_pgms(std::move(o.ref_pgms)), ocvec(std::move(o.ocvec)), path_has_weak_step(o.path_has_weak_step),
-        before(o.before),
+        holds_weak_locks(o.holds_weak_locks), before(o.before),
         removal_objects(std::move(o.removal_objects)), removed_objects(std::move(o.removed_objects)), rdt(o.rdt),
         vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
         assignment_only(o.assignment_only), read_access(o.read_access),
@@ -1717,49 +1716,37 @@ QoreHashNode* LValueHelper::lockWeakHash() {
 }
 
 void LValueHelper::holdWeakLock(AbstractQoreNode* n) {
-    // the reference is released with the helper's other temporaries; weak_locked records it for ensureUniqueNode(),
-    // and holds an entry only for a reference that tvec holds
+    // the reference is released with the helper's other temporaries
     try {
         tvec.push_back(n);
     } catch (...) {
         n->deref(nullptr);
         throw;
     }
-    try {
-        weak_locked.push_back(n);
-    } catch (...) {
-        tvec.pop_back();
-        n->deref(nullptr);
-        throw;
-    }
+    holds_weak_locks = true;
 }
 
 bool LValueHelper::releaseOwnWeakLocks(AbstractQoreNode* n) {
-    int locks = 0;
-    for (const AbstractQoreNode* i : weak_locked) {
+    // each entry of tvec holds a reference of the helper: to a container that an lvalue of the path holds, the ones
+    // taken as it was locked at weak steps, and the original that a copy-on-write step of the path replaced with a
+    // copy, if the path reached it again; no one else can see a change of it
+    int held = 0;
+    for (const AbstractQoreNode* i : tvec) {
         if (i == n) {
-            ++locks;
+            ++held;
         }
     }
     // the lvalue holding the node holds one reference
-    if (!locks || n->reference_count() != locks + 1) {
+    if (!held || n->reference_count() != held + 1) {
         return false;
     }
-    // each entry of weak_locked stands for one reference that tvec holds; vector::erase() neither allocates nor
-    // throws
-    for (size_t i = weak_locked.size(); i-- > 0;) {
-        if (weak_locked[i] != n) {
-            continue;
+    // vector::erase() neither allocates nor throws
+    for (size_t i = tvec.size(); i-- > 0;) {
+        if (tvec[i] == n) {
+            tvec.erase(tvec.begin() + i);
+            // not the last reference: the lvalue holds the node
+            n->deref(nullptr);
         }
-        weak_locked.erase(weak_locked.begin() + i);
-        for (size_t j = tvec.size(); j-- > 0;) {
-            if (tvec[j] == n) {
-                tvec.erase(tvec.begin() + j);
-                break;
-            }
-        }
-        // not the last reference: the lvalue holds the node
-        n->deref(nullptr);
     }
     return true;
 }

@@ -848,7 +848,7 @@ protected:
         // earlier on its path do not make the container shared: a copy would leave the weak references on the
         // original, which the helper then releases (qore#7352).  The lvalue holds the container now, so the helper
         // releases them, and the container is unique
-        if (!weak_locked.empty() && releaseOwnWeakLocks(current_value)) [[unlikely]] {
+        if (holds_weak_locks && releaseOwnWeakLocks(current_value)) [[unlikely]] {
             assert(current_value->is_unique());
             return;
         }
@@ -865,8 +865,9 @@ protected:
         saveTemp(old);
     }
 
-    //! if the only references to \a n other than that of the lvalue holding it are the ones that the helper took as
-    //! it locked \a n at weak steps of its path, releases them and returns true (qore#7352)
+    //! if the only references to \a n other than that of the lvalue holding it are the ones that the helper holds
+    //! in its temporaries (the references it took as it locked \a n at weak steps of its path, or the original that
+    //! a copy-on-write step of the path replaced), releases them and returns true (qore#7352)
     /** The lvalue holds \a n, under its lock, so \a n is not freed; nothing is allocated and nothing throws
     */
     DLLLOCAL QORE_INTERN_NOINLINE bool releaseOwnWeakLocks(AbstractQoreNode* n);
@@ -973,9 +974,6 @@ private:
     typedef std::vector<AbstractQoreNode*> nvec_t;
     //! values released when the helper is destroyed, after the locks; getValue() adds the nodes that it creates
     mutable nvec_t tvec;
-    //! the lists and hashes that the helper locked at the weak steps of its path (lockWeakList(), lockWeakHash()), each
-    //! once for each reference of its own that it holds in tvec; no reference is held here (qore#7352)
-    std::vector<const AbstractQoreNode*> weak_locked;
     lvid_set_t* lvid_set = nullptr;
     //! the Programs of the references that the lvalue was reached through, entered until the lvalue has been used
     /** see keepReferenceProgram() and adoptReferenceProgram()
@@ -985,6 +983,8 @@ private:
     ocvec_t ocvec;
     //! true if a container of ocvec was reached through a weak reference (qore#7321)
     bool path_has_weak_step = false;
+    //! true if the helper locked a list or a hash at a weak step of its path (see releaseOwnWeakLocks(), qore#7352)
+    bool holds_weak_locks = false;
 
     // flag if the changed value was a container before the assignment
     bool before = false;
