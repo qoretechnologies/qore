@@ -1153,13 +1153,14 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
     }
     if (*xsink || stream_id < 0) {
         endSubmitFail();
-        // a request refused because the QUIC connection is closed (by its idle timer, locally or by the peer) was
-        // not sent: the connection is closed now, so that a retry finds a new one
+        // a request refused because the QUIC connection is closed (by its idle timer, for lack of a response from
+        // the peer, locally, by the peer or with a stateless reset) was not sent: the connection is closed now, so
+        // that a retry finds a new one (qore#7385)
         if (*xsink) {
             // the error code and description can be inline short strings, which have no node (issue #7038)
             QoreStringDataHelper err(xsink->getExceptionErr());
-            if (err == "HTTP3-IDLE-CLOSE" || err == "HTTP3-LOCAL-CLOSE" || err == "HTTP3-PEER-CLOSE"
-                    || err == "HTTP3-STATELESS-RESET") {
+            if (err == "HTTP3-IDLE-CLOSE" || err == "HTTP3-PEER-UNRESPONSIVE" || err == "HTTP3-LOCAL-CLOSE"
+                    || err == "HTTP3-PEER-CLOSE" || err == "HTTP3-STATELESS-RESET") {
                 QoreStringDataHelper desc(xsink->getExceptionDesc());
                 setSubmitError(err.c_str(), desc ? desc.c_str() : "");
             }
@@ -1657,6 +1658,22 @@ void Http3ClientPollOperationPriv::setSubmitError(const char* err, const char* d
     }
     failMigrations();
     wakeSettingsWaiters();
+    // the connection is closed as when the I/O thread finds the close (see setError()): its manager gives it out no
+    // more, and the other requests on it get the error; before, it stayed ready in the manager's pool, and every later
+    // request on it failed with HTTP3-STATE-ERROR (qore#7385)
+    AbstractHttpPollConnectionPriv* cp = nullptr;
+    {
+        AutoLocker al(stream_lock);
+        cp = connection_priv;
+        connection_priv = nullptr;
+    }
+    if (cp) {
+        cp->setClosed();
+        ExceptionSink xsink;
+        notifyPendingStreams(err, desc, &xsink);
+        // the constructor's ref is released only after the waiters have been notified (see setError())
+        cp->deref(&xsink);
+    }
 }
 
 int64_t Http3ClientPollOperationPriv::requestMigration(ExceptionSink* xsink) {
