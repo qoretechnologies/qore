@@ -22,8 +22,10 @@ hashdecl AotSection {
     for a count that its data cannot hold.  The test compiles a small module with a section of every kind with qcc,
     with uncompressed metadata, and loads patched copies of it, each in a child process:
     - hand-picked cases, in every execution mode: a namespace, class, hashdecl, enum, typedef and constant whose name
-      reference gives an empty string, which must be refused; a namespace and an embedded source section cut short,
-      their counts set to 0xFFFFFFFF and a string pool without its terminator, which must give their errors;
+      reference gives an empty string, and a namespace whose name reference gives the path of a nested namespace or
+      whose path reference gives a string that is not a path (qore#7358), which must be refused; a namespace and an
+      embedded source section cut short, their counts set to 0xFFFFFFFF and a string pool without its terminator,
+      which must give their errors;
     - the required sections cut in half, in every execution mode, which must be refused;
     - every section truncated at evenly spaced sizes (at every size for a small section), and 0xFFFFFFFF and
       0x7FFFFFFF (the largest count that a signed 32-bit integer holds) written at every offset of every section,
@@ -237,6 +239,29 @@ class AotSectionBoundsBase inherits QUnit::Test {
         return qmod[pos] | (qmod[pos + 1] << 8) | (qmod[pos + 2] << 16) | (qmod[pos + 3] << 24);
     }
 
+    #! returns the string of the pool with the given reference
+    private string poolString(int ref) {
+        int start = pool_pos + ref;
+        int end = start;
+        while (qmod[end]) {
+            ++end;
+        }
+        return qmod.substr(start, end - start).toString();
+    }
+
+    #! returns the position of the record of the first namespace of the section whose path has two names or more
+    private int nestedNamespaceRecord(hash<AotSection> ns) {
+        int count = u32(ns.data_pos);
+        for (int i = 0; i < count; ++i) {
+            int rec = ns.data_pos + 4 + i * NamespaceRecordSize;
+            string path = poolString(u32(rec + 4));
+            if (path =~ /^::[^:]+::[^:]+/) {
+                return rec;
+            }
+        }
+        throw "NO-NESTED-NAMESPACE", "the module has no nested namespace";
+    }
+
     #! returns a copy of the module with the 4 bytes at pos set to v (little-endian)
     private static binary patch32(binary data, int pos, int v) {
         binary b = data.substr(0, pos);
@@ -337,6 +362,21 @@ class AotSectionBoundsBase inherits QUnit::Test {
             "data": patch32(qmod, ns.data_pos + 4 + NamespaceRecordSize, empty_ref),
             "err": "has no name",
         };
+        # a name or path reference into a string of the pool that is not a name or path of a namespace, such as the
+        # path of a nested namespace, from which the namespace cannot be made (qore#7358); a mutation of a reference
+        # gives one depending on the strings of the pool, so the case uses the path of the module's nested namespace
+        {
+            int rec = nestedNamespaceRecord(ns);
+            int path_ref = u32(rec + 4);
+            cases."namespace name with its path" = {
+                "data": patch32(qmod, rec, path_ref),
+                "err": "has a name that is not valid",
+            };
+            cases."namespace path that is not valid" = {
+                "data": patch32(qmod, rec + 4, path_ref + 1),
+                "err": "has a path that is not valid",
+            };
+        }
         foreach int type in (NamedSections) {
             hash<AotSection> sec = section(type);
             cases{sprintf("section %d record without a name", type)} = {

@@ -17777,6 +17777,32 @@ bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm,
     return resolveAll(error);
 }
 
+//! returns true if \a path is the path of a namespace other than the root namespace: names separated by "::", each
+//! non-empty and without a colon, after "::" (which deserializeNamespaces() adds when it is missing)
+static bool qore_aot_valid_ns_path(const char* path) {
+    const char* p = path;
+    if (p[0] == ':' && p[1] == ':') {
+        p += 2;
+    }
+    while (true) {
+        // a name: non-empty, without a colon
+        const char* start = p;
+        while (*p && *p != ':') {
+            ++p;
+        }
+        if (p == start) {
+            return false;
+        }
+        if (!*p) {
+            return true;
+        }
+        if (p[1] != ':' || !p[2]) {
+            return false;
+        }
+        p += 2;
+    }
+}
+
 bool QoreAOTBinaryDeserializer::deserializeNamespaces(std::string& error) {
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::NAMESPACES);
     if (!sec) {
@@ -17842,6 +17868,17 @@ bool QoreAOTBinaryDeserializer::deserializeNamespaces(std::string& error) {
         // string: every namespace but the root has a name (qore#6265)
         if ((!name || !*name) && parent_idx != UINT32_MAX) {
             error = "invalid NAMESPACES section: namespace " + std::to_string(i) + " has no name";
+            return false;
+        }
+        // a reference into a string of the pool, such as a path, can give a name or a path that is not valid, from
+        // which the namespace could not be made (qore#7358): a name is one name, without a colon, and the path of the
+        // root namespace is "::"
+        if (parent_idx != UINT32_MAX && strchr(name, ':')) {
+            error = "invalid NAMESPACES section: namespace " + std::to_string(i) + " has a name that is not valid";
+            return false;
+        }
+        if (path && *path && (parent_idx == UINT32_MAX ? strcmp(path, "::") : !qore_aot_valid_ns_path(path))) {
+            error = "invalid NAMESPACES section: namespace " + std::to_string(i) + " has a path that is not valid";
             return false;
         }
 
