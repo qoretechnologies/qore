@@ -14996,6 +14996,14 @@ load_local_done:
                                 hks_inst->operands[0].id);
                         }
 
+                        // check hashdecl key validity before copying or changing the hash: a key that the hashdecl
+                        // does not declare raises INVALID-MEMBER, as the AST interpreter and the store of a key
+                        // that is not constant (HashKeyStoreDynamic) raise it (qore#7365)
+                        if (qore_hash_private* hp = qore_hash_private::get(*h);
+                                hp->hashdecl && hp->checkLValueKey(hks_inst->key_name.c_str(), xsink)) {
+                            return true;
+                        }
+
                         // Keep RHS referenced before COW, matching QoreAssignmentOperatorNode.
                         // This makes `h.b = h` copy the outer hash before storing the original.
                         if (h->reference_count() > 1) {
