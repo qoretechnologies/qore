@@ -659,7 +659,8 @@ class QdpCmd {
         if (info.display_name && info.display_name != info.name) {
             printf("  %s: %s\n", color.key("Display Name"), info.display_name);
         }
-        printf("  %s: %s\n", color.key("Type"), color.type(info.type));
+        # a provider's static info need not declare its type (qore#7386)
+        printf("  %s: %s\n", color.key("Type"), info.type ? color.type(info.type) : color.dim("(not declared)"));
         if (info.short_desc) {
             printf("  %s: %s\n", color.key("Description"), info.short_desc);
         }
