@@ -1481,9 +1481,15 @@ public:
     DLLLOCAL bool hasActiveStreamInputStreams() const;
 
     //! Process one chunk from each active InputStream (called by I/O thread)
-    /** @since %Qore 3.0
+    /** An error of one stream ends that stream only: it is logged and the stream is reset for the client; no error
+        is raised in \a xsink, which is unused (qore#7434)
+
+        @since %Qore 3.0
     */
     DLLLOCAL void processStreamInputStreams(ExceptionSink* xsink);
+
+    //! Reads and sends the next chunk of one stream's InputStream; an error is the stream's alone (qore#7434)
+    DLLLOCAL void processStreamInputStream(int64_t stream_id, StreamInputStreamInfo& info, ExceptionSink* xsink);
 
     //! Clean up all InputStreams (called on session destruction)
     /** @since %Qore 3.0
