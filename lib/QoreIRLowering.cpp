@@ -3394,7 +3394,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // the statement checks for cancellation at the start of every iteration, as in the AST interpreter
         header_block->loop_cancel = QoreIRLoopCancel::Foreach;
 
-        QoreIRValue init_index = builder.createConstInt(0, stmt->loc)->result;
+        // the index of the first element, created before the loop if the loop saves its element (see below), in the
+        // preheader otherwise
+        QoreIRValue init_index;
 
         // The implicit element ($#): a body without a $# of the statement reads its index nowhere, whatever it calls
         // (qore#7270), and the loop does not set it; the code below decides for a body with one whether the index
@@ -3424,6 +3426,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 error = "IR builder failed to create blocks for foreach";
                 return false;
             }
+            init_index = builder.createConstInt(0, stmt->loc)->result;
             QoreIRInstruction* push_element = builder.createPushImplicitElement(init_index, stmt->loc);
             // an exception that leaves the function from the loop restores it at the frame's exit, after the handlers
             // of the blocks in the body ran with the loop's element, so that the caller's code that reads the
@@ -3460,6 +3463,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         QoreIRValue foreach_limit;
         if (direct_typed_list) {
             foreach_limit = builder.createListSize(list_val, stmt->loc)->result;
+        }
+        if (!init_index.isValid()) {
+            init_index = builder.createConstInt(0, stmt->loc)->result;
         }
         {
             auto* br = builder.createBranch(header_block, stmt->loc);

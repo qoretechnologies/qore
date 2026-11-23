@@ -18226,16 +18226,12 @@ load_local_done:
                 ++ip;
                 break;
             }
-            case QoreIROpcode::PopImplicitElement: {
+            // SetImplicitElement sets the index of the next element of a foreach statement (qore#7379), as a pop
+            // sets the element that it restores
+            case QoreIROpcode::PopImplicitElement:
+            case QoreIROpcode::SetImplicitElement: {
                 QoreValue old_val = getIRValue(values, inst->operands[0]);
                 save_implicit_element(static_cast<int>(old_val.getAsBigInt()));
-                ++ip;
-                break;
-            }
-            case QoreIROpcode::SetImplicitElement: {
-                // the index of the next element of a foreach statement (qore#7379)
-                QoreValue idx = getIRValue(values, inst->operands[0]);
-                save_implicit_element(static_cast<int>(idx.getAsBigInt()));
                 ++ip;
                 break;
             }
