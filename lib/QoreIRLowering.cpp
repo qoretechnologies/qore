@@ -8404,70 +8404,6 @@ static bool isRangeLValue(const QoreValue& value) {
     return node && dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node);
 }
 
-static bool getLValueBaseValue(const QoreValue& value, QoreValue& base) {
-    // follows the chain of operators iteratively: it is as long as the nesting of the lvalue
-    QoreValue cur = value;
-    while (true) {
-        const AbstractQoreNode* node = cur.getInternalNode();
-        if (!node) {
-            return false;
-        }
-        if (dynamic_cast<const VarRefNode*>(node)) {
-            base = cur;
-            return true;
-        }
-        if (auto* op = dynamic_cast<const QoreBinaryLValueOperatorNode*>(node)) {
-            cur = op->getLeft();
-            continue;
-        }
-        if (auto* op = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)) {
-            cur = op->getLeft();
-            continue;
-        }
-        if (auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
-            cur = op->getLeft();
-            continue;
-        }
-        if (auto* op = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
-            cur = op->get(0);
-            continue;
-        }
-        if (auto* op = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
-            cur = op->getLeft();
-            continue;
-        }
-        if (auto* op = dynamic_cast<const QoreShiftOperatorNode*>(node)) {
-            cur = op->getExp();
-            continue;
-        }
-        if (auto* op = dynamic_cast<const QoreUnshiftOperatorNode*>(node)) {
-            cur = op->getLeft();
-            continue;
-        }
-        if (auto* op = dynamic_cast<const QoreSpliceOperatorNode*>(node)) {
-            cur = op->getLValue();
-            continue;
-        }
-        if (auto* op = dynamic_cast<const QorePreIncrementOperatorNode*>(node)) {
-            cur = op->getExp();
-            continue;
-        }
-        if (auto* op = dynamic_cast<const QorePostIncrementOperatorNode*>(node)) {
-            cur = op->getExp();
-            continue;
-        }
-        if (auto* op = dynamic_cast<const QorePreDecrementOperatorNode*>(node)) {
-            cur = op->getExp();
-            continue;
-        }
-        if (auto* op = dynamic_cast<const QorePostDecrementOperatorNode*>(node)) {
-            cur = op->getExp();
-            continue;
-        }
-        return false;
-    }
-}
-
 static std::string describeIRLoweringExpr(const QoreValue& expr) {
     std::string desc = "QoreValue type '";
     desc += expr.getTypeName();
@@ -9388,33 +9324,6 @@ bool QoreIRLowering::isNeverNothingInt(const QoreParseAnalysis& analysis) const 
         && QoreTypeInfo::isType(analysis.known_type, NT_INT);
 }
 
-bool QoreIRLowering::guardVarLValue(const QoreValue& exp, std::string& error, bool allow_maybe_nothing) {
-    const AbstractQoreNode* node = exp.getInternalNode();
-    auto* var = dynamic_cast<const VarRefNode*>(node);
-    if (!var) {
-        return true;
-    }
-
-    std::string guard_error;
-    QoreIRValue value = loadVarRef(var, guard_error, "lvalue guard", exp);
-    if (!value.isValid()) {
-        if (!guard_error.empty()) {
-            error = guard_error;
-        }
-        return false;
-    }
-    maybeInsertNotNothingGuard(value, &exp, getVarRefLocation(var), getVarRefTypeInfo(var), allow_maybe_nothing);
-    return true;
-}
-
-bool QoreIRLowering::guardLValueBase(const QoreValue& exp, std::string& error, bool allow_maybe_nothing) {
-    QoreValue base;
-    if (!getLValueBaseValue(exp, base)) {
-        return true;
-    }
-    return guardVarLValue(base, error, allow_maybe_nothing);
-}
-
 void QoreIRLowering::markLocalAssignmentFromExpression(const QoreValue& exp) {
     if (!parse_context || !exp.hasNode()) {
         return;
@@ -10123,7 +10032,7 @@ void QoreIRLowering::setReferenceLoadExceptionTarget(QoreIRInstruction* load, co
         }
         builder.getFunction()->setValueFacts(result, facts);
     }
-    // NOTE: no guard here — consuming operators (lowerRange, storeVarRef, guardVarLValue, etc.)
+    // NOTE: no guard here — consuming operators (lowerRange, storeVarRef, lowerHashObjectDereference, etc.)
     // emit their own guards with proper exception scope context
     return result;
 }
@@ -14698,14 +14607,20 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
         return result;
     }
 
-    if (!guardLValueBase(lvalue, error)) {
-        return QoreIRValue();
-    }
     // Dynamic key: lower both base and key expressions for native execution.
     // Handles both single-key access (h{var}) and multi-key slicing (h{list}).
-    QoreIRValue base_val = lowerExpression(op->getLeft(), error);
+    // The base is evaluated once, before the key (qore#7263): a base that is a variable is loaded once, and the
+    // not-NOTHING guard that the variable's type may call for is applied to the value that the access reads; a base
+    // that is itself an expression (h.a{k}, h[i]{k}, f(){k}) gets no guard on its root variable, whose value no
+    // instruction would use
+    const QoreValue base = op->getLeft();
+    QoreIRValue base_val = lowerExpression(base, error);
     if (!base_val.isValid()) {
         return QoreIRValue();
+    }
+    if (const VarRefNode* base_var = dynamic_cast<const VarRefNode*>(base.getInternalNode());
+            base_var && !dynamic_cast<const VarRefNewObjectNode*>(base_var)) {
+        maybeInsertNotNothingGuard(base_val, &base, getVarRefLocation(base_var), getVarRefTypeInfo(base_var), false);
     }
     QoreIRValue key_val = lowerExpression(op->getRight(), error);
     if (!key_val.isValid()) {
@@ -14732,7 +14647,7 @@ QoreIRValue QoreIRLowering::lowerShift(const QoreValue& expr, std::string& error
         error = "a range cannot be used as an lvalue";
         return QoreIRValue();
     }
-    // Path-based shift for complex lvalues (must be before guardLValueBase)
+    // Path-based shift for complex lvalues
     {
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
             lvalue, nullptr, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::Shift);
@@ -14754,7 +14669,7 @@ QoreIRValue QoreIRLowering::lowerPop(const QoreValue& expr, std::string& error) 
     if (!op) {
         return QoreIRValue();
     }
-    // Path-based pop for complex lvalues (must be before guardLValueBase)
+    // Path-based pop for complex lvalues
     {
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
             op->getExp(), nullptr, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::Pop);
@@ -17349,7 +17264,7 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicStore(
 // Returns valid QoreIRValue on success, invalid on failure (lvalue not path-encodable).
 // Only applies to lvalues that benefit from path-based access: member variable chains
 // (SelfVarref root) or multi-step paths. Simple local variable subscripts are handled
-// by existing fast paths (emitHashKeyCompoundOp, etc.) or guardLValueBase fallback.
+// by existing fast paths (emitHashKeyCompoundOp, etc.).
 QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreValue& lvalue,
         const QoreIRValue* rhs, const QoreProgramLocation* loc, std::string& error,
         AssignmentMode mode, LVCompoundOp compound_op, LVUnaryOp unary_op,
