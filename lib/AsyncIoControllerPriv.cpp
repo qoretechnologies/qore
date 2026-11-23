@@ -2380,6 +2380,11 @@ void QoreCallDispatcher::dispatchNativeTaskAsync(AsyncIoNativeTask* task) {
 }
 
 void QoreCallDispatcher::releaseWorkItem(AsyncWorkItem& item, ExceptionSink* xsink) {
+    // the release of work that the module cleanup counts is part of that work wherever it runs, as in the worker
+    // (QoreCallDispatcher::workerLoop()): its destructors can hand work over to another thread
+    // (AsyncIoController::holdModuleCleanupWork(), qore#7239, qore#7339); the item outlives the scope
+    QoreModuleCleanupCountedWorkScope counted_scope(item.module_cleanup_work
+        || (item.sandbox_ctx && item.sandbox_ctx->module_cleanup_work), &item.owner);
 #ifdef DEBUG
     if (dbg_release_hook) {
         dbg_release_hook();
@@ -2690,6 +2695,15 @@ void QoreCallDispatcher::stop(ExceptionSink* xsink) {
 
     // Clean up any remaining async work items
     for (auto& item : remaining) {
+        // the release of work that the module cleanup counts is part of that work, as in releaseWorkItem()
+        // (qore#7339)
+        QoreModuleCleanupCountedWorkScope counted_scope(item.module_cleanup_work
+            || (item.sandbox_ctx && item.sandbox_ctx->module_cleanup_work), &item.owner);
+#ifdef DEBUG
+        if (dbg_release_hook) {
+            dbg_release_hook();
+        }
+#endif
         if (item.native_task) {
             item.native_task->discard(xsink);
             delete item.native_task;

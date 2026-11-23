@@ -10374,6 +10374,179 @@ private:
     }
 };
 
+//! The release of a work item that the module cleanup counts runs as counted work wherever it runs (qore#7339)
+/** QoreCallDispatcher::workerLoop() marks an item that the module cleanup counts as counted work while it runs and
+    releases its references (QoreModuleCleanupCountedWorkScope), so that its destructors can hand work over to another
+    thread with AsyncIoController::holdModuleCleanupWork() (qore#7239); the items that other code drains from the
+    queue or discards (a Program or an owner marked as shutting down, an item enqueued for a Program marked so, the
+    dispatcher's stop) are released in the calling thread, which must mark the release of a counted item in the same
+    way; the release of an uncounted item is not marked (unless the calling thread runs counted work itself).
+
+    The work items are put in the dispatcher's queue directly, so that no worker runs them; a debug hook in
+    releaseWorkItem() records whether the release runs as counted work, as a destructor that the release runs sees it.
+*/
+class AsyncIoReleaseCountedScopeTest {
+    typedef AsyncIoControllerPriv Ctrl;
+    typedef QoreCallDispatcher Disp;
+
+public:
+    static void run(UnitTestCounters& c) {
+        ownerMarkCase(c);
+        programMarkCase(c);
+        enqueueDiscardCase(c);
+        stopCase(c);
+    }
+
+private:
+    //! queues a work item of the Program for the owner directly in the dispatcher's queue, counted by the module
+    //! cleanup or not; counts its owner as enqueue() does
+    static void queueItem(Disp* cd, QoreProgram* pgm, const char* owner, bool counted) {
+        Disp::AsyncWorkItem item{nullptr, nullptr, nullptr, nullptr, Disp::DT_CALLBACK, nullptr, std::string()};
+        item.module_cleanup_work = counted;
+        item.pgm = pgm;
+        pgm->depRef();
+        AutoLocker al(cd->m);
+        item.owner = owner;
+        ++cd->active_per_owner[owner];
+        cd->async_queue.push_back(std::move(item));
+    }
+
+    //! creates a controller that is not started, with its dispatcher
+    static Ctrl* newCtrl(ExceptionSink& xsink) {
+        Ctrl* ctrl = new Ctrl(false, &xsink);
+        ctrl->ensureCallDispatcher();
+        return ctrl;
+    }
+
+    //! stops the controller and releases it on every exit path; the release hook is removed first
+    struct CtrlRelease {
+        Ctrl* ctrl;
+        ExceptionSink& xsink;
+
+        DLLLOCAL ~CtrlRelease() {
+            Disp::dbgSetReleaseHook(std::function<void()>());
+            ctrl->stopClear(&xsink);
+            ctrl->deref(&xsink);
+            xsink.clear();
+        }
+    };
+
+    //! 1: the items of an owner marked as shutting down are released in the calling thread, a counted one as counted
+    //! work, and the calling thread is not left marked
+    static void ownerMarkCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        // declared before the release guard, which removes the hook that refers to it
+        std::vector<bool> counted_releases;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        Disp* cd = ctrl->call_dispatcher.load();
+        QoreProgram* pgm = getProgram();
+        Disp::dbgSetReleaseHook([&counted_releases]() {
+            counted_releases.push_back(qore_module_cleanup_counted_work_running());
+        });
+        UT_ASSERT(c, !qore_module_cleanup_counted_work_running(), "the calling thread runs no counted work before");
+        queueItem(cd, pgm, "o7339-counted", true);
+        queueItem(cd, pgm, "o7339-uncounted", false);
+        cd->markOwnerShuttingDown("o7339-counted");
+        UT_ASSERT_EQ(c, 1, (int)counted_releases.size(), "the owner mark releases the item of the owner");
+        UT_ASSERT(c, counted_releases.size() == 1 && counted_releases[0],
+            "the release of the counted item runs as counted work");
+        UT_ASSERT(c, !qore_module_cleanup_counted_work_running(), "the calling thread runs no counted work after");
+        cd->markOwnerShuttingDown("o7339-uncounted");
+        UT_ASSERT_EQ(c, 2, (int)counted_releases.size(), "the owner mark releases the item of the other owner");
+        UT_ASSERT(c, counted_releases.size() == 2 && !counted_releases[1],
+            "the release of the uncounted item does not run as counted work");
+        cd->clearOwnerShuttingDown("o7339-counted");
+        cd->clearOwnerShuttingDown("o7339-uncounted");
+        UT_ASSERT(c, !xsink, "the marks raise no exception");
+    }
+
+    //! 2: the items of a Program marked as shutting down are released in the calling thread, a counted one as counted
+    //! work, an uncounted one not
+    static void programMarkCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        // declared before the release guard, which removes the hook that refers to it
+        std::vector<bool> counted_releases;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        Disp* cd = ctrl->call_dispatcher.load();
+        QoreProgram* pgm = getProgram();
+        Disp::dbgSetReleaseHook([&counted_releases]() {
+            counted_releases.push_back(qore_module_cleanup_counted_work_running());
+        });
+        queueItem(cd, pgm, "p7339", true);
+        queueItem(cd, pgm, "p7339", false);
+        cd->markProgramShuttingDown(pgm, &xsink);
+        UT_ASSERT_EQ(c, 2, (int)counted_releases.size(), "the Program mark releases both items");
+        UT_ASSERT(c, counted_releases.size() == 2 && counted_releases[0],
+            "the release of the counted item runs as counted work");
+        UT_ASSERT(c, counted_releases.size() == 2 && !counted_releases[1],
+            "the release of the uncounted item does not run as counted work");
+        UT_ASSERT(c, !qore_module_cleanup_counted_work_running(), "the calling thread runs no counted work after");
+        cd->clearProgramShuttingDown(pgm, &xsink);
+        UT_ASSERT(c, !xsink, "the mark and the clear raise no exception");
+    }
+
+    //! creates an item of the Program, counted by the module cleanup or not, that enqueue() takes as it is
+    static Disp::AsyncWorkItem newItem(QoreProgram* pgm, bool counted) {
+        Disp::AsyncWorkItem item{nullptr, nullptr, nullptr, nullptr, Disp::DT_CALLBACK, nullptr, std::string()};
+        item.module_cleanup_work = counted;
+        // the dependency reference that enqueue() takes for an item without a Program, released with the item
+        item.pgm = pgm;
+        pgm->depRef();
+        return item;
+    }
+
+    //! 3: an item enqueued for a Program marked as shutting down is discarded and released in the calling thread, a
+    //! counted one as counted work, an uncounted one not
+    static void enqueueDiscardCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        std::vector<bool> counted_releases;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        Disp* cd = ctrl->call_dispatcher.load();
+        QoreProgram* pgm = getProgram();
+        Disp::dbgSetReleaseHook([&counted_releases]() {
+            counted_releases.push_back(qore_module_cleanup_counted_work_running());
+        });
+        cd->markProgramShuttingDown(pgm, &xsink);
+        cd->enqueue(newItem(pgm, true));
+        cd->enqueue(newItem(pgm, false));
+        UT_ASSERT_EQ(c, 2, (int)counted_releases.size(), "both items are discarded and released at once");
+        UT_ASSERT(c, counted_releases.size() == 2 && counted_releases[0],
+            "the release of the discarded counted item runs as counted work");
+        UT_ASSERT(c, counted_releases.size() == 2 && !counted_releases[1],
+            "the release of the discarded uncounted item does not run as counted work");
+        UT_ASSERT(c, !qore_module_cleanup_counted_work_running(), "the calling thread runs no counted work after");
+        cd->clearProgramShuttingDown(pgm, &xsink);
+        UT_ASSERT(c, !xsink, "the discards raise no exception");
+    }
+
+    //! 4: the items left in the queue when the dispatcher stops are released by the stopping thread, a counted one as
+    //! counted work, an uncounted one not
+    static void stopCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        std::vector<bool> counted_releases;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        Disp* cd = ctrl->call_dispatcher.load();
+        QoreProgram* pgm = getProgram();
+        Disp::dbgSetReleaseHook([&counted_releases]() {
+            counted_releases.push_back(qore_module_cleanup_counted_work_running());
+        });
+        queueItem(cd, pgm, "s7339", true);
+        queueItem(cd, pgm, "s7339", false);
+        cd->stop(&xsink);
+        UT_ASSERT_EQ(c, 2, (int)counted_releases.size(), "the stop releases both items");
+        UT_ASSERT(c, counted_releases.size() == 2 && counted_releases[0],
+            "the release of the counted item runs as counted work");
+        UT_ASSERT(c, counted_releases.size() == 2 && !counted_releases[1],
+            "the release of the uncounted item does not run as counted work");
+        UT_ASSERT(c, !qore_module_cleanup_counted_work_running(), "the calling thread runs no counted work after");
+        UT_ASSERT(c, !xsink, "the stop raises no exception");
+    }
+};
+
 //! A socket closed by another thread while the I/O thread registers its descriptor with its event queue
 /** The I/O thread registers a socket's descriptor with the system's event queue of the thread (kqueue on macOS,
     epoll on Linux) when an operation on the socket waits for I/O, and changes the registration when the events it
@@ -25005,6 +25178,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoStoppingThreadTest::run(c);
     AsyncIoPreservedSubmitTest::run(c);
     AsyncIoDispatcherCancelTest::run(c);
+    AsyncIoReleaseCountedScopeTest::run(c);
     AsyncIoFrameSendTest::run(c);
     ut_cond_wait_cancel_in_window(c);
     ut_parse_lock_sinkless_cycle_window(c);
