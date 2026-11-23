@@ -1647,13 +1647,15 @@ private:
     //! Emits, at the insertion point, the restoration of the implicit arguments and elements open at \a inst,
     //! innermost first, on a path where an exception leaves the function from \a inst (see
     //! getImplicitContextRestoreEdge()); the element of a foreach statement is restored after the handlers of the
-    //! frame (QoreIRExceptionExitRestore::AfterHandlers): the path stores it in deferred_element_restore instead
+    //! frame (QoreIRExceptionExitRestore::AfterHandlers): in a function with handlers, the path stores it in
+    //! deferred_element_restore instead
     void emitImplicitContextRestore(llvm::Module& module, const QoreIRInstruction* inst);
     //! The implicit element that an exit on an exception restores after the handlers of the frame have run, which
     //! run with the element of the loop whose body they are in (qore#7379): the element that the outermost foreach
     //! statement open at the exit saved (QoreIRExceptionExitRestore::AfterHandlers), which the exit stores
-    //! (emitImplicitContextRestore()), or QORE_IR_NO_DEFERRED_ELEMENT; nullptr in a function with no such push open at
-    //! an exit, created at the function's entry otherwise
+    //! (emitImplicitContextRestore()), or QORE_IR_NO_DEFERRED_ELEMENT; created at the function's entry in a function
+    //! with on_block_exit handlers and such a push open at an exit, nullptr otherwise: without handlers, nothing that
+    //! runs before the end of the exit can read the element, which the exit then restores at once
     llvm::AllocaInst* deferred_element_restore = nullptr;
     //! Emits, at the insertion point of an exit on an exception after the handlers of the frame, the restoration of
     //! the implicit element that the exit stored in deferred_element_restore, if any

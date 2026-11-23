@@ -6288,8 +6288,11 @@ void QoreIRToLLVM::emitImplicitContextRestore(llvm::Module& module, const QoreIR
             continue;
         }
         // the element of a foreach statement is restored after the handlers of the frame (qore#7379): the exit
-        // stores the element that the outermost one saved, which is the one that stays restored
-        if (push->restore_on_exception_exit == QoreIRExceptionExitRestore::AfterHandlers) {
+        // stores the element that the outermost one saved, which is the one that stays restored; in a function
+        // without handlers, nothing that runs before the end of the exit can read it (a function called from the
+        // exit's cleanup does not see it), so it is restored here, without the slot
+        if (push->restore_on_exception_exit == QoreIRExceptionExitRestore::AfterHandlers
+                && deferred_element_restore) {
             assert(push->opcode == QoreIROpcode::PushImplicitElement);
             deferred = val_it->second;
             continue;
@@ -6307,9 +6310,7 @@ void QoreIRToLLVM::emitImplicitContextRestore(llvm::Module& module, const QoreIR
     }
     if (deferred) {
         assert(deferred_element_restore);
-        if (deferred_element_restore) {
-            builder->CreateStore(deferred, deferred_element_restore);
-        }
+        builder->CreateStore(deferred, deferred_element_restore);
     }
 }
 
@@ -17155,9 +17156,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
         }
 
-        // see deferred_element_restore: only a function with the element of a foreach statement open at an exit
-        // on an exception has it (qore#7379)
-        {
+        // see deferred_element_restore: only a function with handlers and with the element of a foreach statement
+        // open at an exit on an exception has it (qore#7379); without handlers, the exit restores the element at
+        // once (see emitImplicitContextRestore())
+        if (has_on_block_exit_handlers) {
             bool deferred_element = false;
             for (const auto& entry : open_implicit_contexts) {
                 for (const QoreIRInstruction* push : entry.second) {
