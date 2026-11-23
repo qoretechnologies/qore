@@ -28522,6 +28522,28 @@ bool qore_dbg_h3_client_error_hidden() {
     return dbg_h3_client_error_hidden.load(std::memory_order_acquire);
 }
 
+namespace {
+//! the calls of Socket::isHttp2() off the I/O thread that queried the TLS state with a poll operation (qore#7223)
+std::atomic<int64_t> dbg_is_http2_polls{0};
+}
+
+void qore_dbg_note_is_http2_poll() {
+    dbg_is_http2_polls.fetch_add(1, std::memory_order_relaxed);
+}
+
+//! returns the number of calls of Socket::isHttp2() off the I/O thread that queried the TLS state with a poll operation
+/** A call answers from the result of the ALPN negotiation recorded when the handshake completed, and queries the TLS
+    state only before the handshake completed (qore#7223)
+
+    @param reset if True, the count is set to 0 after it is read
+
+    @return the count
+*/
+static QoreValue f_dbg_is_http2_poll_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    bool reset = get_param_value(params, 0).getAsBool();
+    return reset ? dbg_is_http2_polls.exchange(0) : dbg_is_http2_polls.load();
+}
+
 //! makes the HTTP/3 client poll operations report no error, as if a connection left the connecting state without one
 /** For a test of how a connection race reports a leg that settled without an error (issue #6970): the error is
     recorded as usual, and only reading it returns nothing.
@@ -31456,6 +31478,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
     qns.addBuiltinVariant("dbg_http3_client_error_hidden", f_dbg_http3_client_error_hidden, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_is_http2_poll_count", f_dbg_is_http2_poll_count, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "reset");
     qns.addBuiltinVariant("dbg_async_io_registered_qore_ops", f_dbg_async_io_registered_qore_ops, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_http2_hold_stream_data", f_dbg_http2_hold_stream_data, QCF_NO_FLAGS,
