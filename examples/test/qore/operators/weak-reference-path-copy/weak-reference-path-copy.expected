@@ -10,4 +10,7 @@ shared: path {k: 1}, other {}, weak path {k: 1}
 hash removals: keys ["b"], weak keys ["b"], removed 2 and {x: 3}
 list operations: popped 6, extracted [2], list [3, null, 5, 9], through the weak list [3, null, 5, 9]
 list shift: 9, size 4, through the weak list 4
+reached twice: {v: 7}
+replaced: {n: 1}
+deleted from it: ["b"], through the weak references: ["b"]
 done

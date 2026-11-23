@@ -153,6 +153,30 @@ sub list_operations() {
     printf("list shift: %y, size %d, through the weak list %d\n", first.typeCode(), h.l.size(), wl.size());
 }
 
+# the operation replaces or deletes the container that the path reached again, after the helper released its own
+# references to it
+sub reached_container_replaced() {
+    hash<auto> g = {};
+    g.a.b = {};
+    g.a.x = {"v": 1};
+    auto w;
+    w := g.a.b;
+    w.wg := g.a;
+    w.wh := g;
+    g.a.b.wg.b.wh.a.b.wg.b.wh.a.x.v = 7;
+    printf("reached twice: %y\n", g.a.x);
+    g.a.b.wg.b.wh.a.b.wh.a = {"n": 1};
+    printf("replaced: %y\n", g.a);
+    g.a = new hash<auto>();
+    g.a.b = new hash<auto>();
+    g.a.x = 1;
+    w := g.a.b;
+    w.wg := g.a;
+    w.wh := g;
+    delete g.a.b.wg.b.wh.a.b.wh.a.x;
+    printf("deleted from it: %y, through the weak references: %y\n", keys g.a, keys g.a.b.wg);
+}
+
 const Cases = {
     "three_weak_steps": \three_weak_steps(),
     "two_weak_steps_object": \two_weak_steps_object(),
@@ -161,6 +185,7 @@ const Cases = {
     "shared_container_copied": \shared_container_copied(),
     "hash_removals": \hash_removals(),
     "list_operations": \list_operations(),
+    "reached_container_replaced": \reached_container_replaced(),
 };
 
 # a case named on the command line runs alone
