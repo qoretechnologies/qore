@@ -5069,10 +5069,9 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
     std::string trusted_path;
     const bool trusted = !untrusted_container && isTrustedModulePath(path, &trusted_path, found_in);
-    if (trusted) {
-        // the file that was found to be library code is the file that is loaded
-        path = trusted_path.c_str();
-    }
+    // the files that were found to be library code are the files that are read; the module keeps the path that it was
+    // found by (its script path, its file names and its errors are those of that path) (qore#7319)
+    const char* open_path = trusted ? trusted_path.c_str() : path;
     // code that is not trusted cannot replace a library module with a module from elsewhere, nor with one in a
     // container of its own; a private module has a name of its own
     bool tenant_chosen;
@@ -5184,7 +5183,11 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     ModuleReExportHelper reExportHelper(userModule.get(), reexport);
     QoreUserModuleDefContextHelper qmd(feature, path, mpgm, xsink, QMRL_HELD);
 
-    std::string moduleCode = QoreDir::get_file_content(modulePath.c_str());
+    QoreString moduleOpenPath(open_path);
+    moduleOpenPath += QORE_DIR_SEP_STR;
+    moduleOpenPath += feature;
+    moduleOpenPath += ".qm";
+    std::string moduleCode = QoreDir::get_file_content(moduleOpenPath.c_str());
 
     // the module's sources are parsed from memory, so apply the default a file-based module gets from parseFile()
     if (qore_program_private::get(*userModule->getProgram())->applyModernSourceDefault(modulePath.c_str(), &xsink)) {
@@ -5205,7 +5208,7 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
             return nullptr;
         }
 
-        QoreDir moduleDir(&xsink, QCS_DEFAULT, path);
+        QoreDir moduleDir(&xsink, QCS_DEFAULT, open_path);
         ReferenceHolder<QoreListNode> fileList(moduleDir.listModuleSources(&xsink), &xsink);
         if (xsink) {
             xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
@@ -5220,8 +5223,11 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
             filePath += QORE_DIR_SEP_STR;
             QoreStringValueHelper file(fileList->retrieveEntry(i));
             filePath += file->c_str();
+            QoreString fileOpenPath(open_path);
+            fileOpenPath += QORE_DIR_SEP_STR;
+            fileOpenPath += file->c_str();
 
-            std::string fileCode = QoreDir::get_file_content(filePath);
+            std::string fileCode = QoreDir::get_file_content(fileOpenPath);
             qore_program_private::get(*userModule->getProgram())->parsePending(fileCode, filePath.c_str(), &xsink, &xsink,
                 file_warning_mask);
             if (xsink) {
@@ -6330,10 +6336,9 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
     std::string trusted_path;
     const bool trusted = !untrusted_container && isTrustedModulePath(path, &trusted_path, found_in);
-    if (trusted) {
-        // the file that was found to be library code is the file that is loaded
-        path = trusted_path.c_str();
-    }
+    // the file that was found to be library code is the file that is read; the module keeps the path that it was
+    // found by (its script path, its file name and its errors are those of that path) (qore#7319)
+    const char* open_path = trusted ? trusted_path.c_str() : nullptr;
     // code that is not trusted cannot replace a library module with a module from elsewhere, nor with one in a
     // container of its own; a private module has a name of its own
     bool tenant_chosen;
@@ -6444,7 +6449,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     td = mi->getFileName();
     //printd(5, "QoreModuleManager::loadUserModuleFromPath() normalized path: '%s'\n", td);
 
-    if (!QoreDir::file_exists(td)) {
+    if (!QoreDir::file_exists(open_path ? open_path : td)) {
         xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s'; the module doesn't exist", td);
         return nullptr;
     }
@@ -6465,7 +6470,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
         QoreModuleMaskAddedClearHelper mask_added_clear(mi->getProgram());
 
         // issue #3212: warning mask
-        mi->getProgram()->parseFile(td, &xsink, &wsink, warning_mask);
+        qore_program_private::get(*mi->getProgram())->parseFile(td, &xsink, &wsink, warning_mask, false, open_path);
     }
 
     if (xsink) {
@@ -6791,10 +6796,9 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     // loading it, and its path is canonical
     std::string trusted_path;
     const bool trusted = isTrustedModulePath(found_path ? found_path : path, &trusted_path, found_in);
-    if (trusted && !found_path) {
-        // the file that was found to be library code is the file that is loaded
-        path = trusted_path.c_str();
-    }
+    // the file that was found to be library code is the file that is read and loaded; the module keeps the path that
+    // it was found by (its file name and its errors are those of that path) (qore#7319)
+    const char* open_path = (trusted && !found_path) ? trusted_path.c_str() : path;
     // code that is not trusted cannot replace a library module with a module from elsewhere
     bool tenant_chosen;
     QoreSandboxManager* owner;
@@ -6837,7 +6841,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     // to the module's directory, which can plant code in the module path anyway, so it is no boundary to defend here
     {
         struct stat sb;
-        if (!stat(path, &sb) && !S_ISREG(sb.st_mode)) {
+        if (!stat(open_path, &sb) && !S_ISREG(sb.st_mode)) {
             xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
                 "cannot load qore module '%s': it is not a regular file", path);
             return nullptr;
@@ -6848,7 +6852,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     // must happen before dlopen(): on macOS an invalid signature is fatal inside dlopen()
     {
         QoreString integrity_err;
-        if (qore_check_module_file_integrity(path, integrity_err)) {
+        if (qore_check_module_file_integrity(open_path, integrity_err)) {
             xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
                 "cannot load qore module '%s': %s", path, integrity_err.c_str());
             return nullptr;
@@ -6859,7 +6863,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     // unavailable when it was compiled -- in a section of its image, which is read before the module is mapped
     QoreAOTModuleFileInfo aot_info;
     std::string aot_info_error;
-    QoreAOTModuleInfoStatus aot_info_status = qoreAOTReadModuleInfo(path, aot_info, aot_info_error);
+    QoreAOTModuleInfoStatus aot_info_status = qoreAOTReadModuleInfo(open_path, aot_info, aot_info_error);
     if (aot_info_status == QoreAOTModuleInfoStatus::INVALID) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
             "cannot load binary module '%s': %s", path, aot_info_error.c_str());
@@ -6929,7 +6933,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
         // the AOT module is loaded, and the warning tells that it must be rebuilt, as for an optional module that is
         // available now
         std::string stale_desc;
-        bool stale = checkAOTModuleDependencyFiles(xsink, path, feature, aot_info, path_pgm,
+        bool stale = checkAOTModuleDependencyFiles(xsink, open_path, feature, aot_info, path_pgm,
             stale_desc);
         if (xsink) {
             return nullptr;
@@ -6950,7 +6954,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     // metadata is mapped lazily so that its descriptor can be read, and an AOT module without it is refused in
     // loadBinaryModuleFromDesc()
     int dlopen_flags = have_aot_info ? QORE_DLOPEN_NOW_FLAGS : QORE_DLOPEN_FLAGS;
-    void* ptr = dlopen(path, dlopen_flags);
+    void* ptr = dlopen(open_path, dlopen_flags);
     if (!ptr) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
             have_aot_info ? "error resolving symbols in qore AOT module '%s': %s"
