@@ -191,10 +191,14 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     handler of an HTTP/1.x request gets a socket of its request when the handler object is declared by sandboxed
     code, which needs nothing more, or when the handler asked for it with
     @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()" before it was
-    registered; another handler gets the connection's socket.  A @ref RestHandler::RestHandler "RestHandler" object
-    gets a socket of its request when it is declared by sandboxed code, or when it asked for it, and gives that socket
-    to its REST classes and their stream handlers (\c cx.socketobject); a trusted
-    @ref RestHandler::RestHandler "RestHandler" whose REST classes are code that is not trusted must ask for it.
+    registered, or when it runs the code of objects of classes of a sandboxed Program
+    (@ref HttpServer::AbstractHttpRequestHandler::hostsSandboxedCode() "hostsSandboxedCode()", decided for each
+    request); another handler gets the connection's socket.  A @ref RestHandler::RestHandler "RestHandler" object
+    gets a socket of its request when one of its REST classes is of a class of a sandboxed Program, whoever made the
+    handler and whenever the class was added, when it is declared by sandboxed code, or when it asked for it, and
+    gives that socket to its REST classes and their stream handlers (\c cx.socketobject); a trusted
+    @ref RestHandler::RestHandler "RestHandler" whose REST classes are trusted but run code that is not trusted (a
+    closure of a tenant, for example) must ask for it.
 
     @warning A trusted handler that hands the socket of its HTTP/1.x request to code that is not trusted (such as
     code of a tenant) <b>must</b> call
@@ -5076,12 +5080,18 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         when it returns, and handleRequest() before the server answers the request
     */
     private startHandlerSocket(RequestHelper request_helper, Socket s, bool head, bool http10) {
+        # the callers end the socket of each request when the request is handled: a socket of a previous request on
+        # the object that is still live is ended here all the same
+        if (request_helper.h1_view) {
+            request_helper.endHandlerSocket();
+        }
         if (request_helper.hs_state) {
             request_helper.handler_sock = new Http1HandlerSocket(s, request_helper.hs_state,
-                request_helper.hs_state.h1Reset(s, head, http10), handler_socket_max_timeout);
+                request_helper.hs_state.h1Reset(s, head, http10, handler_socket_max_timeout),
+                handler_socket_max_timeout);
         } else {
             # a new state, started for the request: its first generation
-            request_helper.hs_state = new HandlerSocketState(s, head, http10);
+            request_helper.hs_state = new HandlerSocketState(s, head, http10, handler_socket_max_timeout);
             request_helper.handler_sock = new Http1HandlerSocket(s, request_helper.hs_state, 1,
                 handler_socket_max_timeout);
         }
@@ -5225,6 +5235,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         DynamicHandlerHelper dhh;
         # True if the handler's code gets the socket of its HTTP/1.x request (qore#7305)
         bool handler_socket_view;
+        # True if the handler runs the code of other objects, which can be of a sandboxed Program (qore#7305)
+        bool hosts_code;
 
         if (phi.handler) {
             handler = phi.handler;
@@ -5262,6 +5274,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             if (hi) {
                 handler = hi.obj;
                 handler_socket_view = hi.handler_socket_view;
+                hosts_code = hi.hosts_code;
                 cx.handler_name = hi.name;
                 if (root_path)
                     cx.root_path = root_path;
@@ -5272,16 +5285,20 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             if (!handler && defaultHandler) {
                 handler = defaultHandler.obj;
                 handler_socket_view = defaultHandler.handler_socket_view;
+                hosts_code = defaultHandler.hosts_code;
                 cx.handler_name = defaultHandler.name;
             }
 
             # the handler of an HTTP/1.x request that is declared by sandboxed code, or that asked for it, gets a
             # socket that acts on the connection for the request only; another handler gets the connection's socket,
             # which code that is sandboxed cannot use (qore#7305)
-            # the Program that created the handler can be sandboxed after the handler was registered: decided again
-            # for each request by the Program, which costs a native call
+            # the Program of the handler's class can be sandboxed after the handler was registered, and a handler that
+            # runs the code of other objects (such as the REST classes of a RestHandler) can get objects of classes of
+            # a sandboxed Program at any time: decided again for each request, which costs a native call, and a call
+            # of the handler for one that runs the code of other objects
             if (!handler_socket_view && handler && !is_multiplexed) {
-                handler_socket_view = SandboxManager::isFromSandboxedProgram(handler);
+                handler_socket_view = SandboxManager::isFromSandboxedProgram(handler)
+                    || (hosts_code && handler.hostsSandboxedCode());
             }
             if (handler_socket_view && !is_multiplexed && !request_helper.handler_sock) {
                 startHandlerSocket(request_helper, s, head, hdr.http_version == "1.0");
@@ -5500,6 +5517,19 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             if (request_helper.h1_state != Http1ResponseState::Complete) {
                                 cx.close = True;
                             }
+                        } else if (rv.reply_sent) {
+                            # the handler sent no response through the socket of its request: the server answers
+                            # the request, and closes the connection
+                            string err = sprintf("handler %y returned reply_sent without sending a response through "
+                                "the socket of its HTTP/1.x request", cx.handler_name);
+                            listener.logError("cid %d: %s", cx.id, err);
+                            logViaHandlerIfPossible(handler, cx.id, err);
+                            rv = <HttpResponseInfo>{
+                                "code": 500,
+                                "body": "the handler sent no response",
+                                "hdr": {"Content-Type": "text/plain"},
+                            };
+                            cx.close = True;
                         }
                         # a chunked body that the socket of the request did not read to its end: the rest of it is
                         # not read as the next request
@@ -6750,9 +6780,18 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         cx, listener, s, True);
                     return;
                 }
+                # the stream is delimited by the end of the connection: no framing field or connection option of the
+                # handler (in any case) goes out
+                hash<auto> sse_hdr = {};
+                foreach hash<auto> i in ((rv.hdr ?? {}).pairIterator()) {
+                    string k = i.key.lwr();
+                    if (k != "content-length" && k != "transfer-encoding" && k != "connection") {
+                        sse_hdr{i.key} = i.value;
+                    }
+                }
                 try {
                     s.sendHTTPResponseHeader(rv."code" ?? 200, HttpServer::HttpCodes{rv."code" ?? 200} ?? "OK", "1.1",
-                        (rv.hdr ?? {}) + {"Connection": "close"});
+                        sse_hdr + {"Connection": "close"});
                 } catch (hash<ExceptionInfo> ex) {
                     listener.logError("cid %d: error sending the header of the event stream of handler %y: %s: %s",
                         cx.id, cx.handler_name, ex.err, ex.desc);
@@ -11978,6 +12017,9 @@ class HandlerInfo {
         #! True if the handler's code gets the socket of its HTTP/1.x request, decided when the handler is set
         #! (see AbstractHttpRequestHandler::needsHandlerSocketView(); qore#7305)
         bool handler_socket_view;
+        #! True if the handler runs the code of other objects, which is decided for each request (see
+        #! AbstractHttpRequestHandler::hostsCode(); qore#7305)
+        bool hosts_code;
     }
 
     #! Creates the object from the parameters
@@ -11992,6 +12034,7 @@ class HandlerInfo {
         obj = info.handler;
         # the object's provenance does not change: decided once; fails closed
         handler_socket_view = obj.needsHandlerSocketView();
+        hosts_code = obj.hostsCode();
         path = info.path;
         isregex = info.isregex;
         if (isregex && path) {
@@ -13322,6 +13365,9 @@ class HandlerSocketState {
         bool h1_http10 = False;
         #! counts the sends and reads of the socket in progress; made at the first one
         *Counter h1_ops;
+        #! the longest time that the end of the socket waits for its sends and reads in progress, in milliseconds (the
+        #! server's handler_socket_max_timeout option)
+        int h1_max_to = 30000;
         #! the connection's socket of the current request, which the server keeps; never given to handler code
         *Socket h1_real;
     }
@@ -13332,7 +13378,8 @@ class HandlerSocketState {
     }
 
     #! Creates the state of the socket of a new HTTP/1.x request, started: its generation is 1
-    constructor(Socket real, bool head, bool http10) {
+    constructor(Socket real, bool head, bool http10, int max_to) {
+        h1_max_to = max_to;
         h1_real = real;
         h1_live = True;
         h1_head = head;
@@ -13371,11 +13418,23 @@ class HandlerSocketState {
         # whatever it does
         if (h1_ops && h1_ops.getCount()) {
             h1Broken();
-            h1_ops.waitForZero();
+            # at most the longest timeout of the socket: a send or read whose callback or stream (code of the
+            # handler) does not return is not waited for longer
+            h1_ops.waitForZero(h1_max_to);
             try {
                 h1_real.shutdown();
             } catch (hash<ExceptionInfo> ex) {
                 # the connection has already ended
+            }
+            if (h1_ops.getCount()) {
+                # a send or read still in progress (in its callback or stream), which a shutdown does not end: the
+                # connection's socket is closed, so that it fails when it goes on, and the server closes the
+                # connection
+                try {
+                    h1_real.close();
+                } catch (hash<ExceptionInfo> ex) {
+                    # the connection has already ended
+                }
             }
             return h1ResponseState();
         }
@@ -13636,7 +13695,14 @@ class HandlerSocketState {
     }
 
     #! Resets the state for the socket of a new HTTP/1.x request, whose previous socket ended; returns its generation
-    synchronized int h1Reset(Socket real, bool head, bool http10) {
+    synchronized int h1Reset(Socket real, bool head, bool http10, int max_to) {
+        # the socket of the previous request has ended (see HttpServer::startHandlerSocket())
+        @assert(!h1_live);
+        if (h1_live) {
+            # its sends and reads are refused from now on
+            h1_resp = Http1ResponseState::Broken;
+        }
+        h1_max_to = max_to;
         h1_real = real;
         h1_live = True;
         h1_body = 0;

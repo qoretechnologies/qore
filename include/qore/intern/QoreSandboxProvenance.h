@@ -84,9 +84,10 @@ DLLLOCAL QoreParseOptions qore_creation_origin_for(const QoreProgram* code_pgm, 
     qore#6844); does nothing if they are empty
 */
 DLLLOCAL void qore_capture_call_reference_origin(const ResolvedCallReferenceNode* ref, const QoreProgram* code_pgm);
-//! Returns true if a sandbox governs the Program that created the object, now (qore#7305)
-/** The object holds a dependency reference to the Program that created it; the Program's own sandbox and that of
-    the code that created the Program count (qore_program_private::getSandboxManagerRef())
+//! Returns true if a sandbox governs the Program of the class of the object, now (qore#7305)
+/** The object holds a dependency reference to the Program of its class (the Program in whose context it was created,
+    see qore_class_private::execConstructor()), not that of the code that created it; the Program's own sandbox and
+    that of the code that created the Program count (qore_program_private::getSandboxManagerRef())
 */
 DLLLOCAL bool qore_object_program_is_sandboxed(const QoreObject* obj);
 //! Returns the Program whose code a closure runs: the Program that defines it (qore#6520)
