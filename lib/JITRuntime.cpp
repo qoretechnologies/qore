@@ -4886,6 +4886,12 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
                 inner.getTypeName(), hd->getName());
             return toBits(QoreValue());
         }
+        // a hash of the hashdecl is the value itself, as in QoreHashDeclCastOperatorNode::castValue(): the same
+        // container, which keeps the freed state of a hash freed under a weak reference (qore#7199)
+        const TypedHashDecl* vhd = inner.get<const QoreHashNode>()->getHashDecl();
+        if (vhd && typed_hash_decl_private::get(*vhd)->equal(*typed_hash_decl_private::get(*hd))) {
+            return toBits(inner.refSelf());
+        }
         // Perform the same checked/coercing hashdecl cast as
         // QoreHashDeclCastOperatorNode::castValue(). The or_nothing flag only
         // controls whether NOTHING is accepted; it must not disable member
@@ -6642,8 +6648,10 @@ static uint64_t qore_rt_new_complex_hash_from_hash_impl(const QoreTypeInfo* type
     }
 
     QoreHashNode* init_hash = hash_val.get<QoreHashNode>()->hashRefSelf();
-    QoreHashNode* result = qore_hash_private::newComplexHashFromHash(
-        typeInfo, init_hash, xsink, !prechecked);
+    // the hash of a new expression is a new hash, also when it is made from a hash freed under a weak reference
+    // (qore#7199), as in the AST interpreter (qore_hash_private::newComplexHash())
+    QoreHashNode* result = qore_hash_private::makeNewValid(qore_hash_private::newComplexHashFromHash(
+        typeInfo, init_hash, xsink, !prechecked));
     return toBits(result ? QoreValue(result) : QoreValue());
 }
 
@@ -6753,8 +6761,10 @@ static uint64_t qore_rt_new_complex_from_value_consume_impl(const QoreTypeInfo* 
             }
             return toBits(QoreValue());
         }
-        QoreHashNode* result = qore_hash_private::newComplexHashFromHash(typeInfo,
-            holder.release().get<QoreHashNode>(), xsink, !(flags & QORE_RT_COMPLEX_INIT_PRECHECKED));
+        // the hash of a new expression is a new hash, also when it is made from a hash freed under a weak reference
+        // (qore#7199), as in the AST interpreter (qore_hash_private::newComplexHash())
+        QoreHashNode* result = qore_hash_private::makeNewValid(qore_hash_private::newComplexHashFromHash(typeInfo,
+            holder.release().get<QoreHashNode>(), xsink, !(flags & QORE_RT_COMPLEX_INIT_PRECHECKED)));
         return toBits(result ? QoreValue(result) : QoreValue());
     }
     // the initializer is the list of the arguments of the constructor (issue #6172)
