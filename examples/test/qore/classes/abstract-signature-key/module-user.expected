@@ -61,4 +61,5 @@ U3: m(1) from outside: M::m(int)
 U4: m(1) from outside: M::m(int)
 U5: m(1) from outside: M::m(int)
 U6: m(1) from outside: K::m(int)
-U7: m(1) from outside: RUNTIME-OVERLOAD-ERROR: no variant matching '::U7::m(integer)' can be found; no variants were accessible in this execution context
+U7: m(1) from outside: RUNTIME-OVERLOAD-ERROR: no variant matching '::U7::m(integer)' can be found; the following variants were tested:
+   ::SStr::m(string s)

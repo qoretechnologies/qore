@@ -2526,8 +2526,27 @@ struct INode {
 typedef std::vector<INode> ilist_t;
 
 struct IList : public ilist_t {
+    //! returns the function of the first ancestor from \a aqfi on that the class context can access
+    /** @param class_ctx the class context of the call
+        @param last_class the class of the function returned last, updated with that of the function returned
+        @param aqfi the position to search from, updated with the position of the function returned, or \a aqfe
+        @param aqfe the end of the list
+        @param internal_access set if the class of the function returned is the class context; then the ancestors
+        that it inherits with private:internal access are accessible
+
+        @return the function found, or nullptr if no ancestor after \a aqfi is accessible (\a aqfi is then \a aqfe)
+
+        An inaccessible ancestor does not end the search: the ancestors after it are searched (qore#7381).  An ancestor
+        that the list's class inherits with private:internal access is accessible only when no other one comes before
+        it, as when the search ended at the first one: the private:internal access of an ancestor in the list is
+        relative to the list's class, not to the class context, so that a class context reached after another
+        private:internal ancestor does not gain access to those after it
+    */
     DLLLOCAL QoreFunction* getFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
-        const_iterator aqfi, bool& internal_access, bool& stop) const;
+        const_iterator& aqfi, const_iterator aqfe, bool& internal_access) const;
+
+    //! returns true if an ancestor before \a aqfi (after the function itself) has private:internal access
+    DLLLOCAL bool hasInternalBefore(const_iterator aqfi) const;
 };
 
 //! variant filter of QoreFunction::runtimeFindVariant(): only user variants

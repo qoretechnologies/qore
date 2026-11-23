@@ -2859,6 +2859,10 @@
       instead of its own of the same signature when other parent classes declared and implemented the method's other
       overloads (see @ref abstract_own_implementation;
       <a href="https://github.com/qoretechnologies/qore/issues/7337">issue 7337</a>)
+    - a variant of a method that a public path reaches could not be called when an ancestor of the method that the
+      caller cannot access, such as one inherited privately, came before it, for example a method that a class
+      creates to implement an abstract variant with a privately inherited class's variant (see
+      @ref multiple_path_inheritance; <a href="https://github.com/qoretechnologies/qore/issues/7381">issue 7381</a>)
     - @ref Qore::call_static_method() "call_static_method()" and the related calls call the static method that a static
       method call in the caller's code calls: they refused a later parent class's public method behind a private one,
       and called a method of a privately inherited class from outside it
