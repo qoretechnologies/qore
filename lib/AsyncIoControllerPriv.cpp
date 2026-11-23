@@ -6067,6 +6067,12 @@ int AsyncIoControllerPriv::cancelByOwnerIntern(const std::string& owner_str, con
             // SubmitOps already pushed have seq_at_push <= this value and
             // are rejected, while later submits have seq_at_push > and
             // are accepted as fresh.
+            //
+            // A cancel restricted to the operations of an application (qore#7010) records the owner only on the
+            // threads where it canceled one of them (here, in the command's handler and in the last drain of a
+            // stopping thread): a submission of the owner by the same application that is queued to another I/O
+            // thread, where it canceled nothing, is not refused.  This is not a refusal across applications (the
+            // record is the application's), and it was so before the records were keyed by application
             if (!restrict_app.restricted || !keys.empty()) {
                 int own_seq = tp.submit_seq.load(std::memory_order_relaxed);
                 auto& ci = tp.cancelled_owners[QoreCallDispatcher::ownerMarkKey(owner_str, restrict_app)];
