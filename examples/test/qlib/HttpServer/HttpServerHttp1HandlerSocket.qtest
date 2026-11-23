@@ -68,6 +68,12 @@ class ProbeHandler inherits AbstractHttpRequestHandler {
         Queue kept();
     }
 
+    #! a trusted handler that asks for the socket of its request, as a base class of handlers whose subclasses pass
+    #! it to code that is not trusted does
+    constructor() {
+        setHandlerSocketView();
+    }
+
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
             *data body) {
         hash<string, string> r;
@@ -294,6 +300,14 @@ class ProbeHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! A trusted handler that does not ask for the socket of its request: it gets the connection's socket
+class PlainHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return makeResponse(200, "class=" + s.className());
+    }
+}
+
 #! Holds its request until the test releases it
 class HoldHandler inherits AbstractHttpRequestHandler {
     public {
@@ -356,6 +370,7 @@ class StreamBodyHandler inherits AbstractHttpRequestHandler {
     }
 
     constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+        setHandlerSocketView();
     }
 
     bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
@@ -625,6 +640,8 @@ class TenantHttpHandler inherits AbstractHttpRequestHandler {
                 }
                 return <HttpResponseInfo>{\"code\": 200, \"reply_sent\": True};
             }
+            case \"class\":
+                return makeResponse(200, \"class=\" + s.className());
             case \"hold\":
                 entered.push(True);
                 release.get(20s);
@@ -695,6 +712,7 @@ nothing sub run_code(code c) {
         addTestCase("a REST stream with a timeout", \restTimeoutTest());
         addTestCase("the socket ends when the request is answered early", \earlyAnswerTest());
         addTestCase("an HTTP/1.1 event stream ends with its connection", \sseTest());
+        addTestCase("the handlers that get the socket of their request", \whichHandlersTest());
         addTestCase("the abort of an HTTP/2 request's stream", \streamAbortTest(), "h2");
         addTestCase("the abort of an HTTP/3 request's stream", \streamAbortTest(), "h3");
         set_return_value(main());
@@ -849,6 +867,7 @@ nothing sub run_code(code c) {
 
     private list<auto> dataStreamIntern(code get_handler, string name) {
         RestHandler rest();
+        rest.setHandlerSocketView();
         rest.addClass(new EchoRestClass(get_handler));
         server.setHandler(name, "^echo", NOTHING, rest);
         on_exit server.removeHandler(name);
@@ -1268,6 +1287,42 @@ nothing sub run_code(code c) {
         }
         assertTrue(stream.find("event: end") >= 0, "the event: " + stream);
         assertEq(-1, stream.find("served after"), "no response to the next request: " + stream);
+    }
+
+    #! a handler declared by sandboxed code gets the socket of its request without asking for it, a trusted handler
+    #! that asked for it gets it, another trusted handler gets the connection's socket; the decision cannot be
+    #! changed by a subclass
+    whichHandlersTest() {
+        Program p = getTenantProgram();
+        Queue entered();
+        Queue release();
+        server.setHandler("tenant", "^class", NOTHING, p.callFunction("get_http_handler", entered, release));
+        on_exit server.removeHandler("tenant");
+        server.setHandler("plain", "^plain", NOTHING, new PlainHandler());
+        on_exit server.removeHandler("plain");
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /class HTTP/1.1\r\nHost: localhost\r\n\r\nGET /plain HTTP/1.1\r\nHost: localhost\r\n\r\n"
+            "GET /elsewhere HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq({"class": "Http1HandlerSocket"}, parse(readResponse(c)), "a sandboxed handler, without asking");
+        assertEq({"class": "Socket"}, parse(readResponse(c)), "a trusted handler that did not ask");
+        c.send("GET /context HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served elsewhere", readResponse(c));
+        assertEq("Http1HandlerSocket", parse(readResponse(c)).own, "a trusted handler that asked");
+
+        # a subclass cannot change the decision
+        Program q(PO_NO_CHILD_PO_RESTRICTIONS);
+        assertThrows("PARSE-EXCEPTION", sub () {
+            q.parse("%modern
+%requires HttpServer
+%requires HttpServerUtil
+class NoView inherits AbstractHttpRequestHandler {
+    bool needsHandlerSocketView() {
+        return False;
+    }
+}
+", "override");
+        }, NOTHING, "the decision is final");
     }
 
     #! Sends requests to the tenant's HTTP handler and returns its first response's results, with the next response

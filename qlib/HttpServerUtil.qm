@@ -164,6 +164,10 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - added @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "AbstractHttpRequestHandler::setHandlerSocketView()"
+      and @ref HttpServer::AbstractHttpRequestHandler::needsHandlerSocketView() "needsHandlerSocketView()": the handler
+      of an HTTP/1.x request that is declared by sandboxed code, or that asks for it, gets a socket of its request
+      (see @ref httpserver_handler_socket; <a href="https://github.com/qoretechnologies/qore/issues/7305">issue 7305</a>)
     - added @ref HttpServer::Http1BodyReader "Http1BodyReader",
       @ref HttpServer::DefaultBodyStreamThreshold "DefaultBodyStreamThreshold" and
       @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize": a stream request
@@ -3888,6 +3892,9 @@ public class AbstractHttpRequestHandler {
     private:internal {
         #! the thread-local key of the handlers that set persistence on the thread (a PersistentThreadHandlers object)
         const PersistentThreadHandlersKey = "_AHRH_pth";
+
+        #! set by setHandlerSocketView(): the handler's code gets the socket of its HTTP/1.x request (qore#7305)
+        bool handler_socket_view = False;
     }
 
     #! create the object optionally with the given AbstractAuthenticator
@@ -3899,6 +3906,36 @@ public class AbstractHttpRequestHandler {
     constructor(*AbstractAuthenticator n_auth, softbool n_stream = False) {
         auth = n_auth;
         stream = n_stream;
+    }
+
+    #! Makes the handler's code get the socket of its HTTP/1.x request instead of the connection's socket (qore#7305)
+    /** The server gives the handler of an HTTP/1.x request a socket that acts on the connection for the request only
+        (see @ref httpserver_handler_socket) when the handler object is declared by sandboxed code, which needs no call
+        of this method, or when this method was called before the handler was registered with the server; other
+        handlers get the connection's socket.  A base class whose subclasses pass the socket of a request to code
+        that is not trusted calls it in its constructor.  It cannot be undone.
+
+        @since HttpServerUtil 1.6
+    */
+    final setHandlerSocketView() {
+        handler_socket_view = True;
+    }
+
+    #! Returns @ref True "True" if the handler's code gets the socket of its HTTP/1.x request (qore#7305)
+    /** True if the handler object is declared by sandboxed code (the call of this method on the object is sandboxed:
+        see @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()"), or if setHandlerSocketView() was
+        called; also True if this cannot be decided.  The method is final, so that a subclass cannot change the
+        decision; the server calls it when the handler is registered
+
+        @since HttpServerUtil 1.6
+    */
+    final bool needsHandlerSocketView() {
+        try {
+            return handler_socket_view || SandboxManager::isSandboxed();
+        } catch (hash<ExceptionInfo> ex) {
+            # the decision fails closed
+            return True;
+        }
     }
 
     #! Returns @ref True "True" if this handler wants to receive streaming requests without waiting for the full

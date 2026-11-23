@@ -188,7 +188,11 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     connection only.
 
     The requests of an HTTP/1.x connection come one after the other on its socket, which the server keeps.  The
-    socket of an HTTP/1.x request:
+    handler of an HTTP/1.x request gets a socket of its request when the handler object is declared by sandboxed
+    code, which needs nothing more, or when the handler asked for it with
+    @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()" before it was
+    registered (as a base class of handlers whose subclasses pass the socket to code that is not trusted does);
+    another handler gets the connection's socket.  The socket of an HTTP/1.x request:
     - sends the request's own response, once and framed: a complete response with
       @ref Qore::Socket::sendHTTPResponse() "sendHTTPResponse()" or
       @ref Qore::Socket::sendHTTPResponseWithCallback() "sendHTTPResponseWithCallback()", or a header with
@@ -317,8 +321,10 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
-    - the handler of an HTTP/1.x request gets a socket that acts on the connection for its own request only, as the
-      handler of an HTTP/2 or HTTP/3 request does, and code that is not sandboxed aborts the connection with
+    - the handler of an HTTP/1.x request that is declared by sandboxed code, or that asks for it
+      (@ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()"), gets a socket that
+      acts on the connection for its own request only, as the handler of an HTTP/2 or HTTP/3 request does, and code
+      that is not sandboxed aborts the connection with
       @ref HttpServer::http_abort_connection() "http_abort_connection()" (see @ref httpserver_handler_socket;
       <a href="https://github.com/qoretechnologies/qore/issues/7305">issue 7305</a>)
     - a stream handler that wants an HTTP/1.x request body with a \c Content-Length as a stream
@@ -5148,9 +5154,12 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         # handler will only return after all in-progress requests are completed; the object is only allocated if
         # needed
         DynamicHandlerHelper dhh;
+        # True if the handler's code gets the socket of its HTTP/1.x request (qore#7305)
+        bool handler_socket_view;
 
         if (phi.handler) {
             handler = phi.handler;
+            handler_socket_view = handler.needsHandlerSocketView();
         } else {
             # find a handler for the request
             *HandlerInfo hi;
@@ -5183,6 +5192,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
             if (hi) {
                 handler = hi.obj;
+                handler_socket_view = hi.handler_socket_view;
                 cx.handler_name = hi.name;
                 if (root_path)
                     cx.root_path = root_path;
@@ -5192,7 +5202,16 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         try {
             if (!handler && defaultHandler) {
                 handler = defaultHandler.obj;
+                handler_socket_view = defaultHandler.handler_socket_view;
                 cx.handler_name = defaultHandler.name;
+            }
+
+            # the handler of an HTTP/1.x request that is declared by sandboxed code, or that asked for it, gets a
+            # socket that acts on the connection for the request only; another handler gets the connection's socket,
+            # which code that is sandboxed cannot use (qore#7305)
+            if (handler_socket_view && !is_multiplexed && !request_helper.handler_sock) {
+                request_helper.handler_sock = new Http1HandlerSocket(s, request_helper,
+                    request_helper.h1Start(head, hdr.http_version == "1.0"));
             }
 
             # on the thread of a dedicated persistent connection, the request runs with the thread context of its
@@ -8583,10 +8602,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         cx.uctx = get_thread_data("uctx");
         # the socket that the request's handler gets, made from the server's own header information (qore#6953),
         # or for an HTTP/1.x request, one that acts on the connection's socket for the request only (qore#7305)
+        # (made when the handler is known; see HttpServer::handleRequest())
         request_helper.handler_sock = (quic || header_info.http2)
             ? http_handler_socket(s, header_info, request_helper)
-            : new Http1HandlerSocket(s, request_helper, request_helper.h1Start(hdr.method == "HEAD",
-                hdr.http_version == "1.0"));
+            : NOTHING;
         # For body_streaming, expose the socket so handlers can read body data
         # incrementally via readQuicStreamDataBlock()
         if (header_info.body_streaming) {
@@ -9508,10 +9527,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # the socket that the request's handler gets, made from the server's own header information
                 # (qore#6953), or for an HTTP/1.x request, one that acts on the connection's socket for the request
                 # only (qore#7305)
+                # (made when the handler is known; see HttpServer::handleRequest())
                 request_helper.handler_sock = (quic || conn_info.header_info.http2)
                     ? http_handler_socket(s, conn_info.header_info, request_helper)
-                    : new Http1HandlerSocket(s, request_helper, request_helper.h1Start(req_hdr.method == "HEAD",
-                        req_hdr.http_version == "1.0"));
+                    : NOTHING;
                 if (conn_info.header_info.body_streaming) {
                     conn_info.header_info.sock = s;
                 }
@@ -9737,10 +9756,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             cx.uctx = get_thread_data("uctx");
             # the socket that the request's handler gets, made from the server's own header information (qore#6953),
             # or for an HTTP/1.x request, one that acts on the connection's socket for the request only (qore#7305)
+            # (made when the handler is known; see HttpServer::handleRequest())
             request_helper.handler_sock = (quic || conn_info.header_info.http2)
                 ? http_handler_socket(s, conn_info.header_info, request_helper)
-                : new Http1HandlerSocket(s, request_helper, request_helper.h1Start(req_hdr.method == "HEAD",
-                    req_hdr.http_version == "1.0"));
+                : NOTHING;
             if (conn_info.header_info.body_streaming) {
                 conn_info.header_info.sock = s;
             }
@@ -11701,6 +11720,9 @@ class HandlerInfo {
         # content type map
         *hash<string, bool> content_type_map;
         *list<string> special_header_list;
+        #! True if the handler's code gets the socket of its HTTP/1.x request, decided when the handler is set
+        #! (see AbstractHttpRequestHandler::needsHandlerSocketView(); qore#7305)
+        bool handler_socket_view;
     }
 
     #! Creates the object from the parameters
@@ -11713,6 +11735,8 @@ class HandlerInfo {
             throw "HANDLER-ERROR", sprintf("missing \"handler\" from handler config: %y", info);
         }
         obj = info.handler;
+        # the object's provenance does not change: decided once; fails closed
+        handler_socket_view = obj.needsHandlerSocketView();
         path = info.path;
         isregex = info.isregex;
         if (isregex && path) {
@@ -12879,6 +12903,7 @@ class RequestHelper {
         if (h1_live) {
             endHandlerSocket();
         }
+        # the socket is made when the handler of the request is known
         return h1Reset(head, http10);
     }
 
@@ -12887,14 +12912,16 @@ class RequestHelper {
         nothing.  It is called only by the server's own code, never in a send or read of the socket, which cannot be
         waited for by its own thread
 
-        @return the state of the response that the handler sent through the socket (an Http1ResponseState value)
+        @return the state of the response that the handler sent through the socket (an Http1ResponseState value), if
+        the call ended it, otherwise Http1ResponseState::None
     */
     int endHandlerSocket() {
-        *Counter c = h1EndLocked();
+        bool ended;
+        *Counter c = h1EndLocked(\ended);
         if (c) {
             c.waitForZero();
         }
-        return h1ResponseState();
+        return ended ? h1ResponseState() : Http1ResponseState::None;
     }
 
     #! Admits a send or read of the socket of the given generation; refused if that request ended
@@ -13130,10 +13157,11 @@ class RequestHelper {
     }
 
     #! Ends the socket of the current HTTP/1.x request; returns its counter of sends and reads, if any
-    private synchronized *Counter h1EndLocked() {
+    private synchronized *Counter h1EndLocked(reference<bool> ended) {
         if (!h1_live) {
             return;
         }
+        ended = True;
         h1_live = False;
         ++h1_gen;
         return h1_ops;
