@@ -1,0 +1,128 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - qcc and JIT native code generation of the reads of locals whose type converts assigned values
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class IRAssignmentConversionTest
+
+#! Regression coverage for qore#7372: the value of a local whose type converts the value assigned to it
+/** A local whose type converts the value assigned to it (an int assigned to a union<float, string>, a float, a
+    softfloat, a number or a *float local, or to a member or element of such a type) holds the converted value, and
+    its reads must not take the type of the assigned value.  The scenario runs in every tier, in the IR tier alone and
+    as a compiled executable, and must print what the AST tier prints.
+*/
+class IRAssignmentConversionTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string fixture;
+        #! the AST output that every other tier must reproduce
+        *string ast_output;
+
+        #! lines of the AST output, computed independently of Qore
+        const AstLines = (
+            "union-float-string: float 3.0",
+            "union-number-string: number 3",
+            "union-float-int: integer 3",
+            "softint-float: integer 2",
+            "softfloat-int: float 3.0",
+            "number-int: number 3",
+            "float-int: float 3.0",
+            "optfloat-int: float 3.0",
+            "hashdecl-union: float 3.0",
+            "hash-float-store: float 3.0",
+            "list-float-store: float 3.0",
+            "ret-union: float 3.0",
+            "param-union: float 3.0",
+            "union-assign: float 4.0",
+            "union-addassign: float 4.0",
+            "union-loop: float 9.0",
+        );
+    }
+
+    constructor() : QUnit::Test("IRAssignmentConversionTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        fixture = get_script_dir() + "/IRAssignmentConversionScenario.qr";
+
+        addTestCase("ast", \testAst());
+        foreach string tier in (("ir", "jit", "tiered")) {
+            # a local of the loop body, so that each closure binds its own
+            string mode = tier;
+            addTestCase(mode, sub () {
+                assertEq(astOutput(), run(mode), sprintf("exec-mode=%s output matches AST", mode));
+            });
+        }
+        addTestCase("ir tier", \testIrTier());
+        addTestCase("aot", \testAot());
+
+        set_return_value(main());
+    }
+
+    testAst() {
+        string output = astOutput();
+        list<string> lines = output.split("\n");
+        foreach string line in (AstLines) {
+            assertTrue(inlist(line, lines), "AST output has: " + line);
+        }
+        assertFalse(output =~ /null/, "no value reads as NOTHING: " + output);
+        # every scenario call runs three times
+        assertEq(0, lines.size() % 3, "line count: " + output);
+    }
+
+    testIrTier() {
+        string command = sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=tiered %s",
+            shellQuote(libqore_dir), shellQuote(qore_bin), shellQuote(fixture));
+        assertEq(astOutput(), ExecModeHarness::run_ir_tier(command), "IR tier output matches AST");
+    }
+
+    testAot() {
+        if (!is_file(qcc_bin) && !backquote("command -v " + qcc_bin + " 2>/dev/null")) {
+            testSkip("qcc not available");
+        }
+        TmpDir tmp("qore-ir-assignment-conversion-");
+        foreach int level in ((0, 3)) {
+            string exe = sprintf("%s/scenario-O%d", tmp.path, level);
+            # in a debug build, the compile asserts that every native read of a local is native
+            string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O%d -o %s %s 2>&1",
+                shellQuote(libqore_dir), shellQuote(qcc_bin), level, shellQuote(exe), shellQuote(fixture)));
+            assertTrue(is_file(exe), sprintf("AOT -O%d compile produced an executable: %s", level, compile_out));
+            assertEq(astOutput(), ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s %s",
+                shellQuote(libqore_dir), shellQuote(exe))), sprintf("AOT -O%d output matches AST", level));
+        }
+    }
+
+    private string run(string mode) {
+        # ExecModeHarness compiles synchronously, so tiered execution reaches native code deterministically
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+            shellQuote(libqore_dir), shellQuote(qore_bin), mode, shellQuote(fixture)));
+    }
+
+    private string astOutput() {
+        if (!exists ast_output) {
+            ast_output = run("ast");
+        }
+        return ast_output;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The scenario of IRAssignmentConversion.qtest (qore#7372): values assigned to locals, members, elements, return values
+# and parameters whose types convert them (an int to a union<float, string>, a float, a softfloat, a number or a
+# *float; a float or a string to a softint), read in a later statement.  Every call runs three times, so that tiered
+# execution runs it on the AST tier, the IR tier and as native code.
+
+%modern
+
+hashdecl ConversionMembers {
+    union<float, string> u;
+    float f;
+    number n;
+}
+
+enum ConversionEnum {
+    A = 1,
+    B = 2,
+}
+
+sub show(string label, auto v) {
+    printf("%s: %s %y\n", label, v.type(), v);
+}
+
+float sub retFloat(int i) {
+    return i;
+}
+
+union<float, string> sub retUnion(int i) {
+    return i;
+}
+
+number sub retNumber(int i) {
+    return i;
+}
+
+sub paramUnion(union<float, string> p) {
+    show("param-union", p);
+}
+
+sub paramSoftFloat(softfloat p) {
+    show("param-softfloat", p);
+}
+
+sub locals(int i, float fl, string s) {
+    union<float, string> fs = i;
+    show("union-float-string", fs);
+    union<number, string> ns = i;
+    show("union-number-string", ns);
+    union<float, int> fi = i;
+    show("union-float-int", fi);
+    softint si = fl;
+    show("softint-float", si);
+    softint si2 = s;
+    show("softint-string", si2);
+    softfloat sf = i;
+    show("softfloat-int", sf);
+    softnumber sn = i;
+    show("softnumber-int", sn);
+    number n = i;
+    show("number-int", n);
+    float f = i;
+    show("float-int", f);
+    *float of = i;
+    show("optfloat-int", of);
+    int ii = i;
+    show("int-int", ii);
+}
+
+sub containers(int i) {
+    hash<string, float> hf = {"a": i};
+    show("hash-float-member", hf.a);
+    list<float> lf = (i, 2);
+    show("list-float-elem", lf[0]);
+    hash<ConversionMembers> hd = <ConversionMembers>{"u": i, "f": i, "n": i};
+    show("hashdecl-union", hd.u);
+    show("hashdecl-float", hd.f);
+    show("hashdecl-number", hd.n);
+    hf.a = i;
+    show("hash-float-store", hf.a);
+    lf[1] = i;
+    show("list-float-store", lf[1]);
+}
+
+sub other(int i) {
+    ConversionEnum e = ConversionEnum::A;
+    show("enum", e);
+    show("ret-float", retFloat(i));
+    show("ret-union", retUnion(i));
+    show("ret-number", retNumber(i));
+    paramUnion(i);
+    paramSoftFloat(i);
+    union<float, string> fs2;
+    fs2 = i + 1;
+    show("union-assign", fs2);
+    fs2 = i;
+    fs2 += 1;
+    show("union-addassign", fs2);
+    union<float, string> acc = 0;
+    for (int n = 0; n < i; ++n) {
+        acc = acc + i;
+    }
+    show("union-loop", acc);
+}
+
+sub run(code call) {
+    for (int n = 0; n < 3; ++n) {
+        call();
+    }
+}
+
+run(sub () { locals(3, 2.5, "7"); });
+run(sub () { containers(3); });
+run(sub () { other(3); });
