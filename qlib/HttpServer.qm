@@ -191,8 +191,17 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     handler of an HTTP/1.x request gets a socket of its request when the handler object is declared by sandboxed
     code, which needs nothing more, or when the handler asked for it with
     @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()" before it was
-    registered (as a base class of handlers whose subclasses pass the socket to code that is not trusted does);
-    another handler gets the connection's socket.  The socket of an HTTP/1.x request:
+    registered (as a base class of handlers whose subclasses pass the socket to code that is not trusted does, such
+    as @ref RestHandler::RestHandler "RestHandler"); another handler gets the connection's socket.
+
+    @warning A trusted handler that hands the socket of its HTTP/1.x request to code that is not trusted (such as
+    code of a tenant) <b>must</b> call
+    @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()": without it, that
+    code gets the connection's socket, with which it can read the next request on the connection (with its
+    \c Authorization header) and write responses to other requests
+    (<a href="https://github.com/qoretechnologies/qore/issues/7338">issue 7338</a>).
+
+    The socket of an HTTP/1.x request:
     - sends the request's own response, once and framed: a complete response with
       @ref Qore::Socket::sendHTTPResponse() "sendHTTPResponse()" or
       @ref Qore::Socket::sendHTTPResponseWithCallback() "sendHTTPResponseWithCallback()", or a header with

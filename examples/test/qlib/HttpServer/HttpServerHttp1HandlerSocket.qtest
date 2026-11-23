@@ -20,6 +20,8 @@
 %requires DataStreamRequestHandler
 %requires DataStreamClient
 %requires Mime
+%requires Logger
+%requires RestSchemaValidator
 %requires yaml
 %requires ../../TestCertificates.qm
 
@@ -713,6 +715,7 @@ nothing sub run_code(code c) {
         addTestCase("the socket ends when the request is answered early", \earlyAnswerTest());
         addTestCase("an HTTP/1.1 event stream ends with its connection", \sseTest());
         addTestCase("the handlers that get the socket of their request", \whichHandlersTest());
+        addTestCase("the base classes that give the socket to other code ask for it", \baseClassesTest());
         addTestCase("the abort of an HTTP/2 request's stream", \streamAbortTest(), "h2");
         addTestCase("the abort of an HTTP/3 request's stream", \streamAbortTest(), "h3");
         set_return_value(main());
@@ -866,8 +869,8 @@ nothing sub run_code(code c) {
     }
 
     private list<auto> dataStreamIntern(code get_handler, string name) {
+        # RestHandler asks for the socket of its requests itself
         RestHandler rest();
-        rest.setHandlerSocketView();
         rest.addClass(new EchoRestClass(get_handler));
         server.setHandler(name, "^echo", NOTHING, rest);
         on_exit server.removeHandler(name);
@@ -1323,6 +1326,19 @@ class NoView inherits AbstractHttpRequestHandler {
 }
 ", "override");
         }, NOTHING, "the decision is final");
+    }
+
+    #! every base class of the repository that gives the socket of a request to other code, which can be code that is
+    #! not trusted, asks for the socket of the request in each of its constructors (qore#7305): RestHandler gives it to
+    #! its REST classes and their stream handlers (cx.socketobject); Qorus's AbstractServiceHttpHandler is checked in
+    #! Qorus
+    baseClassesTest() {
+        Logger logger("rest");
+        foreach RestHandler rest in ((new RestHandler(), new RestHandler(NOTHING, new NullRestSchemaValidator()),
+                new RestHandler(logger, NOTHING), new RestHandler(logger, NOTHING, new NullRestSchemaValidator()))) {
+            assertTrue(rest.needsHandlerSocketView(), "RestHandler");
+        }
+        assertFalse(new PlainHandler().needsHandlerSocketView(), "a trusted handler that does not ask");
     }
 
     #! Sends requests to the tenant's HTTP handler and returns its first response's results, with the next response

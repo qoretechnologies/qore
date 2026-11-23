@@ -3913,7 +3913,14 @@ public class AbstractHttpRequestHandler {
         (see @ref httpserver_handler_socket) when the handler object is declared by sandboxed code, which needs no call
         of this method, or when this method was called before the handler was registered with the server; other
         handlers get the connection's socket.  A base class whose subclasses pass the socket of a request to code
-        that is not trusted calls it in its constructor.  It cannot be undone.
+        that is not trusted calls it in its constructor (as @ref RestHandler::RestHandler "RestHandler" does).  It
+        cannot be undone.
+
+        @warning A trusted handler that hands the socket of its HTTP/1.x request to code that is not trusted (such as
+        code of a tenant) <b>must</b> call this method in its constructor: without it, that code gets the
+        connection's socket, with which it can read the next request on the connection (with its \c Authorization
+        header) and write responses to other requests; see @ref httpserver_handler_socket and
+        <a href="https://github.com/qoretechnologies/qore/issues/7338">issue 7338</a>
 
         @since HttpServerUtil 1.6
     */
