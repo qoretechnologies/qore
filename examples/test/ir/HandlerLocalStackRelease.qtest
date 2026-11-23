@@ -1,0 +1,138 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
+# test-platform: macos - AOT code generation of block exit handlers run out of line and the fast call paths into it
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class HandlerLocalStackReleaseTest
+
+#! Regression test: a block whose handlers run out of line leaves the runtime local variable stack as it found it
+/** Before the block exit handlers of compiled code run out of line, the native code puts the locals that it keeps
+    only in native storage and that a handler of the block reads on the runtime local variable stack, and takes them
+    back after the handlers.  Native code compiled ahead of time cleared these entries instead of removing them, so
+    each run of the handlers left an entry on the stack (qore#7399).  The runtime frame wrapper of a call removes the
+    entries that the function leaves, but the fast method and function call paths remove the variables that they
+    pushed for the call by their number: they then removed the entry left instead of the last parameter, and the first
+    parameter was taken for \c self, which is removed without releasing its value, so the value of the first parameter
+    was never released (a self call of a qcc-compiled module method, which takes the fast method call path since
+    #7267, leaked the connection options of WebSocketClient::connect()).
+
+    The script runs a method whose block registers an \c on_exit handler and has a local that an \c on_error handler
+    reads, as a self call, a method call and a function call from compiled code and from top-level code, with an object
+    as its first argument whose destructor is counted, and measures the runtime local variable stack around the block
+    and around loops of the calls, in every execution mode, on the IR tier of tiered execution and as qcc executables
+    compiled with -O0 and -O3 (see ExecModeOutputTest).
+*/
+class HandlerLocalStackReleaseTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%new-style
+%require-types
+class Tracked {
+    public {
+        static int dtors = 0;
+    }
+    destructor() {
+        ++dtors;
+    }
+}
+class C {
+    public {
+        int n = 1;
+        # the growth of the runtime local variable stack across the block, summed over the calls
+        int growth = 0;
+    }
+    private touch() {
+    }
+    # the first parameter holds the only reference to its object while the method runs
+    int run(Tracked t, *hash<auto> opts) {
+        int before = qore_test_local_var_stack_size();
+        {
+            on_exit touch();
+            # read only by a handler that does not run: native code keeps it in native storage
+            int seq0 = n;
+            on_error if (seq0 > 100) {
+                n = 0;
+            }
+            n = seq0 + 1;
+        }
+        growth += qore_test_local_var_stack_size() - before;
+        return opts.v ?? 1;
+    }
+    # a self call
+    int selfCall(int i) {
+        return run(new Tracked(), {"v": i});
+    }
+}
+int sub fn(Tracked t, C c) {
+    int before = qore_test_local_var_stack_size();
+    {
+        on_exit c.n += 0;
+        int seq0 = c.n;
+        on_error if (seq0 > 100) {
+            c.n = 0;
+        }
+        c.n = seq0 + 1;
+    }
+    c.growth += qore_test_local_var_stack_size() - before;
+    return 1;
+}
+# a method call made by compiled code
+int sub dot(C c, int i) {
+    return c.run(new Tracked(), {"v": i});
+}
+# a function call made by compiled code
+int sub callFn(C c) {
+    return fn(new Tracked(), c);
+}
+int sub check(string label, C c, int n, code call) {
+    int before = qore_test_local_var_stack_size();
+    int d0 = Tracked::dtors;
+    int s = 0;
+    for (int i = 0; i < n; ++i) {
+        s += call(c, i);
+    }
+    printf("%s: sum %d, objects released %d of %d, stack growth %d in the block, %d in the loop\n", label, s,
+        Tracked::dtors - d0, n, c.growth, qore_test_local_var_stack_size() - before);
+    c.growth = 0;
+    return s;
+}
+C c();
+check("self call", c, 10, int sub (C c, int i) { return c.selfCall(i); });
+check("method call in a function", c, 10, int sub (C c, int i) { return dot(c, i); });
+check("function call in a function", c, 10, int sub (C c, int i) { return callFn(c); });
+int before = qore_test_local_var_stack_size();
+int d0 = Tracked::dtors;
+for (int i = 0; i < 10; ++i) {
+    c.run(new Tracked(), {"v": i});
+    fn(new Tracked(), c);
+}
+printf("top-level calls: objects released %d of 20, stack growth %d in the blocks, %d in the loop\n",
+    Tracked::dtors - d0, c.growth, qore_test_local_var_stack_size() - before);
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "self call: sum 45, objects released 10 of 10, stack growth 0 in the block, 0 in the loop",
+            "method call in a function: sum 45, objects released 10 of 10, stack growth 0 in the block, 0 in the loop",
+            "function call in a function: sum 10, objects released 10 of 10, stack growth 0 in the block, 0 in the "
+                "loop",
+            "top-level calls: objects released 20 of 20, stack growth 0 in the blocks, 0 in the loop",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("HandlerLocalStackRelease", Script, (map $1 + "\n", Expected).join(""),
+            "releases the arguments of a call of a function whose block handlers run out of line, and leaves the "
+            "runtime local variable stack as it found it", NOTHING, NOTHING, ("-O0", "-O3")) {
+    }
+}
