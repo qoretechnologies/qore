@@ -40,6 +40,7 @@
 #include "qore/intern/SocketRecvHttpLinePollOperation.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/ql_debug.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_SSLCertificate.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
@@ -5769,6 +5770,27 @@ bool qore_socket_object_private::isHttp2(ExceptionSink* xsink) const {
         return priv->socket->isHttp2();
     }
 
+    // the protocol negotiated in a completed handshake is recorded, and is read without the TLS state and without a
+    // poll operation (qore#7223); only a handshake that has not completed is queried on the I/O thread
+    {
+        // -2: the connection has no TLS, and has negotiated nothing
+        int rec;
+        {
+            AutoLocker al(priv->m);
+            qore_socket_private::SslRef ssl = qore_socket_private::get(*priv->socket)->getSsl();
+            rec = ssl ? ssl->recordedHttp2() : -2;
+        }
+        if (rec == -2) {
+            return false;
+        }
+        if (rec >= 0) {
+            return rec;
+        }
+    }
+
+#ifdef DEBUG
+    qore_dbg_note_is_http2_poll();
+#endif
     ValueHolder rv(qore_socket_object_exec_poll_output(const_cast<QoreSocketObject*>(so),
         new QoreSocketObjectTlsStatePollOperation(const_cast<QoreSocketObject*>(so),
             QoreSocketObjectTlsStatePollOperation::Action::IsHttp2),
@@ -6438,6 +6460,10 @@ void qore_socket_object_private::dbgResetOnClose() {
 
 void qore_socket_object_private::dbgForceSslErrorSslAtNextWrite() {
     qore_socket_private::get(*priv->socket)->dbg_force_ssl_error_ssl.store(true, std::memory_order_release);
+}
+
+void qore_socket_object_private::dbgForceStagedWriteFailure() {
+    qore_socket_private::get(*priv->socket)->dbg_force_staged_write_failure.store(true, std::memory_order_release);
 }
 
 QoreHashNode* qore_socket_object_private::dbgGetStreamRecordCounts(int64_t session_id, ExceptionSink* xsink) {
@@ -7607,4 +7633,10 @@ void my_socket_priv::shutdownAllQuicStreamReads() {
     for (auto& sess : sessions) {
         sess->shutdownStreamReads();
     }
+}
+
+int64 qore_socket_object_private::getUnacknowledgedSendBytes() const {
+    // the lock keeps another thread from closing the descriptor, or from its number being reused, during the query
+    AutoLocker al(priv->m);
+    return qore_socket_private::getUnacknowledgedBytes(qore_socket_private::get(*priv->socket)->sock);
 }

@@ -156,6 +156,19 @@ class DeletedProgramTypesTest inherits QUnit::Test {
             addTestCase("a native module required by a user module in a cycle with an AOT module is deleted after "
                 + "them: " + mode, sub () { testRuntimeUserCycle(mode_value); });
         }
+        foreach string mode in (ExecModes) {
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string mode_value = mode;
+            addTestCase("a native module required by a user module loaded at run time into a user module that it "
+                + "requires is deleted after them: " + mode, sub () { testRuntimeUserCycleSource(mode_value); });
+        }
+        foreach string mode in (ExecModes) {
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string mode_value = mode;
+            addTestCase("a native module required by a user module loaded at run time into a user module that it "
+                + "requires is deleted after them when an AOT module leaves both to the end: " + mode,
+                sub () { testRuntimeUserCycleAotReq(mode_value); });
+        }
         set_return_value(main());
     }
 
@@ -334,6 +347,29 @@ class DeletedProgramTypesTest inherits QUnit::Test {
     */
     testRuntimeUserCycle(string mode) {
         runRuntimeLoad(mode, ("RuntimeUserCycleAot",), "runtime-user-cycle.qr", "1", ("RuntimeUserCycleLoaded",));
+    }
+
+    #! A native module that a user module requires is deleted after a user module that loaded it at run time, when the
+    #! loaded module requires the loader (qore#7310)
+    /** As testRuntimeUserCycle(), with the loader RuntimeUserCycleAot loaded from its source, as ProviderIndexUtil is
+        when its AOT module is out of date: the run-time load is not recorded as a requirement, as it would make a
+        cycle, so the loaded module was deleted first, and the native module reflection, which no module left
+        required then, next, before the loader, whose Program holds the loaded module's hashdecl naming a class of it
+        (a debug build asserted in qore_type_owner_add_name(); seen with qore-data-provider-i18n).
+    */
+    testRuntimeUserCycleSource(string mode) {
+        runRuntimeLoad(mode, (), "runtime-user-cycle.qr", "1", ("RuntimeUserCycleAot", "RuntimeUserCycleLoaded"));
+    }
+
+    #! As testRuntimeUserCycleSource(), with an AOT module requiring the loaded module, which leaves both user modules to
+    #! the end of the cleanup (QoreModuleManager::cleanup()) (qore#7310)
+    /** The cleanup orders the modules left with records of its own, made before it deletes any of them: the run-time
+        load is one of them, as a requirement at run time only, so that the cycle is broken at the loaded module and
+        its native module reflection is required by the loader in its place.
+    */
+    testRuntimeUserCycleAotReq(string mode) {
+        runRuntimeLoad(mode, ("RuntimeUserCycleAotReq",), "runtime-user-cycle-aot-req.qr", "ok",
+            ("RuntimeUserCycleAot", "RuntimeUserCycleLoaded"));
     }
 
     #! Runs \a script with the modules \a modules compiled to AOT modules and the source modules \a sources

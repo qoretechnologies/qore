@@ -72,6 +72,9 @@ public:
             : so(const_cast<QoreSocketObject*>(n_so)), priv(const_cast<QoreSocketObject*>(n_so)->priv) {
     }
 
+    //! Returns the bytes of the socket's send buffer that the peer has not acknowledged, or 0 if unknown
+    DLLLOCAL int64 getUnacknowledgedSendBytes() const;
+
     //! Shuts down the sending side of the connection only (a half-close); see Socket::shutdownWrite()
     /** @return 0 for success, -1 for error (exception raised)
     */
@@ -578,6 +581,10 @@ public:
 
     //! Debug-only: the next SSL write fails with SSL_ERROR_SSL while errno holds EPIPE
     DLLLOCAL void dbgForceSslErrorSslAtNextWrite();
+
+    //! Debug-only: the next TLS write stages its ciphertext, as with a full socket buffer, and the drain of it fails as
+    //! when the peer reset the connection
+    DLLLOCAL void dbgForceStagedWriteFailure();
 
     //! Debug-only: returns the number of records that a session of the socket keeps for its streams, by kind
     /** Called via the @c dbg_socket_stream_records() debug builtin in @ref lib/ql_debug.cpp, so tests can show that

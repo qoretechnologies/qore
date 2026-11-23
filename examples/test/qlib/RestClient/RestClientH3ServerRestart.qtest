@@ -29,7 +29,10 @@
     the request (HTTP3-PEER-UNRESPONSIVE); an idempotent request is repeated once on a new connection, while another
     one, which the old server may have processed before it went away, raises the error, and the next request takes a
     new connection.  The server is stopped as a killed one is with dbg_quic_silent_server_close() (debug
-    builds): it sends no GOAWAY and no CONNECTION_CLOSE.
+    builds): it sends no GOAWAY and no CONNECTION_CLOSE.  The new server has another private key: a server with the
+    same key would reset the old connection at once with a stateless reset (qore#6931, see
+    RestClientH3StatelessReset.qtest), while the resets of this one have tokens that the client does not take, and
+    neither they nor any other packet that the client discards end the wait for the server's response.
 */
 
 %modern
@@ -42,6 +45,7 @@
 %requires HttpServer
 %requires RestClient
 %requires json
+%requires ../../TestCertificates.qm
 
 %exec-class RestClientH3ServerRestartTest
 
@@ -123,15 +127,15 @@ class RestClientH3ServerRestartTest inherits QUnit::Test {
     }
 
     #! starts an HTTPS server with HTTP/3 on the given port (0: assigned by the OS); returns the server and its port
-    private list<auto> startServer(int port, CountingHandler handler) {
+    private list<auto> startServer(int port, CountingHandler handler, bool other_key = False) {
         HttpServer server(<HttpServerOptionInfo>{});
         server.setDefaultHandler("count", handler);
         server.waitForAsyncIo();
         int p = server.addListener(<HttpListenerOptionInfo>{
             "node": "127.0.0.1",
             "service": port,
-            "cert": new SSLCertificate(CertPem),
-            "key": new SSLPrivateKey(KeyPem),
+            "cert": new SSLCertificate(other_key ? TestCertificates::CertPem : CertPem),
+            "key": new SSLPrivateKey(other_key ? TestCertificates::KeyPem : KeyPem),
             "enable_h3": True,
         }).port;
         server.waitForAsyncIo();
@@ -170,7 +174,8 @@ class RestClientH3ServerRestartTest inherits QUnit::Test {
             delete first;
         }
         CountingHandler handler();
-        HttpServer second = startServer(port, handler)[0];
+        # the new server has another key: it cannot reset the old connection (see above)
+        HttpServer second = startServer(port, handler, True)[0];
         on_exit second.stop();
 
         # the request is sent on the old connection, which the new server does not know: once the server has sent

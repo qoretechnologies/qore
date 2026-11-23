@@ -102,18 +102,28 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
     @par Operators Change the Container of a Weak Reference Held by Their Lvalue
-    The operators that change the list or the hash that an lvalue holds (+=, a hash -=, push, unshift, pop, shift,
-    splice, extract, delete, remove, trim and chomp) change the container that a
-    @ref weak_assignment_operator "weak reference" held by the lvalue designates, as an element or key assignment does,
-    and the lvalue keeps the weak reference; += replaced an untyped lvalue with the value added, and the others raised
-    an error or removed nothing (<a href="https://github.com/qoretechnologies/qore/issues/7297">issue 7297</a>,
-    <a href="https://github.com/qoretechnologies/qore/issues/7312">issue 7312</a>).
+    The operators that change an lvalue's list or hash (+=, hash -=, push, unshift, pop, shift, splice, extract, trim,
+    chomp) change the container of the @ref weak_assignment_operator "weak reference" it holds, as remove does; they
+    raised an error or replaced the lvalue (<a href="https://github.com/qoretechnologies/qore/issues/7297">issue
+    7297</a>, <a href="https://github.com/qoretechnologies/qore/issues/7312">issue 7312</a>).
+
+    @par A Lent Connection Gives Restricted Code Only Clients Bound to the Host's Target
+    Code restricted from the \c NETWORK domain gets no synchronous client from a lent REST, YAML-RPC or server-sent
+    event connection (\c PERMISSION-DENIED), and the HTTP clients that it gets connect only to the target of the code
+    that created the connection (see @ref sandbox_lent_connections;
+    <a href="https://github.com/qoretechnologies/qore/issues/7262">issue 7262</a>).
 
     @par A Weak Assignment From a Member, a Hash Key or a List Element Designates Its Own Container
     A @ref weak_assignment_operator "weak assignment" from a member, a hash key or a list element first gives a shared
     container a copy of its own, as from a variable, so that a change through it no longer changes another owner, and
     one through a deleted object or a freed weak container raises an exception, as an assignment does, in every
     execution mode (<a href="https://github.com/qoretechnologies/qore/issues/7242">issue 7242</a>).
+
+    @par WebSocket Send Timeout and Minimum Transfer Rate
+    The \c send_timeout of @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" bounds the time in which a client
+    takes no data, and a client that stays below the new \c send_min_rate (default: 1 KiB/s; 0 disables it) is
+    disconnected, allowing for the steps in which TCP shows a slow client's progress
+    (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>).
 
     @par Library Code Does Not Use the Terminal for Code That Is Restricted From It
     The builtins that use the terminal refuse a caller restricted with @ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"
@@ -142,6 +152,14 @@
     one reached through private inheritance) that its own hierarchy overrides when an earlier parent class of the
     object's class reaches that parent class first (see @ref multiple_inheritance_order;
     <a href="https://github.com/qoretechnologies/qore/issues/6798">issue 6798</a>).
+
+    @par A Connection That Was Never Checked Is Not Up
+    A connection is not up until a successful ping or connection (also the first connection of its async HTTP or
+    REST client) proves it up: one that was never checked reports \c up @ref False with the status \c "not checked",
+    and a REST connection's ping without \c ping_method connects to the server (see
+    @ref ConnectionProvider::AbstractConnection::up "AbstractConnection::up";
+    <a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>,
+    <a href="https://github.com/qoretechnologies/qore/issues/7274">issue 7274</a>).
 
     @par A Private Override Hides Its Parent Class's Method from Calls Resolved When Parsing
     Code outside a class hierarchy can no longer call a parent class's method that the class overrides with a
@@ -1335,6 +1353,10 @@
     <a href="https://github.com/qoretechnologies/qore/issues/7179">issue 7179</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+
+    @par Minimum Send Rate Monitor
+    @ref Qore::SendRateMonitor "SendRateMonitor" measures the average rate at which a peer takes data while a sender
+    waits for it, over a sliding window (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>).
     @par Hash Identity Test
     @ref <hash>::isSame() "<hash>::isSame()" tests in a constant time whether two hashes are the same hash value
     (identity, not equality; <a href="https://github.com/qoretechnologies/qore/issues/7240">issue 7240</a>).
@@ -1358,6 +1380,18 @@
     @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool") give the description
     of a datasource that %Qore uses in its own exceptions, with the driver, host and port, and the user name, password
     and database name masked as \c "****", for exception messages and logs (issue #6988).
+
+    @par Sensitive DBI Driver Options
+    A DBI driver registers its options with option flags (\c QDBI_OPT_SENSITIVE in the C++ API, given as the
+    \c "sensitive" key of @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()"), and the masked forms
+    that identify a connection and @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()" show only
+    the plain values of the options that a loaded driver so declares not sensitive and whose names name no credential
+    (see @ref datasource_mask_options; issue #7070).
+
+    @par Sensitive DBI Database Names
+    A DBI driver whose database name can hold credentials declares @ref Qore::SQL::DBI_CAP_SENSITIVE_DBNAME, and the
+    masked forms that show a database name, as for \c db:// connections, always mask the database name of such a
+    loaded driver (see @ref datasource_mask_options; issue #7275).
 
     @par IPv6 Hosts in Datasource Strings
     A datasource string gives an IPv6 address as its host in brackets (ex: <tt>%[::1]:5432</tt>), and
@@ -2414,6 +2448,8 @@
       - see @ref wsc_v2_5 for all changes
 
     - @ref websockethandlerintro "WebSocketHandler" module
+      - added the \c send_min_rate and \c send_min_rate_window options, which bound how slowly a client can take data
+         on HTTP/1.1, HTTP/2 and HTTP/3 (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>)
       - permessage-deflate compression
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>) and AsyncAPI 3.0
         message validation
@@ -2764,6 +2800,20 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref Qore::HTTPClient::getURL() "HTTPClient::getURL()", @ref Qore::HTTPClient::getProxyURL() "getProxyURL()"
+      and @ref Qore::HTTPClient::getSafeProxyURL() "getSafeProxyURL()" give an IPv6 host in brackets and the path of a
+      UNIX domain socket with every reserved character encoded; the URL was ambiguous without them, and
+      @ref Qore::HTTPClient::getProxyURL() "getProxyURL()" takes the parts of the URL to give, as \c getURL() does
+      (<a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>)
+    - an operation on a container that raises an exception after changing it, such as a hash merge that stores a
+      key before it refuses another one, keeps the object counts of the containers above it and is seen by the
+      @ref garbage_collection "garbage collector", which collects a cycle that it made (issue #7322)
+    - a change through an lvalue path that reaches a container again through a
+      @ref weak_assignment_operator "weak reference" changes the object count of each container holding the changed
+      one once, where it failed an assertion or counted an object twice (issue #7321)
+    - the @ref garbage_collection "garbage collector" collects a cycle through a hash, list or object holding an
+      object that a member was removed from, which it missed, and a write to a member by its bare name no longer
+      counts the object as holding a value to scan when it holds none (issue #7348)
     - The @ref garbage_collection "garbage collector" now collects object cycles through reversed
       lists and lists whose elements were converted in place (issue #7159).
     - @ref string_formatting "Value formatting" now displays a back-reference when several paths reach the same
@@ -2804,10 +2854,10 @@
       <tt>(w := new C()).method()</tt>) now lives until the end of the statement, as any temporary value does; it was
       destroyed when the assignment ended, so that the rest of the statement saw a destroyed object
       (<a href="https://github.com/qoretechnologies/qore/issues/7085">issue 7085</a>)
-    - the operators that change an lvalue's list or hash (+=, push, splice, remove, trim, ...) change the container
-      that a @ref weak_assignment_operator "weak reference" held by the lvalue designates; they raised an error,
-      replaced the lvalue, or removed nothing (<a href="https://github.com/qoretechnologies/qore/issues/7297">issue
-      7297</a>, <a href="https://github.com/qoretechnologies/qore/issues/7312">issue 7312</a>)
+    - the operators that change an lvalue's list or hash (+=, push, pop, splice, trim, ...) change the container that
+      a @ref weak_assignment_operator "weak reference" held by the lvalue designates; they raised an error or replaced
+      the lvalue (<a href="https://github.com/qoretechnologies/qore/issues/7297">issue 7297</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/7312">issue 7312</a>)
     - the strings of \c ARGV and \c QORE_ARGV are tagged with the
       @ref default_encoding "default character encoding" of the process, where they were tagged \c UTF-8 whatever the
       default encoding (see @ref command_line_processing; issue #7045)
@@ -2818,6 +2868,13 @@
       reference was released was copied, returned or passed to a call; changing such a list or hash through new
       references to it now raises \c LIST-ERROR or \c HASH-ERROR also when more than one is held
       (<a href="https://github.com/qoretechnologies/qore/issues/7163">issue 7163</a>)
+    - the \c splice and \c extract operators and the merge of a list, a hash or an object's members (\c +=) raise
+      \c LIST-ERROR or \c HASH-ERROR for a list or hash freed under a @ref weak_assignment_operator "weak reference", as
+      the other changes do (<a href="https://github.com/qoretechnologies/qore/issues/7199">issue 7199</a>)
+    - the @ref remove "remove" and @ref delete "delete" operators remove an element, a key, a slice or a range through
+      a @ref weak_assignment_operator "weak reference" from the list or hash that it designates, instead of removing
+      the weak reference itself or nothing
+      (<a href="https://github.com/qoretechnologies/qore/issues/7306">issue 7306</a>)
     - @ref httpserverintro "HttpServer" answers a handler's informational response (1xx) other than 101 with an error
       instead of sending it as the final response
       (<a href="https://github.com/qoretechnologies/qore/issues/7222">issue 7222</a>)
@@ -3081,6 +3138,9 @@
     - @ref httpserverutilintro "HttpServerUtil" and @ref httpserverintro "HttpServer" modules: a stream handler that
       wants an HTTP/1.x request body with a \c Content-Length as a stream gets it in bounded binary parts, each byte
       once, instead of the whole body twice, held in memory (see @ref http1_7 and @ref httputil1_6; issue #7308)
+    - @ref resthandlerintro "RestHandler" module: an HTTP/1.x Connect or DataStream request body with a
+      \c Content-Length reaches its stream handler in bounded parts, as over HTTP/2 and HTTP/3 (see @ref rh_1_6_8;
+      issue #7323)
     - @ref httpserverutilintro "HttpServerUtil" and @ref httpserverintro "HttpServer" modules: state that a request
       handler leaves on a server thread (its persistence, its close notification and its user thread context) is
       kept for that handler only, so that a handler of another tenant that runs on the same thread later neither sees
@@ -4379,8 +4439,9 @@
       and raises \c DESERIALIZATION-ERROR for a value, list or hash larger than the data that follows it, instead of
       reserving the size given in the data first (issue #6502)
     - a user module that a module loads at run time with @ref Qore::load_module() "load_module()" is deleted after
-      that module when the process ends, together with the native modules it requires, so the cleanup no longer uses
-      the declarations of a native module that was already deleted (issue #6501)
+      that module when the process ends, together with the native modules it requires, and when the loaded module
+      requires that module, those native modules are still deleted after it, so the cleanup no longer uses the
+      declarations of a native module that was already deleted (issues #6501, #7310)
     - in the C++ API, \c QoreString::parseBase64UrlToString() and \c QoreStringNode::parseBase64UrlToString()
       without an encoding argument decode base64url instead of base64, as the overloads with one do (issue #6621)
     - code of a @ref Qore::Program "Program" could be associated with the thread-local data of another Program in

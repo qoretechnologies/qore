@@ -180,20 +180,22 @@ struct qore_list_private {
         return autoListTypeInfo;
     }
 
+    //! returns a copy of the list converted to another type: a new list, which can be changed also when this list was
+    //! freed under a weak reference, as the copy of a hash converted to another type (qore#7199; see copyFreedState())
     DLLLOCAL QoreListNode* copy(const QoreTypeInfo* newComplexTypeInfo) const {
         QoreListNode* l = new QoreListNode;
         l->priv->complexTypeInfo = newComplexTypeInfo;
         copyIntern(*l->priv);
-        copyFreedState(*l->priv);
         return l;
     }
 
     //! A copy of a freed list cannot be changed either (qore#7163)
     /** A list freed under weak references is held by its weak holders (see QoreContainerWeakRefs), so a new
         reference to it is never its only one, and changing the list through that reference copies it; the copy reads
-        as empty, as the list does, and changing it raises \c LIST-ERROR, as changing the list itself does.  The same
-        holds for its conversion to another list type, which is the list given to a typed variable or parameter.  A
-        value computed from it (sorted, or with an element added: see copyValue()) is a new list.
+        as empty, as the list does, and changing it raises \c LIST-ERROR, as changing the list itself does.  A value
+        computed from it (sorted, or with an element added: see copyValue()) is a new list, and so is its conversion to
+        another list type (a cast or the list given to a variable or parameter of another type: getPlainList(),
+        newComplexListFromValue()), which can be changed (qore#7199).
 
         The copy is not freed: it is freed as any other list when its last reference is released.
     */
@@ -408,6 +410,10 @@ struct qore_list_private {
     }
 
     DLLLOCAL int mergeNative(const QoreListNode* list, ExceptionSink* xsink) {
+        // a list freed under a weak reference cannot be changed (qore#7199)
+        if (checkValid(xsink)) {
+            return -1;
+        }
         reserve(length + list->size());
         ConstListIterator i(list);
         while (i.next()) {
@@ -433,6 +439,10 @@ struct qore_list_private {
     }
 
     DLLLOCAL int merge(const QoreListNode* list, ExceptionSink* xsink) {
+        // a list freed under a weak reference cannot be changed (qore#7199)
+        if (checkValid(xsink)) {
+            return -1;
+        }
         reserve(length + list->size());
         ConstListIterator i(list);
         while (i.next()) {
@@ -443,6 +453,10 @@ struct qore_list_private {
     }
 
     DLLLOCAL int merge(const QoreListNode* list, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+        // a list freed under a weak reference cannot be changed (qore#7199)
+        if (checkValid(xsink)) {
+            return -1;
+        }
         reserve(length + list->size());
         ConstListIterator i(list);
         size_t count = 0;
@@ -713,7 +727,11 @@ struct qore_list_private {
             return l;
         // no exception is possible
         ReferenceHolder<QoreListNode> holder(l, nullptr);
-        return l->priv->copy(true);
+        // the list converted to a plain list is a new list, which can be changed also when the list was freed under
+        // a weak reference (qore#7199; see copyFreedState())
+        QoreListNode* rv = l->priv->copy(true);
+        rv->priv->valid = true;
+        return rv;
     }
 
     DLLLOCAL QoreValue swap(qore_offset_t offset, QoreValue val) {
@@ -818,6 +836,24 @@ struct qore_list_private {
     //! NOTHING held by an lvalue whose declared type \a holder_type requires the element type (qore#6435)
     DLLLOCAL void raiseElementRemovalError(size_t ind, bool for_del, const QoreTypeInfo* holder_type,
             ExceptionSink* xsink) const;
+
+    //! Raises LIST-ERROR for delete or remove that removes nothing from a list freed under a weak reference or from a
+    //! copy of one (qore#7163), which is empty; the removers call it only when they remove nothing (qore#7306)
+    /** @return -1 if the list cannot be changed and LIST-ERROR was raised, 0 if not
+    */
+    DLLLOCAL int checkRemovalValid(ExceptionSink* xsink) {
+        // a list whose last reference was released is empty, and so is a copy of it
+        assert(valid || !length);
+        return checkValid(xsink);
+    }
+
+    //! QoreListNode::extract(ptrdiff_t, ptrdiff_t) for a list that can be shared: the list of a weak reference,
+    //! which a remove changes in place (qore#7306)
+    DLLLOCAL QoreListNode* extract(ptrdiff_t offset, ptrdiff_t len);
+
+    //! raises RUNTIME-TYPE-ERROR for delete or remove of element \a ind of a list whose element type does not take
+    //! NOTHING reached through a weak reference, which keeps the type that its owners declared (qore#7306)
+    DLLLOCAL void raiseWeakElementRemovalError(size_t ind, bool for_del, ExceptionSink* xsink) const;
 
     //! makes the element type of the list its or-nothing type (list<*int> for a list<int>) if its element type does
     //! not take NOTHING, as for delete or remove of an element of a list held by an lvalue that allows it (qore#6435)

@@ -1,0 +1,164 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of reference creation and the types of the references
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class ReferenceTypesTest
+
+#! Tests the types of the references created at run time in every execution mode and in qcc-compiled executables
+/** A reference has the reference type of the type of its lvalue (reference<T>), which is cached in the value type
+    and returned without a lock once it has been looked up (issue #7269).  cases.q creates references to locals of
+    many types, to members, hash keys, list elements and hashdecl members (also in methods), globals, closure-bound
+    locals and references, in loops and in several threads at once, and prints their types as a runtime overload
+    error names them, the variants of an overloaded function that they select at run time, and whether typed
+    containers and typed reference variables take them; every execution mode and executables compiled with qcc -O0
+    and -O3 must give the output of the AST interpreter, which is checked here as well.
+*/
+class ReferenceTypesTest inherits QUnit::Test {
+    public {
+        #! the output of the cases with the AST interpreter
+        const ExpectedAstLines = (
+            "local-int => reference<int>",
+            "local-or-nothing-int => reference<*int>",
+            "local-string => reference<string>",
+            "local-or-nothing-string => reference<*string>",
+            "local-float => reference<float>",
+            "local-number => reference<number>",
+            "local-bool => reference<bool>",
+            "local-date => reference<date>",
+            "local-binary => accepted",
+            "local-auto => RUNTIME-TYPE-ERROR: <reference> expects type 'binary', but got type 'integer' instead",
+            "local-hash-auto => reference<hash<auto>>",
+            "local-hash-string-int => reference<hash<string, int>>",
+            "local-or-nothing-hash-string-int => reference<*hash<string, int>>",
+            "local-list-int => reference<list<int>>",
+            "local-list-list-string => reference<list<list<string>>>",
+            "local-hashdecl => reference<hash<RefTypeDecl>>",
+            "local-object => reference<object<RefTypeObj>>",
+            "local-or-nothing-object => reference<*object<RefTypeObj>>",
+            "local-code => reference<code>",
+            "local-softint => reference<softint>",
+            "pick-local-int => int",
+            "pick-local-string => string",
+            "pick-local-or-nothing-string => string",
+            "pick-local-list-int => list<int>",
+            "pick-local-hash-string-int => hash<string, int>",
+            "pick-local-hashdecl => hash<RefTypeDecl>",
+            "pick-local-object => RefTypeObj",
+            "pick-local-float => RUNTIME-OVERLOAD-ERROR",
+            "pick-local-auto => int",
+            "member-int => reference<int>",
+            "member-or-nothing-string => reference<*string>",
+            "member-hash => reference<hash<string, int>>",
+            "member-list => reference<list<string>>",
+            "member-hashdecl => reference<hash<RefTypeDecl>>",
+            "member-hash-key => reference<*int>",
+            "member-list-element => reference<*string>",
+            "member-hashdecl-member => reference<string>",
+            "method-members => reference<int>, reference<*string>, reference<hash<string, int>>, reference<list<string>>, reference<hash<RefTypeDecl>>, reference<*int>, reference<*string>, reference<string>",
+            "pick-member-int => int",
+            "pick-member-hash-key => int",
+            "pick-member-list-element => string",
+            "hash-key => reference<*int>",
+            "hash-key-dynamic => reference<*int>",
+            "list-element => reference<*list<int>>",
+            "list-element-element => reference<*int>",
+            "hashdecl-member-int => reference<int>",
+            "hashdecl-member-list => reference<list<int>>",
+            "hashdecl-member-list-element => reference<*int>",
+            "pick-hash-key => int",
+            "pick-list-element => list<int>",
+            "pick-hashdecl-member-list => list<int>",
+            "global-int => reference<int>",
+            "global-hash => reference<hash<string, list<int>>>",
+            "global-hash-key => reference<*list<int>>",
+            "pick-global-int => int",
+            "closure-bound-local => reference<list<int>>",
+            "closure-variable-in-closure => reference<list<int>>",
+            "pick-closure-bound-local => list<int>",
+            "reference-variable => reference<hash<string, int>>",
+            "reference-variable-key => reference<*int>",
+            "pick-reference-variable => hash<string, int>",
+            "hash-of-int-references => 1",
+            "hash-of-int-references-string => RUNTIME-TYPE-ERROR",
+            "list-of-string-references => s",
+            "list-of-string-references-int => RUNTIME-TYPE-ERROR",
+            "reference-to-int => 1",
+            "reference-to-int-string => RUNTIME-TYPE-ERROR",
+            "loop => {reference<hash<string, int>>: 100, reference<*int>: 100, hash<string, int>: 100}",
+            "threads => {reference<object<RefTypeThreadObj>>: 160, reference<list<object<RefTypeThreadObj>>>: 160, reference<*object<RefTypeThreadObj>>: 160}",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string cases;
+    }
+
+    constructor() : QUnit::Test("ReferenceTypes", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        cases = get_script_dir() + DirSep + "cases.q";
+
+        addTestCase("every execution mode gives the expected result", \testModes());
+        addTestCase("compiled executables give the expected result", \testExecutables());
+
+        set_return_value(main());
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            compare(mode, runMode(mode));
+        }
+    }
+
+    testExecutables() {
+        TmpDir tmp("qore-reference-types-");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "cases" + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s -o %s %s 2>&1",
+                libqore_dir, libqore_dir, libqore_dir, qcc_bin, opt, exe, cases));
+            assertTrue(is_file(exe), sprintf("%s compiled the executable: %s", opt, out));
+            compare("qcc " + opt, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+                libqore_dir, libqore_dir, exe)).split("\n"));
+        }
+    }
+
+    private list<string> runMode(string mode) {
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, cases)).split("\n");
+    }
+
+    #! compares the lines of a run with the expected lines, reporting the first differences
+    private compare(string mode, list<string> actual) {
+        # a trailing newline gives an empty last line
+        if (actual && actual.last() == "") {
+            pop actual;
+        }
+        list<string> diffs = ();
+        int count = 0;
+        int n = max(ExpectedAstLines.size(), actual.size());
+        for (int i = 0; i < n; ++i) {
+            if (ExpectedAstLines[i] !== actual[i]) {
+                ++count;
+                if (diffs.size() < 20) {
+                    diffs += sprintf("expected: %y\n%s: %y", ExpectedAstLines[i], mode, actual[i]);
+                }
+            }
+        }
+        assertEq((), diffs, sprintf("%s: %d differences:\n%s", mode, count, diffs.join("\n")));
+    }
+}
