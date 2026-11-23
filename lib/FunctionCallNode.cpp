@@ -866,22 +866,28 @@ int FunctionCallBase::parseCommitVirtualNamedCall() {
 int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context,
         QoreFunction* func, qore_ns_private* ns, bool infer_class_receiver_from_args,
         const char* receiver_inference_call_desc) {
+    QoreParseCallArgs call_args;
+    int err = parseInitCallArgs(parse_context, call_args);
+    if (parseFindCallVariant(loc, parse_context, func, ns, call_args, infer_class_receiver_from_args,
+            receiver_inference_call_desc) && !err) {
+        err = -1;
+    }
+    return err;
+}
+
+int FunctionCallBase::parseInitCallArgs(QoreParseContext& parse_context, QoreParseCallArgs& call_args) {
     int err = 0;
-    QoreParseAnalysis arg_analysis;
 
     // number of arguments in call
     unsigned num_args = parse_args ? parse_args->size() : 0;
-    bool named_args = parse_args && parse_args->hasNamedArgs();
-    name_vec_t arg_names;
-    if (named_args) {
+    call_args.named_args = parse_args && parse_args->hasNamedArgs();
+    if (call_args.named_args) {
         const QoreParseListNode::arg_name_vec_t& names = parse_args->getArgNamesVector();
-        arg_names.assign(names.begin(), names.end());
+        call_args.arg_names.assign(names.begin(), names.end());
     }
 
     // argument type list
-    type_vec_t argTypeInfo;
-    // for each argument, true if it always has a value of its type
-    arg_value_vec_t args_with_value;
+    type_vec_t& argTypeInfo = call_args.arg_type_info;
 
     // initialize arguments and setup argument type list (argTypeInfo)
     if (num_args) {
@@ -893,18 +899,30 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         {
             QoreParseContextAnalysisHelper ah(parse_context);
             err = parse_args->initArgs(parse_context, argTypeInfo, args);
-            arg_analysis = parse_context.analysis;
+            call_args.arg_analysis = parse_context.analysis;
         }
         parsed_arg_type_info = argTypeInfo;
         parse_args = nullptr;
         if (args) {
-            args_with_value.reserve(args->size());
+            call_args.args_with_value.reserve(args->size());
             for (size_t i = 0, e = args->size(); i < e; ++i) {
-                args_with_value.push_back(parse_arg_always_has_value(args->retrieveEntry(i)));
+                call_args.args_with_value.push_back(parse_arg_always_has_value(args->retrieveEntry(i)));
             }
         }
-
     }
+    parse_context.typeInfo = nullptr;
+    return err;
+}
+
+int FunctionCallBase::parseFindCallVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context,
+        QoreFunction* func, qore_ns_private* ns, QoreParseCallArgs& call_args, bool infer_class_receiver_from_args,
+        const char* receiver_inference_call_desc) {
+    int err = 0;
+    const QoreParseAnalysis& arg_analysis = call_args.arg_analysis;
+    const bool named_args = call_args.named_args;
+    name_vec_t& arg_names = call_args.arg_names;
+    const type_vec_t& argTypeInfo = call_args.arg_type_info;
+    const arg_value_vec_t& args_with_value = call_args.args_with_value;
     parse_context.typeInfo = nullptr;
 
     if (resolveExplicitTypeArgs(loc) && !err) {
@@ -1312,6 +1330,40 @@ bool SelfFunctionCallNode::backgroundCallIsStatic(const QoreObject* obj) const {
     return !c->findMethod(name, access) && c->findStaticMethod(name, access);
 }
 
+QoreDeferredMethodBindContext::QoreDeferredMethodBindContext(const QoreParseContext& parse_context)
+        : cls(parse_get_class_priv()), ns(parse_get_ns()), pgm(parse_context.pgm), oflag(parse_context.oflag),
+        expected_type_info(parse_context.expected_type_info), pflag(parse_context.pflag),
+        pwo(qore_program_private::getParseWarnOptions(parse_context.pgm)) {
+}
+
+QoreDeferredMethodBindScope::QoreDeferredMethodBindScope(const QoreDeferredMethodBindContext& ctx)
+        : parse_context(ctx.pgm) {
+    parse_context.oflag = ctx.oflag;
+    parse_context.pflag = ctx.pflag;
+    parse_context.expected_type_info = ctx.expected_type_info;
+    thread_set_class_and_ns(ctx.cls, ctx.ns, old_cls, old_ns);
+    // the warnings and parse options of the statement of the call (issue #6207); the class and namespace context are
+    // restored if the helper cannot be made, as the destructor does not run then
+    try {
+        pwh.reset(new ParseWarnHelper(ctx.pwo));
+    } catch (...) {
+        thread_set_class_and_ns(old_cls, old_ns);
+        throw;
+    }
+}
+
+QoreDeferredMethodBindScope::~QoreDeferredMethodBindScope() {
+    pwh.reset();
+    thread_set_class_and_ns(old_cls, old_ns);
+}
+
+//! returns the class in which a call in the code of the class \a class_ctx finds its method: the class of the code
+//! for an unqualified call, the class \a qc that it names otherwise
+static const qore_class_private* self_call_lookup_class(const qore_class_private* class_ctx, const QoreClass* qc,
+        bool single_name) {
+    return single_name ? class_ctx : (qc ? qore_class_private::get(*qc) : nullptr);
+}
+
 int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_context) {
     assert(!parse_context.typeInfo);
     // issue #5769: the receiver of an implicit call to a method of a generic base class
@@ -1326,8 +1378,57 @@ int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_
     if (ns.size() == 1 && !is_copy && method && !method->isStatic()) {
         virtual_named_dispatch = true;
     }
+    // a method of a parent class found for a class whose abstract methods, once resolved, can give it a method of the
+    // name: the call is bound once they are resolved, so that it calls the method that it calls at run time
+    // (qore#7411); its type is not known before
+    if (method && !is_copy && !method->isStatic()) {
+        const qore_class_private* lookup_cls = self_call_lookup_class(class_ctx, qc, ns.size() == 1);
+        if (lookup_cls && !qore_class_private::get(*method->getClass())->sameClass(*lookup_cls)
+                && lookup_cls->parseAbstractMethodPending(ns.getIdentifier())) {
+            QoreParseCallArgs call_args;
+            int err = parseInitCallArgs(parse_context, call_args);
+            // the type of the call until it is bound: that of the variants that its arguments can select, if they
+            // have one
+            parse_context.typeInfo = call_args.named_args ? nullptr
+                : lookup_cls->parseAbstractMethodPendingReturnType(ns.getIdentifier(), call_args.arg_type_info,
+                    class_ctx);
+            QoreDeferredMethodBindContext ctx(parse_context);
+            qore_root_ns_private::get(*getRootNS())->parseDeferMethodBind(this,
+                [this, ctx, call_args = std::move(call_args)]() mutable -> int {
+                    QoreDeferredMethodBindScope scope(ctx);
+                    return parseDeferredMethodBind(scope.parse_context, call_args);
+                });
+            return err;
+        }
+    }
     // issue #3637: qc might be non-null while method is null in case of calls to implicit copy() methods, for example
     int err = parseArgs(parse_context, method ? qore_method_private::get(*method)->getFunction() : nullptr, nullptr);
+    return parseInitCallResolved(parse_context, err);
+}
+
+int SelfFunctionCallNode::parseDeferredMethodBind(QoreParseContext& parse_context, QoreParseCallArgs& call_args) {
+    const qore_class_private* lookup_cls = self_call_lookup_class(class_ctx, qc, ns.size() == 1);
+    assert(lookup_cls);
+    // the method that the call calls now that the abstract methods are resolved, found as when the call was parsed
+    const QoreMethod* m;
+    if (ns.size() == 1) {
+        m = qore_class_private::parseFindSelfMethod(const_cast<QoreClass*>(lookup_cls->cls), ns.ostr);
+    } else {
+        const qore_class_private* access_ctx = class_ctx
+            && qore_class_private::parseCheckPrivateClassAccess(*qc, class_ctx) ? class_ctx : nullptr;
+        m = const_cast<qore_class_private*>(lookup_cls)->parseFindAnyMethodStaticFirst(ns.getIdentifier(),
+            access_ctx);
+    }
+    // the call keeps the method found when it was parsed if the lookup finds no other normal method
+    if (m && !m->isStatic()) {
+        method = m;
+    }
+    int err = parseArgsFindVariant(parse_context, qore_method_private::get(*method)->getFunction(), nullptr,
+        call_args);
+    return parseInitCallResolved(parse_context, err);
+}
+
+int SelfFunctionCallNode::parseInitCallResolved(QoreParseContext& parse_context, int err) {
     if (parse_context.pflag & PF_CONST_METHOD) {
         if (is_copy) {
             parseException(*loc, "READONLY-RECEIVER-ERROR", "cannot call non-const copy() on read-only receiver");

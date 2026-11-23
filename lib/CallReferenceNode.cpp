@@ -820,6 +820,20 @@ int ParseObjectMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseConte
                         m = nullptr;
                     } else {
                         qc = n_qc;
+                        // a normal method of a parent class found for a class whose abstract methods, once resolved,
+                        // can give it a method of the name: the reference is bound once they are resolved, so that
+                        // it calls the method that it calls at run time (qore#7411)
+                        if (!m->isStatic()
+                                && !qore_class_private::get(*m->getClass())->sameClass(
+                                    *qore_class_private::get(*n_qc))
+                                && qore_class_private::get(*n_qc)->parseAbstractMethodPending(method.c_str())) {
+                            QoreDeferredMethodBindContext ctx(parse_context);
+                            qore_root_ns_private::get(*getRootNS())->parseDeferMethodBind(this,
+                                [this, ctx]() -> int {
+                                    QoreDeferredMethodBindScope scope(ctx);
+                                    return parseDeferredMethodBind(scope.parse_context);
+                                });
+                        }
                     }
                 } else {
                     // issue #995: a pseudo-method of objects, such as className(), or a member, which a direct call
@@ -843,6 +857,34 @@ int ParseObjectMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseConte
     }
 
     parse_context.typeInfo = callReferenceTypeInfo;
+    return err;
+}
+
+int ParseObjectMethodReferenceNode::parseDeferredMethodBind(QoreParseContext& parse_context) {
+    assert(qc && m);
+    // the method that the reference calls now that the abstract methods are resolved, found as when it was parsed
+    qore_class_private* class_ctx = parse_context.oflag
+        ? qore_class_private::get(*const_cast<QoreClass*>(
+            QoreTypeInfo::getUniqueReturnClass(parse_context.oflag->getTypeInfo()))
+        )
+        : parse_get_class_priv();
+    if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*qc, class_ctx)) {
+        class_ctx = nullptr;
+    }
+    const QoreMethod* nm = qore_class_private::get(*const_cast<QoreClass*>(qc))->parseFindAnyMethod(method.c_str(),
+        class_ctx);
+    // the reference keeps the method found when it was parsed if the lookup finds no other normal method
+    if (!nm || nm->isStatic() || nm == m) {
+        return 0;
+    }
+    m = nm;
+    int err = check_call_reference_domain(loc, parse_context, m);
+    // as when the reference is parsed (qore#7206)
+    if (qore_method_private::get(*m)->isAbstract()
+            || qore_class_private::get(*m->getClass())->hasUnimplementedAbstractVariants(method.c_str())) {
+        m = nullptr;
+        qc = nullptr;
+    }
     return err;
 }
 
@@ -2521,10 +2563,47 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
         }
         val = new LocalStaticMethodCallReferenceNode(loc, qm, ref_cls);
     } else {
-        val = new LocalMethodCallReferenceNode(loc, qm);
+        LocalMethodCallReferenceNode* mref = new LocalMethodCallReferenceNode(loc, qm);
+        val = mref;
+        // a normal method of a parent class found for a class whose abstract methods, once resolved, can give it a
+        // method of the name: the reference is bound once they are resolved, so that it calls the method that it
+        // calls at run time (qore#7411)
+        const qore_class_private* qcp = qore_class_private::get(*qc);
+        if (!qore_class_private::get(*qm->getClass())->sameClass(*qcp)
+                && qcp->parseAbstractMethodPending(scope->getIdentifier())) {
+            QoreDeferredMethodBindContext ctx(parse_context);
+            std::string mname = scope->getIdentifier();
+            const QoreClass* ref_qc = qc;
+            qore_root_ns_private::get(*getRootNS())->parseDeferMethodBind(mref,
+                [mref, ctx, mname = std::move(mname), ref_qc]() -> int {
+                    QoreDeferredMethodBindScope bind_scope(ctx);
+                    return mref->parseDeferredMethodBind(bind_scope.parse_context, ref_qc, mname.c_str());
+                });
+        }
     }
     deref();
     return 0;
+}
+
+int LocalMethodCallReferenceNode::parseDeferredMethodBind(QoreParseContext& parse_context, const QoreClass* qc,
+        const char* mname) {
+    // the method that the reference calls now that the abstract methods are resolved, found as when it was parsed
+    qore_class_private* class_ctx = parse_context.oflag
+        ? qore_class_private::get(*const_cast<QoreClass*>(
+            QoreTypeInfo::getUniqueReturnClass(parse_context.oflag->getTypeInfo()))
+        )
+        : parse_get_class_priv();
+    if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*qc, class_ctx)) {
+        class_ctx = nullptr;
+    }
+    const QoreMethod* nm = qore_class_private::get(*const_cast<QoreClass*>(qc))->parseFindAnyMethodStaticFirst(
+        mname, class_ctx);
+    // the reference keeps the method found when it was parsed if the lookup finds no other normal method
+    if (!nm || nm->isStatic() || nm == method) {
+        return 0;
+    }
+    method = nm;
+    return check_call_reference_domain(loc, parse_context, method);
 }
 
 LocalFunctionCallReferenceNode::LocalFunctionCallReferenceNode(const QoreProgramLocation* loc,

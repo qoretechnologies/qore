@@ -1,0 +1,22 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the module of abstract-typed-call-created-method.qtest, loaded from the source and as a qcc -m .qmod
+
+%modern
+
+module AbstractTypedCallA {
+    version = "1.0";
+    desc = "abstract classes and classes that implement their overloads for abstract-typed-call-created-method.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace ATC {
+public class C5 { string m(int i) { return "C5::m(int)"; } }
+# public abstract variants; G3 implements one of them
+public class G0 {
+    abstract string m(bool b);
+    abstract string m(int i);
+}
+public class G3 inherits G0 { string m(bool b) { return "G3::m(bool)"; } }
+}

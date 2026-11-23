@@ -5951,9 +5951,13 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
 
 const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(const type_vec_t& argTypeInfo,
         const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
-        QoreTypeParamInstantiation* type_param_inst, const type_vec_t* explicit_type_args) const {
+        QoreTypeParamInstantiation* type_param_inst, const type_vec_t* explicit_type_args,
+        bool* runtime_possible) const {
     if (type_param_inst) {
         type_param_inst->clear();
+    }
+    if (runtime_possible) {
+        *runtime_possible = false;
     }
 
     int score_len = -1;
@@ -6172,13 +6176,19 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
         variant = pvariant;
     }
     // a variant is committed only when no other variant could be resolved at run time (see parseFindVariant())
+    bool other_variant_may_match = false;
     if (variant && parseOtherVariantMayMatch(variant, receiver_type_info, &best_type_param_inst, argTypeInfo,
             class_ctx, parse_get_parse_options())) {
         variant = nullptr;
+        other_variant_may_match = true;
     }
 
     if (variant && type_param_inst) {
         *type_param_inst = best_type_param_inst;
+    }
+
+    if (runtime_possible && !variant) {
+        *runtime_possible = runtime_match || other_variant_may_match;
     }
 
     return variant;

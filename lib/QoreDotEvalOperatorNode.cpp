@@ -324,33 +324,35 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
             }
             if (meth && strcmp(mname, "copy") && named_args) {
                 parse_context.typeInfo = nullptr;
-                QoreFunction* func = qore_method_private::get(*meth)->getFunction();
-                // the arguments are bound by name at run time when the variants that could be selected name their
-                // parameters differently (see AbstractMethodCallNode::execNamed())
-                m->setAllowRuntimeArgNames();
-                // a named call of a normal method is resolved at run time on the class of the object, as a positional
-                // call; a static method called through an object is bound to the receiver's declared class (qore#5990)
-                if (!meth->isStatic()) {
-                    m->setVirtualNamedDispatch();
+                // a normal method of a parent class found for a class whose abstract methods, once resolved, can give
+                // it a method of the name: the names are bound once they are resolved (qore#7411)
+                if (!meth->isStatic()
+                        && !qore_class_private::get(*meth->getClass())->sameClass(*qore_class_private::get(*nqc))
+                        && qore_class_private::get(*nqc)->parseAbstractMethodPending(mname)) {
+                    QoreParseCallArgs call_args;
+                    if (m->parseInitCallArgs(parse_context, call_args) && !err) {
+                        err = -1;
+                    }
+                    parse_context.typeInfo = returnTypeInfo = nullptr;
+                    QoreDeferredMethodBindContext ctx(parse_context);
+                    qore_root_ns_private::get(*getRootNS())->parseDeferMethodBind(this,
+                        [this, ctx, call_args = std::move(call_args), nqc, meth, readonly_receiver]() mutable -> int {
+                            QoreDeferredMethodBindScope scope(ctx);
+                            // the method that the call calls now that the abstract methods are resolved, found as when
+                            // the call was parsed
+                            qore_class_private* bind_class_ctx = parse_get_class_priv();
+                            if (bind_class_ctx
+                                    && !qore_class_private::parseCheckPrivateClassAccess(*nqc, bind_class_ctx)) {
+                                bind_class_ctx = nullptr;
+                            }
+                            const QoreMethod* nm = qore_class_private::get(*const_cast<QoreClass*>(nqc))
+                                ->parseFindAnyMethod(m->getName(), bind_class_ctx);
+                            return parseBindOrNothingNamedCall(scope.parse_context, nqc,
+                                nm && !nm->isStatic() ? nm : meth, readonly_receiver, &call_args, 0);
+                        });
+                    return err;
                 }
-                if (m->parseArgs(parse_context, func, nullptr) && !err) {
-                    err = -1;
-                }
-                // a call resolved at run time by parameter name keeps the method of the receiver's static type, which
-                // it is resolved on when the object is of that class (otherwise on the method of the class of the
-                // object; see AbstractMethodCallNode::execNamed())
-                if (m->getRuntimeArgNames() && !m->getMethod()) {
-                    m->parseSetClassAndMethod(nqc, meth);
-                }
-                if (readonly_receiver
-                    && check_readonly_receiver_method_call(loc, mname,
-                        static_cast<const MethodVariantBase*>(m->getParseCheckVariant()), func)
-                    && !err) {
-                    err = -1;
-                }
-                // the return type is not known, because a receiver with no value is not dispatched to the method
-                parse_context.typeInfo = returnTypeInfo = nullptr;
-                return err;
+                return parseBindOrNothingNamedCall(parse_context, nqc, meth, readonly_receiver, nullptr, err);
             }
             meth = nullptr;
         }
@@ -514,6 +516,85 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     }
     assert(meth);
 
+    // a normal method of a parent class found for a class whose abstract methods, once resolved, can give it a method
+    // of the name: the call is bound once they are resolved, so that it calls the method that it calls at run time
+    // (qore#7411); its type is not known before
+    if (!meth->isStatic() && !m->isPseudo()
+            && !qore_class_private::get(*meth->getClass())->sameClass(*qore_class_private::get(*qc))
+            && qore_class_private::get(*qc)->parseAbstractMethodPending(mname)) {
+        QoreParseCallArgs call_args;
+        if (m->parseInitCallArgs(parse_context, call_args) && !err) {
+            err = -1;
+        }
+        // the type of the call until it is bound: that of the variants that its arguments can select, if they have one
+        parse_context.typeInfo = returnTypeInfo = call_args.named_args ? nullptr
+            : qore_class_private::get(*qc)->parseAbstractMethodPendingReturnType(mname, call_args.arg_type_info,
+                class_ctx);
+        QoreDeferredMethodBindContext ctx(parse_context);
+        qore_root_ns_private::get(*getRootNS())->parseDeferMethodBind(this,
+            [this, ctx, call_args = std::move(call_args), qc, meth, readonly_receiver]() mutable -> int {
+                QoreDeferredMethodBindScope scope(ctx);
+                return parseDeferredMethodBind(scope.parse_context, qc, meth, readonly_receiver, call_args);
+            });
+        return err;
+    }
+    return parseBindMethod(parse_context, qc, meth, readonly_receiver, nullptr, err);
+}
+
+int QoreDotEvalOperatorNode::parseBindOrNothingNamedCall(QoreParseContext& parse_context, const QoreClass* nqc,
+        const QoreMethod* meth, bool readonly_receiver, QoreParseCallArgs* call_args, int err) {
+    const char* mname = m->getName();
+    QoreFunction* func = qore_method_private::get(*meth)->getFunction();
+    // the arguments are bound by name at run time when the variants that could be selected name their
+    // parameters differently (see AbstractMethodCallNode::execNamed())
+    m->setAllowRuntimeArgNames();
+    // a named call of a normal method is resolved at run time on the class of the object, as a positional
+    // call; a static method called through an object is bound to the receiver's declared class (qore#5990)
+    if (!meth->isStatic()) {
+        m->setVirtualNamedDispatch();
+    }
+    if ((call_args ? m->parseArgsFindVariant(parse_context, func, nullptr, *call_args)
+            : m->parseArgs(parse_context, func, nullptr)) && !err) {
+        err = -1;
+    }
+    // a call resolved at run time by parameter name keeps the method of the receiver's static type, which
+    // it is resolved on when the object is of that class (otherwise on the method of the class of the
+    // object; see AbstractMethodCallNode::execNamed())
+    if (m->getRuntimeArgNames() && !m->getMethod()) {
+        m->parseSetClassAndMethod(nqc, meth);
+    }
+    if (readonly_receiver
+        && check_readonly_receiver_method_call(loc, mname,
+            static_cast<const MethodVariantBase*>(m->getParseCheckVariant()), func)
+        && !err) {
+        err = -1;
+    }
+    // the return type is not known, because a receiver with no value is not dispatched to the method
+    parse_context.typeInfo = returnTypeInfo = nullptr;
+    return err;
+}
+
+int QoreDotEvalOperatorNode::parseDeferredMethodBind(QoreParseContext& parse_context, const QoreClass* qc,
+        const QoreMethod* meth, bool readonly_receiver, QoreParseCallArgs& call_args) {
+    // the method that the call calls now that the abstract methods are resolved, found as when the call was parsed
+    qore_class_private* class_ctx = parse_get_class_priv();
+    if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*qc, class_ctx)) {
+        class_ctx = nullptr;
+    }
+    const QoreMethod* nm = qore_class_private::get(*const_cast<QoreClass*>(qc))->parseFindAnyMethod(m->getName(),
+        class_ctx);
+    // the call keeps the method found when it was parsed if the lookup finds no other normal method
+    if (nm && !nm->isStatic()) {
+        meth = nm;
+    }
+    return parseBindMethod(parse_context, qc, meth, readonly_receiver, &call_args, 0);
+}
+
+int QoreDotEvalOperatorNode::parseBindMethod(QoreParseContext& parse_context, const QoreClass* qc,
+        const QoreMethod* meth, bool readonly_receiver, QoreParseCallArgs* call_args, int err) {
+    assert(meth);
+    const char* mname = m->getName();
+
     // a method that has concrete variants beside abstract variants that the class of the method does not implement
     // (issue #6161)
     bool mixed_abstract = !qore_method_private::get(*meth)->isAbstract()
@@ -536,7 +617,8 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
             m->setVirtualNamedDispatch();
         }
     }
-    if (m->parseArgs(parse_context, func, nullptr) && !err) {
+    if ((call_args ? m->parseArgsFindVariant(parse_context, func, nullptr, *call_args)
+            : m->parseArgs(parse_context, func, nullptr)) && !err) {
         err = -1;
     }
     // a call of a method with abstract variants that the class of the method does not implement is resolved at run
@@ -560,7 +642,7 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     }
     returnTypeInfo = parse_context.typeInfo;
 
-    printd(5, "QoreDotEvalOperatorNode::parseInitImpl() %s::%s() method=%p (%s::%s()) (private=%s, static=%s) " \
+    printd(5, "QoreDotEvalOperatorNode::parseBindMethod() %s::%s() method=%p (%s::%s()) (private=%s, static=%s) " \
         "rv=%s\n", qc->getName(), mname, meth, meth ? meth->getClassName() : "n/a", mname,
         meth && (qore_method_private::getAccess(*meth) > Public) ? "true" : "false",
         meth->isStatic() ? "true" : "false", QoreTypeInfo::getName(returnTypeInfo));

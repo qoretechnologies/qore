@@ -3933,6 +3933,26 @@ public:
         return ahm.find(mname) != ahm.end();
     }
 
+    //! returns true if resolving the class's abstract methods can give it a method of the name that it does not have
+    //! yet (qore#7411)
+    /** The abstract methods of the classes are resolved once all the code of the parse is initialized; then a class
+        that has an abstract variant of the name that a parent class implements gets a method of its own of the name,
+        which has the variants of all its parent classes and hides their methods of the name (AbstractMethodMap::
+        parseInit()).  Before, a parse-time lookup finds the method of the first parent class that has one, so a call
+        of the method of such a class is bound once the abstract methods are resolved
+        (qore_root_ns_private::parseDeferMethodBind()), so that it calls the method that it calls at run time.
+    */
+    DLLLOCAL bool parseAbstractMethodPending(const char* mname) const;
+
+    //! returns the type of a call of the method \a mname before it is bound, for a class for which
+    //! parseAbstractMethodPending() is true (qore#7411)
+    /** The method that resolving the abstract methods gives the class has the variants of the methods of the name of
+        its parent classes: the type is the return type of the variant that each parent class's method selects for the
+        arguments when they all have the same, otherwise nullptr (a type known only once the call is bound)
+    */
+    DLLLOCAL const QoreTypeInfo* parseAbstractMethodPendingReturnType(const char* mname, const type_vec_t& arg_types,
+            const qore_class_private* class_ctx) const;
+
     //! records a public member declaration in the class: the class then declares its members (see
     //! hasPublicMembersInHierarchy())
     DLLLOCAL void parseSetPublicMemberDeclaration() {

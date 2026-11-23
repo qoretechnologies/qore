@@ -3506,7 +3506,10 @@ QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, ExceptionSink
         size_t size;
         QoreListNode* l = nullptr;
         if (t == NT_LIST) {
-            l = container.get<QoreListNode>();
+            // a list is always a node (neither an enum value nor an inline value), so it is read directly: the generic
+            // get<T>() handles enum values recursively, which leaves its inlining to the compiler's heuristics, and
+            // this function is on the path of every element removal (qore#7411)
+            l = static_cast<QoreListNode*>(container.getPtr());
             size = l->size();
         } else if (t == NT_STRING) {
             str.emplace(container);

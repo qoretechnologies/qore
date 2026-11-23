@@ -1,0 +1,8 @@
+rollback: PARSE-TYPE-ERROR
+type: PARSE-TYPE-ERROR
+abstract between: PARSE-TYPE-ERROR
+warning disabled at the call: null
+warning enabled at the call: "DEPRECATED"
+no variant: PARSE-TYPE-ERROR
+parsePending: G3::m(bool) G3::m(bool)
+committed: G3::m(bool)
