@@ -26,6 +26,10 @@
     the initialization is unchanged: the sandbox of a sandboxed Program that loads a module by a path outside the
     module path governs the module's initialization, and a module from the module path is initialized as library
     code, with no sandbox.  The probe runs in every execution mode, and with the modules compiled with qcc.
+
+    The init closure of a module (its \c init key) is part of its initialization: the frames of the calls that it
+    makes name the module's Program however the module is loaded, by name or by path, from top-level code or from a
+    method, by trusted code or by a Program with restrictions (module-init-frames/probe-init-closure.q).
 */
 class ModuleInitFramesTest inherits QUnit::Test {
     public {
@@ -53,6 +57,9 @@ class ModuleInitFramesTest inherits QUnit::Test {
         #! with %requires; the module options are set after the script is parsed
         const Requires = "init-frames=module nested=none restored=module closure=module thread=module "
             "sandboxed=False registration=True opt=null";
+
+        #! the init closure of a module: the frames of its calls name the module's Program
+        const InitClosure = "init-closure=module init-closure-fn=module";
     }
 
     private {
@@ -68,6 +75,7 @@ class ModuleInitFramesTest inherits QUnit::Test {
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
         addTestCase("the frames of a module's initialization name its Program", \testSource());
         addTestCase("the frames of an AOT module's initialization name its Program", \testAot());
+        addTestCase("the frames of a module's init closure name its Program", \testInitClosure());
         set_return_value(main());
     }
 
@@ -120,6 +128,22 @@ class ModuleInitFramesTest inherits QUnit::Test {
         assertEq(Trusted, run(sprintf("%s %s %s/probe.q load-path %s .qmod", env, qore_bin, fixtures, tmp.path)),
             "AOT: load-path");
         assertEq(Requires, run(sprintf("%s %s %s/probe-requires.q", env, qore_bin, fixtures)), "AOT: requires");
+    }
+
+    testInitClosure() {
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_JIT_SYNC_COMPILE=1 QORE_MODULE_DIR=%s%s%s",
+            libqore_dir, libqore_dir, fixtures, PathSep, ENV.QORE_MODULE_DIR ?? "");
+        foreach string mode in (ExecModes) {
+            foreach string loader in (("trusted", "restricted")) {
+                foreach string place in (("top", "method")) {
+                    foreach string how in (("name", "path")) {
+                        assertEq(InitClosure, run(sprintf("%s %s --exec-mode=%s %s/probe-init-closure.q %s %s %s %s",
+                            env, qore_bin, mode, fixtures, loader, place, how, fixtures)),
+                            sprintf("%s: %s %s %s", mode, loader, place, how));
+                    }
+                }
+            }
+        }
     }
 
     #! runs the command and returns its output without the trailing newline and the module loader's warnings
