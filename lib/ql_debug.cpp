@@ -394,7 +394,6 @@ static QoreValue f_dbg_generic_cache_counts(const QoreListNode* params, RuntimeC
     return h.release();
 }
 
-//! Returns true if the current thread uses the cache of its local data of Programs with module lifetime (qore#7025)
 //! Returns whether the module manager judges a module path to be library code, and the path that it then loads
 /** For tests of every path form, also those that the loaders normalize before the check (qore#7319): \a path as the
     loaders give it, and the directory of the module search path and the name appended to it if the search found the
@@ -444,6 +443,7 @@ static QoreValue f_dbg_module_path_trust(const QoreListNode* params, RuntimeConf
     return h.release();
 }
 
+//! Returns true if the current thread uses the cache of its local data of Programs with module lifetime (qore#7025)
 static QoreValue f_dbg_module_program_cache_enabled(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     return q_thread_module_program_cache_enabled();
