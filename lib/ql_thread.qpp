@@ -243,7 +243,11 @@ hashdecl CallStackInfo {
     //! the language of the source code; normally \c "Qore"
     string lang;
 
-    //! related program id (since 0.8.13.7)
+    //! the ID of the Program of the code that made the call (since 0.8.13.7)
+    /** For a call that the initialization of a module makes (also the init closure of its module declaration), the
+        module's Program, however the module is loaded
+        (since %Qore 3.0; issue #7289)
+    */
     *int programid;
 
     //! related statement id (since 0.8.13.7)

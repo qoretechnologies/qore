@@ -1,0 +1,32 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# InitFramesReentry.qm - test module: its initialization calls back into the code that loads it (qore#7289)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module InitFramesReentry {
+    version = "1.0";
+    desc = "test module: its initialization calls back into the code that loads it";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace InitFramesReentry {
+public class InitFramesReentry {
+    public {
+        #! what the code of the loading Program that the initialization calls back saw
+        static hash<auto> seen = InitFramesReentry::callBack();
+    }
+
+    #! calls the code of the loading Program that the module option "cb" gives, if any
+    static hash<auto> callBack() {
+        *code cb = get_module_option("InitFramesReentry", "cb");
+        return cb ? cb() : {};
+    }
+
+    static hash<auto> report() {
+        return seen;
+    }
+}
+}

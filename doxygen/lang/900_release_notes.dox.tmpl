@@ -2800,6 +2800,11 @@
 
     - @ref RestClient::AbstractRestConnection::getAsync() "RestConnection::getAsync(False, rtopts)" accepts
       string-valued runtime options when it adds the default \c skip_login flag (issue #7408).
+    - the frames of the calls that the initialization of a module makes name the module's
+      @ref Qore::Program "Program" (@ref Qore::CallStackInfo "CallStackInfo" \c programid) also when the module is
+      loaded at run time (@ref Qore::Program::loadModule() "Program::loadModule()",
+      @ref Qore::load_module() "load_module()"); they named the Program of the code that loaded the module
+      (<a href="https://github.com/qoretechnologies/qore/issues/7289">issue 7289</a>)
     - @ref Qore::HTTPClient::getURL() "HTTPClient::getURL()", @ref Qore::HTTPClient::getProxyURL() "getProxyURL()"
       and @ref Qore::HTTPClient::getSafeProxyURL() "getSafeProxyURL()" give an IPv6 host in brackets and the path of a
       UNIX domain socket with every reserved character encoded; the URL was ambiguous without them, and
