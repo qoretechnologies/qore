@@ -66,6 +66,7 @@ class QoreTypeInfo;
 class qore_class_private;
 class qore_ns_private;
 class QoreIRFunction;
+class QoreNumberNode;
 class LocalVar;
 class Var;
 class UserVariantBase;
@@ -1508,6 +1509,9 @@ public:
 
 //! Binary format writer for AOT metadata
 struct AOTIRLocalBindingSource;
+
+//! Formats a decimal value for AOT metadata; the writer records the number's precision separately.
+DLLLOCAL bool qore_aot_format_number(const QoreNumberNode& number, QoreString& str);
 
 class QoreAOTBinaryWriter {
 public:

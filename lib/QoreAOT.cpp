@@ -36181,7 +36181,9 @@ class ExprTreeSerializer {
         // Number constant
         if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
             QoreString s;
-            num->toString(s);
+            if (!qore_aot_format_number(*num, s)) {
+                return false;
+            }
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_NUMBER));
             writeStr(s.c_str(), s.size());
             writeU16(0);
@@ -37650,14 +37652,12 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     // number rebuilt from digits alone gets a precision derived from the string LENGTH, which is unrelated
     // to its own, so the folded constant is a DIFFERENT number from the one the runtime computes (#5461).
     if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
-        id.kind = AOTExprKind::CONST_NUMBER;
         QoreString str;
-        ExceptionSink xsink;
-        if (num->toStringRoundTrip(str, false, &xsink) || xsink) {
-            xsink.clear();
-            str.clear();
-            num->toString(str);
+        if (!qore_aot_format_number(*num, str)) {
+            id.ref1 = "cannot serialize number literal";
+            return id;
         }
+        id.kind = AOTExprKind::CONST_NUMBER;
         id.ref1 = str.c_str();
         id.ref2 = std::to_string(num->getPrec());
         return id;
