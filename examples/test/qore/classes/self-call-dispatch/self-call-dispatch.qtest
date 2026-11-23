@@ -2,7 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
-# test-platform: macos - JIT and AOT code generation of unqualified calls of methods of self and their fast call path
+# test-platform: macos - JIT and AOT code generation of self method calls (m(), Base::m()) and their fast call path
 
 %modern
 %no-child-restrictions
@@ -15,7 +15,7 @@
 
 %exec-class SelfCallDispatchTest
 
-#! Tests the dispatch of unqualified calls of methods of self (issue #7267)
+#! Tests the dispatch of calls of methods of self, unqualified and qualified (m(), Base::m(); issue #7267)
 /** An unqualified call of a method of self (\c m(i) in a method) is virtual: on an object of the class of the call or
     of the method's class, it calls the method and variant resolved at parse time, which the compiled execution modes
     call with their fast method call path; on an object of any other class, the method is looked up by name in the
@@ -42,7 +42,7 @@ class SelfCallDispatchTest inherits QUnit::Test {
         string dir = get_script_dir();
     }
 
-    constructor() : QUnit::Test("unqualified self call dispatch", "1.0", \ARGV) {
+    constructor() : QUnit::Test("self call dispatch (unqualified and Base:: calls)", "1.0", \ARGV) {
         # the dispatch of the calls, and the values of the locals that the calls take, as the AST interpreter gives
         # them in every execution mode, on the IR tier and in programs compiled with qcc
         foreach string name in (("SelfCallDispatch", "SelfCallLocalValues")) {
