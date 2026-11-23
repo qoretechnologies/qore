@@ -3112,32 +3112,31 @@ template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE QoreObject* qore_class_private::execConstructorImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, const QoreListNode* args, const QoreClass* obj_cls,
         bool allow_abstract, const QoreTypeInfo* object_type_info, bool tmp_args) const {
-#ifdef DEBUG
-    if (!allow_abstract) {
-        // instantiation checks have to be made at parse time
-        for (auto& i : ahm) {
-            printd(0, "qore_class_private::execConstructor() %s::constructor() abstract error '%s':\n",
-                name.c_str(), i.first.c_str());
-            vmap_t& v = i.second->vlist;
-            for (auto& vi : v) {
-                printd(0, " + vlist: %s\n", vi.first);
-            }
-            v = i.second->pending_save;
-            for (auto& vi : v) {
-                printd(0, " + pending_save: %s\n", vi.first);
-            }
-        }
-        assert(ahm.empty());
-    }
-#endif
-
-    // check if the class has pending changes and is used in a constant initialization expression
+    // A constant can be evaluated before inherited abstract variants have been resolved.
+    // Only a committed class is ready for the instantiation checks below.
     if (parseHasPendingChanges()) {
         xsink->raiseException("ILLEGAL-CLASS-INSTANTIATION", new QoreStringNodeMaker("cannot instantiate '%s' class "
             "for assignment in a constant expression in the parse initialization phase when the class has "
             "uncommitted changes", name.c_str()));
         return nullptr;
     }
+
+#ifdef DEBUG
+    if (!allow_abstract) {
+        // instantiation checks have to be made at parse time
+        for (auto& i : ahm) {
+            printd(0, "qore_class_private::execConstructor() %s::constructor() abstract error '%s':\n",
+                name.c_str(), i.first.c_str());
+            for (auto& vi : i.second->vlist) {
+                printd(0, " + vlist: %s\n", vi.first);
+            }
+            for (auto& vi : i.second->pending_save) {
+                printd(0, " + pending_save: %s\n", vi.first);
+            }
+        }
+        assert(ahm.empty());
+    }
+#endif
 
     // Guard the recursion-prone construction path before any object work.
     // Member init expressions can instantiate the same class (see Test3 in
