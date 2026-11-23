@@ -2179,6 +2179,10 @@ private:
 */
 DLLLOCAL bool qore_program_is_sandboxed(const QoreProgram* pgm);
 
+//! Releases the values of the per-Program cache of library classes of the Program (see
+//! SandboxManager::setProgramCacheValue()); called when the Program is deleted, while its code can still run
+DLLLOCAL void qore_program_cache_release_values(QoreProgram* pgm, ExceptionSink* xsink);
+
 //! Marks the Program's code as sandboxed (see qore_program_is_sandboxed())
 DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
 

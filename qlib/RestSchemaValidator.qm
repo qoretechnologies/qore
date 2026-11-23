@@ -105,7 +105,9 @@ module RestSchemaValidator {
       with the request body defaults of a REST client, in the caller's per-Program cache, and shares the types and
       fields that its type builds cache (see
       @ref RestSchemaValidator::AbstractRestSchemaValidator::recordTypeBuildCache() "recordTypeBuildCache()";
-      <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
+      <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>); what it keeps in the
+      per-Program caches is released with the schema
+      (@ref Qore::SandboxManager::releaseProgramCacheValues() "SandboxManager::releaseProgramCacheValues()")
     - the cache writes of a type build are undone from records that are data
       (@ref RestSchemaValidator::AbstractRestSchemaValidator::recordTypeBuildUndo() "recordTypeBuildUndo()"), and a
       nested type build that fails undoes its own writes
@@ -1792,7 +1794,7 @@ public namespace RestSchemaValidator {
             HashDataType rv = base_hash.copy();
             rv.setFieldList(fields);
             if (key) {
-                SandboxManager::setProgramCacheValue(self, key, rv, RestDefaultsCacheSize);
+                SandboxManager::setProgramCacheValue(self, key, rv, RestDefaultsCacheSize, getTypeBuildSchema());
             }
             return rv;
         }
@@ -2269,7 +2271,7 @@ public namespace RestSchemaValidator {
             AbstractDataField rv = ukey == AbstractRestSchemaObject::getFieldUseKey(name, NOTHING, NOTHING)
                 ? canonical
                 : getUseField(canonical, name, desc, required, default_value);
-            SandboxManager::setProgramCacheValue(self, key, rv, CallerFieldCacheSize);
+            SandboxManager::setProgramCacheValue(self, key, rv, CallerFieldCacheSize, getTypeBuildSchema());
             return rv;
         }
 
@@ -3063,6 +3065,7 @@ public namespace RestSchemaValidator {
         */
         destructor() {
             releaseTypeCaches();
+            releaseProgramCacheValues();
         }
 
         #! Runs a type build of this schema as one transaction
@@ -3292,6 +3295,30 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
         */
         private enableOpaqueTypeCaches() {
             opaque_type_caches = True;
+        }
+
+        #! Releases the values that the schema and its schema objects keep in the per-Program caches
+        /** The types and fields that a shared schema builds for its callers outside its type builds are kept in the
+            per-Program cache of each caller (see
+            @ref RestSchemaValidator::AbstractRestSchemaObject::getField() "AbstractRestSchemaObject::getField()"),
+            with the schema as their group: they refer back to the schema objects, so they are released with the
+            schema (see @ref Qore::SandboxManager::releaseProgramCacheValues() "SandboxManager::releaseProgramCacheValues()"),
+            in the caches of sandboxed Programs by the next use of each such cache (qore#6843).
+
+            A schema destroyed while sandboxed code calls (when sandboxed code releases its last reference) cannot
+            release them: they are then released by the next change of each cache, which releases the values of an
+            object whose group was deleted.
+
+            @since RestSchemaValidator 2.5
+        */
+        private releaseProgramCacheValues() {
+            try {
+                SandboxManager::releaseProgramCacheValues(self);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "PROGRAM-CACHE-ERROR") {
+                    rethrow;
+                }
+            }
         }
 
         #! Releases the types that the schema objects of this schema cache through opaque references
