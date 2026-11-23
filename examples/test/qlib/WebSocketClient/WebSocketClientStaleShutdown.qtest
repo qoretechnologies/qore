@@ -4917,11 +4917,14 @@ class HbDiscord inherits DiscordWebSocketClient {
         }
         if (block_hb && v.typeCode() == NT_HASH && v.op == 1) {
             block_hb = False;
+            # read before the beat is reported: once it has the report, the test can release the beat and set up the
+            # next one, giving release_hb a new counter that this beat would wait for (qore#7392); and a test can
+            # release its reference to the client before it releases the beat
+            Counter release = release_hb;
+            bool drop = drop_held_hb;
             hb_tids.push(gettid());
             events.push("hb-blocked");
-            # read before the wait, which the test ends by releasing its reference to the client
-            bool drop = drop_held_hb;
-            release_hb.waitForZero(LifecycleWsClient::HandoffTimeout);
+            release.waitForZero(LifecycleWsClient::HandoffTimeout);
             if (drop) {
                 return False;
             }
