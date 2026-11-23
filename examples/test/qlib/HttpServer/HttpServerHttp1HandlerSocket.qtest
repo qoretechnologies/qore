@@ -1542,8 +1542,9 @@ class NoView inherits AbstractHttpRequestHandler {
         assertEq("class=Http1HandlerSocket", readResponse(c), "the handler registered before its Program was sandboxed");
     }
 
-    #! a read of the socket of a request in a thread of the handler that outlives the request does not hold the server:
-    #! the connection is closed, and the server serves other connections
+    #! a read of the socket of a request in a thread of the handler that outlives the request holds the server at most
+    #! for the longest timeout of the socket (30 s, also for a read without a timeout): the connection is closed, and
+    #! the server serves other connections
     blockedReadTest() {
         Program p = getTenantProgram();
         Queue entered();
@@ -1559,13 +1560,14 @@ class NoView inherits AbstractHttpRequestHandler {
         # the response is sent (the read had not started), or the connection is closed, without waiting for the read
         string r;
         try {
-            r = readResponse(c);
+            hash<auto> h = c.readHTTPHeader(HangGuard * 3);
+            r = c.recv(h."content-length".toInt(), HangGuard);
         } catch (hash<ExceptionInfo> ex) {
             r = "closed";
         }
         assertTrue(r == "returned" || r == "closed", "the request ends: " + r);
-        # the thread's read ends
-        cast<object>(h).ended.get(HangGuard);
+        # the thread's read ends, at the latest at the longest timeout of the socket
+        cast<object>(h).ended.get(HangGuard * 3);
         Socket c2 = connect();
         on_exit c2.close();
         c2.send("GET /after HTTP/1.1\r\nHost: localhost\r\n\r\n");

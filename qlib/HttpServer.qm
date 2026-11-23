@@ -11045,6 +11045,12 @@ enum Http1ResponseSend : int {
     method: its code reaches the server's state of the request only through its own private members.
 */
 class Http1HandlerSocket inherits Qore::Socket {
+    public {
+        #! The longest timeout of a send or a read of the socket, in milliseconds: a longer timeout, or none, is this
+        #! one (the end of the request waits for the sends and reads in progress at most this time; qore#7305)
+        const MaxTimeout = 30000;
+    }
+
     private:internal {
         #! the connection's socket, which the server keeps
         Socket real;
@@ -11661,14 +11667,16 @@ class Http1HandlerSocket inherits Qore::Socket {
         return binary(convert_encoding(str, getEncoding()));
     }
 
-    #! Returns the timeout of a send
+    #! Returns the timeout of a send: at most MaxTimeout, so that the end of the request waits for it a bounded time
     private:internal int sendTimeout(int timeout_ms) {
-        return timeout_ms < 0 ? send_to : timeout_ms;
+        int t = timeout_ms < 0 ? send_to : timeout_ms;
+        return (t < 0 || t > MaxTimeout) ? MaxTimeout : t;
     }
 
-    #! Returns the timeout of a read
+    #! Returns the timeout of a read: at most MaxTimeout, so that the end of the request waits for it a bounded time
     private:internal int recvTimeout(int timeout_ms) {
-        return timeout_ms < 0 ? recv_to : timeout_ms;
+        int t = timeout_ms < 0 ? recv_to : timeout_ms;
+        return (t < 0 || t > MaxTimeout) ? MaxTimeout : t;
     }
 
     #! Admits a raw send of bytes of the response's body, counted against its Content-Length
@@ -13181,8 +13189,9 @@ class HandlerSocketState {
     #! Ends the socket of the current HTTP/1.x request (qore#7305)
     /** The server calls it before it sends a response for the request or reads the next request; a later call only
         returns the state.  A send or read of the socket in progress (of a thread of the handler that outlives its
-        request) is not waited for: the response is then broken and the connection is shut down, which ends the send
-        or read, and the server closes the connection.  It is called only by the server's own code
+        request) is waited for, at most for its timeout, which the socket bounds (Http1HandlerSocket::MaxTimeout); the
+        response is then broken, and the connection is shut down and closed by the server.  It is called only by the
+        server's own code
 
         @return the state of the response that the handler sent through the socket (an Http1ResponseState value)
     */
@@ -13190,14 +13199,14 @@ class HandlerSocketState {
         bool ended;
         *Counter c = h1EndLocked(\ended);
         if (c && c.getCount()) {
-            # a send or read in progress cannot be waited for without a bound: the connection is aborted
+            # a send or read of another thread in progress: the response is broken whatever it does
             h1Broken();
+            c.waitForZero();
             try {
                 h1_real.shutdown();
             } catch (hash<ExceptionInfo> ex) {
                 # the connection has already ended
             }
-            c.waitForZero();
         }
         return h1ResponseState();
     }
