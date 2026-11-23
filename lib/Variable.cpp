@@ -1325,7 +1325,11 @@ LValueHelper::~LValueHelper() {
 
     if (robj) {
         // recalculate recursive references for objects if necessary
-        if (obj_chg && !no_object_scan) {
+        // a member removed from an object that the lvalue holds through a weak reference changes the object's graph
+        // as one removed through a strong reference does (objectRemoved(), which sets robj), although the weak
+        // reference needs no scan itself (qore#7346); tested here, where robj is set, which a write to a local
+        // variable does not do
+        if ((obj_chg || removal_object_scan) && !no_object_scan) {
 #ifdef DEBUG
             ++lvalue_scan_count;
 #endif
@@ -4958,6 +4962,10 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
         h = lvh.getRemovalHash(t);
     } else if (t == NT_OBJECT) {
         o = lvh.getValue().get<QoreObject>();
+    } else if (t == NT_WEAKREF) {
+        // the object that the lvalue holds through a weak reference, whose member is removed, as in the IR
+        // interpreter and the JIT (executeLVHashKeySliceRemove(), qore#7346)
+        o = lvh.getValue().get<const WeakReferenceNode>()->get();
     }
     if (!o && !h)
         return;
