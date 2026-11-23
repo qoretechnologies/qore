@@ -78,6 +78,8 @@ struct TypedefEntry {
     //! the namespace that declares the typedef while the Program that declares it is parsed, in which its type is
     //! resolved; not copied: a copy imported into another Program has the resolved type
     qore_ns_private* parse_ns = nullptr;
+    //! Check for shadowing once the complete namespace tree is available (declaration-time opt-in).
+    bool check_shadow = false;
     //! true while the type is being resolved, so that a typedef that refers to itself is an error
     bool resolving = false;
 
@@ -1907,6 +1909,10 @@ protected:
     DLLLOCAL void parseCheckHashDeclShadowedByQore(const QoreProgramLocation* loc, const TypedHashDecl* hd,
             const qore_ns_private* declaring_ns);
 
+    //! Checks a typedef declaration for a Qore-namespace alias that unqualified lookup selects first.
+    DLLLOCAL void parseCheckTypedefShadowedByQore(const QoreProgramLocation* loc, const char* name,
+        const qore_ns_private* declaring_ns);
+
     //! Checks, and raises the warning, for a global variable declared in \a declaring_ns
     DLLLOCAL void parseCheckGlobalVarShadowedByQore(const QoreProgramLocation* loc, const char* vname,
             const qore_ns_private* declaring_ns);
@@ -3507,7 +3513,8 @@ private:
         return best;
     }
 
-    DLLLOCAL TypedefEntry* parseFindQoreTypedefIntern(const char* tdname) {
+    DLLLOCAL TypedefEntry* parseFindQoreTypedefIntern(const char* tdname,
+            const qore_ns_private** found_ns = nullptr) {
         const qore_ns_private* qore_ns = getQore();
         if (!qore_ns) {
             return nullptr;
@@ -3529,6 +3536,9 @@ private:
             if (!best || ns_priv->depth < best_depth) {
                 best = const_cast<TypedefEntry*>(td);
                 best_depth = ns_priv->depth;
+                if (found_ns) {
+                    *found_ns = ns_priv;
+                }
             }
         }
         return best;

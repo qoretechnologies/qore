@@ -1,0 +1,61 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class TypedefShadowWarningTest
+
+class TypedefShadowWarningTest inherits QUnit::Test {
+    constructor() : Test("Typedef shadow warning", "1.0", \ARGV) {
+        addTestCase("Qore typedef declared first", sub () { typedefShadow(True); });
+        addTestCase("Qore typedef declared last", sub () { typedefShadow(False); });
+        addTestCase("warning disabled at the typedef declaration", \disabledAtDeclaration());
+        addTestCase("nested typedef uses its own warning mask", \nestedAlias());
+        set_return_value(main());
+    }
+
+    private typedefShadow(bool qore_first) {
+        Program p(PO_MODERN | PO_NO_NETWORK);
+        p.setParseDiagnosticsCollected(True);
+        string provider = "namespace Qore { namespace AliasProbe { typedef SameAlias = int; } }\n";
+        string local_alias = "typedef SameAlias = string;\n%disable-warning language-traps\n";
+        p.parse((qore_first ? provider + local_alias : local_alias + provider) +
+            "SameAlias sub chosen() { return 37; }\n"
+            "::SameAlias sub localAlias() { return \"local\"; }", "typedef-shadow", WARN_LANGUAGE_TRAPS);
+        list<hash<ParseDiagnosticInfo>> diags = p.getParseDiagnostics();
+        assertEq(1, diags.size());
+        assertEq("USER-SYMBOL-SHADOWED-BY-QORE", diags[0].id);
+        assertEq("typedef", diags[0].facts.kind);
+        assertEq("::SameAlias", diags[0].facts.declared);
+        assertEq("Qore::AliasProbe::SameAlias", diags[0].facts.shadowedBy);
+        assertEq(37, p.callFunction("chosen"));
+        assertEq("local", p.callFunction("localAlias"));
+    }
+
+    private disabledAtDeclaration() {
+        Program p(PO_MODERN | PO_NO_NETWORK);
+        p.setParseDiagnosticsCollected(True);
+        p.parse("%disable-warning language-traps\n"
+            "typedef SameAlias = string;\n"
+            "%enable-warning language-traps\n"
+            "namespace Qore { namespace AliasProbe { typedef SameAlias = int; } }",
+            "typedef-shadow-disabled", WARN_LANGUAGE_TRAPS);
+        assertEq((), p.getParseDiagnostics());
+    }
+
+    private nestedAlias() {
+        Program p(PO_MODERN | PO_NO_NETWORK);
+        p.setParseDiagnosticsCollected(True);
+        p.parse("namespace Qore { namespace AliasProbe { typedef SameAlias = int; } }\n"
+            "namespace Enabled { typedef SameAlias = string;\n%disable-warning language-traps\n}\n"
+            "namespace Disabled { typedef SameAlias = string;\n%enable-warning language-traps\n}",
+            "nested-typedef-shadow", WARN_LANGUAGE_TRAPS);
+        list<hash<ParseDiagnosticInfo>> diags = p.getParseDiagnostics();
+        assertEq(1, diags.size());
+        assertEq("Enabled::SameAlias", diags[0].facts.declared);
+        assertEq("Qore::AliasProbe::SameAlias", diags[0].facts.shadowedBy);
+    }
+}
