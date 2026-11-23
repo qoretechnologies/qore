@@ -25,6 +25,7 @@ class DatasourceSensitiveDbNameTest inherits QUnit::Test {
         addTestCase("the capabilities of a Datasource and a DatasourcePool", \datasourceCapabilities());
         addTestCase("masked hash forms", \maskedHash());
         addTestCase("masked string forms", \maskedString());
+        addTestCase("show_db without show_options", \showDbOnly());
         addTestCase("a driver that is not loaded", \driverNotLoaded());
         set_return_value(main());
     }
@@ -82,6 +83,17 @@ class DatasourceSensitiveDbNameTest inherits QUnit::Test {
             mask_datasource("dbitestsensitivedb:u/p@" + Plain + "%dbhost", Show));
         assertEq(Plain, mask_datasource_hash("dbitest:u/p@" + Plain + "%dbhost", Show).db);
         assertEq("dbitest:****/****@****%dbhost", mask_datasource("dbitest:u/p@" + Plain + "%dbhost"));
+    }
+
+    showDbOnly() {
+        # the capability applies to show_db alone as well
+        hash<auto> opts = {"show_db": True};
+        assertEq("****", mask_datasource_hash({"type": "dbitestsensitivedb", "db": Plain}, opts).db);
+        assertEq("****", mask_datasource_hash("dbitestsensitivedb:u/p@" + Plain + "%dbhost", opts).db);
+        assertEq("dbitestsensitivedb:****/****@****%dbhost",
+            mask_datasource("dbitestsensitivedb:u/p@" + Plain + "%dbhost", opts));
+        assertEq(Plain, mask_datasource_hash({"type": "dbitest", "db": Plain}, opts).db);
+        assertEq("dbitest:****/****@" + Plain + "%dbhost", mask_datasource("dbitest:u/p@" + Plain + "%dbhost", opts));
     }
 
     driverNotLoaded() {
