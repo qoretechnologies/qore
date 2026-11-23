@@ -623,12 +623,6 @@ public:
     //! returns true if the file is a tty
     DLLEXPORT bool isTty() const;
 
-    //! returns true if the file is the controlling terminal of the process and the process is in its foreground
-    //! process group, so that it can read from it and set its attributes without being stopped by the terminal
-    /** @since %Qore 3.0
-    */
-    DLLEXPORT bool isForegroundTty() const;
-
     //! detaches and returns the file descriptor
     /** the file object is left closed and with no descriptor after this call; the caller owns the descriptor returned
         and must close it.  The object never closes the descriptor afterwards, neither in close() nor when it is

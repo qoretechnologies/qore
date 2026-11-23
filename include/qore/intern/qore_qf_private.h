@@ -1410,23 +1410,6 @@ struct qore_qf_private {
         return (bool)isatty(fd);
     }
 
-    DLLLOCAL bool isForegroundTty() const {
-        AutoLocker al(m);
-        assert(!in_non_block);
-
-        if (!is_open || !isatty(fd)) {
-            return false;
-        }
-#ifdef _Q_WINDOWS
-        // there are no process groups or job control
-        return true;
-#else
-        // tcgetpgrp() fails if the terminal is not the controlling terminal of the process
-        pid_t pgrp = tcgetpgrp(fd);
-        return pgrp != -1 && pgrp == getpgrp();
-#endif
-    }
-
     DLLLOCAL int detachFd() {
         AutoLocker al(m);
         assert(!in_non_block);

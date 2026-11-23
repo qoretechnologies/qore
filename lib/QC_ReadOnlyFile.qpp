@@ -1231,7 +1231,7 @@ if (stdin.isForegroundTty()) {
     @since %Qore 3.0
 */
 bool ReadOnlyFile::isForegroundTty() [flags=CONSTANT] {
-   return f->isForegroundTty();
+   return qore_qf_private::get(*f)->isForegroundTty();
 }
 
 //! returns the file path/name used to open the file if the file is open, otherwise @ref nothing

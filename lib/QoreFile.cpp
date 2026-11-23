@@ -1475,10 +1475,6 @@ bool QoreFile::isTty() const {
     return priv->isTty();
 }
 
-bool QoreFile::isForegroundTty() const {
-    return priv->isForegroundTty();
-}
-
 int QoreFile::detachFd() {
     return priv->detachFd();
 }
