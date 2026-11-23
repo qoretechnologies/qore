@@ -157,6 +157,7 @@
 #include <set>
 #include <system_error>
 #include <thread>
+#include <latch>
 
 //! gives the string node of a value: a string in either representation, or nullptr for any other value
 /** A string of up to QoreValue::SHORTSTR_MAX_BYTES bytes can be held inline, with no QoreStringNode (issue #7038):
@@ -22786,6 +22787,98 @@ static QoreValue f_dbg_run_method_cache_lifetime_tests(const QoreListNode* param
     return make_unit_test_result(c, xsink);
 }
 
+//! Checks the reference type cached in a value type (qore#7269)
+/** qore_get_complex_reference_type() returns the reference type cached in the value type without a lock; the cached
+    type must always be the entry of the cache of reference types for the value type, so that the type of a reference
+    has the same identity however it is looked up, also when threads look it up for the first time at once, and a type
+    retired with a destroyed declaration must not keep the reference type retired with it
+*/
+static void ut_reference_type_cache(UnitTestCounters& c) {
+    // a builtin type
+    const QoreTypeInfo* int_ref = qore_get_complex_reference_type(bigIntTypeInfo);
+    UT_ASSERT(c, int_ref && QoreTypeInfo::isReference(int_ref), "the reference type of int is a reference type");
+    UT_ASSERT(c, QoreTypeInfo::getUniqueReturnComplexReference(int_ref) == bigIntTypeInfo,
+        "the reference type of int refers to int");
+    UT_ASSERT(c, bigIntTypeInfo->getComplexReferenceTypeCache() == int_ref,
+        "the reference type of int is cached in int");
+    UT_ASSERT(c, qore_get_complex_reference_type(bigIntTypeInfo) == int_ref,
+        "the reference type of int is the same type when looked up again");
+
+    const QoreTypeInfo* list_type;
+    const QoreTypeInfo* list_ref;
+    {
+        QoreClassHolder cls(new QoreClass("DbgRefTypeCache", "::DbgRefTypeCache"));
+        const QoreTypeInfo* cls_type = static_cast<QoreClass*>(cls)->getTypeInfo();
+        UT_ASSERT(c, cls_type && !cls_type->getComplexReferenceTypeCache(),
+            "a new class type has no reference type cached");
+
+        // threads that look up the reference type of the new type for the first time at once get the same type
+        constexpr int thread_count = 8;
+        const QoreTypeInfo* results[thread_count] = {};
+        {
+            std::latch start(thread_count);
+            std::vector<std::thread> threads;
+            threads.reserve(thread_count);
+            // the threads are joined however this block is left; if a thread could not be started, the latch is
+            // released for the ones that were, so that they end
+            ON_BLOCK_EXIT([&threads, &start]() {
+                int missing = thread_count - static_cast<int>(threads.size());
+                if (missing > 0) {
+                    start.count_down(missing);
+                }
+                for (std::thread& t : threads) {
+                    if (t.joinable()) {
+                        t.join();
+                    }
+                }
+            });
+            for (int i = 0; i < thread_count; ++i) {
+                threads.emplace_back([&start, &results, cls_type, i]() {
+                    start.arrive_and_wait();
+                    results[i] = qore_get_complex_reference_type(cls_type);
+                });
+            }
+        }
+        const QoreTypeInfo* cls_ref = cls_type->getComplexReferenceTypeCache();
+        UT_ASSERT(c, cls_ref && QoreTypeInfo::getUniqueReturnComplexReference(cls_ref) == cls_type,
+            "the reference type of the class type is cached in it");
+        int same = 0;
+        for (const QoreTypeInfo* ti : results) {
+            if (ti == cls_ref) {
+                ++same;
+            }
+        }
+        UT_ASSERT_EQ(c, thread_count, same,
+            "threads that look up a reference type at once all get the cached reference type");
+        UT_ASSERT(c, qore_get_complex_reference_type(cls_type) == cls_ref,
+            "the reference type of the class type is the same type when looked up again");
+
+        // a type derived from the class type, which is retired, not freed, when the class is destroyed
+        list_type = qore_get_complex_list_type(cls_type);
+        list_ref = qore_get_complex_reference_type(list_type);
+        UT_ASSERT(c, list_type->getComplexReferenceTypeCache() == list_ref,
+            "the reference type of list<DbgRefTypeCache> is cached in it");
+        UT_ASSERT(c, QoreTypeInfo::getUniqueReturnComplexReference(list_ref) == list_type,
+            "the reference type of list<DbgRefTypeCache> refers to it");
+    }
+    // the class was destroyed: list<DbgRefTypeCache> and its reference type were retired together
+    UT_ASSERT(c, !list_type->getComplexReferenceTypeCache(),
+        "a type retired with a destroyed class keeps no reference type cached");
+    const QoreTypeInfo* list_ref2 = qore_get_complex_reference_type(list_type);
+    UT_ASSERT(c, list_ref2 && list_ref2 != list_ref,
+        "a retired type's reference type is a new entry of the cache, as without the cached type");
+    UT_ASSERT(c, list_type->getComplexReferenceTypeCache() == list_ref2,
+        "the new reference type of the retired type is cached in it");
+}
+
+//! Debug-only: runs the unit tests of the reference type cached in a value type (qore#7269)
+static QoreValue f_dbg_run_reference_type_cache_tests(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    UnitTestCounters c;
+    ut_reference_type_cache(c);
+    return make_unit_test_result(c, xsink);
+}
+
 //! Debug-only: returns the numbers of the recorded IR inline call sites that inline their calls and of those that a
 //! debugger attached to their callees' Program suspended (qore_ir_suspend_inline_states(), issue #6473)
 static QoreValue f_dbg_ir_inline_site_states(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
@@ -30840,6 +30933,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
     qns.addBuiltinVariant("dbg_ir_inline_site_states", f_dbg_ir_inline_site_states, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);
+    qns.addBuiltinVariant("dbg_run_reference_type_cache_tests", f_dbg_run_reference_type_cache_tests, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_fail_next_module_init_barrier_records", f_dbg_fail_next_module_init_barrier_records,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
     qns.addBuiltinVariant("dbg_module_init_barrier_unrecorded", f_dbg_module_init_barrier_unrecorded, QCF_NO_FLAGS,
