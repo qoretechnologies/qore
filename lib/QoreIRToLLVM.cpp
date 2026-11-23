@@ -10792,10 +10792,12 @@ bool QoreIRToLLVM::fastEntryArgumentNeedsNothingGuard(const BatchCalleeInfo& cal
         return false;
     }
     if (!nanboxed_values.count(value_id) && !native_boxed_sources.count(value_id)) {
-        // a native value (such as the read of a local with native facts, qore#7372) is never NOTHING
-        if (aot_mode && current_ir_func && QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
-            fprintf(stderr, "AOT: native fast-entry argument needs no NOTHING guard for SSA value %u in '%s'\n",
-                value_id, current_ir_func->getDisplayName().c_str());
+        // a native value (such as the read of a local with native facts, qore#7372) is never NOTHING; reported once
+        // for each argument value
+        if (aot_mode && current_ir_func && QORE_ENV_IS_SET("QORE_AOT_DEBUG")
+                && reported_native_fast_entry_args.insert(value_id).second) {
+            fprintf(stderr, "AOT: native fast-entry argument %u needs no NOTHING guard for SSA value %u in '%s'\n",
+                index, value_id, current_ir_func->getDisplayName().c_str());
         }
         return false;
     }
@@ -16423,6 +16425,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     stable_float_conversions.clear();
     nanboxed_values.clear();
     native_boxed_sources.clear();
+    reported_native_fast_entry_args.clear();
     native_boxed_source_kinds.clear();
     known_not_nothing_values.clear();
     preinstantiated_entry_loads.clear();
@@ -21173,9 +21176,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         loaded = emitReferenceLocalRead(key, loaded, module, llvm_func, inst);
                         reference_read_slots[inst->result.id] = last_reference_read_slot;
                     }
-                    // the native value of a read used after its statement (see unboxed_read_facts) is taken from
-                    // the borrowed value before anything can write the local; a value read through a reference is
-                    // kept in its read slot until the next read at this site, which the native value does not need
+                    // the native value of a read with native facts (see unboxed_read_facts) is taken from the
+                    // borrowed value before anything can write the local; a value read through a reference is kept
+                    // in its read slot until the next read at this site, which the native value does not need
                     if (unboxed_read_facts) {
                         reference_read_slots.erase(inst->result.id);
                         emitUnboxedRead(loaded, false);
