@@ -48,9 +48,9 @@ class ThreadDataClearReentrantTest inherits QUnit::Test {
             assertEq(expected, out, mode);
             # the results that the clearing is about: a destructor reads the 30 values after its own and the key after
             # it, also when it deleted or removed its own key, and not the key after it when it deleted that
-            assertTrue(out =~ /^self-delete pool: \[\x22self-delete: values 30, keys 61, after \\\x22x\\\x22\x22\]$/m,
+            assertTrue(out =~ /^self-delete pool: \[\x22self-delete: values 30, keys 31, after \\\x22x\\\x22\x22\]$/m,
                 mode + " self-delete");
-            assertTrue(out =~ /^next-delete direct: \[\x22next-delete: values 30, keys 61, after null\x22\]$/m,
+            assertTrue(out =~ /^next-delete direct: \[\x22next-delete: values 30, keys 30, after null\x22\]$/m,
                 mode + " next-delete");
             # a destructor that saves a value again and again: the value saved during the release is freed, and its
             # destructor cannot save another one, so the release ends

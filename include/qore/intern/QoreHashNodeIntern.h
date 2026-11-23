@@ -964,7 +964,9 @@ public:
         }
 
         member_list.clear();
-        hm.clear();
+        // the key map was cleared above (clearing an empty map would set its buckets again); no code can add to the
+        // hash, which no code can reach, or which has no member left (see clear())
+        assert(hm.empty());
         obj_count = 0;
         sbClear();
     }
@@ -1004,7 +1006,8 @@ public:
     DLLLOCAL static void finishFree(QoreHashNode& h) {
         qore_hash_private* p = h.priv;
         assert(p->member_list.empty());
-        p->hm.clear();
+        // the key map was cleared before the first member was deleted (see freeNextMember())
+        assert(p->hm.empty());
         p->obj_count = 0;
         p->sbClear();
         finishFreeMembers(h);
@@ -1051,37 +1054,36 @@ public:
 
         Code that runs when a value is freed (a destructor) can read and change the hash (ex: thread-local data), in
         two phases (qore#7265):
-        - first the values that the hash has when the clearing starts are freed, one at a time in the order of the
-          members, each taken from its member first: their destructors can read the values not freed yet and save
-          values in the hash;
+        - first the values that the hash has when the clearing starts are freed in order: their destructors can read
+          the values not freed yet and save values;
         - then the values saved in the first phase are freed in the same way, while nothing can be saved in the hash
           (checkClearingSave()): the clearing ends also when destructors save values again and again, as the release
           of thread_local variables does (see thread_local_vars_finalizing()).
 
-        No iterator of the member list is held while a value is freed, and no member is deleted while it is in the key
-        map, which reads the hashes of the members in a bucket when it is searched (see hm_hm_t).  Before the second
-        phase, the members without values are deleted; in it, each value is taken and its member deleted before the
-        value is freed, so that each member is visited once.  If the keys of the first phase cannot be allocated, all
-        values are freed in the second phase, which allocates nothing.
+        Each value is taken, and its member deleted (from the key map first), before the value is freed, as
+        deleteKey() does, so that no member or iterator is held while code runs, and each member is visited once;
+        nothing is allocated.  If no value's release can run code (freeRunsNoCode()), the members are deleted as
+        when the hash is freed.
 
         Values saved through the C++ API (QoreProgram::getThreadData()) during the release are not refused: a module
         must not save thread-local data from code that runs when thread-local data is released.
     */
-    DLLLOCAL void clear(ExceptionSink* xsink, bool reverse);
+    DLLLOCAL void clear(ExceptionSink* xsink);
 
     //! raises \c DESTRUCTOR-ERROR and returns -1 if nothing can be saved in this hash of thread-local data now (see
     //! clear())
     DLLLOCAL int checkClearingSave(ExceptionSink* xsink) const;
 
-    //! takes the value of the member \a m and frees it; code that runs can change the hash
-    DLLLOCAL void freeMemberValue(HashMember* m, ExceptionSink* xsink) {
-        QoreValue v = m->val;
-        m->val = QoreValue();
-        if (needs_scan(v)) {
-            incScanCount(-1);
-        }
-        v.discard(xsink);
-    }
+    //! returns true if freeing \a v runs no code (a destructor): a value without a node, or a string, date, binary,
+    //! number or null (see clear())
+    DLLLOCAL static bool freeRunsNoCode(const QoreValue& v);
+
+    //! deletes the member at \a li from the key map and the member list (see clear())
+    DLLLOCAL void deleteMemberForClear(qhlist_t::iterator li);
+
+    //! takes the value of the first member, deletes the member and frees the value, which can run code that changes
+    //! the hash (see clear())
+    DLLLOCAL void takeFreeMemberForClear(ExceptionSink* xsink);
 
     DLLLOCAL size_t size() const {
         return member_list.size();

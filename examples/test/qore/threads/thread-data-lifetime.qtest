@@ -375,8 +375,8 @@ public class ThreadDataLifetimeTest inherits QUnit::Test {
     }
 
     #! a destructor run by the clearing of a pool task's thread data at its end reads the values of the keys that are
-    #! freed after its object's; the values freed before it are gone, and the keys stay in the hash until all values
-    #! are freed (qore#7265: a destructor read the members that had been freed)
+    #! freed after its object's; the values freed before it, and their keys, are gone (qore#7265: a destructor read
+    #! the members that had been freed)
     poolTaskEndDestructorReadsOtherKeys() {
         ThreadPool pool(1, 1);
         on_exit pool.stopWait();
@@ -391,8 +391,7 @@ public class ThreadDataLifetimeTest inherits QUnit::Test {
                 "keys": keys all,
             });
         };
-        list<string> expected_keys = (map "pad-earlier-" + $1, xrange(30)) + ("tracked", "later")
-            + (map "pad-later-" + $1, xrange(30));
+        list<string> expected_keys = ("later",) + (map "pad-later-" + $1, xrange(30));
         pool.submit(sub () {
             # enough keys that the buckets of the key map hold more than one key
             for (int i = 0; i < 30; ++i) {
@@ -409,7 +408,7 @@ public class ThreadDataLifetimeTest inherits QUnit::Test {
         assertEq("later value", r.later, "a value freed after the destructor's object");
         assertEq(29, r.later_pad, "the last value");
         assertNothing(r.earlier, "a value freed before the destructor's object");
-        assertEq(expected_keys, r.keys, "every key, in order");
+        assertEq(expected_keys, r.keys, "the keys of the values not freed yet, in order");
     }
 
     #! a child Program that outlives its root has thread data of its own, empty at first, after the root's teardown

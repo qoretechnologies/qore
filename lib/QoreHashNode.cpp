@@ -94,44 +94,30 @@ const TypedHashDecl* qore_hash_private::getInheritingHashDecl(const TypedHashDec
     return nullptr;
 }
 
-void qore_hash_private::clear(ExceptionSink* xsink, bool reverse) {
-    // the first phase: the keys (and their hashes) of the members with values when the clearing starts, in the order
-    // in which their values are freed; each member is looked up again before its value is freed, as the code that
-    // freed the values before can have deleted it
-    {
-        std::vector<std::pair<std::string, size_t>> keys;
-        bool have_keys = true;
-        try {
-            keys.reserve(member_list.size());
-            auto add_key = [&keys](const HashMember* m) {
-                if (!m->val.isNothing()) {
-                    keys.emplace_back(m->key, m->hash);
-                }
-            };
-            if (reverse) {
-                for (qhlist_t::reverse_iterator i = member_list.rbegin(), e = member_list.rend(); i != e; ++i) {
-                    add_key(*i);
-                }
-            } else {
-                for (HashMember* m : member_list) {
-                    add_key(m);
-                }
-            }
-        } catch (std::bad_alloc&) {
-            // all values are freed in the second phase, which allocates nothing
-            have_keys = false;
-        }
-        if (have_keys) {
-            for (const std::pair<std::string, size_t>& k : keys) {
-                HashMember* m = findMember(qore_hash_lookup_key(k.first.c_str(), k.first.size(), k.second));
-                if (m && !m->val.isNothing()) {
-                    freeMemberValue(m, xsink);
-                }
-            }
+void qore_hash_private::clear(ExceptionSink* xsink) {
+    // if no value's release can run code, the members are deleted as when the hash is freed
+    bool runs_code = false;
+    for (const HashMember* m : member_list) {
+        if (!freeRunsNoCode(m->val)) {
+            runs_code = true;
+            break;
         }
     }
+    if (!runs_code) {
+        freeMembers(xsink);
+        return;
+    }
 
-    // the second phase: the values saved in the first, while nothing can be saved, so that no value is left
+    // the first phase: the values that the hash has now are freed in order: each is taken, and its member deleted, as
+    // deleteKey() does, before it is freed, so that no member or iterator is held while code runs; their
+    // destructors can read the values not freed yet and save values, which are added at the end.  The number of
+    // values freed here is that of the members when it starts, so that it ends
+    for (size_t n = member_list.size(); n && !member_list.empty(); --n) {
+        takeFreeMemberForClear(xsink);
+    }
+
+    // the second phase: the values saved in the first are freed in the same way, while nothing can be saved, so
+    // that no value is left
     {
         struct RefuseSavesHelper {
             qore_hash_private& h;
@@ -145,35 +131,48 @@ void qore_hash_private::clear(ExceptionSink* xsink, bool reverse) {
                 h.refuse_saves = old;
             }
         } rsh(*this);
-        // the members without values (those of the values freed in the first phase) are deleted first, so that the
-        // members left are those of the values to free; no code runs for them
-        for (qhlist_t::iterator i = member_list.begin(), e = member_list.end(); i != e;) {
-            qhlist_t::iterator li = i++;
-            if ((*li)->val.isNothing()) {
-                hm.erase(*li);
-                internDeleteKey(li);
-            }
-        }
-        // each value is taken, and its member deleted, before it is freed, as deleteKey() does: nothing can be saved,
-        // so no member is added, and each value is visited once
         while (!member_list.empty()) {
-            qhlist_t::iterator li = member_list.begin();
-            if (reverse) {
-                li = member_list.end();
-                --li;
-            }
-            QoreValue v = (*li)->val;
-            hm.erase(*li);
-            internDeleteKey(li);
-            if (needs_scan(v)) {
-                incScanCount(-1);
-            }
-            v.discard(xsink);
+            takeFreeMemberForClear(xsink);
         }
     }
 
     // no member is left; this resets the accounting of the hash
     freeMembers(xsink);
+}
+
+bool qore_hash_private::freeRunsNoCode(const QoreValue& v) {
+    if (!v.hasNode()) {
+        return true;
+    }
+    // an opaque reference can hold the last reference to an object
+    if (v.isOpaque()) {
+        return false;
+    }
+    switch (v.getType()) {
+        case NT_STRING:
+        case NT_DATE:
+        case NT_BINARY:
+        case NT_NUMBER:
+        case NT_NULL:
+            return true;
+    }
+    return false;
+}
+
+void qore_hash_private::deleteMemberForClear(qhlist_t::iterator li) {
+    hm.erase(*li);
+    internDeleteKey(li);
+}
+
+void qore_hash_private::takeFreeMemberForClear(ExceptionSink* xsink) {
+    assert(!member_list.empty());
+    qhlist_t::iterator li = member_list.begin();
+    QoreValue v = (*li)->val;
+    deleteMemberForClear(li);
+    // the scan count is not decreased: it is reset when the release ends (freeMembers()), and a count that is too
+    // high only makes the collector look at the hash
+    // code can run now: no member or iterator is held
+    v.discard(xsink);
 }
 
 int qore_hash_private::checkClearingSave(ExceptionSink* xsink) const {
