@@ -10837,6 +10837,10 @@ static QORE_INTERN_NOINLINE int qore_ir_run_lvalue_path_ternary(const QoreIRLVal
                         removed_list = qore_list_private::replace(*vl, offset, length, replacement_val, false, xsink);
                     }
                 }
+                // the elements taken out of a list reached through a weak reference (qore#7373)
+                if (removed_list) {
+                    lvh.removedValueThroughWeak(QoreValue(*removed_list));
+                }
             } else if (vt == NT_STRING) {
                 QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
                 if (length_val.isNothing() && replacement_val.isNothing()) {
@@ -10888,6 +10892,8 @@ static QORE_INTERN_NOINLINE int qore_ir_run_lvalue_path_ternary(const QoreIRLVal
                         res = qore_list_private::replace(*vl, offset, length, replacement_val, true, xsink);
                     }
                 }
+                // the elements taken out of a list reached through a weak reference (qore#7373)
+                lvh.removedValueThroughWeak(res);
             } else if (vt == NT_STRING) {
                 // note: safe; lvh.ensureUnique() above materializes any inline
                 // short string
@@ -20879,6 +20885,8 @@ load_local_done:
                                 QoreListNode* l = lvh.getValue().get<QoreListNode>();
                                 if (l && l->size() > 0) {
                                     res = l->shift();
+                                    // a value taken out of a list reached through a weak reference (qore#7373)
+                                    lvh.removedValueThroughWeak(res);
                                 }
                                 break;
                             }
@@ -20895,6 +20903,8 @@ load_local_done:
                                 QoreListNode* l = lvh.getValue().get<QoreListNode>();
                                 if (l && l->size() > 0) {
                                     res = l->pop();
+                                    // a value taken out of a list reached through a weak reference (qore#7373)
+                                    lvh.removedValueThroughWeak(res);
                                 }
                                 break;
                             }
