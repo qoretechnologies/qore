@@ -987,11 +987,11 @@ QuicSession::QuicSession() : session_id_(next_session_id_.fetch_add(1, std::memo
 }
 
 QuicSession::~QuicSession() {
-    // server sessions are recorded for dbg_quic_wait_idle() (see createServer())
+#ifdef DEBUG
+    // server sessions are recorded for dbg_quic_wait_idle() (see createServer()), which only a debug build has
     if (is_server_) {
         qore_dbg_quic_unregister_session(session_id_);
     }
-#ifdef DEBUG
     // the extended-CONNECT buffers are released with the session (issue #5821)
     for (auto& i : connect_stream_data_) {
         qore_dbg_quic_connect_buffered.fetch_sub(static_cast<int64_t>(i.second.size()), std::memory_order_relaxed);
@@ -1250,8 +1250,11 @@ std::shared_ptr<QuicSession> QuicSession::createServer(
     session->setMaxHeaderListSize(sock->getMaxHeaderSize());
     // Clear the temporary socket pointer; it was only needed during init
     session->clearSockPtr();
-    // a handler of a request of the session can find it by its ID with dbg_quic_wait_idle() (issue #7354)
+#ifdef DEBUG
+    // a handler of a request of the session can find it by its ID with dbg_quic_wait_idle() (issue #7354), which only
+    // a debug build has
     qore_dbg_quic_register_session(session);
+#endif
     return session;
 }
 
@@ -2344,11 +2347,11 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
     pending_write_.store(true, std::memory_order_release);
 #ifdef DEBUG
     quic_test_count_rx(is_server_);
-#endif
     // the packet can have acknowledged the data in flight (issue #7354)
     if (qore_dbg_quic_idle_waiters.load(std::memory_order_acquire)) {
         qore_dbg_quic_notify_idle_waiters();
     }
+#endif
 
     return 0;
 }
@@ -2475,10 +2478,12 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
 
     // Signal pending write once for the entire batch
     pending_write_.store(true, std::memory_order_release);
+#ifdef DEBUG
     // the packets can have acknowledged the data in flight (issue #7354)
     if (qore_dbg_quic_idle_waiters.load(std::memory_order_acquire)) {
         qore_dbg_quic_notify_idle_waiters();
     }
+#endif
 
     return 0;
 }
