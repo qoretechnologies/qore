@@ -399,6 +399,10 @@ struct qore_list_private {
     }
 
     DLLLOCAL int mergeNative(const QoreListNode* list, ExceptionSink* xsink) {
+        // a list freed under a weak reference cannot be changed (qore#7199)
+        if (checkValid(xsink)) {
+            return -1;
+        }
         reserve(length + list->size());
         ConstListIterator i(list);
         while (i.next()) {
@@ -424,6 +428,10 @@ struct qore_list_private {
     }
 
     DLLLOCAL int merge(const QoreListNode* list, ExceptionSink* xsink) {
+        // a list freed under a weak reference cannot be changed (qore#7199)
+        if (checkValid(xsink)) {
+            return -1;
+        }
         reserve(length + list->size());
         ConstListIterator i(list);
         while (i.next()) {
@@ -434,6 +442,10 @@ struct qore_list_private {
     }
 
     DLLLOCAL int merge(const QoreListNode* list, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+        // a list freed under a weak reference cannot be changed (qore#7199)
+        if (checkValid(xsink)) {
+            return -1;
+        }
         reserve(length + list->size());
         ConstListIterator i(list);
         size_t count = 0;

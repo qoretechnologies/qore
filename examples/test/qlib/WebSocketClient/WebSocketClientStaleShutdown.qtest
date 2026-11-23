@@ -47,6 +47,9 @@ class LifecycleWsConnection inherits WebSocketConnection {
         bool discord;
         #! the heartbeat interval sent in HELLO
         int hbi = 45000;
+        #! acknowledge heartbeats; a gateway that does not stands for one whose acknowledgements come later than
+        #! the heartbeat interval, as on a slow host (qore#7088)
+        bool ack = True;
     }
 
     private {
@@ -76,7 +79,7 @@ class LifecycleWsConnection inherits WebSocketConnection {
         if (discord) {
             # heartbeats are acknowledged; other gateway messages are ignored
             auto h = parse_json(msg);
-            if (h.typeCode() == NT_HASH && h.op == 1) {
+            if (h.typeCode() == NT_HASH && h.op == 1 && ack) {
                 send(make_json({"op": 11}));
             }
             return;
@@ -91,6 +94,9 @@ class LifecycleWsHandler inherits WebSocketHandler {
         c.discord = exists hdr."x-discord";
         if (hdr."x-hbi") {
             c.hbi = hdr."x-hbi".toInt();
+        }
+        if (exists hdr."x-no-ack") {
+            c.ack = False;
         }
         return c;
     }
@@ -1108,7 +1114,9 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         addTestCase("replaced connection reported closed before a connection that failed to start",
             \replacedClosedBeforeUnstartedTest());
         addTestCase("Discord: concurrent stops of a heartbeat leave the new connection's heartbeat",
-            \discordHeartbeatStopRaceTest());
+            \discordHeartbeatStopRaceTest(), True);
+        addTestCase("Discord: concurrent stops of a heartbeat leave the new connection's heartbeat, with "
+            "acknowledgements later than the interval", \discordHeartbeatStopRaceTest(), False);
         addTestCase("Discord: a superseded reconnect keeps the HELLO watchdog of the new connection",
             \discordWatchdogSupersededReconnectTest());
         addTestCase("Discord: a connect that fails keeps the HELLO watchdog of the connection",
@@ -3319,13 +3327,20 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! The close of a connection and the HELLO of the connection replacing it both stop the old heartbeat; the
     #! stopper that ends last does not touch the heartbeat that the HELLO started for the new connection
-    discordHeartbeatStopRaceTest() {
+    #! \a acks False: the gateway never acknowledges a heartbeat, as when its acknowledgements come later than the
+    #! 100 ms interval on a slow host; the case is about the stops of a heartbeat, so the client ignores the
+    #! acknowledgements (qore#7088)
+    discordHeartbeatStopRaceTest(bool acks) {
         HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
         on_exit {
             d.releaseAll();
             delete d;
         }
+        d.ignore_late_ack = True;
         hash<auto> hdr = {"X-Discord": "1", "X-Hbi": "100"};
+        if (!acks) {
+            hdr."X-No-Ack" = "1";
+        }
         # connection A and its heartbeat, held in its next heartbeat
         d.block_hb = True;
         d.connect({"hdr": hdr});
@@ -3363,11 +3378,15 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertEq(cid_b, st.cid, "the heartbeat is the new connection's");
         assertEq(1, st.running, "its thread runs");
         assertEq(100, st.interval);
-        # and it beats
-        d.release_hb = new Counter(1);
-        d.block_hb = True;
-        assertEq("hb-blocked", d.events.get(LifecycleWsClient::HandoffTimeout));
-        d.release_hb.dec();
+        # and it beats, twice: the zombie check of the second beat finds whether the first was acknowledged, which a
+        # gateway that does not acknowledge in time never does (qore#7088): the case ignores it, as it is about the
+        # stops of the heartbeat
+        for (int i = 0; i < 2; ++i) {
+            d.release_hb = new Counter(1);
+            d.block_hb = True;
+            assertEq("hb-blocked", d.events.get(LifecycleWsClient::HandoffTimeout), "beat " + (i + 1));
+            d.release_hb.dec();
+        }
         d.disconnect();
         assertEq(-1, d.hbState().cid, "the disconnect stopped the heartbeat");
     }
@@ -4821,6 +4840,9 @@ class HbDiscord inherits DiscordWebSocketClient {
         int closing_tid = 0;
         #! the next zombie check finds a zombie
         bool force_zombie = False;
+        #! the zombie checks find no zombie whether or not the heartbeat was acknowledged: for cases about other
+        #! things than the acknowledgement, whose 100 ms interval a slow round trip exceeds (qore#7088)
+        bool ignore_late_ack = False;
         #! forced reconnects are not made
         bool fail_reconnect = False;
         #! gets "destroyed:<tid>" from the destructor and "waiting-threads" from the base destructor
@@ -4961,7 +4983,9 @@ class HbDiscord inherits DiscordWebSocketClient {
             force_zombie = False;
             return True;
         }
-        return DiscordWebSocketClient::heartbeatZombieCheck();
+        # the base check marks the next heartbeat as in flight in either case
+        bool zombie = DiscordWebSocketClient::heartbeatZombieCheck();
+        return ignore_late_ack ? False : zombie;
     }
 
     private bool reconnectIntern(*int cid) {

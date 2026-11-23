@@ -8615,6 +8615,13 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
         the full @ref datasource_hash "datasource hash" (or datasource string) of the datasource, with its credentials
         from the configured source.
 
+        @note the database name in the masked configuration is \c "****" if it can hold credentials: if it has a
+        character that a database name only does not have (see @ref datasource_mask_options), or if the driver of the
+        datasource was loaded when the data was serialized and declares
+        @ref Qore::SQL::DBI_CAP_SENSITIVE_DBNAME "DBI_CAP_SENSITIVE_DBNAME" (as the \c jdbc driver does, whose database
+        name is a JDBC URL), so a resolver cannot identify such a datasource by its database name; data serialized with
+        the datasource of a named connection keeps the name of the connection and is restored by it (qore#7275)
+
         @param new_ds_resolve the callback, with the signature
         <tt>hash<auto>|string sub (string type, hash<auto> masked_config)</tt>, or @ref nothing to remove it
 
