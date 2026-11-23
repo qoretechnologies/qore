@@ -2274,12 +2274,23 @@ static const QoreClass* resolveAOTBareClassRefByNamespacePriority(QoreProgram* p
 }
 
 static const QoreClass* resolveAOTClassRefInProgram(QoreProgram* pgm,
-        const char* class_path, bool pseudo) {
+        const AOTClassRef& ref, bool pseudo) {
+    const char* class_path = ref.path;
     if (!pgm || !class_path || !*class_path) {
         return nullptr;
     }
 
     qore_program_private* pp = qore_program_private::get(*pgm);
+    // A module-tagged reference carries the declaration path. A single component denotes its root
+    // namespace, even when unqualified source lookup would select a builtin with the same name (#7422).
+    if (ref.module && *ref.module && !pseudo) {
+        const char* path = !strncmp(class_path, "::", 2) ? class_path + 2 : class_path;
+        if (*path && !strstr(path, "::")) {
+            const auto* root = qore_root_ns_private::get(*pp->RootNS);
+            qore_root_ns_private::RuntimeNamespaceReadLocker lock(root);
+            return root->classList.find(path);
+        }
+    }
     const qore_ns_private* found_ns = nullptr;
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
         *pp->RootNS, class_path, found_ns, LexicalSemanticPolicy{});
@@ -2354,7 +2365,7 @@ const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
     }
 
     AOTClassRef ref = decodeAOTClassRef(class_ref);
-    const QoreClass* qc = resolveAOTClassRefInProgram(pgm, ref.path, pseudo);
+    const QoreClass* qc = resolveAOTClassRefInProgram(pgm, ref, pseudo);
     if (ref.module && *ref.module) {
         const char* owner = qc ? qc->getModuleName() : nullptr;
         if (!owner || ref.module_storage != owner) {
@@ -2367,7 +2378,7 @@ const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
             // that the module's Program has is the module's class whatever its
             // tag (issue #6971)
             if (QoreAbstractModule* module = QMM.findModule(ref.module)) {
-                const QoreClass* module_qc = resolveAOTClassRefInProgram(module->getModuleProgram(), ref.path,
+                const QoreClass* module_qc = resolveAOTClassRefInProgram(module->getModuleProgram(), ref,
                     pseudo);
                 if (module_qc && module_qc != qc
                         && (!module_qc->getModuleName() || ref.module_storage != module_qc->getModuleName())) {
