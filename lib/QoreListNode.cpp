@@ -697,7 +697,7 @@ int QoreListNode::merge(const QoreListNode* list, ExceptionSink* xsink) {
 }
 
 int QoreListNode::setEntry(size_t index, QoreValue val, ExceptionSink* xsink) {
-    assert(reference_count() == 1);
+    assert(reference_count() == 1 || priv->weakChangeAllowed());
     // a negative index cast to size_t arrives here as SIZE_MAX; "index + 1" would then wrap to 0, resize(0) would
     // be a no-op, and "priv->entry[index]" would address memory before the start of the entry array.  Callers must
     // resolve negative indices themselves (see PO_NEGATIVE_OFFSETS handling in the lvalue, JIT, AOT, and IR paths),
@@ -760,7 +760,7 @@ int qore_list_private::pushCanonical(QoreListNode& list, QoreValue val, Exceptio
 }
 
 int QoreListNode::insert(QoreValue val, ExceptionSink* xsink) {
-    assert(reference_count() == 1);
+    assert(reference_count() == 1 || priv->weakChangeAllowed());
     ValueHolder holder(val, xsink);
     // see setEntry(): a list whose last reference was released cannot be changed
     if (priv->checkValid(xsink) || priv->checkValNative(holder, xsink)) {
@@ -781,7 +781,7 @@ int QoreListNode::insert(QoreValue val, ExceptionSink* xsink) {
 }
 
 int qore_list_private::insertCanonical(QoreListNode& list, QoreValue val, ExceptionSink* xsink) {
-    assert(list.reference_count() == 1);
+    assert(list.reference_count() == 1 || list.priv->weakChangeAllowed());
     ValueHolder holder(val, xsink);
     // see setEntry(): a list whose last reference was released cannot be changed
     if (list.priv->checkValid(xsink) || list.priv->checkVal(holder, xsink)) {
@@ -812,7 +812,7 @@ int qore_list_private::push(QoreListNode& list, QoreValue val, ExceptionSink* xs
 
 int qore_list_private::insert(QoreListNode& list, QoreValue val, ExceptionSink* xsink,
         LexicalSemanticPolicy policy) {
-    assert(list.reference_count() == 1);
+    assert(list.reference_count() == 1 || list.priv->weakChangeAllowed());
     ValueHolder holder(val, xsink);
     // see setEntry(): a list whose last reference was released cannot be changed
     if (list.priv->checkValid(xsink) || list.priv->checkVal(holder, nullptr, xsink, policy)) {
@@ -833,7 +833,7 @@ int qore_list_private::insert(QoreListNode& list, QoreValue val, ExceptionSink* 
 }
 
 QoreValue QoreListNode::shift() {
-    assert(reference_count() == 1);
+    assert(reference_count() == 1 || priv->weakChangeAllowed());
     if (!priv->length) {
         return QoreValue();
     }
@@ -854,7 +854,7 @@ QoreValue QoreListNode::shift() {
 }
 
 QoreValue QoreListNode::pop() {
-    assert(reference_count() == 1);
+    assert(reference_count() == 1 || priv->weakChangeAllowed());
     if (!priv->length) {
         return QoreValue();
     }
@@ -916,7 +916,7 @@ QoreListNode* QoreListNode::copyListFrom(size_t index) const {
 }
 
 QoreListNode* QoreListNode::splice(ptrdiff_t offset) {
-    assert(reference_count() == 1);
+    assert(reference_count() == 1 || priv->weakChangeAllowed());
     size_t n_offset = priv->checkOffset(offset);
     if (n_offset == priv->length) {
         return nullptr;
@@ -926,7 +926,7 @@ QoreListNode* QoreListNode::splice(ptrdiff_t offset) {
 }
 
 QoreListNode* QoreListNode::splice(ptrdiff_t offset, ptrdiff_t len) {
-    assert(reference_count() == 1);
+    assert(reference_count() == 1 || priv->weakChangeAllowed());
     size_t n_offset, n_len;
     priv->checkOffset(offset, len, n_offset, n_len);
     if (n_offset == priv->length) {
@@ -937,14 +937,14 @@ QoreListNode* QoreListNode::splice(ptrdiff_t offset, ptrdiff_t len) {
 }
 
 QoreListNode* QoreListNode::splice(ptrdiff_t offset, ptrdiff_t len, const QoreValue l, ExceptionSink* xsink) {
-    assert(reference_count() == 1);
+    assert(reference_count() == 1 || priv->weakChangeAllowed());
     size_t n_offset, n_len;
     priv->checkOffset(offset, len, n_offset, n_len);
     return priv->spliceIntern<false, true>(n_offset, n_len, l, false, xsink);
 }
 
 QoreListNode* QoreListNode::extract(ptrdiff_t offset) {
-    assert(reference_count() == 1);
+    assert(reference_count() == 1 || priv->weakChangeAllowed());
     size_t n_offset = priv->checkOffset(offset);
     if (n_offset == priv->length)
         return priv->getCopy();
@@ -953,7 +953,7 @@ QoreListNode* QoreListNode::extract(ptrdiff_t offset) {
 }
 
 QoreListNode* QoreListNode::extract(ptrdiff_t offset, ptrdiff_t len) {
-    assert(reference_count() == 1);
+    assert(reference_count() == 1 || priv->weakChangeAllowed());
     size_t n_offset, n_len;
     priv->checkOffset(offset, len, n_offset, n_len);
     if (n_offset == priv->length)
@@ -962,7 +962,7 @@ QoreListNode* QoreListNode::extract(ptrdiff_t offset, ptrdiff_t len) {
 }
 
 QoreListNode* QoreListNode::extract(ptrdiff_t offset, ptrdiff_t len, const QoreValue l, ExceptionSink* xsink) {
-    assert(reference_count() == 1);
+    assert(reference_count() == 1 || priv->weakChangeAllowed());
     size_t n_offset, n_len;
     priv->checkOffset(offset, len, n_offset, n_len);
     return priv->spliceIntern<false, true>(n_offset, n_len, l, true, xsink);

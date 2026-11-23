@@ -197,6 +197,15 @@ public:
     const QoreTypeInfo* complexTypeInfo = nullptr;
     unsigned obj_count = 0;
     QoreContainerWeakRefs weakRefs;
+#ifndef NDEBUG
+    //! the number of lvalue helpers changing the container through a weak reference that it is designated by, which
+    //! its other owners share (qore#7297): the assertions of uniqueness of its changes accept it then
+    std::atomic<int> weak_change{0};
+
+    DLLLOCAL bool weakChangeAllowed() const {
+        return weak_change.load(std::memory_order_relaxed) > 0;
+    }
+#endif
 #ifdef DEBUG
     bool is_obj = false;
 #endif

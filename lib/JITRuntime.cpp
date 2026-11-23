@@ -18707,6 +18707,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             // the type alone: getValue() would box a large int or a special float that the parent stores
             // natively in a new node (qore#6094)
             qore_type_t ct = lvh.getType();
+            // a weak reference to a list or a hash: the key or element is removed from its container (qore#7297)
+            if (ct == NT_WEAKREF_LIST || ct == NT_WEAKREF_HASH) {
+                if (lvh.viewWeakContainer()) {
+                    return exception_result();
+                }
+                ct = lvh.getType();
+            }
             if ((last_is_hash_slice || last_is_hash_list)
                     && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
                 res = executeLVHashKeySliceRemove(lvh, ct, last_step,
@@ -18759,11 +18766,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 pending_delete_finish = pending_delete_direct_list = true;
                 handled_multistep_remove = true;
             } else {
-                // any other parent - no value, a weak reference to a hash, a scalar - has nothing to remove, as with
-                // the IR interpreter and the AST interpreter (LValueRemoveHelper), which remove a key only from a
-                // hash or an object
+                // any other parent - no value, a scalar - has nothing to remove, as with the IR interpreter and the
+                // AST interpreter (LValueRemoveHelper), which remove a key only from a hash or an object
                 handled_multistep_remove = true;
             }
+            // removed through a weak reference: a value that needs a scan starts the scan of the lvalue's object
+            // (qore#7297)
+            lvh.changedScannedValue(res);
         }
         // The LValueHelper above has been destroyed here, so the lvalue locks are released.  A "delete"
         // runs the object's destructor, which is Qore code that can dereference objects in the
@@ -18938,11 +18947,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 }
                 break;
             case LVUnaryOp::Shift:
+                // a weak reference to a list: its list is changed (qore#7297)
+                if (lvh.getType() == NT_WEAKREF_LIST && lvh.viewWeakContainer()) {
+                    break;
+                }
                 if (lvh.getType() == NT_LIST) {
                     lvh.ensureUnique();
                     QoreListNode* l = lvh.getValue().get<QoreListNode>();
                     if (l && l->size() > 0) {
                         res = l->shift();
+                        lvh.changedScannedValue(res);
                     }
                 } else if (lvh.getType() != NT_NOTHING && qore_compiled_code_strict_args()) {
                     // matches QoreShiftOperatorNode::evalImpl()
@@ -18951,11 +18965,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 }
                 break;
             case LVUnaryOp::Pop:
+                // a weak reference to a list: its list is changed (qore#7297)
+                if (lvh.getType() == NT_WEAKREF_LIST && lvh.viewWeakContainer()) {
+                    break;
+                }
                 if (lvh.getType() == NT_LIST) {
                     lvh.ensureUnique();
                     QoreListNode* l = lvh.getValue().get<QoreListNode>();
                     if (l && l->size() > 0) {
                         res = l->pop();
+                        lvh.changedScannedValue(res);
                     }
                 } else if (lvh.getType() != NT_NOTHING && qore_compiled_code_strict_args()) {
                     // matches QorePopOperatorNode::evalImpl()
@@ -18964,6 +18983,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 }
                 break;
             case LVUnaryOp::Trim:
+                // a weak reference to a list or a hash: its container is changed (qore#7297)
+                if (lvh.viewWeakContainer()) {
+                    break;
+                }
                 // a string enum lvalue, and a container whose type refuses a plain string in the place of an enum
                 // element, refuse the plain strings that the operation leaves, as in the AST interpreter
                 // (QoreTrimOperatorNode::evalImpl(), qore#6195)
@@ -19019,6 +19042,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 }
                 break;
             case LVUnaryOp::Chomp:
+                // a weak reference to a list or a hash: its container is changed (qore#7297)
+                if (lvh.viewWeakContainer()) {
+                    break;
+                }
                 // see LVUnaryOp::Trim (QoreChompOperatorNode::evalImpl(), qore#6195)
                 if (lvh.getType() == NT_STRING) {
                     if (lvh.ensureUnique("<chomp operator>")) {
@@ -19106,6 +19133,10 @@ static uint64_t qore_rt_lv_path_binary_mut_impl(QoreIRLValuePathInstruction* ins
     switch (inst->binary_mut_op) {
         case LVBinaryMutOp::Push:
         case LVBinaryMutOp::Unshift: {
+            // a weak reference to a list: its list is changed (qore#7297)
+            if (lvh.getType() == NT_WEAKREF_LIST && lvh.viewWeakContainer()) {
+                break;
+            }
             // Auto-vivify NOTHING to empty list (mirror IR interpreter).
             // Without this, ensureUnique() null-derefs on a NOTHING slot and
             // `push list_member, val` crashes for members declared without an
@@ -19134,6 +19165,9 @@ static uint64_t qore_rt_lv_path_binary_mut_impl(QoreIRLValuePathInstruction* ins
             }
             lvh.ensureUnique();
             QoreListNode* l = lvh.getValue().get<QoreListNode>();
+            // added through a weak reference: a value that needs a scan starts the scan of the lvalue's object
+            // (qore#7297)
+            lvh.changedScannedValue(*rhs_holder);
             // the list takes the reference held for the value, as the AST interpreter hands the value over
             if (inst->binary_mut_op == LVBinaryMutOp::Push) {
                 qore_list_private::pushCanonical(*l, rhs_holder.release(), xsink);
@@ -19241,6 +19275,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
         return toBits(QoreValue());
     }
     QoreValue res;
+    // a weak reference to a list: its list is changed; a value removed or inserted that needs a scan starts the scan
+    // of the lvalue's object (qore#7297)
+    if (lvh.getType() == NT_WEAKREF_LIST && lvh.viewWeakContainer()) {
+        return toBits(QoreValue());
+    }
+    if (lvh.getType() == NT_LIST) {
+        lvh.changedScannedValue(lvh.getValue());
+        lvh.changedScannedValue(replacement_val);
+    }
     qore_type_t vt = lvh.getType();
     if (vt == NT_NOTHING) {
         const QoreTypeInfo* ti = lvh.getTypeInfo();

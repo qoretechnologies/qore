@@ -101,6 +101,14 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Operators Change the Container of a Weak Reference Held by Their Lvalue
+    The operators that change the list or the hash that an lvalue holds (+=, a hash -=, push, unshift, pop, shift,
+    splice, extract, delete, remove, trim and chomp) change the container that a
+    @ref weak_assignment_operator "weak reference" held by the lvalue designates, as an element or key assignment does,
+    and the lvalue keeps the weak reference; += replaced an untyped lvalue with the value added, and the others raised
+    an error or removed nothing (<a href="https://github.com/qoretechnologies/qore/issues/7297">issue 7297</a>,
+    <a href="https://github.com/qoretechnologies/qore/issues/7312">issue 7312</a>).
+
     @par A Weak Assignment From a Member, a Hash Key or a List Element Designates Its Own Container
     A @ref weak_assignment_operator "weak assignment" from a member, a hash key or a list element first gives a shared
     container a copy of its own, as from a variable, so that a change through it no longer changes another owner, and
@@ -2796,6 +2804,10 @@
       <tt>(w := new C()).method()</tt>) now lives until the end of the statement, as any temporary value does; it was
       destroyed when the assignment ended, so that the rest of the statement saw a destroyed object
       (<a href="https://github.com/qoretechnologies/qore/issues/7085">issue 7085</a>)
+    - the operators that change an lvalue's list or hash (+=, push, splice, remove, trim, ...) change the container
+      that a @ref weak_assignment_operator "weak reference" held by the lvalue designates; they raised an error,
+      replaced the lvalue, or removed nothing (<a href="https://github.com/qoretechnologies/qore/issues/7297">issue
+      7297</a>, <a href="https://github.com/qoretechnologies/qore/issues/7312">issue 7312</a>)
     - the strings of \c ARGV and \c QORE_ARGV are tagged with the
       @ref default_encoding "default character encoding" of the process, where they were tagged \c UTF-8 whatever the
       default encoding (see @ref command_line_processing; issue #7045)

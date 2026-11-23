@@ -1148,6 +1148,11 @@ bool QoreIRLowering::changesThroughLValue(const VarRefNode* var) const {
     if (isSharedVar(var)) {
         return true;
     }
+    // a thread-local variable can be assigned a weak reference by any code of its thread, which an operator that
+    // changes its list or hash follows to the container (qore#7297)
+    if (var && var->getType() == VT_THREAD_LOCAL && qore_weak_source_type_may_hold_container(var->getTypeInfo())) {
+        return true;
+    }
     if (!var || !var->ref.id || (var->getType() != VT_LOCAL && var->getType() != VT_CLOSURE)) {
         return false;
     }

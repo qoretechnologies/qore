@@ -2537,6 +2537,14 @@ if (x || y)
     closures that capture the weak reference.  A weak reference held by a hash, a list or an object member reads as
     its target, also when the target is an object that has been destroyed: \c exists returns @ref True for the
     destroyed object, and calling a method on it raises \c OBJECT-ALREADY-DELETED.\n<br>
+    The operators that change the list or the hash that an lvalue holds (an element or key assignment, the
+    @ref plus_equals_operator "+=" operator, a \c -= on a hash, @ref push "push", @ref unshift "unshift",
+    @ref pop "pop", @ref shift "shift", @ref splice "splice", @ref extract "extract", @ref delete "delete",
+    @ref remove "remove", @ref trim "trim" and @ref chomp "chomp") change the container that a weak reference held by
+    the lvalue designates, and the lvalue keeps the weak reference; a container that was freed raises \c LIST-ERROR
+    or \c HASH-ERROR.  The change is made in place, so that every owner of the container sees it, also a copy that
+    shares it (as after <tt>b = a</tt>, where \a a is the source of the weak reference), and an element of a list whose
+    element type does not take @ref nothing "NOTHING" is not removed (the shared list is not retyped).\n<br>
     A method called through a weak reference keeps its object until the call returns, as any method call does
     (see @ref running_call_receiver "object scope"): if the method releases the last strong reference to its own
     object, the object is destroyed when the method returns, or, for a weak reference read from a hash, a list, a
