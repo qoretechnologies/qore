@@ -6462,6 +6462,10 @@ void qore_socket_object_private::dbgForceSslErrorSslAtNextWrite() {
     qore_socket_private::get(*priv->socket)->dbg_force_ssl_error_ssl.store(true, std::memory_order_release);
 }
 
+void qore_socket_object_private::dbgForceStagedWriteFailure() {
+    qore_socket_private::get(*priv->socket)->dbg_force_staged_write_failure.store(true, std::memory_order_release);
+}
+
 QoreHashNode* qore_socket_object_private::dbgGetStreamRecordCounts(int64_t session_id, ExceptionSink* xsink) {
     if (session_id) {
         std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(so, session_id);
