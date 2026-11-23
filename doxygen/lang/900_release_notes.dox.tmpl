@@ -2794,6 +2794,13 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a @ref RestClientIo::RestClientIo "RestClientIo" client (and any other client that gives its connection manager the
+      proof of its creator when trusted code creates it) that trusted code lends to code restricted from the \c NETWORK
+      functional domain is bound for that code to the client's target, proxy and CA locations, as the clients of
+      @ref ConnectionProvider are: a copy of the client with another URL, its connection manager and the redirects of
+      its requests no longer reach another origin for the restricted code; a client that is given a shared connection
+      manager takes no proof and is not bound
+      (<a href="https://github.com/qoretechnologies/qore/issues/7295">issue 7295</a>)
     - @ref Qore::HTTPClient::getURL() "HTTPClient::getURL()", @ref Qore::HTTPClient::getProxyURL() "getProxyURL()"
       and @ref Qore::HTTPClient::getSafeProxyURL() "getSafeProxyURL()" give an IPv6 host in brackets and the path of a
       UNIX domain socket with every reserved character encoded; the URL was ambiguous without them, and
