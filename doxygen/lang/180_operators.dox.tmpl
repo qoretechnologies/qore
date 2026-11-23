@@ -2579,18 +2579,26 @@ if (x || y)
     A hash or a list that a weak reference designates is a value like any other, so that a change made through the
     weak reference reaches only the holder that the weak reference was made from (ex: after <tt>w := src; b = src;</tt>,
     <tt>w[0] = 9</tt> changes \c src but not \c b):
-    <ul><li>a local variable that is assigned it (also the variable of a @ref foreach "foreach" loop) takes a copy of
-      its own while another holder holds it; one that nothing else holds (the value of @ref remove "remove",
-      @ref shift "shift", @ref pop "pop" or @ref extract "extract", or of a call that gives a container that nothing
-      else holds) is moved into the variable, and the weak reference designates it there</li>
-    <li>a parameter, a list element, a hash key, an object member, a global or thread-local variable, a class static
-      variable and a variable that a closure captures that are given it always take a copy of their own, also of one
-      that nothing else holds (the weak reference then designates the temporary, which the statement releases)</li>
+    <ul><li>a local variable that is assigned it (also the variable of a @ref foreach "foreach" loop, and a variable
+      without a value that @ref plus_equals_operator "+=" adds it to) takes a copy of its own while another holder
+      holds it; one that nothing else holds (the value of @ref remove "remove", @ref shift "shift" or @ref pop "pop",
+      or of a call that gives a container that nothing else holds) is moved into the variable, and the weak reference
+      designates it there</li>
+    <li>a parameter, a list element (also an element of the list that @ref extract "extract" returns), a hash key, an
+      object member, a global or thread-local variable, a class static variable, and a local variable that a closure
+      captures or that a @ref lvalue_references "reference" is made to anywhere in its scope, that are given it always
+      take a copy of their own, also of one that nothing else holds (the weak reference then designates the temporary,
+      which the statement releases)</li>
     <li>a weak assignment from it designates it</li></ul>
     A container that only holds such a hash or list is shared as any other
     value, and so is the hash or list in it: after <tt>w := src[0]; b = src;</tt>, <tt>w[0] = 9</tt> changes
     <tt>b[0]</tt> too.  A module written in C++ that keeps a reference of its own to such a value, instead of a copy,
-    shares it.\n<br>
+    shares it.  A new list or hash that an operator or a function builds from another currently holds either the same
+    weakly designated hash or list as its source or a copy of it, depending on the operation: after <tt>w := l[0]</tt>,
+    <tt>w.a = 9</tt> reaches the element of <tt>l + ()</tt>, <tt>sort(l)</tt>, <tt>reverse(l)</tt> and
+    <tt>h + {...}</tt>, but not that of <tt>() + l</tt>, <tt>l[0..]</tt>, <tt>sort_stable(l)</tt>,
+    @ref map "map", <tt>{...} + h</tt>, a hash slice (<tt>h{"x",}</tt>) or <tt>h.values()</tt>; code should not rely on
+    either.\n<br>
     The value of the operator is the value assigned, converted to the type of the lvalue, as a strong reference: a
     call that is given it uses the value, and a variable or a container that is given a hash or a list from it takes a
     copy of its own, as from any value that a weak reference designates (see above).  A temporary value assigned, as in

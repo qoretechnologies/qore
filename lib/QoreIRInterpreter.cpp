@@ -7993,6 +7993,36 @@ static QoreValue newComplexFromOperand(IRValueSlots& values, IRCleanupSlots& cle
     }
     return rv;
 }
+
+//! Gives the result of += on an lvalue without a value the reference of its operand's temporary (qore#7342)
+/** The result is the value added with a reference of its own (qore_compound_assign_value()); when the operand is a
+    list or hash that a weak reference designates, held by an owned temporary whose only use is the operation, the
+    temporary's reference is released here, so that the result holds the reference that the temporary held, as the AST
+    interpreter gives the operand's reference to the lvalue (doPlusEqualsOnLValue()), and a local variable that takes
+    it moves it as from an assignment.  Any other value stays in its temporary until the end of the statement: the
+    result holds it then, but its temporary is released at the same point as in the AST interpreter.
+*/
+static void releaseAddAssignOperand(const QoreIRFunction& func, IRValueSlots& values, IRCleanupSlots& cleanup,
+        QoreIRValue operand, const QoreValue& res, const std::vector<uint32_t>& value_use_counts,
+        const std::unordered_map<uint32_t, int32_t>& borrowed_slots, const std::vector<int32_t>& borrowed_temps,
+        ExceptionSink* xsink) {
+    if (!res.isPlainPointer() || !operand.isValid() || operand.id >= values.size()) {
+        return;
+    }
+    const QoreValue& v = values[operand.id];
+    if (!v.isPlainPointer() || v.getPtr() != res.getPtr() || !qore_weak_designated_container(res.getPtr())
+            // the value of a weak or opaque store stays held by the statement (qore#7342)
+            || (operand.id < func.interpreter_weak_store_results.size()
+                && func.interpreter_weak_store_results[operand.id])) {
+        return;
+    }
+    uint64_t owned;
+    takeSoleUseOperand(values, cleanup, operand, value_use_counts, borrowed_slots, borrowed_temps, owned);
+    if (owned) {
+        // the result holds the container, so releasing the temporary's reference runs no destructor
+        fromBits(owned).discard(xsink);
+    }
+}
 #endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
 static QoreValue raiseIRAstFallback(ExceptionSink* xsink, const char* kind,
@@ -14055,6 +14085,11 @@ dispatch_folded_step_host:
                         res = evalInvoke(inv, values, xsink, &func, block, ip, preserve_hash_key_weak_result);
                     }
                 }
+                if (inv->invoke_opcode == QoreIROpcode::AddAssignAny && inv->operands.size() > 1
+                        && !(xsink && *xsink)) {
+                    releaseAddAssignOperand(func, values, cleanup, inv->operands[1], res, value_use_counts,
+                        weak_load_temp_slots, borrowed_temp_remaining, xsink);
+                }
                 // Post-invalidation: ensure slot cache is cleared after the lvalue
                 // operation modifies TLS. Always invalidate (not repopulate) since
                 // the invoke expression may be a complex lvalue.
@@ -19916,6 +19951,10 @@ load_local_done:
                     unwindForException();
                     cleanupLocalCaches();
                     return exitAfterUnwind();
+                }
+                if (inst->opcode == QoreIROpcode::AddAssignAny) {
+                    releaseAddAssignOperand(func, values, cleanup, inst->operands[1], res, value_use_counts,
+                        weak_load_temp_slots, borrowed_temp_remaining, xsink);
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
                 if (res.needsRef()) {

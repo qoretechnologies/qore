@@ -3,10 +3,10 @@
 
 # Copyright 2026 Qore Technologies, s.r.o.
 
-# A list or hash that a weak reference designates is a value: a holder that takes it while another holder holds it
-# (an assignment, a parameter, a list element, a hash key, an object member, a foreach variable) takes a copy of its
-# own, so that a change made through the weak reference reaches only the holder that the weak reference was made from;
-# one that nothing else holds is moved, and the weak reference follows it (qore#7342)
+# A list or hash that a weak reference designates is a value: a holder that takes it (an assignment, a parameter, a
+# list element, a hash key, an object member, a foreach variable) takes a copy of its own, so that a change made
+# through the weak reference reaches only the holder that the weak reference was made from; only a local variable that
+# takes one that nothing else holds keeps it, and the weak reference follows it (qore#7342)
 
 %modern
 %allow-weak-references
@@ -146,7 +146,10 @@ hash<auto> sub make_weak_target(reference<auto> w) {
     return h;
 }
 
-# a container that nothing else holds is moved, not shared: it keeps its identity, and the weak reference follows it
+# a container that nothing else holds is moved into the local variable that takes it: it keeps its identity, and the
+# weak reference follows it; the list that extract returns holds a copy of the element that it removes, as a list
+# element always takes a copy (see share_points_of_moves()), so the weak reference to the element designates the
+# element removed, which nothing holds then
 sub moves() {
     hash<auto> h = {"a": 1};
     auto w;
@@ -210,6 +213,14 @@ hash<auto> sub mk() {
     return h;
 }
 
+our auto gwl;
+
+list<auto> sub mkl() {
+    list<auto> l = (1,);
+    gwl := l;
+    return l;
+}
+
 hash<auto> sub param_observe(hash<auto> p) {
     p.b = 2;
     return p;
@@ -222,6 +233,17 @@ sub share_points_of_moves() {
     hash<auto> local = mk();
     local.b = 2;
     printf("move into a local: %y\n", gw);
+
+    # += on a local without a value assigns the value added, which a local takes as from an assignment
+    auto ax;
+    ax += mk();
+    ax.b = 2;
+    printf("move by += into an empty local: %y\n", gw);
+
+    auto al;
+    al += mkl();
+    al[0] = 9;
+    printf("move of a list by += into an empty local: %y\n", gwl);
 
     list<auto> l = (mk(),);
     l[0].b = 2;

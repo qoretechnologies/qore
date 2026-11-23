@@ -544,6 +544,7 @@ uint64_t qore_rt_make_opaque_value(uint64_t value, ExceptionSink* xsink);
 uint64_t qore_rt_weak_source_container(uint64_t value);
 uint64_t qore_rt_weak_share_copy(uint64_t value, ExceptionSink* xsink);
 uint64_t qore_rt_take_store_value(uint64_t value, uint64_t* slot_a, uint64_t* slot_b);
+uint64_t qore_rt_add_assign_take_operand(uint64_t value, uint64_t* slot);
 
 //! Load a NaN-boxed QoreValue from a local variable on the Qore thread-local
 //! variable stack.

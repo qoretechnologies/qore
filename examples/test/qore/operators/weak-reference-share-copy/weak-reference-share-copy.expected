@@ -16,6 +16,8 @@ move call result: wf: {a: 1, b: 2}
 copy on write: src: [[9, 2], 4], b: [[9, 2], 3]
 copy on write hash: hsrc: {x: {y: 9}, z: {q: 2}}, hb: {x: {y: 9}}
 move into a local: {a: 1, b: 2}
+move by += into an empty local: {a: 1, b: 2}
+move of a list by += into an empty local: [9]
 move into a list element: {}
 move into a hash key: {}
 move into a global: {}

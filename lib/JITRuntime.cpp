@@ -241,6 +241,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_weak_source_container", reinterpret_cast<void*>(&qore_rt_weak_source_container) },
     { "qore_rt_weak_share_copy", reinterpret_cast<void*>(&qore_rt_weak_share_copy) },
     { "qore_rt_take_store_value", reinterpret_cast<void*>(&qore_rt_take_store_value) },
+    { "qore_rt_add_assign_take_operand", reinterpret_cast<void*>(&qore_rt_add_assign_take_operand) },
     { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
     { "qore_rt_take_param", reinterpret_cast<void*>(&qore_rt_take_param) },
     { "qore_rt_take_param_aot", reinterpret_cast<void*>(&qore_rt_take_param_aot) },
@@ -2585,6 +2586,22 @@ extern "C" DLLEXPORT uint64_t qore_rt_take_store_value(uint64_t value, uint64_t*
         }
     }
     return value;
+}
+
+//! returns the value that += on an lvalue without a value gives: \a value, the operand, with a reference of its own
+/** When \a value is a list or hash that a weak reference designates and \a slot, the cleanup slot of the operand's
+    temporary, whose only use is the operation, holds it, the slot's reference is given to the result and the slot is
+    cleared, as the AST interpreter gives the operand's reference to the lvalue (doPlusEqualsOnLValue()), so that a
+    local variable that takes it moves it as from an assignment (qore#7342); any other value is given a reference of
+    its own, and its temporary is released at the end of the statement, as in the AST interpreter
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_add_assign_take_operand(uint64_t value, uint64_t* slot) {
+    QoreValue v = fromBits(value);
+    if (slot && *slot == value && v.isPlainPointer() && qore_weak_designated_container(v.getPtr())) {
+        *slot = toBits(QoreValue());
+        return value;
+    }
+    return toBits(v.refSelf());
 }
 
 //! Assigns a value to a local on the runtime stack

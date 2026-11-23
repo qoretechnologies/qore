@@ -2020,6 +2020,8 @@ private:
     bool irValueMayBeChar(uint32_t value_id) const;
     //! Returns true if the IR value can be NOTHING at runtime, as far as its facts show
     bool irValueMayBeNothing(uint32_t value_id) const;
+    //! Returns true if the IR value can be a list or a hash at runtime: it is boxed, and its type does not exclude both
+    bool irValueMayBeContainer(uint32_t value_id) const;
     //! Returns the type path argument of the return type of a method that AOT-compiled code reads a member for
     //! directly (a getter, an assignment or a compound assignment that returns the member), or a null pointer
     //! when the return type accepts no value

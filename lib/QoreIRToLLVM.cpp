@@ -1769,6 +1769,8 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
             llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_take_store_value",
             llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_add_assign_take_operand",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
 
     // Invoke helpers
     module.getOrInsertFunction("qore_rt_invoke_expr",
@@ -3126,6 +3128,17 @@ bool QoreIRToLLVM::irValueMayBeChar(uint32_t value_id) const {
     const QoreIRValueFacts* facts = current_ir_func ? current_ir_func->getValueFacts(QoreIRValue(value_id)) : nullptr;
     return !facts || !QoreTypeInfo::hasType(facts->type_info)
         || QoreTypeInfo::parseReturns(facts->type_info, NT_CHAR) != QTI_NOT_EQUAL;
+}
+
+bool QoreIRToLLVM::irValueMayBeContainer(uint32_t value_id) const {
+    // a native value is never a list or a hash
+    if (!nanboxed_values.count(value_id)) {
+        return false;
+    }
+    const QoreIRValueFacts* facts = current_ir_func ? current_ir_func->getValueFacts(QoreIRValue(value_id)) : nullptr;
+    return !facts || !QoreTypeInfo::hasType(facts->type_info)
+        || QoreTypeInfo::parseReturns(facts->type_info, NT_HASH) != QTI_NOT_EQUAL
+        || QoreTypeInfo::parseReturns(facts->type_info, NT_LIST) != QTI_NOT_EQUAL;
 }
 
 bool QoreIRToLLVM::irValueMayBeNothing(uint32_t value_id) const {
@@ -41555,7 +41568,20 @@ llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::Bina
     llvm::BasicBlock* slow_bb = llvm::BasicBlock::Create(ctx, "ca_slow_path", llvm_func);
     llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "ca_merge", llvm_func);
 
-    // For AddAssignAny, if lhs is NOTHING, return rhs with incremented ref count
+    // For AddAssignAny, if lhs is NOTHING, return rhs with incremented ref count; the cleanup slot of an operand
+    // whose only remaining use is this operation and that can be a list or a hash is given to
+    // qore_rt_add_assign_take_operand(), which gives its reference to the result for a weakly designated container,
+    // so that a local that takes it moves it, as the interpreters do (qore#7342).  The slot is made here, before the
+    // branch, as promoteSsaEntryToAlloca() stores the value at the insert point.
+    llvm::Value* rhs_slot = nullptr;
+    if (handle_nothing && inst && inst->operands.size() > 1) {
+        uint32_t rhs_id = inst->operands[1].id;
+        auto uses_it = operand_remaining_uses.find(rhs_id);
+        if ((uses_it == operand_remaining_uses.end() || uses_it->second <= 1) && !weak_store_results.count(rhs_id)
+                && irValueMayBeNothing(inst->operands[0].id) && irValueMayBeContainer(rhs_id)) {
+            rhs_slot = promoteSsaEntryToAlloca(rhs_id, module, llvm_func);
+        }
+    }
     llvm::BasicBlock* nothing_bb = nullptr;
     llvm::Value* nothing_result = nullptr;
     if (handle_nothing) {
@@ -41579,7 +41605,13 @@ llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::Bina
                 llvm::MDBuilder(ctx).createBranchWeights(1, 1 << 20));
             builder->SetInsertPoint(nothing_ref_bb);
         }
-        nothing_result = emitHelperRef(module, rhs);
+        if (rhs_slot) {
+            auto take_fn = module.getOrInsertFunction("qore_rt_add_assign_take_operand",
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+            nothing_result = builder->CreateCall(take_fn, {rhs, rhs_slot});
+        } else {
+            nothing_result = emitHelperRef(module, rhs);
+        }
         builder->CreateBr(merge_bb);
         nothing_bb = builder->GetInsertBlock();
     }
