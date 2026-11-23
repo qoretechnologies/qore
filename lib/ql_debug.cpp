@@ -9744,6 +9744,177 @@ public:
         xsink.clear();
     }
 
+    //! Makes a connected UDP socket with a pending error (a port unreachable answer); -1 if it gets none
+    /** The error stays pending until it is read: a check of a connection attempt that reads it (getsockopt(SO_ERROR))
+        clears it.  The descriptor is added to \a fds.
+    */
+    static int makePendingErrorSocket(UnitTestCounters& c, std::vector<int>& fds) {
+        // a port on which no UDP socket listens: one bound and closed
+        struct sockaddr_in sa = {};
+        sa.sin_family = AF_INET;
+        sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        socklen_t salen = sizeof(sa);
+        int probe = ::socket(AF_INET, SOCK_DGRAM, 0);
+        bool ok = probe >= 0 && !::bind(probe, reinterpret_cast<struct sockaddr*>(&sa), salen)
+            && !::getsockname(probe, reinterpret_cast<struct sockaddr*>(&sa), &salen);
+        if (probe >= 0) {
+            ::close(probe);
+        }
+        UT_ASSERT(c, ok, "pending error: a free UDP port is found");
+        if (!ok) {
+            return -1;
+        }
+        int ufd = ::socket(AF_INET, SOCK_DGRAM, 0);
+        UT_ASSERT(c, ufd >= 0, "pending error: the UDP socket is created");
+        if (ufd < 0) {
+            return -1;
+        }
+        fds.push_back(ufd);
+        ok = !::connect(ufd, reinterpret_cast<struct sockaddr*>(&sa), salen) && ::send(ufd, "x", 1, 0) == 1;
+        UT_ASSERT(c, ok, "pending error: the UDP socket sends to the closed port");
+        if (!ok) {
+            return -1;
+        }
+        // the answer arrives asynchronously; poll() reports the pending error without reading it
+        struct pollfd pfd = {ufd, 0, 0};
+        ok = ::poll(&pfd, 1, 5000) == 1 && (pfd.revents & POLLERR);
+        UT_ASSERT(c, ok, "pending error: the UDP socket has a pending error");
+        return ok ? ufd : -1;
+    }
+
+    //! Returns the pending error of a descriptor, which reading it clears; -1 if the descriptor has none or is closed
+    static int readPendingError(int fd) {
+        struct pollfd pfd = {fd, 0, 0};
+        if (::poll(&pfd, 1, 0) != 1 || !(pfd.revents & POLLERR)) {
+            return -1;
+        }
+        int err = 0;
+        socklen_t len = sizeof(err);
+        if (::getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len)) {
+            return -1;
+        }
+        return err;
+    }
+
+    //! A connection attempt makes no system call on a descriptor number that its socket has given up (qore#7003)
+    /** The socket takes the descriptor of the first attempt of an Internet connection over while the attempt is in
+        progress; the attempt keeps the number to check the connection.  When the socket was closed and the connection
+        was continued, the attempt was checked by its number, which could belong to another descriptor by then: the
+        check read the other socket's pending error with getsockopt(SO_ERROR), which clears it, and the connection
+        failed with that error.  When the socket had been given another descriptor meanwhile, the failed connection
+        also reset the socket's new descriptor without closing it.
+
+        The connection is the poll state of QoreSocket::startConnect(), which a module drives itself: no controller
+        cancels it when the socket is closed.  The socket is closed, and then also bound again; the attempt's number
+        is given to a UDP socket with a pending error, which must stay pending, and the connection must fail with
+        SOCKET-CLOSED.
+    */
+    static void runConnectClosedSocketAttempt(UnitTestCounters& c) {
+        for (int variant = 0; variant < 2; ++variant) {
+            const char* what = variant ? "closed and bound again" : "closed";
+            auto m = [what](const char* msg) {
+                return std::string(what) + ": " + msg;
+            };
+            ExceptionSink xsink;
+            std::vector<int> fds;
+            struct FdCloser {
+                std::vector<int>& fds;
+                ~FdCloser() {
+                    for (int fd : fds) {
+                        ::close(fd);
+                    }
+                }
+            } fd_closer{fds};
+            struct sockaddr_in sa;
+            if (!makeSilentTarget(c, fds, sa, std::string(" (") + what + ")")) {
+                return;
+            }
+            int ufd = makePendingErrorSocket(c, fds);
+            if (ufd < 0) {
+                return;
+            }
+            std::string target = "127.0.0.1:" + std::to_string(ntohs(sa.sin_port));
+
+            QoreSocket client;
+            std::unique_ptr<AbstractPollState> state(client.startConnect(&xsink, target.c_str()));
+            // the first step resolves the address and starts the attempt, which is in progress
+            int rc = xsink || !state ? -1 : state->continuePoll(&xsink);
+            UT_ASSERT(c, rc > 0 && !xsink, m("the connection is in progress").c_str());
+            int attempt_fd = qore_socket_ops(client).getDescriptor();
+            UT_ASSERT(c, attempt_fd >= 0, m("the socket has the descriptor of the attempt").c_str());
+            if (rc <= 0 || xsink || attempt_fd < 0) {
+                xsink.clear();
+                return;
+            }
+
+            // the socket is closed while the attempt is in progress
+            client.close();
+            // the attempt's number is either closed with the socket, or kept reserved by the connection until it is
+            // destroyed, so that it cannot be given to another descriptor meanwhile
+            struct stat reserved_st;
+            bool reserved = !ut_fd_stat(attempt_fd, &reserved_st);
+            int reuse_fd = -1;
+            if (!reserved) {
+                // the attempt's number is given to a socket with a pending error
+                reuse_fd = fcntl(ufd, F_DUPFD_CLOEXEC, attempt_fd);
+                if (reuse_fd >= 0) {
+                    fds.push_back(reuse_fd);
+                }
+                UT_ASSERT_EQ(c, attempt_fd, reuse_fd, m("the attempt's number is given to a new descriptor").c_str());
+                if (reuse_fd != attempt_fd) {
+                    return;
+                }
+            }
+            int new_fd = -1;
+            if (variant) {
+                // the socket is opened again: it gets another descriptor
+                int brc = client.bindINET("127.0.0.1", "0", false, AF_INET, SOCK_STREAM, 0, &xsink);
+                new_fd = qore_socket_ops(client).getDescriptor();
+                UT_ASSERT(c, !brc && !xsink && new_fd >= 0 && new_fd != attempt_fd,
+                    m("the socket is bound again").c_str());
+                if (brc || xsink || new_fd < 0 || new_fd == attempt_fd) {
+                    xsink.clear();
+                    return;
+                }
+            }
+
+            // the connection is continued
+            rc = state->continuePoll(&xsink);
+            UT_ASSERT(c, rc < 0 && xsink, m("the connection fails").c_str());
+            QoreStringValueHelper err(xsink ? xsink.getExceptionErr() : QoreValue());
+            UT_ASSERT(c, !strcmp(err->c_str(), "SOCKET-CLOSED"),
+                (m("the connection fails with SOCKET-CLOSED, not ") + err->c_str()).c_str());
+            xsink.clear();
+            if (!reserved) {
+                // the error of the socket that has the attempt's number is still pending
+                UT_ASSERT_EQ(c, ECONNREFUSED, readPendingError(reuse_fd),
+                    m("the pending error of the descriptor with the attempt's number is kept").c_str());
+            }
+            if (variant) {
+                UT_ASSERT_EQ(c, new_fd, qore_socket_ops(client).getDescriptor(),
+                    m("the socket keeps its new descriptor").c_str());
+                UT_ASSERT(c, fcntl(new_fd, F_GETFD) != -1, m("the new descriptor is open").c_str());
+            }
+            // the connection is destroyed
+            state.reset();
+            if (reserved) {
+                // the reserved number is released: it is closed, or (if another descriptor of the process got it
+                // since) it is another file
+                struct stat st;
+                bool released = ut_fd_stat(attempt_fd, &st)
+                    || st.st_dev != reserved_st.st_dev || st.st_ino != reserved_st.st_ino;
+                UT_ASSERT(c, released, m("the number that the connection reserved is released").c_str());
+            } else {
+                UT_ASSERT(c, fcntl(reuse_fd, F_GETFD) != -1,
+                    m("the descriptor with the attempt's number is still open").c_str());
+            }
+            if (variant) {
+                UT_ASSERT(c, fcntl(new_fd, F_GETFD) != -1,
+                    m("the new descriptor is open after the connection is destroyed").c_str());
+            }
+        }
+    }
+
     //! One descriptor registered for two objects in one event loop: each registration gets the descriptor's events,
     //! and removing one keeps the other
     /** A socket and a controller wrapper of it have I/O identities of their own, and Socket::poll() polls a pollable
@@ -26865,6 +27036,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runPollableExtraFdClose(c, AsyncIoDescriptorHoldTest::XFD_ALL_FALLBACK);
     AsyncIoDescriptorHoldTest::runPollableExtraFdClose(c, AsyncIoDescriptorHoldTest::XFD_DRAIN_FALLBACK);
     AsyncIoDescriptorHoldTest::runReplaceDescriptorGeneration(c);
+    AsyncIoDescriptorHoldTest::runConnectClosedSocketAttempt(c);
     AsyncIoDescriptorHoldTest::runSharedRegistration(c);
     AsyncIoDescriptorHoldTest::runOwnedExtraFd(c);
     AsyncIoDescriptorHoldTest::runRefusedExtraFd(c);
