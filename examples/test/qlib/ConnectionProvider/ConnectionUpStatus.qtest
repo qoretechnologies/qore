@@ -990,6 +990,9 @@ string sub own_ping(string url) {
             # the IPv6 host "::1:<port>" with the default port
             push cases, (sprintf("http://[::1]:%d", rest_port6), sprintf("http://[::1:%d]/", rest_port6));
         }
+        # a host with "?" followed by a port and a path: the client's host is "localhost?x", but the URL without its
+        # path reads as host "localhost" with the default port and a query
+        push cases, ("http://localhost", sprintf("http://localhost?x:%d/", rest_port));
 
         code make_http = AbstractConnection sub (string url, *hash<auto> opts) {
             return new HttpConnection("http", "test", url, {"monitor": False}, opts ?? {});
@@ -1031,7 +1034,21 @@ string sub own_ping(string url) {
         evil_proxy.bind("127.0.0.1:0");
         evil_proxy.listen();
         on_exit evil_proxy.close();
+        # a REST connection's pings check its client's target the same way
+        foreach list<string> c in (cases) {
+            string label = sprintf("REST: %y -> %y", c[0], c[1]);
+            RestConnection conn("rest", "test", c[0], {"monitor": False});
+            assertEq("PERMISSION-DENIED", p.callFunction("path_ping", conn, c[1]), label);
+            conn = new RestConnection("rest", "test", c[0], {"monitor": False});
+            assertEq("PERMISSION-DENIED", p.callFunction("path_poll", conn, c[1]), label + ", polling");
+        }
+
         foreach hash<auto> kind in ({"name": "HTTP", "make": make_http}, {"name": "JSON-RPC", "make": make_jsonrpc}) {
+            # a proxy host with "?" followed by a port and a path reads as the proof's proxy without its path
+            AbstractConnection pconn = kind.make("http://127.0.0.1:" + closed_port, {"proxy": "http://localhost"});
+            assertEq("PERMISSION-DENIED", p.callFunction("proxy_ping", pconn, "http://localhost?x:3129/"),
+                kind.name + ": a proxy host with \"?\"");
+
             string label = sprintf("%s: credentials in the proxy option", kind.name);
             AbstractConnection conn = kind.make("http://127.0.0.1:" + closed_port, {"proxy": proxy});
             assertEq("OK", p.callFunction("path_ping", conn), label);
