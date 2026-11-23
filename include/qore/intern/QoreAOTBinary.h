@@ -34,6 +34,7 @@
 
 #include <atomic>
 #include <cassert>
+#include <climits>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
