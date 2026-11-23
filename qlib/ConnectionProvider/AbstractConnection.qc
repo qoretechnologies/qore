@@ -113,15 +113,16 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
             reader can tell a connection that was never checked from one that is down).
 
             It is set to @ref True "True" by a successful ping (@ref handlePingSuccess(), called by @ref ping() and by
-            connection monitoring) and by a successful connection made with @ref get() with \a connect
-            @ref True "True", unless the last ping failed, and to @ref False "False" by a failed ping
-            (@ref handlePingFailed()), also one that throws its error.  It is not changed by:
-            - an object acquired with \a connect @ref False "False" or with @ref getAsync(), which does not prove that
-              the connection can be made (async objects connect on demand): a connection that is used only through
-              such objects, including the data providers that use them (the REST connections' data providers, for
-              example), stays not up until it is pinged
-              (<a href="https://github.com/qoretechnologies/qore/issues/7274">issue 7274</a> tracks marking it up
-              on the first successful request of an async client)
+            connection monitoring), by a successful connection made with @ref get() with \a connect
+            @ref True "True", and by the first connection that an async HTTP or REST client acquired with
+            @ref getAsync() makes (when its first request is submitted on a connection made successfully; see
+            \c watchFirstConnection(); <a href="https://github.com/qoretechnologies/qore/issues/7274">issue 7274</a>),
+            unless the last ping failed, and to @ref False "False" by a failed ping (@ref handlePingFailed()), also one
+            that throws its error.  It is not changed by:
+            - an object acquired with \a connect @ref False "False" with @ref get(), or an object acquired with
+              @ref getAsync() before it has connected, which do not prove that the connection can be made (async
+              objects connect on demand); a connection used only through the data providers that use async clients
+              (the REST connections' data providers, for example) comes up with their first connection
             - a connection that cannot be made with @ref get() or @ref getAsync(), which sets @ref status to its error
               only (issue #4852)
             - an automatic ping (@ref PF_AUTOMATIC_PING) skipped because the connection disables automatic pings
@@ -438,12 +439,13 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
     }
 
     #! Returns the connection safe URL (without password info)
-    /** @return the connection safe URL (without password info)
+    /** @return the connection safe URL (without password info); the URL that the connection shows when this method
+        is called (see getShownUrl())
 
         @since %ConnectionProvider 1.7
     */
     string getSafeUrl() {
-        return safe_url;
+        return getShownUrl();
     }
 
     #! Returns True if the connection requires OAuth2 authorization before it can be used
@@ -688,7 +690,7 @@ conn.checkSandboxAccess(True);
         # Ping results are diagnostics, including when authentication fails. Apply
         # the same sensitive-option policy as getInfo() before returning either result.
         rv.opts = getSafeOptions(rv.opts);
-        rv.url = safe_url;
+        rv.url = getShownUrl();
 
         # issue #7236: an automatic ping of a connection whose automatic pings are disabled checks nothing, so it
         # leaves the state of the connection (up, status and last_check) as it is
@@ -807,7 +809,7 @@ conn.checkSandboxAccess(True);
         }
         h.opts = orig_opts;
         if (!opts.with_passwords) {
-            h.url = safe_url;
+            h.url = getShownUrl();
             delete h.url_hash.password;
             # remove all sensitive option values as well
             h.opts = getSafeOptions(h.opts);
@@ -817,6 +819,20 @@ conn.checkSandboxAccess(True);
             h.opts = h.opts{sort(keys h.opts)};
         }
         return h;
+    }
+
+    #! Returns the safe URL that the connection shows, made when it is shown
+    /** Used for getSafeUrl(), the \c url of the information (getInfo() without the \c with_passwords option) and
+        the ping results of the connection; the base implementation returns the \c safe_url member, which is made when
+        the connection is created; a connection whose safe URL depends on state that can change afterwards (such as
+        the drivers that are loaded) reimplements it to make the URL when it is shown (qore#7275)
+
+        @return the safe URL to show
+
+        @since ConnectionProvider 3.1
+    */
+    private string getShownUrl() {
+        return safe_url;
     }
 
     #! Returns the options of the connection without the values of its sensitive options
@@ -1048,6 +1064,7 @@ conn.checkSandboxAccess(True);
         if (!connect) {
             object o = getAsyncImpl(False, rtopts);
             postProcess(o);
+            watchFirstConnection(o);
             return o;
         }
 
@@ -1056,12 +1073,36 @@ conn.checkSandboxAccess(True);
             postProcess(o);
             # issue #7236: an async object does not prove that the connection is up, as async objects connect on
             # demand (getAsyncImpl() of the HTTP, REST and FTP connections ignores "connect"), so it is no check of
-            # the connection and changes neither its state nor last_check
+            # the connection and changes neither its state nor last_check; its first connection does (qore#7274)
+            watchFirstConnection(o);
             return o;
         } catch (hash<ExceptionInfo> ex) {
             last_check = now_us();
             setErrorStatus(ex);
             rethrow;
+        }
+    }
+
+    #! Marks the connection up when the async client that getAsync() created was first connected
+    /** An async HTTP or REST client connects on demand: when its first request is submitted on a connection, which is
+        possible only on a connection that was made successfully (connected, and with the TLS handshake made for
+        HTTPS), the connection is marked up as by @ref get() with \a connect @ref True "True": @ref up is set to
+        @ref True "True" and @ref status to \c "OK", unless a failed ping marked the connection down (issue #4852),
+        and @ref last_check is set.  A client that cannot connect (a closed port, a refused certificate) changes
+        nothing.  The result of the request is not considered: liveness by the response of a request is the job of a
+        ping (qore#7274).
+
+        @param o the object created by getAsyncImpl(); objects that do not support it are left as they are
+    */
+    private:internal watchFirstConnection(object o) {
+        code<nothing()> cb = sub () {
+            last_check = now_us();
+            handleConnected();
+        };
+        if (o instanceof HttpClientIo::HttpClientConnectionManager) {
+            cast<HttpClientIo::HttpClientConnectionManager>(o).setFirstConnectionCallback(cb);
+        } else if (o.hasCallableMethod("setFirstConnectionCallback")) {
+            call_object_method(o, "setFirstConnectionCallback", cb);
         }
     }
 

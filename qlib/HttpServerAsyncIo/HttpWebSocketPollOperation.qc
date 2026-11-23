@@ -111,12 +111,30 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
             order and user code serialized per connection.
         */
         bool dispatching = False;
+
+        #! The handles of work of the module cleanup that left its frames or its result to the running drainer
+        /** Protected by @ref dispatch_mutex; released by the drainer once it has processed them, so that the cleanup
+            at the end of the process waits for it as for the work itself (see
+            @ref Qore::AsyncIoController::holdModuleCleanupWork() "AsyncIoController::holdModuleCleanupWork()",
+            qore#7239)
+        */
+        list<int> pending_cleanup_work = ();
     }
 
     #! Creates the poll operation
     /** @param sock the WebSocket socket (after upgrade handshake complete)
     */
     constructor(Socket sock) : HttpWebSocketPollOperationBase(sock) {
+    }
+
+    #! Releases the handles of work of the module cleanup that are still left to the drainer
+    /** Handles are left only if the object is destroyed without the drainer taking them (qore#7239): the cleanup at
+        the end of the process does not then wait for them
+    */
+    destructor() {
+        foreach int handle in (pending_cleanup_work) {
+            AsyncIoController::releaseModuleCleanupWork(handle);
+        }
     }
 
     #! Sets the connection and handler references for frame dispatch
@@ -303,7 +321,12 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
             }
             if (dispatching) {
                 # An already-running handlerPoolDrain() will pick up new
-                # frames before it clears the dispatching flag.
+                # frames before it clears the dispatching flag; work of the module cleanup at the end of the process
+                # hands itself over to it (qore#7239)
+                int handle = AsyncIoController::holdModuleCleanupWork();
+                if (handle) {
+                    push pending_cleanup_work, handle;
+                }
                 return;
             }
             if (!completion_controller || !completion_target) {
@@ -324,7 +347,9 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
             # claim so that future onPollComplete() calls (or onComplete()'s
             # final drain) can make progress.  A stopping pool means the
             # connection is going down anyway.
-            *hash<SocketPollResultInfo> result = releaseDispatchClaim();
+            list<int> handed;
+            *hash<SocketPollResultInfo> result = releaseDispatchClaim(\handed);
+            on_exit map AsyncIoController::releaseModuleCleanupWork($1), handed;
             if (exists result) {
                 finishCompletion(result);
             }
@@ -380,9 +405,13 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
     /** @return the result of an @ref onComplete() call that arrived while the claim was held; the caller must
         then call @ref finishCompletion() with it
     */
-    private *hash<SocketPollResultInfo> releaseDispatchClaim() {
+    private *hash<SocketPollResultInfo> releaseDispatchClaim(reference<list<int>> handed) {
         AutoLock al(dispatch_mutex);
         dispatching = False;
+        # the handles of the work of the module cleanup that was handed over to the claim (qore#7239), taken with it:
+        # the caller releases them once it has done what it does next
+        handed = pending_cleanup_work;
+        pending_cleanup_work = ();
         return remove pending_completion;
     }
 
@@ -403,9 +432,14 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
         # the deferred onComplete() result, if any
         *hash<SocketPollResultInfo> result;
         bool released = False;
+        # released last, once the frames and the result handed over to this drainer have been processed: work of the
+        # module cleanup that handed itself over to the drainer (qore#7239)
+        # the handles of the work of the module cleanup handed over to this drainer, taken when it releases its claim
+        list<int> handed;
+        on_exit map AsyncIoController::releaseModuleCleanupWork($1), handed;
         on_exit if (!released) {
             # an unexpected exception left the loop with the claim held
-            result = releaseDispatchClaim();
+            result = releaseDispatchClaim(\handed);
             if (exists result) {
                 finishCompletion(result);
             }
@@ -422,6 +456,9 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
                 if (!frame) {
                     dispatching = False;
                     result = remove pending_completion;
+                    # taken with the claim: a drainer submitted after this one gets the handles of its own
+                    handed = pending_cleanup_work;
+                    pending_cleanup_work = ();
                     released = True;
                     break;
                 }
@@ -529,8 +566,13 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
             AutoLock al(dispatch_mutex);
             completed = True;
             if (dispatching) {
-                # the running drainer finishes the operation
+                # the running drainer finishes the operation; work of the module cleanup at the end of the process
+                # hands itself over to it (qore#7239)
                 pending_completion = result;
+                int handle = AsyncIoController::holdModuleCleanupWork();
+                if (handle) {
+                    push pending_cleanup_work, handle;
+                }
                 return;
             }
             if (wsc && completion_controller && completion_target && hasReceivedFrames()) {
@@ -548,7 +590,11 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
                 return;
             } catch (hash<ExceptionInfo> ex) {
                 # the pool is stopping; finish here
-                result = releaseDispatchClaim() ?? result;
+                list<int> handed;
+                result = releaseDispatchClaim(\handed) ?? result;
+                on_exit map AsyncIoController::releaseModuleCleanupWork($1), handed;
+                finishCompletion(result);
+                return;
             }
         }
         finishCompletion(result);

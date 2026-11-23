@@ -42,6 +42,9 @@ const SendTimeoutMs = 1000;
 #! a hang guard only, never a timing assertion
 const HangGuard = 60s;
 
+#! far below the client's timeout (@ref HangGuard), which a disconnect that gets no answer waits for, in milliseconds
+const DisconnectBoundMs = 30000;
+
 #! Pushes the messages about a send that timed out to a Queue
 class SendLogAppender inherits LoggerAppenderWithLayout {
     public {
@@ -54,7 +57,7 @@ class SendLogAppender inherits LoggerAppenderWithLayout {
 
     processEventImpl(int type, auto params) {
         if (type == LoggerAppender::EVENT_LOG && params.toString() =~ /send timed out/) {
-            messages.push(params.toString());
+            messages.push({"msg": params.toString(), "at": clock_get_monotonic_us()});
         }
     }
 }
@@ -73,9 +76,23 @@ class StallConnection inherits WebSocketConnection {
         self.stream_id = stream_id;
     }
 
+    #! holds the setup of the connection until the sends have returned, if the handler asks for it: the client's
+    #! message is then handled before direct sends are enabled, so the sends only queue their frames, and the wait for
+    #! the stream's send buffer is made when the frames are flushed here
+    enableDirectSend() {
+        if (stall_handler.hold_setup) {
+            stall_handler.sends_returned.waitForZero(HangGuard);
+        }
+        WebSocketConnection::enableDirectSend();
+    }
+
     gotMessage(string msg) {
         if (msg != "send") {
             return;
+        }
+        stall_handler.started.push(clock_get_monotonic_us());
+        on_exit if (stall_handler.hold_setup) {
+            stall_handler.sends_returned.dec();
         }
         if (session_id) {
             call_function("dbg_quic_hold_stream_data", session_id, stream_id);
@@ -86,17 +103,20 @@ class StallConnection inherits WebSocketConnection {
             call_function("dbg_quic_simulate_stream_progress", stream_id, stall_handler.progress_reads);
         }
         send(binary(strmul("a", Payload)));
-        int start = clock_get_monotonic_us();
-        # waits for the stream's send buffer, which never drains, and ends the connection
+        # waits for the stream's send buffer, which never drains, and ends the connection; or only queues the frame,
+        # before direct sends are enabled
         send(binary(strmul("b", Payload)));
-        stall_handler.elapsed.push((clock_get_monotonic_us() - start) / 1000);
     }
 }
 
 class StallHandler inherits WebSocketHandler {
     public {
-        #! the time of the send that found the buffer full, in milliseconds
-        Queue elapsed();
+        #! the time on the monotonic clock when the handler started to send, in microseconds
+        Queue started();
+        #! True to hold the setup of the connection until the sends have returned
+        bool hold_setup = False;
+        #! released when the sends have returned
+        Counter sends_returned(1);
         #! the reads of the progress count that see progress
         int progress_reads = 0;
     }
@@ -123,6 +143,12 @@ class WebSocketStreamSendStallTest inherits QUnit::Test {
                 \testStall(), ver);
             addTestCase(sprintf("HTTP/%s: a client that is taking the data is not cut off by the send timeout", ver),
                 \testProgress(), ver);
+        }
+        foreach string ver in (("2.0", "3.0")) {
+            addTestCase(sprintf("HTTP/%s: frames queued before direct sends: no progress", ver), \testQueuedStall(),
+                ver);
+            addTestCase(sprintf("HTTP/%s: frames queued before direct sends: a client taking the data", ver),
+                \testQueuedProgress(), ver);
         }
         set_return_value(main());
     }
@@ -158,7 +184,9 @@ class WebSocketStreamSendStallTest inherits QUnit::Test {
             testSkip("the library is not built with debugging");
         }
         appender.messages.clear();
-        handler.elapsed.clear();
+        handler.started.clear();
+        handler.hold_setup = False;
+        handler.sends_returned = new Counter(1);
     }
 
     #! Makes the server send to a client that takes nothing; returns the time of the send and the log message
@@ -185,9 +213,23 @@ class WebSocketStreamSendStallTest inherits QUnit::Test {
         wsc.connect();
         assertEq(ver == "3.0", wsc.isHttp3(), "the connection uses the HTTP version");
         wsc.send("send");
-        string msg = appender.messages.get(HangGuard);
-        int elapsed = handler.elapsed.get(HangGuard);
-        return {"msg": msg, "elapsed": elapsed};
+        hash<auto> timed_out = appender.messages.get(HangGuard);
+        # from the start of the sends to the timeout, wherever the wait was made: the return of a send says nothing,
+        # as a send before direct sends are enabled only queues its frame
+        int elapsed = (timed_out.at - handler.started.get(HangGuard)) / 1000;
+        # the release of the hold resumes the stream, whose data and end go out with the session's next write, which the
+        # client's close makes happen, so that the close is not left waiting for them until its timeout
+        call_function("dbg_quic_simulate_stream_progress", 0, 0);
+        call_function("dbg_quic_release_stream_data");
+        call_function("dbg_http2_release_stream_data");
+        int disconnect_start = clock_get_monotonic_us();
+        try {
+            wsc.disconnect();
+        } catch () {
+        }
+        assertLt(DisconnectBoundMs, (clock_get_monotonic_us() - disconnect_start) / 1000,
+            "the disconnect does not wait for its timeout");
+        return {"msg": timed_out.msg, "elapsed": elapsed};
     }
 
     testStall(string ver) {
@@ -200,8 +242,20 @@ class WebSocketStreamSendStallTest inherits QUnit::Test {
     #! the first read of the count starts the wait and the next one sees progress, at the end of the first period
     testProgress(string ver) {
         hash<auto> r = runSend(ver, 2);
-        assertRegex(ver == "3.0" ? "acknowledged no data" : "granted no credit", r.msg, "it ended for lack of progress");
+        assertRegex(ver == "3.0" ? "acknowledged no data" : "granted no credit", r.msg,
+            "it ended for lack of progress");
         # a deadline on the total time ended the send at the end of the first period
         assertGe(2 * SendTimeoutMs - 50, r.elapsed, "the send went on into a second period");
+    }
+
+    #! the client's message is handled before direct sends are enabled, as it can be at any time
+    testQueuedStall(string ver) {
+        handler.hold_setup = True;
+        testStall(ver);
+    }
+
+    testQueuedProgress(string ver) {
+        handler.hold_setup = True;
+        testProgress(ver);
     }
 }
