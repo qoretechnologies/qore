@@ -38,6 +38,11 @@ public namespace AsyncSocketIo {
 */
 public class AbstractStreamContext {
     private {
+        #! the minimum rate of the sends on the stream, if any (see @ref setSendMinRate())
+        *SendRateMonitor send_rate;
+    }
+
+    private {
         #! True once this context sent the close frame of a WebSocket connection (@ref sendWebSocketClose())
         bool ws_close_sent = False;
 
@@ -83,6 +88,21 @@ public class AbstractStreamContext {
         before (see @ref sendWebSocketClose()); also raised by @ref sendDataWithTimeout() and @ref trySendData()
     */
     abstract sendData(binary data, bool end_stream = False);
+
+    #! Sets the minimum average rate at which the peer must take data while a send waits for it
+    /** The rate is measured over a sliding window of the time spent waiting for the peer, kept across the sends on the
+        stream; a send that waits for a peer below it raises \c STREAM-SEND-TIMEOUT.
+
+        @param min_rate the minimum rate in bytes per second; 0 disables the check
+        @param window the length of the sliding window
+
+        @throw SEND-RATE-ERROR invalid arguments
+
+        @since AsyncSocketIo 1.0
+    */
+    setSendMinRate(int min_rate, timeout window) {
+        send_rate = min_rate > 0 ? new SendRateMonitor(min_rate, window) : NOTHING;
+    }
 
     #! Sends data on the stream, waiting at most the given time for a full stream send buffer to drain
     /** Transports with a bounded stream send buffer (HTTP/2 and HTTP/3) override this to wait for the buffer to
@@ -222,6 +242,22 @@ public class AbstractStreamContext {
     */
     close() {
         # no-op by default; Http3StreamContext overrides
+    }
+
+    #! Aborts the stream: the data not yet sent is discarded and the peer is told that the stream was cancelled
+    /** For a connection that is dropped without delivering what it has not sent yet, for example a client that took
+        none of the data for the send timeout (qore#7325): unlike @ref close(), which ends the stream after the data
+        already queued, so that a peer that grants no flow-control credit is never told, and the stream and its send
+        buffer stay until the session ends, the stream is reset at once (HTTP/2 \c RST_STREAM, HTTP/3
+        \c RESET_STREAM and \c STOP_SENDING) and its state and buffered data are released.  Errors are ignored, as
+        the peer or the session may have ended the stream already.
+
+        The default implementation calls @ref close()
+
+        @since AsyncSocketIo 1.0
+    */
+    abort() {
+        close();
     }
 }
 

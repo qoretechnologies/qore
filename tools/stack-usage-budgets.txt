@@ -68,7 +68,12 @@
 # #6627 gained 187-685 there.  The budget is 64 B over 4272, and the x86_64 release budgets of
 # recursion-frame-budget.qtest are 56 bytes per level over the measured 5053 / 6114 / 5041 (glibc, GCC 15.2; 4987 /
 # 6052 / 4975 with the frame of 4208 B), which were 20 bytes per level under the ir method budget
-4336 QoreIRInterpreter::execute
+# #7355: the AS fix-forward e4aa617ea7..2ce276b9f2 adds 48 B: 4336 B on batch AS 2ce276b9f2, 4288 B on e4aa617ea7;
+# its only change to execute() is #7299's (an element or key store through a local that holds a weak reference changes
+# the container).  Accepted for now to unblock batches AS and AT; the reduction of the frame is tracked in #7355.  The
+# budget is 64 B over 4336, and the x86_64 release budgets of recursion-frame-budget.qtest are 56 bytes per level over
+# the measured 5121 / 6177 / 5121 (glibc, GCC 15.2; 5090 / 6141 / 5071 on e4aa617ea7)
+4400 QoreIRInterpreter::execute
 928 tryExecuteInterpreterInlineIRFunction
 880 tryExecuteInterpreterInlineIRStaticMethod
 96 evalAndRef

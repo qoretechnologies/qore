@@ -113,15 +113,16 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
             reader can tell a connection that was never checked from one that is down).
 
             It is set to @ref True "True" by a successful ping (@ref handlePingSuccess(), called by @ref ping() and by
-            connection monitoring) and by a successful connection made with @ref get() with \a connect
-            @ref True "True", unless the last ping failed, and to @ref False "False" by a failed ping
-            (@ref handlePingFailed()), also one that throws its error.  It is not changed by:
-            - an object acquired with \a connect @ref False "False" or with @ref getAsync(), which does not prove that
-              the connection can be made (async objects connect on demand): a connection that is used only through
-              such objects, including the data providers that use them (the REST connections' data providers, for
-              example), stays not up until it is pinged
-              (<a href="https://github.com/qoretechnologies/qore/issues/7274">issue 7274</a> tracks marking it up
-              on the first successful request of an async client)
+            connection monitoring), by a successful connection made with @ref get() with \a connect
+            @ref True "True", and by the first connection that an async HTTP or REST client acquired with
+            @ref getAsync() makes (when its first request is submitted on a connection made successfully; see
+            \c watchFirstConnection(); <a href="https://github.com/qoretechnologies/qore/issues/7274">issue 7274</a>),
+            unless the last ping failed, and to @ref False "False" by a failed ping (@ref handlePingFailed()), also one
+            that throws its error.  It is not changed by:
+            - an object acquired with \a connect @ref False "False" with @ref get(), or an object acquired with
+              @ref getAsync() before it has connected, which do not prove that the connection can be made (async
+              objects connect on demand); a connection used only through the data providers that use async clients
+              (the REST connections' data providers, for example) comes up with their first connection
             - a connection that cannot be made with @ref get() or @ref getAsync(), which sets @ref status to its error
               only (issue #4852)
             - an automatic ping (@ref PF_AUTOMATIC_PING) skipped because the connection disables automatic pings
@@ -438,12 +439,13 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
     }
 
     #! Returns the connection safe URL (without password info)
-    /** @return the connection safe URL (without password info)
+    /** @return the connection safe URL (without password info); the URL that the connection shows when this method
+        is called (see getShownUrl())
 
         @since %ConnectionProvider 1.7
     */
     string getSafeUrl() {
-        return safe_url;
+        return getShownUrl();
     }
 
     #! Returns True if the connection requires OAuth2 authorization before it can be used
@@ -688,7 +690,7 @@ conn.checkSandboxAccess(True);
         # Ping results are diagnostics, including when authentication fails. Apply
         # the same sensitive-option policy as getInfo() before returning either result.
         rv.opts = getSafeOptions(rv.opts);
-        rv.url = safe_url;
+        rv.url = getShownUrl();
 
         # issue #7236: an automatic ping of a connection whose automatic pings are disabled checks nothing, so it
         # leaves the state of the connection (up, status and last_check) as it is
@@ -807,7 +809,7 @@ conn.checkSandboxAccess(True);
         }
         h.opts = orig_opts;
         if (!opts.with_passwords) {
-            h.url = safe_url;
+            h.url = getShownUrl();
             delete h.url_hash.password;
             # remove all sensitive option values as well
             h.opts = getSafeOptions(h.opts);
@@ -817,6 +819,20 @@ conn.checkSandboxAccess(True);
             h.opts = h.opts{sort(keys h.opts)};
         }
         return h;
+    }
+
+    #! Returns the safe URL that the connection shows, made when it is shown
+    /** Used for getSafeUrl(), the \c url of the information (getInfo() without the \c with_passwords option) and
+        the ping results of the connection; the base implementation returns the \c safe_url member, which is made when
+        the connection is created; a connection whose safe URL depends on state that can change afterwards (such as
+        the drivers that are loaded) reimplements it to make the URL when it is shown (qore#7275)
+
+        @return the safe URL to show
+
+        @since ConnectionProvider 3.1
+    */
+    private string getShownUrl() {
+        return safe_url;
     }
 
     #! Returns the options of the connection without the values of its sensitive options
@@ -1048,6 +1064,7 @@ conn.checkSandboxAccess(True);
         if (!connect) {
             object o = getAsyncImpl(False, rtopts);
             postProcess(o);
+            watchFirstConnection(o);
             return o;
         }
 
@@ -1056,12 +1073,36 @@ conn.checkSandboxAccess(True);
             postProcess(o);
             # issue #7236: an async object does not prove that the connection is up, as async objects connect on
             # demand (getAsyncImpl() of the HTTP, REST and FTP connections ignores "connect"), so it is no check of
-            # the connection and changes neither its state nor last_check
+            # the connection and changes neither its state nor last_check; its first connection does (qore#7274)
+            watchFirstConnection(o);
             return o;
         } catch (hash<ExceptionInfo> ex) {
             last_check = now_us();
             setErrorStatus(ex);
             rethrow;
+        }
+    }
+
+    #! Marks the connection up when the async client that getAsync() created was first connected
+    /** An async HTTP or REST client connects on demand: when its first request is submitted on a connection, which is
+        possible only on a connection that was made successfully (connected, and with the TLS handshake made for
+        HTTPS), the connection is marked up as by @ref get() with \a connect @ref True "True": @ref up is set to
+        @ref True "True" and @ref status to \c "OK", unless a failed ping marked the connection down (issue #4852),
+        and @ref last_check is set.  A client that cannot connect (a closed port, a refused certificate) changes
+        nothing.  The result of the request is not considered: liveness by the response of a request is the job of a
+        ping (qore#7274).
+
+        @param o the object created by getAsyncImpl(); objects that do not support it are left as they are
+    */
+    private:internal watchFirstConnection(object o) {
+        code<nothing()> cb = sub () {
+            last_check = now_us();
+            handleConnected();
+        };
+        if (o instanceof HttpClientIo::HttpClientConnectionManager) {
+            cast<HttpClientIo::HttpClientConnectionManager>(o).setFirstConnectionCallback(cb);
+        } else if (o.hasCallableMethod("setFirstConnectionCallback")) {
+            call_object_method(o, "setFirstConnectionCallback", cb);
         }
     }
 
@@ -1357,7 +1398,9 @@ conn.checkSandboxAccess(True);
         that was lent the connection may connect only to the connection's own target, as with the clients that
         @ref get() and @ref getAsync() create for it (qore#7262): the origin of \a url (TLS or not, host, port) and the
         proxy must be the ones that the proof that the connection took from the code that created it is bound to; a
-        connection without a proof, or another target, is refused before any connection is attempted.
+        connection without a proof, or another target, is refused before any connection is attempted.  A URL whose
+        IPv6 host is not in brackets is ambiguous and refused as well.  A UNIX domain socket target is compared by its
+        socket path.
 
         @param url the URL that the client connects to (an \c http or \c https URL)
         @param proxy_url the URL of the client's proxy, if any
@@ -1378,6 +1421,46 @@ conn.checkSandboxAccess(True);
                 "functional domain and may connect only to the target of a connection that unrestricted code created "
                 "and lent to it", name);
         }
+    }
+
+    #! Returns the target of a configured URL (its scheme, host and port), without its user information and path
+    /** For a check with checkLentNetworkTarget() of a URL or proxy URL that the connection's client parses as it is (a
+        configured URL, which can hold credentials): the target is rebuilt from what parse_url() gives, which is what
+        the client connects to: an IPv6 address in brackets, and a UNIX domain socket path as \c "socket=" followed by
+        the path with every reserved character encoded
+
+        @param url the configured URL
+
+        @return the URL of its target
+
+        @throw PERMISSION-DENIED the URL cannot be parsed or has no host, so its target cannot be checked
+
+        @since %ConnectionProvider 3.1
+    */
+    final private string getLentTargetUrl(string url) {
+        try {
+            hash<UrlInfo> u = parse_url(url);
+            # a host (not a socket path) with "?", "#", "/" or white space is not rebuilt: a client can read the host of
+            # such a URL otherwise than parse_url() reads the URL (qore#7236)
+            if (u.host.val() && (u.host =~ /^\// || u.host !~ /[?#\/\s]/)) {
+                string rv = (u.protocol ?? "http") + "://";
+                if (u.host =~ /^\//) {
+                    if (!u.port) {
+                        return rv + "socket=" + encode_url(u.host, True);
+                    }
+                } else {
+                    rv += u.host =~ /:/ ? "[" + u.host + "]" : u.host;
+                    if (u.port) {
+                        rv += ":" + u.port;
+                    }
+                    return rv;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # refused below
+        }
+        throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the NETWORK functional "
+            "domain, and the target of a URL of the connection cannot be checked", name);
     }
 
     #! Marks the connection up after a connection was made successfully with get(), unless a failed ping marked it down

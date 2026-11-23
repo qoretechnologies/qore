@@ -148,7 +148,9 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
         password is removed, the user name is masked as @c "****", and the value of each driver option is masked as
         @c "****" unless all of the conditions of @ref datasource_mask_options hold: the driver is loaded, registers
         the option with option flags without declaring it sensitive, the option name names no credential, and the
-        value is a plain string, number or boolean that a datasource string can show (qore#7017, qore#7070)
+        value is a plain string, number or boolean that a datasource string can show (qore#7017, qore#7070); the
+        database name is shown under the rule of @ref datasource_mask_options, which masks the database name of a
+        loaded driver that declares @ref Qore::SQL::DBI_CAP_SENSITIVE_DBNAME "DBI_CAP_SENSITIVE_DBNAME" (qore#7275)
     */
     hash<ConnectionInfo> getInfo(*hash<auto> opts) {
         hash<ConnectionInfo> h = AbstractConnectionWithInfo::getInfo(opts);
@@ -236,11 +238,27 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
 
         @return a safe URL string with the @c "db://" prefix and no credentials
 
-        @note the safe URL is made when the connection is created: if the driver is not loaded then, the value of each
-        driver option stays masked in it, also after the driver has been loaded
+        @note the \c safe_url member is made when the connection is created: if the driver is not loaded then, the
+        value of each driver option stays masked in it, also after the driver has been loaded, and its database name is
+        shown or masked by the character rule of @ref datasource_mask_options alone, as the driver's
+        @ref Qore::SQL::DBI_CAP_SENSITIVE_DBNAME "DBI_CAP_SENSITIVE_DBNAME" is not known then; the safe URL that the
+        connection shows (getSafeUrl(), the \c url of getInfo(), getInfoAsData(), getExtendedInfo() and ping()) is made
+        when it is shown, so that it follows the drivers loaded then (see getShownUrl(); qore#7275)
     */
     private string getSafeUrl(hash<auto> urlh) {
         return "db://" + mask_datasource(urlh, {"show_db": True, "show_options": True});
+    }
+
+    #! Returns the safe URL that the connection shows, made when it is shown
+    /** The safe URL depends on the drivers that are loaded when it is made (the values of the driver options that a
+        loaded driver declares not sensitive, and the database name of a loaded driver that declares
+        @ref Qore::SQL::DBI_CAP_SENSITIVE_DBNAME "DBI_CAP_SENSITIVE_DBNAME"), so it is made each time that it is shown,
+        and the \c url of getInfo() agrees with its \c url_hash (qore#7275)
+
+        @since DbDataProvider 2.5
+    */
+    private string getShownUrl() {
+        return getSafeUrl(urlh);
     }
 
     #! Validates connection options

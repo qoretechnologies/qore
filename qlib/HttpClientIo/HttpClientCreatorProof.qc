@@ -25,6 +25,24 @@
 #! Main namespace
 public namespace HttpClientIo {
 
+#! The register of the creator proofs that were issued and of their grants (qore#7262, qore#7236)
+/** Not public: only HttpClientCreatorProof uses it.  It is referenced by the class's static member and by every proof,
+    so it lives as long as any proof that is recorded in it
+*/
+class HttpClientCreatorProofRegistry {
+    public {
+        #! the lock of \c issued and \c grants
+        Mutex lock();
+
+        #! the proofs issued and not yet destroyed, by object
+        hash<string, bool> issued = {};
+
+        #! the grants of proofs to the next client of their target created in a thread (see
+        #! HttpClientCreatorProofGrant), by thread, innermost last; each has the \c id of its grant and its \c proof
+        hash<string, list<hash<auto>>> grants = {};
+    }
+}
+
 #! An opaque proof that the code that created a client passed the caller check of a connection manager (qore#7262)
 /** A client that creates its @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" lazily,
     when it connects or reconnects, or again when it is closed, takes a proof with forClient() when it is created and
@@ -74,15 +92,15 @@ public final class HttpClientCreatorProof {
         *string ca_file;
         *string ca_path;
 
-        #! the proofs issued and not yet destroyed, by object
-        static hash<string, bool> issued = {};
+        #! the register of the proofs that were issued and of their grants (see HttpClientCreatorProofRegistry)
+        static HttpClientCreatorProofRegistry registry();
 
-        #! the lock of \c issued and \c grants
-        static Mutex lock();
-
-        #! the grants of proofs to the next client of their target created in a thread (see
-        #! HttpClientCreatorProofGrant), by thread, innermost last; each has the \c id of its grant and its \c proof
-        static hash<string, list<hash<auto>>> grants = {};
+        #! the register that this proof is recorded in
+        /** Each proof keeps a reference to the register, so that the register outlives every proof that is recorded
+            in it: a proof can be destroyed after the static members of the class were cleared, when the program ends
+            and an object that holds a proof (a client or a connection manager) is released after them (qore#7236)
+        */
+        HttpClientCreatorProofRegistry reg;
 
         #! True for the schemes that use TLS, False for the plain ones, of the schemes that are mapped to HTTP
         const SchemeTls = {
@@ -102,14 +120,18 @@ public final class HttpClientCreatorProof {
         }
         ca_file = opts.ssl_ca_file;
         ca_path = opts.ssl_ca_path;
-        AutoLock al(lock);
-        issued{self.uniqueHash()} = True;
+        reg = registry;
+        AutoLock al(reg.lock);
+        reg.issued{self.uniqueHash()} = True;
     }
 
     #! Withdraws the proof
+    /** Uses the register that the proof was recorded in, which the proof keeps, so that it works whenever the proof is
+        destroyed, also after the static members of the class were cleared at the end of the program (qore#7236)
+    */
     destructor() {
-        AutoLock al(lock);
-        remove issued{self.uniqueHash()};
+        AutoLock al(reg.lock);
+        remove reg.issued{self.uniqueHash()};
     }
 
     #! A copy of a proof is not a proof
@@ -171,17 +193,18 @@ public final class HttpClientCreatorProof {
             # the origin of the client's URL (a URL has one origin at most)
             *string want = HttpClientCreatorProof::getOrigins(url).firstKey();
             if (want) {
-                AutoLock al(lock);
+                HttpClientCreatorProofRegistry r = registry;
+                AutoLock al(r.lock);
                 string tid = string(gettid());
-                if (*list<hash<auto>> l = grants{tid}) {
+                if (*list<hash<auto>> l = r.grants{tid}) {
                     for (int i = l.size() - 1; i >= 0; --i) {
                         HttpClientCreatorProof granted = l[i].proof;
                         if (granted.origins{want}) {
                             splice l, i, 1;
                             if (l) {
-                                grants{tid} = l;
+                                r.grants{tid} = l;
                             } else {
-                                remove grants{tid};
+                                remove r.grants{tid};
                             }
                             return granted;
                         }
@@ -194,8 +217,9 @@ public final class HttpClientCreatorProof {
 
     #! Returns True if the given object is a proof that this class issued
     static bool genuine(object proof) {
-        AutoLock al(lock);
-        return issued{proof.uniqueHash()} ?? False;
+        HttpClientCreatorProofRegistry r = registry;
+        AutoLock al(r.lock);
+        return r.issued{proof.uniqueHash()} ?? False;
     }
 
 
@@ -233,18 +257,38 @@ public final class HttpClientCreatorProof {
 
         @return True if the origin of \a url is one that the proof allows and \a proxy_url is its proxy (or both have
         none)
+
+        The URLs checked here (\a url and \a proxy_url alike) allow nothing if they have user information (a
+        connection class gives the target URL without it, ex: \c HTTPClient::getURL(UC_TARGET), as the code that
+        was lent the connection can set the credentials so that the rendered URL reads as another target), if their
+        authority is not of the \c "scheme://authority" form, or, for \a url, if a socket path and a socket
+        authority do not match exactly (see socketAuthorityMatches()); an IPv6 host without brackets allows nothing
+        (ambiguousHost()), and any error in checking a URL allows nothing.  These checks apply only to the checked
+        URLs: the URL that a proof is issued for (a creator's configured URL, also with credentials) and the URL of a
+        client that takes a granted proof are derived as before.
+
+        @since HttpClientIo 1.0 (qore#7262); qore#7236 refuses ambiguous URLs
     */
     bool allowsUrl(string url, *string proxy_url) {
-        *string key = HttpClientCreatorProof::getOrigins(url).firstKey();
-        if (!key || !origins{key}) {
+        try {
+            if (!HttpClientCreatorProof::checkedUrlOk(url)
+                    || (proxy_url.val() && !HttpClientCreatorProof::checkedUrlOk(proxy_url))) {
+                return False;
+            }
+            *string key = HttpClientCreatorProof::getOrigins(url, True).firstKey();
+            if (!key || !origins{key}) {
+                return False;
+            }
+            if (proxy_url.val()) {
+                # an ambiguous or invalid proxy URL has no key and matches nothing, also not a proof's own such proxy
+                *string proxy_key = HttpClientCreatorProof::getProxyKey(proxy_url);
+                return exists proxy && proxy_key.val() && proxy == proxy_key;
+            }
+            return !exists proxy;
+        } catch (hash<ExceptionInfo> ex) {
+            # a URL that cannot be checked (one that is not valid in its encoding, for example) allows nothing
             return False;
         }
-        if (proxy_url.val()) {
-            # an ambiguous or invalid proxy URL has no key and matches nothing, also not a proof's own such proxy
-            *string key = HttpClientCreatorProof::getProxyKey(proxy_url);
-            return exists proxy && key.val() && proxy == key;
-        }
-        return !exists proxy;
     }
 
     #! Returns True if the proof allows the given CA certificate locations
@@ -263,9 +307,9 @@ public final class HttpClientCreatorProof {
     */
     HttpClientCreatorProofGrant grantNext() {
         HttpClientCreatorProofGrant grant(self);
-        AutoLock al(lock);
+        AutoLock al(reg.lock);
         hash<auto> entry = {"id": grant.uniqueHash(), "proof": self};
-        grants{string(gettid())} += (entry,);
+        reg.grants{string(gettid())} += (entry,);
         return grant;
     }
 
@@ -273,16 +317,16 @@ public final class HttpClientCreatorProof {
     /** @param id the ID of the grant: the unique hash of its HttpClientCreatorProofGrant object
     */
     revokeGrant(string id) {
-        AutoLock al(lock);
+        AutoLock al(reg.lock);
         string tid = string(gettid());
-        *list<hash<auto>> l = grants{tid};
+        *list<hash<auto>> l = reg.grants{tid};
         for (int i = l.size() - 1; i >= 0; --i) {
             if (l[i].id == id && l[i].proof === self) {
                 splice l, i, 1;
                 if (l) {
-                    grants{tid} = l;
+                    reg.grants{tid} = l;
                 } else {
-                    remove grants{tid};
+                    remove reg.grants{tid};
                 }
                 return;
             }
@@ -309,7 +353,7 @@ public final class HttpClientCreatorProof {
     }
 
     #! Returns the origins of the given URL, as \c "host:port" keys
-    private:internal static hash<string, bool> getOrigins(string url) {
+    private:internal static hash<string, bool> getOrigins(string url, *bool strict) {
         hash<auto> u;
         try {
             u = parse_url(url);
@@ -317,6 +361,11 @@ public final class HttpClientCreatorProof {
             return {};
         }
         if (!u.host.val() || HttpClientCreatorProof::ambiguousHost(url, u.host)) {
+            return {};
+        }
+        # a URL that is checked against a proof (allowsUrl()) gives a socket path only with a canonical socket
+        # authority, and a socket authority only a socket path (qore#7236)
+        if (strict && !HttpClientCreatorProof::socketAuthorityMatches(url, u)) {
             return {};
         }
         # a UNIX domain socket target: plain HTTP with port 0, as the manager connects to it
@@ -328,6 +377,67 @@ public final class HttpClientCreatorProof {
             return {};
         }
         return {HttpClientCreatorProof::getKey(tls, u.host, u.port ?? (tls ? 443 : 80)): True};
+    }
+
+    #! Returns True if a URL that allowsUrl() checks has an authority and no user information (qore#7236)
+    /** The URL must be of the \c "scheme://authority" form, the authority (ending at the first \c "/", \c "?" or
+        \c "#") must have no \c "@" and must not be followed by \c "?" or \c "#" (which a client reads as part of the
+        host when a path follows), and parse_url() must give no user name or password: a URL that a client renders
+        with its credentials, which the code that was lent the connection can set (a password with \c "@host:port/"
+        or \c "@host?"), can be read as another target
+
+        @param url the URL
+
+        @return True if the URL has an authority without user information; any error gives False
+    */
+    private:internal static bool checkedUrlOk(string url) {
+        try {
+            *list<*string> m = url =~ x/^[A-Za-z][-A-Za-z0-9+.]*:\/\/([^\/?#]*)/;
+            if (!m || !(m[0] ?? "").val() || (m[0] ?? "") =~ /@/) {
+                return False;
+            }
+            # an authority followed by "?" or "#" is ambiguous: a client's URL with a path after it (QoreURL ends the
+            # authority at the first "/" and reads "?" as a query only when no path follows) has another host and port
+            # than the URL without the path, as a target-only URL is given (qore#7236)
+            if (url =~ /^[A-Za-z][-A-Za-z0-9+.]*:\/\/[^\/?#]*[?#]/) {
+                return False;
+            }
+            hash<auto> u = parse_url(url);
+            return !exists u.username && !exists u.password;
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+    }
+
+    #! Returns True if a URL gives a UNIX domain socket path exactly when its authority is a canonical socket authority
+    /** The host and port after the user information must be \c "socket=" followed by the path that parse_url() gives
+        with every reserved character encoded (as @ref encode_url() "encode_url(path, True)" and
+        @ref Qore::HTTPClient::getURL() "HTTPClient::getURL()" give it), with no port, so that the path is the only
+        one that the URL can be read as: a raw \c "@", \c "%", \c ":", \c "#" or \c "?" in the path, or an encoded
+        path that decodes to another path, does not match; and a URL whose authority is not a socket authority must not
+        give a socket path (qore#7236)
+
+        @param url the URL
+        @param u the parsed URL
+
+        @return True if the socket path and the socket authority match (or the URL has neither); any error gives False
+    */
+    private:internal static bool socketAuthorityMatches(string url, hash<auto> u) {
+        try {
+            string hostport = (url =~ x/^[^\/]*\/\/([^\/?#]*)/)[0] ?? "";
+            int at = hostport.rfind("@");
+            if (at >= 0) {
+                hostport = hostport.substr(at + 1);
+            }
+            bool socket_authority = hostport.lwr().equalPartial("socket=");
+            bool socket_path = (u.host ?? "") =~ /^\//;
+            if (!socket_authority && !socket_path) {
+                return True;
+            }
+            return socket_authority && socket_path && !u.port && hostport == "socket=" + encode_url(u.host, True);
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
     }
 
     #! Returns True if the host of a URL is an IPv6 address without brackets

@@ -424,6 +424,28 @@ Debug builds count the scans started by lvalue operations per thread (`dbg_get_l
 `examples/test/qore/misc/dgc-remove-scan/dgc-remove-scan.qtest` uses it to check every removal kind in each
 execution mode and from a compiled module, along with cycle collection after removals that skipped the scan.
 
+### Object counts up the lvalue path
+
+`~LValueHelper` writes the change of the target's object count to the container holding it, and the change of each
+container's count to the container before it on the path (`ocvec`), then scans from `robj`. It does so from the
+values that the containers hold when it runs, also when the operation raised an exception: an operation can raise
+after it changed a container (a hash or list merge that stores an element, then refuses the next one), and the change
+stays, so the counts above it and the recursive set of the object holding them must follow it (issue #7322).
+
+A weak reference does not count for the container that holds it (`needs_scan()` is false for it), so the change of a
+container reached through a weak reference (`ObjCountRec::shared`) is not written to the entry before it, which can
+even be the container itself (`c.holder.wk.k = 1`, where `wk` is a weak reference to `c.holder`: issue #7321). A path
+that crosses a weak reference can come back to containers that are already on it, and then go down again through the
+containers below them (`c.holder.inner.wk.inner.k`, where `wk` is a weak reference to `c.holder`). On a path with a
+weak step, `LValueHelper::writeWeakPathChanges()` writes each edge from a holder to a container that it holds strongly
+once, and from the bottom up: an edge is written when the edges from the container to the containers it holds on the
+path have been written, so that the container's change is final. Each entry compares the count its container had when
+the path reached it with the count it has now, and a container has one strong holder, so the edges form a tree. The
+edge from the last container to the lvalue's value is not written again: the helper wrote the change of the value to
+that container first. A path without a weak step writes its entries from the end, as before. The containers that hold
+a container reached through a weak reference strongly but are not on the path do not see a change made through it
+(issue #7318).
+
 ### A write inside a set that a real reference holds
 
 A write at an object X that has no real reference itself scans from X, which walks X's whole recursive set - in

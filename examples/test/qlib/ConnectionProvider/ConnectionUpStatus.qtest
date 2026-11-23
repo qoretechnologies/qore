@@ -27,7 +27,8 @@
     up False with the status "not checked" and no last_check value; a successful ping or a connection made with
     get() marks it up (issue #4789: a connection that was used is up without monitoring), and a failed
     ping marks it down, also when the ping throws its error; an object acquired without connecting or an async object,
-    which connects on demand, proves nothing.  A connection restored by deserialization or copied keeps
+    which connects on demand, proves nothing until the async client has made its first connection, which marks the
+    connection up as get() does (issue #7274).  A connection restored by deserialization or copied keeps
     its state.  Checked with a test connection class and with REST, HTTP, WebSocket, SSE and SQLite connections.
 */
 
@@ -39,16 +40,20 @@
 %requires Logger
 %requires Mime
 %requires DataProvider
+%requires HttpClientIo
 %requires ConnectionProvider
 %requires HttpServerUtil
 %requires HttpServer
 %requires RestClient
+%requires RestClientIo
+%requires HttpClientIo
 %requires WebSocketUtil
 %requires WebSocketHandler
 %requires WebSocketClient
 %requires ServerSentEventHandler
 %requires ServerSentEventClient
 %requires DbDataProvider
+%requires JsonRpcConnection
 
 %exec-class ConnectionUpStatusTest
 
@@ -152,9 +157,12 @@ class ResultMonitor inherits PollingConnectionMonitor {
     }
 }
 
-#! answers every request with 200 OK
+#! answers every request with 200 OK, except the paths starting with /err, which get 500
 class OkHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path =~ /^\/?err/) {
+            return makeResponse(500, "ERROR", {"Content-Type": MimeTypeText});
+        }
         return makeResponse(200, "OK", {"Content-Type": MimeTypeText});
     }
 }
@@ -177,6 +185,47 @@ string sub do_poll(object conn) {
         return ex.err;
     }
 }
+string sub retarget_creds(object conn, string url, string user, string pass) {
+    conn.url = url;
+    conn.real_url = url;
+    conn.real_opts.url = url;
+    conn.real_opts.username = user;
+    conn.real_opts.password = pass;
+    return do_ping(conn);
+}
+string sub poll_creds(object conn) {
+    return do_poll(conn);
+}
+sub set_target(object conn, string url) {
+    conn.url = url;
+    conn.real_url = url;
+    try {
+        conn.real_opts.url = url;
+    } catch (hash<ExceptionInfo> ex) {
+        # a connection without real options
+    }
+}
+string sub path_ping(object conn, *string url) {
+    if (url) {
+        set_target(conn, url);
+    }
+    return do_ping(conn);
+}
+string sub proxy_ping(object conn, string proxy) {
+    conn.opts.proxy = proxy;
+    try {
+        conn.real_opts.proxy = proxy;
+    } catch (hash<ExceptionInfo> ex) {
+        # a connection without real options
+    }
+    return do_ping(conn);
+}
+string sub path_poll(object conn, *string url) {
+    if (url) {
+        set_target(conn, url);
+    }
+    return do_poll(conn);
+}
 string sub retarget(object conn, string url) {
     conn.url = url;
     conn.real_url = url;
@@ -194,6 +243,10 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         TokenHandler token_handler();
         int token_port;
         int rest_port;
+        #! the port of the REST server's IPv6 loopback listener, if any
+        int rest_port6;
+        #! the path of the REST server's UNIX domain socket
+        string rest_socket;
         int ws_port;
         int sse_port;
         #! a port where nothing listens
@@ -203,10 +256,20 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
     constructor() : Test("ConnectionUpStatus", "1.0") {
         Logger logger("server", LoggerLevel::getLevelError());
 
+        # a short path, as the path of a UNIX domain socket is limited (103 bytes on macOS); removed after the server
+        # stops
+        rest_socket = sprintf("/tmp/q7236-%s.sock", get_random_string(10));
+        on_exit unlink(rest_socket);
         rest_server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
         on_exit rest_server.stop();
         rest_server.setDefaultHandler("ok", new OkHandler());
         rest_port = rest_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        rest_server.addListener(<HttpListenerOptionInfo>{"node": rest_socket});
+        try {
+            rest_port6 = rest_server.addListener(<HttpListenerOptionInfo>{"node": "::1", "service": 0}).port;
+        } catch (hash<ExceptionInfo> ex) {
+            # no IPv6 loopback; the IPv6 test case is skipped
+        }
 
         ws_server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
         on_exit ws_server.stop();
@@ -242,7 +305,13 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         addTestCase("REST connection", \restTest());
         addTestCase("unauthorized REST connection", \unauthorizedRestTest());
         addTestCase("lent REST connection pinged by restricted code", \lentRestTest());
+        addTestCase("lent IPv6 REST connection pinged by restricted code", \lentRestIpv6Test());
+        addTestCase("lent UNIX socket REST connection pinged by restricted code", \lentRestSocketTest());
+        addTestCase("socket paths that read as other targets", \lentSocketPathTest());
+        addTestCase("credentials that read as other targets", \lentCredentialsTest());
+        addTestCase("ambiguous targets on every caller path", \callerPathsTest());
         addTestCase("HTTP connection", \httpTest());
+        addTestCase("first connection of an async client", \asyncFirstConnectionTest());
         addTestCase("WebSocket connection", \webSocketTest());
         addTestCase("SSE connection", \sseTest());
         addTestCase("SQLite connection", \sqliteTest());
@@ -703,6 +772,304 @@ string sub own_ping(string url) {
         assertUp(conn, start, "an unrestricted ping");
     }
 
+    #! an IPv6 target is compared as host and port, not as an ambiguous URL text
+    lentRestIpv6Test() {
+        if (!rest_port6) {
+            testSkip("no IPv6 loopback listener");
+        }
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.parse(RestrictedCode, "restricted-ipv6");
+        string own = sprintf("http://[::1]:%d", rest_port6);
+
+        # a lent connection at its own target
+        RestConnection conn("lent6", "test", own, {"monitor": False});
+        date start = now_us();
+        assertEq("OK", p.callFunction("do_ping", conn));
+        assertUp(conn, start, "a lent IPv6 connection pinged by restricted code");
+
+        # the host "::1:<port>" with the default port: its URL without brackets would read as the lent target
+        conn = new RestConnection("lent6", "test", own, {"monitor": False});
+        assertEq("PERMISSION-DENIED", p.callFunction("retarget", conn, sprintf("http://[::1:%d]/", rest_port6)),
+            "an IPv6 host that names the lent port");
+        assertDown(conn, "^PERMISSION-DENIED: ", "a retargeted lent IPv6 connection");
+
+        # another IPv6 target: refused before any connection is attempted
+        Socket listener();
+        listener.bind("[::1]:0");
+        listener.listen();
+        on_exit listener.close();
+        conn = new RestConnection("lent6", "test", own, {"monitor": False});
+        assertEq("PERMISSION-DENIED", p.callFunction("retarget", conn,
+            sprintf("http://[::1]:%d", listener.getSocketInfo().port)), "another IPv6 target");
+        assertEq("PERMISSION-DENIED", p.callFunction("do_poll", conn), "the polling ping of another IPv6 target");
+        assertNothing(listener.accept(0), "no connection to the other IPv6 target was attempted");
+    }
+
+    #! a UNIX domain socket target is compared by its socket path
+    lentRestSocketTest() {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.parse(RestrictedCode, "restricted-socket");
+        string own = "http://socket=" + encode_url(rest_socket, True);
+
+        # a lent connection at its own socket
+        RestConnection conn("lent-socket", "test", own, {"monitor": False});
+        date start = now_us();
+        assertEq("OK", p.callFunction("do_ping", conn));
+        assertUp(conn, start, "a lent UNIX socket connection pinged by restricted code");
+
+        # another socket: refused before any connection is attempted
+        string other_path = sprintf("/tmp/q7236-%s.sock", get_random_string(10));
+        Socket listener();
+        listener.bind(other_path);
+        on_exit {
+            listener.close();
+            unlink(other_path);
+        }
+        listener.listen();
+        conn = new RestConnection("lent-socket", "test", own, {"monitor": False});
+        assertEq("PERMISSION-DENIED", p.callFunction("retarget", conn, "http://socket=" + encode_url(other_path, True)),
+            "another UNIX socket");
+        assertDown(conn, "^PERMISSION-DENIED: ", "a retargeted lent UNIX socket connection");
+        assertEq("PERMISSION-DENIED", p.callFunction("do_poll", conn), "the polling ping of another UNIX socket");
+        assertNothing(listener.accept(0), "no connection to the other UNIX socket was attempted");
+    }
+
+    #! a UNIX socket path whose URL would read as another target is refused, for the ping and the polling ping
+    lentSocketPathTest() {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.parse(RestrictedCode, "restricted-socket-paths");
+        string prefix = sprintf("/tmp/q7236-%s", get_random_string(6));
+
+        # the evil sockets, each with a listener that must see no connection
+        hash<string, Socket> listeners;
+        on_exit {
+            map ($1.value.close(), unlink($1.key)), listeners.pairIterator();
+        }
+        code listen = sub (string path) {
+            Socket s();
+            # bindUNIX(): bind() reads a path with ":" as a host and port
+            s.bindUNIX(path);
+            s.listen();
+            listeners{path} = s;
+        };
+
+        # a socket path with "@host:port": its URL with "@" written as it is would read as the lent TCP target
+        string tcp_own = "http://127.0.0.1:" + rest_port;
+        string at_path = sprintf("%s-a@127.0.0.1:%d", prefix, rest_port);
+        listen(at_path);
+        RestConnection conn("lent", "test", tcp_own, {"monitor": False});
+        assertEq("PERMISSION-DENIED", p.callFunction("retarget", conn, "http://socket=" + encode_url(at_path, True)),
+            "a socket path with @host:port");
+        assertEq("PERMISSION-DENIED", p.callFunction("do_poll", conn), "a socket path with @host:port, polling");
+
+        # a socket path with "%2e": its URL with "%" written as it is would read as the lent socket's path
+        string socket_own = "http://socket=" + encode_url(rest_socket, True);
+        string pct_path = rest_socket.substr(0, -5) + "%2esock";
+        assertEq(".sock", rest_socket.substr(-5));
+        listen(pct_path);
+        conn = new RestConnection("lent", "test", socket_own, {"monitor": False});
+        assertEq("PERMISSION-DENIED", p.callFunction("retarget", conn, "http://socket=" + encode_url(pct_path, True)),
+            "a socket path with %2e");
+        assertEq("PERMISSION-DENIED", p.callFunction("do_poll", conn), "a socket path with %2e, polling");
+
+        # socket paths with ":", "#" and "?"
+        foreach string sfx in (":1", "#x", "?x") {
+            string path = rest_socket + sfx;
+            listen(path);
+            conn = new RestConnection("lent", "test", socket_own, {"monitor": False});
+            assertEq("PERMISSION-DENIED", p.callFunction("retarget", conn, "http://socket=" + encode_url(path, True)),
+                "a socket path with " + sfx);
+            assertEq("PERMISSION-DENIED", p.callFunction("do_poll", conn), "a socket path with " + sfx + ", polling");
+        }
+
+        foreach hash<auto> i in (listeners.pairIterator()) {
+            assertNothing(i.value.accept(0), "no connection to " + i.key);
+        }
+
+        # the lent socket at its own path still pings up
+        conn = new RestConnection("lent", "test", socket_own, {"monitor": False});
+        date start = now_us();
+        assertEq("OK", p.callFunction("do_ping", conn));
+        assertUp(conn, start, "a lent socket connection at its own path");
+    }
+
+    #! credentials that the restricted code sets are not given to the check, which refuses a URL with user information
+    lentCredentialsTest() {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.parse(RestrictedCode, "restricted-credentials");
+        string tcp_own = "http://127.0.0.1:" + rest_port;
+        string socket_own = "http://socket=" + encode_url(rest_socket, True);
+
+        # an evil UNIX socket and an evil TCP port, which must see no connection
+        string evil_path = sprintf("/tmp/q7236-%s-evil.sock", get_random_string(6));
+        Socket evil_socket();
+        evil_socket.bindUNIX(evil_path);
+        evil_socket.listen();
+        Socket evil_tcp();
+        evil_tcp.bind("127.0.0.1:0");
+        evil_tcp.listen();
+        on_exit {
+            evil_socket.close();
+            unlink(evil_path);
+            evil_tcp.close();
+        }
+        string evil_socket_url = "http://socket=" + encode_url(evil_path, True);
+        string evil_tcp_url = sprintf("http://127.0.0.1:%d/r", evil_tcp.getSocketInfo().port);
+
+        # passwords that make the URL with credentials read as the lent TCP target
+        foreach string pass in (sprintf("x@127.0.0.1:%d/", rest_port), "x@127.0.0.1?") {
+            foreach string target in ((evil_socket_url, evil_tcp_url)) {
+                string label = sprintf("password %y, target %y", pass, target);
+                RestConnection conn("lent", "test", tcp_own, {"monitor": False});
+                assertEq("PERMISSION-DENIED", p.callFunction("retarget_creds", conn, target, "u", pass), label);
+                assertEq("PERMISSION-DENIED", p.callFunction("poll_creds", conn), label + ", polling");
+            }
+        }
+        assertNothing(evil_socket.accept(0), "no connection to the evil socket");
+        assertNothing(evil_tcp.accept(0), "no connection to the evil port");
+
+        # a lent connection with credentials at its own target pings up, a socket and a TCP one
+        foreach string own in ((socket_own, tcp_own)) {
+            string with_creds = own =~ /socket=/
+                ? "http://user:pass@socket=" + encode_url(rest_socket, True)
+                : sprintf("http://user:pass@127.0.0.1:%d", rest_port);
+            RestConnection conn("lent", "test", with_creds, {"monitor": False});
+            date start = now_us();
+            assertEq("OK", p.callFunction("do_ping", conn), "a lent connection with credentials: " + with_creds);
+            assertUp(conn, start, "a lent connection with credentials: " + with_creds);
+        }
+
+        # the check itself (HttpClientCreatorProof::allowsUrl()): a checked URL or proxy URL with user information,
+        # and a URL that is not valid UTF-8, allow nothing; the proof of a URL with credentials allows its target
+        HttpClientIo::HttpClientCreatorProof proof = HttpClientIo::HttpClientCreatorProof::get(tcp_own);
+        assertTrue(proof.allowsUrl(tcp_own));
+        assertFalse(proof.allowsUrl(sprintf("http://u:x@127.0.0.1:%d", rest_port)));
+        assertFalse(proof.allowsUrl(sprintf("http://u:x@127.0.0.1:%d/@socket=%%2Ftmp%%2Fx", rest_port)));
+        HttpClientIo::HttpClientCreatorProof proxied = HttpClientIo::HttpClientCreatorProof::get(tcp_own,
+            {"proxy": "http://u:p@127.0.0.1:3128"});
+        assertTrue(proxied.allowsUrl(tcp_own, "http://127.0.0.1:3128"));
+        assertFalse(proxied.allowsUrl(tcp_own, "http://u:p@127.0.0.1:3128"));
+        HttpClientIo::HttpClientCreatorProof socket_proof = HttpClientIo::HttpClientCreatorProof::get(socket_own);
+        assertTrue(socket_proof.allowsUrl(socket_own));
+        assertFalse(socket_proof.allowsUrl("http://socket=%2Ftmp%2F%FF"));
+        HttpClientIo::HttpClientCreatorProof cred_proof = HttpClientIo::HttpClientCreatorProof::get(
+            sprintf("http://user:pass@127.0.0.1:%d/", rest_port));
+        assertTrue(cred_proof.allowsUrl(tcp_own));
+    }
+
+    #! every bypass is refused on every path that checks a lent connection's target: an HTTP connection's ping (its
+    #! client's URL), and a JSON-RPC connection's ping and polling ping (its raw configured URL and its client's URL)
+    callerPathsTest() {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.parse(RestrictedCode, "restricted-paths");
+        string prefix = sprintf("/tmp/q7236-%s", get_random_string(6));
+        string tcp_own = "http://127.0.0.1:" + rest_port;
+        string socket_own = "http://socket=" + encode_url(rest_socket, True);
+
+        hash<string, Socket> listeners;
+        on_exit {
+            map ($1.value.close(), unlink($1.key)), listeners.pairIterator();
+        }
+        code listen = sub (string path) {
+            Socket s();
+            s.bindUNIX(path);
+            s.listen();
+            listeners{path} = s;
+        };
+        string evil_path = prefix + "-evil.sock";
+        listen(evil_path);
+        string at_path = sprintf("%s-a@127.0.0.1:%d", prefix, rest_port);
+        listen(at_path);
+        string pct_path = rest_socket.substr(0, -5) + "%2esock";
+        listen(pct_path);
+
+        # [own target, bypass target] pairs
+        list<list<string>> cases = (
+            # a password with "@host:port/" in front of a socket target
+            (tcp_own, "http://u:" + encode_url(sprintf("x@127.0.0.1:%d/", rest_port), True) + "@socket="
+                + encode_url(evil_path, True)),
+            # a socket path with "@host:port"
+            (tcp_own, "http://socket=" + encode_url(at_path, True)),
+            # a socket path with "%2e"
+            (socket_own, "http://socket=" + encode_url(pct_path, True)),
+        );
+        if (rest_port6) {
+            # the IPv6 host "::1:<port>" with the default port
+            push cases, (sprintf("http://[::1]:%d", rest_port6), sprintf("http://[::1:%d]/", rest_port6));
+        }
+        # a host with "?" followed by a port and a path: the client's host is "localhost?x", but the URL without its
+        # path reads as host "localhost" with the default port and a query
+        push cases, ("http://localhost", sprintf("http://localhost?x:%d/", rest_port));
+
+        code make_http = AbstractConnection sub (string url, *hash<auto> opts) {
+            return new HttpConnection("http", "test", url, {"monitor": False}, opts ?? {});
+        };
+        code make_jsonrpc = AbstractConnection sub (string url, *hash<auto> opts) {
+            return new JsonRpcConnection("jsonrpc", "test", url, {"monitor": False}, opts ?? {});
+        };
+        foreach hash<auto> kind in ({"name": "HTTP", "make": make_http, "poll": False},
+                {"name": "JSON-RPC", "make": make_jsonrpc, "poll": True}) {
+            foreach list<string> c in (cases) {
+                string label = sprintf("%s: %y -> %y", kind.name, c[0], c[1]);
+                AbstractConnection conn = kind.make(c[0]);
+                assertEq("PERMISSION-DENIED", p.callFunction("path_ping", conn, c[1]), label);
+                if (kind.poll) {
+                    conn = kind.make(c[0]);
+                    assertEq("PERMISSION-DENIED", p.callFunction("path_poll", conn, c[1]), label + ", polling");
+                }
+            }
+            # the legitimate targets, also with credentials in the configured URL, which are not given to the check
+            list<string> own = (tcp_own, socket_own, sprintf("http://user:pass@127.0.0.1:%d/", rest_port),
+                "http://user:pass@socket=" + encode_url(rest_socket, True));
+            if (rest_port6) {
+                push own, sprintf("http://[::1]:%d", rest_port6);
+            }
+            foreach string url in (own) {
+                string label = sprintf("%s: own target %y", kind.name, url);
+                AbstractConnection conn = kind.make(url);
+                assertEq("OK", p.callFunction("path_ping", conn), label);
+                if (kind.poll) {
+                    conn = kind.make(url);
+                    assertEq("STARTED", p.callFunction("path_poll", conn), label + ", polling");
+                }
+            }
+        }
+        # a lent connection with credentials in its proxy option reaches its own target through its own proxy (the REST
+        # server, as a plain HTTP proxy is only connected to), and another proxy is refused
+        string proxy = sprintf("http://pu:pp@127.0.0.1:%d", rest_port);
+        Socket evil_proxy();
+        evil_proxy.bind("127.0.0.1:0");
+        evil_proxy.listen();
+        on_exit evil_proxy.close();
+        # a REST connection's pings check its client's target the same way
+        foreach list<string> c in (cases) {
+            string label = sprintf("REST: %y -> %y", c[0], c[1]);
+            RestConnection conn("rest", "test", c[0], {"monitor": False});
+            assertEq("PERMISSION-DENIED", p.callFunction("path_ping", conn, c[1]), label);
+            conn = new RestConnection("rest", "test", c[0], {"monitor": False});
+            assertEq("PERMISSION-DENIED", p.callFunction("path_poll", conn, c[1]), label + ", polling");
+        }
+
+        foreach hash<auto> kind in ({"name": "HTTP", "make": make_http}, {"name": "JSON-RPC", "make": make_jsonrpc}) {
+            # a proxy host with "?" followed by a port and a path reads as the proof's proxy without its path
+            AbstractConnection pconn = kind.make("http://127.0.0.1:" + closed_port, {"proxy": "http://localhost"});
+            assertEq("PERMISSION-DENIED", p.callFunction("proxy_ping", pconn, "http://localhost?x:3129/"),
+                kind.name + ": a proxy host with \"?\"");
+
+            string label = sprintf("%s: credentials in the proxy option", kind.name);
+            AbstractConnection conn = kind.make("http://127.0.0.1:" + closed_port, {"proxy": proxy});
+            assertEq("OK", p.callFunction("path_ping", conn), label);
+            conn = kind.make("http://127.0.0.1:" + closed_port, {"proxy": proxy});
+            assertEq("PERMISSION-DENIED", p.callFunction("proxy_ping", conn,
+                sprintf("http://pu:pp@127.0.0.1:%d", evil_proxy.getSocketInfo().port)), label + ", another proxy");
+        }
+        assertNothing(evil_proxy.accept(0), "no connection to the other proxy");
+
+        foreach hash<auto> i in (listeners.pairIterator()) {
+            assertNothing(i.value.accept(0), "no connection to " + i.key);
+        }
+    }
+
     httpTest() {
         string url = "http://127.0.0.1:" + rest_port;
         HttpConnection conn("http", "test", url, {"monitor": False});
@@ -777,5 +1144,71 @@ string sub own_ping(string url) {
         assertNeverChecked(conn, "bad path");
         assertFalse(conn.ping().ok);
         assertDown(conn, ".+", "ping() of a database that cannot be opened");
+    }
+
+    #! the first connection of an async HTTP or REST client marks its connection up, as get() does (issue #7274)
+    asyncFirstConnectionTest() {
+        string rest_url = "rest://127.0.0.1:" + rest_port;
+        string http_url = "http://127.0.0.1:" + rest_port;
+
+        # REST: the async client connects on demand; its first request marks the connection up
+        RestConnection rconn("rest", "test", rest_url, {"monitor": False});
+        RestClientIo rest = rconn.getAsync();
+        assertNeverChecked(rconn, "REST getAsync()");
+        date start = now_us();
+        assertEq("OK", rest.restGet("/x").body);
+        assertUp(rconn, start, "REST first request");
+
+        # REST, a client acquired without connecting
+        rconn = new RestConnection("rest", "test", rest_url, {"monitor": False});
+        rest = rconn.getAsync(False);
+        assertNeverChecked(rconn, "REST getAsync(False)");
+        start = now_us();
+        rest.restGet("/x");
+        assertUp(rconn, start, "REST getAsync(False) first request");
+
+        # HTTP: the async client is a connection manager
+        HttpConnection hconn("http", "test", http_url, {"monitor": False});
+        HttpClientConnectionManager mgr = hconn.getAsync();
+        assertNeverChecked(hconn, "HTTP getAsync()");
+        start = now_us();
+        assertEq(200, mgr.request(http_url, "GET", "/x").status_code);
+        assertUp(hconn, start, "HTTP first request");
+
+        # the connection was made: a request that the server answers with an error status marks it up too; the
+        # status of the response is the business of a ping with a ping request
+        hconn = new HttpConnection("http", "test", http_url, {"monitor": False});
+        mgr = hconn.getAsync();
+        start = now_us();
+        assertEq(500, mgr.request(http_url, "GET", "/err").status_code);
+        assertUp(hconn, start, "HTTP first request answered with 500");
+
+        # a client that cannot connect changes nothing
+        string closed_url = "http://127.0.0.1:" + closed_port;
+        hconn = new HttpConnection("http", "test", closed_url, {"monitor": False});
+        mgr = hconn.getAsync();
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \mgr.request(), (closed_url, "GET", "/x"));
+        assertNeverChecked(hconn, "HTTP request to a closed port");
+        rconn = new RestConnection("rest", "test", "rest://127.0.0.1:" + closed_port, {"monitor": False});
+        rest = rconn.getAsync();
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \rest.restGet(), "/x");
+        assertNeverChecked(rconn, "REST request to a closed port");
+
+        # issue #4852: a connection that a ping found down stays down; only a ping brings it up
+        hconn = new HttpConnection("http", "test", http_url, {"monitor": False});
+        hconn.handlePingFailed(0s, "TEST-ERROR: down");
+        mgr = hconn.getAsync();
+        assertEq(200, mgr.request(http_url, "GET", "/x").status_code);
+        assertDown(hconn, "TEST-ERROR", "first request after a failed ping");
+
+        # the first connection only: later requests do not change the state again
+        hconn = new HttpConnection("http", "test", http_url, {"monitor": False});
+        mgr = hconn.getAsync();
+        mgr.request(http_url, "GET", "/x");
+        date first_check = hconn.last_check;
+        hconn.handlePingFailed(0s, "TEST-ERROR: down later");
+        mgr.request(http_url, "GET", "/x");
+        assertDown(hconn, "TEST-ERROR: down later", "a later request");
+        assertTrue(hconn.last_check >= first_check, "last_check");
     }
 }

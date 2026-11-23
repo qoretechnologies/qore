@@ -89,6 +89,7 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <sys/ioctl.h>
 #endif
 #ifdef DARWIN
 // the socket table of the system, as netstat reads it, for the port checks of qore_socket_bind_unshadowed() and
@@ -6361,7 +6362,15 @@ std::string SSLSocketHelper::getAlpnProtocol() const {
 }
 
 bool SSLSocketHelper::isHttp2() const {
+    int rec = recordedHttp2();
+    if (rec >= 0) {
+        return rec;
+    }
     return getAlpnProtocol() == "h2";
+}
+
+void SSLSocketHelper::recordAlpn() {
+    h2_negotiated.store(getAlpnProtocol() == "h2" ? 1 : 0, std::memory_order_release);
 }
 
 int SSLSocketHelper::pending() const {
@@ -6408,6 +6417,9 @@ int SSLSocketHelper::startConnect(ExceptionSink* xsink) {
         if (sslError(xsink, "startConnect", "SSL_connect", true)) {
             return QSE_SSL_ERR;
         }
+    } else {
+        // the handshake completed: the negotiated protocol does not change any more
+        recordAlpn();
     }
 
     return 0;
@@ -6442,6 +6454,9 @@ int SSLSocketHelper::startAccept(ExceptionSink* xsink) {
         if (sslError(xsink, "startAccept", "SSL_accept", true)) {
             return QSE_SSL_ERR;
         }
+    } else {
+        // the handshake completed: the negotiated protocol does not change any more
+        recordAlpn();
     }
 
     return 0;
@@ -12910,6 +12925,22 @@ bool QoreSocket::isHttp2() const {
         return ssl ? ssl->isHttp2() : false;
     }
 
+    // the protocol negotiated in a completed handshake is recorded, and is read without the TLS state and without a
+    // poll operation (qore#7223); a connection without TLS has negotiated nothing
+    {
+        qore_socket_private::SslRef ssl = priv->getSsl();
+        if (!ssl) {
+            return false;
+        }
+        int rec = ssl->recordedHttp2();
+        if (rec >= 0) {
+            return rec;
+        }
+    }
+
+#ifdef DEBUG
+    qore_dbg_note_is_http2_poll();
+#endif
     ExceptionSink xsink;
     bool rv = qore_socket_exec_tls_state_bool(const_cast<QoreSocket*>(this),
         QoreSocketControllerTlsStatePollOperation::Action::IsHttp2, "isHttp2", &xsink);
@@ -23672,4 +23703,30 @@ QoreHashNode* SocketSendToPollOperation::continuePoll(ExceptionSink* xsink) {
         return getSocketPollInfoHash(xsink, rc);
     }
     return nullptr;
+}
+
+int64 qore_socket_private::getUnacknowledgedBytes(int fd) {
+#ifdef DARWIN
+    int n = 0;
+    socklen_t len = sizeof n;
+    return getsockopt(fd, SOL_SOCKET, SO_NWRITE, &n, &len) || n < 0 ? 0 : n;
+#elif defined(TIOCOUTQ)
+    int n = 0;
+    if (::ioctl(fd, TIOCOUTQ, &n) || n <= 0) {
+        return 0;
+    }
+#if defined(__linux__) && defined(TCP_INFO)
+    // the count is the difference of the sequence numbers, which includes the FIN of a socket shut down for writing:
+    // it is not data, and a peer whose window is 0 can take it (Linux 6.10 or later accepts a bare FIN then)
+    struct tcp_info ti;
+    socklen_t len = sizeof ti;
+    if (!getsockopt(fd, IPPROTO_TCP, TCP_INFO, &ti, &len)
+            && (ti.tcpi_state == TCP_FIN_WAIT1 || ti.tcpi_state == TCP_CLOSING || ti.tcpi_state == TCP_LAST_ACK)) {
+        --n;
+    }
+#endif
+    return n;
+#else
+    return 0;
+#endif
 }
