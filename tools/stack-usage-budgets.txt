@@ -58,22 +58,24 @@
 #            static method 4975 (1663) -> 4993 (1657)
 # (0.4-0.8% of the depth; the AST recursions do not change; at least 67 B to the test's budgets)
 # #6540: 4240 B on develop 54285687c5 with the parent slot count error of #6451 raised out of line (#6451 had made it
-# 4288 B); the budget is 64 B over it, and the x86_64 release budgets of recursion-frame-budget.qtest are 56 bytes per
-# level over the measured 5102 / 6078 / 5077 (ir function / method / static method), so a growth of 64 B, which
-# costs 62-68 bytes per level, fails the test even within this budget: raise both, by the measured growth, when a
-# growth is accepted
+# 4288 B); the budget was set 64 B over it, and the x86_64 release budgets of recursion-frame-budget.qtest 56 bytes
+# per level over the measured 5102 / 6078 / 5077 (ir function / method / static method), so that a growth of 64 B,
+# which costs 62-68 bytes per level, fails the test even within this budget: raise both, by the measured growth, when
+# a growth is accepted
 # #6609: #6627 (the probe table of the pre-instantiated locals) adds 64 B: 4272 B on develop d1539bd5c1, as
 # releaseFrameRuntimeLocal() is now inlined into execute() with the inline probe.  Accepted: the frame is 4208 B with
 # that function out of line, but that costs 13-117 Ir per iteration on the ir call rows (m +26, fs +26, mm +117), and
-# #6627 gained 187-685 there.  The budget is 64 B over 4272, and the x86_64 release budgets of
-# recursion-frame-budget.qtest are 56 bytes per level over the measured 5053 / 6114 / 5041 (glibc, GCC 15.2; 4987 /
+# #6627 gained 187-685 there.  The budget was 4336 B, 64 B over 4272, and the x86_64 release budgets of
+# recursion-frame-budget.qtest were 56 bytes per level over the measured 5053 / 6114 / 5041 (glibc, GCC 15.2; 4987 /
 # 6052 / 4975 with the frame of 4208 B), which were 20 bytes per level under the ir method budget
 # #7355: #7299 (an element or key store through a local that holds a weak reference changes the container) added 48 B
-# (4336 B), and ee49ada857 raised this budget to 4400 B and those of recursion-frame-budget.qtest to unblock batches AS
-# and AT; the raise is reverted, as #7355 removed the growth: the helper of those stores is out of line and their holds
-# are in the scope of the store.  4288 B on batch AT 86373c02d4 with #7355; the budget is 64 B over it, and the x86_64
-# release budgets of recursion-frame-budget.qtest are 56 bytes per level over the measured 5071 / 5343 / 5071 (glibc,
-# GCC 15.2; 5121 / 5398 / 5121 without #7355)
+# (4336 B), and ee49ada857 raised this budget to 4400 B and the x86_64 release ir budgets of
+# recursion-frame-budget.qtest to 5177 / 6233 / 5177 to unblock batches AS and AT.  #7355 removed the growth (the helper
+# of those stores is out of line and their holds are in the scope of the store), and both are recalibrated on batch AT
+# 86373c02d4 (glibc, GCC 15.2): the frame is 4288 B and the budget 64 B over it (4352 B), and the test's budgets are
+# 56 bytes per level over the measured 5071 / 5343 / 5071 (5121 / 5398 / 5121 and 4336 B without #7355).  The ir method
+# recursion is about 780 bytes per level shorter than on AT bc77c48cc6 (6177 without #7355), as #7267 (129e0bdea9) gives
+# its unqualified self call the fast method call path
 4352 QoreIRInterpreter::execute
 928 tryExecuteInterpreterInlineIRFunction
 880 tryExecuteInterpreterInlineIRStaticMethod

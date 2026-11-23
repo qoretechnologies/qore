@@ -142,15 +142,17 @@ int sub run(string f) {
             images); see the comment at the top
         */
         const Budgets = {
-            # measured: ast 2639, 2559, 2528; the ir budgets: measured 5053, 6114, 5041 with a frame of
-            # QoreIRInterpreter::execute of 4272 B (develop d1539bd5c1, which includes the growths of #5824, #6074 and
-            # #6627) plus 56 bytes per level: a frame that grows by N bytes costs about N bytes per level (#6451: 64 B,
-            # +62, +63, +68; #6627: 64 B, +66, +62, +66), so a growth of 64 bytes (as #6451's) fails here, and one of 48
-            # bytes (+46..51) does not; the budget of execute() in tools/stack-usage-budgets.txt is 64 B over its frame,
-            # so a frame at its budget there fails here: raise both when a growth is accepted (issues #6540, #6609).
-            # #7355: the growth of #7299 (48 B, raised in ee49ada857) is removed and the raise reverted: measured 5071,
-            # 5343, 5071 with a frame of 4288 B (batch AT 86373c02d4 with #7355; 5121, 5398, 5121 without it), and the
-            # budgets are 56 bytes per level over those
+            # measured: ast 2639, 2559, 2528 (develop d1539bd5c1); the ir budgets are the measured values plus 56 bytes
+            # per level: a frame that grows by N bytes costs about N bytes per level (#6451: 64 B, +62, +63, +68;
+            # #6627: 64 B, +66, +62, +66), so a growth of 64 bytes (as #6451's) fails here, and one of 48 bytes
+            # (+46..51) does not; the budget of execute() in tools/stack-usage-budgets.txt is 64 B over its frame, so a
+            # frame at its budget there fails here: raise both when a growth is accepted (issues #6540, #6609).
+            # Recalibrated for #7355 on batch AT 86373c02d4 (glibc, GCC 15.2): ir 5071, 5343, 5071 with a frame of
+            # QoreIRInterpreter::execute of 4288 B.  #7355 removed the 48 B that #7299 added (5121, 5398, 5121 and
+            # 4336 B without it; ee49ada857 had raised these budgets to 5177, 6233, 5177 for that growth), and the ir
+            # method recursion is about 780 bytes per level shorter than at the calibration before (5109, 6170, 5097
+            # for 5053, 6114, 5041 on develop d1539bd5c1), as #7267 (129e0bdea9) gives its unqualified self call the
+            # fast method call path
             "x86_64-linux-gnu release": {
                 "ast": {"function": 2840, "method": 2640, "static method": 2690},
                 "ir": {"function": 5127, "method": 5399, "static method": 5127},
