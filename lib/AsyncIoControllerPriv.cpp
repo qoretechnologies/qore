@@ -6791,6 +6791,8 @@ size_t AsyncIoControllerPriv::dbgWakeAllSockets() {
 
 #ifdef DEBUG
 std::atomic<bool> qore_dbg_close_wake_push_fails{false};
+std::atomic<bool> qore_dbg_close_wake_drain_fails{false};
+std::atomic<int> qore_dbg_close_wake_all_fails{0};
 #endif
 
 std::function<void()> AsyncIoControllerPriv::makeCloseWake(IoThreadContext& t, const std::string& sock_hash) {
@@ -7957,22 +7959,27 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         }
 
         // the sockets that closes made by other threads woke (see CloseWakeQueue)
+        // set when a close wake could not record its socket, or its socket could not be moved to the wake set (no
+        // memory): every operation of the thread runs again, without an allocation (see below)
+        bool wake_all = false;
         if (t.close_wakes) {
             AutoLocker al(t.close_wakes->l);
-            for (std::string& h : t.close_wakes->hashes) {
-                t.wake_socket_hashes.insert(std::move(h));
+            try {
+#ifdef DEBUG
+                if (!t.close_wakes->hashes.empty() && qore_dbg_close_wake_drain_fails.load(std::memory_order_relaxed)) {
+                    throw std::bad_alloc();
+                }
+#endif
+                for (std::string& h : t.close_wakes->hashes) {
+                    t.wake_socket_hashes.insert(std::move(h));
+                }
+            } catch (...) {
+                wake_all = true;
             }
             t.close_wakes->hashes.clear();
             if (t.close_wakes->all) {
                 t.close_wakes->all = false;
-                for (const auto& [hash, fd] : t.registered_fds) {
-                    t.wake_socket_hashes.insert(hash);
-                }
-                // and every operation of the thread, also one whose own socket has no registered descriptor (one that
-                // waits only for extra descriptors, such as another Socket's)
-                for (auto& [key, pinfo] : t.cache) {
-                    t.wake_socket_hashes.insert(closeWakeKey(pinfo));
-                }
+                wake_all = true;
             }
         }
 
@@ -8120,6 +8127,35 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             expand_ready_events(ready_socket_events);
             expand_hashes(ready_socket_hashes, true);
             expand_hashes(woken_hashes, true);
+            if (wake_all) {
+                // every operation of the thread runs again, as for a wake of its socket, also one whose own socket has
+                // no registered descriptor (one that waits only for extra descriptors, such as another Socket's): the
+                // walk records nothing; the list of the operations to run is reserved for all of them first, so that
+                // queuing one cannot fail, and if the reservation fails, the fallback runs again at the next iteration
+                // (nothing may leave the I/O thread)
+                try {
+#ifdef DEBUG
+                    if (qore_dbg_close_wake_all_fails.load(std::memory_order_relaxed) > 0) {
+                        qore_dbg_close_wake_all_fails.fetch_sub(1, std::memory_order_relaxed);
+                        throw std::bad_alloc();
+                    }
+#endif
+                    ops_to_poll.reserve(ops_to_poll.size() + t.cache.size());
+                    for (auto& [key, pinfo] : t.cache) {
+                        try_queue(pinfo, false, true);
+                    }
+                } catch (...) {
+                    std::shared_ptr<CloseWakeQueue>& q = t.close_wakes;
+                    assert(q);
+                    {
+                        AutoLocker al(q->l);
+                        q->all = true;
+                    }
+                    if (q->notifier) {
+                        q->notifier->notify();
+                    }
+                }
+            }
             // the events of the last poll have now been reported to their operations; they must not be reported
             // again when the loop goes round without polling (when a command arrives before the poll, or the poll
             // fails): an operation continued for an event may have consumed it, and would be continued again for an

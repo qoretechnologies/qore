@@ -864,6 +864,12 @@ DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollResultInfo;
 //! memory (see AsyncIoControllerPriv::makeCloseWake()); for the C++ unit tests of the fallback that wakes all of the
 //! I/O thread's operations
 DLLLOCAL extern std::atomic<bool> qore_dbg_close_wake_push_fails;
+//! Debug builds: if true, the I/O thread cannot move the sockets of its close wake queue to its wake set, as when
+//! there is no memory; for the C++ unit tests of the fallback that wakes all of the I/O thread's operations
+DLLLOCAL extern std::atomic<bool> qore_dbg_close_wake_drain_fails;
+//! Debug builds: the number of times that the I/O thread's fallback that wakes all of its operations fails, as when
+//! there is no memory, before it runs; for the C++ unit tests of its retry
+DLLLOCAL extern std::atomic<int> qore_dbg_close_wake_all_fails;
 #endif
 
 //! C++ async I/O controller - direct translation of AsyncSocketIoController.qc
