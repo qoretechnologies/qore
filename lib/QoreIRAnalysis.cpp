@@ -12575,6 +12575,8 @@ private:
                 case QoreIROpcode::ReleaseOwnedTemp:
                 case QoreIROpcode::ReleasePlainLocalRead:
                 case QoreIROpcode::CheckException:
+                // a read through a reference element stores nothing: its value is the referenced value (qore#6662)
+                case QoreIROpcode::ReadReferenceThrough:
                     rv = false;
                     break;
                 default:

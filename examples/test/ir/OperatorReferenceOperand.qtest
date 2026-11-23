@@ -16,16 +16,17 @@
 %exec-class OperatorReferenceOperandTest
 
 #! Regression test: an operator takes a reference that arrives as a value as its operand as it is
-/** The AST interpreter evaluates the operand expressions of an operator and takes the values they give as they are:
-    an expression giving a reference (an element <tt>h.r</tt> holding <tt>\x</tt>) gives the reference itself, which
-    the arithmetic, bitwise and string operators do not read (ex: <tt>NOTHING + h.r</tt> is \c NOTHING,
-    <tt>h.r + 1</tt> is \c 1).  The IR interpreter's evaluation of these operators built AST operator nodes from the
-    values, which evaluated the reference again and read the referenced lvalue, as did the native helper for binary
-    operators (qore_rt_binary_op()), so every compiled mode gave the referenced value (\c 3 and \c 4).  Container
-    accesses (<tt>h.r[0]</tt>, <tt>h.r.a</tt>) and iterations (\c foreach, \c select, \c foldl, \c foldr) read the
-    referenced lvalue in the same way.  The script applies the unary, binary and ternary operators, the container
-    accesses and the iterations to such a reference, also with a missing hash key or an empty list or hash as the
-    other operand (<tt>h.r - h.missing</tt>, <tt>() + h.r</tt>), and the compound assignment operators with such a
+/** The AST interpreter evaluates the operand expressions of an operator and takes the values they give as they are: an
+    expression giving a reference (an element <tt>h.r</tt> holding <tt>\x</tt>) gives the reference itself, which the
+    arithmetic, bitwise and string operators do not read (ex: <tt>NOTHING + h.r</tt> is \c NOTHING, <tt>h.r + 1</tt> is
+    \c 1).  The IR interpreter's evaluation of these operators built AST operator nodes from the values, which evaluated
+    the reference again and read the referenced lvalue, as did the native helper for binary operators
+    (qore_rt_binary_op()), so every compiled mode gave the referenced value (\c 3 and \c 4).  Container accesses
+    (<tt>h.r[0]</tt>, <tt>h.r.a</tt>) and iterations (\c foreach, \c select, \c foldl, \c foldr) read the referenced
+    lvalue in the same way.  A container access through such a reference (<tt>h.r[0]</tt>, <tt>h.r.a</tt>) reads the
+    referenced value in every mode (qore#6662).  The script applies the unary, binary and ternary operators, the
+    container accesses and the iterations to such a reference, also with a missing hash key or an empty list or hash as
+    the other operand (<tt>h.r - h.missing</tt>, <tt>() + h.r</tt>), and the compound assignment operators with such a
     reference as their right operand to locals of every kind, a hash element, a global, members and a closure-bound
     local (<tt>a %= h.r</tt> raises \c DIVISION-BY-ZERO, as <tt>a %= 0</tt> does), twice, in every execution mode, on
     the IR tier of tiered execution and as a qcc executable (see ExecModeOutputTest).
@@ -298,20 +299,20 @@ fe({"r": \lx});
             "u *= r: 0",
             "v -= r: 5",
             "x: 3",
-            "r[0]: null",
-            "r[i]: null",
-            "r.a: null",
-            "r{a}: null",
+            "r[0]: 3",
+            "r[i]: 3",
+            "r.a: 1",
+            "r{a}: 1",
             "elements r: 0",
             "keys r: null",
             "r.size(): 2",
             "map: 0",
             "select: null",
             "foldl: [3, 4]",
-            "r[0]: null",
-            "r[i]: null",
-            "r.a: null",
-            "r{a}: null",
+            "r[0]: 3",
+            "r[i]: 3",
+            "r.a: 1",
+            "r{a}: 1",
             "elements r: 0",
             "keys r: null",
             "r.size(): 2",

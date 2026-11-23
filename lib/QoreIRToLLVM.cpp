@@ -51,7 +51,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 443,
+static_assert(QORE_IR_MAX_OPCODE == 444,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -38158,6 +38158,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+
+        // === ReadReferenceThrough: the value of the lvalue that a reference element names (qore#6662) ===
+        case QoreIROpcode::ReadReferenceThrough: {
+            // a member or an element that holds a reference gives the referenced value, with a reference of its own,
+            // read before the assignment locks its target; any other value is given as it is, with a reference
+            auto* operand = getVal(inst->operands[0].id, error);
+            if (!operand) { return false; }
+            llvm::Value* operand_boxed = boxValue(operand, inst->operands[0].id);
+            auto read_fn = module.getOrInsertFunction("qore_rt_read_access_base",
+                llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(read_fn, {operand_boxed, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            // the referenced lvalue can be gone (a member of a deleted object): the exception goes to the
+            // instruction's exception target
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }

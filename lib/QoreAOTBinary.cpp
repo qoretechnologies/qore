@@ -118,6 +118,7 @@
 #include "qore/intern/QoreUnshiftOperatorNode.h"
 #include "qore/intern/QoreUnaryMinusOperatorNode.h"
 #include "qore/intern/QoreUnaryPlusOperatorNode.h"
+#include "qore/intern/QoreReadReferenceOperatorNode.h"
 #include "qore/intern/QoreBinaryNotOperatorNode.h"
 #include "qore/intern/QoreLogicalComparisonOperatorNode.h"
 #include "qore/intern/QoreListAssignmentOperatorNode.h"
@@ -14041,6 +14042,11 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     if (auto* unary_plus = dynamic_cast<const QoreUnaryPlusOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::UNARY_PLUS));
         return write_inline_expr(unary_plus->getExp());
+    }
+    // a read through a reference element (qore#6662)
+    if (auto* read_reference = dynamic_cast<const QoreReadReferenceOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::READ_REFERENCE));
+        return write_inline_expr(read_reference->getExp());
     }
     if (auto* bit_not = dynamic_cast<const QoreBinaryNotOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::BIT_NOT));

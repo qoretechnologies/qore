@@ -228,6 +228,29 @@ static void qore_mark_weak_assignment_sources(const QoreValue& expr) {
     }
 }
 
+//! Returns true if the value of \a right is read through the reference that it gives (qore#6662)
+/** A member or an element access whose parse type is a reference type (a container element that holds a reference,
+    read as the reference itself) assigned to a target with a type that does not accept a reference (any type but
+    \c auto, \c any or a reference type) is assigned the referenced value (QoreReadReferenceOperatorNode).
+
+    @param ti the type of the target
+    @param right the parse-initialized right-hand side
+    @param right_ti the parse type of \a right
+*/
+static bool qore_assignment_reads_through_reference(const QoreTypeInfo* ti, const QoreValue& right,
+        const QoreTypeInfo* right_ti) {
+    if (!QoreTypeInfo::hasType(ti) || ti == autoTypeInfo || QoreTypeInfo::isReference(ti)
+            || QoreTypeInfo::parseAcceptsBaseType(ti, NT_REFERENCE)) {
+        return false;
+    }
+    if (!QoreReadReferenceOperatorNode::isReferenceType(right_ti)) {
+        return false;
+    }
+    const AbstractQoreNode* node = right.hasNode() ? right.getInternalNode() : nullptr;
+    return qore_exact_node_cast<QoreHashObjectDereferenceOperatorNode>(node)
+        || qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node);
+}
+
 int QoreAssignmentOperatorNode::parseInitMode(QoreValue& val, QoreParseContext& parse_context,
         AssignmentMode mode) {
     int err = parseInitIntern(parse_context, mode);
@@ -361,6 +384,30 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     // a local variable that a weak reference is taken of must be changed in place (qore#5846)
     if (mode == AssignmentMode::Weak) {
         qore_mark_weak_assignment_sources(right);
+    }
+
+    // a member or an element that holds a reference is read as the reference itself, which a typed target that does
+    // not accept a reference cannot take: its referenced value is assigned, read before the target is locked
+    // (qore#6662)
+    if (!err && mode == AssignmentMode::Normal && qore_assignment_reads_through_reference(ti, right,
+            parse_context.typeInfo)) {
+        const QoreTypeInfo* target_ti = QoreReadReferenceOperatorNode::getTargetType(parse_context.typeInfo);
+        // the node has the location of its operand, a parse node (see qore_assignment_reads_through_reference())
+        const QoreProgramLocation* read_loc = static_cast<const ParseNode*>(right.getInternalNode())->loc;
+        QoreReadReferenceOperatorNode* read = new QoreReadReferenceOperatorNode(read_loc, right, target_ti);
+        QoreParseAnalysis read_analysis;
+        // the referenced lvalue can have no value whatever its type (a missing hash key, for one), so the value is
+        // known only to be of the or-nothing type of the target, and never known to be assigned
+        if (target_ti) {
+            read_analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+            read_analysis.known_type = get_or_nothing_type_check(target_ti);
+        }
+        // the operand is parse-initialized: the node is not parse-initialized again
+        read->setParseAnalysis(read_analysis);
+        right = read;
+        parse_context.typeInfo = target_ti;
+        parse_context.analysis = read_analysis;
+        right_analysis = read_analysis;
     }
 
     // check for illegal assignment to $self

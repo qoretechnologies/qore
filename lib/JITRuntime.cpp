@@ -244,6 +244,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_load_local_raw", reinterpret_cast<void*>(&qore_rt_load_local_raw) },
     { "qore_rt_value_is_reference", reinterpret_cast<void*>(&qore_rt_value_is_reference) },
     { "qore_rt_strip_any_param", reinterpret_cast<void*>(&qore_rt_strip_any_param) },
+    { "qore_rt_read_access_base", reinterpret_cast<void*>(&qore_rt_read_access_base) },
     { "qore_rt_read_reference_local", reinterpret_cast<void*>(&qore_rt_read_reference_local) },
     { "qore_rt_read_element_local_held", reinterpret_cast<void*>(&qore_rt_read_element_local_held) },
     { "qore_rt_reference_slot_write", reinterpret_cast<void*>(&qore_rt_reference_slot_write) },
@@ -3053,6 +3054,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_read_reference_local(uint64_t value, Excep
     return toBits(v.needsRef() ? v.refSelf() : v);
 }
 
+//! Reads a value that may be a reference element through, for a typed assignment of it (qore#6662)
+/** @param value the value of the right-hand side, borrowed: a reference is held while it is read, as it can be an element
+    of a container that reading the lvalue releases
+    @return the value of the referenced lvalue, or the value itself, always with a reference for the caller
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_read_access_base(uint64_t value, ExceptionSink* xsink) {
+    QoreValue v = fromBits(value);
+    if (v.hasNode() && v.getInternalNode()->getType() == NT_REFERENCE) {
+        return toBits(qore_read_access_base(v, xsink));
+    }
+    return toBits(v.needsRef() ? v.refSelf() : v);
+}
+
 //! Assigns a value through the reference that the native cache of an IR-only local holds
 /** A store to a local that holds a reference assigns the referenced lvalue, as LocalVarValue::getLValue() resolves
     it for an assignment, and the local keeps the reference.  An IR-only local has no LocalVarValue: its cache is the
@@ -3658,6 +3672,20 @@ static int qore_rt_apply_list_selector(const QoreValue& result, const QoreValue&
     return 0;
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, const uint8_t* kinds,
+        int32_t count, const uint64_t* selector_bits, int32_t string_index_char, ExceptionSink* xsink);
+
+//! qore_rt_list_index_selectors() of the value that the reference \a ref names (qore#6662)
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD uint64_t qore_rt_list_index_selectors_through_reference(
+        const QoreValue& ref, const uint8_t* kinds, int32_t count, const uint64_t* selector_bits,
+        int32_t string_index_char, ExceptionSink* xsink) {
+    ValueHolder value(qore_read_access_base(ref, xsink), xsink);
+    if (*xsink || value->getType() == NT_REFERENCE) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_list_index_selectors(toBits(*value), kinds, count, selector_bits, string_index_char, xsink);
+}
+
 // applies a list of selectors whose evaluation cannot be observed (see QoreIROpcode::ListSelectorStep); it applies them
 // as qore_rt_list_selector_step() applies one selector after the other, with a loop of its own for each type of
 // sequence, which keeps this common case as fast as it is
@@ -3665,6 +3693,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, c
         int32_t count, const uint64_t* selector_bits, int32_t string_index_char, ExceptionSink* xsink) {
     QoreValue left = fromBits(left_bits);
     qore_type_t left_type = left.getType();
+    // the elements of a reference element are elements of the referenced value (qore#6662)
+    if (left_type == NT_REFERENCE) {
+        return qore_rt_list_index_selectors_through_reference(left, kinds, count, selector_bits, string_index_char,
+            xsink);
+    }
     int selector_idx = 0;
     bool negative_offsets = qore_compiled_code_negative_offsets();
 
@@ -3829,6 +3862,21 @@ static QORE_INTERN_ALWAYS_INLINE QoreValue qore_rt_selector_value(const QoreIRSe
     return selector_vals.slots[selector_vals.ids[i].id];
 }
 
+template <typename SelectorVals>
+static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_list_selector_step_intern(uint64_t result_val, uint64_t seq_val,
+        int64_t flags, SelectorVals selector_vals, int32_t count, ExceptionSink* xsink);
+
+//! A step of a list of selectors on the value that the reference element \a seq names (qore#6662)
+template <typename SelectorVals>
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD uint64_t qore_rt_list_selector_step_through_reference(uint64_t result_val,
+        const QoreValue& seq, int64_t flags, SelectorVals selector_vals, int32_t count, ExceptionSink* xsink) {
+    ValueHolder value(qore_read_access_base(seq, xsink), xsink);
+    if (*xsink || value->getType() == NT_REFERENCE) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_list_selector_step_intern(result_val, toBits(*value), flags, selector_vals, count, xsink);
+}
+
 //! Applies a step of a list of selectors; see qore_rt_list_selector_step()
 /** @param selector_vals the \a count selector values, which qore_rt_selector_value() returns, each once, in order,
     as the selectors are applied: an array of them, or the IR value slots that hold them
@@ -3841,6 +3889,10 @@ template <typename SelectorVals>
 static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_list_selector_step_intern(uint64_t result_val, uint64_t seq_val,
         int64_t flags, SelectorVals selector_vals, int32_t count, ExceptionSink* xsink) {
     QoreValue seq = fromBits(seq_val);
+    // the elements of a reference element are elements of the referenced value (qore#6662)
+    if (seq.getType() == NT_REFERENCE) {
+        return qore_rt_list_selector_step_through_reference(result_val, seq, flags, selector_vals, count, xsink);
+    }
     ValueHolder created(xsink);
     QoreValue result;
     if (flags & static_cast<int64_t>(QoreIRListSelectorFlag::Begin)) {
@@ -3927,6 +3979,11 @@ public:
             : seq(n_seq.refSelf(), xs), count(n_count),
             string_index_char(flags & static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar)),
             negative_offsets(flags & static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets)), xsink(xs) {
+        setMode();
+    }
+
+    //! Sets the mode from the type of the sequence
+    void setMode() {
         switch (seq->getType()) {
             case NT_LIST:
                 mode = Lazy;
@@ -3936,10 +3993,25 @@ public:
                 mode = Eager;
                 result = qore_rt_new_list_selector_result(*seq);
                 break;
+            // the elements of a reference element are elements of the referenced value, read once (qore#6662)
+            case NT_REFERENCE:
+                readSequenceThrough();
+                break;
             default:
                 mode = None;
                 break;
         }
+    }
+
+    //! Replaces a reference element sequence with the value that it names and sets the mode for it (qore#6662)
+    QORE_INTERN_NOINLINE QORE_INTERN_COLD void readSequenceThrough() {
+        ValueHolder value(qore_read_access_base(*seq, xsink), xsink);
+        if (*xsink || value->getType() == NT_REFERENCE) {
+            mode = None;
+            return;
+        }
+        seq = value.release();
+        setMode();
     }
 
     virtual ~QoreRtSelectorIterator() {
@@ -4084,6 +4156,23 @@ private:
 // the IR interpreter keeps the iterator in a value slot (see QoreIRPointerSlot.h)
 QORE_IR_POINTER_SLOT_TYPE_CHECK(QoreRtSelectorIterator);
 
+//! The iterator of a list of selectors on the value that the reference element \a ref names (qore#6662)
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD void* qore_rt_iterator_create_selectors_through_reference(
+        const QoreValue& ref, int64_t flags, int64_t count, ExceptionSink* xsink) {
+    ValueHolder value(qore_read_access_base(ref, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    switch (value->getType()) {
+        case NT_LIST:
+        case NT_STRING:
+        case NT_BINARY:
+            return new QoreRtSelectorIterator(*value, flags, count, xsink);
+        default:
+            return nullptr;
+    }
+}
+
 extern "C" DLLEXPORT void* qore_rt_iterator_create_selectors(uint64_t seq_bits, int64_t flags, int64_t count,
         ExceptionSink* xsink) {
     // a sequence that is not a list, a string or a binary object gives no value and no selector is evaluated: no
@@ -4093,6 +4182,9 @@ extern "C" DLLEXPORT void* qore_rt_iterator_create_selectors(uint64_t seq_bits, 
         case NT_STRING:
         case NT_BINARY:
             break;
+        // the elements of a reference element are elements of the referenced value, read once (qore#6662)
+        case NT_REFERENCE:
+            return qore_rt_iterator_create_selectors_through_reference(fromBits(seq_bits), flags, count, xsink);
         default:
             return nullptr;
     }
@@ -8186,6 +8278,19 @@ static uint64_t qore_rt_hash_key_access_hash_impl(uint64_t hash_val, const char*
     return toBits(result);
 }
 
+static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
+        size_t key_hash, bool prehashed, ExceptionSink* xsink, bool preserve_weak_result);
+
+//! Returns the member \a key of the value that the reference \a ref names (qore#6662)
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD uint64_t qore_rt_hash_key_access_through_reference(const QoreValue& ref,
+        const char* key, size_t key_hash, bool prehashed, ExceptionSink* xsink, bool preserve_weak_result) {
+    ValueHolder value(qore_read_access_base(ref, xsink), xsink);
+    if (*xsink || value->getType() == NT_REFERENCE) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_hash_key_access_impl(toBits(*value), key, key_hash, prehashed, xsink, preserve_weak_result);
+}
+
 // \a preserve_weak_result: the value is the base of a method call: a weak reference to a hash or a list is returned as
 // it is; a weak reference to an object is read as its object, as without it: the receiver of a call read from a
 // container is a temporary of the statement, which keeps the object until the statement ends, as in the AST
@@ -8263,6 +8368,10 @@ static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
             }
         }
         return toBits(rv);
+    }
+    // a member of a reference element is a member of the referenced value (qore#6662)
+    if (v.getType() == NT_REFERENCE) {
+        return qore_rt_hash_key_access_through_reference(v, key, key_hash, prehashed, xsink, preserve_weak_result);
     }
     // Not a hash or object (or NOTHING/NULL): return NOTHING
     return toBits(QoreValue());
@@ -9125,6 +9234,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
     return val_bits;
 }
 
+//! qore_rt_list_index_access_compat() of the value that the reference \a ref names (qore#6662)
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD uint64_t qore_rt_list_index_access_through_reference(const QoreValue& ref,
+        int64_t index, int32_t string_index_char, ExceptionSink* xsink) {
+    ValueHolder value(qore_read_access_base(ref, xsink), xsink);
+    if (*xsink || value->getType() == NT_REFERENCE) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_list_index_access_compat(toBits(*value), index, string_index_char, xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_list_index_access_compat(uint64_t list_val, int64_t index,
         int32_t string_index_char, ExceptionSink* xsink) {
     QoreValue raw_v = fromBits(list_val);
@@ -9161,6 +9280,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_access_compat(uint64_t list_val
                 negative_offsets)) {
             return toBits(b->getReferencedEntry(static_cast<size_t>(qindex), xsink));
         }
+    } else if (v.getType() == NT_REFERENCE) {
+        // an element of a reference element is an element of the referenced value (qore#6662)
+        return qore_rt_list_index_access_through_reference(v, index, string_index_char, xsink);
     }
     // Unsupported container type or index out of bounds: return NOTHING.
     return toBits(QoreValue());

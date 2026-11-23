@@ -281,6 +281,10 @@ public:
     QoreIRValue lowerLogicalComparison(const QoreValue& expr, std::string& error);
     QoreIRValue lowerUnaryPlus(const QoreValue& expr, std::string& error);
     QoreIRValue lowerUnaryMinus(const QoreValue& expr, std::string& error);
+    //! Lowers a read through a reference element (QoreReadReferenceOperatorNode) as ReadReferenceThrough (qore#6662)
+    QoreIRValue lowerReadReference(const QoreValue& expr, std::string& error);
+    //! Returns the sequence of a list of selectors read through if it can be a reference element (qore#6662)
+    QoreIRValue readSelectorSequenceThrough(const QoreValue& seq_expr, QoreIRValue seq, const QoreProgramLocation* loc);
     QoreIRValue lowerRange(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSquareBracketsRange(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSquareBrackets(const QoreValue& expr, std::string& error);

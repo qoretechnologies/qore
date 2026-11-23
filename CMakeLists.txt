@@ -1910,6 +1910,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreCastOperatorNode.cpp
     lib/QoreUnaryMinusOperatorNode.cpp
     lib/QoreUnaryPlusOperatorNode.cpp
+    lib/QoreReadReferenceOperatorNode.cpp
     lib/QoreLogicalNotOperatorNode.cpp
     lib/QoreDotEvalOperatorNode.cpp
     lib/QoreLogicalEqualsOperatorNode.cpp
@@ -2251,6 +2252,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreKeysOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreUnaryMinusOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreUnaryPlusOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreReadReferenceOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreLogicalNotOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreDotEvalOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreLogicalEqualsOperatorNode.cpp\"

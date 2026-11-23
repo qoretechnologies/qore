@@ -181,6 +181,11 @@ static QoreIRValue handler_lowerUnaryMinus(QoreIRExprCtx& ctx) {
     return ctx.lowering.lowerUnaryMinus(ctx.expr, ctx.error);
 }
 
+// Handler for lowerReadReference
+static QoreIRValue handler_lowerReadReference(QoreIRExprCtx& ctx) {
+    return ctx.lowering.lowerReadReference(ctx.expr, ctx.error);
+}
+
 // Handler for lowerBinaryNot
 static QoreIRValue handler_lowerBinaryNot(QoreIRExprCtx& ctx) {
     return ctx.lowering.lowerBinaryNot(ctx.expr, ctx.error);

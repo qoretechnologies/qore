@@ -1,0 +1,76 @@
+object member: "p"
+object member in braces: 5
+hash member: "hv"
+hash slice: {n: "hv", m: 2}
+member of a hash of int: 4
+hashdecl member: 3
+list element: 20
+negative list offset: 40
+list element at a variable offset: 20
+list range: [20, 30]
+list elements: [10, 30]
+list range and element: [10, 20, 40]
+typed declaration of an object: "p"
+typed declaration of an int: 7
+typed declaration of a list: [10, 20, 30, 40]
+assignment to a typed local: 7
+assignment to a typed global: 7
+assignment to a typed member: 7
+assignment to an element of a typed hash: {x: 7}
+assignment to an element of a typed list: [7]
+assignment to a closure-bound typed local: 7
+assignment to the referenced variable: 7
+member of a deleted object: null
+member of a deleted object: "RUNTIME-TYPE-ERROR"
+missing referenced key: null
+missing referenced key for an int: RUNTIME-TYPE-ERROR
+range and a selector with side effects: [10, 20, 30]
+iteration of a range and a selector with side effects: [10, 20, 30]
+map of a range and a selector with side effects: [10, 20, 30]
+selector that changes the referenced variable: [1, 2, 3]
+order of the selectors and of the map: [[1, 2, 3], ["f0", "g1", "f1", "f2", "g2", "g3"]]
+reference to a reference element: 20
+operator: 1
+auto variable: 9
+reference parameter: 8
+iteration: 1
+typed assignment from an untyped container: RUNTIME-TYPE-ERROR
+member access in an untyped container: 20
+object member: "p"
+object member in braces: 5
+hash member: "hv"
+hash slice: {n: "hv", m: 2}
+member of a hash of int: 4
+hashdecl member: 3
+list element: 20
+negative list offset: 40
+list element at a variable offset: 20
+list range: [20, 30]
+list elements: [10, 30]
+list range and element: [10, 20, 40]
+typed declaration of an object: "p"
+typed declaration of an int: 7
+typed declaration of a list: [10, 20, 30, 40]
+assignment to a typed local: 7
+assignment to a typed global: 7
+assignment to a typed member: 7
+assignment to an element of a typed hash: {x: 7}
+assignment to an element of a typed list: [7]
+assignment to a closure-bound typed local: 7
+assignment to the referenced variable: 7
+member of a deleted object: null
+member of a deleted object: "RUNTIME-TYPE-ERROR"
+missing referenced key: null
+missing referenced key for an int: RUNTIME-TYPE-ERROR
+range and a selector with side effects: [10, 20, 30]
+iteration of a range and a selector with side effects: [10, 20, 30]
+map of a range and a selector with side effects: [10, 20, 30]
+selector that changes the referenced variable: [1, 2, 3]
+order of the selectors and of the map: [[1, 2, 3], ["f0", "g1", "f1", "f2", "g2", "g3"]]
+reference to a reference element: 20
+operator: 1
+auto variable: 9
+reference parameter: 8
+iteration: 1
+typed assignment from an untyped container: RUNTIME-TYPE-ERROR
+member access in an untyped container: 20

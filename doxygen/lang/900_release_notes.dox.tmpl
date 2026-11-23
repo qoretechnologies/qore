@@ -2794,6 +2794,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - an access to a member or an element of a reference held in a container (<tt>h.a.n</tt>, <tt>l[0][1]</tt>) reads
+      the referenced value, as does a typed assignment of it (<tt>int i = l[0]</tt>); they gave no value or raised a
+      \c RUNTIME-TYPE-ERROR exception (see @ref reference_elements,
+      <a href="https://github.com/qoretechnologies/qore/issues/6662">issue 6662</a>)
     - @ref Qore::HTTPClient::getURL() "HTTPClient::getURL()", @ref Qore::HTTPClient::getProxyURL() "getProxyURL()"
       and @ref Qore::HTTPClient::getSafeProxyURL() "getSafeProxyURL()" give an IPv6 host in brackets and the path of a
       UNIX domain socket with every reserved character encoded; the URL was ambiguous without them, and

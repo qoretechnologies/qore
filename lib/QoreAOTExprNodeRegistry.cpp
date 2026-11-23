@@ -99,7 +99,7 @@ const QoreAOTExprNodeKindInfo AOT_EXPR_NODE_KIND_REGISTRY[256] = {
     {nullptr, 38, false, nullptr, nullptr},
     {nullptr, 39, false, nullptr, nullptr},
 
-    // [40-55] Unary operators (note: 46 is undefined)
+    // [40-56] Unary operators (note: 46 is undefined)
     {"EN_KEYS", 40, true, read_node_EN_KEYS, "Extract keys operator"},
     {"EN_ELEMENTS", 41, true, read_node_EN_ELEMENTS, "Extract elements operator"},
     {"EN_EXISTS", 42, true, read_node_EN_EXISTS, "Existence check operator"},
@@ -117,8 +117,9 @@ const QoreAOTExprNodeKindInfo AOT_EXPR_NODE_KIND_REGISTRY[256] = {
     {"EN_BIT_NOT", 54, true, read_node_EN_BIT_NOT, "Bitwise not operator"},
     {"EN_SHIFT", 55, true, read_node_EN_SHIFT, "Shift operator"},
 
-    // [56-59] Undefined
-    {nullptr, 56, false, nullptr, nullptr},
+    {"EN_READ_REFERENCE", 56, true, read_node_EN_READ_REFERENCE, "Read through a reference element"},
+
+    // [57-59] Undefined
     {nullptr, 57, false, nullptr, nullptr},
     {nullptr, 58, false, nullptr, nullptr},
     {nullptr, 59, false, nullptr, nullptr},

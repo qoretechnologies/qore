@@ -108,6 +108,7 @@
 #include <qore/intern/QoreUnshiftOperatorNode.h>
 #include <qore/intern/QoreUnaryMinusOperatorNode.h>
 #include <qore/intern/QoreUnaryPlusOperatorNode.h>
+#include <qore/intern/QoreReadReferenceOperatorNode.h>
 #include <qore/intern/QoreValueCoalescingOperatorNode.h>
 #include <qore/intern/QoreExtractOperatorNode.h>
 #include <qore/intern/QoreRemoveOperatorNode.h>
@@ -13040,6 +13041,36 @@ QoreIRValue QoreIRLowering::lowerUnaryMinus(const QoreValue& expr, std::string& 
     return lowerUnaryOpOrInvoke(op, expr, value, minus->loc, error);
 }
 
+QoreIRValue QoreIRLowering::lowerReadReference(const QoreValue& expr, std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* read = dynamic_cast<const QoreReadReferenceOperatorNode*>(node);
+    if (!read) {
+        return QoreIRValue();
+    }
+    if (!ensureBuilderContext(error)) {
+        return QoreIRValue();
+    }
+
+    QoreIRValue value = lowerExpression(read->getExp(), error);
+    if (!value.isValid()) {
+        return QoreIRValue();
+    }
+    // the referenced lvalue can be gone (a member of a deleted object): the exception goes to the enclosing handler
+    // (qore#6662)
+    return withExceptionTarget(builder.createUnaryOp(QoreIROpcode::ReadReferenceThrough, value, read->loc))->result;
+}
+
+QoreIRValue QoreIRLowering::readSelectorSequenceThrough(const QoreValue& seq_expr, QoreIRValue seq,
+        const QoreProgramLocation* loc) {
+    // a variable is read as the value of a reference of its type; only a value of a type that can be a reference can
+    // be a reference element
+    if (dynamic_cast<const VarRefNode*>(seq_expr.getInternalNode())
+            || QoreTypeInfo::parseReturns(getExprTypeInfo(seq_expr), NT_REFERENCE) == QTI_NOT_EQUAL) {
+        return seq;
+    }
+    return withExceptionTarget(builder.createUnaryOp(QoreIROpcode::ReadReferenceThrough, seq, loc))->result;
+}
+
 QoreIRValue QoreIRLowering::lowerBinaryNot(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* binary_not = dynamic_cast<const QoreBinaryNotOperatorNode*>(node);
@@ -13699,7 +13730,9 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
         // selectors are evaluated before one instruction applies them all only if the order cannot be observed
         for (const QoreValue& selector : range_selectors) {
             if (!qore_ir_selector_eval_is_inert(selector)) {
-                return lowerListSelectorSteps(op, lhs, range_selectors, error);
+                // the sequence that is a reference element is the referenced value, read once (qore#6662)
+                return lowerListSelectorSteps(op, readSelectorSequenceThrough(op->getLeft(), lhs, op->loc),
+                    range_selectors, error);
             }
         }
         std::vector<QoreIRValue> operands{lhs};
@@ -14560,8 +14593,13 @@ QoreIRIteratorNextInstruction* QoreIRLowering::emitSelectorIteratorNext(const La
     return next_inst;
 }
 
-static bool qore_ir_is_explicit_hash_value_type(const QoreTypeInfo* type_info) {
-    const QoreTypeInfo* reference_target = QoreTypeInfo::getReferenceTarget(type_info);
+//! Returns true if the base of a member access is a hash of an explicit type
+/** @param reads_through true if the base is read as the value of a reference of its type, as a variable is; a
+    reference element read from a container is the reference itself, whose member access reads through it at run time
+    (qore#6662)
+*/
+static bool qore_ir_is_explicit_hash_value_type(const QoreTypeInfo* type_info, bool reads_through) {
+    const QoreTypeInfo* reference_target = reads_through ? QoreTypeInfo::getReferenceTarget(type_info) : nullptr;
     if (reference_target) {
         type_info = reference_target;
     }
@@ -14622,8 +14660,11 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
         std::vector<QoreIRValue> operands{base_val};
         QoreIRValue result;
         const QoreTypeInfo* base_type = getExprTypeInfo(op->getLeft());
+        // a variable of a reference type is read as the referenced value; any other base of a reference type is a
+        // reference element, which the access reads through at run time, so no typed access applies (qore#6662)
+        const bool base_reads_through = dynamic_cast<const VarRefNode*>(op->getLeft().getInternalNode()) != nullptr;
         const QoreTypeInfo* base_value_type =
-            QoreTypeInfo::getReferenceTarget(base_type);
+            base_reads_through ? QoreTypeInfo::getReferenceTarget(base_type) : nullptr;
         if (!base_value_type) {
             base_value_type = base_type;
         }
@@ -14686,7 +14727,7 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
                         }
                     }
                 }
-                bool typed_hash = assigned_hash || qore_ir_is_explicit_hash_value_type(base_type);
+                bool typed_hash = assigned_hash || qore_ir_is_explicit_hash_value_type(base_type, base_reads_through);
                 auto* hka_inst = typed_hash
                     && !QORE_ENV_IS_SET("QORE_DISABLE_IR_TYPED_HASH_KEY_ACCESS")
                     ? builder.createHashKeyAccessHash(key_str, !assigned_hash, op->loc)
@@ -24855,6 +24896,11 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         : lowerExpression(base_source, error);
     if (!source.isValid()) {
         return QoreIRValue();
+    }
+    // the sequence of a list of selectors that is a reference element is the referenced value, read once, as the AST
+    // interpreter reads it (qore#6662)
+    if (selector_source) {
+        source = readSelectorSequenceThrough(selector_source.op->getLeft(), source, loc);
     }
 
     QoreIRValue owned_source = source;

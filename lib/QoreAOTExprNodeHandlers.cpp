@@ -1045,6 +1045,19 @@ static QoreValue read_node_EN_UNARY_PLUS(AOTExprNodeReadCtx& ctx) {
     return QoreValue(new QoreUnaryPlusOperatorNode(&loc_builtin, operand));
 }
 
+//! Reads a read through a reference element (qore#6662)
+static QoreValue read_node_EN_READ_REFERENCE(AOTExprNodeReadCtx& ctx) {
+    uint16_t num_children = readU16(ctx.ptr, ctx.end);
+    QoreValue operand;
+    if (num_children >= 1) {
+        operand = ctx.recurse(ctx);
+    }
+    for (uint16_t i = 1; i < num_children; ++i) {
+        ctx.recurse(ctx).discard(nullptr);
+    }
+    return QoreValue(new QoreReadReferenceOperatorNode(&loc_builtin, operand));
+}
+
 static QoreValue read_node_EN_LOG_NOT(AOTExprNodeReadCtx& ctx) {
     uint16_t num_children = readU16(ctx.ptr, ctx.end);
     QoreValue operand;

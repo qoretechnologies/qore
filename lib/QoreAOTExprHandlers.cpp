@@ -122,6 +122,7 @@
 #include "qore/intern/QoreUnshiftOperatorNode.h"
 #include "qore/intern/QoreUnaryMinusOperatorNode.h"
 #include "qore/intern/QoreUnaryPlusOperatorNode.h"
+#include "qore/intern/QoreReadReferenceOperatorNode.h"
 #include "qore/intern/QoreBinaryNotOperatorNode.h"
 #include "qore/intern/QoreLogicalComparisonOperatorNode.h"
 #include "qore/intern/QoreListAssignmentOperatorNode.h"
@@ -5253,6 +5254,35 @@ static bool write_expr_backquote(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_backquote(AOTExprReadCtx& ctx) {
     const char* cmd = ctx.reader.readStringRef(ctx.ptr);
     return QoreValue(new BackquoteNode(&loc_builtin, strdup(cmd ? cmd : "")));
+}
+
+// ============================================================================
+// READ_REFERENCE (134)
+// ============================================================================
+
+//! Writes a read through a reference element (qore#6662)
+static bool write_expr_read_reference(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreReadReferenceOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::READ_REFERENCE));
+    return classifyAndWriteExpr(ctx.writer, op->getExp(), ctx.parent_locals,
+        ctx.parent_globals, ctx.const_reverse_map);
+}
+
+//! Reads a read through a reference element (qore#6662)
+static QoreValue read_expr_read_reference(AOTExprReadCtx& ctx) {
+    std::string operand_err;
+    QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, operand_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+    if (!operand_err.empty()) {
+        operand.discard(nullptr);
+        ctx.error = operand_err;
+        return QoreValue();
+    }
+    return QoreValue(new QoreReadReferenceOperatorNode(&loc_builtin, operand));
 }
 
 // ============================================================================

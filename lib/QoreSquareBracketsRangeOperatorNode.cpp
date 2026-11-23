@@ -34,6 +34,7 @@
 #include "qore/intern/QorePluginRegistry.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/LocalVar.h"
 
 QoreString QoreSquareBracketsRangeOperatorNode::op_str("x[m..n] operator expression");
 
@@ -217,6 +218,16 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool&
     return slice(*seq, *start_index, *stop_index, broken_list_range, negative_offsets, xsink);
 }
 
+QoreValue QoreSquareBracketsRangeOperatorNode::sliceThroughReference(const QoreValue& seq_value,
+        const QoreValue& start_value, const QoreValue& stop_value, bool broken_list_range, bool negative_offsets,
+        ExceptionSink* xsink) {
+    ValueHolder value(qore_read_access_base(seq_value, xsink), xsink);
+    if (*xsink || value->getType() == NT_REFERENCE) {
+        return QoreValue();
+    }
+    return slice(*value, start_value, stop_value, broken_list_range, negative_offsets, xsink);
+}
+
 QoreValue QoreSquareBracketsRangeOperatorNode::slice(const QoreValue& seq_value, const QoreValue& start_value,
         const QoreValue& stop_value, bool broken_list_range, bool negative_offsets, ExceptionSink* xsink) {
     // the evaluated operands, under the names that the code below has always used
@@ -239,6 +250,11 @@ QoreValue QoreSquareBracketsRangeOperatorNode::slice(const QoreValue& seq_value,
         if (*xsink || plugin_matched) {
             return plugin_result;
         }
+    }
+
+    // a range of a reference element is a range of the referenced value (qore#6662)
+    if (seq_type == NT_REFERENCE) {
+        return sliceThroughReference(seq_value, start_value, stop_value, broken_list_range, negative_offsets, xsink);
     }
 
     bool empty = !getEffectiveRange(*seq, start, stop, seq_size, *start_index, *stop_index, broken_list_range,

@@ -151,6 +151,7 @@
 #include "qore/intern/QoreRangeOperatorNode.h"
 #include "qore/intern/QoreUnaryMinusOperatorNode.h"
 #include "qore/intern/QoreUnaryPlusOperatorNode.h"
+#include "qore/intern/QoreReadReferenceOperatorNode.h"
 #include "qore/intern/QoreBinaryNotOperatorNode.h"
 #include "qore/intern/QoreShiftLeftOperatorNode.h"
 #include "qore/intern/QoreShiftRightOperatorNode.h"
@@ -5900,6 +5901,20 @@ static QoreAOTContext* buildContextFromSlotMap(
                 } else {
                     ctx->exprs[i] = toBitsNB(QoreValue(
                         new QoreUnaryPlusOperatorNode(&loc_builtin, operand)));
+                }
+                continue;
+            }
+            // a read through a reference element (qore#6662)
+            case AOTExprKind::READ_REFERENCE: {
+                std::string operand_err;
+                QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
+                if (!operand_err.empty()) {
+                    operand.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreReadReferenceOperatorNode(&loc_builtin, operand)));
                 }
                 continue;
             }

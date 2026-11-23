@@ -112,6 +112,11 @@ protected:
     //! Returns the value of the expression from its evaluated operands: the sequence, and the start and the end
     DLLLOCAL static QoreValue slice(const QoreValue& seq, const QoreValue& start_index, const QoreValue& stop_index,
         bool broken_list_range, bool negative_offsets, ExceptionSink* xsink);
+
+    //! slice() of the value that the reference \a seq names (qore#6662)
+    DLLLOCAL static QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue sliceThroughReference(const QoreValue& seq,
+            const QoreValue& start_index, const QoreValue& stop_index, bool broken_list_range, bool negative_offsets,
+            ExceptionSink* xsink);
 };
 
 class QoreFunctionalSquareBracketsRangeOperator : public FunctionalOperatorInterface, public RangeIterator {

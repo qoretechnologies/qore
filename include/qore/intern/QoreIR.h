@@ -1162,8 +1162,17 @@ enum class QoreIROpcode : uint16_t {
     ReleaseHandedOverReturn = 442,
     //! Release an operator source loaded from a local unless the load read through a reference.
     ReleasePlainLocalRead = 443,
+    /** Reads the value of the lvalue that a reference names: the value of the typed assignment of a member or an
+        element that holds a reference (QoreReadReferenceOperatorNode, qore#6662)
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (444, 445, ...)
+        One operand, the value of the member or element access; the result is the referenced value, with a reference of
+        its own, or the operand's value itself, with a reference of its own, when it is not a reference.  Raises an
+        exception if the referenced lvalue cannot be read (a member of a deleted object, for example).  See
+        qore_rt_read_reference_local().
+    */
+    ReadReferenceThrough = 444,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (445, 446, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1172,8 +1181,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::ReleasePlainLocalRead);
-static_assert(QORE_IR_MAX_OPCODE == 443, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::ReadReferenceThrough);
+static_assert(QORE_IR_MAX_OPCODE == 444, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns the Any comparison of a plugin comparison opcode (QoreIROpcode::EqPlugin...GePlugin), or \a op itself

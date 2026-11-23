@@ -154,6 +154,7 @@ static_assert(QORE_AOT_STRING_EXPRESSION_MAX_NODES <= QORE_AOT_WIRE_STRING_EXPRE
 #include "qore/intern/QoreRangeOperatorNode.h"
 #include "qore/intern/QoreUnaryMinusOperatorNode.h"
 #include "qore/intern/QoreUnaryPlusOperatorNode.h"
+#include "qore/intern/QoreReadReferenceOperatorNode.h"
 #include "qore/intern/QoreBinaryNotOperatorNode.h"
 #include "qore/intern/QoreShiftLeftOperatorNode.h"
 #include "qore/intern/QoreShiftRightOperatorNode.h"
@@ -36568,6 +36569,10 @@ class ExprTreeSerializer {
         if (auto* op = dynamic_cast<const QoreUnaryPlusOperatorNode*>(node)) {
             return serializeUnary(AOTExprNodeKind::EN_UNARY_PLUS, op->getExp());
         }
+        // a read through a reference element (qore#6662)
+        if (auto* op = dynamic_cast<const QoreReadReferenceOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_READ_REFERENCE, op->getExp());
+        }
         if (auto* op = dynamic_cast<const QoreLogicalNotOperatorNode*>(node)) {
             return serializeUnary(AOTExprNodeKind::EN_LOG_NOT, op->getExp());
         }
@@ -37979,6 +37984,12 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (dynamic_cast<const QoreUnaryPlusOperatorNode*>(node)) {
         id.kind = AOTExprKind::UNARY_PLUS;
+        id.child_expr = v;
+        return id;
+    }
+    // a read through a reference element (qore#6662)
+    if (dynamic_cast<const QoreReadReferenceOperatorNode*>(node)) {
+        id.kind = AOTExprKind::READ_REFERENCE;
         id.child_expr = v;
         return id;
     }

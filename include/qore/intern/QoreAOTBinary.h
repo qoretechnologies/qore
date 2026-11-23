@@ -652,6 +652,13 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      - no format change, but the code that a v50 compiler wrote differs (an image must be rebuilt): string literals
 //!        that an earlier compiler folded with the encoding of the source tagged as the default encoding are
 //!        materialized as UTF-8 CONST_STRING values, as the source is decoded as UTF-8 (qore#6816, qore#6815)
+//! next format version (the batch that takes qore#6662 assigns its version; one line each):
+//!      - IR can encode ReadReferenceThrough (opcode 444, Base group, one operand, a result), which reads the value
+//!        of the lvalue that a reference element names for a typed assignment (qore#6662); the maximum opcode in the
+//!        AOT header is 444
+//!      - an expression that reads through a reference element (QoreReadReferenceOperatorNode) is written natively
+//!        (AOTExprKind::READ_REFERENCE, 134: the operand; its node form EN_READ_REFERENCE, 56) (qore#6662); a reader
+//!        of an earlier format refuses the kind
 //! The shared format version for the changes in batch AL (see v48 above).
 constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
 //! The shared format version for the changes in batch AM (see v49 above).
@@ -3095,6 +3102,8 @@ enum class AOTExprKind : uint8_t {
     //! list assignment operator: lvalue list (LIST_LITERAL; read as a parse list) + value(AOTExprKind) (qore#6229)
     LIST_ASSIGN        = 132,
     BACKQUOTE          = 133, //!< Backquote (shell command) expression: command(stringref) (qore#6302)
+    //! read through a reference element (QoreReadReferenceOperatorNode): operand(AOTExprKind) (qore#6662)
+    READ_REFERENCE     = 134,
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };
@@ -3156,6 +3165,7 @@ enum class AOTExprNodeKind : uint8_t {
     EN_LOG_NOT       = 53,  //!< no metadata
     EN_BIT_NOT       = 54,  //!< no metadata
     EN_SHIFT         = 55,  //!< no metadata (shift list)
+    EN_READ_REFERENCE = 56, //!< no metadata (read through a reference element, qore#6662)
 
     // Binary operators (2 children = [left, right])
     EN_PUSH          = 60,  //!< no metadata

@@ -46,6 +46,38 @@ lastorder.numberofitems = lastorder.items.size();
     arguments to a function or method call or the like.  As of %Qore 0.8.5+, references can be used anywhere in %Qore
     in any expression, even with references to local variables in background expressions and in closure argument lists.
 
+    @section reference_elements References Held in Containers
+
+    A list element, a hash key or an object member can hold a reference (a container of type
+    <tt>list<reference<int>></tt> or <tt>hash<string, reference<*MyClass>></tt>, for example); reading the element
+    gives the reference itself, not the value of the lvalue that it refers to.  The referenced value is read in two
+    cases:
+    - an access to a member or an element of the element, with the \c "." operator, the \c "{}" operator or the
+      \c "[]" operator, including slices and ranges, reads the member or the element of the referenced value
+    - an assignment of the element to an lvalue of a type that does not take a reference assigns the referenced value
+
+    @code{.py}
+our list<int> numbers = (1, 2, 3);
+our int count = 2;
+hash<string, reference<list<int>>> h = {"numbers": \numbers};
+list<reference<int>> l = (\count,);
+
+int second = h.numbers[1];  # 2: an element of the referenced list
+int n = l[0];               # 2: the referenced value is assigned
+    @endcode
+
+    Any other use takes the reference as it is: an operator (<tt>l[0] + 1</tt> is \c 1), an iteration, a call
+    argument (an element passed to a parameter of type \c reference<int> passes the reference), and an assignment to
+    an \c auto variable, which keeps the reference, so that an assignment to the variable assigns the referenced
+    lvalue.
+
+    @note The type of the container decides whether a typed assignment reads the referenced value: the element of an
+    untyped container (<tt>hash<auto></tt>, for example) is a value of no known type, which is assigned as it is, so a
+    reference held in it assigned to an \c int variable raises a \c RUNTIME-TYPE-ERROR exception.  An access to a member or an element of it reads the
+    referenced value in every case.  Only an assignment reads the referenced value: the initial value of a class member
+    and the default value of a parameter are assigned as they are.  A reference read through a reference element is not
+    read through again: if the referenced lvalue holds a reference itself, that reference is the value read.
+
     @section reference_types Reference Type Restrictions
 
     The following reference type restrictions exist:

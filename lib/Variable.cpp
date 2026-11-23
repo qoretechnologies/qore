@@ -5801,6 +5801,19 @@ QoreValue reference_read_result(QoreValue rv, bool& needs_deref, ExceptionSink* 
 }
 
 // documented in LocalVar.h
+QoreValue qore_read_access_base(const QoreValue& ref, ExceptionSink* xsink) {
+    assert(ref.getType() == NT_REFERENCE);
+    ReferenceNode* r = const_cast<ReferenceNode*>(ref.get<const ReferenceNode>());
+    r->ref();
+    ReferenceHolder<ReferenceNode> holder(r, xsink);
+    bool needs_deref = true;
+    QoreValue rv = qore_local_reference_eval(*r, needs_deref, xsink);
+    if (!needs_deref && rv.needsRef()) {
+        rv = rv.refSelf();
+    }
+    return rv;
+}
+
 QoreValue qore_local_reference_eval(const ReferenceNode& ref, bool& needs_deref, ExceptionSink* xsink) {
     lvalue_ref* lr = lvalue_ref::get(&ref);
     // a reference to a closure-bound variable itself has the variable as its lvalue (ClosureVarValue::getReference()),

@@ -867,6 +867,17 @@ static bool write_slot_BACKQUOTE(AOTExprSlotWriteCtx& ctx) {
     return true;
 }
 
+//! Writes the operand of a read through a reference element (qore#6662)
+static bool write_slot_READ_REFERENCE(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreReadReferenceOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->getExp(),
+        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
 static bool write_slot_NULL_COAL(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreNullCoalescingOperatorNode>(ctx);
 }

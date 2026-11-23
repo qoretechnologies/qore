@@ -638,6 +638,8 @@ uint64_t qore_rt_strip_any_param(uint64_t value);
 uint64_t qore_rt_load_local_raw(LocalVar* var, ExceptionSink* xsink);
 
 //! Reads a cached value that can be a reference: the referenced value, or the value itself, with a reference
+//! Reads a value that may be a reference element through, holding the reference while it reads (qore#6662)
+uint64_t qore_rt_read_access_base(uint64_t value, ExceptionSink* xsink);
 uint64_t qore_rt_read_reference_local(uint64_t value, ExceptionSink* xsink);
 //! Reads the cache of an untyped IR-only variable of a foreach loop; a value read through a reference is held in
 //! \a current, whose value moves to \a previous, whose value is released, and \a held is set
