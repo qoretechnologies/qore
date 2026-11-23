@@ -5076,9 +5076,15 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         when it returns, and handleRequest() before the server answers the request
     */
     private startHandlerSocket(RequestHelper request_helper, Socket s, bool head, bool http10) {
-        HandlerSocketState hs_state = request_helper.hs_state ?? (request_helper.hs_state = new HandlerSocketState());
-        request_helper.handler_sock = new Http1HandlerSocket(s, hs_state, hs_state.h1Reset(s, head, http10),
-            handler_socket_max_timeout);
+        if (request_helper.hs_state) {
+            request_helper.handler_sock = new Http1HandlerSocket(s, request_helper.hs_state,
+                request_helper.hs_state.h1Reset(s, head, http10), handler_socket_max_timeout);
+        } else {
+            # a new state, started for the request: its first generation
+            request_helper.hs_state = new HandlerSocketState(s, head, http10);
+            request_helper.handler_sock = new Http1HandlerSocket(s, request_helper.hs_state, 1,
+                handler_socket_max_timeout);
+        }
         request_helper.h1_state = 0;
         request_helper.h1_view = True;
     }
@@ -5483,10 +5489,17 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # a response that the handler sent through the socket of its HTTP/1.x request, or a part of it:
                     # the server sends no other response, and closes the connection after an incomplete one
                     # (qore#7305)
-                    if (request_helper.h1_view && request_helper.endHandlerSocket()) {
-                        rv.reply_sent = True;
-                        if (request_helper.h1_state != Http1ResponseState::Complete) {
-                            cx.close = True;
+                    if (request_helper.h1_view) {
+                        # ended with one call when no send or read of it is in progress
+                        request_helper.h1_view = False;
+                        if ((request_helper.h1_state = request_helper.hs_state.h1End()) < 0) {
+                            request_helper.h1_state = request_helper.hs_state.endHandlerSocket();
+                        }
+                        if (request_helper.h1_state) {
+                            rv.reply_sent = True;
+                            if (request_helper.h1_state != Http1ResponseState::Complete) {
+                                cx.close = True;
+                            }
                         }
                     }
 
@@ -13110,8 +13123,10 @@ class RequestHelper {
     */
     int endHandlerSocket() {
         if (h1_view) {
-            h1_state = hs_state.endHandlerSocket();
             h1_view = False;
+            if ((h1_state = hs_state.h1End()) < 0) {
+                h1_state = hs_state.endHandlerSocket();
+            }
         }
         return h1_state;
     }
@@ -13285,9 +13300,37 @@ class HandlerSocketState {
     }
 
 
+    #! Creates a state without a socket of an HTTP/1.x request (for an HTTP/2 or HTTP/3 stream)
+    constructor() {
+    }
+
+    #! Creates the state of the socket of a new HTTP/1.x request, started: its generation is 1
+    constructor(Socket real, bool head, bool http10) {
+        h1_real = real;
+        h1_live = True;
+        h1_head = head;
+        h1_http10 = http10;
+        h1_gen = 1;
+    }
+
+    #! Ends the socket of the current HTTP/1.x request when no send or read of it is in progress (qore#7305)
+    /** @return the state of the response that the handler sent through the socket (an Http1ResponseState value), or
+        -1 if a send or read of it is in progress: the server then calls endHandlerSocket(), which waits for it
+    */
+    synchronized int h1End() {
+        if (h1_live) {
+            h1_live = False;
+            ++h1_gen;
+            if (h1_ops && h1_ops.getCount()) {
+                return -1;
+            }
+        }
+        return h1_resp;
+    }
+
     #! Ends the socket of the current HTTP/1.x request (qore#7305)
-    /** The server calls it before it sends a response for the request or reads the next request; a later call only
-        returns the state.  A send or read of the socket in progress (of a thread of the handler that outlives its
+    /** The server calls it before it sends a response for the request or reads the next request, or after h1End()
+        returned -1; a later call only returns the state.  A send or read of the socket in progress (of a thread of the handler that outlives its
         request) is waited for, at most for its timeout, which the socket bounds (the \c handler_socket_max_timeout
         option of the server); the response is then broken, and the connection is shut down and closed by the
         server.  It is called only by the server's own code
@@ -13296,11 +13339,12 @@ class HandlerSocketState {
     */
     int endHandlerSocket() {
         int state;
-        *Counter c = h1EndLocked(\state);
-        if (c && c.getCount()) {
-            # a send or read of another thread in progress: the response is broken whatever it does
+        h1EndLocked(\state);
+        # a send or read of another thread in progress, also one that h1End() found: the response is broken
+        # whatever it does
+        if (h1_ops && h1_ops.getCount()) {
             h1Broken();
-            c.waitForZero();
+            h1_ops.waitForZero();
             try {
                 h1_real.shutdown();
             } catch (hash<ExceptionInfo> ex) {
@@ -13555,14 +13599,12 @@ class HandlerSocketState {
     }
 
     #! Ends the socket of the current HTTP/1.x request; returns its counter of sends and reads, if any
-    private synchronized *Counter h1EndLocked(reference<int> state) {
+    private synchronized h1EndLocked(reference<int> state) {
         state = h1_resp;
-        if (!h1_live) {
-            return;
+        if (h1_live) {
+            h1_live = False;
+            ++h1_gen;
         }
-        h1_live = False;
-        ++h1_gen;
-        return h1_ops;
     }
 
     #! Resets the state for the socket of a new HTTP/1.x request, whose previous socket ended; returns its generation
