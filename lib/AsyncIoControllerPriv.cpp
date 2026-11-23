@@ -6789,6 +6789,10 @@ size_t AsyncIoControllerPriv::dbgWakeAllSockets() {
 }
 #endif
 
+#ifdef DEBUG
+std::atomic<bool> qore_dbg_close_wake_push_fails{false};
+#endif
+
 std::function<void()> AsyncIoControllerPriv::makeCloseWake(IoThreadContext& t, const std::string& sock_hash) {
     if (!t.close_wakes) {
         t.close_wakes = std::make_shared<CloseWakeQueue>(t.notifier);
@@ -6801,6 +6805,11 @@ std::function<void()> AsyncIoControllerPriv::makeCloseWake(IoThreadContext& t, c
             // a leaf lock (see CloseWakeQueue)
             AutoLocker al(q->l);
             try {
+#ifdef DEBUG
+                if (qore_dbg_close_wake_push_fails.load(std::memory_order_relaxed)) {
+                    throw std::bad_alloc();
+                }
+#endif
                 q->hashes.push_back(sock_hash);
             } catch (...) {
                 // no memory: the thread wakes all of its sockets (nothing may leave a close)
@@ -7958,6 +7967,11 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 t.close_wakes->all = false;
                 for (const auto& [hash, fd] : t.registered_fds) {
                     t.wake_socket_hashes.insert(hash);
+                }
+                // and every operation of the thread, also one whose own socket has no registered descriptor (one that
+                // waits only for extra descriptors, such as another Socket's)
+                for (auto& [key, pinfo] : t.cache) {
+                    t.wake_socket_hashes.insert(closeWakeKey(pinfo));
                 }
             }
         }
@@ -11964,8 +11978,8 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, uint64_t op_id,
                     // a close of the object that bypasses the controller wakes the operation, also one made since the
                     // hold was taken (qore#7003)
                     OpCache::node_t* node = t.cache.findId(op_id);
-                    if (node && node->second.sock) {
-                        qore_descriptor_hold_set_close_wake(hold, makeCloseWake(t, getSocketHash(node->second.sock)));
+                    if (node) {
+                        qore_descriptor_hold_set_close_wake(hold, makeCloseWake(t, closeWakeKey(node->second)));
                     }
                     t.extra_fd_holds[{op_id, fd}] = std::move(hold);
                 }

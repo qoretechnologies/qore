@@ -9475,8 +9475,9 @@ public:
     //! closed in a step that finds the other Socket closed
     class PollableExtraOp : public SocketPollOperationBase {
     public:
-        DLLLOCAL PollableExtraOp(QoreObject* notifier_obj, QoreObject* other_obj, QoreSocketObject* other)
-                : notifier_obj(notifier_obj), other_obj(other_obj), other(other) {
+        DLLLOCAL PollableExtraOp(QoreObject* notifier_obj, QoreObject* other_obj, QoreSocketObject* other,
+                int events = SOCK_POLLIN) : notifier_obj(notifier_obj), other_obj(other_obj), other(other),
+                events(events) {
         }
 
         DLLLOCAL virtual bool goalReached() const override {
@@ -9492,7 +9493,7 @@ public:
                 return nullptr;
             }
             ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
-            info->setKeyValue("events", SOCK_POLLIN, xsink);
+            info->setKeyValue("events", events, xsink);
             info->setKeyValue("socket", notifier_obj->objectRefSelf(), xsink);
             ReferenceHolder<QoreListNode> list(new QoreListNode(hashdeclExtraPollFdInfo->getTypeInfo()), xsink);
             ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclExtraPollFdInfo, xsink), xsink);
@@ -9511,6 +9512,8 @@ public:
         QoreObject* notifier_obj;
         QoreObject* other_obj;
         QoreSocketObject* other;
+        //! the events that the operation waits for on its own socket (none: only its extra fd is registered)
+        int events;
         int calls = 0;
     };
 
@@ -9521,9 +9524,24 @@ public:
         close that bypasses the controller (close_and_reset(), which gives the event loop no event while the
         descriptor is held) must run the operation, which then finds the other Socket closed and fails as closed; the
         operation has no time limit, and the wait for its end is limited only to guard against a hang.
+
+        With XFD_POLL_DIFFERS, the operation is submitted for a Socket without a descriptor and polls the notifier
+        (its poll socket differs from its submit socket): the wake must run it by the socket that it polls.  With
+        XFD_ALL_FALLBACK, the operation waits for no events of its own object (so that only its extra fd is
+        registered; an object without a descriptor would run it again at each step anyway), and the wake cannot
+        record its socket (qore_dbg_close_wake_push_fails, as with no memory): the I/O thread's fallback, which wakes
+        all of its operations, must still run it.
     */
-    static void runPollableExtraFdClose(UnitTestCounters& c) {
-        const std::string when = " (extra fd of another Socket closed directly)";
+    enum XfdCloseMode {
+        XFD_NORMAL,
+        XFD_POLL_DIFFERS,
+        XFD_ALL_FALLBACK,
+    };
+    static void runPollableExtraFdClose(UnitTestCounters& c, XfdCloseMode mode) {
+        const bool all_fallback = mode == XFD_ALL_FALLBACK;
+        const std::string when = all_fallback ? " (extra fd of another Socket closed directly, wake fallback)"
+            : (mode == XFD_POLL_DIFFERS ? " (extra fd of another Socket closed directly, poll socket differs)"
+                : " (extra fd of another Socket closed directly)");
         ExceptionSink xsink;
         ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
         UT_ASSERT(c, !xsink, ("the controller is created" + when).c_str());
@@ -9575,10 +9593,14 @@ public:
         }
         notifier->ref();
         ReferenceHolder<QoreObject> notifier_obj(new QoreObject(QC_EVENTNOTIFIER, getProgram(), *notifier), &xsink);
+        // the operation's own object (the notifier, or a Socket without a descriptor) and the object that it polls
+        QoreSocketObject* unopened = new QoreSocketObject;
+        ReferenceHolder<QoreObject> unopened_obj(new QoreObject(QC_SOCKET, getProgram(), unopened), &xsink);
+        QoreObject* main_obj = mode == XFD_POLL_DIFFERS ? *unopened_obj : *notifier_obj;
         ReferenceHolder<QoreObject> queue_obj(&xsink);
         // the operation waits with its extra fd registered, without a time limit
-        if (!submitExtraFdOp(c, **ctrl, *notifier_obj, new PollableExtraOp(*notifier_obj, *other_obj, other),
-                "pollable-extra-fd-close-unit-test", queue_obj, xsink)) {
+        if (!submitExtraFdOp(c, **ctrl, main_obj, new PollableExtraOp(*notifier_obj, *other_obj, other,
+                all_fallback ? 0 : SOCK_POLLIN), "pollable-extra-fd-close-unit-test", queue_obj, xsink)) {
             return;
         }
         ReferenceHolder<Queue> queue(static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink)),
@@ -9591,6 +9613,14 @@ public:
         UT_ASSERT_EQ(c, 1, info.extra_fds, ("the operation has its extra fd registered" + when).c_str());
 
         // the other Socket is closed with the C++ close that bypasses the controller
+        struct PushFailHelper {
+            explicit PushFailHelper(bool on) {
+                qore_dbg_close_wake_push_fails.store(on, std::memory_order_relaxed);
+            }
+            ~PushFailHelper() {
+                qore_dbg_close_wake_push_fails.store(false, std::memory_order_relaxed);
+            }
+        } push_fail_helper(all_fallback);
         qore_socket_private::get(*other->priv->socket)->close_and_reset();
 
         bool timed_out = false;
@@ -27059,7 +27089,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runCloseUnderControllerLock(c);
     AsyncIoDescriptorHoldTest::runCloseWakeAfterStop(c);
     AsyncIoDescriptorHoldTest::runCloseWakeAfterGiveUp(c);
-    AsyncIoDescriptorHoldTest::runPollableExtraFdClose(c);
+    AsyncIoDescriptorHoldTest::runPollableExtraFdClose(c, AsyncIoDescriptorHoldTest::XFD_NORMAL);
+    AsyncIoDescriptorHoldTest::runPollableExtraFdClose(c, AsyncIoDescriptorHoldTest::XFD_POLL_DIFFERS);
+    AsyncIoDescriptorHoldTest::runPollableExtraFdClose(c, AsyncIoDescriptorHoldTest::XFD_ALL_FALLBACK);
     AsyncIoDescriptorHoldTest::runReplaceDescriptorGeneration(c);
     AsyncIoDescriptorHoldTest::runSharedRegistration(c);
     AsyncIoDescriptorHoldTest::runOwnedExtraFd(c);
