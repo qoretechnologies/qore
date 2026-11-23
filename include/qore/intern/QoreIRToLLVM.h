@@ -596,7 +596,21 @@ private:
     // Boxed source values retained when a typed collection read is unboxed.
     // Generic calls and NOTHING guards must observe the source value rather
     // than re-boxing a native zero produced from a sparse list entry.
+    // The source of a ListGetInt or ListGetFloat is an element borrowed from its list, which boxValue() and the
+    // arguments of a compiled call give to later consumers without a reference of their own.  This is safe because
+    // the IR reads a typed element so only where nothing can release the list while the read is used (qore#7372):
+    // in a bounded loop over a list local, only when the loop neither assigns nor changes the list and makes no call
+    // that can (qore_ir_specialize_bounded_typed_list_reads()), and the read itself is used only in the loop: that
+    // function does not check it, but it holds by construction, as a use after the loop takes the value through a
+    // Phi, and a Phi never has an entry here (entries are added only by the lowering of ListGetInt and
+    // ListGetFloat); and in a functional operator (map, select, foldl, foldr, map with select), from its input
+    // list, which is held for all its iterations (a read of a local that the operator's expressions can assign
+    // takes a reference of its own, see qore_ir_find_local_reads_overwritten_before_use()), whose results are new
+    // values or Phis of native values, not the read itself
     std::unordered_map<uint32_t, llvm::Value*> native_boxed_sources;
+    //! The native arguments of fast entries that QORE_AOT_DEBUG reported as needing no NOTHING guard (see
+    //! fastEntryArgumentNeedsNothingGuard()), so that each is reported once
+    mutable std::unordered_set<uint32_t> reported_native_fast_entry_args;
     std::unordered_map<uint32_t, BatchCalleeParamKind>
         native_boxed_source_kinds;
 
@@ -1300,6 +1314,9 @@ private:
     //! from the local cache is borrowed from it, so each of these takes a reference of its own, released as a
     //! temporary's
     std::unordered_set<uint32_t> overwritten_local_reads;
+    //! The reads of a local whose value has a native representation (NativeInt or NativeFloat facts), which are
+    //! unboxed where they are read (see findNativeLocalReads())
+    std::unordered_set<uint32_t> native_local_reads;
 
     // Locals assigned through the weak assignment operator. Loads must go
     // through LocalVar::eval() so weak refs are resolved to the current target
@@ -3044,6 +3061,25 @@ private:
     // is true when the uses of the call's operands have not been consumed yet (in an invoke lowerer).  Returns true
     // if any was released, as releasing can raise an exception
     bool releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::Module& module, bool use_pending);
+
+    //! Finds the reads of locals that have a native representation
+    /** Fills native_local_reads with the LoadLocal results whose facts are NativeInt or NativeFloat (assigned, never
+        NOTHING).  The IR gives such a value no owner in the statement that reads it (see design/qore-ir-spec.md),
+        and the fixed-aggregate scalar replacement forwards it to the statements that read the members; a local
+        whose storage is boxed here gives a value of the local, which is borrowed or released with the temporaries of
+        the statement, so each such read is unboxed where it is read (qore#7372).
+
+        @return false if the analysis was cancelled
+    */
+    bool findNativeLocalReads(const QoreIRFunction& func);
+
+#ifndef NDEBUG
+    //! Asserts that every read in native_local_reads that was lowered has its native value
+    /** Called after the function's blocks are lowered, so that it covers the reads used by Phis whose incoming
+        values are added after the Phi, and those used in blocks lowered before the defining block.
+    */
+    void assertNativeLocalReadsUnboxed() const;
+#endif
 
     // Releases the object that the load of a weak-assigned local kept for the call \a inst whose receiver it is
     // (weak_receiver_holds) when the call returns, after its arguments, as the AST interpreter releases the object of a

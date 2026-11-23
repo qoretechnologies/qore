@@ -9522,6 +9522,40 @@ bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::
     return released;
 }
 
+// documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::findNativeLocalReads(const QoreIRFunction& func) {
+    native_local_reads.clear();
+    size_t check_count = 0;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (!(++check_count % 100) && qore_check_cancel(nullptr, "LLVM native local read analysis")) {
+                return false;
+            }
+            if (inst->opcode != QoreIROpcode::LoadLocal || !inst->result.isValid()
+                    || !static_cast<const QoreIRLocalInstruction*>(inst.get())->local) {
+                continue;
+            }
+            const QoreIRValueFacts* facts = func.getValueFacts(inst->result);
+            if (facts && facts->assigned_state == QoreIRAssignedState::Assigned && facts->never_nothing
+                    && (facts->representation == QoreIRValueRepresentation::NativeInt
+                        || facts->representation == QoreIRValueRepresentation::NativeFloat)) {
+                native_local_reads.insert(inst->result.id);
+            }
+        }
+    }
+    return true;
+}
+
+#ifndef NDEBUG
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::assertNativeLocalReadsUnboxed() const {
+    for (uint32_t id : native_local_reads) {
+        // a read that was lowered has its native value; one in a block that was not lowered has no value
+        assert(!nanboxed_values.count(id));
+    }
+}
+#endif
+
 llvm::Value* QoreIRToLLVM::allocCallArray(llvm::Function* llvm_func, unsigned slots) {
     // an array of no slots (the operands of an empty literal) is an address that is never read, as the empty alloca
     // was: it can be one past the end of the buffer, which is a valid address for a GEP that is not inbounds
@@ -11029,9 +11063,20 @@ bool QoreIRToLLVM::fastEntryNativeArgsNeedNothingGuard(const BatchCalleeInfo& in
 // documented in QoreIRToLLVM.h
 bool QoreIRToLLVM::fastEntryArgumentNeedsNothingGuard(const BatchCalleeInfo& callee_info, unsigned index,
         uint32_t value_id) const {
-    return fastEntryParamRejectsNothing(callee_info, index)
-        && (nanboxed_values.count(value_id) || native_boxed_sources.count(value_id))
-        && !fastEntryArgumentKnownNotNothing(value_id);
+    if (!fastEntryParamRejectsNothing(callee_info, index)) {
+        return false;
+    }
+    if (!nanboxed_values.count(value_id) && !native_boxed_sources.count(value_id)) {
+        // a native value (such as the read of a local with native facts, qore#7372) is never NOTHING; reported once
+        // for each argument value
+        if (aot_mode && current_ir_func && QORE_ENV_IS_SET("QORE_AOT_DEBUG")
+                && reported_native_fast_entry_args.insert(value_id).second) {
+            fprintf(stderr, "AOT: native fast-entry argument %u needs no NOTHING guard for SSA value %u in '%s'\n",
+                index, value_id, current_ir_func->getDisplayName().c_str());
+        }
+        return false;
+    }
+    return !fastEntryArgumentKnownNotNothing(value_id);
 }
 
 bool QoreIRToLLVM::fastEntryArgumentKnownNotNothing(uint32_t value_id) const {
@@ -16723,6 +16768,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     stable_float_conversions.clear();
     nanboxed_values.clear();
     native_boxed_sources.clear();
+    reported_native_fast_entry_args.clear();
     native_boxed_source_kinds.clear();
     known_not_nothing_values.clear();
     preinstantiated_entry_loads.clear();
@@ -17226,6 +17272,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // their own
     if (!qore_ir_find_local_reads_overwritten_before_use(func, overwritten_local_reads)) {
         error = "cancelled during LLVM overwritten local read analysis";
+        return false;
+    }
+    // the native values read from a local are unboxed where they are read (qore#7372)
+    if (!findNativeLocalReads(func)) {
+        error = "cancelled during LLVM native local read analysis";
         return false;
     }
     // an exception releases a statement's temporaries in the order in which the AST interpreter unwinds them
@@ -19591,6 +19642,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             assigned_hash_guard_elisions);
     }
 
+#ifndef NDEBUG
+    // after every block, so that the reads given to Phis after them and used in blocks lowered first are checked too
+    assertNativeLocalReadsUnboxed();
+#endif
+
     // Reset per-function state
     current_ir_func = nullptr;
     current_module = nullptr;
@@ -20949,6 +21005,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 values[inst->result.id] = llvm::ConstantInt::get(i64_type,
                     VAL_NOTHING);
                 nanboxed_values.insert(inst->result.id);
+                // the access is elided: its value is not a value of the local (see assertNativeLocalReadsUnboxed())
+                native_local_reads.erase(inst->result.id);
                 return true;
             }
             auto key = reinterpret_cast<const void*>(linst->local);
@@ -20972,6 +21030,44 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // shared, the store copied it although the variable was its only owner, and a weak reference to the
             // variable was left with the container the variable no longer held (qore#5832).
             const bool borrowed_load = linst->local && !linst->auto_ref && !weak_assigned_locals.count(key);
+            // A value with a native representation is not owned by the statement that reads it: the IR forwards it
+            // to later statements (the fixed-aggregate scalar replacement replaces the reads of a member with the
+            // value that built it), as the interpreter keeps it in a slot that it owns (see design/qore-ir-spec.md).
+            // A local whose storage here is boxed gives a value borrowed from the local, or a reference of its own
+            // that is released as a temporary of the statement: an integer outside the inline range or a double whose
+            // bits collide with a value tag is then a node that a later write to the local, or the end of its scope,
+            // releases before the later statement uses it.  Every such read is therefore unboxed here, as the read of
+            // a native local is, whether or not a later statement uses it (qore#7372)
+            const QoreIRValueFacts* unboxed_read_facts = !is_native_int && !is_native_float && !is_native_bool
+                    && native_local_reads.count(inst->result.id)
+                ? current_ir_func->getValueFacts(inst->result) : nullptr;
+            // a value with a native representation is never read through a weak reference, nor by the borrowed load
+            // of a container that a store changes in place
+            assert(!unboxed_read_facts || (!weak_assigned_locals.count(key) && !borrowed_load));
+            // gives the native value of a boxed value read from the local; an owned value is released, as the
+            // native value does not need it
+            auto emitUnboxedRead = [&](llvm::Value* boxed, bool owned) {
+                assert(unboxed_read_facts);
+                llvm::Value* native;
+                if (unboxed_read_facts->representation == QoreIRValueRepresentation::NativeFloat) {
+                    auto to_float = module.getOrInsertFunction("qore_rt_to_float",
+                        llvm::FunctionType::get(double_type, {i64_type}, false));
+                    native = builder->CreateCall(to_float, {boxed});
+                } else {
+                    assert(unboxed_read_facts->representation == QoreIRValueRepresentation::NativeInt);
+                    auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    native = builder->CreateCall(to_int, {boxed});
+                }
+                if (owned) {
+                    // an int or a float has no destructor: its release raises no exception
+                    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                    builder->CreateCall(decref_fn, {boxed, xsink_arg});
+                }
+                // NOT in nanboxed_values: a native double or integer
+                values[inst->result.id] = native;
+            };
             auto emitBorrowedLoad = [&]() -> bool {
                 llvm::Value* result;
                 llvm::AllocaInst* owned_flag = nullptr;
@@ -21054,6 +21150,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         reinterpret_cast<uint64_t>(linst->local));
                     llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
                     result = builder->CreateCall(load_fn, {var_as_ptr, xsink_arg});
+                }
+                if (unboxed_read_facts) {
+                    emitUnboxedRead(result, true);
+                    if (may_hold_reference) {
+                        emitExceptionCheck(module, llvm_func, inst);
+                    }
+                    return true;
                 }
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
@@ -21170,6 +21273,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
                     result = builder->CreateCall(load_fn, {var_as_ptr, xsink_arg});
                 }
+                if (unboxed_read_facts) {
+                    emitUnboxedRead(result, true);
+                    if (may_hold_reference) {
+                        emitExceptionCheck(module, llvm_func, inst);
+                    }
+                    return true;
+                }
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -21200,6 +21310,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         reinterpret_cast<uint64_t>(linst->local));
                     llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
                     result = builder->CreateCall(load_fn, {var_as_ptr, xsink_arg});
+                }
+                if (unboxed_read_facts) {
+                    emitUnboxedRead(result, true);
+                    if (may_hold_reference) {
+                        emitExceptionCheck(module, llvm_func, inst);
+                    }
+                    return true;
                 }
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
@@ -21236,6 +21353,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         reinterpret_cast<uint64_t>(linst->local));
                     llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
                     result = builder->CreateCall(load_fn, {var_as_ptr, xsink_arg});
+                }
+                if (unboxed_read_facts) {
+                    emitUnboxedRead(result, true);
+                    if (may_hold_reference) {
+                        emitExceptionCheck(module, llvm_func, inst);
+                    }
+                    return true;
                 }
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
@@ -21385,7 +21509,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // (qore#6594); a read that a later write to the local can overwrite takes its own reference below
                 llvm::AllocaInst* receiver_slot = nullptr;
                 llvm::AllocaInst* receiver_flag = nullptr;
-                if (!is_native_int && ir_only_element_locals.count(key) && receiver_value_ids.count(inst->result.id)
+                if (!is_native_int && !unboxed_read_facts && ir_only_element_locals.count(key)
+                        && receiver_value_ids.count(inst->result.id)
                         && !overwritten_local_reads.count(inst->result.id)) {
                     // the slot and the flag are set only by a read of a weak reference: the read of any other value
                     // leaves them as they are, and the call tests the flag only (see endWeakReceiverCall()); the
@@ -21419,6 +21544,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (localReferenceFlag(key, llvm_func)) {
                         loaded = emitReferenceLocalRead(key, loaded, module, llvm_func, inst);
                         reference_read_slots[inst->result.id] = last_reference_read_slot;
+                    }
+                    // the native value of a read with native facts (see unboxed_read_facts) is taken from the
+                    // borrowed value before anything can write the local; a value read through a reference is kept
+                    // in its read slot until the next read at this site, which the native value does not need
+                    if (unboxed_read_facts) {
+                        reference_read_slots.erase(inst->result.id);
+                        emitUnboxedRead(loaded, false);
+                        return true;
                     }
                     nanboxed_values.insert(inst->result.id);
                     if (assigned_non_nothing_locals.count(key)) {

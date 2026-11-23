@@ -229,3 +229,19 @@ replaces a member's reads: after a try statement, the load is not forwarded from
 the store, and the member's value is the load's.
 `IRHandlerJoinScalarReplacement.qtest` checks members built after try, on_exit,
 on_error and on_success statements in every execution mode and compiled code.
+Native code keeps such a value as a native double or integer: a local whose
+storage there is boxed (a local that may be unassigned somewhere, a parameter,
+a local of the runtime stack) gives a read that is borrowed from the local, or
+a reference of its own released with the temporaries of the statement, which a
+later write to the local or the end of its statement releases.  The lowering
+(`QoreIRToLLVM::findNativeLocalReads()`) therefore unboxes every read of a local
+with native facts where it is read (qore#7372); in a debug build,
+`QoreIRToLLVM::assertNativeLocalReadsUnboxed()` asserts it after the function's
+blocks are lowered.  The facts must therefore be exact: the refinement takes a
+local whose type accepts NOTHING as assigned only after a store of a value that
+cannot be NULL, as such a local stores NULL as NOTHING.
+`IRForwardedLocalRead.qtest` checks
+members whose local is written after the aggregate is built (compound
+assignments, increments, assignments, writes through a reference and by a
+closure, writes in loops and branches, member and element stores) or goes out of
+scope, in every execution mode and compiled code.
