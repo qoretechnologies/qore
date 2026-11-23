@@ -6765,6 +6765,23 @@ size_t AsyncIoControllerPriv::dbgWakeAllSockets() {
 }
 #endif
 
+std::function<void()> AsyncIoControllerPriv::makeCloseWake(IoThreadContext& t, const std::string& sock_hash) {
+    if (!t.close_wakes) {
+        t.close_wakes = std::make_shared<CloseWakeQueue>(t.notifier);
+    }
+    std::shared_ptr<CloseWakeQueue> q = t.close_wakes;
+    return [q, sock_hash]() {
+        {
+            // a leaf lock (see CloseWakeQueue)
+            AutoLocker al(q->l);
+            q->hashes.push_back(sock_hash);
+        }
+        if (q->notifier) {
+            q->notifier->notify();
+        }
+    };
+}
+
 void AsyncIoControllerPriv::wakeSocket(const std::string& sock_hash) {
     if (forked()) {
         return;
@@ -7897,6 +7914,15 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         if (!ssl_deferred_hashes.empty()) {
             ready_socket_hashes.insert(ssl_deferred_hashes.begin(), ssl_deferred_hashes.end());
             ssl_deferred_hashes.clear();
+        }
+
+        // the sockets that closes made by other threads woke (see CloseWakeQueue)
+        if (t.close_wakes) {
+            AutoLocker al(t.close_wakes->l);
+            for (std::string& h : t.close_wakes->hashes) {
+                t.wake_socket_hashes.insert(std::move(h));
+            }
+            t.close_wakes->hashes.clear();
         }
 
         // Consume wake_socket_hashes (I/O-thread-only, no lock needed)
@@ -11898,6 +11924,12 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, uint64_t op_id,
                     continue;
                 }
                 if (hold) {
+                    // a close of the object that bypasses the controller wakes the operation, also one made since the
+                    // hold was taken (qore#7003)
+                    OpCache::node_t* node = t.cache.findId(op_id);
+                    if (node && node->second.sock) {
+                        qore_descriptor_hold_set_close_wake(hold, makeCloseWake(t, getSocketHash(node->second.sock)));
+                    }
                     t.extra_fd_holds[{op_id, fd}] = std::move(hold);
                 }
             } else {
@@ -12104,6 +12136,11 @@ int AsyncIoControllerPriv::addSocketFd(IoThreadContext& t, AbstractPollableIoObj
     }
     ASYNC_IO_TRACE("addSocketFd[%d]: add fd=%d sock='%s' hold=%d\n", t.thread_idx, fd, sock_hash.c_str(),
         hold ? 1 : 0);
+    if (hold) {
+        // a close of the socket that bypasses the controller wakes its operations, also one made since the hold was
+        // taken (qore#7003)
+        qore_descriptor_hold_set_close_wake(hold, makeCloseWake(t, sock_hash));
+    }
     t.loop->addRegistration(fd, regKey(t, sock_hash), events, socket, xsink);
     t.registered_fds[sock_hash] = fd;
     // the registration's own hold; an object that takes no hold (a pollable that Socket::poll() polls by number, a

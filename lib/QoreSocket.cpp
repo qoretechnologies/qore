@@ -5920,7 +5920,34 @@ std::shared_ptr<qore_socket_private::DescriptorHold> qore_socket_private::Descri
     if (!priv.shared_fd || priv.shared_fd->fd != priv.sock) {
         priv.shared_fd = std::make_shared<SharedDescriptor>(priv.sock);
     }
-    return std::make_shared<DescriptorHold>(priv, priv.shared_fd);
+    // made with its own deleter, which identifies it (see qore_descriptor_hold_set_close_wake())
+    return std::shared_ptr<DescriptorHold>(new DescriptorHold(priv, priv.shared_fd), Deleter());
+}
+
+void qore_socket_private::DescriptorHold::setCloseWake(std::function<void()> wake) {
+    bool given_up;
+    {
+        CloseLockHelper cl(*priv);
+        if (close_wake) {
+            auto& v = fd->close_wakes;
+            v.erase(std::remove(v.begin(), v.end(), close_wake), v.end());
+        }
+        close_wake = std::make_shared<std::function<void()>>(std::move(wake));
+        fd->close_wakes.push_back(close_wake);
+        // the socket gave the descriptor up since the hold was taken: the close ran no wake of this hold
+        given_up = fd->close_on_release;
+    }
+    if (given_up) {
+        (*close_wake)();
+    }
+}
+
+bool qore_descriptor_hold_set_close_wake(const std::shared_ptr<void>& hold, std::function<void()> wake) {
+    if (!hold || !std::get_deleter<qore_socket_private::DescriptorHold::Deleter>(hold)) {
+        return false;
+    }
+    static_cast<qore_socket_private::DescriptorHold*>(hold.get())->setCloseWake(std::move(wake));
+    return true;
 }
 
 qore_socket_private::DescriptorHold::DescriptorHold(qore_socket_private& priv, std::shared_ptr<SharedDescriptor> fd)
@@ -5933,6 +5960,10 @@ qore_socket_private::DescriptorHold::~DescriptorHold() {
         // the last use of a descriptor that the socket gave up closes it; every release of a descriptor is made with
         // close_m held
         CloseLockHelper cl(*priv);
+        if (close_wake) {
+            auto& v = fd->close_wakes;
+            v.erase(std::remove(v.begin(), v.end(), close_wake), v.end());
+        }
         fd.reset();
     }
     priv->deref();
@@ -9450,7 +9481,7 @@ SocketConnectInetHappyEyeballsPollState::SocketConnectInetHappyEyeballsPollState
     // close socket if already open
     qore_socket_close_private_from_controller(sock);
     // a close of the socket or a descriptor given to it by another caller from now on ends the operation (qore#7003)
-    sock->getDescriptorGeneration(sock_gen);
+    sock_gen = sock->startConnectGeneration();
 
     destinations = std::make_shared<QoreConnectionDestinations>();
 
@@ -9989,11 +10020,20 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
     winner.owned.reset();
     // the socket has the winner's descriptor: the attempt has no use for it any more
     sock->releaseAttemptHold(winner.sock_hold);
+#ifdef DEBUG
+    // a test closes the socket here, as another thread can after the socket took the descriptor
+    if (void (*hook)() = qore_dbg_connect_before_connected.load(std::memory_order_acquire)) {
+        hook();
+    }
+#endif
+    // the connection's state is set with the socket's close lock held, only if the socket was not closed since it
+    // took the descriptor; otherwise the connection fails as closed (qore#7003)
+    if (!sock->setConnectedIfGeneration(sock_gen, wp.family, wp.socktype, wp.protocol, prt)) {
+        closeAllFds();
+        qore_socket_raise_canceled("connect", xsink);
+        return;
+    }
     sock->resetCloseInterrupt();
-    sock->sfamily = wp.family;
-    sock->stype = wp.socktype;
-    sock->sprot = wp.protocol;
-    sock->port = prt;
 
     // Close all other fds
     closeAllFds();
@@ -10020,6 +10060,8 @@ std::atomic<void (*)()> qore_dbg_connect_before_assign_winner{nullptr};
 std::atomic<void (*)(int)> qore_dbg_connect_before_adopt{nullptr};
 std::atomic<void (*)()> qore_dbg_connect_in_resolve{nullptr};
 std::atomic<bool> qore_dbg_connect_fail_held_attempt{false};
+std::atomic<void (*)()> qore_dbg_connect_before_connected{nullptr};
+std::atomic<void (*)()> qore_dbg_before_close_wakes{nullptr};
 std::atomic<void (*)()> qore_dbg_unix_connect_before_adopt{nullptr};
 std::atomic<void (*)(int)> qore_dbg_unix_connect_before_check{nullptr};
 
