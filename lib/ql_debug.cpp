@@ -16316,16 +16316,19 @@ static void ut_manager_streaming_repeats_on_closed_reused_connection(UnitTestCou
     xsink.clear();
 }
 
-// The repeat is limited as in request(): a request that is not idempotent, or whose closed connection had not
-// served a request, fails with the connection's refusal, and the closed connection is evicted.
-static void ut_manager_streaming_does_not_repeat_unsafe_requests(UnitTestCounters& c) {
+// The repeat is limited as in request(): a request refused at its submit was not sent, so it is repeated whatever its
+// method (RFC 9110 section 9.2.2, qore#7385), but only when its closed connection had served a request; a request on
+// a connection that served none fails with the connection's refusal.  The closed connection is evicted either way.
+static void ut_manager_streaming_repeat_limits(UnitTestCounters& c) {
     struct {
         const char* method;
         bool served;
+        bool repeated;
         const char* label;
     } cases[] = {
-        {"POST", true, "a POST request"},
-        {"GET", false, "a request on a connection that served none"},
+        {"POST", true, true, "a POST request refused at its submit"},
+        {"GET", false, false, "a request on a connection that served none"},
+        {"POST", false, false, "a POST request on a connection that served none"},
     };
     for (auto& tc : cases) {
         ExceptionSink xsink;
@@ -16350,21 +16353,38 @@ static void ut_manager_streaming_does_not_repeat_unsafe_requests(UnitTestCounter
         mgr->addPooledForOrigin(*conn, "127.0.0.1", server.port, false);
 
         QoreChannel* channel_raw = nullptr;
+        bool reused = true;
         int64_t stream_id = mgr->requestStreaming(tc.method, "http", "127.0.0.1", server.port, "/", nullptr,
-            nullptr, 0, channel_raw, &xsink, nullptr, nullptr);
+            nullptr, 0, channel_raw, &xsink, nullptr, &reused);
         ReferenceHolder<QoreChannel> channel(channel_raw, &xsink);
         std::string label = tc.label;
-        UT_ASSERT(c, stream_id < 0 && !channel_raw, (label + " fails").c_str());
-        UT_ASSERT(c, xsink.isException(), (label + ": the refusal reaches the caller").c_str());
-        if (xsink.isException()) {
-            QoreStringValueHelper err(xsink.getExceptionErr());
-            UT_ASSERT(c, !strcmp(err->c_str(), "HTTPCLIENT-STATE-ERROR"),
-                (label + ": the error of the closed connection").c_str());
+        if (tc.repeated) {
+            UT_ASSERT(c, !xsink, (label + ": the request is repeated instead of failing").c_str());
+            UT_ASSERT(c, stream_id >= 0 && channel_raw, (label + ": the repeated request is submitted").c_str());
+            if (channel_raw) {
+                UT_ASSERT_EQ(c, (int64)200, ut_read_streaming_status(channel_raw, &xsink),
+                    (label + ": the repeated request is answered on a new connection").c_str());
+                channel_raw->close();
+            }
+            UT_ASSERT(c, !reused, (label + ": a repeated request is not reported as submitted on a reused "
+                "connection").c_str());
+        } else {
+            UT_ASSERT(c, stream_id < 0 && !channel_raw, (label + " fails").c_str());
+            UT_ASSERT(c, xsink.isException(), (label + ": the refusal reaches the caller").c_str());
+            if (xsink.isException()) {
+                QoreStringValueHelper err(xsink.getExceptionErr());
+                UT_ASSERT(c, !strcmp(err->c_str(), "HTTPCLIENT-STATE-ERROR"),
+                    (label + ": the error of the closed connection").c_str());
+            }
         }
         xsink.clear();
         UT_ASSERT_EQ(c, 1, conn->getSubmitCalls(), (label + ": the closed connection was used once").c_str());
-        UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), (label + ": the closed connection is evicted").c_str());
-        UT_ASSERT_EQ(c, 0, server.accepted.load(), (label + ": the request is not repeated").c_str());
+        // the closed connection is evicted; a repeated request leaves the new connection that served it in the pool
+        UT_ASSERT_EQ(c, tc.repeated ? 1 : 0, mgr->getPoolSize(),
+            (label + ": the closed connection is evicted").c_str());
+        UT_ASSERT_EQ(c, tc.repeated ? 1 : 0, server.accepted.load(),
+            (label + (tc.repeated ? ": the request was repeated on one new connection"
+                : ": the request is not repeated")).c_str());
         server.wakeUnused();
         mgr->closeAll(&xsink);
         xsink.clear();
@@ -25807,7 +25827,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_request_evicts_connection_closed_on_submit(c);
     ut_manager_request_keeps_open_connection_that_refuses(c);
     ut_manager_streaming_repeats_on_closed_reused_connection(c);
-    ut_manager_streaming_does_not_repeat_unsafe_requests(c);
+    ut_manager_streaming_repeat_limits(c);
     ut_manager_streaming_abandon_releases_connection(c);
     ut_manager_new_connection_closed_before_reservation(c);
     ut_manager_closed_new_connection_detached(c);
