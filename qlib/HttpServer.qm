@@ -191,8 +191,10 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     handler of an HTTP/1.x request gets a socket of its request when the handler object is declared by sandboxed
     code, which needs nothing more, or when the handler asked for it with
     @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()" before it was
-    registered (as a base class of handlers whose subclasses pass the socket to code that is not trusted does, such
-    as @ref RestHandler::RestHandler "RestHandler"); another handler gets the connection's socket.
+    registered; another handler gets the connection's socket.  A @ref RestHandler::RestHandler "RestHandler" object
+    gets a socket of its request when it is declared by sandboxed code, or when it asked for it, and gives that socket
+    to its REST classes and their stream handlers (\c cx.socketobject); a trusted
+    @ref RestHandler::RestHandler "RestHandler" whose REST classes are code that is not trusted must ask for it.
 
     @warning A trusted handler that hands the socket of its HTTP/1.x request to code that is not trusted (such as
     code of a tenant) <b>must</b> call
@@ -5069,16 +5071,24 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         If thread_contexts is provided (the thread of a dedicated persistent connection), the request runs with the
         thread context of its handler (issue #6847)
     */
+    #! Starts the socket of the current HTTP/1.x request that its handler gets (qore#7305)
+    /** Called only for a request whose handler gets the socket of its request; the callers of handleRequest() end it
+        when it returns, and handleRequest() before the server answers the request
+    */
+    private startHandlerSocket(RequestHelper request_helper, Socket s, bool head, bool http10) {
+        HandlerSocketState hs_state = request_helper.hs_state ?? (request_helper.hs_state = new HandlerSocketState());
+        request_helper.handler_sock = new Http1HandlerSocket(s, hs_state, hs_state.h1Reset(s, head, http10),
+            handler_socket_max_timeout);
+        request_helper.h1_state = 0;
+        request_helper.h1_view = True;
+    }
+
     private handleRequest(RequestHelper request_helper, HttpListener listener, Socket s,
             reference<hash<auto>> cx, hash<auto> hdr, bool head = False, HttpPersistentHandlerInfo phi,
             hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out,
             *HttpHandlerThreadContexts thread_contexts) {
-        # the socket of an HTTP/1.x request ends on every path, at the latest when the request is handled (qore#7305)
-        on_exit if (request_helper.h1_view) {
-            request_helper.endHandlerSocket();
-        }
-        # the state of the response that the handler of the previous request on the object sent
-        request_helper.h1_state = 0;
+        # the socket of an HTTP/1.x request that the handler gets, if it gets one, is ended by the callers when this
+        # method returns (on every path), as well as before the server answers the request (qore#7305)
         remove cx."response-sent";
         # the listener object of the handlers (qore#6921), read once per request
         HttpServer::HttpListenerInterface hview = listener.getHandlerView();
@@ -5268,11 +5278,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 handler_socket_view = SandboxManager::isFromSandboxedProgram(handler);
             }
             if (handler_socket_view && !is_multiplexed && !request_helper.handler_sock) {
-                HandlerSocketState hs_state = request_helper.hs_state
-                    ?? (request_helper.hs_state = new HandlerSocketState());
-                request_helper.handler_sock = new Http1HandlerSocket(s, hs_state,
-                    hs_state.h1Reset(s, head, hdr.http_version == "1.0"), handler_socket_max_timeout);
-                request_helper.h1_view = True;
+                startHandlerSocket(request_helper, s, head, hdr.http_version == "1.0");
             }
 
             # on the thread of a dedicated persistent connection, the request runs with the thread context of its
@@ -5477,9 +5483,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # a response that the handler sent through the socket of its HTTP/1.x request, or a part of it:
                     # the server sends no other response, and closes the connection after an incomplete one
                     # (qore#7305)
-                    if (int st = request_helper.h1_view ? request_helper.endHandlerSocket() : 0) {
+                    if (request_helper.h1_view && request_helper.endHandlerSocket()) {
                         rv.reply_sent = True;
-                        if (st != Http1ResponseState::Complete) {
+                        if (request_helper.h1_state != Http1ResponseState::Complete) {
                             cx.close = True;
                         }
                     }
@@ -5616,7 +5622,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
             # a response that the handler sent through the socket of its HTTP/1.x request, or a part of it: the server
             # sends no error response after it, and closes the connection (qore#7305)
-            if (request_helper.h1_view ? request_helper.endHandlerSocket() : request_helper.h1_state) {
+            # (a socket of the request that already ended: the state of its response; none for a request without
+            # one, whose handler_sock is NOTHING for HTTP/1.x)
+            if (request_helper.h1_view
+                    ? request_helper.endHandlerSocket()
+                    : (!is_multiplexed && request_helper.handler_sock && request_helper.h1_state)) {
                 cx."response-sent" = True;
                 cx.close = True;
                 logError("%s", str);
@@ -6311,9 +6321,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         # the WebSocket handler takes over the connection of an HTTP/1.1 request, whose own
                         # socket ended with the request (qore#7305)
                         externally_managed = sockhandler.start(listener.getID(), ws_cx, hdr,
-                                request_helper.handler_sock instanceof Http1HandlerSocket
-                                    ? s
-                                    : (request_helper.handler_sock ?? s))
+                                (cx."header-info".http2 || cx."header-info".http3)
+                                    ? (request_helper.handler_sock ?? s)
+                                    : s)
                             && holder.isAccepted();
                         if (externally_managed) {
                             # the connection stays open after the request returns
@@ -6704,7 +6714,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # the handler of a request that got a socket of its request gets the connection's socket for the stream
             # only after the server sent the stream's header, which ends the exchange with the connection, and only
             # for a request that asked for an event stream: the connection serves no other request (qore#7305)
-            bool server_header = request_helper.handler_sock instanceof Http1HandlerSocket;
+            bool server_header = exists request_helper.handler_sock;
             if (server_header) {
                 if (!HttpServer::requestAcceptsEventStream(hdr)) {
                     string err = sprintf("an event stream returned from handler %y for a request that does not "
@@ -8651,7 +8661,13 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # a stop of this listener that runs in this thread does not wait for this request (see stop())
         *Priv::RequestHelper prev_request = Priv::current_request;
         Priv::current_request = request_helper;
-        on_exit Priv::current_request = prev_request;
+        on_exit {
+            # the socket of an HTTP/1.x request that its handler got ends on every path (qore#7305)
+            if (request_helper.h1_view) {
+                request_helper.endHandlerSocket();
+            }
+            Priv::current_request = prev_request;
+        }
 
         bool is_multiplexed = (header_info.http2 ?? False) || (header_info.http3 ?? False);
         string sock_key;
@@ -9690,6 +9706,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # Ensure h2op is resumed even if handleRequest() or response
                 # sending throws — otherwise the connection is stuck.
                 on_exit {
+                    # the socket of an HTTP/1.x request that its handler got ends on every path (qore#7305)
+                    if (request_helper.h1_view) {
+                        request_helper.endHandlerSocket();
+                    }
                     resumeQueuedPersistentEntry(entry);
                 }
                 # the thread context of the session's handler is the thread's again after the request
@@ -9917,6 +9937,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             # Process request
             hash<HttpAsyncResponseInfo> async_response = <HttpAsyncResponseInfo>{};
             on_exit {
+                # the socket of an HTTP/1.x request that its handler got ends on every path (qore#7305)
+                if (request_helper.h1_view) {
+                    request_helper.endHandlerSocket();
+                }
                 resumeQueuedPersistentEntry(entry);
             }
             # the thread context of the session's handler is the thread's again after the request
@@ -11104,6 +11128,8 @@ class Http1HandlerSocket inherits Qore::Socket {
         int gen;
         #! the object's own character encoding, once it was set; the connection's until then
         *string enc;
+        #! the connection's character encoding when the object's own was first set
+        *string conn_enc;
         #! the timeout of the object's sends that are given none; -1 for the connection's
         int send_to = -1;
         #! the timeout of the object's reads that are given none; -1 for the connection's
@@ -11134,6 +11160,9 @@ class Http1HandlerSocket inherits Qore::Socket {
     nothing setEncoding(string encoding) {
         # the name is checked as the socket checks it
         Socket::setEncoding(encoding);
+        if (!conn_enc) {
+            conn_enc = real.getEncoding();
+        }
         enc = Socket::getEncoding();
     }
 
@@ -11683,16 +11712,13 @@ class Http1HandlerSocket inherits Qore::Socket {
     hash<auto> readHTTPChunkedBody(timeout timeout_ms = -1) {
         enterChunkedRead("readHTTPChunkedBody");
         on_exit rh.h1Leave();
-        # in the connection's encoding, the connection's socket decodes the body
-        if (!ownEncoding()) {
+        # the connection's socket decodes the body in the object's encoding
+        if (ownEncoding()) {
+            useOwnEncoding();
+            on_exit restoreEncoding();
             return real.readHTTPChunkedBody(recvTimeout(timeout_ms));
         }
-        hash<auto> rv = real.readHTTPChunkedBodyBinary(recvTimeout(timeout_ms));
-        # the body in the object's encoding
-        if (rv.body instanceof binary) {
-            rv.body = binary_to_string(rv.body, getEncoding());
-        }
-        return rv;
+        return real.readHTTPChunkedBody(recvTimeout(timeout_ms));
     }
 
     hash<auto> readHTTPChunkedBodyBinary(timeout timeout_ms = -1) {
@@ -11710,19 +11736,14 @@ class Http1HandlerSocket inherits Qore::Socket {
     nothing readHTTPChunkedBodyWithCallback(code receive_callback, timeout timeout_ms = -1) {
         enterChunkedRead("readHTTPChunkedBodyWithCallback");
         on_exit rh.h1Leave();
-        # in the connection's encoding, the connection's socket decodes the chunks
-        if (!ownEncoding()) {
+        # the connection's socket decodes the chunks in the object's encoding
+        if (ownEncoding()) {
+            useOwnEncoding();
+            on_exit restoreEncoding();
             real.readHTTPChunkedBodyWithCallback(receive_callback, recvTimeout(timeout_ms));
             return;
         }
-        # the chunks in the object's encoding
-        string enc = getEncoding();
-        real.readHTTPChunkedBodyBinaryWithCallback(sub (hash<auto> v) {
-            if (v.data instanceof binary) {
-                v.data = binary_to_string(v.data, enc);
-            }
-            receive_callback(v);
-        }, recvTimeout(timeout_ms));
+        real.readHTTPChunkedBodyWithCallback(receive_callback, recvTimeout(timeout_ms));
     }
 
     nothing readHTTPChunkedBodyBinaryWithCallback(code receive_callback, timeout timeout_ms = -1) {
@@ -11733,7 +11754,22 @@ class Http1HandlerSocket inherits Qore::Socket {
 
     #! Returns True if the object's encoding is not the connection's
     private:internal bool ownEncoding() {
-        return enc && enc != real.getEncoding();
+        return enc && enc != conn_enc;
+    }
+
+    #! Gives the connection's socket the object's encoding for a send or read of strings in progress
+    /** The caller calls restoreEncoding() at its end, before it leaves the operation.  The server uses the
+        connection's socket only after the sends and reads of the socket of a request that are in progress ended (see
+        HandlerSocketState::endHandlerSocket()), and finds it in the connection's encoding; two sends or reads of the
+        object of more than one thread can only affect the strings of each other
+    */
+    private:internal useOwnEncoding() {
+        real.setEncoding(enc);
+    }
+
+    #! Gives the connection's socket its encoding again after a send or read of strings of the object
+    private:internal restoreEncoding() {
+        real.setEncoding(conn_enc);
     }
 
     #! Returns the bytes of a string in the object's encoding
@@ -11809,18 +11845,17 @@ class Http1HandlerSocket inherits Qore::Socket {
         rh.h1Enter(gen, "sendHTTPResponseWithCallback");
         on_exit rh.h1Leave();
         rh.h1StartResponse("sendHTTPResponseWithCallback", status_code, headers, Http1ResponseSend::FullChunked);
-        # the strings that the callback returns are sent in the object's encoding
-        code cb = send_callback;
-        if (ownEncoding()) {
-            string enc = getEncoding();
-            cb = auto sub () {
-                auto v = send_callback();
-                return v.typeCode() == NT_STRING ? binary(convert_encoding(v, enc)) : v;
-            };
+        # the connection's socket sends the strings that the callback returns in the object's encoding
+        bool own = ownEncoding();
+        if (own) {
+            useOwnEncoding();
+        }
+        on_exit if (own) {
+            restoreEncoding();
         }
         sendChecked(sub () {
-            real.sendHTTPResponseWithCallback(cb, status_code, status_description, http_version, headers, \info,
-                sendTimeout(timeout_ms));
+            real.sendHTTPResponseWithCallback(send_callback, status_code, status_description, http_version, headers,
+                \info, sendTimeout(timeout_ms));
         });
     }
 

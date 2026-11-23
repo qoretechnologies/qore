@@ -115,6 +115,28 @@ class ProbeHandler inherits AbstractHttpRequestHandler {
                 r.pending_after = sprintf("%y", s.pendingHttpChunkedBody());
                 break;
             }
+            case "chunked-enc":
+            case "chunked-enc-body": {
+                # a chunked body in the socket's own encoding: the connection's does not change
+                s.setEncoding("ISO-8859-2");
+                string body;
+                if (hdr.path == "chunked-enc") {
+                    list<string> chunks;
+                    s.readHTTPChunkedBodyWithCallback(sub (hash<auto> v) {
+                        if (v.data) {
+                            # the encoding of each chunk
+                            r.encoding = v.data.encoding();
+                            chunks += v.data;
+                        }
+                    }, HangGuard);
+                    body = chunks.join("");
+                } else {
+                    body = s.readHTTPChunkedBody(HangGuard).body;
+                    r.encoding = body.encoding();
+                }
+                r.match = sprintf("%y", body == "x\u010dy");
+                break;
+            }
             case "chunked-callback": {
                 list<string> chunks;
                 s.readHTTPChunkedBodyWithCallback(sub (hash<auto> v) {
@@ -627,6 +649,24 @@ AbstractRestStreamRequestHandler sub get_handler(hash<auto> cx, *hash<auto> ah) 
     return new TenantEchoHandler(cx, ah);
 }
 
+#! the tenant's REST class of the DataStream records of the test
+class TenantEchoRestClass inherits AbstractRestClass {
+    string name() {
+        return \"echo\";
+    }
+
+    AbstractRestStreamRequestHandler streamPost(hash<auto> cx, *hash<auto> ah) {
+        return new TenantEchoHandler(cx, ah);
+    }
+}
+
+#! a RestHandler declared by the tenant, which does not ask for the socket of its requests
+RestHandler sub get_rest_handler() {
+    RestHandler rest();
+    rest.addClass(new TenantEchoRestClass());
+    return rest;
+}
+
 string sub try_it(code c) {
     try {
         c();
@@ -844,6 +884,7 @@ nothing sub run_code(code c) {
         addTestCase("the connection is not closed", \closeTest());
         addTestCase("a chunked body", \chunkedTest());
         addTestCase("a chunked body read with a callback", \chunkedCallbackTest());
+        addTestCase("a chunked body in the socket's own encoding", \chunkedEncodingTest());
         addTestCase("other methods", \otherTest());
         addTestCase("the socket ends with its request", \staleTest());
         addTestCase("the handler's own response", \selfResponseTest());
@@ -874,7 +915,7 @@ nothing sub run_code(code c) {
         addTestCase("the socket ends when the request is answered early", \earlyAnswerTest());
         addTestCase("an HTTP/1.1 event stream ends with its connection", \sseTest());
         addTestCase("the handlers that get the socket of their request", \whichHandlersTest());
-        addTestCase("the base classes that give the socket to other code ask for it", \baseClassesTest());
+        addTestCase("a trusted RestHandler asks for the socket of its requests only when told", \baseClassesTest());
         addTestCase("a kept socket does not keep the server", \keptSocketTest());
         addTestCase("an exception after the handler's response sends no other response", \sentThenThrowTest());
         addTestCase("a handler made before its Program was sandboxed", \earlyHandlerTest());
@@ -972,6 +1013,26 @@ nothing sub run_code(code c) {
         assertEq("served second", readResponse(c), "the next request is served");
     }
 
+    #! a chunked body is read in the socket's own encoding, by its chunks and whole, and the next request's socket has
+    #! the connection's encoding
+    chunkedEncodingTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /encoding HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        string conn_enc = parse(readResponse(c)).before;
+        assertNeq("ISO-8859-2", conn_enc);
+        foreach string path in (("chunked-enc", "chunked-enc-body")) {
+            # "x", c with caron in ISO-8859-2 (0xe8), "y"
+            c.send(binary("POST /" + path + " HTTP/1.1\r\nHost: localhost\r\nContent-Type: text/plain\r\n"
+                "Transfer-Encoding: chunked\r\n\r\n2\r\nx") + <e8> + binary("\r\n1\r\ny\r\n0\r\n\r\n"));
+            hash<auto> r = parse(readResponse(c));
+            assertEq("ISO-8859-2", r.encoding, path + ": the body's encoding");
+            assertEq("True", r.match, path + ": the body is decoded in the socket's encoding");
+            c.send("GET /encoding HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            assertEq(conn_enc, parse(readResponse(c)).before, path + ": the connection keeps its encoding");
+        }
+    }
+
     #! the methods that would act on the connection otherwise are refused; its information is given
     otherTest() {
         Socket c = connect();
@@ -1017,28 +1078,35 @@ nothing sub run_code(code c) {
         assertEq("served after", readResponse(c), "the connection serves the next request");
     }
 
-    #! a DataStream handler streams through the socket of its HTTP/1.1 request
+    #! a DataStream handler of a trusted RestHandler that asked for the socket of its requests streams through the
+    #! socket of its HTTP/1.1 request
     dataStreamTest() {
-        list<auto> rv = dataStreamIntern(auto sub (hash<auto> cx, *hash<auto> ah) { return new EchoHandler(cx, ah); },
-            "echo");
+        list<auto> rv = dataStreamIntern(getRestHandler(auto sub (hash<auto> cx, *hash<auto> ah) {
+            return new EchoHandler(cx, ah);
+        }), "echo");
         assertEq({"probe": "HTTP-HANDLER-SOCKET-ERROR", "version": "1.1"}, rv.last(), "the handler's socket");
     }
 
-    #! a DataStream handler of a sandboxed Program streams through the socket of its HTTP/1.1 request, which
-    #! refuses to read the next request
+    #! a RestHandler declared by a sandboxed Program, which does not ask for it, gets the socket of its HTTP/1.1
+    #! request, which refuses to read the next request, and its DataStream handler streams through it
     sandboxedDataStreamTest() {
         Program p = getTenantProgram();
-        list<auto> rv = dataStreamIntern(auto sub (hash<auto> cx, *hash<auto> ah) {
-            return p.callFunction("get_handler", cx, ah);
-        }, "tenant");
+        RestHandler rest = p.callFunction("get_rest_handler");
+        assertTrue(rest.needsHandlerSocketView(), "a RestHandler of a sandboxed Program");
+        list<auto> rv = dataStreamIntern(rest, "tenant");
         assertEq({"probe": "HTTP-HANDLER-SOCKET-ERROR", "version": "1.1"}, rv.last(),
             "the sandboxed handler's socket");
     }
 
-    private list<auto> dataStreamIntern(code get_handler, string name) {
-        # RestHandler asks for the socket of its requests itself
+    #! Returns a trusted RestHandler that asked for the socket of its requests, with the REST class of the test
+    private RestHandler getRestHandler(code get_handler) {
         RestHandler rest();
+        rest.setHandlerSocketView();
         rest.addClass(new EchoRestClass(get_handler));
+        return rest;
+    }
+
+    private list<auto> dataStreamIntern(RestHandler rest, string name) {
         server.setHandler(name, "^echo", NOTHING, rest);
         on_exit server.removeHandler(name);
 
@@ -1392,9 +1460,9 @@ nothing sub run_code(code c) {
 
     #! a REST stream handler with a timeout streams over HTTP/1.1
     restTimeoutTest() {
-        list<auto> rv = dataStreamIntern(auto sub (hash<auto> cx, *hash<auto> ah) {
+        list<auto> rv = dataStreamIntern(getRestHandler(auto sub (hash<auto> cx, *hash<auto> ah) {
             return new TimeoutEchoHandler(cx, ah);
-        }, "echo-timeout");
+        }), "echo-timeout");
         assertEq({"probe": "HTTP-HANDLER-SOCKET-ERROR", "version": "1.1"}, rv.last(), "the handler's socket");
     }
 
@@ -1495,15 +1563,16 @@ class NoView inherits AbstractHttpRequestHandler {
         }, NOTHING, "the decision is final");
     }
 
-    #! every base class of the repository that gives the socket of a request to other code, which can be code that is
-    #! not trusted, asks for the socket of the request in each of its constructors (qore#7305): RestHandler gives it to
-    #! its REST classes and their stream handlers (cx.socketobject); Qorus's AbstractServiceHttpHandler is checked in
-    #! Qorus
+    #! a trusted RestHandler does not ask for the socket of its requests (it gets the connection's socket, at no cost),
+    #! from any of its constructors, until it asks with setHandlerSocketView(); one declared by sandboxed code gets it
+    #! (see sandboxedDataStreamTest())
     baseClassesTest() {
         Logger logger("rest");
         foreach RestHandler rest in ((new RestHandler(), new RestHandler(NOTHING, new NullRestSchemaValidator()),
                 new RestHandler(logger, NOTHING), new RestHandler(logger, NOTHING, new NullRestSchemaValidator()))) {
-            assertTrue(rest.needsHandlerSocketView(), "RestHandler");
+            assertFalse(rest.needsHandlerSocketView(), "a trusted RestHandler");
+            rest.setHandlerSocketView();
+            assertTrue(rest.needsHandlerSocketView(), "a trusted RestHandler that asked");
         }
         assertFalse(new PlainHandler().needsHandlerSocketView(), "a trusted handler that does not ask");
     }

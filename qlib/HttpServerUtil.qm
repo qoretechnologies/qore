@@ -3912,9 +3912,9 @@ public class AbstractHttpRequestHandler {
     /** The server gives the handler of an HTTP/1.x request a socket that acts on the connection for the request only
         (see @ref httpserver_handler_socket) when the handler object is declared by sandboxed code, which needs no call
         of this method, or when this method was called before the handler was registered with the server; other
-        handlers get the connection's socket.  A base class whose subclasses pass the socket of a request to code
-        that is not trusted calls it in its constructor (as @ref RestHandler::RestHandler "RestHandler" does).  It
-        cannot be undone.
+        handlers get the connection's socket.  A handler that passes the socket of a request to code that is not
+        trusted calls it in its constructor (a trusted @ref RestHandler::RestHandler "RestHandler" whose REST classes
+        are such code, for example, which does not call it itself).  It cannot be undone.
 
         @warning A trusted handler that hands the socket of its HTTP/1.x request to code that is not trusted (such as
         code of a tenant) <b>must</b> call this method in its constructor: without it, that code gets the
