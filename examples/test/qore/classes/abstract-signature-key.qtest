@@ -1,0 +1,121 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation and linking, and the loading of a qcc -m module's signatures
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class AbstractSignatureKeyTest
+
+#! abstract declarations with the same parameter types are one abstract variant whatever the names of the parameters
+#! and of the types, and whether their classes were parsed or loaded from a qcc -m module (qore#7331)
+/** An abstract variant is merged with the declarations of the same signature by a key that was made from the parse
+    types of a declaration that had not been resolved yet (the names of the types as written) and from the resolved
+    types with the parameter names for a resolved one, which a signature loaded from an AOT image always is: a
+    declaration of a class of a qcc -m module and one of a parsed class with the same signature were two abstract
+    variants of a class that inherits both, and the access of a privately inherited method that implements them,
+    which is computed from the declarations with the key (qore#7288), was not the one with the module's source.  In
+    the interpreter, declarations that wrote a type differently (a class with and without its namespace path, a
+    typedef and its type, \c object<C> and \c C) were two variants, and declarations of different classes of the
+    same name were one, so that a class that implemented only one of them could be instantiated.  The key is made
+    from the resolved types only now.
+
+    The output of every execution mode and of qcc executables (-O0, -O3) of a program with all classes, and that of
+    a program whose classes inherit those of a module, loaded from its source and as a qcc -m .qmod, must be the
+    expected one.  The programs and the module are in \c abstract-signature-key/.
+*/
+class AbstractSignatureKeyTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/abstract-signature-key";
+
+        const Name = "probe";
+    }
+
+    constructor() : QUnit::Test("AbstractSignatureKeyTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT, tiered and IR-tier execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        addTestCase("the classes of a module and of a qcc -m .qmod", \testModule());
+        set_return_value(main());
+    }
+
+    private string qccBin() {
+        string qcc_bin = ENV.QCC ?? ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        return is_file(qcc_bin) ? qcc_bin : "qcc";
+    }
+
+    private string expected() {
+        return ReadOnlyFile::readTextFile(dir + "/" + Name + ".expected");
+    }
+
+    private string command(string mode) {
+        return sprintf("%s -b --enable-debug --exec-mode=%s %s/%s.q", qore_bin, mode, dir, Name);
+    }
+
+    private string run(string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command(mode));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        ExecModeHarness::check_native(r);
+        return r.stdout;
+    }
+
+    testAst() {
+        assertEq(expected(), run("ast"), "ast");
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), run(mode), mode);
+        }
+        # the IR tier of tiered execution runs the calls in the IR interpreter
+        assertEq(expected(), ExecModeHarness::run_ir_tier(command("tiered")), ExecModeHarness::IRTierName);
+    }
+
+    testModule() {
+        string expected = ReadOnlyFile::readTextFile(dir + "/module-user.expected");
+        # the module's source
+        string cmd = sprintf("QORE_MODULE_DIR=%s %s -b %s/module-user.q 2>&1", dir, qore_bin, dir);
+        int rc;
+        string result = backquote(cmd, \rc);
+        assertEq(0, rc, sprintf("source module: exit status (output: %y)", result));
+        assertEq(expected, result, "source module");
+
+        # the module compiled by qcc -m, whose signatures the AOT loader reads resolved
+        TmpDir tmp("qore-abstract-signature-key-qmod-");
+        string out = backquote(sprintf("%s -m -o %s/AbstractSignatureKey.qmod %s/AbstractSignatureKey.qm 2>&1",
+            qccBin(), tmp.path, dir), \rc);
+        if (rc || !is_file(tmp.path + "/AbstractSignatureKey.qmod")) {
+            testSkip("qcc is not available or cannot compile the module: " + out);
+        }
+        result = backquote(sprintf("QORE_MODULE_DIR=%s %s -b %s/module-user.q 2>&1", tmp.path, qore_bin, dir), \rc);
+        assertEq(0, rc, sprintf("qmod: exit status (output: %y)", result));
+        assertEq(expected, result, "qmod");
+    }
+
+    testCompiled() {
+        string qcc_bin = qccBin();
+        TmpDir tmp("qore-abstract-signature-key-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/%s-O%s", tmp.path, Name, opt);
+            int rc;
+            string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, Name), \rc);
+            if (rc || !is_file(exe)) {
+                testSkip("qcc is not available or cannot compile " + Name + ": " + out);
+            }
+            # -b must be the first argument of a compiled program
+            string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
+            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
+            assertEq(expected(), result, sprintf("-O%s", opt));
+        }
+    }
+}

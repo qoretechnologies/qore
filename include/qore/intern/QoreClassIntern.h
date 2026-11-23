@@ -197,6 +197,10 @@ struct AbstractMethod {
 
     DLLLOCAL void parseOverride(MethodVariantBase* v);
 
+    //! keys again the variants whose keys are not their current abstract signatures, making those of the class
+    //! \a qc's own variants from their resolved types (qore#7331)
+    DLLLOCAL void parseResolveSignatures(const qore_class_private& qc);
+
     // delete/purge all saved variants in the pending_save list, returns 0 if the AbstractMethod still has abstract
     // variants, -1 if not and therefore can be removed from the map
     DLLLOCAL int parseCommit();
@@ -248,6 +252,14 @@ struct AbstractMethodMap : amap_t {
     DLLLOCAL void parseAddAbstractVariant(const char* name, MethodVariantBase* f);
 
     DLLLOCAL void parseOverrideAbstractVariant(const char* name, MethodVariantBase* f);
+
+    //! makes the keys of the class \a qc's own abstract variants from their resolved types (qore#7331)
+    /** Called when the class is initialized, after its signatures have been resolved and before the abstract
+        variants of its parent classes are merged, so that a declaration has the same key as one with the same
+        signature of a class that was loaded from an AOT image, whose signatures are resolved; the variants that the
+        class was given by a parent class before the parent class made their keys again are keyed again as well
+    */
+    DLLLOCAL void parseResolveSignatures(const qore_class_private& qc);
 
     // adds a committed abstract variant if it doesn't already exist
     DLLLOCAL void addAbstractVariant(const char* name, MethodVariantBase* f);
@@ -322,7 +334,14 @@ protected:
     bool final;                             // is the variant final or not
     bool abstract;                          // is the variant abstract or not
     bool const_method;                      // true for const-qualified instance methods
-    std::string asig;                       // abstract signature, only set for abstract method variants
+    // the abstract signature, only set for abstract method variants; the abstract variant maps keep pointers to it
+    // as their keys, so neither string is changed once it is set (qore#7331)
+    std::string asig;
+    // the abstract signature made again from the resolved types if asig was made from the parse types
+    std::string resolved_asig;
+    bool asig_set = false;                  // asig has been made
+    bool asig_resolved = false;             // the abstract signature is made from the resolved types (qore#7331)
+    bool asig_remade = false;               // resolved_asig has been made
 
 public:
     // if %broken-varargs is set, add QCF_USES_EXTRA_ARGS to abstract methods by default as derived methods could use
@@ -404,7 +423,22 @@ public:
         return qmethod->getClass();
     }
 
+    //! returns the abstract signature of the variant, the key of the abstract variants of its signature
+    /** see AbstractFunctionSignature::addAbstractSignatureKey(); the abstract variant maps (vmap_t) keep the returned
+        pointer as the key of the variant
+    */
     DLLLOCAL const char* getAbstractSignature();
+
+    //! returns true if the abstract signature was made from the parse types of a signature not yet resolved
+    DLLLOCAL bool hasParseAbstractSignature() const {
+        return asig_set && !asig_resolved;
+    }
+
+    //! resolves the signature and makes the abstract signature again from its resolved types (qore#7331)
+    /** The abstract signature made from the parse types stays valid, as the abstract variant maps of subclasses
+        initialized meanwhile can have it as a key; they are keyed again (AbstractMethod::parseResolveSignatures())
+    */
+    DLLLOCAL void parseResolveAbstractSignature();
 
     DLLLOCAL const qore_class_private* getClassPriv() const;
 

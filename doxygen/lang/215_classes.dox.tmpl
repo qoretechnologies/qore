@@ -520,6 +520,19 @@ string s = a.create(1);
     An abstract method can also be defined by another parent class of a class that inherits more than one class; a
     call of the method, also an unqualified or qualified call through \c self, then calls that definition, also when
     the class that declares the abstract variant has concrete variants of the method as well.\n\n
+    @anchor abstract_same_signature Abstract declarations of a method with the same parameter types in several parent
+    classes are one abstract variant of a class that inherits them, whatever the names of their parameters and the
+    names that they give the types (a class with or without its namespace path, a @ref typedef_keyword "typedef" or
+    the type that it names, \c object<C> or \c C), and whether their classes were parsed or loaded from a module
+    compiled with \c qcc \c -m; declarations with different parameter types are different abstract variants:
+    @code{.py}
+namespace NS { class Foo {} }
+class I1 { abstract string m(NS::Foo f); }
+class I2 { abstract string m(object<NS::Foo> o); }
+class I3 { abstract string m(*string s); }
+# one abstract variant m(NS::Foo), and m(*string)
+class C inherits I1, I2, I3 {}
+    @endcode
     @anchor abstract_own_implementation A concrete variant of a class's own method implements the abstract variant
     with its signature of each of its parent classes, also when other parent classes declare other overloads of the
     method that the class itself does not implement, whatever the order of the parent classes (since %Qore 3.0):

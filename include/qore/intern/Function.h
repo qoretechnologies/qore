@@ -178,6 +178,30 @@ public:
         return str.c_str();
     }
 
+    //! appends the key of the signature as an abstract variant (MethodVariantBase::getAbstractSignature())
+    /** The key is made from the parameter types (with the path of a class, hashdecl or other named type) and the
+        \c const qualifiers of the parameters only, without the parameter names and default values: a declaration has
+        the same key whether its class was parsed or loaded from an AOT image (qore#7331).  As the key made from the
+        parse types of a signature that is not resolved yet, it has neither the default arguments nor the varargs of
+        the signature.
+
+        @return true if the key is made from the resolved types, false if from the parse types of a signature that
+        is not resolved yet, in which case it is made again when the signature has been resolved
+        (AbstractMethodMap::parseResolveSignatures())
+    */
+    DLLLOCAL virtual bool addAbstractSignatureKey(std::string& str) const {
+        for (unsigned i = 0; i < typeList.size(); ++i) {
+            if (i) {
+                str.append(",");
+            }
+            if (isParamReadOnly(i)) {
+                str.append("const ");
+            }
+            str.append(QoreTypeInfo::getPath(typeList[i]));
+        }
+        return true;
+    }
+
     DLLLOCAL virtual void addAbstractParameterSignature(std::string& str) const {
         for (unsigned i = 0; i < typeList.size(); ++i) {
             if (isParamReadOnly(i)) {
@@ -720,6 +744,28 @@ public:
         @return 0 for OK, -1 if an exception was raised; the result is the same on later calls
     */
     DLLLOCAL int resolveTypes();
+
+    // documented in AbstractFunctionSignature
+    DLLLOCAL virtual bool addAbstractSignatureKey(std::string& str) const {
+        // a signature read from an AOT image has its parameter types and no parse types
+        if (types_resolved || parseTypeList.size() < typeList.size()) {
+            return AbstractFunctionSignature::addAbstractSignatureKey(str);
+        }
+        for (unsigned i = 0; i < parseTypeList.size(); ++i) {
+            if (i) {
+                str.append(",");
+            }
+            if (isParamReadOnly(i)) {
+                str.append("const ");
+            }
+            if (!parseTypeList[i] && typeList.size() > i && typeList[i]) {
+                str.append(QoreTypeInfo::getPath(typeList[i]));
+            } else {
+                str.append(QoreParseTypeInfo::getName(parseTypeList[i]));
+            }
+        }
+        return false;
+    }
 
     DLLLOCAL virtual void addAbstractParameterSignature(std::string& str) const {
         // a signature read from an AOT image has its parameter types and no parse types before it is resolved: its

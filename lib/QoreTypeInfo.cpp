@@ -4005,8 +4005,8 @@ static type_vec_t normalize_union_key(const type_vec_t& member_types) {
     return key;
 }
 
-// Helper function to build the union type name
-static QoreString build_union_name(const type_vec_t& member_types, bool or_nothing) {
+// Helper function to build the union type name, or its path (with the paths of the members, qore#7331)
+static QoreString build_union_name(const type_vec_t& member_types, bool or_nothing, bool path = false) {
     QoreString name;
     if (or_nothing) {
         name.concat('*');
@@ -4016,7 +4016,7 @@ static QoreString build_union_name(const type_vec_t& member_types, bool or_nothi
         if (i > 0) {
             name.concat(", ");
         }
-        name.concat(QoreTypeInfo::getName(member_types[i]));
+        name.concat(path ? QoreTypeInfo::getPath(member_types[i]) : QoreTypeInfo::getName(member_types[i]));
     }
     name.concat('>');
     return name;
@@ -4074,9 +4074,10 @@ static QoreUnionTypeInfo* qore_make_union_type(const type_vec_t& key, bool or_no
     // Build the name
     // the name is built from the members without duplicates, as an AOT image writes and reads the type (qore#5858)
     QoreString name = build_union_name(key, or_nothing && !has_nothing);
+    QoreString path = build_union_name(key, or_nothing && !has_nothing, true);
 
     // Create the union type
-    QoreUnionTypeInfo* ti = new QoreUnionTypeInfo(std::move(accept_vec), std::move(return_vec), name, key,
+    QoreUnionTypeInfo* ti = new QoreUnionTypeInfo(std::move(accept_vec), std::move(return_vec), name, path, key,
         or_nothing || has_nothing);
     ti->initExactMembers(value_types);
     return ti;
