@@ -77,6 +77,11 @@ module @NAME@ {
 }
 
 public namespace @NAME@ {
+# the directory of the module's script: that of the path that the module keeps
+public string sub scriptDir() {
+    return get_script_dir() ?? \"-\";
+}
+
 public string sub classify() {
     try {
         return call_module_init_closure(InitHelper::getClosure());
@@ -112,6 +117,51 @@ printf(\"%s\\n\", LinkedAot::classify());
             ("a prepended directory outside the module directories", "outside", "@D@/mods", "not library"),
             ("a directory whose name starts with a module directory's", "evil", "@D@/mods", "not library"),
         );
+
+        #! a program that loads a module by name and prints whether it is library code, the directory of its script and
+        #! the file name it keeps; @PREPEND@ (a directive or nothing) and @NAME@ set
+        const ByNameRecorded = "%modern
+@PREPEND@
+%requires @NAME@
+printf(\"%s %s %s\\n\", @NAME@::classify(), @NAME@::scriptDir(), get_module_hash().@NAME@.filename);
+";
+
+        #! the loads through a link to a module directory or to another directory: label -> (program, QORE_MODULE_DIR,
+        #! expected); the module keeps the path that the search found it by, also when it is library code, which is
+        #! judged where the link leads
+        const RecordedLoads = (
+            ("a source module, module path entry through a link", "rec-plain", "@D@/modslink",
+                "library @D@/modslink/ @D@/modslink/PlainProbe.qm"),
+            ("an AOT module, module path entry through a link", "rec-aot", "@D@/modslink",
+                "library @D@/modslink/ @D@/modslink/LinkedAot.qmod"),
+            ("a split AOT module, module path entry through a link", "rec-split", "@D@/modslink",
+                "library @D@/modslink/SplitProbe/ @D@/modslink/SplitProbe/SplitProbe.qmod"),
+            ("a separated module, module path entry through a link", "rec-sep", "@D@/modslink",
+                "library @D@/modslink/SepProbe/ @D@/modslink/SepProbe/SepProbe.qm"),
+            ("a source module, prepended path through a link", "rec-plain-p", "@D@/mods",
+                "library @D@/modslink/ @D@/modslink/PlainProbe.qm"),
+            ("an AOT module, prepended path through a link", "rec-aot-p", "@D@/mods",
+                "library @D@/modslink/ @D@/modslink/LinkedAot.qmod"),
+            ("a split AOT module, prepended path through a link", "rec-split-p", "@D@/mods",
+                "library @D@/modslink/SplitProbe/ @D@/modslink/SplitProbe/SplitProbe.qmod"),
+            ("a separated module, prepended path through a link", "rec-sep-p", "@D@/mods",
+                "library @D@/modslink/SepProbe/ @D@/modslink/SepProbe/SepProbe.qm"),
+            ("a module outside the module directories, prepended path through a link", "rec-out-p", "@D@/mods",
+                "not library @D@/outlink/ @D@/outlink/Out2Probe.qm"),
+        );
+
+        #! the programs of RecordedLoads: name -> (prepended path or nothing, module)
+        const RecordedPrograms = {
+            "rec-plain": (NOTHING, "PlainProbe"),
+            "rec-aot": (NOTHING, "LinkedAot"),
+            "rec-split": (NOTHING, "SplitProbe"),
+            "rec-sep": (NOTHING, "SepProbe"),
+            "rec-plain-p": ("${SCRIPT_DIR}/../modslink", "PlainProbe"),
+            "rec-aot-p": ("${SCRIPT_DIR}/../modslink", "LinkedAot"),
+            "rec-split-p": ("${SCRIPT_DIR}/../modslink", "SplitProbe"),
+            "rec-sep-p": ("${SCRIPT_DIR}/../modslink", "SepProbe"),
+            "rec-out-p": ("${SCRIPT_DIR}/../outlink", "Out2Probe"),
+        };
 
         #! the programs that prepend a module path: name -> (prepended path, module)
         const Prepends = {
@@ -200,6 +250,11 @@ a link elsewhere to a file in a module directory: library @D@/mods/InitHelper.qm
         addTestCase("qcc -O0", sub () { checkQcc(0); });
         addTestCase("qcc -O3", sub () { checkQcc(3); });
         addTestCase("path forms that the loaders normalize", \checkDebug());
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("the path that a module keeps, execution mode " + mode,
+                sub () { checkRecorded(execution_mode); });
+        }
 
         set_return_value(main());
     }
@@ -238,12 +293,20 @@ a link elsewhere to a file in a module directory: library @D@/mods/InitHelper.qm
         # a link to the module directory, and a link elsewhere to a file in it
         symlink(dir + "/mods", dir + "/modslink");
         symlink(dir + "/mods/InitHelper.qm", dir + "/outside/ToMods.qm");
+        # a module that is a file of the module directory, and a link to a directory outside the module directories
+        writeModule(dir + "/mods/PlainProbe.qm", "PlainProbe");
+        symlink(dir + "/outside", dir + "/outlink");
         foreach hash<auto> i in (Prepends.pairIterator()) {
             writeFile(dir + "/scripts/" + i.key + ".q", replace(replace(ByPrepend, "@PREPEND@", i.value[0]), "@NAME@",
                 i.value[1]));
         }
         writeFile(dir + "/scripts/by-name.q", ByName);
         writeFile(dir + "/scripts/debug-checks.q", DebugChecks);
+        foreach hash<auto> i in (RecordedPrograms.pairIterator()) {
+            string prepend = i.value[0] ? sprintf("%%prepend-module-path \"%s\"", i.value[0]) : "";
+            writeFile(dir + "/scripts/" + i.key + ".q", replace(replace(ByNameRecorded, "@PREPEND@", prepend),
+                "@NAME@", i.value[1]));
+        }
     }
 
     private writeModule(string path, string name) {
@@ -324,6 +387,22 @@ a link elsewhere to a file in a module directory: library @D@/mods/InitHelper.qm
             testSkip("the debug hook exists in a debug build of the library only");
         }
         assertEq(DebugExpected, out);
+    }
+
+    #! checks the path that a module keeps when it is loaded through a link (qore#7319)
+    /** Whether the module is library code is judged where the link leads, while the module keeps the path that the
+        search found it by: its script directory and its file name are those of that path
+    */
+    private checkRecorded(string mode) {
+        hash<string, string> expected;
+        hash<string, string> actual;
+        foreach list<auto> c in (RecordedLoads) {
+            string out = backquote(sprintf("cd %s && %s %s --exec-mode=%s %s 2>&1", shellQuote(dir), env(c[2]),
+                shellQuote(qore_bin), mode, shellQuote(sprintf("%s/scripts/%s.q", dir, c[1]))));
+            expected{c[0]} = replace(c[3], "@D@", dir);
+            actual{c[0]} = lastLine(out);
+        }
+        assertEq(expected, actual);
     }
 
     private static string lastLine(string out) {
