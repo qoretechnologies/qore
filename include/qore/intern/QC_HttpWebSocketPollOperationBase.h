@@ -85,6 +85,8 @@ public:
         @param opcode WSOP_TEXT or WSOP_BINARY
         @param data pointer to the (already-reassembled) message payload
         @param len length of the payload in bytes
+        @param rsv the RSV bits of the message's first frame (RSV1 = 4: the payload is compressed by permessage-deflate,
+        and is given as received)
         @param xsink exception sink
         @return pre-encoded response frame(s) to send, or nullptr for no response.
                 Caller takes ownership (must deref).
@@ -92,7 +94,7 @@ public:
         @since %Qore 3.0
     */
     DLLLOCAL virtual BinaryNode* handleFrameRaw(WsOpcode opcode,
-            const void* data, size_t len, ExceptionSink* xsink) {
+            const void* data, size_t len, uint8_t rsv, ExceptionSink* xsink) {
         if (opcode == WSOP_TEXT) {
             SimpleRefHolder<QoreStringNode> text(new QoreStringNode(
                 reinterpret_cast<const char*>(data), len, QCS_UTF8));
@@ -123,8 +125,11 @@ public:
             ExceptionSink* xsink) override;
 
     //! Fast-path echo: encode raw bytes directly — no wrapper allocation
+    /** A compressed message (RSV1, permessage-deflate) is echoed compressed, with the RSV bits as received
+        (qore#6774): the client's inflater sees the compressed messages that its own deflater made, in the same order
+    */
     DLLLOCAL BinaryNode* handleFrameRaw(WsOpcode opcode, const void* data,
-            size_t len, ExceptionSink* xsink) override;
+            size_t len, uint8_t rsv, ExceptionSink* xsink) override;
 };
 
 //! C++ private data for HttpWebSocketPollOperationBase

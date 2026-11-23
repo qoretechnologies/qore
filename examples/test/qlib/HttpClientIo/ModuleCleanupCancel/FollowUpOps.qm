@@ -123,31 +123,41 @@ public class FollowUpOperation inherits AbstractPollOperation<auto> {
     }
 
     onComplete(hash<SocketPollResultInfo> result) {
-        printf("%s onComplete: canceled: %y\n", label, result.canceled);
-        flush();
+        # the lines are written at once: a line that another thread writes (the test hook, a warning of the cleanup)
+        # cannot come between them, which the test expects together
+        string out = sprintf("%s onComplete: canceled: %y\n", label, result.canceled);
+        on_exit {
+            if (out) {
+                print(out);
+            }
+            flush();
+        }
         try {
             switch (action) {
                 case FollowUpAction::None:
                     break;
                 case FollowUpAction::Submit:
                     submit_operation(notifier, label, FollowUpGoal::Never, FollowUpAction::Submit);
-                    printf("%s resubmitted\n", label);
+                    out += sprintf("%s resubmitted\n", label);
                     break;
                 case FollowUpAction::Timer:
                     AsyncIoController::addTimerDelay(0s, follow_up_printer(label + " timer ran"));
-                    printf("%s timer added\n", label);
+                    out += sprintf("%s timer added\n", label);
                     break;
                 case FollowUpAction::Task:
                     AsyncIoController::submitTask(follow_up_printer(label + " task ran"));
-                    printf("%s task submitted\n", label);
+                    out += sprintf("%s task submitted\n", label);
                     break;
                 case FollowUpAction::TaskChain:
                     AsyncIoController::submitTask(follow_up_chain_task(label));
                     break;
                 case FollowUpAction::TaskCancel:
+                    # the cancel callback of a refused task writes its line in this thread, after the lines so far
+                    print(out);
+                    out = "";
                     AsyncIoController::submitTask(follow_up_printer(label + " task ran"),
                         follow_up_printer(label + " task cancel callback ran"));
-                    printf("%s task submitted\n", label);
+                    out += sprintf("%s task submitted\n", label);
                     break;
                 case FollowUpAction::Exec:
                 case FollowUpAction::ExecNever: {
@@ -157,14 +167,13 @@ public class FollowUpOperation inherits AbstractPollOperation<auto> {
                         "spop": new ExecOperation(exec_notifier, action == FollowUpAction::Exec),
                         "owner": "module-cleanup-follow-up-" + label + "-exec",
                     });
-                    printf("%s exec: canceled: %y\n", label, r.canceled);
+                    out += sprintf("%s exec: canceled: %y\n", label, r.canceled);
                     break;
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
-            printf("%s %s refused: %s\n", label, action, ex.err);
+            out += sprintf("%s %s refused: %s\n", label, action, ex.err);
         }
-        flush();
     }
 }
 
@@ -231,12 +240,15 @@ code sub follow_up_printer(string msg) {
 #! follow_up_printer())
 code sub follow_up_chain_task(string label) {
     return sub () {
-        printf("%s chain task ran\n", label);
+        # written at once: the line of the test hook that another thread writes when the item that submitted the
+        # task ends cannot come between the two lines, which the test expects together
+        string out = sprintf("%s chain task ran\n", label);
         try {
             AsyncIoController::submitTask(follow_up_chain_task(label));
         } catch (hash<ExceptionInfo> ex) {
-            printf("%s chain task resubmit refused: %s\n", label, ex.err);
+            out += sprintf("%s chain task resubmit refused: %s\n", label, ex.err);
         }
+        print(out);
         flush();
     };
 }

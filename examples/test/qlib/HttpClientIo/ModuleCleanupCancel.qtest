@@ -360,9 +360,12 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         assertEq(0, status, out);
         assertRegex("(^|\n)server got: hello\n", out, "the WebSocket server reads the frame: " + out);
         assertNRegex("did not start", out, "the server's stream starts: " + out);
-        assertRegex("(?s)(^|\n)" + sprintf(DeadlineWarning, 0) + ".*\nserver log: H2/H3 WebSocket heartbeat timer not "
-            "re-armed at the end of the process: ASYNC-IO-SHUTDOWN-ERROR", out, "the server stream's refused re-arm, "
-            "after the deadline, is logged at the debug level: " + out);
+        # the cleanup's warning and the server stream's refused re-arm are written by different threads, in either
+        # order (qore#7298); the refusal, which names the deadline, shows that the re-arm came after it
+        assertRegex("(^|\n)" + sprintf(DeadlineWarning, 0), out, "the cleanup reaches its deadline: " + out);
+        assertRegex("(^|\n)server log: H2/H3 WebSocket heartbeat timer not re-armed at the end of the process: "
+            "ASYNC-IO-SHUTDOWN-ERROR: [^\n]*after its deadline", out, "the server stream's refused re-arm, after the "
+            "deadline, is logged at the debug level: " + out);
         assertRegex("(^|\n)sse stream created: canceled: True\n", out, "the SSE stream is created: " + out);
         # the end of the server's connection, which the controller notifies on a thread of its own once the cleanup
         # canceled the connection, runs in work that the cleanup waits for: the work of the cleanup handed itself over
@@ -395,6 +398,16 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         assertRegex("(^|\n)server frame blocked: work handed over: True\n" + other + "server got: again\n" + other
             + "later module data deleted\n", out, "the cleanup waits for the thread that processes the frame: " + out);
         assertNRegex("unhandled [^\n]*exception", out, "nothing is reported: " + out);
+    }
+
+    #! returns the regular expression of a group of expected lines, with the lines that other threads write (the
+    #! test hook's lines, the cleanup's warnings, all on stderr) allowed between the lines of the group (qore#7298)
+    /** The lines of a group that one thread writes at once cannot be split, but those that different threads, or
+        separate writes of one thread, write can (for example the test hook's line of a held timer callback's release
+        and the callback's own line, or a task cancel callback's line between the lines of an onComplete())
+    */
+    private static string allowOtherThreadLines(string expected) {
+        return replace(expected, "\n", "\n(?:(?:held module cleanup work|warning: )[^\n]*\n)*");
     }
 
     #! quotes \a arg for a regular expression
@@ -466,13 +479,14 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         assertRegex("(^|\n)started\n", out, "the mode is prepared: " + out);
         # the work ends before the cleanup goes on with the next module (FollowUpOps), whose data it then deletes
         foreach string expected in (FollowUpExpected{follow_up}) {
-            assertRegex("(?s)(^|\n)" + expected + "\n.*follow-up ops cleared\n.*held module cleanup work: the hold "
-                "ends \\(the user modules have been deleted\\)\n", out, "the work ends before the cleanup goes on "
-                "with the next module: " + out);
+            assertRegex("(?s)(^|\n)" + allowOtherThreadLines(expected) + "\n.*follow-up ops cleared\n.*held module "
+                "cleanup work: the hold ends \\(the user modules have been deleted\\)\n", out, "the work ends before "
+                "the cleanup goes on with the next module: " + out);
         }
         foreach string expected in (FollowUpBeforeDeletion{follow_up}) {
-            assertRegex("(?s)(^|\n)" + expected + "\n.*held module cleanup work: the hold ends \\(the user modules "
-                "have been deleted\\)\n", out, "the work ends before the user modules have been deleted: " + out);
+            assertRegex("(?s)(^|\n)" + allowOtherThreadLines(expected) + "\n.*held module cleanup work: the hold ends "
+                "\\(the user modules have been deleted\\)\n", out, "the work ends before the user modules have been "
+                "deleted: " + out);
         }
         if (!FollowUpDeadline{follow_up}) {
             assertNRegex("QORE_MODULE_CLEANUP_TIMEOUT", out, "the cleanup does not reach its deadline: " + out);

@@ -246,9 +246,22 @@ public:
     DLLLOCAL std::string getAlpnProtocol() const;
 
     //! Returns true if HTTP/2 ("h2") was negotiated via ALPN
-    /** @since Qore 3.0
+    /** Answers from the value recorded when the handshake completed (see recordedHttp2()), and otherwise reads the
+        TLS state, which must then be done on the thread that owns the connection
+
+        @since Qore 3.0
     */
     DLLLOCAL bool isHttp2() const;
+
+    //! Returns the result of the ALPN negotiation recorded when the handshake completed
+    /** The negotiated protocol does not change once the handshake has completed, so the value can be read from any
+        thread without the TLS state (qore#7223)
+
+        @return 1 if HTTP/2 ("h2") was negotiated, 0 if not, -1 if the handshake has not completed
+    */
+    DLLLOCAL int recordedHttp2() const {
+        return h2_negotiated.load(std::memory_order_acquire);
+    }
 
     //! Returns the number of bytes already decrypted and buffered in the SSL layer
     /** This is a lightweight check (no I/O) that reads an internal counter.
@@ -298,6 +311,13 @@ private:
         @since %Qore 3.0
     */
     std::atomic<bool> write_failed{false};
+
+    //! The result of the ALPN negotiation, recorded when the handshake completed: 1 for "h2", 0 for another or no
+    //! protocol, -1 before the handshake completed (qore#7223)
+    std::atomic<int> h2_negotiated{-1};
+
+    //! Records the result of the ALPN negotiation once the handshake has completed
+    DLLLOCAL void recordAlpn();
 
     //! ALPN protocols for client-side negotiation (wire format)
     std::vector<unsigned char> alpn_wire_format;
