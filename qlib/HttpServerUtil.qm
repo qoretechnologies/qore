@@ -3930,15 +3930,17 @@ public class AbstractHttpRequestHandler {
 
     #! Returns @ref True "True" if the handler's code gets the socket of its HTTP/1.x request (qore#7305)
     /** True if the handler object is declared by sandboxed code (the call of this method on the object is sandboxed:
-        see @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()"), or if setHandlerSocketView() was
-        called; also True if this cannot be decided.  The method is final, so that a subclass cannot change the
+        see @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()", or a sandbox governs the Program
+        that created the object: see
+        @ref Qore::SandboxManager::isFromSandboxedProgram() "SandboxManager::isFromSandboxedProgram()"), or if
+        setHandlerSocketView() was called; also True if this cannot be decided.  The method is final, so that a subclass cannot change the
         decision; the server calls it when the handler is registered
 
         @since HttpServerUtil 1.6
     */
     final bool needsHandlerSocketView() {
         try {
-            return handler_socket_view || SandboxManager::isSandboxed();
+            return handler_socket_view || SandboxManager::isSandboxed() || SandboxManager::isFromSandboxedProgram(self);
         } catch (hash<ExceptionInfo> ex) {
             # the decision fails closed
             return True;
