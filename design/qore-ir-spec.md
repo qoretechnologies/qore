@@ -215,8 +215,11 @@ loop-carried and branch values, in every execution mode and compiled code.
 Since the slot ownership follows the final facts, the local loads that the
 scalar replacement forwards with a native representation keep it when
 `qore_ir_refine_local_value_facts()` runs after the replacement: the replacement
-takes the representation from the lowering's facts, which the parse's flow
-analysis proved assigned, and the refinement's dataflow is less precise (a
+forwards only a value whose facts are native and never NOTHING, which the
+lowering gives a local load only where the read itself is assigned (the parse
+records the assignment state of each read; a read that may be unassigned, or of
+a local that delete or remove can clear, has its type or NOTHING and stays
+boxed), and the refinement's dataflow is less precise (a
 handler entry starts with nothing known), so it found such a load after a try
 statement only possibly assigned and gave it boxed facts; the interpreter then
 kept the value as a temporary of the statement that loaded it, and the reads of

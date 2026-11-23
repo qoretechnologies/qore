@@ -10656,9 +10656,13 @@ static bool qore_ir_value_is_proven_assigned(
 
 //! Refines the facts of the loads of local ints, floats and bools with a dataflow of the locals proven assigned
 /** @param forwarded_loads the results of the loads that the fixed-aggregate scalar replacement forwarded with a native
-    representation (see qore_ir_scalar_replace_fixed_aggregates()), which keep it: the replacement took it from the
-    facts of the lowering, which the parse's flow analysis proved assigned; this dataflow is less precise (a handler
-    entry starts with nothing known, and a call that can take references clears what is known), and a forwarded value
+    representation (see qore_ir_scalar_replace_fixed_aggregates()), which keep it.  The replacement forwards only a
+    value whose facts are native and never NOTHING; the lowering gives a local load such facts only where the read
+    itself is assigned: the parse records the assignment state of each read (qore#5937), and a read that may be
+    unassigned, or of a local that delete or remove can clear (qore#5710), has its type or NOTHING
+    (QoreIRLowering::getAnalysis()), so it is never NOTHING only where it has a value, and its value stays boxed
+    otherwise.  This dataflow is less precise (a handler entry starts with nothing known, and a call that can take
+    references clears what is known), and a forwarded value
     that it took as possibly unassigned would get boxed facts, so the interpreter would keep it as a temp of the
     statement that loaded it and release it there, before the reads of the members in later statements ran: they read
     NOTHING (qore#7356)
@@ -10919,8 +10923,12 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
                         facts = *current;
                     }
                     QoreIRValueFacts refined_facts = facts;
-                    bool assigned = known.count(load->local)
-                        || (forwarded_loads && forwarded_loads->count(inst->result.id));
+                    bool forwarded = forwarded_loads && forwarded_loads->count(inst->result.id);
+                    // the replacement recorded the load only with these facts, which nothing has changed since
+                    assert(!forwarded || (facts.never_nothing
+                        && (facts.representation == QoreIRValueRepresentation::NativeInt
+                            || facts.representation == QoreIRValueRepresentation::NativeFloat)));
+                    bool assigned = known.count(load->local) || forwarded;
                     // a load where the local may not have been assigned has its type or NOTHING (qore#5937): its
                     // declared type alone would let the optimizers take the value as one of the type
                     refined_facts.type_info = assigned
