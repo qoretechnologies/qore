@@ -1,0 +1,145 @@
+empty: TFTF
+same order: TFTF
+copy: TFTF
+reverse order: TFTF
+reverse order 2: TFTF
+first two swapped: TFTF
+last two swapped: TFTF
+middle moved to the end: TFTF
+end moved to the start: TFTF
+value differs first: FTFT
+value differs middle: FTFT
+value differs last: FTFT
+value differs last, reverse order: FTFT
+value differs first, reverse order: FTFT
+key differs first: FTFT
+key differs middle: FTFT
+key differs last: FTFT
+key differs last byte: FTFT
+key differs in length: FTFT
+key prefix: FTFT
+long key last byte: FTFT
+long key same: TFTF
+empty key: TFTF
+empty key differs: FTFT
+key differs, values swapped: FTFT
+subset: FTFT
+subset first: FTFT
+empty and one: FTFT
+nothing value and no key: FTFT
+int and float: TFFT
+float and int first: TFFT
+int and float differ: FTFT
+int and string: TFFT
+int and string differ: FTFT
+float and string: TFFT
+int and bool: TFFT
+zero and false: TFFT
+int and number: TFFT
+float and number: TFFT
+number and string: TFFT
+ints: TFTF
+ints differ in sign: FTFT
+big ints: TFTF
+big ints differ: FTFT
+big int and int: FTFT
+big int and float: TFFT
+floats: TFTF
+floats differ: FTFT
+zero and negative zero: TFTF
+infinities: TFTF
+infinities differ: FTFT
+numbers: TFTF
+numbers differ: FTFT
+numbers and floats: TFFT
+NaN: FTFT
+NaN same hash: FTTF
+NaN copy: FTFT
+NaN reverse order: FTFT
+NaN and int: FTFT
+NaN and string: FTFT
+NaN number: FTFT
+nested NaN same hash: FTTF
+nested NaN: FTFT
+NaN in list same hash: FTTF
+NaN same variable: FTTF
+NaN same untyped variable: FTTF
+nothing values: TFTF
+null values: TFTF
+nothing and null: FTFT
+nothing and zero: TFFT
+null and zero: TFFT
+nothing and empty string: TFFT
+short strings: TFTF
+short strings differ: FTFT
+short and long strings: FTFT
+long strings: TFTF
+long strings differ: FTFT
+empty strings: TFTF
+strings in other encodings: TFTF
+non-ascii strings in other encodings: TFTF
+string and date: FTFT
+binaries: TFTF
+binaries differ: FTFT
+binary and string: FTFT
+dates: TFTF
+dates in other zones: TFTF
+dates differ: FTFT
+relative dates: TFTF
+date and int: TFFT
+nested reverse order: TFTF
+nested soft: TFFT
+nested differs: FTFT
+nested key differs: FTFT
+lists: FTFT
+lists of ints: TFTF
+lists of floats: TFTF
+lists of short strings: TFTF
+lists differ: FTFT
+lists differ in size: FTFT
+list and hash: FTFT
+hashes in lists: TFFT
+hash and nothing: FTFT
+same object: TFTF
+different objects: FTFT
+object and hash: FTFT
+hashdecl and hash: TFTF
+hashdecl and hash in other order: TFTF
+hashdecl and soft hash: TFFT
+hashdecls: TFTF
+hashdecls differ: FTFT
+typed hash and hash: TFTF
+typed hash and hashdecl: TFTF
+weak reference: TFTF
+weak reference untyped: TFTF TFTF
+weak reference member: TFFT reversed: FTFT typed: TFFT
+weak reference member differs: FTFT
+invalid date: F
+invalid date reverse order: F
+exception: ENCODING-CONVERSION-ERROR
+exception, reverse order: ENCODING-CONVERSION-ERROR
+order: ENCODING-CONVERSION-ERROR
+order 2: F
+order, same keys: F
+order, same keys 2: ENCODING-CONVERSION-ERROR
+order after a key mismatch: ENCODING-CONVERSION-ERROR
+order after a key mismatch 2: F
+order in lists: ENCODING-CONVERSION-ERROR F
+hard comparison with an exception: F
+enum and int: TFFT
+enum and float: TFFT
+enums: TFTF
+enums differ: FTFT
+float enum and float: TFFT
+float enum and string: TFFT
+enums in lists: TFFT
+chars: TFTF
+chars differ: FTFT
+char and string: TFFT
+char and int: TFFT
+chars in lists: TFFT
+soft after a key mismatch: TFFT
+soft nested after a key mismatch: TFFT
+big int and float in lists: TFFT
+inlist: TF
+list equality: TFFT

@@ -404,6 +404,7 @@ private:
 
 class QoreCallDispatcher {
     friend class AsyncIoDispatcherCancelTest;
+    friend class AsyncIoReleaseCountedScopeTest;
 public:
     //! Dispatch type for async work items
     enum DispatchType {
@@ -880,6 +881,7 @@ class AsyncIoControllerPriv : public AbstractPrivateData {
     friend class AsyncIoStaleReadinessTest;
     friend class AsyncIoStoppingThreadTest;
     friend class AsyncIoDispatcherCancelTest;
+    friend class AsyncIoReleaseCountedScopeTest;
     friend class AsyncIoPreservedSubmitTest;
     friend class AsyncIoFrameSendTest;
 #endif

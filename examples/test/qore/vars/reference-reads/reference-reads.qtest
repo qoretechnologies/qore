@@ -1,0 +1,181 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of reads through references, threads and the stack limit
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class ReferenceReadsTest
+
+#! Tests reads through references in every execution mode and in qcc-compiled executables
+/** A read through a reference to a closure-bound local of the Program that the thread runs reads the variable without
+    entering the reference's Program and object context, and the references that a thread resolves are kept without
+    an allocation for circular-reference detection (issue #7268).  cases.q reads through references to locals,
+    closure-bound locals changed by closures, globals, members (also in methods, of the method's object and of
+    others), hash keys and list elements (missing ones are not created), references to references (chains deeper
+    than the references kept without an allocation), references held in containers, weak references, locals of other
+    Programs (also deleted ones), circular references (which raise CIRCULAR-REFERENCE-ERROR, also deep in a chain),
+    recursions that reach the stack limit, and from several threads that read and increment one variable at once;
+    every execution mode and executables compiled with qcc -O0 and -O3 must give the output of the AST interpreter,
+    which is checked here as well.
+*/
+class ReferenceReadsTest inherits QUnit::Test {
+    public {
+        #! the output of the cases with the AST interpreter
+        const ExpectedAstLines = (
+            "local-int-loop => integer 1225",
+            "local-string => string \"a\"",
+            "local-string-changed => string \"b\"",
+            "local-hash => hash<auto> {a: 1, b: [1, 2]}",
+            "local-hash-key => list<int> [1, 2]",
+            "local-hash-missing-key => nothing null",
+            "local-hash-missing-key-not-created => bool False",
+            "local-hash-same => bool True",
+            "local-list => list<auto> [1, \"two\", 3.0]",
+            "local-list-size => integer 3",
+            "local-nothing => nothing null",
+            "local-null => NULL <NULL>",
+            "local-object-same => bool True",
+            "local-object-deleted => nothing null",
+            "local-closure-call => integer 42",
+            "local-hash-key-loop => integer 172",
+            "closure-bound-local => list<int> [2, 3, 4, 5, 6]",
+            "closure-variable-in-closure => hash<string, int> {c: 1, d: 2}",
+            "closure-read-after-change => string \"y\"",
+            "global-int => integer 7",
+            "global-hash => hash<string, int> {g: 1}",
+            "global-hash-key => integer 1",
+            "member-int => integer 1",
+            "member-hash-key => integer 1",
+            "member-list-element => integer 2",
+            "method-member => integer 1",
+            "method-member-key => integer 1",
+            "method-local => string \"m0m01m012\"",
+            "method-local-other-object => string \"o-2:1\"",
+            "hash-key => hash<string, int> {n: 1}",
+            "hash-key-nested => integer 1",
+            "hash-key-missing => nothing null",
+            "hash-key-missing-not-created => bool False",
+            "list-element => list<int> [2, 3]",
+            "list-element-nested => integer 2",
+            "list-element-past-end => nothing null",
+            "list-element-past-end-size => integer 2",
+            "reference-to-reference => hash<string, int> {r: 1}",
+            "reference-chain-5 => hash<string, int> {r: 1}",
+            "reference-chain-40 => hash<string, int> {r: 1}",
+            "reference-chain-200 => integer 3",
+            "references-in-list => list<auto> [2, \"b\"]",
+            "reference-in-hash => integer 2",
+            "reference-in-hash-call => integer 2",
+            "reference-variable => hash<string, int> {w: 1}",
+            "reference-variable-changed => hash<string, int> {w: 2}",
+            "weak-hash => hash<string, int> {w: 1}",
+            "weak-list => list<int> [1, 2]",
+            "weak-object-same => bool True",
+            "weak-object-deleted-is-object => bool True",
+            "circular-self => CIRCULAR-REFERENCE-ERROR: a circular lvalue reference was detected",
+            "circular-self-direct => CIRCULAR-REFERENCE-ERROR: a circular lvalue reference was detected",
+            "circular-self-reference => CIRCULAR-REFERENCE-ERROR: a circular lvalue reference was detected",
+            "circular-two => CIRCULAR-REFERENCE-ERROR: a circular lvalue reference was detected",
+            "circular-through-chain => CIRCULAR-REFERENCE-ERROR: a circular lvalue reference was detected",
+            "circular-in-list => string \"list<auto> 1\"",
+            "circular-in-hash => string \"hash<auto> 1\"",
+            "circular-after => hash<string, int> {after: 1}",
+            "circular-after-chain => hash<string, int> {after: 1}",
+            "other-program-local => hash<string, int> {a: 1}",
+            "other-program-reference => hash<string, int> {a: 1}",
+            "other-program-reference-direct => hash<string, int> {a: 1}",
+            "other-program-reads-parent-local => hash<string, int> {parent: 1}",
+            "other-program-args-list => hash<string, int> {l: 1}",
+            "deleted-program-reference => PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime",
+            "deleted-program-reference-direct => PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime",
+            "deleted-program-args-list => PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime",
+            "stack-limit-chain => STACK-LIMIT-EXCEEDED",
+            "stack-limit-chain-after => hash<string, int> {x: 1}",
+            "stack-limit-local => STACK-LIMIT-EXCEEDED",
+            "stack-limit-local-after => hash<string, int> {x: 1}",
+            "threads-sum => integer 8000",
+            "threads-reads-monotonic => bool True",
+            "threads-count => integer 4",
+            "threads-closure-sum => integer 8000",
+            "threads-closure-reads-monotonic => bool True",
+            "destructor-scope => hash<string, int> {d: 1}",
+            "destructor-scope-int => integer 2",
+            "destructor-delete => hash<string, int> {d: 1}",
+            "destructor-delete-int => integer 2",
+            "destructor-exception => hash<string, int> {d: 1}",
+            "destructor-exception-int => integer 2",
+            "destructor-exception-caught => REF-READ-TEST"
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string cases;
+    }
+
+    constructor() : QUnit::Test("ReferenceReads", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        cases = get_script_dir() + DirSep + "cases.q";
+
+        addTestCase("every execution mode gives the expected result", \testModes());
+        addTestCase("compiled executables give the expected result", \testExecutables());
+
+        set_return_value(main());
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            compare(mode, runMode(mode));
+        }
+    }
+
+    testExecutables() {
+        TmpDir tmp("qore-reference-reads-");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "cases" + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s -o %s %s 2>&1",
+                libqore_dir, libqore_dir, libqore_dir, qcc_bin, opt, exe, cases));
+            assertTrue(is_file(exe), sprintf("%s compiled the executable: %s", opt, out));
+            compare("qcc " + opt, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+                libqore_dir, libqore_dir, exe)).split("\n"));
+        }
+    }
+
+    private list<string> runMode(string mode) {
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, cases)).split("\n");
+    }
+
+    #! compares the lines of a run with the expected lines, reporting the first differences
+    private compare(string mode, list<string> actual) {
+        # a trailing newline gives an empty last line
+        if (actual && actual.last() == "") {
+            pop actual;
+        }
+        list<string> diffs = ();
+        int count = 0;
+        int n = max(ExpectedAstLines.size(), actual.size());
+        for (int i = 0; i < n; ++i) {
+            if (ExpectedAstLines[i] !== actual[i]) {
+                ++count;
+                if (diffs.size() < 20) {
+                    diffs += sprintf("expected: %y\n%s: %y", ExpectedAstLines[i], mode, actual[i]);
+                }
+            }
+        }
+        assertEq((), diffs, sprintf("%s: %d differences:\n%s", mode, count, diffs.join("\n")));
+    }
+}

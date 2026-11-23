@@ -32,6 +32,7 @@
 #include "qore/intern/QoreArithmeticParseType.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreStatementTemps.h"
+#include "qore/intern/QoreHashNodeIntern.h"
 
 QoreString QoreMinusOperatorNode::minus_str("- operator expression");
 
@@ -161,7 +162,9 @@ QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
 
     if (lt == NT_HASH) {
         if (rt == NT_LIST) {
-            ReferenceHolder<QoreHashNode> nh(lh->get<const QoreHashNode>()->copy(), xsink);
+            // a new value, which can be changed also when the hash was freed (qore#7199)
+            ReferenceHolder<QoreHashNode> nh(qore_hash_private::get(*lh->get<const QoreHashNode>())->copyValue(),
+                xsink);
             ConstListIterator li(rh->get<const QoreListNode>());
             while (li.next()) {
                 QoreStringValueHelper val(li.getValue());
@@ -173,7 +176,9 @@ QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
             return nh.release();
         }
         if (rt == NT_STRING) {
-            ReferenceHolder<QoreHashNode> nh(lh->get<const QoreHashNode>()->copy(), xsink);
+            // a new value, which can be changed also when the hash was freed (qore#7199)
+            ReferenceHolder<QoreHashNode> nh(qore_hash_private::get(*lh->get<const QoreHashNode>())->copyValue(),
+                xsink);
             QoreStringValueHelper key(*rh);
             nh->removeKey(*key, xsink);
             if (*xsink)

@@ -1955,6 +1955,21 @@ DLLLOCAL void q_ds_append_masked_string(QoreString& str, const char* ds);
 */
 DLLLOCAL void q_ds_append_masked_string_desc(QoreString& str, const QoreString& ds);
 
+//! returns a copy of the options of a datasource with the value of each option that cannot be shown masked (qore#7070)
+/** The value of an option is shown only as in q_ds_masked_hash(): if \a driver is a driver already loaded that
+    registers the option with option flags without \ref QDBI_OPT_SENSITIVE, if its name names no credential, and only
+    as a string, if it can be shown in a datasource string; every other value is replaced with \ref QORE_DS_MASK
+    (fail-closed: an option of a driver that is not loaded, or that the driver registers without flags or does not
+    register, is masked); no module is loaded;
+    never raises an exception
+
+    @param driver the driver name, if any
+    @param opts the options, if any
+
+    @return a new hash with the keys of \a opts, owned by the caller
+*/
+DLLLOCAL QoreHashNode* q_dbi_mask_options(const char* driver, const QoreHashNode* opts);
+
 //! appends the masked description of a datasource hash for a message (qore#6988)
 /** The description is made with q_ds_append_masked(QoreString&, const char*, const char*, int) from the \c "type",
     \c "host" and \c "port" keys of the hash (as in a datasource hash returned by parse_datasource()); a \c "type" or
@@ -1965,8 +1980,10 @@ DLLLOCAL void q_ds_append_masked_hash(QoreString& str, const QoreHashNode* h);
 
 //! the database name is shown in a masked datasource (see q_ds_masked_hash()); a db:// safe URL shows it (qore#7017)
 #define QDS_MASK_SHOW_DB (1 << 0)
-//! the character encoding and the option names are shown in a masked datasource, with every option value masked
-/** See q_ds_masked_hash(); a db:// safe URL and serialized SqlUtil data show them (qore#7016, qore#7017)
+//! the character encoding and the option names are shown in a masked datasource, with the option values that can be shown
+/** See q_ds_masked_hash(); a db:// safe URL and serialized SqlUtil data show them (qore#7016, qore#7017); only the
+    value of an option that the driver, already loaded, registers with option flags without declaring it sensitive,
+    and whose name names no credential, is shown (qore#7070)
 */
 #define QDS_MASK_SHOW_OPTIONS (1 << 1)
 
@@ -1980,8 +1997,13 @@ DLLLOCAL void q_ds_append_masked_hash(QoreString& str, const QoreHashNode* h);
     - \c "charset": the encoding, with \ref QDS_MASK_SHOW_OPTIONS only, if it is a valid encoding name
     - \c "host" and \c "port": as in q_ds_append_masked()
     - \c "options": with \ref QDS_MASK_SHOW_OPTIONS only: the option names, each with the value
-      \ref QORE_DS_MASK, as no driver declares which of its options hold secrets (qore#7070); if a name is not a
-      valid option name, the value of \c "options" is \ref QORE_DS_MASK instead
+      \ref QORE_DS_MASK, except an option that the driver, if it is already loaded, registers with option flags
+      without \ref QDBI_OPT_SENSITIVE and whose name names no credential, whose value is shown as a string if it is a
+      string, a number or a boolean whose string form has only printable ASCII characters and no separator of a
+      datasource string or of its option block (q_dbi_shown_option(); qore#7070; fail-closed: every option of a driver
+      that is not loaded, an option registered without flags or not registered, an option whose name names a
+      credential and a sensitive option are masked, and the driver is never loaded); if a name is not a valid option
+      name, the value of \c "options" is \ref QORE_DS_MASK instead
 
     The password is never in the hash.  Never raises an exception; values are read with QoreStringDataHelper, so
     inline short strings are read as well.
@@ -1993,7 +2015,7 @@ DLLLOCAL QoreHashNode* q_ds_masked_hash(const QoreHashNode* h, unsigned flags);
 
 //! appends the masked description of a datasource hash with the given flags (qore#7016, qore#7017)
 /** The description has the form
-    <tt>driver:****</tt><tt>/</tt><tt>****</tt><tt>\@db[(charset)][%host[:port]][{opt=****,...}]</tt>, made from
+    <tt>driver:****</tt><tt>/</tt><tt>****</tt><tt>\@db[(charset)][%host[:port]][{opt=value,...}]</tt>, made from
     q_ds_masked_hash(); with no flags, it is identical to the description of q_ds_append_masked_hash().  A separate
     name, so that a call with flags never resolves to an overload of q_ds_append_masked().
 */

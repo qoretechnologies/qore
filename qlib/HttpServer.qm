@@ -6256,6 +6256,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         refs.ctrl @= asyncIo;
         refs.target @= asyncTarget;
         return sub (code<nothing()> c) {
+            # work of the module cleanup that leaves the end to another thread hands itself over to it (qore#7239)
+            c = HttpAsyncSocketIoController::wrapCleanupHandover(c, "HttpServer handler pool submitter");
             *HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = refs.ctrl;
             *HttpServerAsyncIo::HttpAsyncTarget target = refs.target;
             if (ctrl && target) {

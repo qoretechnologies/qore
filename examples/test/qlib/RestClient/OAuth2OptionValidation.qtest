@@ -367,7 +367,9 @@ public class OAuth2OptionValidationTest inherits QUnit::Test {
             # once authorized, its clients have the token
             conn = new RestConnection(grant_type, "test", base + "/api", {"monitor": False},
                 opts + {"token": "authorized-token"});
-            assertTrue(conn.getInfo().up);
+            # never checked: not up, and not marked as unable to connect (issue #7236)
+            assertFalse(conn.getInfo().up);
+            assertEq("not checked", conn.getInfo().status);
             assertFalse(conn.needsAuth());
             assertEq("authorized-token", conn.get(False).getToken());
             RestClientIo authorized_rcio = conn.getAsync(False);
@@ -408,7 +410,7 @@ public class OAuth2OptionValidationTest inherits QUnit::Test {
             # neither logged in
             assertEq((), handler.takePaths(), grant_type);
             if (grant_type == "client_credentials" || grant_type == "password") {
-                assertTrue(conn.getInfo().up, grant_type);
+                assertEq("not checked", conn.getInfo().status, grant_type);
                 # the async client logs in before its first request
                 rcio.restGet("ping");
                 assertEq(("oauth2/token", "api/ping"), handler.takePaths(), grant_type);

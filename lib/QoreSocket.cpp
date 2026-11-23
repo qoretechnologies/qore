@@ -6393,7 +6393,15 @@ std::string SSLSocketHelper::getAlpnProtocol() const {
 }
 
 bool SSLSocketHelper::isHttp2() const {
+    int rec = recordedHttp2();
+    if (rec >= 0) {
+        return rec;
+    }
     return getAlpnProtocol() == "h2";
+}
+
+void SSLSocketHelper::recordAlpn() {
+    h2_negotiated.store(getAlpnProtocol() == "h2" ? 1 : 0, std::memory_order_release);
 }
 
 int SSLSocketHelper::pending() const {
@@ -6440,6 +6448,9 @@ int SSLSocketHelper::startConnect(ExceptionSink* xsink) {
         if (sslError(xsink, "startConnect", "SSL_connect", true)) {
             return QSE_SSL_ERR;
         }
+    } else {
+        // the handshake completed: the negotiated protocol does not change any more
+        recordAlpn();
     }
 
     return 0;
@@ -6474,6 +6485,9 @@ int SSLSocketHelper::startAccept(ExceptionSink* xsink) {
         if (sslError(xsink, "startAccept", "SSL_accept", true)) {
             return QSE_SSL_ERR;
         }
+    } else {
+        // the handshake completed: the negotiated protocol does not change any more
+        recordAlpn();
     }
 
     return 0;
@@ -13061,6 +13075,22 @@ bool QoreSocket::isHttp2() const {
         return ssl ? ssl->isHttp2() : false;
     }
 
+    // the protocol negotiated in a completed handshake is recorded, and is read without the TLS state and without a
+    // poll operation (qore#7223); a connection without TLS has negotiated nothing
+    {
+        qore_socket_private::SslRef ssl = priv->getSsl();
+        if (!ssl) {
+            return false;
+        }
+        int rec = ssl->recordedHttp2();
+        if (rec >= 0) {
+            return rec;
+        }
+    }
+
+#ifdef DEBUG
+    qore_dbg_note_is_http2_poll();
+#endif
     ExceptionSink xsink;
     bool rv = qore_socket_exec_tls_state_bool(const_cast<QoreSocket*>(this),
         QoreSocketControllerTlsStatePollOperation::Action::IsHttp2, "isHttp2", &xsink);
