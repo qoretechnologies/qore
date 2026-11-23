@@ -129,11 +129,6 @@
     registered credential resolver gives the credentials (see @ref sqlutil_serialization;
     <a href="https://github.com/qoretechnologies/qore/issues/7016">issue 7016</a>).
 
-    @par A Credential Resolver Gets No Database Name That Can Hold Credentials
-    The masked configuration that a SqlUtil credential resolver gets has \c "****" as the database name of a driver
-    that declares @ref Qore::SQL::DBI_CAP_SENSITIVE_DBNAME (such as \c jdbc), so a resolver cannot identify such a
-    datasource by its database name; data of a named connection is restored by the connection (issue #7275).
-
     @par Code of a Class Does Not Call a Private Method That Its Own Hierarchy Overrides
     Code of a class no longer calls a @ref private_methods "private" method of one of its parent classes (or a public
     one reached through private inheritance) that its own hierarchy overrides when an earlier parent class of the
