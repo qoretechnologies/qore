@@ -1039,6 +1039,9 @@ private:
         @param xsink for Qore-language exceptions
         @param arg the underlying exception argument, referenced into the error information hash when present
     */
+    //! returns the extra error information of a request that was not written: \c request_sent is @ref False (qore#7278)
+    DLLLOCAL static QoreHashNode* getUnsentRequestErrorInfo(ExceptionSink* xsink);
+
     DLLLOCAL void setError(const char* err, const char* desc, const QoreHashNode* extra, ExceptionSink* xsink,
         QoreValue arg = QoreValue());
 
@@ -1066,7 +1069,9 @@ private:
     */
     DLLLOCAL int checkResponseBodySize(int64_t size, const char* desc, ExceptionSink* xsink);
     DLLLOCAL bool getStoredError(std::string& err, std::string& desc) const;
-    DLLLOCAL void notifyPendingStreams(const char* err, const char* desc, ExceptionSink* xsink);
+    //! fails the pending request with the given error; a non-NOTHING \a arg (borrowed) is the exception argument
+    DLLLOCAL void notifyPendingStreams(const char* err, const char* desc, ExceptionSink* xsink,
+        QoreValue arg = QoreValue());
     DLLLOCAL void fireReadyCallback(ExceptionSink* xsink);
 
     //! Arms the idle deadline (if not already armed) and annotates \a poll_info
