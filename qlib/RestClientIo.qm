@@ -222,10 +222,6 @@ resp = rc.restGet("/api/data");
 
     @subsection restclientio_v1_0 Version 1.0
     - initial release
-    - supports sealed OAuth2 credentials (@ref RestClient::SealedOAuth2Credentials "SealedOAuth2Credentials", option
-      \c oauth2_sealed_credentials); with them, @ref RestClientIo::RestClientIo::startOAuth2PollRefreshToken()
-      "startOAuth2PollRefreshToken()" returns the poll operation of the token request instead of the request
-      (<a href="https://github.com/qoretechnologies/qore/issues/7248">issue 7248</a>)
 */
 
 #! Main namespace for the RestClientIo module
