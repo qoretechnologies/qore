@@ -167,15 +167,20 @@ sibling artifact).
 - An argument that a call hands over to a parameter whose prologue takes no reference (a parameter that the body
   does not use, which has no local, or that it borrows) is released by the call when the copy returns:
   `materializeOwnedFastEntries()` adds the release after each call of the copy, as the call of the fast entry releases
-  its argument; the mask that it records on the copy (`QORE_OWNED_FAST_ENTRY_ARGS_ATTR`) has only the arguments whose
-  references the copy owns.
+  its argument; it marks only the arguments whose references the copy owns, each with the parameter attribute
+  `QORE_OWNED_FAST_ENTRY_ARG_ATTR`.
 - The prologue takes its references before the entry's stack check: the paths that leave the entry before its body
   runs, the stack overflow and the debugger entry, release them (`emitFastEntryPrologueRelease()`), so that the copy
   releases the caller's references there and the fast entry its own (which a stack overflow in a fast entry leaked
-  before).  The thunk that checks the stack for a large frame (`QoreIRFrameCheck`) releases the arguments of the
-  copy's mask when it does not call the copy's code.  The debugger entry calls the function's standard entry, whose
-  parameters take references of their own: under a debugger, a temporary handed over is released when the call
-  returns.
+  before).  The thunk that checks the stack for a large frame (`QoreIRFrameCheck`) releases the copy's marked
+  arguments when it does not call the copy's code.  The marks, like the one of the ExceptionSink argument that the
+  thunk raises the exception with (`QORE_FRAME_CHECK_XSINK_ATTR`), are parameter attributes and not argument
+  indexes: a copy is internal, and at `-O2`/`-O3` LLVM's dead-argument elimination removes the arguments whose values
+  it does not need (an unused parameter is stored in its local, which needs no value when every call gives the same
+  constant), which moves the arguments after them; the attributes stay on their arguments.  A function with a
+  stack check whose thunk cannot be made fails the compilation (qore#7072).  The debugger entry calls the function's
+  standard entry, whose parameters take references of their own: under a debugger, a temporary handed over is
+  released when the call returns.
 - `QORE_DUMP_LLVM_IR` prints the module before the copies are made (their declarations); `QORE_DUMP_IR_BEFORE_OPT`
   prints them.
 - The copies are made in `lib/QoreIRToLLVMOwnedEntries.cpp`, compiled outside the single compilation unit with hidden

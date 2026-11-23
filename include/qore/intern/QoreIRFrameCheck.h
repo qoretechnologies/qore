@@ -41,16 +41,6 @@ namespace llvm {
 class Module;
 }
 
-//! The function attribute of a fast entry that takes its arguments over: a mask with a '1' for each argument whose
-//! reference it owns, which the thunk releases when the stack has no room for the entry's frame (issue #6105)
-/** The mask is indexed by the position of the arguments as the entry was declared, as the index of the ExceptionSink
-    in the "qore-frame-check" attribute is: both are valid only while optimization has not removed arguments from the
-    function.  Dead argument elimination of an internal function at -O3 can remove them (issue #7072); today the index
-    of the ExceptionSink then lies past the last argument and makeThunk() makes no thunk, so the mask is not used
-    either.  A fix that keeps the thunk must remap the mask with the index.
-*/
-#define QORE_OWNED_FAST_ENTRY_ARGS_ATTR "qore-owned-args"
-
 //! The stack check of compiled functions whose frame is larger than the stack guard allows (qore#6414)
 /** Every compiled function checks the stack in its entry block (qore_rt_check_stack()), after its prologue has
     allocated its frame: a frame that does not fit in the stack guard (QORE_STACK_GUARD) can reach past the end of the
@@ -66,6 +56,18 @@ class Module;
     of every function of the module.  Every other function's frame is checked against the threshold in the same way: a
     frame above it with a stack check fails the code generation.
 */
+//! The parameter attribute of each argument of a fast entry that takes its arguments over whose reference the entry
+//! owns, which the thunk releases when the stack has no room for the entry's frame (issue #6105)
+/** a parameter attribute and not an index in a function attribute: LLVM's interprocedural passes remove arguments of
+    an internal function whose values it does not need (dead-argument elimination), and keep the attributes of the
+    arguments that remain (qore#7072)
+*/
+#define QORE_OWNED_FAST_ENTRY_ARG_ATTR "qore-owned-arg"
+
+//! The parameter attribute of the ExceptionSink argument of a function whose entry checks the stack (the function
+//! attribute "qore-frame-check"), which the thunk of a large frame raises the exception with (qore#7072)
+#define QORE_FRAME_CHECK_XSINK_ATTR "qore-frame-check-xsink"
+
 class QoreIRFrameCheck {
 public:
     //! the suffix of the name of the code of a function whose frame is checked by a thunk
