@@ -6916,7 +6916,8 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         @ref RestClient::RestClient "RestClient" created by @ref get() with \a connect @ref False, it does not log in
         when it is created but before its first request; a client of a connection that awaits OAuth2 authorization
         (\c authorization_code or \c implicit grant type without a token) can therefore be created.  Invalid OAuth2
-        options raise \c OAUTH2-ERROR in both cases.
+        options raise \c OAUTH2-ERROR in both cases. The default is applied to a copy of the runtime options,
+        which may have a specific value type such as \c hash<string,string>.
 
         @since
         - %RestClient 2.5
@@ -6925,6 +6926,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     object getAsync(bool connect = True, *hash<auto> rtopts) {
         if (!connect && !exists rtopts.skip_login) {
             # as get(False) creates a RestClient that does not connect (qore#6906)
+            rtopts = {} + rtopts;
             rtopts.skip_login = True;
         }
         object o = AbstractConnection::getAsync(connect, rtopts);
