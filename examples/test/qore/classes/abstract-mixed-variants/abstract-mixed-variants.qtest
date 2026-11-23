@@ -33,6 +33,7 @@ class AbstractMixedVariantsTest inherits QUnit::Test {
     private {
         string qore_bin = TestInterpreter::qore_interpreter();
         string fixture = get_script_dir() + "/AbstractMixedVariants.q";
+        string return_fixture = shellQuote(get_script_dir() + "/AbstractReturnType.q");
         string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/AbstractMixedVariants.expected");
     }
 
@@ -41,6 +42,9 @@ class AbstractMixedVariantsTest inherits QUnit::Test {
             string execution_mode = mode;
             addTestCase("execution mode " + mode, sub () {
                 assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+                string cmd = shellQuote(qore_bin) + " --exec-mode=" + execution_mode;
+                assertEq("1 missing\n", ExecModeHarness::run(cmd + " " + return_fixture));
+                checkWideReturn(cmd, 2);
             });
         }
         addTestCase("IR tier", sub () {
@@ -69,6 +73,26 @@ class AbstractMixedVariantsTest inherits QUnit::Test {
             shellQuote(fixture)));
         assertTrue(is_file(program), "the fixture compiled: " + output);
         assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+
+        string dest = shellQuote(dir + "/return-type");
+        string cmd = sprintf("%s -O%d -o %s", shellQuote(qcc_bin), opt, dest);
+        checkWideReturn(cmd, 1);
+        assertFalse(is_file(dir + "/return-type"), "qcc rejected the incompatible hierarchy");
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(cmd + " " + return_fixture);
+        assertEq(0, result.rc, result.out);
+        assertEq("1 missing\n", ExecModeHarness::run_any(dest));
+    }
+
+    # A variant installed by abstract resolution must honor the return type of a parent-typed call (qore#7425).
+    private checkWideReturn(string cmd, int expected_status) {
+        foreach string flags in (("--define=WIDE_RETURN", "--define=WIDE_RETURN --define=INHERIT_RESOLVED")) {
+            hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(cmd + " " + flags + " "
+                + return_fixture);
+            assertEq(expected_status, result.rc, result.out);
+            assertTrue(result.out.find("PARSE-TYPE-ERROR: class 'Combined' cannot inherit method IntegerLabel::label("
+                "int value) returning *string with parent class method OptionalLabel::label(*int value) returning "
+                "string") >= 0, result.out);
+        }
     }
 
     private static string shellQuote(string value) {
