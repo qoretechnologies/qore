@@ -801,8 +801,10 @@ static bool qore_weak_path_member_step(const QoreHashObjectDereferenceOperatorNo
         mem = key.get<const QoreStringNode>()->c_str();
     }
     const qore_class_private* cls = qore_class_private::get(*qc);
+    // a class with memberGate(): the read takes a member that the object holds and that is accessible without it,
+    // which the step checks when it runs (LValueHelper::weakSourceMemberIsLValue(), qore#7351)
     if (cls->parseHasMemberGate()) {
-        return false;
+        return true;
     }
     // the class was initialized by the parse of the member access that gives the step its type; a class that is not
     // initialized has no members yet, and the step is then not made unique.  No initialization is started here: the

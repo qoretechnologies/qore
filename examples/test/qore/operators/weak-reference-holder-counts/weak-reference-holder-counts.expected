@@ -17,4 +17,18 @@ destroyed x5
 weak remove: {}
 weak remove: removed: null
 destroyed c5
+destroyed x6
+slice remove: [], holder count consistent: True
+slice remove: removed: null
+destroyed c6
+destroyed x7
+expression: HASH-ERROR
+expression: member: {}
+expression: removed: null
+destroyed x8
+slice path: HASH-ERROR
+slice path: member: {}
+slice path: removed: null
+destroyed c8
+memberGate class: g1: {added: 1}, g2: {}, gated: "gate:other"
 done

@@ -1393,63 +1393,6 @@ bool qore_removed_object_needs_scan(RObject* o, RObject* root) {
     return !root->hasInValidSet(*o);
 }
 
-void qore_scan_weak_written_value_objects(QoreValue v, RObject* root, ExceptionSink* xsink) {
-    if (!needs_scan(v)) {
-        return;
-    }
-    // an object written directly, the common case, needs no walk and allocates nothing
-    if (v.getType() == NT_OBJECT) {
-        qore_object_private* o = const_cast<qore_object_private*>(qore_object_private::get(*v.get<const QoreObject>()));
-        if (o != root) {
-            RSetHelper rsh(*o, xsink);
-        }
-        return;
-    }
-    std::vector<const AbstractQoreNode*> todo;
-    std::unordered_set<const AbstractQoreNode*> visited;
-    auto add = [&todo, &visited] (QoreValue val) {
-        if (!needs_scan(val)) {
-            return;
-        }
-        const AbstractQoreNode* n = val.getInternalNode();
-        if (n && visited.insert(n).second) {
-            todo.push_back(n);
-        }
-    };
-    add(v);
-    while (!todo.empty()) {
-        const AbstractQoreNode* n = todo.back();
-        todo.pop_back();
-        switch (n->getType()) {
-            case NT_OBJECT: {
-                // the scan of an object follows the values it holds; its members are not walked here
-                qore_object_private* o = const_cast<qore_object_private*>(
-                    qore_object_private::get(*static_cast<const QoreObject*>(n)));
-                if (o != root) {
-                    RSetHelper rsh(*o, xsink);
-                }
-                break;
-            }
-            case NT_LIST: {
-                ConstListIterator li(static_cast<const QoreListNode*>(n));
-                while (li.next()) {
-                    add(li.getValue());
-                }
-                break;
-            }
-            case NT_HASH: {
-                ConstHashIterator hi(static_cast<const QoreHashNode*>(n));
-                while (hi.next()) {
-                    add(hi.get());
-                }
-                break;
-            }
-            default:
-                break;
-        }
-    }
-}
-
 //! scans the objects in a recursive set that a removed value holds, directly or in its lists and hashes (#6335)
 void qore_scan_removed_value_objects(QoreValue v, RObject* root, ExceptionSink* xsink) {
     if (!needs_scan(v)) {
@@ -3070,6 +3013,33 @@ QoreValue QoreObject::evalMember(const char* mem, ExceptionSink* xsink) {
 
 QoreValue qore_object_private::evalMember(QoreObject* obj, const std::string& mem, ExceptionSink* xsink) {
     return obj->priv->evalMember(mem.c_str(), mem.size(), xsink);
+}
+
+bool qore_object_private::memberReadRunsNoCode(const char* mem) const {
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    size_t len = strlen(mem);
+    if (cls->findAccessorMember(mem, len)) {
+        return false;
+    }
+    if (!cls->memberGate) {
+        return true;
+    }
+    // the class context and the access check of evalMember()
+    const qore_class_private* class_ctx = runtime_get_class();
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
+        class_ctx = qore_class_private::runtimeGetMemberStorageContext(*theclass, mem, class_ctx);
+    }
+    const qore_class_private* member_class_ctx = nullptr;
+    if (checkMemberAccess(mem, len, class_ctx, member_class_ctx)) {
+        return false;
+    }
+    // memberGate() is run for a member that the object does not hold
+    QoreAutoVarRWReadLocker al(rml);
+    if (status == OS_DELETED) {
+        return true;
+    }
+    const QoreHashNode* odata = member_class_ctx ? getInternalData(member_class_ctx) : data;
+    return odata && qore_hash_private::get(*odata)->existsKey(mem);
 }
 
 QoreValue qore_object_private::evalMember(const char* mem, size_t len, ExceptionSink* xsink) {

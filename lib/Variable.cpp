@@ -1193,8 +1193,6 @@ LValueHelper::~LValueHelper() {
 
     bool obj_chg = before;
     bool obj_ref = false;
-    // the value written through a weak reference, whose objects are scanned (qore#7318)
-    QoreValue weak_written;
 
     // the object counts and the scan follow the values that the lvalue's containers hold now, also when the operation
     // raised an exception: one that raised after changing a container, such as a merge that stored a key before it
@@ -1252,15 +1250,6 @@ LValueHelper::~LValueHelper() {
         if (robj) {
             robj->tRef();
             obj_ref = true;
-        }
-        // a write through a weak reference: the holders of the container that it changed are not on the path, so a
-        // cycle that it made through the container is found from the objects of the value written, which is taken
-        // before the locks are released (qore#7318)
-        if (path_has_weak_step && obj_chg) [[unlikely]] {
-            QoreValue written = val ? val->getValue() : *qv;
-            if (needs_scan(written)) {
-                weak_written = written.refSelf();
-            }
         }
         //printd(5, "LValueHelper::~LValueHelper() robj: %p before: %d rdt: %d obj_chg: %d (val: %s qv: %s v: %s)\n",
         //    robj, before, rdt, obj_chg, val ? val->getTypeName() : "n/a", qv ? qv->getTypeName() : "n/a",
@@ -1392,14 +1381,6 @@ LValueHelper::~LValueHelper() {
         }
     }
 
-    if (weak_written.hasNode()) [[unlikely]] {
-#ifdef DEBUG
-        ++lvalue_scan_count;
-#endif
-        qore_scan_weak_written_value_objects(weak_written, robj, vl.xsink);
-        weak_written.discard(vl.xsink);
-    }
-
     // Release the values the write replaced or removed only now, after the scan: the recursive sets they were in
     // still count the edges that pointed at them until that scan has repaired them, so releasing one before it
     // would compare what is left of its references - from outside the set - with those counts, find them equal,
@@ -1507,7 +1488,9 @@ int LValueHelper::weakSourceReadStep(const QoreValue& key, bool member, bool str
     assert(weak_source_resolution);
     if (!weak_source_read) {
         // the value reached, which the step is read from
-        weak_source_read.reset(new WeakSourceRead(getValue().refSelf()));
+        // allocated before the reference is taken, so that nothing is left behind if the allocation throws
+        weak_source_read.reset(new WeakSourceRead);
+        weak_source_read->setValue(getValue().refSelf());
         clearPtr();
     }
     weak_source_read->addStep(key, member, string_index_char, negative_offsets);
@@ -1531,10 +1514,9 @@ bool LValueHelper::weakSourceIndexNeedsRead(const QoreValue& index) const {
 }
 
 bool LValueHelper::weakSourceMemberIsLValue(QoreObject* o, const char* mem) {
-    const qore_class_private* cls = qore_class_private::get(*o->getClass());
-    // memberGate() gives a member that the object does not have, and an accessor runs Qore code, which a read runs
-    // after the lvalue is released
-    return !cls->memberGate && !cls->findAccessorMember(mem);
+    // memberGate() gives a member that the object does not hold or that is not accessible, and an accessor runs Qore
+    // code, which a read runs after the lvalue is released
+    return qore_object_private::get(*o)->memberReadRunsNoCode(mem);
 }
 
 //! the nesting depth from which removedValue() continues without recursion (qore#6117)
@@ -4035,12 +4017,16 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
         if (n.getType() == NT_OBJECT) {
             n = new WeakReferenceNode(n.get<QoreObject>());
             saveTemp(old);
-        } else if (n.getType() == NT_HASH) {
-            n = new WeakHashReferenceNode(n.get<QoreHashNode>());
+        } else if (n.getType() == NT_HASH || n.getType() == NT_LIST) {
+            // the container that the weak reference designates: pinned, or a pinned copy of the container of an
+            // expression, which the helper holds until the caller has taken it as the value of the assignment
+            // (qore#7318)
             saveTemp(old);
-        } else if (n.getType() == NT_LIST) {
-            n = new WeakListReferenceNode(n.get<QoreListNode>());
-            saveTemp(old);
+            QoreValue target = qore_weak_source_container(old);
+            saveTemp(target);
+            n = target.getType() == NT_HASH
+                ? QoreValue(new WeakHashReferenceNode(target.get<QoreHashNode>()))
+                : QoreValue(new WeakListReferenceNode(target.get<QoreListNode>()));
         }
     } else if (mode == AssignmentMode::Opaque) {
         // an opaque reference keeps the strong reference the value already carries but stores it in
@@ -5313,7 +5299,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                 }
             }
             if (needs_scan(*v)) {
-                if (!qore_list_private::getScanCount(*l))
+                if (!qore_list_private::needsScan(*l))
                     lvh.setRemovalDelta(-1, lt == NT_WEAKREF_LIST);
             }
             discard(rv.assignInitial(v.release()), xsink);
@@ -5502,7 +5488,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
             }
 
             if (needs_scan(*v)) {
-                if (!qore_list_private::getScanCount(*l))
+                if (!qore_list_private::needsScan(*l))
                     lvh.setRemovalDelta(-1, lt == NT_WEAKREF_LIST);
             }
             discard(rv.assignInitial(v.release()), xsink);

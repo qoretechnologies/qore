@@ -90,12 +90,104 @@ sub weak_write_then_weak_remove() {
     printf("weak remove: removed: %y\n", c.holder.inner);
 }
 
+# a list slice removed from a list that a weak reference pins (the list still needs a scan): its holder keeps
+# counting it, and the removal of the list from its holder is counted right
+sub slice_remove_from_pinned_list() {
+    C c("c6");
+    c.holder = {"l": new list<auto!>((1, 2, 3))};
+    auto w;
+    w := c.holder.l;
+    c.holder.l[1] = new C("x6");
+    remove c.holder.l[1, 2];
+    list<int> k = (0,);
+    remove c.holder.l[k];
+    printf("slice remove: %y, holder count consistent: %y\n", c.holder.l, check_count(c.holder, 1));
+    remove c.holder.l;
+    printf("slice remove: removed: %y\n", c.holder.l);
+}
+
+class Hd {
+    public {
+        hash<auto> h = {};
+    }
+
+    hash<auto> get() {
+        return h;
+    }
+}
+
+# a weak reference made from an expression (a call result that the object also holds) designates a copy of its own,
+# a temporary of the statement: a change through it later raises HASH-ERROR and does not change the object's member,
+# and the object's counts stay right (qore#7318)
+sub expression_source_copy() {
+    Hd hd();
+    auto w;
+    w := hd.get();
+    try {
+        w.o = new C("x7");
+        printf("expression: written\n");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("expression: %s\n", ex.err);
+    }
+    printf("expression: member: %y\n", hd.h);
+    remove hd.h;
+    printf("expression: removed: %y\n", hd.h);
+}
+
+# a path that a slice stops is read as an expression: the weak reference designates a copy of its own
+sub slice_path_source_copy() {
+    C c("c8");
+    c.holder = {"a": {}};
+    list<string> k = ("a",);
+    auto w;
+    w := c.holder{k}.a;
+    try {
+        w.o = new C("x8");
+        printf("slice path: written\n");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("slice path: %s\n", ex.err);
+    }
+    printf("slice path: member: %y\n", c.holder.a);
+    remove c.holder.a;
+    printf("slice path: removed: %y\n", c.holder.a);
+}
+
+class Gated {
+    public {
+        hash<auto> real = {};
+    }
+
+    auto memberGate(string m) {
+        return "gate:" + m;
+    }
+}
+
+# a declared member of a class with memberGate() is read without memberGate(): it is made unique as an lvalue, so the
+# literal that initializes it is not changed through the weak reference
+sub member_gate_declared_member() {
+    Gated g1();
+    auto w;
+    w := g1.real;
+    w.added = 1;
+    Gated g2();
+    printf("memberGate class: g1: %y, g2: %y, gated: %y\n", g1.real, g2.real, g1.other);
+}
+
+# true if the object count of a container is as expected (dbg_get_scan_count() exists in debug builds only)
+bool sub check_count(auto v, int expected) {
+    return exists_function("dbg_get_scan_count") ? call_function("dbg_get_scan_count", v) == expected : True;
+}
+
 const Cases = {
     "list_element_then_remove": \list_element_then_remove(),
     "hash_key_then_remove": \hash_key_then_remove(),
     "append_then_remove": \append_then_remove(),
     "cycle_through_weak_write": \cycle_through_weak_write(),
     "weak_write_then_weak_remove": \weak_write_then_weak_remove(),
+    "slice_remove_from_pinned_list": \slice_remove_from_pinned_list(),
+    "expression_source_copy": \expression_source_copy(),
+    "slice_path_source_copy": \slice_path_source_copy(),
+    "member_gate_declared_member": \member_gate_declared_member(),
 };
 
 # a case named on the command line runs alone

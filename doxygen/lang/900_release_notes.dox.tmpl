@@ -107,6 +107,12 @@
     that created the connection (see @ref sandbox_lent_connections;
     <a href="https://github.com/qoretechnologies/qore/issues/7262">issue 7262</a>).
 
+    @par A Weak Reference Made From an Expression Designates a Copy of Its Own
+    A @ref weak_assignment_operator "weak assignment" from a call or another expression that gives a hash or a list
+    designates a copy of it, which lives until the end of the statement, so that a change through the weak reference no
+    longer changes another holder of the value; one from a path whose steps have no type designates the path's own
+    container (<a href="https://github.com/qoretechnologies/qore/issues/7318">issue 7318</a>).
+
     @par A Weak Assignment From a Member, a Hash Key or a List Element Designates Its Own Container
     A @ref weak_assignment_operator "weak assignment" from a member, a hash key or a list element first gives a shared
     container a copy of its own, as from a variable, so that a change through it no longer changes another owner, and

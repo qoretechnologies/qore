@@ -541,6 +541,7 @@ uint64_t qore_rt_make_weak_value(uint64_t value, ExceptionSink* xsink);
 //! Returns an owned value: an opaque reference (which owns its target) for supported types,
 //! or an extra reference to unsupported node values.
 uint64_t qore_rt_make_opaque_value(uint64_t value, ExceptionSink* xsink);
+uint64_t qore_rt_weak_source_container(uint64_t value);
 
 //! Load a NaN-boxed QoreValue from a local variable on the Qore thread-local
 //! variable stack.

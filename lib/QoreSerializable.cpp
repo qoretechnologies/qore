@@ -1006,6 +1006,9 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
                 if (qore_set_indexed_hash_type(**holder, *oh, xsink)) {
                     return QoreValue();
                 }
+                // a weak reference in the data can designate it: it is pinned before any container holds it, so that
+                // its holders count it as needing a scan from the start (qore#7318)
+                qore_weak_target_pin(QoreValue(*holder));
                 assert(context.oimap.find(key) == context.oimap.end());
                 context.oimap.insert(oimap_t::value_type(key, holder.release()));
             } else if (hashdeclListSerializationInfo->equal(oh->getHashDecl())) {
@@ -1013,6 +1016,9 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
                 if (qore_set_indexed_list_type(**holder, *oh, xsink)) {
                     return QoreValue();
                 }
+                // a weak reference in the data can designate it: it is pinned before any container holds it, so that
+                // its holders count it as needing a scan from the start (qore#7318)
+                qore_weak_target_pin(QoreValue(*holder));
                 assert(context.oimap.find(key) == context.oimap.end());
                 context.oimap.insert(oimap_t::value_type(key, holder.release()));
             } else {

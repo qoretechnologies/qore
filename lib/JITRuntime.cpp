@@ -238,6 +238,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_throwing) },
     { "qore_rt_make_weak_value", reinterpret_cast<void*>(&qore_rt_make_weak_value) },
     { "qore_rt_make_opaque_value", reinterpret_cast<void*>(&qore_rt_make_opaque_value) },
+    { "qore_rt_weak_source_container", reinterpret_cast<void*>(&qore_rt_weak_source_container) },
     { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
     { "qore_rt_take_param", reinterpret_cast<void*>(&qore_rt_take_param) },
     { "qore_rt_take_param_aot", reinterpret_cast<void*>(&qore_rt_take_param_aot) },
@@ -2858,6 +2859,12 @@ extern "C" DLLEXPORT void qore_rt_sync_local(LocalVar* var, uint64_t value) {
     if (xsink) {
         xsink.clear();
     }
+}
+
+//! the container that a weak assignment of \a value designates, owned by the caller (see
+//! qore_weak_source_container(), qore#7318)
+extern "C" DLLEXPORT uint64_t qore_rt_weak_source_container(uint64_t value) {
+    return toBits(qore_weak_source_container(fromBits(value)));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_weak_value(uint64_t value, ExceptionSink* xsink) {

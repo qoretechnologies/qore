@@ -208,12 +208,6 @@ class VRMutex;
     which does not reach them when the removed edge was its only path to them (#6335).
 */
 DLLLOCAL void qore_scan_removed_value_objects(QoreValue v, RObject* root, ExceptionSink* xsink);
-//! scans each object of a value written through a weak reference, directly or in its lists and hashes, other than
-//! \a root, which the caller scanned (qore#7318)
-/** The containers and objects that hold the container that the write changed are not on the lvalue's path, so a
-    cycle that the write made through it is found from the objects of the value written
-*/
-DLLLOCAL void qore_scan_weak_written_value_objects(QoreValue v, RObject* root, ExceptionSink* xsink);
 
 //! Marks the objects in \a v as constants of the whole process, whose members no code can change (qore#6749)
 /** Called for the value of each builtin constant of the library and of binary modules (QoreNamespace::addConstant(),
@@ -633,6 +627,13 @@ public:
 
     //! returns the value of the member \a mem of \a len bytes as QoreObject::evalMember() (qore#7194)
     DLLLOCAL QoreValue evalMember(const char* mem, size_t len, ExceptionSink* xsink);
+
+    //! returns true if evalMember() reads the member \a mem without running Qore code: the class has no
+    //! memberGate() or the member is accessible in the current class context and the object holds it, and the
+    //! member has no accessors (qore#7351)
+    /** As evalMember() decides; the object's data is read under its lock
+    */
+    DLLLOCAL bool memberReadRunsNoCode(const char* mem) const;
 
     //! returns the value of the member \a mem of \a obj as QoreObject::evalMember() (qore#7194)
     /** Not inline, so that a call from the IR interpreter's dispatch loop is as small as a call of

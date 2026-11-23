@@ -786,8 +786,12 @@ private:
 */
 class WeakSourceRead {
 public:
-    //! takes the reference of \a value, the value of the path where the lvalue stopped
-    DLLLOCAL explicit WeakSourceRead(QoreValue value) : value(value) {
+    DLLLOCAL WeakSourceRead() = default;
+
+    //! takes the reference of \a v, the value of the path where the lvalue stopped
+    DLLLOCAL void setValue(QoreValue v) {
+        assert(!value.hasNode());
+        value = v;
     }
 
     //! releases the values that read() did not take
@@ -1332,7 +1336,8 @@ public:
     DLLLOCAL bool weakSourceIndexNeedsRead(const QoreValue& index) const;
 
     //! returns true if the member \a mem of \a o is read through an lvalue as an rvalue reads it: a member without
-    //! accessors, in a class without memberGate(); the access to the member is checked as for a read (qore#7351)
+    //! accessors that a read takes without memberGate(); the access to the member is checked as for a read
+    //! (qore#7351)
     DLLLOCAL static bool weakSourceMemberIsLValue(QoreObject* o, const char* mem);
 
     //! Finishes the parent lvalue before a callback that can replace or remove it

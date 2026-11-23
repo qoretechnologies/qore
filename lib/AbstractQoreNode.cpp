@@ -1220,6 +1220,33 @@ void qore_weak_target_pin(const QoreValue& v) {
     }
 }
 
+QoreValue qore_weak_source_container(const QoreValue& v) {
+    AbstractQoreNode* copy;
+    switch (v.getType()) {
+        case NT_LIST: {
+            const QoreListNode* l = v.get<const QoreListNode>();
+            if (qore_list_private::isPinned(*l)) {
+                return v.refSelf();
+            }
+            copy = l->realCopy();
+            break;
+        }
+        case NT_HASH: {
+            const QoreHashNode* h = v.get<const QoreHashNode>();
+            if (qore_hash_private::isPinned(*h)) {
+                return v.refSelf();
+            }
+            copy = h->realCopy();
+            break;
+        }
+        default:
+            return v.refSelf();
+    }
+    QoreValue rv(copy);
+    qore_weak_target_pin(rv);
+    return rv;
+}
+
 void qore_weak_target_pin_copy(const AbstractQoreNode* orig, const AbstractQoreNode* copy) {
     switch (get_node_type(orig)) {
         case NT_LIST:

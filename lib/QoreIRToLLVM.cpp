@@ -1763,6 +1763,8 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
             llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_make_opaque_value",
             llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_weak_source_container",
+            llvm::FunctionType::get(i64_type, {i64_type}, false));
 
     // Invoke helpers
     module.getOrInsertFunction("qore_rt_invoke_expr",
@@ -21417,6 +21419,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     registerInvokeCleanupAlloca(cleanup);
                 }
                 if (qore_assignment_mode_converts_value(linst->mode)) {
+                    if (linst->mode == AssignmentMode::Weak) {
+                        // the container that the weak reference designates: pinned, or a pinned copy of the
+                        // container of an expression, held until the end of the statement as the value of the
+                        // assignment (qore#7318)
+                        auto source_fn = module.getOrInsertFunction("qore_rt_weak_source_container",
+                                llvm::FunctionType::get(i64_type, {i64_type}, false));
+                        llvm::Value* source = builder->CreateCall(source_fn, {boxed});
+                        track_owned_value_cleanup(source, "weak_source_cleanup_outer");
+                        boxed = source;
+                    }
                     auto weak_fn = module.getOrInsertFunction(
                             qore_assignment_mode_value_helper(linst->mode),
                             llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
@@ -21898,6 +21910,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
             if (qore_assignment_mode_converts_value(linst->mode)) {
+                if (linst->mode == AssignmentMode::Weak) {
+                    // see the store of an outer-scope local above (qore#7318)
+                    auto source_fn = module.getOrInsertFunction("qore_rt_weak_source_container",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    llvm::Value* source = builder->CreateCall(source_fn, {boxed});
+                    llvm::AllocaInst* source_cleanup = track_owned_value_cleanup(source, "weak_source_cleanup");
+                    if (block_scoped_locals.count(key)) {
+                        local_cleanup_allocas[key].push_back(source_cleanup);
+                    }
+                    boxed = source;
+                }
                 auto weak_fn = module.getOrInsertFunction(
                         qore_assignment_mode_value_helper(linst->mode),
                         llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));

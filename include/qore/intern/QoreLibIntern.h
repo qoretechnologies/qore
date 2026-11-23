@@ -541,6 +541,13 @@ DLLLOCAL bool needs_scan(const QoreValue& v);
     nothing but a variable, or the lvalue helper whose path holds it writes the change up the path
 */
 DLLLOCAL void qore_weak_target_pin(const QoreValue& v);
+//! returns the list or hash that a weak assignment of \a v designates (qore#7318), with a reference of its own
+/** \a v itself if a weak reference pins it (the source of the assignment was made unique through a path or in a
+    variable), otherwise a copy of \a v, which is pinned: the container of an expression can have holders that a
+    pin would not count right, and a weak reference made from an expression designates a value of its own.  A value
+    of another type is returned with a new reference.
+*/
+DLLLOCAL QoreValue qore_weak_source_container(const QoreValue& v);
 //! pins \a copy if \a orig, which it is a copy-on-write copy of, is pinned (qore#7318)
 DLLLOCAL void qore_weak_target_pin_copy(const AbstractQoreNode* orig, const AbstractQoreNode* copy);
 

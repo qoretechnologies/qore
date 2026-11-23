@@ -20,8 +20,9 @@
     updated the object count of that container, but not those of the containers and objects that hold it, which are
     not on the lvalue's path: a later removal subtracted from a count of 0 (an assertion failure in a debug build),
     and a cycle made through such a change was not collected.  The target of a weak reference is now pinned (it
-    always needs a scan, so what is stored in it does not change the counts of its holders), and a write through a
-    weak reference scans the objects of the value written.  Every mode must print the expected output.
+    always needs a scan, so what is stored in it does not change the counts of its holders, whose scans find such a
+    cycle), and a weak reference made from an expression designates a pinned copy of its own.  Every mode must print
+    the expected output.
 
     The program is in \c weak-reference-holder-counts/.
 */
