@@ -2231,13 +2231,17 @@ QoreValue MethodCallNode::exec(LexicalSemanticPolicy policy, QoreObject* o, Exce
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE QoreValue MethodCallNode::execPseudoImpl(LexicalSemanticPolicy policy, const QoreValue n, ExceptionSink* xsink) const {
    //printd(5, "MethodCallNode::execPseudo() %s::%s() variant: %p\n", qc->getName(), method->getName(), variant);
-   // if n is nothing make sure and use the "<nothing>" class with a dynamic method lookup
+   // if the value is not of the type that the method was resolved for (nothing, or any other type that the parser did
+   // not expect, qore#7363), look the method up by name for the value's own type
    RuntimeConfig& rc = rc_get_current_ref();
    QoreRcCallSiteHelper call_site(rc, loc);
-   if (n.isNothing() && qc != QC_PSEUDONOTHING)
-      return qore_class_private::get(*QC_PSEUDONOTHING)->evalPseudoMethodWithPolicy<Lexical>(policy, n, method->getName(), args, rc, xsink);
-   else
-      return qore_class_private::get(*qc)->evalPseudoMethodWithPolicy<Lexical>(policy, method, variant, n, args, rc, xsink);
+   if (__builtin_expect(!qore_pseudo_receiver_accepts(qc, n), 0)) {
+      if constexpr (Lexical) {
+         return pseudo_classes_eval(policy, n, method->getName(), args, xsink);
+      }
+      return pseudo_classes_eval(n, method->getName(), args, xsink);
+   }
+   return qore_class_private::get(*qc)->evalPseudoMethodWithPolicy<Lexical>(policy, method, variant, n, args, rc, xsink);
 }
 
 QoreValue MethodCallNode::execPseudo(const QoreValue n, ExceptionSink* xsink) const {
