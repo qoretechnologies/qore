@@ -11012,6 +11012,14 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
     // variable is not read again, as it can have been assigned in between (qore#5847).  The step of an untyped local
     // keeps the local in IR storage (see QoreIRFunction::computeIROnlyLocals()).
     QoreIRValue unique_source;
+    // a ?: or ?? operator that chooses a source that is made unique (qore#7342)
+    if (assign_mode == AssignmentMode::Weak && !qore_weak_assignment_source_made_unique(right_expr)
+            && qore_weak_assignment_source_chooses(right_expr)) {
+        unique_source = lowerWeakSource(right_expr, assign->loc, error);
+        if (!unique_source.isValid()) {
+            return QoreIRValue();
+        }
+    }
     if (assign_mode == AssignmentMode::Weak && qore_weak_assignment_source_made_unique(right_expr)) {
         QoreIRValue unique = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary, right_expr, nullptr, assign->loc,
             error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::EnsureUnique);
@@ -27631,6 +27639,101 @@ QoreIRValue QoreIRLowering::lowerValueCoalescing(const QoreValue& expr, std::str
         {right_value, rhs_exit_block},
     };
     return builder.createPhi(incoming)->result;
+}
+
+QoreIRValue QoreIRLowering::lowerWeakUniqueSource(const QoreValue& expr, const QoreProgramLocation* loc,
+        std::string& error) {
+    QoreIRValue unique = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary, expr, nullptr, loc, error,
+        AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::EnsureUnique);
+    if (!unique.isValid()) {
+        if (error.empty()) {
+            error = "unsupported variable for weak assignment IR lowering";
+        }
+        return QoreIRValue();
+    }
+    auto* source_var = dynamic_cast<const VarRefNode*>(expr.getInternalNode());
+    bool shared_source = !source_var;  // a class static variable or a path
+    if (source_var) {
+        qore_var_t vt = source_var->getType();
+        shared_source = vt == VT_GLOBAL || vt == VT_CLOSURE || vt == VT_LOCAL_TS
+            || ((vt == VT_LOCAL) && source_var->ref.id
+                && (source_var->ref.id->closureUse() || source_var->ref.id->isTopLevel()));
+    }
+    return shared_source ? unique : lowerExpression(expr, error);
+}
+
+QoreIRValue QoreIRLowering::lowerWeakSource(const QoreValue& expr, const QoreProgramLocation* loc,
+        std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!ensureBuilderContext(error)) {
+        return QoreIRValue();
+    }
+    if (auto* ternary = dynamic_cast<const QoreQuestionMarkOperatorNode*>(node)) {
+        QoreIRValue cond_bool = lowerConsumedTruthValue(ternary->get(0), ternary->loc, error);
+        if (!cond_bool.isValid()) {
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* left_block = createBlock("weak.ternary.then");
+        QoreIRBasicBlock* right_block = createBlock("weak.ternary.else");
+        QoreIRBasicBlock* merge_block = createBlock("weak.ternary.merge");
+        if (!left_block || !right_block || !merge_block) {
+            error = "IR builder failed to create blocks for the ternary source of a weak assignment";
+            return QoreIRValue();
+        }
+        builder.createBranchIf(cond_bool, left_block, right_block);
+        builder.setBlock(left_block);
+        QoreIRValue left_value = lowerWeakSource(ternary->get(1), loc, error);
+        if (!left_value.isValid()) {
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* left_exit_block = builder.getBlock();
+        builder.createBranch(merge_block);
+        builder.setBlock(right_block);
+        QoreIRValue right_value = lowerWeakSource(ternary->get(2), loc, error);
+        if (!right_value.isValid()) {
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* right_exit_block = builder.getBlock();
+        builder.createBranch(merge_block);
+        setJoinBlock(merge_block);
+        std::vector<QoreIRPhiIncoming> incoming = {
+            {left_value, left_exit_block},
+            {right_value, right_exit_block},
+        };
+        return builder.createPhi(incoming)->result;
+    }
+    if (auto* coalesce = dynamic_cast<const QoreNullCoalescingOperatorNode*>(node)) {
+        QoreIRValue left_value = lowerWeakSource(coalesce->getLeft(), loc, error);
+        if (!left_value.isValid()) {
+            return QoreIRValue();
+        }
+        QoreIRValue is_null = builder.createUnaryOp(QoreIROpcode::IsNullOrNothing, left_value)->result;
+        QoreIRBasicBlock* left_block = builder.getBlock();
+        QoreIRBasicBlock* rhs_block = createBlock("weak.coalesce.rhs");
+        QoreIRBasicBlock* merge_block = createBlock("weak.coalesce.merge");
+        if (!rhs_block || !merge_block) {
+            error = "IR builder failed to create blocks for the null coalescing source of a weak assignment";
+            return QoreIRValue();
+        }
+        builder.createBranchIf(is_null, rhs_block, merge_block);
+        builder.setBlock(rhs_block);
+        QoreIRValue right_value = lowerWeakSource(coalesce->getRight(), loc, error);
+        if (!right_value.isValid()) {
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* rhs_exit_block = builder.getBlock();
+        builder.createBranch(merge_block);
+        setJoinBlock(merge_block);
+        std::vector<QoreIRPhiIncoming> incoming = {
+            {left_value, left_block},
+            {right_value, rhs_exit_block},
+        };
+        return builder.createPhi(incoming)->result;
+    }
+    if (qore_weak_assignment_source_made_unique(expr)) {
+        return lowerWeakUniqueSource(expr, loc, error);
+    }
+    return lowerExpression(expr, error);
 }
 
 QoreIRValue QoreIRLowering::lowerQuestionMark(const QoreValue& expr, std::string& error) {

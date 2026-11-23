@@ -101,7 +101,7 @@ sub slice_remove_from_pinned_list() {
     remove c.holder.l[1, 2];
     list<int> k = (0,);
     remove c.holder.l[k];
-    printf("slice remove: %y, holder count consistent: %y\n", c.holder.l, check_count(c.holder, 1));
+    printf("slice remove: %y, holder count consistent: %y\n", c.holder.l, check_count(\c.holder, 1));
     remove c.holder.l;
     printf("slice remove: removed: %y\n", c.holder.l);
 }
@@ -173,9 +173,11 @@ sub member_gate_declared_member() {
     printf("memberGate class: g1: %y, g2: %y, gated: %y\n", g1.real, g2.real, g1.other);
 }
 
-# true if the object count of a container is as expected (dbg_get_scan_count() exists in debug builds only)
-bool sub check_count(auto v, int expected) {
-    return exists_function("dbg_get_scan_count") ? call_function("dbg_get_scan_count", v) == expected : True;
+# true if the object count of the container that \a v names is as expected (dbg_get_scan_count() exists in debug
+# builds only); the container is read through the reference, as a container that holds a weakly referenced one is
+# passed to a function as a copy of its own
+bool sub check_count(reference<auto> v, int expected) {
+    return exists_function("dbg_get_scan_count") ? call_function("dbg_get_scan_count", \v) == expected : True;
 }
 
 const Cases = {

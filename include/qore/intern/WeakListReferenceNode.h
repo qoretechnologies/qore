@@ -37,10 +37,12 @@ class WeakListReferenceNode : public AbstractQoreNode {
 public:
     DLLLOCAL WeakListReferenceNode(QoreListNode* l) : AbstractQoreNode(NT_WEAKREF_LIST, false, true), l(l) {
         l->weakRef();
+        qore_weak_holder(l, 1);
     }
 
     DLLLOCAL WeakListReferenceNode(const WeakListReferenceNode& old) : AbstractQoreNode(old), l(old.l) {
         l->weakRef();
+        qore_weak_holder(l, 1);
     }
 
     //! Returns a new reference to the list, or a new empty list that cannot be changed if its last reference was released
@@ -72,6 +74,8 @@ protected:
     static QoreString nstr;
 
     DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        // before the weak reference is released, which can delete the list
+        qore_weak_holder(l, -1);
         l->weakDeref();
         return true;
     }

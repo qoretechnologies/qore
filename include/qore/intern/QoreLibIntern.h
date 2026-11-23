@@ -536,6 +536,43 @@ DLLLOCAL q_method_t qore_get_lexical_program_method(q_method_t method);
 // returns true if the node needs to be scanned for recursive references or not
 DLLLOCAL bool needs_scan(const AbstractQoreNode* n);
 DLLLOCAL bool needs_scan(const QoreValue& v);
+//! returns true if the list or hash \a n gives a new holder a copy (out of line; see qore_weak_shared())
+DLLLOCAL bool qore_weak_shared_container(const AbstractQoreNode* n);
+//! returns true if \a n is a list or hash that a weak reference designates, whatever holds it (qore#7342)
+DLLLOCAL bool qore_weak_designated_container(const AbstractQoreNode* n);
+//! returns true if \a v is a list or hash that a new holder takes as a copy of its own: a weak reference designates
+//! it, and another strong holder holds it, so that it is shared, not moved (qore#7342); the tag and the type are tested
+//! inline
+static inline bool qore_weak_shared(const QoreValue& v) {
+    // QoreValue::getType() is not inline
+    if (!v.isPlainPointer()) {
+        return false;
+    }
+    const AbstractQoreNode* n = v.getPtr();
+    qore_type_t t = n->getType();
+    return (t == NT_HASH || t == NT_LIST) && qore_weak_shared_container(n);
+}
+//! takes \a v, a list or hash that qore_weak_shared() is true for, and returns a copy of its own (qore#7342); the
+//! values in it are shared
+DLLLOCAL QORE_INTERN_NOINLINE __attribute__((cold)) QoreValue qore_weak_share_copy(QoreValue v, ExceptionSink* xsink);
+//! the value that a new holder stores: a list or hash that qore_weak_shared() is true for is replaced by a copy of its
+//! own (qore#7342); returns true if the value stored needs a scan
+/** A container that qore_weak_shared() is true for needs a scan (a weak reference pins it), so the test is made only
+    for such a value
+*/
+static inline bool qore_store_needs_scan(QoreValue& v) {
+    if (!needs_scan(v)) {
+        return false;
+    }
+    if (qore_weak_shared(v)) [[unlikely]] {
+        v = qore_weak_share_copy(v, nullptr);
+        return needs_scan(v);
+    }
+    return true;
+}
+//! raises (\a dt = 1) or releases (\a dt = -1) the count of the weak references that designate the list or hash
+//! \a n (qore#7342)
+DLLLOCAL void qore_weak_holder(const AbstractQoreNode* n, int dt);
 //! pins a list or hash that a weak reference designates (qore#7318); another value is left as it is
 /** The caller makes sure that the holders of the container count it as needing a scan: the container is held by
     nothing but a variable, or the lvalue helper whose path holds it writes the change up the path

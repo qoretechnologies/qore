@@ -1615,11 +1615,12 @@ const char* hash_assignment_priv::getKey() const {
 
 QoreValue hash_assignment_priv::swapImpl(QoreValue v) {
     assert(om);
+    // a weakly shared container is stored as a copy of its own (qore#7342)
+    bool after = qore_store_needs_scan(v);
     QoreValue old = om->val;
     om->val = v;
 
     bool before = needs_scan(old);
-    bool after = needs_scan(v);
     if (before) {
         if (!after) {
             if (o)

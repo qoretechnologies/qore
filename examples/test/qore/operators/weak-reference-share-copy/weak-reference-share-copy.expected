@@ -1,0 +1,16 @@
+local assignment: src: [9, 2], b: [1, 2]
+nested: src: [[9, 2], 3], b: [[9, 2], 3]
+parameter: src: [9, 2], p: [1, 2]
+parameter observed: src: [7, 2], r: [1, 2], i: 1
+list element: src: [9, 2], l: [[1, 2], [1, 2]]
+hash key: src: {a: 9}, h: {k: {a: 1}, k2: {a: 1}}
+object member: src: {a: 9}, o.m: {a: 1}
+return value: src: [9, 2], r: [1, 2]
+foreach: src: [[9, 2]], seen: [1, 2]
+member path: o.m: {x: {y: 9}}, copy: {x: {y: 9}}
+move remove: w: {a: 1, b: 2}
+move shift: wl: {x: 1, y: 2}
+move pop: wl2: {x: 1, y: 2}
+move extract: wl3: [9, 2]
+move call result: wf: {a: 1, b: 2}
+done

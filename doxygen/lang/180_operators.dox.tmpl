@@ -2576,8 +2576,20 @@ if (x || y)
     reference designates needs a scan by the garbage collector whatever it holds, so that a change made through a weak
     reference keeps the object counts of the containers and objects that hold it, and a recursive reference made
     through it is collected.\n<br>
+    A hash or a list that a weak reference designates is a value like any other: a variable that is assigned it, a
+    parameter, a list element, a hash key or an object member that is given it, and the variable of a
+    @ref foreach "foreach" loop take a copy of their own while another holder holds it, so that a change made through
+    the weak reference reaches only the holder that the weak reference was made from (ex: after
+    <tt>w := src; b = src;</tt>, <tt>w[0] = 9</tt> changes \c src but not \c b); one that nothing else holds (the
+    value of @ref remove "remove", @ref shift "shift", @ref pop "pop" or @ref extract "extract", or of a call that
+    gives a container that nothing else holds) is moved, and the weak reference designates it in its new holder; a
+    weak assignment from it designates it.  A container that only holds such a hash or list is shared as any other
+    value, and so is the hash or list in it: after <tt>w := src[0]; b = src;</tt>, <tt>w[0] = 9</tt> changes
+    <tt>b[0]</tt> too.  A module written in C++ that keeps a reference of its own to such a value, instead of a copy,
+    shares it.\n<br>
     The value of the operator is the value assigned, converted to the type of the lvalue, as a strong reference: a
-    variable, a container or a call that is given it holds the value.  A temporary value assigned, as in
+    call that is given it uses the value, and a variable or a container that is given a hash or a list from it takes a
+    copy of its own, as from any value that a weak reference designates (see above).  A temporary value assigned, as in
     <tt>w := new C()</tt>, and a copy that the type of the lvalue makes of a container (ex: a
     <tt>hash<string, int></tt> assigned to a \c hash variable) live until the end of the statement, as any temporary
     value does, so that the weak reference and the value of the operator designate them until then, in every

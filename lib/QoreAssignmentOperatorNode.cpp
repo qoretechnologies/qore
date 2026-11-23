@@ -885,13 +885,103 @@ bool qore_weak_assignment_source_made_unique(const QoreValue& right) {
     return qore_weak_assignment_path_source_made_unique(node);
 }
 
-bool QoreAssignmentOperatorNode::weakSourceMadeUnique() const {
+bool qore_weak_assignment_source_chooses(const QoreValue& right) {
+    const AbstractQoreNode* node = right.getInternalNode();
+    auto operand = [](const QoreValue& v) {
+        return qore_weak_assignment_source_made_unique(v) || qore_weak_assignment_source_chooses(v);
+    };
+    if (auto* q = dynamic_cast<const QoreQuestionMarkOperatorNode*>(node)) {
+        return operand(q->get(1)) || operand(q->get(2));
+    }
+    if (auto* nc = dynamic_cast<const QoreNullCoalescingOperatorNode*>(node)) {
+        return operand(nc->getLeft()) || operand(nc->getRight());
+    }
+    return false;
+}
+
+signed char QoreAssignmentOperatorNode::weakSourceState() const {
     signed char v = weak_source_unique.load(std::memory_order_relaxed);
     if (!v) {
-        v = qore_weak_assignment_source_made_unique(right) ? 2 : 1;
+        v = qore_weak_assignment_source_made_unique(right) ? 2 : (qore_weak_assignment_source_chooses(right) ? 3 : 1);
         weak_source_unique.store(v, std::memory_order_relaxed);
     }
-    return v == 2;
+    return v;
+}
+
+//! returns the value of a source of a weak assignment that is made unique (qore_weak_assignment_source_made_unique()),
+//! read by the step that makes its container unique and pins it, with a reference (qore#7242, qore#7318)
+static QoreValue qore_weak_source_value(const QoreValue& src, QoreProgram* pgm, ExceptionSink* xsink) {
+    // the steps of the path from the first one that an lvalue cannot take, which are read as the operators read them
+    // once the lvalue is released (qore#7351)
+    std::unique_ptr<WeakSourceRead> read_rest;
+    QoreValue rv;
+    {
+        LValueHelper source(src, xsink, LValueHelper::WeakSourceAccess());
+        if (*xsink) {
+            return QoreValue();
+        }
+        // a path that leads to no value (a missing key, an index beyond the end of a list, a step through NOTHING)
+        // gives NOTHING, as an rvalue read of it does, without being evaluated again
+        if (source) {
+            // a weak reference held by the source and a value of another type are left as they are; the operand
+            // evaluates a weak reference to its target
+            if (source.getType() == NT_HASH || source.getType() == NT_LIST) {
+                source.ensureUnique();
+                // the weak reference designates it: it is pinned, and the helper writes the change of its state up
+                // the path (qore#7318)
+                qore_weak_target_pin(source.getValue());
+            }
+            rv = source.getReferencedValue();
+        } else {
+            read_rest = source.takeWeakSourceRead();
+        }
+    }
+    if (read_rest) {
+        rv = read_rest->read(pgm, xsink);
+    }
+    return rv;
+}
+
+//! returns the value of the source of a weak assignment, with a reference: a ?: or ?? operator chooses its operand
+//! when it runs, which is made unique if it is a variable or a path, and read as an expression otherwise (qore#7342)
+static QoreValue qore_weak_resolve_source(const QoreValue& src, QoreProgram* pgm, ExceptionSink* xsink) {
+    const AbstractQoreNode* node = src.getInternalNode();
+    if (auto* q = dynamic_cast<const QoreQuestionMarkOperatorNode*>(node)) {
+        RuntimeConfig& rc = rc_get_current_ref();
+        bool cond;
+        {
+            ValueEvalRefHolder b(rc, q->get(0), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            // a temporary condition lives until the end of the statement, as the operator keeps it (qore#5712)
+            if (b.isTemp() && b->needsRef()) {
+                QoreStatementTempScope::holdReceiver(q->get(0), b, xsink);
+            }
+            cond = q->strictBoolean() ? LexicalSemanticPolicy::getAsBoolFor<true>(*b)
+                : LexicalSemanticPolicy::getAsBoolFor<false>(*b);
+        }
+        return qore_weak_resolve_source(cond ? q->get(1) : q->get(2), pgm, xsink);
+    }
+    if (auto* nc = dynamic_cast<const QoreNullCoalescingOperatorNode*>(node)) {
+        ValueHolder left(qore_weak_resolve_source(nc->getLeft(), pgm, xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (!left->isNullOrNothing()) {
+            return left.release();
+        }
+        return qore_weak_resolve_source(nc->getRight(), pgm, xsink);
+    }
+    if (qore_weak_assignment_source_made_unique(src)) {
+        return qore_weak_source_value(src, pgm, xsink);
+    }
+    // an expression
+    ValueEvalRefHolder v(src, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return v.takeReferencedValue();
 }
 
 QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& needs_deref,
@@ -1009,36 +1099,18 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreAssignmentOperatorNode::evalInternImpl(E
     ValueHolder unique_source(xsink);
     bool source_read = false;
     if (mode == AssignmentMode::Weak) {
-        if (weakSourceMadeUnique()) {
-            // the steps of the path from the first one that an lvalue cannot take, which are read as the operators read
-            // them once the lvalue is released (qore#7351)
-            std::unique_ptr<WeakSourceRead> read_rest;
-            {
-                LValueHelper source(right, xsink, LValueHelper::WeakSourceAccess());
-                if (*xsink) {
-                    return QoreValue();
-                }
-                // a path that leads to no value (a missing key, an index beyond the end of a list, a step through
-                // NOTHING) gives NOTHING, as an rvalue read of it does, without being evaluated again
-                if (source) {
-                    // a weak reference held by the source and a value of another type are left as they are; the
-                    // operand evaluates a weak reference to its target
-                    if (source.getType() == NT_HASH || source.getType() == NT_LIST) {
-                        source.ensureUnique();
-                        // the weak reference designates it: it is pinned, and the helper writes the change of its
-                        // state up the path (qore#7318)
-                        qore_weak_target_pin(source.getValue());
-                    }
-                    unique_source = source.getReferencedValue();
-                } else {
-                    read_rest = source.takeWeakSourceRead();
-                }
+        signed char state = weakSourceState();
+        if (state == 2) {
+            unique_source = qore_weak_source_value(right, getProgram(), xsink);
+            if (*xsink) {
+                return QoreValue();
             }
-            if (read_rest) {
-                unique_source = read_rest->read(getProgram(), xsink);
-                if (*xsink) {
-                    return QoreValue();
-                }
+            source_read = true;
+        } else if (state == 3) [[unlikely]] {
+            // a ?: or ?? operator: the operand that it chooses (qore#7342)
+            unique_source = qore_weak_resolve_source(right, getProgram(), xsink);
+            if (*xsink) {
+                return QoreValue();
             }
             source_read = true;
         }

@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class WeakReferenceShareCopyTest
+
+#! a list or hash that a weak reference designates is a value (qore#7342)
+/** A holder that took such a container (a variable assigned it, a parameter, a list element, a hash key, an object
+    member, the variable of a foreach loop) shared it, so that a change made through the weak reference reached that
+    holder too.  It now takes a copy of its own while another holder holds the container, and a change through the
+    weak reference reaches only the holder that the weak reference was made from, in every execution mode; a container
+    that nothing else holds is moved, and the weak reference follows it.  A container that only holds a weakly
+    referenced one is shared, as is the one in it (the documented limitation).  Every mode must print the expected
+    output.
+
+    The program is in \c weak-reference-share-copy/.
+*/
+class WeakReferenceShareCopyTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/weak-reference-share-copy";
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+        const Programs = ("weak-reference-share-copy",);
+    }
+
+    constructor() : QUnit::Test("WeakReferenceShareCopyTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT and tiered execution print the expected output", \testModes());
+        addTestCase("qcc executables print the expected output", \testCompiled());
+        set_return_value(main());
+    }
+
+    private string expected(string name) {
+        return ReadOnlyFile::readTextFile(dir + "/" + name + ".expected");
+    }
+
+    private string run(string name, string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=%s %s/%s.q", qore_bin, mode, dir, name));
+        assertEq(0, r.rc, sprintf("%s %s: exit status (output: %y)", name, mode, r.out));
+        return r.stdout;
+    }
+
+    testAst() {
+        foreach string name in (Programs) {
+            assertEq(expected(name), run(name, "ast"), name + " ast");
+        }
+    }
+
+    testModes() {
+        foreach string name in (Programs) {
+            foreach string mode in (Modes) {
+                if (mode == "ast") {
+                    continue;
+                }
+                assertEq(expected(name), run(name, mode), name + " " + mode);
+            }
+        }
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            *string path = backquote("command -v qcc 2>/dev/null");
+            trim path;
+            if (!path) {
+                testSkip("qcc is not available");
+            }
+            qcc_bin = path;
+        }
+        TmpDir tmp("qore-weak-reference-share-copy-");
+        foreach string name in (Programs) {
+            foreach string opt in (("0", "3")) {
+                string exe = sprintf("%s/%s-O%s", tmp.path, name, opt);
+                int rc;
+                string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, name), \rc);
+                assertEq(0, rc, sprintf("%s -O%s: qcc compiles the program: %s", name, opt, out));
+                if (rc || !is_file(exe)) {
+                    continue;
+                }
+                # -b must be the first argument of a compiled program
+                string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
+                assertEq(0, rc, sprintf("%s -O%s: exit status (output: %y)", name, opt, result));
+                assertEq(expected(name), result, sprintf("%s -O%s", name, opt));
+            }
+        }
+    }
+}

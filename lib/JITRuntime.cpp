@@ -239,6 +239,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_make_weak_value", reinterpret_cast<void*>(&qore_rt_make_weak_value) },
     { "qore_rt_make_opaque_value", reinterpret_cast<void*>(&qore_rt_make_opaque_value) },
     { "qore_rt_weak_source_container", reinterpret_cast<void*>(&qore_rt_weak_source_container) },
+    { "qore_rt_weak_share_copy", reinterpret_cast<void*>(&qore_rt_weak_share_copy) },
+    { "qore_rt_take_store_value", reinterpret_cast<void*>(&qore_rt_take_store_value) },
     { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
     { "qore_rt_take_param", reinterpret_cast<void*>(&qore_rt_take_param) },
     { "qore_rt_take_param_aot", reinterpret_cast<void*>(&qore_rt_take_param_aot) },
@@ -2546,6 +2548,45 @@ static AssignmentMode qore_rt_store_mode(int32_t mode) {
     return m;
 }
 
+//! set by qore_rt_take_store_value() when the store to a local on the runtime stack that follows it takes the reference
+//! of the value that it is given (qore#7342); consumed by qore_rt_assign_local_impl(), which every store helper that the
+//! compiled code calls right after qore_rt_take_store_value() calls
+static thread_local bool qore_rt_store_takes_value = false;
+
+//! returns \a value; if \a slot_a or \a slot_b (each optional), a cleanup slot of the statement, holds it, the reference
+//! of the slot is given to the store to a local that the compiled code calls next, and the slot is cleared (qore#7342)
+/** The store then holds the only reference to a container that nothing else holds, which it takes as moved (David,
+    qore#7342: a share point copies a weakly shared container only when another strong holder holds it), as the AST
+    interpreter and the IR interpreter give the reference of a temporary to the store
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_take_store_value(uint64_t value, uint64_t* slot_a, uint64_t* slot_b) {
+    assert(!qore_rt_store_takes_value);
+    // only a list or hash that a weak reference designates, which a share copies and a move does not: any other value
+    // keeps the reference of its slot, as a store can convert it (a big integer stored natively, a container whose
+    // type a typed local strips) and release the node that the local cache of the compiled code keeps the bits of
+    QoreValue v = fromBits(value);
+    if (!v.isPlainPointer() || !qore_weak_designated_container(v.getPtr())) {
+        return value;
+    }
+    uint64_t nothing = toBits(QoreValue());
+    // both slots can hold the value, each with a reference of its own (the conversion's slot holds the operand as it
+    // is): the store takes one, and the other is released here, which the reference taken keeps from freeing it
+    ExceptionSink xsink;
+    for (uint64_t* slot : {slot_a, slot_b}) {
+        if (!slot || *slot != value) {
+            continue;
+        }
+        *slot = nothing;
+        if (!qore_rt_store_takes_value) {
+            qore_rt_store_takes_value = true;
+        } else {
+            fromBits(value).discard(&xsink);
+            assert(!xsink);
+        }
+    }
+    return value;
+}
+
 //! Assigns a value to a local on the runtime stack
 /** @param desc the description of the lvalue in a type error of the assignment's own type check: "<lvalue>", or
     "<foreach lvalue assignment>" for the variable of a foreach loop, as the AST interpreter describes them
@@ -2555,6 +2596,13 @@ static AssignmentMode qore_rt_store_mode(int32_t mode) {
 static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSink* xsink,
         bool check_types, bool normalize_weak_refs, const char* desc = "<lvalue>",
         AssignmentMode mode = AssignmentMode::Normal, QoreValue* converted = nullptr) {
+    // the reference of the value that the store takes from a cleanup slot of the statement (see
+    // qore_rt_take_store_value()), released here if the store does not take it
+    ValueHolder taken(xsink);
+    if (qore_rt_store_takes_value) {
+        qore_rt_store_takes_value = false;
+        taken = fromBits(value);
+    }
     if (!var || *xsink) {
         return;
     }
@@ -2570,8 +2618,14 @@ static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSi
     if (var->getLValueInline(helper, false, true)) {
         return;
     }
-    // refSelf before assign — assign takes ownership of the reference
-    QoreValue stored = val.needsRef() ? val.refSelf() : val;
+    // assign() takes ownership of the reference: the one taken from the cleanup slot if the value is still the one
+    // given (a weak reference normalized to its target is not), or a new one
+    QoreValue stored;
+    if (taken && toBits(*taken) == toBits(val)) {
+        stored = taken.release();
+    } else {
+        stored = val.needsRef() ? val.refSelf() : val;
+    }
     if (!helper.assign(stored, desc, check_types, mode) && converted) {
         *converted = qore_rt_store_converted_value(helper, xsink);
     }
@@ -2865,6 +2919,11 @@ extern "C" DLLEXPORT void qore_rt_sync_local(LocalVar* var, uint64_t value) {
 //! qore_weak_source_container(), qore#7318)
 extern "C" DLLEXPORT uint64_t qore_rt_weak_source_container(uint64_t value) {
     return toBits(qore_weak_source_container(fromBits(value)));
+}
+
+//! takes \a value, a weakly shared container, and returns a copy of its own (see qore_weak_share_copy(), qore#7342)
+extern "C" DLLEXPORT uint64_t qore_rt_weak_share_copy(uint64_t value, ExceptionSink* xsink) {
+    return toBits(qore_weak_share_copy(fromBits(value), xsink));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_weak_value(uint64_t value, ExceptionSink* xsink) {
@@ -9849,11 +9908,13 @@ extern "C" DLLEXPORT void qore_rt_list_set_value(uint64_t list_bits, int64_t ind
         qore_list_private* priv = qore_list_private::get(*l);
         // Track element type for correct list<T> type info at runtime
         priv->setListTypeFromNewElementType(val.getFullTypeInfo());
+        // a weakly shared container is stored as a copy of its own (qore#7342)
+        bool scan = qore_store_needs_scan(val);
         priv->getEntryReference(static_cast<size_t>(index)) = val;
         if (static_cast<size_t>(index) >= priv->length) {
             priv->length = static_cast<size_t>(index) + 1;
         }
-        if (needs_scan(val)) {
+        if (scan) {
             priv->incScanCount(1);
         }
     }
@@ -9873,11 +9934,13 @@ extern "C" DLLEXPORT void qore_rt_list_set_value_checked(uint64_t list_bits, int
     }
     QoreValue stored = value.release();
     priv->setListTypeFromNewElementType(stored.getFullTypeInfo());
+    // a weakly shared container is stored as a copy of its own (qore#7342)
+    bool scan = qore_store_needs_scan(stored);
     priv->getEntryReference(static_cast<size_t>(index)) = stored;
     if (static_cast<size_t>(index) >= priv->length) {
         priv->length = static_cast<size_t>(index) + 1;
     }
-    if (needs_scan(stored)) {
+    if (scan) {
         priv->incScanCount(1);
     }
 }

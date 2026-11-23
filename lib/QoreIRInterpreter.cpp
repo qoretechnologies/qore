@@ -4132,6 +4132,18 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
         }
     }
     func.interpreter_value_use_counts = std::move(value_use_counts);
+    {
+        std::vector<uint8_t> weak_results(func.max_value_id + 1, 0);
+        for (const auto& b : func.blocks) {
+            for (const auto& inst_ptr : b->instructions) {
+                uint32_t id = qore_ir_weak_store_result(inst_ptr.get());
+                if (id != UINT32_MAX && id < weak_results.size()) {
+                    weak_results[id] = 1;
+                }
+            }
+        }
+        func.interpreter_weak_store_results = std::move(weak_results);
+    }
     func.interpreter_dot_eval_only_bases = std::move(dot_eval_only_bases);
     // a call with an argument that it can consume gives the references of its temporary arguments to the callee (see
     // IRConsumedCallArgs); the others, which the flag tells apart with no test of their arguments, are made with the
@@ -17073,6 +17085,9 @@ load_local_done:
                     // object one more time, which is a garbage-collection scan for an object holding objects
                     bool transfer = !normalized_weak_ref && store_mode == AssignmentMode::Normal
                         && operand.isValid() && operand.id < values.size()
+                        // the value of a weak or opaque store stays held by the statement (qore#7342)
+                        && !(operand.id < func.interpreter_weak_store_results.size()
+                            && func.interpreter_weak_store_results[operand.id])
                         && operand.id < value_use_counts.size() && value_use_counts[operand.id] == 1
                         && values[operand.id].hasNode() && hasCleanupEntry(cleanup, operand.id)
                         && !weak_load_temp_slots.count(operand.id)
@@ -17086,6 +17101,12 @@ load_local_done:
                         stored = coerceIRLocalValue(local_inst->local, val, xsink, true, store_desc);
                     } else {
                         stored = coerceIRLocalValue(local_inst->local, val, xsink, false, store_desc);
+                    }
+                    // a weakly shared container is stored as a copy of its own, as by an assignment (qore#7342); a
+                    // weak or opaque store keeps the container that it designates
+                    if (store_mode != AssignmentMode::Weak && store_mode != AssignmentMode::Opaque
+                            && qore_weak_shared(stored)) [[unlikely]] {
+                        stored = qore_weak_share_copy(stored, xsink);
                     }
                     if (xsink && *xsink) {
                         if (inst->exception_target) {
@@ -17135,6 +17156,9 @@ load_local_done:
                 bool transfer_owned_operand = !normalized_weak_ref
                     && operand.isValid()
                     && operand.id < values.size()
+                    // the value of a weak or opaque store stays held by the statement (qore#7342)
+                    && !(operand.id < func.interpreter_weak_store_results.size()
+                        && func.interpreter_weak_store_results[operand.id])
                     && operand.id < value_use_counts.size()
                     && value_use_counts[operand.id] == 1
                     && values[operand.id].hasNode()

@@ -13,8 +13,8 @@ plain float 1.0 number 2 softint 3 hash "hash<string, int>"
 closure float 1.0 float softint 4 integer
 global float 5.0 float softint 6 integer
 list [7.0, 8.0, 9.0]
-plain strip: {a: 1} hash ph={a: 1}
-closure strip: {a: 1} hash ch={a: 1}
+plain strip: {a: 1} hash ph={}
+closure strip: {a: 1} hash ch={}
 strip released: ph={} ch={}
 global strip: {a: 1} thread_local strip: {a: 1}
 self member temp: C destroyed=0
@@ -33,7 +33,7 @@ opaque member value: C
 opaque member strip: {a: 1}
 list element temp: C destroyed=0
 list element value: C
-softlist value: [1] list<auto> sl=[1]
+softlist value: [1] list<auto> sl=[]
 softlist released: sl=[]
 softlist in the statement: [2]
 softlist after the statement: sl2=[]

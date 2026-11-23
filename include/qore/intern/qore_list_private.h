@@ -54,6 +54,10 @@ struct qore_list_private {
     //! whatever it holds (needsScan()), so that the counts of its holders do not change with the values stored in it
     //! through a weak reference, as the holders off the path of such a write are not known (qore#7318); never cleared
     std::atomic<bool> weak_pinned{false};
+    //! the number of weak references (:=) that designate the list: raised and released by the weak reference nodes
+    //! only (not by the weak references of the collector and of serialization, see weakRefs); a share of a list that
+    //! has them gives the new holder a copy (qore#7342); a container that only holds such a list is shared (David)
+    std::atomic<unsigned> weak_holders{0};
     const QoreTypeInfo* complexTypeInfo = nullptr;
     QoreContainerWeakRefs weakRefs;
     std::unique_ptr<std::vector<size_t>> eval_pos_map;
@@ -503,8 +507,9 @@ struct qore_list_private {
     DLLLOCAL void initEntry(size_t index, QoreValue val) {
         QoreValue& slot = getEntryReference(index);
         assert(slot.isNothing());
+        bool scan = qore_store_needs_scan(val);
         slot = val;
-        if (needs_scan(val)) {
+        if (scan) {
             incScanCount(1);
         }
     }
@@ -678,7 +683,7 @@ struct qore_list_private {
         // add in new entries
         if (l.getType() != NT_LIST) {
             entry[offset] = holder.release();
-            if (needs_scan(entry[offset]))
+            if (qore_store_needs_scan(entry[offset]))
                 incScanCount(1);
         }
         else {
@@ -1093,6 +1098,30 @@ public:
 
     DLLLOCAL void setVariableList() {
         vlist = true;
+    }
+
+    //! the offsets of the private data in the node and of weak_holders in it, for the inline test of the JIT
+    //! (qore#7342)
+    DLLLOCAL static void weakSharedOffsets(size_t& priv_off, size_t& holders_off) {
+        QoreListNode* c = new QoreListNode;
+        priv_off = reinterpret_cast<const char*>(&c->priv) - reinterpret_cast<const char*>(c);
+        holders_off = reinterpret_cast<const char*>(&c->priv->weak_holders) - reinterpret_cast<const char*>(c->priv);
+        c->deref(nullptr);
+    }
+
+    //! returns true if a share of the list gives the new holder a copy (see weak_holders)
+    DLLLOCAL static bool weakShared(const QoreListNode& c) {
+        return c.priv->weak_holders.load(std::memory_order_relaxed);
+    }
+
+    //! raises (\a dt = 1) or releases (\a dt = -1) the count of the weak references that designate the list
+    DLLLOCAL static void weakHolder(const QoreListNode& c, int dt) {
+        if (dt > 0) {
+            c.priv->weak_holders.fetch_add(1, std::memory_order_relaxed);
+        } else {
+            assert(c.priv->weak_holders.load(std::memory_order_relaxed));
+            c.priv->weak_holders.fetch_sub(1, std::memory_order_relaxed);
+        }
     }
 
     //! returns true if the list needs a scan: it holds a value that needs one, or it is pinned (qore#7318)

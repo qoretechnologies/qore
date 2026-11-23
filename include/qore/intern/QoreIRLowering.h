@@ -473,6 +473,14 @@ public:
     QoreIRValue lowerNullCoalescing(const QoreValue& expr, std::string& error);
     QoreIRValue lowerValueCoalescing(const QoreValue& expr, std::string& error);
     QoreIRValue lowerQuestionMark(const QoreValue& expr, std::string& error);
+    //! lowers the source of a weak assignment that is a ?: or ?? operator choosing a source that is made unique
+    //! (qore_weak_assignment_source_chooses(), qore#7342): the chosen operand is made unique if it is such a source,
+    //! and lowered as an expression otherwise
+    QoreIRValue lowerWeakSource(const QoreValue& expr, const QoreProgramLocation* loc, std::string& error);
+    //! lowers the unique step of a source of a weak assignment that is made unique
+    //! (qore_weak_assignment_source_made_unique()) and gives its value: the value that the step read for a source that
+    //! another thread can assign (a global, a closure variable, a class static, a path), or the variable read again
+    QoreIRValue lowerWeakUniqueSource(const QoreValue& expr, const QoreProgramLocation* loc, std::string& error);
     //! Lowers a typed hash or list construction whose initializer is lowered as the operand \a init
     /** @param type_only a NewComplexHashNode or NewComplexListNode of the type without an initializer */
     QoreIRValue lowerNewComplexFromOperand(QoreIROpcode opcode, const QoreValue& type_only, QoreIRValue init,

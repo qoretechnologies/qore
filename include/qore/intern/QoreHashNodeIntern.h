@@ -200,6 +200,10 @@ public:
     //! whatever it holds (needsScan()), so that the counts of its holders do not change with the values stored in it
     //! through a weak reference, as the holders off the path of such a write are not known (qore#7318); never cleared
     std::atomic<bool> weak_pinned{false};
+    //! the number of weak references (:=) that designate the hash: raised and released by the weak reference nodes
+    //! only (not by the weak references of the collector and of serialization, see weakRefs); a share of a hash that
+    //! has them gives the new holder a copy (qore#7342); a container that only holds such a hash is shared (David)
+    std::atomic<unsigned> weak_holders{0};
     QoreContainerWeakRefs weakRefs;
 #ifdef DEBUG
     bool is_obj = false;
@@ -865,8 +869,9 @@ public:
 
     DLLLOCAL void setKeyValueKnownAbsentIntern(const char* key, QoreValue val) {
         HashMember* member = createMemberKnownAbsent(key);
+        bool scan = qore_store_needs_scan(val);
         member->val = val;
-        if (needs_scan(val)) {
+        if (scan) {
             incScanCount(1);
         }
     }
@@ -1136,6 +1141,30 @@ public:
     template <bool Lexical>
     DLLLOCAL static QoreHashNode* newComplexHashFromHashImpl(const QoreTypeInfo* typeInfo, QoreHashNode* init,
             ExceptionSink* xsink, bool coerce_values, LexicalSemanticPolicy policy);
+
+    //! the offsets of the private data in the node and of weak_holders in it, for the inline test of the JIT
+    //! (qore#7342)
+    DLLLOCAL static void weakSharedOffsets(size_t& priv_off, size_t& holders_off) {
+        QoreHashNode* c = new QoreHashNode;
+        priv_off = reinterpret_cast<const char*>(&c->priv) - reinterpret_cast<const char*>(c);
+        holders_off = reinterpret_cast<const char*>(&c->priv->weak_holders) - reinterpret_cast<const char*>(c->priv);
+        c->deref(nullptr);
+    }
+
+    //! returns true if a share of the hash gives the new holder a copy (see weak_holders)
+    DLLLOCAL static bool weakShared(const QoreHashNode& c) {
+        return c.priv->weak_holders.load(std::memory_order_relaxed);
+    }
+
+    //! raises (\a dt = 1) or releases (\a dt = -1) the count of the weak references that designate the hash
+    DLLLOCAL static void weakHolder(const QoreHashNode& c, int dt) {
+        if (dt > 0) {
+            c.priv->weak_holders.fetch_add(1, std::memory_order_relaxed);
+        } else {
+            assert(c.priv->weak_holders.load(std::memory_order_relaxed));
+            c.priv->weak_holders.fetch_sub(1, std::memory_order_relaxed);
+        }
+    }
 
     //! returns true if the hash needs a scan: it holds a value that needs one, or it is pinned (qore#7318)
     DLLLOCAL static bool needsScan(const QoreHashNode& h) {

@@ -753,9 +753,11 @@ int QoreListNode::setEntry(size_t index, QoreValue val, ExceptionSink* xsink) {
         priv->incScanCount(-1);
     }
     priv->entry[index].discard(xsink);
+    // a weakly shared container is stored as a copy of its own (qore#7342)
+    bool scan = qore_store_needs_scan(val);
     priv->entry[index] = val;
 
-    if (needs_scan(val)) {
+    if (scan) {
         priv->incScanCount(1);
     }
     return xsink && *xsink ? -1 : 0;
@@ -815,7 +817,7 @@ int qore_list_private::insertCanonical(QoreListNode& list, QoreValue val, Except
     // the value stored, not the argument: checkVal() can replace the argument with a converted value and release
     // it, as when a string is converted for a list<softint>
     list.priv->entry[0] = holder.release();
-    if (needs_scan(list.priv->entry[0])) {
+    if (qore_store_needs_scan(list.priv->entry[0])) {
         list.priv->incScanCount(1);
     }
     return 0;
@@ -846,7 +848,7 @@ int qore_list_private::insert(QoreListNode& list, QoreValue val, ExceptionSink* 
     // the value stored, not the argument: checkVal() can replace the argument with a converted value and release
     // it, as when a string is converted for a list<softint>
     list.priv->entry[0] = holder.release();
-    if (needs_scan(list.priv->entry[0])) {
+    if (qore_store_needs_scan(list.priv->entry[0])) {
         list.priv->incScanCount(1);
     }
     return 0;

@@ -37,6 +37,11 @@ namespace {
 class StrictBooleanQuestionMarkOperatorNode : public QoreQuestionMarkOperatorNode {
 public:
     using QoreQuestionMarkOperatorNode::QoreQuestionMarkOperatorNode;
+
+    bool strictBoolean() const override {
+        return true;
+    }
+
 private:
     QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const override {
         return evalCommon<true>(rc, needs_deref, xsink);

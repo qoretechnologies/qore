@@ -916,6 +916,10 @@ public:
     }
 
     DLLLOCAL void instantiateIntern(QoreValue nval, bool assign, const QoreTypeInfo* runtimeTypeInfo = nullptr) {
+        // a weakly shared container is bound as a copy of its own (qore#7342)
+        if (qore_weak_shared(nval)) [[unlikely]] {
+            nval = qore_weak_share_copy(nval, nullptr);
+        }
         if (!closure_use) {
             const QoreTypeInfo* ti = runtimeTypeInfo ? runtimeTypeInfo : typeInfo;
             LocalVarValue* val = thread_instantiate_lvar();

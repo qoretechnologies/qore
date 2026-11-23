@@ -37,10 +37,12 @@ class WeakHashReferenceNode : public AbstractQoreNode {
 public:
     DLLLOCAL WeakHashReferenceNode(QoreHashNode* h) : AbstractQoreNode(NT_WEAKREF_HASH, false, true), h(h) {
         h->weakRef();
+        qore_weak_holder(h, 1);
     }
 
     DLLLOCAL WeakHashReferenceNode(const WeakHashReferenceNode& old) : AbstractQoreNode(old), h(old.h) {
         h->weakRef();
+        qore_weak_holder(h, 1);
     }
 
     //! Returns a new reference to the hash, or a new empty hash that cannot be changed if its last reference was released
@@ -72,6 +74,8 @@ protected:
     static QoreString nstr;
 
     DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        // before the weak reference is released, which can delete the hash
+        qore_weak_holder(h, -1);
         h->weakDeref();
         return true;
     }

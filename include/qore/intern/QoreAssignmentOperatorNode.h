@@ -50,11 +50,12 @@ protected:
     bool ident = false;
     //! whether a weak assignment makes the container of its source unique (see
     //! qore_weak_assignment_source_made_unique()), found when it is first evaluated: 0 not known yet, 1 no, 2 yes
-    //! (qore#7242); the source does not change after the parse
+    //! (qore#7242), 3 if the source is a ?: or ?? operator that chooses such a source when it runs
+    //! (qore_weak_assignment_source_chooses(), qore#7342); the source does not change after the parse
     mutable std::atomic<signed char> weak_source_unique{0};
 
-    //! returns true if a weak assignment makes the container of its source unique (see weak_source_unique)
-    DLLLOCAL bool weakSourceMadeUnique() const;
+    //! returns the state of weak_source_unique, finding it the first time
+    DLLLOCAL signed char weakSourceState() const;
 
     DLLLOCAL int parseInitIntern(QoreParseContext& parse_context, AssignmentMode mode);
 
@@ -104,6 +105,10 @@ static inline bool qore_weak_source_type_may_hold_container(const QoreTypeInfo* 
     variable or the path are left as they are (qore#5756, qore#5847)
 */
 DLLLOCAL bool qore_weak_assignment_source_made_unique(const QoreValue& right);
+//! returns true if the source of a weak assignment is a ?: or ?? operator, also nested, an operand of which that can be
+//! its value is a source that is made unique (qore_weak_assignment_source_made_unique()): the operand that is chosen
+//! when it runs is that source, and any other one an expression (qore#7342)
+DLLLOCAL bool qore_weak_assignment_source_chooses(const QoreValue& right);
 
 class QoreWeakAssignmentOperatorNode : public QoreAssignmentOperatorNode {
 OP_COMMON

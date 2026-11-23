@@ -128,7 +128,9 @@ sub conversions() {
     list<auto> l = ((f := 7), (cf := 8), (gf := 9));
     printf("list %y\n", l);
     # a container that the variable's type converts to a copy of its own: the copy is a temporary of the statement,
-    # and the value of the assignment (qore#7085)
+    # and the value of the assignment (qore#7085); the variable given the value takes a copy of its own, as from any
+    # value that a weak reference designates, so the weak reference designates the temporary, which the statement
+    # releases (qore#7342)
     hash<string, int> th = {"a": 1};
     hash ph;
     auto v5 = (ph := th);
@@ -291,6 +293,8 @@ sub paths() {
     printf("list element value: %s\n", desc(v3));
     remove v3;
 
+    # the list that the softlist type makes of the value is a temporary of the statement; v4 takes a copy of its own
+    # (qore#7342)
     softlist<auto> sl;
     auto v4 = (sl := 1);
     printf("softlist value: %y %s sl=%y\n", v4, v4.fullType(), sl);

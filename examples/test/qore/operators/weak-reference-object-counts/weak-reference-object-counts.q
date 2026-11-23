@@ -78,7 +78,7 @@ sub same_container_twice_add() {
     c.holder.wk.obj = new C("added");
     printf("added through the weak step: %y\n", c.holder.obj.name);
     remove c.holder.obj;
-    printf("object count after the object was removed: %d\n", object_count(c.holder));
+    printf("object count after the object was removed: %d\n", object_count(\c.holder));
     remove c.holder;
 }
 
@@ -117,7 +117,7 @@ sub ancestor_twice_add() {
     c.holder.inner.wk.inner.k = new C("x");
     remove c.holder.inner.k;
     printf("object count after the object added through a weak step to an ancestor was removed: %d\n",
-        object_count(c.holder.inner));
+        object_count(\c.holder.inner));
     remove c.holder;
 }
 
@@ -149,7 +149,7 @@ sub two_weak_steps_replace() {
     w2.w2 := c.holder.z.v;
     c.holder.z.v.w1.z.v2.w2.t.k = 1;
     printf("object count after the object was replaced through two weak steps: %d\n",
-        object_count(c.holder.z.v.t));
+        object_count(\c.holder.z.v.t));
     remove c.holder;
 }
 
@@ -167,7 +167,7 @@ sub weak_step_down_and_back() {
     c.holder.wk.y.back.x.y.t.k = new C("o");
     remove c.holder.x.y.t.k;
     printf("object count after the object added down and back through weak steps was removed: %d\n",
-        object_count(c.holder.x.y.t));
+        object_count(\c.holder.x.y.t));
     remove c.holder;
 }
 
@@ -197,9 +197,11 @@ sub same_container_twice_keys() {
     remove c.holder;
 }
 
-# the number of values that need a scan that a container holds (dbg_get_scan_count() exists in debug builds only)
-int sub object_count(auto v) {
-    return exists_function("dbg_get_scan_count") ? call_function("dbg_get_scan_count", v) : 0;
+# the number of values that need a scan that the container that \a v names holds (dbg_get_scan_count() exists in
+# debug builds only); the container is read through the reference, as a container that holds a weakly referenced one
+# is passed to a function as a copy of its own
+int sub object_count(reference<auto> v) {
+    return exists_function("dbg_get_scan_count") ? call_function("dbg_get_scan_count", \v) : 0;
 }
 
 # qore#7322: k is stored, then zz raises

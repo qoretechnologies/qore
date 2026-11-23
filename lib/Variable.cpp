@@ -3993,6 +3993,12 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
         }
     }
 
+    // a weakly shared container is assigned as a copy of its own (qore#7342); a weak assignment designates it, and an
+    // opaque one keeps the reference
+    if (mode != AssignmentMode::Weak && mode != AssignmentMode::Opaque && qore_weak_shared(n)) [[unlikely]] {
+        n = qore_weak_share_copy(n, vl.xsink);
+    }
+
     if (lvid_set && n.getType() == NT_REFERENCE
         && (lvid_set->find(lvalue_ref::get(reinterpret_cast<const ReferenceNode*>(n.getInternalNode()))->lvalue_id)
             != lvid_set->end())) {

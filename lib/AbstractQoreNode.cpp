@@ -1220,6 +1220,56 @@ void qore_weak_target_pin(const QoreValue& v) {
     }
 }
 
+bool qore_weak_shared_container(const AbstractQoreNode* n) {
+    // a container with no other strong holder is moved, not shared: it keeps its identity, and the weak references
+    // follow it (David, qore#7342)
+    if (n->is_unique()) {
+        return false;
+    }
+    return n->getType() == NT_LIST ? qore_list_private::weakShared(*static_cast<const QoreListNode*>(n))
+        : qore_hash_private::weakShared(*static_cast<const QoreHashNode*>(n));
+}
+
+bool qore_weak_designated_container(const AbstractQoreNode* n) {
+    switch (n->getType()) {
+        case NT_LIST:
+            return qore_list_private::weakShared(*static_cast<const QoreListNode*>(n));
+        case NT_HASH:
+            return qore_hash_private::weakShared(*static_cast<const QoreHashNode*>(n));
+        default:
+            return false;
+    }
+}
+
+void qore_weak_holder(const AbstractQoreNode* n, int dt) {
+    if (n->getType() == NT_LIST) {
+        qore_list_private::weakHolder(*static_cast<const QoreListNode*>(n), dt);
+    } else {
+        assert(n->getType() == NT_HASH);
+        qore_hash_private::weakHolder(*static_cast<const QoreHashNode*>(n), dt);
+    }
+}
+
+QoreValue qore_weak_share_copy(QoreValue v, ExceptionSink* xsink) {
+    // a container with no other strong holder is moved (see qore_weak_shared_container()); the JIT's inline test does
+    // not test the reference count
+    if (v.getInternalNode()->is_unique()) {
+        return v;
+    }
+    ExceptionSink local_xsink;
+    if (!xsink) {
+        xsink = &local_xsink;
+    }
+    // the original keeps its other holder (the one that the weak reference designates it in), so releasing this
+    // reference does not free it
+    ValueHolder orig(v, xsink);
+    if (v.getType() == NT_LIST) {
+        return v.get<const QoreListNode>()->copy();
+    }
+    assert(v.getType() == NT_HASH);
+    return v.get<const QoreHashNode>()->copy();
+}
+
 QoreValue qore_weak_source_container(const QoreValue& v) {
     AbstractQoreNode* copy;
     switch (v.getType()) {

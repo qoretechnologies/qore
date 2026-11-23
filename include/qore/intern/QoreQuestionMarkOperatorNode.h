@@ -36,6 +36,12 @@
 class RuntimeConfig;
 
 class QoreQuestionMarkOperatorNode : public QoreNOperatorNodeBase<3> {
+public:
+    //! returns true if the condition is converted to a bool with the strict-boolean policy (see evalCommon())
+    DLLLOCAL virtual bool strictBoolean() const {
+        return false;
+    }
+
 protected:
     template <bool StrictBoolean>
     DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue evalCommon(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;

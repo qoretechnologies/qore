@@ -26723,12 +26723,22 @@ static QoreValue f_dbg_get_scan_object_count(const QoreListNode* params, Runtime
     return q_get_scan_object_count();
 }
 
-//! returns the object count of an object, a hash or a list: the number of its values that need a recursive-reference
-//! scan (needs_scan()), or -1 for a value of another type
+//! returns the object count of an object, a hash or a list, or of the one that a reference names: the number of its
+//! values that need a recursive-reference scan (needs_scan()), or -1 for a value of another type
 /** Tests use it to check that the counts follow the values that the lvalue operations store and remove (qore#7348).
 */
 static QoreValue f_dbg_get_scan_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     QoreValue v = get_param_value(params, 0);
+    // a reference is read through (qore#7342): a list or hash that a weak reference designates, or that holds one, is
+    // passed to the function as a copy of its own, whose count is not the count of the container that it was made from
+    std::unique_ptr<LValueHelper> lvh;
+    if (v.getType() == NT_REFERENCE) {
+        lvh.reset(new LValueHelper(*v.get<const ReferenceNode>(), rc, xsink, LValueHelper::ReadAccess()));
+        if (!*lvh) {
+            return QoreValue();
+        }
+        v = lvh->getValue();
+    }
     switch (v.getType()) {
         case NT_OBJECT:
             return static_cast<int64>(qore_object_private::get(*v.get<const QoreObject>())->getScanCount());
