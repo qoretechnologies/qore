@@ -1889,6 +1889,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreIRAnalysis.cpp
     lib/QoreIRLowering.cpp
     lib/QoreIRToLLVM.cpp
+    lib/QoreIRToLLVMOwnedEntries.cpp
     lib/QoreIRFrameCheck.cpp
     lib/QoreIRVerifier.cpp
     lib/QoreIRTakeOver.cpp
@@ -2611,9 +2612,12 @@ if (SINGLE_COMPILATION_UNIT)
     # - QoreIRTakeOver.cpp, QoreClassGivenArgs.cpp, JITRuntimeTakeOver.cpp: the analysis of the parameters that take
     #   their arguments over, and the calls with the arguments given to them of the code that a member holds and of
     #   the callees that the JIT runtime finds at run time (issue #5958), for the same reason
+    # - QoreIRToLLVMOwnedEntries.cpp: the copies of the AOT fast entries that take their arguments over (issue
+    #   #6105), compiled with hidden visibility (below), so that the LLVM templates that it instantiates are not
+    #   exported
     set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp lib/qore_aot_runtime_identity.cpp
         lib/JITRuntimeGivenArgs.cpp lib/QoreIRInterpreterGivenArgs.cpp lib/QoreIRTakeOver.cpp
-        lib/QoreClassGivenArgs.cpp lib/JITRuntimeTakeOver.cpp)
+        lib/QoreClassGivenArgs.cpp lib/JITRuntimeTakeOver.cpp lib/QoreIRToLLVMOwnedEntries.cpp)
     if (SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1)
         # sources that cannot share a translation unit with the LLVM users (see cmake/QoreScuChunks.cmake)
         list(APPEND LIBQORE_EXTRA_SRC ${LIBQORE_SCU_ISOLATED_SRC})
@@ -2652,6 +2656,12 @@ else (SINGLE_COMPILATION_UNIT)
 endif (SINGLE_COMPILATION_UNIT)
 # an edit made while a libqore object compiles must not be lost (issue #6951)
 qore_compile_race_guard(libqore)
+# the copies of the AOT fast entries that take their arguments over (issue #6105): the LLVM templates that the copy
+# instantiates are not exported from libqore
+if (NOT MSVC)
+    set_source_files_properties(${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVMOwnedEntries.cpp
+        PROPERTIES COMPILE_OPTIONS "-fvisibility=hidden;-fvisibility-inlines-hidden")
+endif ()
 
 add_dependencies(QPP_GENERATED_FILES qpp)
 add_dependencies(libqore QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision qore-aot-runtime-identity CHECK_GRAMMAR_CONFLICTS)
@@ -3316,6 +3326,7 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/lib/QoreIRExprRegistry.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVMOwnedEntries.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRFrameCheck.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp
     # the analysis of the parameters that take their arguments over, compiled from QoreIRVerifier.cpp

@@ -1,0 +1,118 @@
+dtor w
+w written
+after w
+dtor wx
+wx written
+catch WX
+dtor xw
+catch XW
+dtor w2
+w2 written a
+after w2
+dtor w2b
+w2b written b
+after w2b
+dtor w2-a
+w2 written a
+dtor w2-b
+after w2 both
+keep written
+after keep
+dtor keep
+removed keep
+dtor wl
+wl written
+after wl
+dtor rec1
+rec written 0
+dtor rec2
+rec written 1
+dtor rec
+rec written 2
+after rec
+dtor wt
+wt written
+after wt
+dtor wt-bind
+catch RUNTIME-OVERLOAD-ERROR
+dtor s
+s written
+after s
+dtor sx
+sx written
+catch SX
+dtor fs
+F::s written
+after F::s
+dtor fsx
+F::sx written
+catch FSX
+dtor m
+m written
+after m
+dtor loop0
+w written
+after loop 0
+dtor loop1
+w written
+after loop 1
+kept 2
+dtor kept
+in try done
+dtor u.a
+u written
+dtor u.b
+after u
+dtor an.b
+an written
+dtor an.a
+after an
+dtor an.b2
+an written
+dtor an.h
+after an hash
+dtor esc.a
+esc written
+after esc
+dtor esc.b
+removed esc
+dtor on
+on written
+after on
+dtor ha.b
+dtor ha.h
+ha written
+after ha
+dtor cl
+cl written
+after cl
+dtor dbl.a
+dtor dbl.b
+dbl written
+after dbl
+dtor ou.a
+u written
+dtor ou.b
+after ou
+dtor oan.b
+an written
+dtor oan.a
+after oan
+unused params done
+dtor ow
+w written
+after ow
+dtor os
+s written
+after os
+dtor ofs
+F::s written
+after ofs
+dtor ow2
+w2 written a
+after ow2
+dtor okept
+outside try done
+dtor top
+w written
+after top
