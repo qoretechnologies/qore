@@ -57,6 +57,7 @@ public:
 };
 
 class QoreProgram;
+class QoreObject;
 
 //! Captures provenance, returning nullptr when no sandbox governs execution and no origin is recorded.
 /** @param code_pgm the Program whose code an object created now runs (its class's), or nullptr for an object of a
@@ -83,6 +84,11 @@ DLLLOCAL QoreParseOptions qore_creation_origin_for(const QoreProgram* code_pgm, 
     qore#6844); does nothing if they are empty
 */
 DLLLOCAL void qore_capture_call_reference_origin(const ResolvedCallReferenceNode* ref, const QoreProgram* code_pgm);
+//! Returns true if a sandbox governs the Program that created the object, now (qore#7305)
+/** The object holds a dependency reference to the Program that created it; the Program's own sandbox and that of
+    the code that created the Program count (qore_program_private::getSandboxManagerRef())
+*/
+DLLLOCAL bool qore_object_program_is_sandboxed(const QoreObject* obj);
 //! Returns the Program whose code a closure runs: the Program that defines it (qore#6520)
 DLLLOCAL const QoreProgram* qore_closure_code_program(const ResolvedCallReferenceNode* closure);
 //! Returns the restrictions of a callable value or object as a mask of parse options (see the public
