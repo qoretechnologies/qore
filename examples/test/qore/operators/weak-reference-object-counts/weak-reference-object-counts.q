@@ -141,6 +141,48 @@ sub ancestor_twice_container() {
     remove c.holder;
 }
 
+# qore#7321: two weak steps (holder, z, v, holder through w1, z, v2, v through w2, t): the edge from holder to z is on
+# the path twice, and is written once the change of z is final (the form that adds an object needs qore#7351 in AST)
+sub two_weak_steps_replace() {
+    C c("c11");
+    c.holder = {"z": {"v": {"t": {}}, "v2": {}}};
+    c.holder.z.v.t.k = new C("x");
+    auto w;
+    w := c.holder.z.v;
+    w.w1 := c.holder;
+    auto w2;
+    w2 := c.holder.z.v2;
+    w2.w2 := c.holder.z.v;
+    c.holder.z.v.w1.z.v2.w2.t.k = 1;
+    *code scan_count = get_lvalue_scan_count_func();
+    int start = scan_count ? scan_count() : 0;
+    c.holder += {};
+    printf("scans after the object was replaced through two weak steps: %d\n",
+        scan_count ? scan_count() - start : 0);
+    remove c.holder;
+}
+
+# qore#7321: holder, x (through wk), y, holder (through back), x, y, t: the only strong entry of the edge from holder to
+# x comes before the change of x reaches it through the second entry of the edge from x to y
+sub weak_step_down_and_back() {
+    C c("c12");
+    c.holder = {"x": {"y": {"t": {}}}};
+    auto w;
+    w := c.holder;
+    w.wk := c.holder.x;
+    auto wy;
+    wy := c.holder.x.y;
+    wy.back := c.holder;
+    c.holder.wk.y.back.x.y.t.k = new C("o");
+    remove c.holder.x.y.t.k;
+    *code scan_count = get_lvalue_scan_count_func();
+    int start = scan_count ? scan_count() : 0;
+    c.holder += {};
+    printf("scans after the object added down and back through weak steps was removed: %d\n",
+        scan_count ? scan_count() - start : 0);
+    remove c.holder;
+}
+
 # qore#7321 with a list: an element of the list is a weak reference to the list itself
 sub same_list_twice() {
     C c("c7");
@@ -237,6 +279,8 @@ const Cases = {
     "ancestor_twice_remove": \ancestor_twice_remove(),
     "ancestor_twice_add": \ancestor_twice_add(),
     "ancestor_twice_container": \ancestor_twice_container(),
+    "two_weak_steps_replace": \two_weak_steps_replace(),
+    "weak_step_down_and_back": \weak_step_down_and_back(),
     "same_list_twice": \same_list_twice(),
     "same_container_twice_keys": \same_container_twice_keys(),
     "failed_merge": \failed_merge(),
