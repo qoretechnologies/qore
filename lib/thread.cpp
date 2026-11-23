@@ -4495,8 +4495,21 @@ static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_module_init_frame_ca
     }
 }
 
+// The frame push is inlined in the call path (CodeEvaluationHelper) where the caller is in the same compilation unit:
+// the module initialization check (qore#7289) put it over the compiler's inlining limit, which made every call pay for
+// an out-of-line call.  The attribute is on the definitions only, without "inline", so that callers in other
+// compilation units (a build without a single compilation unit, or its chunks) call the external definition; GCC warns
+// that such a function "might not be inlinable", which is expected here.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wattributes"
+#define QORE_FRAME_PUSH_INLINE __attribute__((always_inline))
+#else
+#define QORE_FRAME_PUSH_INLINE
+#endif
+
 // called when pushing a new location on the stack
-const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* stack_loc,
+QORE_FRAME_PUSH_INLINE const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* stack_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm, QoreProgram* frame_pgm) {
     ThreadData* td = thread_data.get();
 
@@ -4517,7 +4530,7 @@ const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* st
     return publish_pushed_stack_location(td, stack_loc);
 }
 
-const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLocation* stack_loc,
+QORE_FRAME_PUSH_INLINE const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLocation* stack_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm,
         const QoreProgramLocation*& old_runtime_loc, QoreProgram* frame_pgm) {
     ThreadData* td = thread_data.get();
@@ -4540,6 +4553,11 @@ const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLoca
     td->runtime_loc = &loc_builtin;
     return publish_pushed_stack_location(td, stack_loc);
 }
+
+#undef QORE_FRAME_PUSH_INLINE
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 void* get_thread_data_for_native_calls() {
     return thread_data.get();
