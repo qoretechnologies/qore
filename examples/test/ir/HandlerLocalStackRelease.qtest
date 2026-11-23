@@ -22,16 +22,19 @@
     back after the handlers.  Native code compiled ahead of time cleared these entries instead of removing them, so
     each run of the handlers left an entry on the stack (qore#7399).  The runtime frame wrapper of a call removes the
     entries that the function leaves, but the fast method and function call paths remove the variables that they
-    pushed for the call by their number: they then removed the entry left instead of the last parameter, and the first
-    parameter was taken for \c self, which is removed without releasing its value, so the value of the first parameter
-    was never released (a self call of a qcc-compiled module method, which takes the fast method call path since
-    #7267, leaked the connection options of WebSocketClient::connect()).
+    pushed for the call by their number, so each of them removed the entry above it instead of its own, and every
+    variable was paired with the wrong entry.  A function call released its arguments all the same, as each pop
+    releases the value of the entry it removes; a method call removes \c self without releasing its value, and that
+    removal took the entry of the first parameter, whose value was then never released (a self call of a qcc-compiled
+    module method, which takes the fast method call path since #7267, leaked the connection options of
+    WebSocketClient::connect()).
 
-    The script runs a method whose block registers an \c on_exit handler and has a local that an \c on_error handler
-    reads, as a self call, a method call and a function call from compiled code and from top-level code, with an object
-    as its first argument whose destructor is counted, and measures the runtime local variable stack around the block
-    and around loops of the calls, in every execution mode, on the IR tier of tiered execution and as qcc executables
-    compiled with -O0 and -O3 (see ExecModeOutputTest).
+    The script runs a method and a function whose block registers an \c on_exit handler and has a local that an
+    \c on_error handler reads, as a self call, a method call and a function call from compiled code and from top-level
+    code, with an object as its first argument whose destructor is counted (the method calls leaked it, the function
+    calls did not), and measures the runtime local variable stack around the block and around loops of the calls, in
+    every execution mode, on the IR tier of tiered execution and as qcc executables compiled with -O0 and -O3 (see
+    ExecModeOutputTest).
 */
 class HandlerLocalStackReleaseTest inherits ExecModeOutputTest {
     public {

@@ -3543,6 +3543,11 @@ void QoreIRToLLVM::emitLocalInstantiation(llvm::Module& module) {
                     continue;
                 }
             }
+            // generated code pushes only closure-bound locals here: an entry local that is not closure-bound is a body
+            // local, which the runtime frame wrapper pushes and pops, or a pre-instantiated local (collectLocals() takes
+            // no other: see is_outer_scope_local()); emitLocalUninstantiationIntern() only clears such a local, so a
+            // push here would leave an entry on the runtime stack at every call (#7399)
+            assert(var->closureUse());
             int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
                     key);
             builder->CreateCall(helper, {aot_ctx_arg,
@@ -4303,6 +4308,9 @@ void QoreIRToLLVM::emitLocalUninstantiationIntern(llvm::Module& module) {
                 }
                 continue;
             }
+            // qore_rt_uninstantiate_local_aot() only clears the local: one that is not closure-bound is a body local,
+            // which the runtime frame wrapper pops, as emitLocalInstantiation() pushes none of them (#7399)
+            assert((*it)->closureUse() || body_local_set.count(key));
             int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
                     key);
             builder->CreateCall(helper, {aot_ctx_arg,

@@ -13489,6 +13489,19 @@ static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature
 static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig,
         const QoreTypeInfo* receiver_type_info);
 
+#ifdef DEBUG
+//! returns the top entry of the runtime local variable stack of the current thread in its current Program, or nullptr
+//! if the stack is empty: the same entry before and after a call means that the call left the stack at the same depth
+[[maybe_unused]] static const LocalVarValue* qore_rt_debug_lvstack_top() {
+    ThreadLocalProgramData* tlpd = get_thread_local_program_data();
+    if (!tlpd) {
+        return nullptr;
+    }
+    ThreadLocalVariableData::Position top = tlpd->lvstack.position();
+    return top.peek();
+}
+#endif
+
 template <bool IN_FRAME_RELEASE = false, typename ExecFn>
 static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call_name,
         ExecFn&& exec_fn, QoreValue& val, ExceptionSink* xsink,
@@ -13504,6 +13517,10 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     }
     bool has_aot = uvb->hasCachedAOT();
     bool has_ir = uvb->getCachedIR() != nullptr;
+#ifdef DEBUG
+    // the runtime local variable stack as the caller left it for the call, with the variables it pushed for it
+    const LocalVarValue* lv_top_at_entry = qore_rt_debug_lvstack_top();
+#endif
     // AST-only variants (no AOT and no IR cache) own their own LocalVarList via
     // the StatementBlock and instantiate it themselves on entry — pre-instantiating
     // here both has nothing to read from (getASTVisibleBodyLocals() requires
@@ -13666,6 +13683,14 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
             body_locals[i]->uninstantiate(xsink);
         }
     }
+
+#ifdef DEBUG
+    // the call leaves the runtime local variable stack as it found it: the callers of the fast call paths remove the
+    // variables that they pushed for the call (self, the parameters, argv) by their number, so an entry that the callee
+    // left would be removed in place of one of them, and the value of the variable taken for self would never be
+    // released (#7399)
+    assert(qore_rt_debug_lvstack_top() == lv_top_at_entry);
+#endif
 
     // the parameters of a call that gives its arguments are released in the frame of the call, after the body locals
     if constexpr (IN_FRAME_RELEASE) {
