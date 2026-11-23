@@ -1059,33 +1059,19 @@ public:
           of thread_local variables does (see thread_local_vars_finalizing()).
 
         No iterator of the member list is held while a value is freed, and no member is deleted while it is in the key
-        map, which reads the hashes of the members in a bucket when it is searched (see hm_hm_t); the members are
-        deleted when no member has a value.  If the keys of the first phase cannot be allocated, all values are freed
-        in the second phase.
+        map, which reads the hashes of the members in a bucket when it is searched (see hm_hm_t).  Before the second
+        phase, the members without values are deleted; in it, each value is taken and its member deleted before the
+        value is freed, so that each member is visited once.  If the keys of the first phase cannot be allocated, all
+        values are freed in the second phase, which allocates nothing.
+
+        Values saved through the C++ API (QoreProgram::getThreadData()) during the release are not refused: a module
+        must not save thread-local data from code that runs when thread-local data is released.
     */
     DLLLOCAL void clear(ExceptionSink* xsink, bool reverse);
 
     //! raises \c DESTRUCTOR-ERROR and returns -1 if nothing can be saved in this hash of thread-local data now (see
     //! clear())
     DLLLOCAL int checkClearingSave(ExceptionSink* xsink) const;
-
-    //! returns the first member (or the last, if \a reverse) that has a value, or nullptr
-    DLLLOCAL HashMember* firstMemberWithValue(bool reverse) const {
-        if (reverse) {
-            for (qhlist_t::const_reverse_iterator i = member_list.rbegin(), e = member_list.rend(); i != e; ++i) {
-                if (!(*i)->val.isNothing()) {
-                    return *i;
-                }
-            }
-        } else {
-            for (HashMember* m : member_list) {
-                if (!m->val.isNothing()) {
-                    return m;
-                }
-            }
-        }
-        return nullptr;
-    }
 
     //! takes the value of the member \a m and frees it; code that runs can change the hash
     DLLLOCAL void freeMemberValue(HashMember* m, ExceptionSink* xsink) {

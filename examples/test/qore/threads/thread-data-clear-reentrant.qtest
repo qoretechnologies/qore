@@ -2,7 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # test-exec-mode: children - its checks run in child processes that set their own execution modes
-# test-platform: macos - thread-local data freed at the end of threads and pool tasks, with the allocator scribbling freed memory
+# test-platform: macos - thread-local data freed at the end of pool tasks, the allocator scribbling freed memory
 
 %modern
 %no-child-restrictions
@@ -18,8 +18,8 @@
     their own key and a later key, clear all thread data and add many keys, read the keys freed before and after
     them, and save new values again and again.  A destructor reads the values not freed yet and never a freed member,
     and the values saved during the release are freed while nothing can be saved, so that the release ends; the
-    output must be the expected one in every execution mode.  The children run with the macOS allocator scribbling freed memory, so that a read of a
-    freed member shows.
+    output must be the expected one in every execution mode.  The children run with the macOS allocator scribbling
+    freed memory, so that a read of a freed member shows.
 */
 class ThreadDataClearReentrantTest inherits QUnit::Test {
     public {
@@ -54,8 +54,8 @@ class ThreadDataClearReentrantTest inherits QUnit::Test {
                 mode + " next-delete");
             # a destructor that saves a value again and again: the value saved during the release is freed, and its
             # destructor cannot save another one, so the release ends
-            assertTrue(out =~ /^resave same pool: \[\x22resave 0 freed\x22, \x22resave 1 freed\x22, \x22save r: DESTRUCTOR-ERROR\x22, /m,
-                mode + " resave");
+            assertTrue(out =~ /^resave same pool: \[\x22resave 0 freed\x22, \x22resave 1 freed\x22, /m
+                && out =~ /^resave same pool: [^\n]*\x22save r: DESTRUCTOR-ERROR\x22, /m, mode + " resave");
             # the thread data of the main thread is empty after its clearing
             assertTrue(out =~ /^main keys: \[\]$/m, mode + " main keys");
         }

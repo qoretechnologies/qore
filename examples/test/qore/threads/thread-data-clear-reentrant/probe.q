@@ -131,6 +131,26 @@ class Resave {
     }
 }
 
+# a value whose destructor saves one value to a new key (if i >= 0); counts the values freed
+class Spawn {
+    private {
+        int i;
+        Counter freed;
+    }
+
+    constructor(int i, Counter freed) {
+        self.i = i;
+        self.freed = freed;
+    }
+
+    destructor() {
+        freed.inc();
+        if (i >= 0) {
+            save_thread_data("n" + i, new Spawn(-1, freed));
+        }
+    }
+}
+
 # runs the code that fills the thread data in the way given, and clears the thread data there: with
 # delete_all_thread_data(), or at the end of a pool task (the data of a thread that ends is freed after the thread's
 # Program context, so its destructors do not use it)
@@ -190,6 +210,16 @@ foreach string how in ("direct", "pool") {
         });
         show("resave " + mode + " " + how);
     }
+}
+# many values whose destructors each save one value: all are freed (each member is visited once in the second phase)
+foreach string how in ("direct", "pool") {
+    Counter freed();
+    run(how, sub () {
+        for (int i = 0; i < 2000; ++i) {
+            save_thread_data("k" + i, new Spawn(i, freed));
+        }
+    });
+    printf("spawn %s: freed %d\n", how, freed.getCount());
 }
 # the thread data of this thread is empty after the clearing
 printf("main keys: %y\n", keys get_all_thread_data());

@@ -145,12 +145,34 @@ void qore_hash_private::clear(ExceptionSink* xsink, bool reverse) {
                 h.refuse_saves = old;
             }
         } rsh(*this);
-        while (HashMember* m = firstMemberWithValue(reverse)) {
-            freeMemberValue(m, xsink);
+        // the members without values (those of the values freed in the first phase) are deleted first, so that the
+        // members left are those of the values to free; no code runs for them
+        for (qhlist_t::iterator i = member_list.begin(), e = member_list.end(); i != e;) {
+            qhlist_t::iterator li = i++;
+            if ((*li)->val.isNothing()) {
+                hm.erase(*li);
+                internDeleteKey(li);
+            }
+        }
+        // each value is taken, and its member deleted, before it is freed, as deleteKey() does: nothing can be saved,
+        // so no member is added, and each value is visited once
+        while (!member_list.empty()) {
+            qhlist_t::iterator li = member_list.begin();
+            if (reverse) {
+                li = member_list.end();
+                --li;
+            }
+            QoreValue v = (*li)->val;
+            hm.erase(*li);
+            internDeleteKey(li);
+            if (needs_scan(v)) {
+                incScanCount(-1);
+            }
+            v.discard(xsink);
         }
     }
 
-    // no member has a value, so no code runs when the members are deleted
+    // no member is left; this resets the accounting of the hash
     freeMembers(xsink);
 }
 
