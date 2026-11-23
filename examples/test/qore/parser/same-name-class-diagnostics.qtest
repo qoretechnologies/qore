@@ -17,7 +17,30 @@ class SameNameClassDiagnostics inherits QUnit::Test {
         addTestCase("generic class arguments survive qualification", \generic());
         addTestCase("runtime member errors identify the receiver", \runtimeMember());
         addTestCase("runtime cast identifies both classes", \runtimeCast());
+        addTestCase("unqualified names select the Qore sub-namespace", \shadowWarning());
         set_return_value(main());
+    }
+
+    shadowWarning() {
+        Program p(PO_MODERN | PO_NO_NETWORK);
+        p.setParseDiagnosticsCollected(True);
+        p.parse("class Gate { int marker() { return 37; } }\n"
+            "const HAVE_STACK_GUARD = 37;\n"
+            "hashdecl SqlMutationInfo { int marker; }\n"
+            "int sub builtinGate() { Gate g(); return g.numInside(); }\n"
+            "int sub rootGate() { ::Gate g(); return g.marker(); }", "sub-namespace-shadow", WARN_LANGUAGE_TRAPS);
+        hash<string, string> paths = {};
+        foreach hash<ParseDiagnosticInfo> d in (p.getParseDiagnostics()) {
+            assertEq("USER-SYMBOL-SHADOWED-BY-QORE", d.id);
+            assertTrue(d.message.find(d.facts.declared) >= 0);
+            assertTrue(d.message.find(d.facts.shadowedBy) >= 0);
+            assertFalse(exists paths{d.facts.declared}, d.facts.declared);
+            paths{d.facts.declared} = d.facts.shadowedBy;
+        }
+        assertEq({"::Gate": "Qore::Thread::Gate", "::HAVE_STACK_GUARD": "Qore::Option::HAVE_STACK_GUARD",
+            "::SqlMutationInfo": "Qore::SQL::SqlMutationInfo"}, paths);
+        assertEq(0, p.callFunction("builtinGate"));
+        assertEq(37, p.callFunction("rootGate"));
     }
 
     private string error(string src, bool execute = False) {
