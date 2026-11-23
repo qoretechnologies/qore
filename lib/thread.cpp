@@ -573,8 +573,80 @@ unsigned q_parse_overlay_count(const SyncParseOptions* key) {
     return rv;
 }
 
-// for detecting circular references at runtime
-typedef std::set<const lvalue_ref*> ref_set_t;
+//! The references that a thread is resolving, for the detection of circular references (qore#7268)
+/** RuntimeReferenceHelperBase adds a reference when its resolution starts, and raises CIRCULAR-REFERENCE-ERROR if the
+    reference is already there; the fast read of a reference (qore_reference_fast_resolution_enter()) does the same.
+    The resolutions of a thread nest (the lvalue of a reference can be a variable that holds another reference, which
+    is resolved in the resolution of the first), and they end in the reverse order of their start, as the objects that
+    add and remove the references are on the stack; so the references form a stack.
+
+    The first \c InlineDepth references of the stack are kept in an array, without an allocation, which holds every
+    reference of a read through a reference, or through a few references to references; the deeper ones, of a chain of
+    references as long as a recursion that passes a reference on to itself, are kept in a set, allocated when it is
+    first needed, so that the test stays logarithmic for them: a chain is limited only by the stack size (the stack
+    check of RuntimeReferenceHelperBase).  Before qore#7268 every reference was kept in a std::set, which made every
+    resolution allocate and free a node of it.
+
+    The object has the size of the std::set that it replaces (with libstdc++), so that the members of ThreadData after
+    it keep their offsets: a change of their alignment changed the code that the compiler generated for code that
+    copies them (an extra instruction for each pair of members that it had copied with one SSE load and store).
+*/
+class ThreadReferenceResolutionStack {
+public:
+    //! the number of references that are kept in the array
+    static constexpr unsigned InlineDepth = 4;
+
+    //! Returns true if the reference is being resolved
+    DLLLOCAL bool contains(const lvalue_ref* r) const {
+        unsigned n = depth < InlineDepth ? depth : InlineDepth;
+        for (unsigned i = 0; i < n; ++i) {
+            if (inline_refs[i] == r) {
+                return true;
+            }
+        }
+        return depth > InlineDepth && deep_refs->find(r) != deep_refs->end();
+    }
+
+    //! Adds a reference that is not being resolved
+    /** Throws std::bad_alloc if the set of the deeper references cannot take it, which leaves the stack unchanged
+    */
+    DLLLOCAL void push(const lvalue_ref* r) {
+        assert(!contains(r));
+        if (depth < InlineDepth) {
+            inline_refs[depth] = r;
+        } else {
+            if (!deep_refs) {
+                deep_refs.reset(new std::set<const lvalue_ref*>);
+            }
+            deep_refs->insert(r);
+        }
+        ++depth;
+    }
+
+    //! Removes the reference added last, which is \a r
+    DLLLOCAL void pop(const lvalue_ref* r) {
+        assert(depth);
+        --depth;
+        if (depth < InlineDepth) {
+            assert(inline_refs[depth] == r);
+        } else {
+            assert(deep_refs && deep_refs->find(r) != deep_refs->end());
+            deep_refs->erase(r);
+        }
+    }
+
+private:
+    //! the first references of the stack, in their order; only the first \c depth entries are set
+    const lvalue_ref* inline_refs[InlineDepth];
+    //! the number of references of the stack
+    unsigned depth = 0;
+    //! the references of the stack after the first \c InlineDepth, if there have been any
+    std::unique_ptr<std::set<const lvalue_ref*>> deep_refs;
+};
+
+// the size of a std::set of libstdc++ (see above)
+static_assert(sizeof(ThreadReferenceResolutionStack) == 6 * sizeof(void*), "ThreadReferenceResolutionStack must keep "
+    "the layout of ThreadData");
 
 // for user TLD
 typedef std::map<int, q_user_tld> u_tld_map_t;
@@ -799,7 +871,7 @@ public:
     ThreadResourceList* trlist = new ThreadResourceList;
 
     // for detecting circular references at runtime
-    ref_set_t ref_set;
+    ThreadReferenceResolutionStack ref_stack;
 
     // current function/method name
     const char* current_code = nullptr;
@@ -1182,13 +1254,9 @@ public:
         */
         tlv_clearing : 1;
 
-    //! the generation of the thread: unique in the process, unlike its TID, which is reused (qore#7010)
-    const uint64_t thread_gen = next_thread_gen();
-
-    DLLLOCAL static uint64_t next_thread_gen() {
-        static std::atomic<uint64_t> gen{0};
-        return gen.fetch_add(1, std::memory_order_relaxed) + 1;
-    }
+    //! the generation of the work that the thread runs: its own, unique in the process (unlike its TID, which is
+    //! reused), or that of the work item of other code that it runs (see runtime_get_thread_generation(), qore#7010)
+    uint64_t work_gen = qore_new_work_generation();
 
     DLLLOCAL ThreadData(int ptid, QoreProgram* p, bool n_foreign = false,
             int n_flags = QTF_NONE) :
@@ -3193,6 +3261,17 @@ static __attribute__((noinline, cold)) int raise_stack_limit(ExceptionSink* xsin
     return -1;
 }
 
+//! Returns true if entering a Program does nothing: the thread runs in it, with its local data of the Program
+/** The case of ProgramThreadCountContextHelper::set() that returns at once, and so cannot fail; every other case enters
+    the Program.  qore_reference_resolution_check() uses the same test to know that resolving a reference enters no
+    Program (qore#7264), so the two cannot differ.
+*/
+static __attribute__((always_inline)) inline bool thread_program_entry_is_noop(const ThreadData* td,
+        const QoreProgram* pgm) {
+    return pgm == td->current_pgm && td->tlpd && td->entry_pgm == pgm && !td->cancel_defer_count
+        && !td->dtor_cancel_defer_count;
+}
+
 static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
 #ifdef IA64_64
     //printd(5, "check_stack() bsp current: %p limit: %p\n", get_rse_bsp(), td->rse_limit);
@@ -3549,13 +3628,49 @@ void thread_pop_container(const AbstractQoreNode* n) {
 
 int thread_ref_set(const lvalue_ref* r) {
     ThreadData* td = thread_data.get();
-    return !td->ref_set.insert(r).second ? -1 : 0;
+    if (td->ref_stack.contains(r)) {
+        return -1;
+    }
+    td->ref_stack.push(r);
+    return 0;
 }
 
 void thread_ref_remove(const lvalue_ref* r) {
+    thread_data.get()->ref_stack.pop(r);
+}
+
+//! The checks of qore_reference_resolution_check() and qore_reference_fast_resolution_enter(), in the order of
+//! RuntimeReferenceHelperBase: the entry into the Program, the stack, the circular reference
+static __attribute__((always_inline)) inline int reference_resolution_check_intern(ThreadData* td,
+        const QoreProgram* pgm, const lvalue_ref* r, ExceptionSink* xsink) {
+    // the entry into the Program does nothing only in the case of ProgramThreadCountContextHelper::set() that returns
+    // at once (no Program, or thread_program_entry_is_noop()); the others enter the Program, which can fail
+    if (pgm && !thread_program_entry_is_noop(td, pgm)) {
+        return 0;
+    }
+    // the stack check of RuntimeReferenceHelperBase
+    if (check_stack_intern(xsink, td)) {
+        return -1;
+    }
+    // a reference being resolved raises CIRCULAR-REFERENCE-ERROR
+    if (td->ref_stack.contains(r)) {
+        return 0;
+    }
+    return 1;
+}
+
+int qore_reference_resolution_check(const QoreProgram* pgm, const lvalue_ref* r, ExceptionSink* xsink) {
+    return reference_resolution_check_intern(thread_data.get(), pgm, r, xsink);
+}
+
+int qore_reference_fast_resolution_enter(const QoreProgram* pgm, const lvalue_ref* r, ExceptionSink* xsink) {
     ThreadData* td = thread_data.get();
-    assert(td->ref_set.find(r) != td->ref_set.end());
-    td->ref_set.erase(r);
+    int rc = reference_resolution_check_intern(td, pgm, r, xsink);
+    if (rc == 1) {
+        // as thread_ref_set() of RuntimeReferenceHelperBase
+        td->ref_stack.push(r);
+    }
+    return rc;
 }
 
 LocalVarValue* thread_instantiate_lvar() {
@@ -6290,8 +6405,7 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     // and is made without the call that converts a C++ exception
     {
         ThreadData* td = thread_data.get();
-        if (pgm == td->current_pgm && td->tlpd && td->entry_pgm == pgm && !td->cancel_defer_count
-                && !td->dtor_cancel_defer_count) {
+        if (thread_program_entry_is_noop(td, pgm)) {
             // the Program's code runs with the thread's local data of the Program (qore#6185, qore#6537; see
             // setRethrow())
             assert(td->tlpd->pgm == pgm);
@@ -8391,6 +8505,8 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
         in_build = td->sandbox_budgets.inBuild();
         // the work that continues on another thread runs for the capturing code (qore#6844)
         caller_restrictions = qore_get_calling_code_restrictions(td);
+        // and continues its work (qore#7010)
+        work_gen = td->work_gen;
     }
     manager = current.release();
     policy_manager = policy.release();
@@ -8421,11 +8537,15 @@ QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, ModuleClea
     // a continuation of code in a trusted build stays one, and keeps the restrictions of the code that created it
     in_build = src->in_build;
     origin_restrictions = src->origin_restrictions;
+    work_gen = src->work_gen;
     isolation = src->isolation;
     if (isolation) {
         isolation->ref();
     }
     caller_restrictions = src->caller_restrictions;
+    // the steps of the operation are still raised for its submitter (qore#7232)
+    origin_sandboxed = src->origin_sandboxed;
+    origin_pgm_id = src->origin_pgm_id;
     for (QoreSandboxCallBudget* budget : budgets) {
         budget->ref();
     }
@@ -9482,9 +9602,31 @@ qore_program_id_t runtime_get_sandboxed_call_app_id(ThreadData* td, const QorePr
     return runtime_get_module_call_app_id(caller_pgm);
 }
 
+uint64_t qore_new_work_generation() {
+    static std::atomic<uint64_t> gen{0};
+    return gen.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
 uint64_t runtime_get_thread_generation() {
     ThreadData* td = thread_data.get();
-    return td ? td->thread_gen : 0;
+    return td ? td->work_gen : 0;
+}
+
+QoreWorkGenerationHelper::QoreWorkGenerationHelper(uint64_t gen) {
+    if (!gen) {
+        return;
+    }
+    td = thread_data.get();
+    if (td) {
+        old_gen = td->work_gen;
+        td->work_gen = gen;
+    }
+}
+
+QoreWorkGenerationHelper::~QoreWorkGenerationHelper() {
+    if (td) {
+        td->work_gen = old_gen;
+    }
 }
 
 qore_program_id_t runtime_get_sandboxed_module_call_app_id() {
@@ -9729,10 +9871,9 @@ void RuntimeParseOptionsOverrideHelper::set(const QoreCallParseOptionsOverride& 
 void RuntimeParseOptionsOverrideHelper::set(ThreadData* td, const QoreCallParseOptionsOverride& o, bool new_gen) {
     // the caller restrictions apply only to the code of the given module Program
     assert(!o.caller_restrictions || o.module_pgm);
-    assert(!active);
+    assert(!state);
     assert(td == thread_data.get());
     state = &td->runtime_po_state;
-    active = true;
     old = *state;
     state->override_mask = o.mask;
     state->override_value = o.value;
@@ -9752,9 +9893,8 @@ void RuntimeParseOptionsOverrideHelper::set(ThreadData* td, const QoreCallParseO
 }
 
 void RuntimeParseOptionsOverrideHelper::setCleared() {
-    assert(!active);
+    assert(!state);
     state = &thread_data.get()->runtime_po_state;
-    active = true;
     old = *state;
     // an empty override leaves the runtime parse options as they are (see apply_runtime_po_override())
     QoreParseOptions po = state->po;
@@ -9787,6 +9927,9 @@ void QoreThreadRuntimeParseOptions::derefPrograms() {
 QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::captureForThread() {
     QoreThreadRuntimeParseOptions rv = capture();
     rv.override.app_pgm_id = 0;
+    // the thread's work is its own (qore#7010)
+    rv.work_gen = 0;
+    rv.new_work = true;
     return rv;
 }
 
@@ -9827,6 +9970,8 @@ QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::capture() {
     // runs for that code (qore#6520); one that trusted code starts in a host grant does not run for the code that
     // established it in the lent domains
     rv.caller_domain_restrictions = qore_get_calling_code_restrictions(td, false);
+    // the work that runs with the options continues the work of the capturing code (qore#7010)
+    rv.work_gen = td->work_gen;
     rv.refPrograms();
     return rv;
 }
@@ -9848,12 +9993,20 @@ QoreThreadRuntimeParseOptionsHelper::QoreThreadRuntimeParseOptionsHelper(const Q
     old_caller_restrictions_gen = td->thread_caller_restrictions_gen;
     td->thread_caller_restrictions = o->caller_domain_restrictions;
     td->thread_caller_restrictions_gen = ++td->restriction_gen;
+    // the generation of the work: that of the capturing code, a new one for work of its own (qore#7010)
+    old_work_gen = td->work_gen;
+    if (o->work_gen) {
+        td->work_gen = o->work_gen;
+    } else if (o->new_work) {
+        td->work_gen = qore_new_work_generation();
+    }
 }
 
 void QoreThreadRuntimeParseOptionsHelper::restoreCallerRestrictions() {
     ThreadData* td = thread_data.get();
     td->thread_caller_restrictions = old_caller_restrictions;
     td->thread_caller_restrictions_gen = old_caller_restrictions_gen;
+    td->work_gen = old_work_gen;
 }
 
 bool runtime_module_call_override_in_effect(const QoreProgram* module_pgm) {

@@ -442,6 +442,19 @@ Content-Length: 16
       @ref RestHandler::RestHandler::isLogTraceEnabled() "RestHandler::isLogTraceEnabled()"; request arguments and
       bodies are masked and formatted for debug messages only if they will be logged
     - exception messages in REST debug and error log messages are masked
+    - added @ref RestHandler::RestHandler::responseSerializationRetry() "RestHandler::responseSerializationRetry()":
+      a response that it changes so that it can be serialized in a type that the client accepts is sent; before, the
+      client always received status 406 (Not Acceptable);
+      @ref RestHandler::RestHandler::responseSerializationError() "RestHandler::responseSerializationError()" is
+      unchanged since Qore 2.2.1 and is still called first with a copy of the response, but a 406 response no longer
+      always follows it
+      (<a href="https://github.com/qoretechnologies/qore/issues/7250">issue 7250</a>)
+    - an HTTP/1.x Connect or DataStream v1 request body with a \c Content-Length is given to the stream handler in
+      binary parts of at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize" bytes, whatever its size, as
+      over HTTP/2 and HTTP/3; before, the whole body was read before the handler got any of it; a REST method without a
+      stream handler still gets the body whole (see @ref RestHandler::RestHandler::wantsBodyStreaming()
+      "RestHandler::wantsBodyStreaming()";
+      <a href="https://github.com/qoretechnologies/qore/issues/7323">issue 7323</a>)
 
     @section rh_1_6_7 RestHandler v1.6.7
     - fixed responses with headers whose values all have the same type, such as a literal
@@ -1066,6 +1079,43 @@ public namespace RestHandler {
             return dispatchStream(listener, rh, s, mn, args, cx);
         }
 
+        #! Reads an HTTP/1.x body that the server left to a stream request whole, for a method without a stream handler
+        /** The body is decoded, deserialized and validated as the server and RestHandler::handleRequest() do with a
+            body read before dispatching: a Connect body is binary and given in \c cx."stream-body", any other body is
+            decoded as text for a text content type and deserialized into \c cx.body, which is reflected in the
+            arguments if it is a hash (qore#7323)
+
+            @return an error response if the body cannot be decoded or deserialized, otherwise @ref nothing
+        */
+        private:internal *hash<HttpHandlerResponseInfo> readBodyWhole(HttpListenerInterface listener, RestHandler rh,
+                HttpServer::Http1BodyReader body_reader, reference<hash<auto>> cx, reference<*hash<auto>> ah) {
+            binary raw = binary();
+            while (*binary part = body_reader.read(HttpServer::ReadTimeout)) {
+                raw += part;
+            }
+            if (!raw.size()) {
+                return;
+            }
+            *string ct = http_get_field(cx.hdr, "content-type");
+            if (ct =~ /^application\/connect\+/) {
+                cx."stream-body" = raw;
+                cx."orig-request-body" = raw;
+                return;
+            }
+            # the content type rules that the server decodes a body read before dispatching with
+            data body = (ct == MimeTypeOctetStream || ct =~ /^multipart\//i)
+                ? raw
+                : AbstractHttpRequestHandler::decodeRequestText(cx.hdr, raw, listener.getDefaultTextEncoding());
+            *hash<HttpHandlerResponseInfo> err = rh.processRequestBody(\cx, body);
+            if (err) {
+                return err;
+            }
+            # reflect the body in the arguments if it is a hash
+            if (cx.body.typeCode() == NT_HASH) {
+                map ah{$1} = cx.body{$1}, keys cx.body, !exists ah{$1};
+            }
+        }
+
         #! this method is called to dispatch streamed requests on the given object
         private hash<HttpServer::HttpHandlerResponseInfo> dispatchStream(HttpListenerInterface listener,
                 RestHandler rh, Socket s, string mn, *hash<auto> ah, hash<auto> cx) {
@@ -1095,6 +1145,14 @@ public namespace RestHandler {
                                 if (cx.body.typeCode() == NT_HASH) {
                                     map ah{$1} = cx.body{$1}, keys cx.body, !exists ah{$1};
                                 }
+                            }
+                        } else if (*HttpServer::Http1BodyReader body_reader = cx."header-info".body_reader) {
+                            # an HTTP/1.x body with a Content-Length that the server left to a stream request
+                            # (see RestHandler::wantsBodyStreaming()) is read whole for a method without a stream
+                            # handler, and given to it as a body read before dispatching is (qore#7323)
+                            *hash<HttpHandlerResponseInfo> err = readBodyWhole(listener, rh, body_reader, \cx, \ah);
+                            if (err) {
+                                return err;
                             }
                         }
 
@@ -1365,33 +1423,54 @@ public namespace RestHandler {
             validator.setLogger(logger);
         }
 
-        #! Returns @ref True for HTTP/2 and HTTP/3 body streaming with Connect or DataStream protocols
+        #! Returns @ref True for body streaming with Connect or DataStream protocols
         /** For Connect protocol (DataStream 2.0) and DataStream v1 over HTTP/2 or HTTP/3,
             this allows the framework to skip pre-buffering the entire request body and instead
             pass DATA frames incrementally to the stream handler via
             \c AbstractStreamRequest::handleRequest(). This enables mid-stream error detection
             (e.g. COLUMN-ERROR during an upsert) without buffering the entire body in memory.
 
+            Over HTTP/1.x, a Connect or DataStream request body with a \c Content-Length is given to the stream
+            handler in binary parts of at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize" bytes
+            through the server's @ref HttpServer::Http1BodyReader "Http1BodyReader", whatever its size (qore#7323);
+            a DataStream v1 body with a \c Content-Encoding or \c DataStream-Content-Encoding other than \c identity
+            is read whole, as its compressed records are not delimited and are found in the whole body (Connect
+            frames are self-delimiting and are compressed one by one).  A REST method without a stream handler gets
+            such a body whole, as it would without streaming.
+
             @param cx the connection context
             @param hdr the HTTP headers
 
-            @return @ref True for HTTP/2/3 body streaming with Connect or DataStream content types
+            @return @ref True for body streaming with Connect or DataStream content types
 
             @since RestHandler 1.6.7
         */
         bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
-            if (!(cx."header-info".body_streaming ?? False)) {
+            # an HTTP/1.x body with a Content-Length is given in parts through the server's body reader
+            # (cx."header-info".body_reader; qore#7323); an HTTP/2 or HTTP/3 body when it is read as a stream
+            bool http1 = !(cx."header-info".http2 ?? False) && !(cx."header-info".http3 ?? False);
+            if (!http1 && !(cx."header-info".body_streaming ?? False)) {
                 return False;
             }
-            # For Connect or DataStream content types, read body data incrementally
+            # For Connect or DataStream content types, read body data incrementally; Connect frames are
+            # self-delimiting, and each compressed frame is decoded on its own, in any parts
             *string ct = http_get_field(hdr, "content-type");
             if (ct =~ /^application\/connect\+/) {
                 return True;
             }
             if (http_get_field(hdr, "datastream-content-type").val()) {
-                return True;
+                # an HTTP/1.x DataStream v1 body with a content encoding is read whole: its compressed records are
+                # not delimited, and are found in the whole body (see DataStreamUtil::ds_decode_content_streams())
+                return !http1 || (!encodedBody(hdr, "content-encoding")
+                    && !encodedBody(hdr, "datastream-content-encoding"));
             }
             return False;
+        }
+
+        #! Returns @ref True if the given content encoding header of the request names an encoding other than identity
+        private:internal static bool encodedBody(hash<auto> hdr, string field) {
+            *string ce = http_get_field(hdr, field);
+            return ce.val() && ce.lwr() != "identity";
         }
 
         #! returns the name of the root REST class
@@ -1819,40 +1898,36 @@ public namespace RestHandler {
                         if (isLogDebugEnabled()) {
                             logDebug("REST DBG: %s", maskData(get_exception_string(ex)));
                         }
-                        if (ex.err == "ACCEPT-ERROR") {
-                            # Allow subclasses to sanitize the response body and retry
-                            auto orig_body = rv.body;
-                            responseSerializationError(cx, aih, \rv);
-                            if (rv.body !== orig_body) {
-                                # Body was sanitized; retry serialization
-                                try {
-                                    res = validator.processResponse(hdr.method, req.path, rv."code", rv.body,
-                                        rv.hdr, aih."*/*" ? NOTHING : keys aih);
-                                } catch (hash<ExceptionInfo> ex2) {
-                                    if (isLogDebugEnabled()) {
-                                        logDebug("REST DBG retry failed: %s", maskData(get_exception_string(ex2)));
-                                    }
-                                    # http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html: If an Accept header
-                                    # field is present, and if the server cannot send a response which is acceptable
-                                    # according to the combined Accept field value, then the server SHOULD send a
-                                    # 406 (not acceptable) response.
-                                    return AbstractHttpRequestHandler::makeResponse(406, ex2.desc);
-                                }
-                            } else {
-                                # http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html: If an Accept header field is
-                                # present, and if the server cannot send a response which is acceptable according to the
-                                # combined Accept field value, then the server SHOULD send a 406 (not acceptable) response.
-                                return AbstractHttpRequestHandler::makeResponse(406, ex.desc);
+                        if (ex.err != "ACCEPT-ERROR") {
+                            # add original resp to the exception (only if it was an error)
+                            if (rv."code" >= 400 && rv."code" < 600) {
+                                ex.desc += sprintf(" ... Original response: code: %d, body: %s, hdr: %s", rv."code",
+                                    getMaskedLogString(rv.body), getMaskedLogString(rv.hdr));
                             }
+                            rethrow ex.err, ex.desc;
                         }
-
-                        # add original resp to the exception (only if it was an error)
-                        if (rv."code" >= 400 && rv."code" < 600) {
-                            ex.desc += sprintf(" ... Original response: code: %d, body: %s, hdr: %s", rv."code",
-                                getMaskedLogString(rv.body), getMaskedLogString(rv.hdr));
+                        # notify subclasses with a copy of the response, as in Qore 2.2
+                        responseSerializationError(cx, aih, rv);
+                        # let subclasses change the response so that it can be serialized; a retry that succeeds is
+                        # sent (qore#7250)
+                        auto orig_body = rv.body;
+                        responseSerializationRetry(cx, aih, \rv);
+                        if (rv.body === orig_body) {
+                            # http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html: If an Accept header field is
+                            # present, and if the server cannot send a response which is acceptable according to the
+                            # combined Accept field value, then the server SHOULD send a 406 (not acceptable) response.
+                            return AbstractHttpRequestHandler::makeResponse(406, ex.desc);
                         }
-
-                        rethrow ex.err, ex.desc;
+                        try {
+                            res = validator.processResponse(hdr.method, req.path, rv."code", rv.body, rv.hdr,
+                                aih."*/*" ? NOTHING : keys aih);
+                        } catch (hash<ExceptionInfo> ex2) {
+                            if (isLogDebugEnabled()) {
+                                logDebug("REST DBG retry failed: %s", maskData(get_exception_string(ex2)));
+                            }
+                            # see above: 406 (not acceptable)
+                            return AbstractHttpRequestHandler::makeResponse(406, ex2.desc);
+                        }
                     }
 
                     # TRACE (not DEBUG) because both rv.body and res.body can be multi-MB — e.g. a
@@ -2041,15 +2116,49 @@ public namespace RestHandler {
         requestDeserializationError(hash<auto> hdr, hash<auto> cx, string body) {
         }
 
-        #! Called when response serialization fails
-        /** Subclasses can override this method to sanitize the response body and allow retry.
-            If the body is modified, serialization will be retried with the new body.
+        #! Called when the response cannot be serialized in a type that the client accepts
+        /** Called when the schema validator raises an \c ACCEPT-ERROR exception for the response, with a copy of
+            the response; changes to \a rv have no effect, and a <tt>406 Not Acceptable</tt> response follows only if
+            the response is not made serializable by the retry hook.  It is called before
+            @ref RestHandler::RestHandler::responseSerializationRetry() "responseSerializationRetry()", which can
+            change the response so that it can be sent.
+
+            The default implementation does nothing.
 
             @param cx the call context hash
             @param aih the accepted content types from the client
-            @param rv reference to the response hash; modify rv.body to sanitize and retry
+            @param rv a copy of the response that could not be serialized
         */
-        responseSerializationError(hash<auto> cx, *hash<auto> aih, reference rv) {
+        responseSerializationError(hash<auto> cx, *hash<auto> aih, hash<auto> rv) {
+        }
+
+        #! Called to change a response that cannot be serialized in a type that the client accepts
+        /** Called when the schema validator raises an \c ACCEPT-ERROR exception for the response, after
+            @ref RestHandler::RestHandler::responseSerializationError() "responseSerializationError()"; subclasses
+            can override this method to change the response so that it can be sent.
+
+            If the body is changed, the response (with its code, headers and new body) is serialized again; when this
+            succeeds, the response is sent, otherwise (whatever the error) a <tt>406 Not Acceptable</tt> response is
+            sent.  If the body is not changed, a <tt>406 Not Acceptable</tt> response is sent, even if the code or
+            headers were changed.
+
+            For example, to send an error as a Server-Sent Events message to a client that accepts only
+            \c text/event-stream, set \c rv.hdr to <tt>{"Content-Type": "text/event-stream;charset=utf-8"}</tt> and
+            \c rv.body to the SSE message string; a new \c rv.hdr hash replaces all the headers of the response, so
+            copy any others that must be sent into it.
+
+            The default implementation does nothing.
+
+            @param cx the call context hash
+            @param aih the accepted content types from the client
+            @param rv reference to the response; change \c rv.body (and \c rv.code and \c rv.hdr if needed) to retry
+
+            @note an override must declare these parameter types: a method with another typed reference for \a rv
+            (such as <tt>reference&lt;hash&lt;auto&gt;&gt;</tt>) is a separate variant that is never called
+
+            @since RestHandler 1.6.8
+        */
+        responseSerializationRetry(hash<auto> cx, *hash<auto> aih, reference<hash<HttpHandlerResponseInfo>> rv) {
         }
 
         #! This method is called with informational log messages

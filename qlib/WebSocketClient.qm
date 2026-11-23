@@ -358,6 +358,9 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       a message only if the client's connection is the one with the given ID, so a message that belongs to one
       connection (a heartbeat) and was held across a reconnect is dropped instead of being sent on the new connection
       (<a href="https://github.com/qoretechnologies/qore/issues/7106">issue 7106</a>)
+    - a successful ping of a @ref WebSocketClient::WebSocketConnectionObject "WebSocketConnectionObject" marks the
+      connection up with the status \c "OK"; the status stayed \c "not checked"
+      (<a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>)
     - a control frame with an RSV bit set (RFC 6455 section 5.2), or a continuation frame with RSV1 set (the
       "Per-Message Compressed" bit of permessage-deflate, RFC 7692 section 6.1), closes the connection with
       @ref WebSocketUtil::WSCC_ProtocolError "WSCC_ProtocolError" (1002)
@@ -1466,6 +1469,25 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         const ReconnectDelay = 2s;
     }
 
+    private:internal {
+        #! the proof that the code that created the client passed the caller check of a connection manager
+        /** The client creates its connection manager when it connects, and again after a detach or a fallback from
+            HTTP/2 or HTTP/3 to HTTP/1.1: the code that created the client decides, so a client that the host creates
+            and lends to restricted code connects for it, only to the target that it had when it was created (the proof
+            is bound to it); nothing if the creator could not create a manager, whose client is then refused when it
+            connects (qore#7262)
+        */
+        *HttpClientIo::HttpClientCreatorProof creator_proof;
+
+        #! HttpClientIo connection manager for fully async H2/H3 connections
+        /** Created lazily when connecting via HTTP/2. Manages the H2 connection
+            lifecycle, protocol negotiation, and async I/O controller registration.  Not visible to subclasses: a
+            manager created for a client that trusted code lent is a capability of the client's target (qore#7262)
+            @since WebSocketClient 2.4
+        */
+        *HttpClientIo::HttpClientConnectionManager hcio_mgr;
+    }
+
     private {
         Mutex m();
         Condition sleep_cond();
@@ -1715,12 +1737,6 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         */
         *Socket async_wake_socket;
 
-        #! HttpClientIo connection manager for fully async H2/H3 connections
-        /** Created lazily when connecting via HTTP/2. Manages the H2 connection
-            lifecycle, protocol negotiation, and async I/O controller registration.
-            @since WebSocketClient 2.4
-        */
-        *HttpClientIo::HttpClientConnectionManager hcio_mgr;
 
         #! HttpClientIo stream handle for the active H2 CONNECT tunnel
         /** Provides async sendData()/readData() for bidirectional WebSocket
@@ -3562,6 +3578,9 @@ ws.setEventQueue();
 
     #! Common constructor code
     private constructorInit(hash<auto> opts) {
+        # the proof of the code that creates the client, or the one that the trusted creator of the connection that
+        # creates it grants, bound to its target (qore#7262)
+        creator_proof = HttpClientIo::HttpClientCreatorProof::forClient(opts.url, {"proxy": opts.proxy});
         if (opts.reconnect) {
             reconnect = True;
         }
@@ -5730,7 +5749,10 @@ ws.setEventQueue();
     */
     private ensureHcioMgr(*string force_protocol) {
         if (!hcio_mgr) {
-            hcio_mgr = new HttpClientIo::HttpClientConnectionManager(buildHcioOpts(force_protocol));
+            # the code that created the client decides (qore#7262)
+            hcio_mgr = creator_proof
+                ? new HttpClientIo::HttpClientConnectionManager(buildHcioOpts(force_protocol), creator_proof)
+                : new HttpClientIo::HttpClientConnectionManager(buildHcioOpts(force_protocol));
         }
     }
 
@@ -6588,7 +6610,8 @@ public class WebSocketPingPollOperation inherits ConnectionProvider::HttpClientI
     */
     constructor(string base_url, *hash<auto> http_opts, *hash<auto> headers, *Logger::LoggerInterface logger)
             : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(
-                WebSocketPingPollOperation::getHttpOptions(http_opts), logger),
+                WebSocketPingPollOperation::getHttpOptions(http_opts), logger,
+                WebSocketPingPollOperation::getHttpUrl(base_url)),
                 WebSocketPingPollOperation::getHttpUrl(base_url), "GET",
                 HttpClientIoPollOperation::getRequestHeaders(WebSocketPingPollOperation::getHttpUrl(base_url),
                     http_opts, headers),
@@ -6910,9 +6933,12 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
         # Use a 30-second connect timeout for ping operations to prevent hanging on unresponsive endpoints
         object o = get(True, {"connect_timeout": 30000});
         on_exit o.disconnect();
+        date delta = now_us() - start;
+        # issue #7236: a successful ping marks the connection up
+        handlePingSuccess(delta);
         return rv += {
             "ok": True,
-            "time": now_us() - start,
+            "time": delta,
             "info": "OK",
         };
     }

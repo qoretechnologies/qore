@@ -689,7 +689,9 @@ public class Main inherits QUnit::Test {
             TestPollingConnectionMonitor monitor(logger);
             on_exit delete monitor;
 
-            assertTrue(rc.getInfo().up);
+            # never checked: not up (issue #7236)
+            assertFalse(rc.getInfo().up);
+            assertEq("not checked", rc.getInfo().status);
 
             # first test a standard ping
             hash<PingInfo> ping = rc.ping(True);

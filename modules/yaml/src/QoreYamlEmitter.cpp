@@ -74,8 +74,25 @@ int QoreYamlEmitter::emit(const QoreValue& val) {
     }
     // A container can hold a weak (":=") or opaque ("@=") reference, and iterating the container yields the
     // reference itself rather than its target, so it is resolved before the value's type is checked; otherwise a
-    // serializable hash or list reaches the default case below and is reported as a type that cannot be converted
-    const QoreValue v = val.resolveIndirect();
+    // serializable hash or list reaches the default case below and is reported as a type that cannot be converted;
+    // the target of a weak reference is read with a reference of its own, as another thread can free its list or
+    // hash while it is emitted (qore#7231)
+    QoreValue v = val;
+    ValueHolder target(xsink);
+    switch (v.getType()) {
+        case NT_WEAKREF:
+        case NT_WEAKREF_HASH:
+        case NT_WEAKREF_LIST:
+            target = v.resolveIndirectRef();
+            v = *target;
+            break;
+        default:
+            // the target of an opaque reference is held by the container that holds the reference
+            if (v.isOpaque()) {
+                v = v.resolveIndirect();
+            }
+            break;
+    }
     switch (v.getType()) {
         case NT_STRING: {
             QoreStringNodeValueHelper str(v);

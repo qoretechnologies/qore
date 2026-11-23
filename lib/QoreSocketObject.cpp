@@ -2501,6 +2501,7 @@ public:
         IsSecure,
         SetAlpnProtocols,
         SetCaLocations,
+        SetTrustStore,
         GetAlpnProtocol,
         IsHttp2,
         VerifyPeerCertificate,
@@ -2523,11 +2524,23 @@ public:
         sock->ref();
     }
 
+    //! Sets or clears the in-memory trust store; takes a reference to it (qoretechnologies/qore#7248)
+    DLLLOCAL QoreSocketObjectTlsStatePollOperation(QoreSocketObject* sock, QoreSSLTrustStore* ts)
+            : sock(sock), action(Action::SetTrustStore), trust_store(ts) {
+        sock->ref();
+        if (ts) {
+            ts->ref();
+        }
+    }
+
     DLLLOCAL ~QoreSocketObjectTlsStatePollOperation() override {
         ExceptionSink xsink;
         output.discard(&xsink);
         if (xsink) {
             xsink.clear();
+        }
+        if (trust_store) {
+            trust_store->deref();
         }
         sock->deref(&xsink);
         if (xsink) {
@@ -2588,6 +2601,11 @@ public:
                 output = 0;
                 break;
 
+            case Action::SetTrustStore:
+                sp->setSslTrustStore(trust_store);
+                output = 0;
+                break;
+
             case Action::GetAlpnProtocol:
                 setAlpnValue(sp);
                 break;
@@ -2630,6 +2648,7 @@ private:
                 return static_cast<int64>(-1);
             case Action::SetAlpnProtocols:
             case Action::SetCaLocations:
+            case Action::SetTrustStore:
                 return static_cast<int64>(-1);
             case Action::GetCipherName:
             case Action::GetCipherVersion:
@@ -2664,6 +2683,8 @@ private:
     //! the CA locations for Action::SetCaLocations
     std::string ca_file;
     std::string ca_path;
+    //! the trust store for Action::SetTrustStore; a reference is held
+    QoreSSLTrustStore* trust_store = nullptr;
     bool done = false;
 };
 
@@ -4746,6 +4767,7 @@ QoreSocketObject::QoreSocketObject(QoreSocketObject& orig, int descriptor)
     }
     dst->ssl_ca_file = src->ssl_ca_file;
     dst->ssl_ca_path = src->ssl_ca_path;
+    dst->setSslTrustStore(src->ssl_trust_store);
     dst->async_io_route_key = getIoIdentityHash();
     // the connections accepted from a listener share its HTTP fast context (routes and extra headers): a change
     // reaches the connections that are already open
@@ -5661,6 +5683,24 @@ void QoreSocketObject::setSslCaLocations(const char* ca_file, const char* ca_pat
         new QoreSocketObjectTlsStatePollOperation(this, std::string(ca_file ? ca_file : ""),
             std::string(ca_path ? ca_path : "")),
         -1, "setSslCaLocations", "tls-state", xsink), xsink);
+}
+
+void qore_socket_object_private::setSslTrustStore(QoreSSLTrustStore* ts, ExceptionSink* xsink) {
+    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
+        setSslTrustStoreForAsyncPoll(ts, xsink);
+        return;
+    }
+
+    ValueHolder rv(qore_socket_object_exec_poll_output(so, new QoreSocketObjectTlsStatePollOperation(so, ts),
+        -1, "setSslTrustStore", "tls-state", xsink), xsink);
+}
+
+void qore_socket_object_private::setSslTrustStoreForAsyncPoll(QoreSSLTrustStore* ts, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    if (priv->checkValid(xsink)) {
+        return;
+    }
+    qore_socket_private::get(*priv->socket)->setSslTrustStore(ts);
 }
 
 void qore_socket_object_private::setSslCaLocationsForAsyncPoll(const char* ca_file, const char* ca_path,

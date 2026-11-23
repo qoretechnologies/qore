@@ -630,8 +630,24 @@ static int do_json_string(ExceptionSink* xsink, QoreString* str, const QoreStrin
 static int do_json_value(QoreString* str, QoreValue v, int format, int depth,
         QoreSandboxManager* sm, ExceptionSink* xsink) {
     // a value read through the language unwraps itself, but walking a container gives the stored
-    // representation, so a value assigned with ':=' or '@=' arrives here as the reference itself
-    v = v.resolveIndirect();
+    // representation, so a value assigned with ':=' or '@=' arrives here as the reference itself; the target of a
+    // weak reference is read with a reference of its own, as another thread can free its list or hash while it is
+    // written (qore#7231)
+    ValueHolder target(xsink);
+    switch (v.getType()) {
+        case NT_WEAKREF:
+        case NT_WEAKREF_HASH:
+        case NT_WEAKREF_LIST:
+            target = v.resolveIndirectRef();
+            v = *target;
+            break;
+        default:
+            // the target of an opaque reference is held by the container that holds the reference
+            if (v.isOpaque()) {
+                v = v.resolveIndirect();
+            }
+            break;
+    }
 
     if (v.isNullOrNothing()) {
         str->concat("null");

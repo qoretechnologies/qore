@@ -42,6 +42,21 @@ public hashdecl LlmStructuredRepairResult {
     *string failure_fingerprint;
 }
 
+#! Per-call options of the OpenAI-compatible chat-completions facade, given beside the request body
+/** These options hold values that cannot travel in an OpenAI-shaped (JSON) request body, so a caller that forwards
+    such a body unchanged, such as an LLM gateway, can still control the call.
+
+    @see LlmBackend::chatCompletions(), LlmBackend::chatCompletionsStream()
+*/
+public hashdecl LlmFacadeCallOptions {
+    #! Cancellation token of the call
+    /** Calling @ref LlmCancellation::cancel() from any thread stops the call: a request not yet sent is not sent,
+        a request in flight has its connection closed (also while its response or its next stream event is
+        awaited), no retry or repair request follows, and the call raises \c LLM-CANCELLED.
+    */
+    *LlmCancellation cancellation;
+}
+
 #! Provider-neutral helpers for parsing and repairing structured LLM output
 /** LLM providers differ in how strictly they enforce JSON schema and tool
     argument shapes.  This class centralizes conservative, provider-neutral
@@ -665,6 +680,11 @@ public class LlmBackend {
         const SupportedFacadeControls = ("max_retries", "tool_repair_enabled", "stream_progress", "cancellation");
     }
     private {
+        #! The failure description of a forced-tool JSON repair of a response without the required tool call
+        const RequiredToolNoOutputDescription = "The previous response returned no content and no function call even "
+            "though a tool call was required.";
+        #! The failure description of a forced-tool JSON repair of a malformed function call
+        const MalformedFunctionCallDescription = "The previous forced function-call response was malformed.";
         #! Minimum visible-output budget for a schema-constrained forced-tool retry
         const ForcedToolJsonRetryMinOutputTokens = 2048;
         #! Errors meaning a forced-tool JSON repair was not satisfied by the provider
@@ -888,33 +908,46 @@ public class LlmBackend {
         });
         try {
             hash<ChatResponse> response = provider.chat(messages, tools, opts);
-            notifyTelemetry(observer, "end", "chat", opts, {
-                "request": request,
-                "response": LlmTelemetry::chatResponseSummary(response),
-                "usage": LlmTelemetry::normalizeUsage(response.usage),
-                "raw_usage": response.usage,
-                "status": "ok",
-                "stop_reason": response.stop_reason,
-                "response_id": response.id,
-                "model": response.model,
-                "latency_ms": elapsedMs(started),
-            });
+            notifyChatEnd(observer, opts, request, response, started);
             return response;
         } catch (hash<ExceptionInfo> ex) {
-            *hash<auto> rejected_usage;
-            if (ex.arg.typeCode() == NT_HASH && ex.arg.hasKey("_qore_llm_response")) {
-                rejected_usage = ex.arg._qore_llm_response.usage;
-            }
-            notifyTelemetry(observer, "error", "chat", opts, {
-                "raw_usage": rejected_usage,
-                "usage": rejected_usage ? LlmTelemetry::normalizeUsage(rejected_usage) : NOTHING,
-                "request": request,
-                "status": "error",
-                "latency_ms": elapsedMs(started),
-                "error": LlmTelemetry::errorInfo(ex),
-            });
+            notifyCallError(observer, "chat", opts, request, ex, started);
             rethrow;
         }
+    }
+
+    #! Reports the end of a chat call to the telemetry observer
+    private notifyChatEnd(*hash<LlmTelemetryObserver> observer, hash<LlmRequestOptions> opts, hash<auto> request,
+            hash<ChatResponse> response, date started) {
+        notifyTelemetry(observer, "end", "chat", opts, {
+            "request": request,
+            "response": LlmTelemetry::chatResponseSummary(response),
+            "usage": LlmTelemetry::normalizeUsage(response.usage),
+            "raw_usage": response.usage,
+            "status": "ok",
+            "stop_reason": response.stop_reason,
+            "response_id": response.id,
+            "model": response.model,
+            "latency_ms": elapsedMs(started),
+        });
+    }
+
+    #! Reports the error of a call to the telemetry observer
+    private notifyCallError(*hash<LlmTelemetryObserver> observer, string operation, *hash<LlmRequestOptions> opts,
+            hash<auto> request, hash<ExceptionInfo> ex, date started, *hash<auto> extra) {
+        *hash<auto> rejected_usage;
+        if (ex.arg.typeCode() == NT_HASH && ex.arg.hasKey("_qore_llm_response")) {
+            rejected_usage = ex.arg._qore_llm_response.usage;
+        }
+        notifyTelemetry(observer, "error", operation, opts, {
+            "raw_usage": rejected_usage,
+            "usage": rejected_usage ? LlmTelemetry::normalizeUsage(rejected_usage) : NOTHING,
+            "request": request,
+            "status": "error",
+            "latency_ms": elapsedMs(started),
+        } + extra + {
+            "error": LlmTelemetry::errorInfo(ex),
+        });
     }
 
     #! Streams a chat completion via Server-Sent Events (SSE)
@@ -955,88 +988,105 @@ llm.chatStream(
     chatStream(list<hash<ChatMessage>> messages,
             code<nothing(hash<ChatStreamEvent>)> callback,
             *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
-        date started = now_us();
-        *date first_delta;
-        int delta_count = 0;
-        *hash<auto> last_usage;
-        *string stop_reason;
-        *string response_id;
-        *string response_model;
-        hash<auto> telemetry_state = newOpenAiStreamState(NOTHING);
-        *hash<LlmTelemetryObserver> observer = getTelemetryObserver(opts);
-        hash<auto> request = LlmTelemetry::chatRequestSummary(messages, tools,
-            opts, True);
-        notifyTelemetry(observer, "start", "chat_stream", opts, {
-            "request": request,
-        });
+        hash<auto> telemetry = startStreamTelemetry(messages, tools, opts);
         try {
             provider.chatStream(messages, sub (hash<ChatStreamEvent> event) {
-                ++delta_count;
-                if (!first_delta) {
-                    first_delta = now_us();
-                }
-                if (event.raw.typeCode() == NT_HASH) {
-                    # the provider hook reads its own event shape (e.g. Gemini usageMetadata and
-                    # candidates[0].finishReason, or Anthropic message_start and message_delta)
-                    updateStreamState(\telemetry_state, event);
-                    if (telemetry_state.usage.typeCode() == NT_HASH) {
-                        last_usage = cast<hash>(telemetry_state.usage);
-                    }
-                    response_id = telemetry_state.id;
-                    response_model = telemetry_state.model;
-                    stop_reason = telemetry_state.finish_reason;
-                }
-                notifyTelemetry(observer, "stream_delta", "chat_stream", opts, {
-                    "request": request,
-                    "stream_delta": LlmTelemetry::streamDeltaSummary(event,
-                        delta_count),
-                    "usage": last_usage
-                        ? LlmTelemetry::normalizeUsage(last_usage) : NOTHING,
-                    "raw_usage": last_usage,
-                    "response_id": response_id,
-                    "model": response_model,
-                    "time_to_first_delta_ms": first_delta
-                        ? (first_delta - started).durationMicroseconds()
-                            / 1000
-                        : NOTHING,
-                });
+                notifyStreamDelta(\telemetry, event);
                 callback(event);
             }, tools, opts);
-            notifyTelemetry(observer, "end", "chat_stream", opts, {
-                "request": request,
-                "response": {
-                    "stream_delta_count": delta_count,
-                },
-                "usage": last_usage
-                    ? LlmTelemetry::normalizeUsage(last_usage) : NOTHING,
-                "raw_usage": last_usage,
-                "status": "ok",
-                "stop_reason": stop_reason,
-                "response_id": response_id,
-                "model": response_model,
-                "latency_ms": elapsedMs(started),
-                "time_to_first_delta_ms": first_delta
-                    ? (first_delta - started).durationMicroseconds() / 1000
-                    : NOTHING,
-            });
+            notifyStreamEnd(telemetry);
         } catch (hash<ExceptionInfo> ex) {
-            *hash<auto> rejected_usage;
-            if (ex.arg.typeCode() == NT_HASH && ex.arg.hasKey("_qore_llm_response")) {
-                rejected_usage = ex.arg._qore_llm_response.usage;
-            }
-            notifyTelemetry(observer, "error", "chat_stream", opts, {
-                "raw_usage": rejected_usage,
-                "usage": rejected_usage ? LlmTelemetry::normalizeUsage(rejected_usage) : NOTHING,
-                "request": request,
-                "status": "error",
-                "latency_ms": elapsedMs(started),
-                "time_to_first_delta_ms": first_delta
-                    ? (first_delta - started).durationMicroseconds() / 1000
-                    : NOTHING,
-                "error": LlmTelemetry::errorInfo(ex),
-            });
+            notifyStreamError(telemetry, ex);
             rethrow;
         }
+    }
+
+    #! Starts the telemetry of a stream: reports its start and returns its state
+    private hash<auto> startStreamTelemetry(list<hash<ChatMessage>> messages, *list<hash<ToolDefinition>> tools,
+            *hash<LlmRequestOptions> opts) {
+        hash<auto!> telemetry = {
+            "started": now_us(),
+            "first_delta": NOTHING,
+            "delta_count": 0,
+            "last_usage": NOTHING,
+            "stop_reason": NOTHING,
+            "response_id": NOTHING,
+            "response_model": NOTHING,
+            "observer": getTelemetryObserver(opts),
+            "opts": opts,
+            "request": LlmTelemetry::chatRequestSummary(messages, tools, opts, True),
+        };
+        telemetry.state = newOpenAiStreamState(NOTHING);
+        notifyTelemetry(telemetry.observer, "start", "chat_stream", opts, {
+            "request": telemetry.request,
+        });
+        return telemetry;
+    }
+
+    #! Reports an event of a stream to the telemetry observer
+    private notifyStreamDelta(reference<hash<auto>> telemetry, hash<ChatStreamEvent> event) {
+        ++telemetry.delta_count;
+        if (!telemetry.first_delta) {
+            telemetry.first_delta = now_us();
+        }
+        if (event.raw.typeCode() == NT_HASH) {
+            # the provider hook reads its own event shape (e.g. Gemini usageMetadata and
+            # candidates[0].finishReason, or Anthropic message_start and message_delta)
+            hash<auto> telemetry_state = telemetry.state;
+            updateStreamState(\telemetry_state, event);
+            telemetry.state = telemetry_state;
+            if (telemetry_state.usage.typeCode() == NT_HASH) {
+                telemetry.last_usage = cast<hash>(telemetry_state.usage);
+            }
+            telemetry.response_id = telemetry_state.id;
+            telemetry.response_model = telemetry_state.model;
+            telemetry.stop_reason = telemetry_state.finish_reason;
+        }
+        notifyTelemetry(telemetry.observer, "stream_delta", "chat_stream", telemetry.opts, {
+            "request": telemetry.request,
+            "stream_delta": LlmTelemetry::streamDeltaSummary(event,
+                telemetry.delta_count),
+            "usage": telemetry.last_usage
+                ? LlmTelemetry::normalizeUsage(telemetry.last_usage) : NOTHING,
+            "raw_usage": telemetry.last_usage,
+            "response_id": telemetry.response_id,
+            "model": telemetry.response_model,
+            "time_to_first_delta_ms": telemetry.first_delta
+                ? (telemetry.first_delta - telemetry.started).durationMicroseconds()
+                    / 1000
+                : NOTHING,
+        });
+    }
+
+    #! Reports the end of a stream to the telemetry observer
+    private notifyStreamEnd(hash<auto> telemetry) {
+        notifyTelemetry(telemetry.observer, "end", "chat_stream", telemetry.opts, {
+            "request": telemetry.request,
+            "response": {
+                "stream_delta_count": telemetry.delta_count,
+            },
+            "usage": telemetry.last_usage
+                ? LlmTelemetry::normalizeUsage(telemetry.last_usage) : NOTHING,
+            "raw_usage": telemetry.last_usage,
+            "status": "ok",
+            "stop_reason": telemetry.stop_reason,
+            "response_id": telemetry.response_id,
+            "model": telemetry.response_model,
+            "latency_ms": elapsedMs(telemetry.started),
+            "time_to_first_delta_ms": telemetry.first_delta
+                ? (telemetry.first_delta - telemetry.started).durationMicroseconds() / 1000
+                : NOTHING,
+        });
+    }
+
+    #! Reports the error of a stream to the telemetry observer
+    private notifyStreamError(hash<auto> telemetry, hash<ExceptionInfo> ex) {
+        notifyCallError(telemetry.observer, "chat_stream", telemetry.opts, telemetry.request, ex,
+            telemetry.started, {
+                "time_to_first_delta_ms": telemetry.first_delta
+                    ? (telemetry.first_delta - telemetry.started).durationMicroseconds() / 1000
+                    : NOTHING,
+            });
     }
 
     #! Streams a chat completion and returns the accumulated response
@@ -1103,9 +1153,11 @@ if (resp.stop_reason == "tool_use") {
         Gemini internally.
 
         @param body OpenAI-compatible chat-completions request
+        @param call_opts per-call options given beside the body; see @ref LlmFacadeCallOptions
 
-        @note Pass an @ref LlmCancellation object as \c cancellation to stop this call from another thread.
-            Cancellation raises \c LLM-CANCELLED. The token stays local to this request and its repairs.
+        @note Pass an @ref LlmCancellation object as \c cancellation in \a call_opts (or in \a body) to stop this
+            call from another thread: the request in flight is aborted at once, no retry or repair follows, and the
+            call raises \c LLM-CANCELLED. The token stays local to this request and its repairs.
 
         @note The optional \c max_retries field is a provider-neutral Qore
             facade extension. It is consumed as a per-call transport retry
@@ -1132,12 +1184,21 @@ if (resp.stop_reason == "tool_use") {
         @return OpenAI-compatible chat-completions response
 
         @throw LLM-ERROR the backend call failed
-        @throw LLM-REQUEST-ERROR the supplied \c cancellation is not an @ref LlmCancellation
+        @throw LLM-CANCELLED the call was cancelled
+        @throw LLM-REQUEST-ERROR the supplied \c cancellation is not an @ref LlmCancellation, or \a body and
+            \a call_opts give different tokens
         @throw LLM-REQUEST-ERROR \c tool_repair_enabled is present and is not a boolean
+
+        @par Example
+        @code{.py}
+LlmCancellation stop();
+# another thread calls stop.cancel("stopped by the user")
+hash<auto> rv = backend.chatCompletions(body, <LlmFacadeCallOptions>{"cancellation": stop});
+        @endcode
     */
-    hash<auto> chatCompletions(hash<auto> body) {
+    hash<auto> chatCompletions(hash<auto> body, *hash<LlmFacadeCallOptions> call_opts) {
         bool tool_repair_enabled = toolRepairEnabled(body);
-        hash<auto> parsed = parseOpenAiChatCompletionsRequest(body);
+        hash<auto> parsed = parseOpenAiChatCompletionsRequest(body, call_opts);
         list<hash<ChatMessage>> messages =
             cast<list<hash<ChatMessage>>>(parsed.messages);
         *list<hash<ToolDefinition>> tools =
@@ -1152,8 +1213,7 @@ if (resp.stop_reason == "tool_use") {
             forced_tool_name, tools);
         if (tool_repair_enabled && shouldRetryForcedToolAsJson(rv, forced_tool_name)) {
             *hash<auto> retry = retryForcedToolAsJson(messages, tools, options,
-                forced_tool_name,
-                "The previous forced function-call response was malformed.");
+                forced_tool_name, MalformedFunctionCallDescription);
             if (retry) {
                 if (openAiResponseHasToolCall(retry)) {
                     return attachOpenAiToolProtocolDiagnostics(
@@ -1189,10 +1249,13 @@ if (resp.stop_reason == "tool_use") {
         OpenAI-compatible final response.
 
         @param body OpenAI-compatible chat-completions request
-
-        @note Pass an @ref LlmCancellation object as \c cancellation to stop this call from another thread.
-            Cancellation raises \c LLM-CANCELLED. The token stays local to this request and its repairs.
         @param delta_cb callback receiving OpenAI-compatible stream chunks
+        @param call_opts per-call options given beside the body; see @ref LlmFacadeCallOptions
+
+        @note Pass an @ref LlmCancellation object as \c cancellation in \a call_opts (or in \a body) to stop this
+            call from another thread: the stream's connection is closed at once, also while the next event is
+            awaited, no further chunk reaches \a delta_cb, no retry or repair follows, and the call raises
+            \c LLM-CANCELLED. The token stays local to this request and its repairs.
 
         @note Set the optional boolean \c tool_repair_enabled to \c False when the caller owns the budget for
             additional requests. The original response and usage are returned without automatic JSON or tool
@@ -1217,14 +1280,16 @@ if (resp.stop_reason == "tool_use") {
         @return accumulated OpenAI-compatible final response
 
         @throw LLM-ERROR the backend call failed
-        @throw LLM-REQUEST-ERROR the supplied \c cancellation is not an @ref LlmCancellation
+        @throw LLM-CANCELLED the call was cancelled
+        @throw LLM-REQUEST-ERROR the supplied \c cancellation is not an @ref LlmCancellation, or \a body and
+            \a call_opts give different tokens
         @throw LLM-REQUEST-ERROR \c tool_repair_enabled or \c stream_progress is present and is not a boolean
     */
     hash<auto> chatCompletionsStream(hash<auto> body,
-            code<nothing(hash<auto>)> delta_cb) {
+            code<nothing(hash<auto>)> delta_cb, *hash<LlmFacadeCallOptions> call_opts) {
         bool tool_repair_enabled = toolRepairEnabled(body);
         bool stream_progress = facadeFlag(body, "stream_progress", False);
-        hash<auto> parsed = parseOpenAiChatCompletionsRequest(body);
+        hash<auto> parsed = parseOpenAiChatCompletionsRequest(body, call_opts);
         list<hash<ChatMessage>> messages =
             cast<list<hash<ChatMessage>>>(parsed.messages);
         *list<hash<ToolDefinition>> tools =
@@ -1253,8 +1318,7 @@ if (resp.stop_reason == "tool_use") {
         *string forced_tool_name = getForcedOpenAiToolName(body, tools);
         if (tool_repair_enabled && shouldRetryForcedToolAsJson(rv, forced_tool_name)) {
             *hash<auto> retry = retryForcedToolAsJson(messages, tools, options,
-                forced_tool_name,
-                "The previous forced function-call response was malformed.");
+                forced_tool_name, MalformedFunctionCallDescription);
             if (retry) {
                 if (openAiResponseHasToolCall(retry)) {
                     return attachOpenAiToolProtocolDiagnostics(
@@ -1285,6 +1349,365 @@ if (resp.stop_reason == "tool_use") {
         # instead of a RUNTIME-TYPE-ERROR.
         return attachOpenAiToolProtocolDiagnostics(rv ?? {}, body, tools,
             options, True);
+    }
+
+    #! Returns @ref True if the provider's asynchronous calls hold no thread while they wait for the provider
+    /** The asynchronous methods (@ref chatAsync(), @ref chatStreamAsync(), @ref chatCompletionsAsync() and
+        @ref chatCompletionsStreamAsync()) work with every provider: a provider without an asynchronous transport
+        runs its synchronous call in a thread of the call's executor, which it holds while it waits.  The Anthropic
+        provider and the OpenAI-compatible providers (OpenAI, Azure OpenAI, DeepSeek, Fireworks, Grok, Groq,
+        Mistral, Ollama, Perplexity, SGLang and Together) hold no thread.
+
+        @return @ref True if the provider's asynchronous calls hold no thread while they wait
+
+        @see @ref QoreLlmUtils::AbstractLlmProvider::supportsAsyncChat() "AbstractLlmProvider::supportsAsyncChat()"
+    */
+    bool supportsAsyncChat() {
+        return provider.supportsAsyncChat();
+    }
+
+    #! Starts a multi-turn chat call that holds no thread while it waits for the provider
+    /** The asynchronous form of @ref chat(): the same request, retries, telemetry events, errors and result, with
+        the steps of the call run in threads of the executor given in \a async_opts.
+
+        @param messages list of @ref ChatMessage hashes forming the conversation
+        @param tools optional list of @ref ToolDefinition hashes the LLM can call
+        @param opts per-call request overrides; when @ref LlmRequestOptions::cancellation is not given, the
+        operation creates a token of its own, so that @ref LlmAsyncOperation::cancel() can stop the call
+        @param async_opts the executor of the call and its optional completion callback
+
+        @return the operation of the call; its result is a @ref ChatResponse
+
+        @throw LLM-REQUEST-ERROR \a async_opts has no executor
+    */
+    LlmAsyncOperation chatAsync(list<hash<ChatMessage>> messages, *list<hash<ToolDefinition>> tools,
+            *hash<LlmRequestOptions> opts, hash<LlmAsyncCallOptions> async_opts) {
+        hash<LlmRequestOptions> call_opts = opts ?? <LlmRequestOptions>{};
+        LlmAsyncOperation op = LlmAsyncOperation::forCall(\call_opts, async_opts);
+        op.post(sub () {
+            startChatStep(op, messages, tools, call_opts, sub (hash<ChatResponse> response) {
+                op.complete(response);
+            });
+        });
+        return op;
+    }
+
+    #! Starts a streamed chat call that holds no thread while it waits for the provider
+    /** The asynchronous form of @ref chatStream(): the same request, events, telemetry events and errors.
+        \a callback receives each event in order, in a thread of the executor given in \a async_opts, and never two
+        at once; the operation is done after the final event or when the call fails, and its result is
+        @ref nothing.
+
+        @param messages list of @ref ChatMessage hashes
+        @param callback receives each @ref ChatStreamEvent; an exception it raises ends the call with that error
+        @param tools optional tool definitions
+        @param opts per-call request overrides; when @ref LlmRequestOptions::cancellation is not given, the
+        operation creates a token of its own
+        @param async_opts the executor of the call and its optional completion callback
+
+        @return the operation of the call
+
+        @throw LLM-REQUEST-ERROR \a async_opts has no executor
+    */
+    LlmAsyncOperation chatStreamAsync(list<hash<ChatMessage>> messages,
+            code<nothing(hash<ChatStreamEvent>)> callback, *list<hash<ToolDefinition>> tools,
+            *hash<LlmRequestOptions> opts, hash<LlmAsyncCallOptions> async_opts) {
+        hash<LlmRequestOptions> call_opts = opts ?? <LlmRequestOptions>{};
+        LlmAsyncOperation op = LlmAsyncOperation::forCall(\call_opts, async_opts);
+        op.post(sub () {
+            startChatStreamStep(op, messages, callback, tools, call_opts, sub () {
+                op.complete();
+            });
+        });
+        return op;
+    }
+
+    #! Asynchronous OpenAI-compatible chat-completions facade
+    /** The asynchronous form of @ref chatCompletions(): the same request, transport retries, tool and structured
+        output repairs, telemetry events, errors and response, without holding a thread while the provider is
+        awaited.  The steps of the call run in threads of the executor given in \a async_opts; a retry waits on a
+        timer of the async I/O controller, and a repair request is made when the response that needs it has been
+        read.
+
+        The request is checked before this method returns: an invalid request raises the error that
+        @ref chatCompletions() raises, and no operation is started.
+
+        @param body OpenAI-compatible chat-completions request
+        @param async_opts the executor of the call and its optional completion callback
+        @param call_opts per-call options given beside the body; see @ref LlmFacadeCallOptions.  A cancellation token
+        given here (or in \a body) stops the call as it stops @ref chatCompletions(); without one, the operation
+        creates its own, which @ref LlmAsyncOperation::cancel() cancels
+
+        @return the operation of the call; its result is the OpenAI-compatible response of @ref chatCompletions(),
+        including its \c usage
+
+        @throw LLM-REQUEST-ERROR the request is invalid (see @ref chatCompletions()), or \a async_opts has no executor
+
+        @par Example
+        @code{.py}
+LlmThreadPoolExecutor executor(4);
+LlmCancellation stop();
+LlmAsyncOperation op = backend.chatCompletionsAsync(body, <LlmAsyncCallOptions>{
+    "executor": executor,
+    "on_complete": sub (LlmAsyncOperation op) {
+        if (!op.isError()) {
+            hash<auto> response = op.getResult();
+            printf("tokens: %d\n", response.usage.total_tokens);
+        }
+    },
+}, <LlmFacadeCallOptions>{"cancellation": stop});
+        @endcode
+    */
+    LlmAsyncOperation chatCompletionsAsync(hash<auto> body, hash<LlmAsyncCallOptions> async_opts,
+            *hash<LlmFacadeCallOptions> call_opts) {
+        bool tool_repair_enabled = toolRepairEnabled(body);
+        hash<auto> parsed = parseOpenAiChatCompletionsRequest(body, call_opts);
+        list<hash<ChatMessage>> messages =
+            cast<list<hash<ChatMessage>>>(parsed.messages);
+        *list<hash<ToolDefinition>> tools =
+            cast<*list<hash<ToolDefinition>>>(parsed.tools);
+        # one deadline for the whole call: its repair requests get only the time left
+        hash<LlmRequestOptions> options = withCallDeadline(
+            cast<hash<LlmRequestOptions>>(parsed.options));
+        LlmAsyncOperation op = LlmAsyncOperation::forCall(\options, async_opts);
+        hash<auto> ctx = {
+            "body": body,
+            "messages": messages,
+            "tools": tools,
+            "options": options,
+            "forced_tool_name": getForcedOpenAiToolName(body, tools),
+            "tool_repair_enabled": tool_repair_enabled,
+            "stream": False,
+        };
+        op.post(sub () {
+            startChatStep(op, messages, tools, options, sub (hash<ChatResponse> response) {
+                hash<auto> rv = synthesizeOpenAiForcedToolCall(chatResponseToOpenAi(
+                    response, options.model ?? provider.getModel(), tools),
+                    ctx.forced_tool_name, tools);
+                repairFacadeResponseAsync(op, ctx, rv);
+            });
+        });
+        return op;
+    }
+
+    #! Asynchronous streaming OpenAI-compatible chat-completions facade
+    /** The asynchronous form of @ref chatCompletionsStream(): the same request, chunks, repairs, telemetry events,
+        errors and final response, without holding a thread while the provider is awaited.  \a delta_cb receives the
+        chunks in order, in a thread of the executor given in \a async_opts, and never two at once.
+
+        The request is checked before this method returns: an invalid request raises the error that
+        @ref chatCompletionsStream() raises, and no operation is started.
+
+        @param body OpenAI-compatible chat-completions request
+        @param delta_cb receives the OpenAI-compatible stream chunks; an exception it raises ends the call with that
+        error
+        @param async_opts the executor of the call and its optional completion callback
+        @param call_opts per-call options given beside the body; see @ref LlmFacadeCallOptions
+
+        @return the operation of the call; its result is the accumulated OpenAI-compatible response of
+        @ref chatCompletionsStream()
+
+        @throw LLM-REQUEST-ERROR the request is invalid (see @ref chatCompletionsStream()), or \a async_opts has no
+        executor
+    */
+    LlmAsyncOperation chatCompletionsStreamAsync(hash<auto> body, code<nothing(hash<auto>)> delta_cb,
+            hash<LlmAsyncCallOptions> async_opts, *hash<LlmFacadeCallOptions> call_opts) {
+        bool tool_repair_enabled = toolRepairEnabled(body);
+        bool stream_progress = facadeFlag(body, "stream_progress", False);
+        hash<auto> parsed = parseOpenAiChatCompletionsRequest(body, call_opts);
+        list<hash<ChatMessage>> messages =
+            cast<list<hash<ChatMessage>>>(parsed.messages);
+        *list<hash<ToolDefinition>> tools =
+            cast<*list<hash<ToolDefinition>>>(parsed.tools);
+        hash<LlmRequestOptions> options =
+            cast<hash<LlmRequestOptions>>(parsed.options);
+        if (stream_progress) {
+            # held-back raw output goes to the caller as it arrives, marked, and is never accumulated
+            options.stream_progress = sub (hash<ChatStreamEvent> event) {
+                if (event.raw.typeCode() == NT_HASH) {
+                    delta_cb(event.raw + {"stream_progress": True});
+                }
+            };
+        }
+        LlmAsyncOperation op = LlmAsyncOperation::forCall(\options, async_opts);
+        hash<auto> state = newOpenAiStreamState(options.model
+            ?? provider.getModel());
+        hash<auto> ctx = {
+            "body": body,
+            "messages": messages,
+            "tools": tools,
+            "options": options,
+            "forced_tool_name": getForcedOpenAiToolName(body, tools),
+            "tool_repair_enabled": tool_repair_enabled,
+            "stream": True,
+        };
+        op.post(sub () {
+            startChatStreamStep(op, messages, sub (hash<ChatStreamEvent> event) {
+                *hash<auto> chunk = chatStreamEventToOpenAiChunk(\state, event);
+                if (chunk) {
+                    delta_cb(chunk);
+                }
+            }, tools, options, sub () {
+                hash<auto> rv = synthesizeOpenAiForcedToolCall(
+                    streamStateToOpenAiResponse(state),
+                    getForcedOpenAiToolName(body, tools), tools);
+                repairFacadeResponseAsync(op, ctx, rv);
+            });
+        });
+        return op;
+    }
+
+    #! Runs a chat request as a step of an asynchronous operation, with the telemetry events of @ref chat()
+    /** Must be called in a task of \a op.  \a next receives the response; the error of the request goes to
+        \a error_cb, or ends the operation if not given.
+    */
+    private startChatStep(LlmAsyncOperation op, list<hash<ChatMessage>> messages, *list<hash<ToolDefinition>> tools,
+            hash<LlmRequestOptions> opts, code<nothing(hash<ChatResponse>)> next,
+            *code<nothing(hash<ExceptionInfo>)> error_cb) {
+        date started = now_us();
+        opts = withCallDeadline(opts);
+        *hash<LlmTelemetryObserver> observer = getTelemetryObserver(opts);
+        hash<auto> request = LlmTelemetry::chatRequestSummary(messages, tools,
+            opts, False);
+        notifyTelemetry(observer, "start", "chat", opts, {
+            "request": request,
+        });
+        provider.startChatAsync(op, messages, tools, opts, sub (hash<ChatResponse> response) {
+            notifyChatEnd(observer, opts, request, response, started);
+            next(response);
+        }, sub (hash<ExceptionInfo> ex) {
+            notifyCallError(observer, "chat", opts, request, ex, started);
+            if (error_cb) {
+                error_cb(ex);
+            } else {
+                op.fail(ex);
+            }
+        });
+    }
+
+    #! Runs a streamed chat request as a step of an asynchronous operation, with the telemetry events of
+    #! @ref chatStream()
+    /** Must be called in a task of \a op.  \a next is called after the final event; the error of the request ends
+        the operation.
+    */
+    private startChatStreamStep(LlmAsyncOperation op, list<hash<ChatMessage>> messages,
+            code<nothing(hash<ChatStreamEvent>)> callback, *list<hash<ToolDefinition>> tools,
+            hash<LlmRequestOptions> opts, code<nothing()> next) {
+        hash<auto> telemetry = startStreamTelemetry(messages, tools, opts);
+        provider.startChatStreamAsync(op, messages, sub (hash<ChatStreamEvent> event) {
+            notifyStreamDelta(\telemetry, event);
+            callback(event);
+        }, tools, opts, sub () {
+            notifyStreamEnd(telemetry);
+            next();
+        }, sub (hash<ExceptionInfo> ex) {
+            notifyStreamError(telemetry, ex);
+            op.fail(ex);
+        });
+    }
+
+    #! Applies the tool repairs of @ref chatCompletions() to a facade response as continuations, and ends the
+    #! operation with the final response
+    private repairFacadeResponseAsync(LlmAsyncOperation op, hash<auto> ctx, hash<auto> rv) {
+        if (ctx.tool_repair_enabled && shouldRetryForcedToolAsJson(rv, ctx.forced_tool_name)) {
+            retryForcedToolAsJsonAsync(op, ctx.messages, ctx.tools, ctx.options, ctx.forced_tool_name,
+                    MalformedFunctionCallDescription, sub (*hash<auto> retry) {
+                hash<auto> response = rv;
+                if (retry) {
+                    if (openAiResponseHasToolCall(retry)) {
+                        op.complete(attachOpenAiToolProtocolDiagnostics(
+                            attachForcedToolRetryDiagnostics(retry, rv, retry,
+                                True, True, "malformed_function_call"), ctx.body,
+                            ctx.tools, ctx.options, ctx.stream));
+                        return;
+                    }
+                    response = attachForcedToolRetryDiagnostics(rv, rv, retry, False,
+                        False, "malformed_function_call");
+                }
+                repairRequiredToolAsync(op, ctx, response);
+            });
+            return;
+        }
+        repairRequiredToolAsync(op, ctx, rv);
+    }
+
+    #! Applies the required-tool repair of @ref chatCompletions() as a continuation, and ends the operation
+    private repairRequiredToolAsync(LlmAsyncOperation op, hash<auto> ctx, hash<auto> rv) {
+        if (ctx.tool_repair_enabled && shouldRetryRequiredToolNoOutput(rv, ctx.body, ctx.tools)) {
+            retryRequiredToolNoOutputAsync(op, ctx.messages, ctx.tools, ctx.options, ctx.forced_tool_name, rv,
+                    sub (*hash<auto> retry) {
+                hash<auto> response = rv;
+                if (retry) {
+                    if (openAiResponseHasToolCall(retry)
+                            || openAiResponseHasMessageContent(retry)) {
+                        op.complete(attachOpenAiToolProtocolDiagnostics(retry, ctx.body,
+                            ctx.tools, ctx.options, ctx.stream));
+                        return;
+                    }
+                    response = retry;
+                }
+                # never NOTHING (see chatCompletions())
+                op.complete(attachOpenAiToolProtocolDiagnostics(response ?? {}, ctx.body, ctx.tools,
+                    ctx.options, ctx.stream));
+            });
+            return;
+        }
+        # never NOTHING (see chatCompletions())
+        op.complete(attachOpenAiToolProtocolDiagnostics(rv ?? {}, ctx.body, ctx.tools,
+            ctx.options, ctx.stream));
+    }
+
+    #! The asynchronous form of retryForcedToolAsJson(): \a next receives the repaired response or nothing
+    private retryForcedToolAsJsonAsync(LlmAsyncOperation op, list<hash<ChatMessage>> messages,
+            *list<hash<ToolDefinition>> tools, hash<LlmRequestOptions> options, *string forced_tool_name,
+            string failure_description, code<nothing(*hash<auto>)> next) {
+        *hash<auto> retry = prepareForcedToolJsonRetry(messages, tools, options, forced_tool_name,
+            failure_description);
+        if (!retry) {
+            next(NOTHING);
+            return;
+        }
+        startChatStep(op, retry.messages, NOTHING, retry.options, sub (hash<ChatResponse> retry_response) {
+            next(finishForcedToolJsonRetry(retry_response, retry.options, tools, forced_tool_name));
+        }, sub (hash<ExceptionInfo> ex) {
+            if (!ForcedToolJsonRetryUnsatisfiedErrors{ex.err}) {
+                op.fail(ex);
+                return;
+            }
+            # an unsatisfied repair is "no repair", as in retryForcedToolAsJson()
+            next(NOTHING);
+        });
+    }
+
+    #! The asynchronous form of retryRequiredToolNoOutput(): \a next receives the repaired response or nothing
+    private retryRequiredToolNoOutputAsync(LlmAsyncOperation op, list<hash<ChatMessage>> messages,
+            *list<hash<ToolDefinition>> tools, hash<LlmRequestOptions> options, *string forced_tool_name,
+            hash<auto> original_response, code<nothing(*hash<auto>)> next) {
+        if (!tools) {
+            next(NOTHING);
+            return;
+        }
+        # the structural retry resends the tools (see retryRequiredToolNoOutput())
+        code<nothing()> structural_retry = sub () {
+            startChatStep(op, getRequiredToolRetryMessages(messages), tools, options,
+                    sub (hash<ChatResponse> retry_response) {
+                next(finishRequiredToolRetry(retry_response, options, tools, forced_tool_name, original_response));
+            });
+        };
+        if (forced_tool_name.val()) {
+            retryForcedToolAsJsonAsync(op, messages, tools, options, forced_tool_name,
+                    RequiredToolNoOutputDescription, sub (*hash<auto> retry) {
+                if (retry && openAiResponseHasToolCall(retry)) {
+                    next(attachForcedToolRetryDiagnostics(retry,
+                        original_response, retry, True, True,
+                        "required_tool_no_output"));
+                    return;
+                }
+                structural_retry();
+            });
+            return;
+        }
+        structural_retry();
     }
 
     private *hash<LlmTelemetryObserver> getTelemetryObserver(
@@ -1375,7 +1798,7 @@ if (resp.stop_reason == "tool_use") {
     }
 
     #! Parses an OpenAI-compatible request for provider-native dispatch
-    private hash<auto> parseOpenAiChatCompletionsRequest(hash<auto> body) {
+    private hash<auto> parseOpenAiChatCompletionsRequest(hash<auto> body, *hash<LlmFacadeCallOptions> call_opts) {
         hash<LlmRequestOptions> options_h = <LlmRequestOptions>{};
         if (body.hasKey("cancellation")) {
             if (!(body.cancellation instanceof LlmCancellation)) {
@@ -1383,6 +1806,14 @@ if (resp.stop_reason == "tool_use") {
             }
             options_h.cancellation = body.cancellation;
             remove body.cancellation;
+        }
+        if (call_opts.cancellation) {
+            # one call has one token: two different ones would leave one of them unable to stop it
+            if (options_h.cancellation && options_h.cancellation !== call_opts.cancellation) {
+                throw "LLM-REQUEST-ERROR", "cancellation is given in both the request body and the call options "
+                    "with different tokens";
+            }
+            options_h.cancellation = call_opts.cancellation;
         }
         if (body.model.val()) {
             options_h.model = body.model;
@@ -1838,6 +2269,31 @@ if (resp.stop_reason == "tool_use") {
             *list<hash<ToolDefinition>> tools,
             hash<LlmRequestOptions> options, *string forced_tool_name,
             string failure_description) {
+        *hash<auto> retry = prepareForcedToolJsonRetry(messages, tools, options, forced_tool_name,
+            failure_description);
+        if (!retry) {
+            return NOTHING;
+        }
+
+        hash<ChatResponse> retry_response;
+        try {
+            retry_response = chat(retry.messages, NOTHING, retry.options);
+        } catch (hash<ExceptionInfo> ex) {
+            if (!ForcedToolJsonRetryUnsatisfiedErrors{ex.err}) {
+                rethrow;
+            }
+            # An unsatisfied repair is information, not a failure: report it as
+            # "no repair" so every caller can fall through to the repair that a
+            # native-tool-calling provider can actually answer.
+            return NOTHING;
+        }
+        return finishForcedToolJsonRetry(retry_response, retry.options, tools, forced_tool_name);
+    }
+
+    #! Returns the messages and options of a forced-tool JSON repair, or nothing if the forced tool cannot be repaired
+    private *hash<auto> prepareForcedToolJsonRetry(list<hash<ChatMessage>> messages,
+            *list<hash<ToolDefinition>> tools, hash<LlmRequestOptions> options, *string forced_tool_name,
+            string failure_description) {
         if (!forced_tool_name.val()) {
             return NOTHING;
         }
@@ -1857,19 +2313,15 @@ if (resp.stop_reason == "tool_use") {
 
         hash<LlmRequestOptions> retry_options =
             makeForcedToolJsonRetryOptions(options, forced_tool.parameters);
+        return {
+            "messages": retry_messages,
+            "options": retry_options,
+        };
+    }
 
-        hash<ChatResponse> retry_response;
-        try {
-            retry_response = chat(retry_messages, NOTHING, retry_options);
-        } catch (hash<ExceptionInfo> ex) {
-            if (!ForcedToolJsonRetryUnsatisfiedErrors{ex.err}) {
-                rethrow;
-            }
-            # An unsatisfied repair is information, not a failure: report it as
-            # "no repair" so every caller can fall through to the repair that a
-            # native-tool-calling provider can actually answer.
-            return NOTHING;
-        }
+    #! Returns the OpenAI-compatible response of a forced-tool JSON repair
+    private hash<auto> finishForcedToolJsonRetry(hash<ChatResponse> retry_response,
+            hash<LlmRequestOptions> retry_options, *list<hash<ToolDefinition>> tools, string forced_tool_name) {
         return synthesizeOpenAiForcedToolCall(chatResponseToOpenAi(
             retry_response, retry_options.model ?? provider.getModel(), tools),
             forced_tool_name, tools);
@@ -1885,9 +2337,7 @@ if (resp.stop_reason == "tool_use") {
         }
         if (forced_tool_name.val()) {
             *hash<auto> retry = retryForcedToolAsJson(messages, tools,
-                options, forced_tool_name,
-                "The previous response returned no content and no function "
-                    "call even though a tool call was required.");
+                options, forced_tool_name, RequiredToolNoOutputDescription);
             if (retry && openAiResponseHasToolCall(retry)) {
                 return attachForcedToolRetryDiagnostics(retry,
                     original_response, retry, True, True,
@@ -1905,6 +2355,13 @@ if (resp.stop_reason == "tool_use") {
             # actually answer, and it costs one extra request only in the case
             # that was previously guaranteed to fail.
         }
+        hash<ChatResponse> retry_response = chat(getRequiredToolRetryMessages(messages), tools,
+            options);
+        return finishRequiredToolRetry(retry_response, options, tools, forced_tool_name, original_response);
+    }
+
+    #! Returns the messages of a structural repair of a response without the required tool call
+    private static list<hash<ChatMessage>> getRequiredToolRetryMessages(list<hash<ChatMessage>> messages) {
         list<hash<ChatMessage>> retry_messages = messages;
         push retry_messages, <ChatMessage>{
             "role": "system",
@@ -1913,9 +2370,12 @@ if (resp.stop_reason == "tool_use") {
                 "exactly one available function now and provide valid JSON "
                 "arguments for that function.",
         };
+        return retry_messages;
+    }
 
-        hash<ChatResponse> retry_response = chat(retry_messages, tools,
-            options);
+    #! Returns the OpenAI-compatible response of a structural repair, with its diagnostics
+    private hash<auto> finishRequiredToolRetry(hash<ChatResponse> retry_response, hash<LlmRequestOptions> options,
+            *list<hash<ToolDefinition>> tools, *string forced_tool_name, hash<auto> original_response) {
         hash<auto> retry = synthesizeOpenAiForcedToolCall(chatResponseToOpenAi(
             retry_response, options.model ?? provider.getModel(), tools),
             forced_tool_name, tools);

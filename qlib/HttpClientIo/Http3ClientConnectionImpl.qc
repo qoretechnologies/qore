@@ -54,6 +54,8 @@ public class Http3ClientConnection inherits HttpClientConnection {
         @param client_pk optional client private key for mutual TLS (mTLS)
         @param ssl_ca_file a PEM file with the CA certificates to verify the server with instead of the default CAs
         @param ssl_ca_path a directory with the CA certificates to verify the server with instead of the default CAs
+        @param ssl_trust_store an in-memory trust store to verify the server with instead of the CA locations (since
+            %HttpClientIo 1.0, qoretechnologies/qore#7248)
         @param address_family the address family to connect in; if not set, the family of the first address of the
             host is used, unless it is in \a avoid_families
         @param avoid_families address families not to connect in if the host also has an address in another family
@@ -69,6 +71,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
             *LoggerInterface logger, int max_streams = DefaultMaxStreamsPerConnection,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path,
+            *SSLTrustStore ssl_trust_store,
             *int address_family, *list<int> avoid_families)
             : HttpClientConnection(url_info, connect_timeout, logger, max_streams) {
         # the caller check comes first, before any code of a caller (such as the logger) runs (qore#6981)
@@ -78,7 +81,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
 
         HttpClientCallerExemption exemption();
         poll_op = new Http3ClientPollOperation(url_info, connect_timeout, logger, ssl_verify_mode,
-            accept_all_certs, client_cert, client_pk, self, ssl_ca_file, ssl_ca_path, address_family,
+            accept_all_certs, client_cert, client_pk, self, ssl_ca_file, ssl_ca_path, ssl_trust_store, address_family,
             avoid_families);
     }
 

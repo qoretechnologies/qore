@@ -33,6 +33,8 @@ QoreYamlStreamWriteHandler::QoreYamlStreamWriteHandler(QoreObject* stream)
 }
 
 QoreYamlStreamWriteHandler::~QoreYamlStreamWriteHandler() {
+    // an error of the stream that was not raised is not reported
+    stream_xsink.clear();
 }
 
 int QoreYamlStreamWriteHandler::write(unsigned char* buffer, size_t size) {
@@ -56,7 +58,9 @@ int QoreYamlStreamWriteHandler::write(unsigned char* buffer, size_t size) {
             QoreStringValueHelper errstr(err);
             error_message = errstr->c_str();
         }
-        xsink.clear();
+        // kept to be raised with the writer's error (see raiseStreamError())
+        stream_xsink.clear();
+        stream_xsink.assimilate(xsink);
         return 0;
     }
     return 1;
@@ -129,6 +133,7 @@ int QoreYamlStreamWriter::emitEvent(const char* event_name, ExceptionSink* xsink
         if (write_handler && write_handler->hasError()) {
             xsink->raiseException(QY_STREAM_EMIT_ERR, "failed to emit %s event: stream write error: %s",
                 event_name, write_handler->getErrorMessage());
+            write_handler->raiseStreamError(xsink);
         } else {
             xsink->raiseException(QY_STREAM_EMIT_ERR, "failed to emit %s event: %s",
                 event_name, emitter.problem ? emitter.problem : "unknown error");
@@ -455,8 +460,25 @@ int QoreYamlStreamWriter::writeValueRecursive(QoreValue val, ExceptionSink* xsin
     }
     // A container can hold a weak (":=") or opaque ("@=") reference, and iterating the container yields the
     // reference itself rather than its target, so it is resolved before the value's type is checked; otherwise a
-    // hash or list target reaches the scalar case below and is written as an empty string
-    const QoreValue value = val.resolveIndirect();
+    // hash or list target reaches the scalar case below and is written as an empty string; the target of a weak
+    // reference is read with a reference of its own, as another thread can free its list or hash while it is written
+    // (qore#7231)
+    QoreValue value = val;
+    ValueHolder target(xsink);
+    switch (value.getType()) {
+        case NT_WEAKREF:
+        case NT_WEAKREF_HASH:
+        case NT_WEAKREF_LIST:
+            target = value.resolveIndirectRef();
+            value = *target;
+            break;
+        default:
+            // the target of an opaque reference is held by the container that holds the reference
+            if (value.isOpaque()) {
+                value = value.resolveIndirect();
+            }
+            break;
+    }
     switch (value.getType()) {
         case NT_HASH: {
             if (startMapping(nullptr, xsink)) return -1;
@@ -508,6 +530,10 @@ int QoreYamlStreamWriter::flush(ExceptionSink* xsink) {
 
     if (!yaml_emitter_flush(&emitter)) {
         xsink->raiseException(QY_STREAM_EMIT_ERR, "failed to flush emitter");
+        // the error of the stream, which made the flush fail (qore#7232)
+        if (write_handler) {
+            write_handler->raiseStreamError(xsink);
+        }
         return -1;
     }
     return 0;
@@ -558,6 +584,7 @@ int QoreYamlStreamWriter::close(ExceptionSink* xsink) {
     if (write_handler && write_handler->hasError()) {
         xsink->raiseException(QY_STREAM_EMIT_ERR, "stream write error: %s",
             write_handler->getErrorMessage());
+        write_handler->raiseStreamError(xsink);
         state = YWS_CLOSED;
         return -1;
     }

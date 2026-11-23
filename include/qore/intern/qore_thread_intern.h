@@ -746,8 +746,38 @@ DLLLOCAL bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id);
 */
 DLLLOCAL qore_program_id_t runtime_get_sandboxed_module_call_app_id();
 
-//! returns the generation of the current thread: unique in the process, unlike its TID, which is reused (qore#7010)
+//! returns the generation of the work that the current thread runs: unique in the process, unlike its TID (qore#7010)
+/** A thread runs work of its own generation, which it is given when it is created; while it runs a work item of other
+    code (a task of a ThreadPool, the callback of a timer or of an operation of the async I/O controller, a signal
+    handler, a handler of a Program that runs for every thread that enters it), the generation of that work, which the
+    work item carries (QoreThreadRuntimeParseOptions::work_gen, QoreSandboxContext::work_gen) and
+    QoreThreadRuntimeParseOptionsHelper or QoreWorkGenerationHelper installs: a pooled or reused thread does not share
+    one generation between the work of different callers
+*/
 DLLLOCAL uint64_t runtime_get_thread_generation();
+
+//! returns a new work generation, unique in the process (qore#7010)
+DLLLOCAL uint64_t qore_new_work_generation();
+
+//! Makes the current thread run work of the given generation while it exists (qore#7010)
+/** See runtime_get_thread_generation(); restores the generation in effect before when it is destroyed
+*/
+class QoreWorkGenerationHelper {
+public:
+    //! installs \a gen; leaves the generation in effect if \a gen is 0
+    DLLLOCAL QoreWorkGenerationHelper(uint64_t gen);
+
+    DLLLOCAL ~QoreWorkGenerationHelper();
+
+    DLLLOCAL QoreWorkGenerationHelper(const QoreWorkGenerationHelper&) = delete;
+    DLLLOCAL QoreWorkGenerationHelper& operator=(const QoreWorkGenerationHelper&) = delete;
+
+private:
+    //! the thread's data, if a generation was installed
+    ThreadData* td = nullptr;
+    //! the generation in effect before
+    uint64_t old_gen = 0;
+};
 
 //! returns the ID of the application Program that the module code of a call by a sandboxed caller runs for
 /** The caller's application; for module code that calls module code for a sandboxed caller, the one that the calling
@@ -1252,6 +1282,20 @@ public:
         qore_get_provenance_origin_restrictions()
     */
     QoreParseOptions origin_restrictions;
+    //! The generation of the work of the capturing code, for a continuation (runtime_get_thread_generation()), or 0
+    /** The work that the context continues on another thread (a step or a callback of a poll operation, the callback
+        of a timer) runs with it: a worker of the async I/O controller does not share one generation between the work
+        of different callers (qore#7010)
+    */
+    uint64_t work_gen = 0;
+    //! true if the code that captured the context is sandboxed or acts for sandboxed code (see
+    //! qore_caller_is_sandboxed()): the exceptions of the C++ steps that the context's operation runs on the async I/O
+    //! thread are raised for it (see QoreExceptionOriginScope; qore#7232)
+    /** Set by capture_async_io_sandbox_context() only
+    */
+    bool origin_sandboxed = false;
+    //! the ID of the sandboxed Program of that code, or 0 if it is not known
+    qore_program_id_t origin_pgm_id = 0;
     //! The functional-domain restrictions of the code that captured the context (qore_get_calling_code_restrictions())
     /** Work that the context continues on another thread (a step of a poll operation on a worker of the async I/O
         controller, a task of a pool that applies a QoreSandboxCapture) runs for that code: the restrictions replace
@@ -1772,7 +1816,7 @@ public:
 
     //! restores the override that was in effect when the override was set, if it was set
     DLLLOCAL QORE_INTERN_ALWAYS_INLINE ~RuntimeParseOptionsOverrideHelper() {
-        if (active) {
+        if (state) {
             restore();
         }
     }
@@ -1797,31 +1841,32 @@ public:
 
     //! returns true if the override has been set
     DLLLOCAL bool isSet() const {
-        return active;
+        return state;
     }
 
     //! restores the override that was in effect when the override was set, if it was set, and leaves the helper
     //! without one, so that it can be set again
     DLLLOCAL void reset() {
-        if (active) {
+        if (state) {
             restore();
-            active = false;
+            state = nullptr;
         }
     }
 
 private:
-    //! true if the override has been set; the state saved below is valid only then (it is written by set() and read
-    //! by restore() only), so it takes no initialization beyond that of its parse options: the helper is created on
-    //! every call of a user variant
-    bool active = false;
-    //! the state of the thread (ThreadData::runtime_po_state)
-    QoreRuntimePoState* state;
+    //! the state of the thread (ThreadData::runtime_po_state) if the override has been set, or nullptr
+    /** The state saved below is valid only if this is set (it is written by set() and read by restore() only), so it
+        takes no initialization beyond that of its parse options: the helper is created on every call of a user
+        variant, and is in the frame of each level of a recursion of user code (CodeEvaluationHelper), so the pointer
+        is also the flag that tells whether the override has been set (tools/stack-usage-budgets.txt)
+    */
+    QoreRuntimePoState* state = nullptr;
     //! the state that set() replaced
     QoreRuntimePoState old;
 
     //! restores the state that set() replaced; inline, as it runs on every call of a user variant (qore#6446)
     DLLLOCAL QORE_INTERN_ALWAYS_INLINE void restore() {
-        assert(active);
+        assert(state);
         *state = old;
     }
 };
@@ -1842,11 +1887,18 @@ struct QoreThreadRuntimeParseOptions {
     QoreCallParseOptionsOverride override;
     //! the functional-domain restrictions of the calling code (see ThreadData::thread_caller_restrictions)
     QoreParseOptions caller_domain_restrictions;
+    //! the generation of the work of the capturing code, which the work that runs with the options continues
+    //! (runtime_get_thread_generation()); 0 for options made otherwise, which leave the generation in effect (qore#7010)
+    uint64_t work_gen = 0;
+    //! true if the work that runs with the options is work of its own, which runs with a new generation: a thread
+    //! that the capturing code starts, a handler that runs for every thread that enters a Program (qore#7010)
+    bool new_work = false;
 
     DLLLOCAL QoreThreadRuntimeParseOptions() = default;
 
     DLLLOCAL QoreThreadRuntimeParseOptions(const QoreThreadRuntimeParseOptions& old) : po(old.po),
-            override(old.override), caller_domain_restrictions(old.caller_domain_restrictions) {
+            override(old.override), caller_domain_restrictions(old.caller_domain_restrictions),
+            work_gen(old.work_gen), new_work(old.new_work) {
         refPrograms();
     }
 
@@ -1857,6 +1909,8 @@ struct QoreThreadRuntimeParseOptions {
             std::swap(po, copy.po);
             std::swap(override, copy.override);
             std::swap(caller_domain_restrictions, copy.caller_domain_restrictions);
+            std::swap(work_gen, copy.work_gen);
+            std::swap(new_work, copy.new_work);
         }
         return *this;
     }
@@ -1884,7 +1938,8 @@ struct QoreThreadRuntimeParseOptions {
     /** The thread inherits the restrictions of the code that starts it, but not the application that a call of
         module code runs for (\c app_pgm_id), which is attribution, not a restriction: what the thread adds later
         (timers, for example) belongs to the call that adds it, not to the caller of the code that started the
-        thread, which a long-lived worker thread of a module does not serve only (qore#6208)
+        thread, which a long-lived worker thread of a module does not serve only (qore#6208).  Nor the generation of
+        the work of the starting code: what the thread runs is work of its own (qore#7010)
     */
     DLLLOCAL static QoreThreadRuntimeParseOptions captureForThread();
 
@@ -1927,8 +1982,10 @@ private:
     QoreParseOptions old_caller_restrictions;
     //! their generation (ThreadData::thread_caller_restrictions_gen)
     uint64_t old_caller_restrictions_gen = 0;
+    //! the generation of the work in effect before (see runtime_get_thread_generation())
+    uint64_t old_work_gen = 0;
 
-    //! restores old_caller_restrictions
+    //! restores old_caller_restrictions and old_work_gen
     DLLLOCAL void restoreCallerRestrictions();
 };
 
@@ -2171,6 +2228,35 @@ DLLLOCAL int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, con
 */
 DLLLOCAL bool qore_caller_is_sandboxed(qore_program_id_t* pgm_id = nullptr);
 
+//! Returns true and sets \a pgm_id if the code that raises an exception or sets an error now is sandboxed or acts for
+//! sandboxed code: the origin that a QoreExceptionOriginScope sets (work that the library does on the async I/O thread
+//! for a sandboxed submitter), else qore_caller_is_sandboxed() (qore#7139, qore#7232)
+DLLLOCAL bool qore_code_origin_sandboxed(qore_program_id_t* pgm_id);
+
+//! Sets the origin of the exceptions that the current thread raises while it exists: work that the library does for a
+//! sandboxed submitter where no sandbox context is applied, such as a C++ step of an operation on the async I/O thread
+//! (qore#7232)
+/** Inactive if \a origin_sandboxed is false; costs a thread-local load and store when active, and a branch otherwise
+*/
+class QoreExceptionOriginScope {
+public:
+    DLLLOCAL QoreExceptionOriginScope(bool origin_sandboxed, qore_program_id_t origin_pgm_id);
+    DLLLOCAL ~QoreExceptionOriginScope();
+
+    DLLLOCAL QoreExceptionOriginScope(const QoreExceptionOriginScope&) = delete;
+    DLLLOCAL QoreExceptionOriginScope& operator=(const QoreExceptionOriginScope&) = delete;
+
+    //! the scope of the current thread, or nullptr
+    DLLLOCAL static const QoreExceptionOriginScope* current();
+
+    //! the ID of the sandboxed Program, or 0 if it is not known
+    qore_program_id_t pgm_id;
+
+private:
+    const QoreExceptionOriginScope* previous = nullptr;
+    bool active;
+};
+
 //! Returns true and sets \a mark if an exception in \a xsink was raised by code that is sandboxed or acts for
 //! sandboxed code (qore#7139)
 /** The mark is \c "[caller Program N] " (\c N the ID of the sandboxed Program of the first such exception, see
@@ -2201,6 +2287,13 @@ DLLLOCAL void qore_append_escaped_report_text(QoreString& out, const QoreString*
 
 //! Appends \a text (UTF-8, as the names of files and functions) to \a out escaped as by the variant above
 DLLLOCAL void qore_append_escaped_report_text(QoreString& out, const char* text);
+
+//! Appends UTF-8 \a text to \a out with the characters that could end or rewrite a log line escaped (line breaks,
+//! the other C0 and C1 control characters except tab, DEL, the Unicode line and paragraph separators and the
+//! bidirectional formatting characters), and \c % doubled if \a double_percent (qore#7216)
+/** Backslash is not escaped, so text escaped with qore_append_escaped_report_text() is kept as it is
+*/
+DLLLOCAL void qore_append_line_safe_text(QoreString& out, const char* text, size_t len, bool double_percent);
 
 //! Returns true if the code that calls into the library is restricted from terminal I/O (qore#7140)
 /** As qore_caller_restricts_domain(QDOM_TERMINAL_IO), but the terminal is the host's: when the nearest code on the
@@ -2613,6 +2706,42 @@ DLLLOCAL void thread_ensure_local_program_data();
 
 DLLLOCAL int thread_ref_set(const lvalue_ref* r);
 DLLLOCAL void thread_ref_remove(const lvalue_ref* r);
+
+//! Checks whether resolving a reference in the current thread can raise an exception before its lvalue is reached
+/** This makes the checks of RuntimeReferenceHelperBase without changing the thread's state: it enters no Program and
+    does not add the reference to the thread's references being resolved (qore#7264)
+
+    @param pgm the reference's Program (lvalue_ref::pgm)
+    @param r the reference
+    @param xsink for the exception of the stack check
+
+    @return 1 if the resolution can raise nothing before its lvalue: the reference's Program is the one that the thread
+    runs (entering it does nothing), the stack is within its limit and the reference is not being resolved by the
+    thread; 0 if the Program would have to be entered or the reference is being resolved (the caller resolves it with
+    RuntimeReferenceHelper, which raises the exception if any); -1 if \c STACK-LIMIT-EXCEEDED was raised in \a xsink,
+    as RuntimeReferenceHelper would raise it
+*/
+DLLLOCAL int qore_reference_resolution_check(const QoreProgram* pgm, const lvalue_ref* r, ExceptionSink* xsink);
+
+//! Starts the resolution of a reference whose lvalue needs neither its Program to be entered nor its object context
+/** For the fast read of a reference (qore_local_reference_eval(), qore#7268): this makes the checks of
+    RuntimeReferenceHelperBase as qore_reference_resolution_check() does, and if they pass, adds the reference to the
+    thread's references being resolved, as RuntimeReferenceHelperBase does; the caller removes it with
+    thread_ref_remove() when it has read the lvalue.  Neither the Program nor the object context are entered: the
+    caller must use the lvalue only in ways that depend on neither, or resolve the reference with
+    RuntimeReferenceHelper instead (after removing it).
+
+    @param pgm the reference's Program (lvalue_ref::pgm)
+    @param r the reference
+    @param xsink for the exception of the stack check
+
+    @return 1 if the reference was added; 0 if the Program would have to be entered or the reference is being resolved
+    (nothing is changed, and the caller resolves the reference with RuntimeReferenceHelper, which raises the exception
+    if any); -1 if \c STACK-LIMIT-EXCEEDED was raised in \a xsink, as RuntimeReferenceHelper would raise it
+
+    Throws std::bad_alloc, with nothing changed, if the reference cannot be added, as RuntimeReferenceHelper does
+*/
+DLLLOCAL int qore_reference_fast_resolution_enter(const QoreProgram* pgm, const lvalue_ref* r, ExceptionSink* xsink);
 
 // pushes a new argv reference counter
 DLLLOCAL void new_argv_ref();

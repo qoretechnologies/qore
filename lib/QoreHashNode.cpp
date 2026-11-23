@@ -34,6 +34,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreFormatBounds.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreHashKeyHelper.h"
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/QoreParseListNode.h"
@@ -96,7 +97,7 @@ const TypedHashDecl* qore_hash_private::getInheritingHashDecl(const TypedHashDec
 QoreValue qore_hash_private::takeKeyValueIntern(const char* key, qore_object_private* obj) {
     assert(key);
 
-    hm_hm_t::iterator i = hm.find(key);
+    hm_hm_t::iterator i = findIter(key);
 
     if (i == hm.end()) {
         return QoreValue();
@@ -126,7 +127,7 @@ QoreValue qore_hash_private::takeKeyValueIfExists(const char* key, qore_object_p
     assert(o);
     assert(is_obj);
 
-    hm_hm_t::iterator i = hm.find(key);
+    hm_hm_t::iterator i = findIter(key);
     if (i == hm.end()) {
         exists = false;
         return QoreValue();
@@ -246,7 +247,7 @@ int qore_hash_private::getLValue(const char* key, LValueHelper& lvh, bool for_re
         memTypeInfo = QoreTypeInfo::getUniqueReturnComplexHash(complexTypeInfo);
     }
 
-    hm_hm_t::const_iterator i = hm.find(key);
+    hm_hm_t::const_iterator i = findIter(key);
     HashMember* m;
     if (i == hm.end()) {
         if (for_remove) {
@@ -568,7 +569,7 @@ QoreValue qore_hash_private::getKeyValueExistence(const char* key, bool& exists,
 }
 
 QoreValue qore_hash_private::getKeyValueExistenceIntern(const char* key, bool& exists) const {
-    hm_hm_t::const_iterator i = hm.find(key);
+    hm_hm_t::const_iterator i = findIter(key);
 
     if (i != hm.end()) {
         exists = true;
@@ -580,7 +581,7 @@ QoreValue qore_hash_private::getKeyValueExistenceIntern(const char* key, bool& e
 }
 
 QoreValue qore_hash_private::getKeyValueIntern(const char* key) const {
-    hm_hm_t::const_iterator i = hm.find(key);
+    hm_hm_t::const_iterator i = findIter(key);
     return i != hm.end() ? (*i->second)->val : QoreValue();
 }
 
@@ -600,12 +601,7 @@ QoreValue qore_hash_private::getKeyValueExistencePrehashed(const char* key, size
 
 QoreValue qore_hash_private::getKeyValueExistencePrehashedIntern(const char* key, size_t hash,
         bool& exists) const {
-#ifdef HAVE_QORE_HASH_MAP
-    hm_hm_t::const_iterator i = hm.find(qore_prehashed_str{key, hash});
-#else
-    (void)hash;
-    hm_hm_t::const_iterator i = hm.find(key);
-#endif
+    hm_hm_t::const_iterator i = findIterPrehashed(key, hash);
     if (i != hm.end()) {
         exists = true;
         return (*i->second)->val;
@@ -1015,22 +1011,27 @@ bool QoreHashNode::compareHard(const QoreHashNode* h, ExceptionSink* xsink) cons
         return 1;
     }
 
-    ConstHashIterator hi(this);
-    while (hi.next()) {
-        hm_hm_t::const_iterator j = h->priv->hm.find(hi.getKey());
-        if (j == h->priv->hm.end())
-            return 1;
-
+    // an exception raised before makes the first member unequal, also when the inline comparison compares it
+    if (xsink && !priv->empty() && *xsink) {
+        return 1;
+    }
+    // the members are compared in the order of this hash, as a lookup of each of its keys in the other hash does
+    // (qore#7266)
+    return !priv->membersEqual(*h->priv, [xsink](const QoreValue& lv, const QoreValue& rv) -> bool {
+        // two ints or two floats compare as QoreValue::isEqualHard() compares them (a NaN is not equal to itself)
+        if (lv.isInt()) {
+            if (rv.isInt()) {
+                return lv.getInt() == rv.getInt();
+            }
+        } else if (lv.isFloat() && rv.isFloat()) {
+            return lv.getDouble() == rv.getDouble();
+        }
         // the sink is optional in this API: without one, an exception means that the hashes are not equal
         if (xsink) {
-            if (!hi.get().isEqualHard((*j->second)->val, xsink) || *xsink) {
-                return 1;
-            }
-        } else if (!hi.get().isEqualHard((*j->second)->val)) {
-            return 1;
+            return lv.isEqualHard(rv, xsink) && !*xsink;
         }
-    }
-    return 0;
+        return lv.isEqualHard(rv);
+    });
 }
 
 bool QoreHashNode::derefImpl(ExceptionSink* xsink) {
@@ -1046,6 +1047,12 @@ bool QoreHashNode::derefImpl(ExceptionSink* xsink) {
     if (priv->weakRefs.hasHolders()) [[unlikely]] {
         priv->weak_hold = true;
         ref();
+#ifdef DEBUG
+        // the free of a hash that has weak holders starts; see dbg_hold_container_free()
+        if (qore_dbg_container_free_hook_t hook = qore_dbg_container_free_hook.load()) {
+            hook("hash");
+        }
+#endif
     }
     qore_container_free_helper cfh(this, xsink);
     if (cfh.freeEntries()) {
@@ -1327,7 +1334,7 @@ void HashIterator::deleteKey(ExceptionSink* xsink) {
     qhlist_t::iterator ni = priv->i;
     priv->prev(h->priv->member_list);
 
-    hm_hm_t::iterator i = h->priv->hm.find((*ni)->key.c_str());
+    hm_hm_t::iterator i = h->priv->hm.find(&(*ni)->key);
     assert(i != h->priv->hm.end());
     h->priv->hm.erase(i);
     h->priv->internDeleteKey(ni);
@@ -1361,7 +1368,7 @@ QoreValue HashIterator::removeKeyValue() {
     qhlist_t::iterator ni = priv->i;
     priv->prev(h->priv->member_list);
 
-    hm_hm_t::iterator i = h->priv->hm.find((*ni)->key.c_str());
+    hm_hm_t::iterator i = h->priv->hm.find(&(*ni)->key);
     assert(i != h->priv->hm.end());
     h->priv->hm.erase(i);
     h->priv->internDeleteKey(ni);

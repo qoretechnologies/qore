@@ -449,8 +449,6 @@ list<Constant> l = n.getConstants();
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
     @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
-
-    @note the constants are returned in the order in which they were declared, also for a namespace that was copied and for a program compiled with \c qcc (qore#7171)
 */
 list<Constant> Namespace::getConstants() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
@@ -529,8 +527,6 @@ list<Namespace> l = n.getNamespaces();
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
     @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
-
-    @note the namespaces are returned in the order in which they were declared (the namespaces that the enums declare are among them, at the place of their enum), also for a namespace that was copied and for a program compiled with \c qcc (qore#7171)
 */
 list<Namespace> Namespace::getNamespaces() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
@@ -609,8 +605,6 @@ list<Class> l = n.getClasses();
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
     @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
-
-    @note the classes are returned sorted by name, also for a namespace that was copied and for a program compiled with \c qcc (qore#7171)
 */
 list<Class> Namespace::getClasses() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
@@ -697,8 +691,6 @@ list<Function> l = n.getFunctions();
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
     @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
-
-    @note the functions are returned in the order in which they were declared (a function that has several variants is at the place of its first declaration), also for a namespace that was copied and for a program compiled with \c qcc (qore#7171)
 */
 list<Function> Namespace::getFunctions() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
@@ -846,8 +838,6 @@ list<FunctionVariant> l = n.getVariants();
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
     @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
-
-    @note the variants are returned function by function, the functions in the order in which they were declared, also for a namespace that was copied and for a program compiled with \c qcc (qore#7171)
 */
 list<FunctionVariant> Namespace::getVariants() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
@@ -930,8 +920,6 @@ list<GlobalVar> l = n.getGlobalVars();
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
     @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
-
-    @note the global variables are returned in the order in which they were declared, also for a namespace that was copied and for a program compiled with \c qcc (qore#7171)
 */
 list<GlobalVar> Namespace::getGlobalVars() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
@@ -1009,8 +997,6 @@ list<TypedHash> l = n.getTypedHashes();
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
     @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
-
-    @note the typed hashes are returned in the order in which they were declared, also for a namespace that was copied and for a program compiled with \c qcc (qore#7171)
 */
 list<TypedHash> Namespace::getTypedHashes() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
@@ -1092,8 +1078,6 @@ list<Enum> l = n.getEnums();
 
     @since %Qore 3.0
     @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
-
-    @note the enums are returned in the order in which they were declared, also for a namespace that was copied and for a program compiled with \c qcc (qore#7171)
 */
 list<Enum> Namespace::getEnums() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)

@@ -2365,6 +2365,10 @@ void QoreModuleManager::trySetModuleProgramUserDependencyLocked(const QoreProgra
                 if (run_time_only) {
                     runtime_dep_map.addDep(name, requirer);
                 }
+            } else {
+                // the module can be deleted first: the native modules that it requires are then required by the
+                // module whose Program holds its declarations (qore#7310)
+                runtime_importer_map.addDep(name, requirer);
             }
         } else if (strcmp(i->first, name) && !aot_user_dep_map.addDep(name, i->first)) {
             runtime_dep_map.addDep(name, i->first);
@@ -3760,6 +3764,9 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             }
             ++e.waiters;
             ++module_load_waiting;
+#ifdef DEBUG
+            dbg_load_waiter_cond.broadcast();
+#endif
             int wait_rc = module_load_cond.waitWithInterrupt(mutex, &xsink);
             --module_load_waiting;
             // NOTE: the entry may have been erased while we were unlocked; re-find below.  Decrement
@@ -3780,11 +3787,17 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             // binary init in every waiter (thundering herd)
             std::string err = e.err.empty() ? std::string("LOAD-MODULE-ERROR") : e.err;
             std::string desc = e.desc;
+            const bool err_sandboxed = e.err_sandboxed;
+            const qore_program_id_t err_pgm_id = e.err_pgm_id;
             if (e.waiters == 0) {
                 module_load_map.erase(i);       // last observer GCs the terminal entry
             }
             xsink.raiseException(err.c_str(), "module '%s' failed to load in another thread%s%s",
                 name, desc.empty() ? "" : ": ", desc.c_str());
+            // the text that sandboxed code chose is reported marked in every waiting thread (qore#7232)
+            if (err_sandboxed) {
+                qore_mark_last_exception_sandboxed(xsink, err_pgm_id);
+            }
             return nullptr;
         }
         // MLS_LOADED: the module is registered; GC the terminal entry if we are the last observer and
@@ -7487,9 +7500,60 @@ void QoreModuleManager::deleteUserModule(module_map_t::iterator i) {
     if (orig_name && map.find(orig_name) != map.end()) {
         orig_name = nullptr;
     }
+    // the modules whose Programs it was applied to at run time without a record require the native modules that it
+    // requires in its place (qore#7310)
+    passNativeRequirementsToImporters(m->getName());
     removeUserModuleDependency(m->getName(), orig_name);
     map.erase(i);
     delete m;
+}
+
+// documented in ModuleInfo.h
+void QoreModuleManager::passNativeRequirementsToImporters(const char* name) {
+    md_map_t::iterator ii = runtime_importer_map.find(name);
+    if (ii == runtime_importer_map.end()) {
+        return;
+    }
+    // the importers that are still loaded
+    strset_t importers;
+    for (const std::string& importer : ii->second) {
+        if (map.find(importer.c_str()) != map.end()) {
+            importers.insert(importer);
+        }
+    }
+    runtime_importer_map.erase(ii);
+    if (importers.empty()) {
+        return;
+    }
+    // the native binary modules that the module requires; an AOT module, which cleanup() deletes in the order of the
+    // requirements made with %requires, is not passed on
+    strset_t natives;
+    for (const auto& bi : binary_user_dep_map) {
+        if (bi.second.find(name) == bi.second.end()) {
+            continue;
+        }
+        module_map_t::iterator mi = map.find(bi.first.c_str());
+        std::vector<std::string> deps;
+        if (mi != map.end() && !mi->second->isUser() && getBinaryModuleDependencies(mi, deps)) {
+            natives.insert(bi.first);
+        }
+    }
+    // the user modules that the module requires
+    strset_t users;
+    md_map_t::iterator ri = rmd_map.find(name);
+    if (ri != rmd_map.end()) {
+        users = ri->second;
+    }
+    for (const std::string& importer : importers) {
+        for (const std::string& native : natives) {
+            binary_user_dep_map.addDep(native.c_str(), importer.c_str());
+        }
+        for (const std::string& user : users) {
+            if (user != importer && map.find(user.c_str()) != map.end()) {
+                runtime_importer_map.addDep(user.c_str(), importer.c_str());
+            }
+        }
+    }
 }
 
 //! The deletion rank of a module that cleanup() can delete: the module with the lowest rank is deleted first
@@ -7582,6 +7646,22 @@ void QoreModuleManager::cleanup() {
             auto ri = required_mods.find(aot);
             if (ri != required_mods.end()) {
                 ri->second.push_back(i->first);
+            }
+        }
+    }
+    // a user module requiring a user module applied to its Program at run time that requires it, a cycle that rmd_map
+    // does not record (see runtime_importer_map): a requirement at run time only, so that the cycle is broken at the
+    // module loaded, whose native modules it then requires in its place (qore#7310)
+    for (md_map_t::iterator i = runtime_importer_map.begin(), e = runtime_importer_map.end(); i != e; ++i) {
+        if (required_mods.find(i->first) == required_mods.end()) {
+            continue;
+        }
+        for (const std::string& importer : i->second) {
+            auto ri = required_mods.find(importer);
+            if (ri != required_mods.end()
+                    && std::find(ri->second.begin(), ri->second.end(), i->first) == ri->second.end()) {
+                ri->second.push_back(i->first);
+                runtime_required_mods[importer].insert(i->first);
             }
         }
     }
@@ -8203,6 +8283,7 @@ ModuleLoadMapHelper::~ModuleLoadMapHelper() {
         if (edesc) {
             i->second.desc = edesc.c_str();
         }
+        i->second.err_sandboxed = qore_exception_sandboxed_origin(xsink, i->second.err_pgm_id);
     } else {
         i->second.state = QoreModuleManager::MLS_LOADED;
     }
@@ -8218,3 +8299,18 @@ ModuleLoadMapHelper::~ModuleLoadMapHelper() {
         QMM.module_load_map.erase(i);
     }
 }
+
+#ifdef DEBUG
+bool QoreModuleManager::dbgWaitLoadWaiters(const char* name, unsigned count, int timeout_ms) {
+    AutoLocker al(mutex);
+    while (true) {
+        module_load_map_t::iterator i = module_load_map.find(name);
+        if (i != module_load_map.end() && i->second.waiters >= count) {
+            return true;
+        }
+        if (dbg_load_waiter_cond.wait(mutex, timeout_ms)) {
+            return false;
+        }
+    }
+}
+#endif

@@ -188,6 +188,21 @@ class FakeLlmServer {
         }
     }
 
+    #! Returns the number of connections accepted since the last script() call, not counting its own probe
+    /** The server accepts the connections in order, so a probe connection opened after a call has ended is
+        accepted after every connection the call opened, retries included; its sequence number gives their count
+        without waiting for a time.
+    */
+    int getCallConnectionCount() {
+        Socket probe();
+        on_exit probe.close();
+        probe.connect(sprintf("127.0.0.1:%d", port), 60s);
+        probe.send(sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\n\r\n", ProbePath));
+        int probe_seq = probe_results.get(60s);
+        AutoLock al(m);
+        return probe_seq - script_base - 1;
+    }
+
     #! Releases a stalled response
     release() {
         release_queue.push(True);
@@ -381,6 +396,15 @@ public class LlmStreamingTest inherits QUnit::Test {
         addTestCase("Facade cancellation after the first chunk", \facadeMidstream());
         addTestCase("Facade cancellation in an application callback", \facadeCallback());
         addTestCase("Facade cancellation type and discovery", \facadeValidation());
+        addTestCase("Facade call options: a held response is aborted from another thread without a retry",
+            \facadeCallOptionsHeldTest());
+        addTestCase("Facade call options: a held stream is aborted from another thread without a retry",
+            \facadeCallOptionsMidstreamTest());
+        addTestCase("Facade call options: a call cancelled before its start sends nothing",
+            \facadeCallOptionsPreCancelTest());
+        addTestCase("Facade call options: calls that are not cancelled are unchanged",
+            \facadeCallOptionsUncancelledTest());
+        addTestCase("Facade call options: one token per call", \facadeCallOptionsConflictTest());
         addTestCase("Cancel: a stream in flight is closed at once", \cancelInFlightStreamTest());
         addTestCase("Cancel: a stream awaiting its response is closed at once", \cancelStreamSetupTest());
         addTestCase("Cancel: silent and partial-event streams close without a callback", \cancelSilentStreamTest());
@@ -749,60 +773,101 @@ public class LlmStreamingTest inherits QUnit::Test {
 
     providerStreamDeadlineTest() {
         foreach string mode in (("http", "gemini")) {
-            # the client's own deadline is longer than any test run, so only a call's deadline can end the call
-            LlmBackend llm(<LlmBackendConfig>{"mode": mode,
-                "url": "http://localhost:" + port, "protocol": "h1",
-                "model": mode == "http" ? "gpt-test" : "gemini-2.5-flash",
-                "api_key": "fixture-key", "timeout_ms": 3600000, "max_retries": 0});
             foreach string stage in (("headers", "comments", "events")) {
-                bool held_headers = stage == "headers";
-                bool event_stage = stage == "events";
-                # Comments are valid SSE traffic but must not reset a call's deadline.
-                string frame = stage == "comments" ? ": keepalive\n\n"
-                    : (mode == "http" ? sseData({"choices": ({"delta": {"content": "x"}},)})
-                        : sseData({"candidates": ({"content": {"parts": ({"text": "x"},)}},)}));
-                # The server sends nothing at all, or sends comments or events until the client closes the
-                # connection, so the call can only end on its deadline: a deadline reset by each frame would keep
-                # the call reading for ever.  The first event is sent with the response headers as soon as the
-                # request has been read; the deadline of the events stage leaves time to read it.
-                int call_timeout_ms = event_stage ? 2000 : 50;
-                server.script(held_headers
-                    ? <FakeReply>{"hold_headers": True}
-                    : <FakeReply>{"chunk_delay_ms": event_stage ? 20 : 25,
-                        "chunks": (frame,),
-                        "repeat_until_close": True,
-                        "first_chunk_with_head": event_stage,
-                        "report_stream": True});
-                *hash<ExceptionInfo> error;
-                int observed = 0;
-                try {
-                    llm.chatStream(userMessage("test"), sub (hash<ChatStreamEvent> event) {
-                        ++observed;
-                    }, NOTHING, <LlmRequestOptions>{"timeout_ms": call_timeout_ms});
-                } catch (hash<ExceptionInfo> ex) { error = ex; }
-                string label = mode + " " + stage;
-                assertTrue(hasTransportTimeout(error), label + ": the call ends on its deadline");
-                if (!callRequestRead(label)) {
+                if (stage != "events") {
+                    streamDeadlineCall(mode, stage, 50);
                     continue;
                 }
-                if (held_headers) {
-                    # the deadline expired before the headers arrived: no event of the stream is read
-                    assertTrue(server.client_closed.get(60s), label + ": the deadline closes the connection");
-                    assertEq(0, observed, label + ": no event is read after the deadline");
-                } else {
-                    # the server sends until the client closes the connection
-                    hash<FakeStreamResult> stream = server.stream_results.get(60s);
-                    assertFalse(stream.completed, label + ": the client closed the connection");
-                    if (event_stage) {
-                        assertGt(0, observed, label + ": events were read before the deadline");
-                        assertLe(stream.sent, observed, label + ": only events that the server sent were read");
-                    } else {
-                        assertEq(0, observed, label + ": comments are not events");
+                # The first event is sent with the response headers, but a slow run (valgrind) can spend the
+                # whole deadline before it reads it.  The deadline is doubled until an event has been read, so the
+                # case does not depend on the speed of the run; every call must still end on its deadline.
+                int observed;
+                for (int call_timeout_ms = 2000; ; call_timeout_ms *= 2) {
+                    observed = streamDeadlineCall(mode, stage, call_timeout_ms);
+                    if (observed || call_timeout_ms >= 128000) {
+                        break;
                     }
                 }
-                assertEq(1, server.requests.size());
+                assertGt(0, observed, mode + " events: events were read before the deadline");
             }
         }
+    }
+
+    #! Makes a streamed call whose server never ends the response, and checks that the call ends on its deadline
+    /** The server sends nothing at all (\a stage \c "headers"), or sends comments or events back to back, without a
+        delay, until the client closes the connection: the call can then only end on its deadline, as a deadline
+        reset by each frame would keep the call reading for ever.  No frame waits for a time, so the result does
+        not depend on the speed of the run.
+
+        Each call has a client of its own: when a deadline expires while the client is still connecting, the
+        connection can be completed after the call has ended and kept in the client's pool, where the server,
+        which never receives a request on it, closes it.  A later call of the same client could take that
+        connection and fail with \c HTTP1-CONNECTION-CLOSED instead of ending on its deadline (seen in slow runs,
+        e.g. under valgrind).
+
+        @return the number of events read before the deadline
+    */
+    private int streamDeadlineCall(string mode, string stage, int call_timeout_ms) {
+        # the client's own deadline is longer than any test run, so only a call's deadline can end the call
+        LlmBackend llm(<LlmBackendConfig>{"mode": mode,
+            "url": "http://localhost:" + port, "protocol": "h1",
+            "model": mode == "http" ? "gpt-test" : "gemini-2.5-flash",
+            "api_key": "fixture-key", "timeout_ms": 3600000, "max_retries": 0});
+        bool held_headers = stage == "headers";
+        bool event_stage = stage == "events";
+        # Comments are valid SSE traffic but must not reset a call's deadline.
+        string frame = stage == "comments" ? ": keepalive\n\n"
+            : (mode == "http" ? sseData({"choices": ({"delta": {"content": "x"}},)})
+                : sseData({"candidates": ({"content": {"parts": ({"text": "x"},)}},)}));
+        server.script(held_headers
+            ? <FakeReply>{"hold_headers": True}
+            : <FakeReply>{"chunks": (frame,),
+                "repeat_until_close": True,
+                "first_chunk_with_head": event_stage,
+                "report_stream": True});
+        *hash<ExceptionInfo> error;
+        int observed = 0;
+        try {
+            llm.chatStream(userMessage("test"), sub (hash<ChatStreamEvent> event) {
+                ++observed;
+            }, NOTHING, <LlmRequestOptions>{"timeout_ms": call_timeout_ms});
+        } catch (hash<ExceptionInfo> ex) { error = ex; }
+        string label = sprintf("%s %s (%d ms)", mode, stage, call_timeout_ms);
+        assertTrue(hasTransportTimeout(error), sprintf("%s: the call ends on its deadline; it ended with: %s",
+            label, describeError(error)));
+        if (!callRequestRead(label)) {
+            return observed;
+        }
+        if (held_headers) {
+            # the deadline expired before the headers arrived: no event of the stream is read
+            assertTrue(server.client_closed.get(60s), label + ": the deadline closes the connection");
+            assertEq(0, observed, label + ": no event is read after the deadline");
+        } else {
+            # the server sends until the client closes the connection
+            hash<FakeStreamResult> stream = server.stream_results.get(60s);
+            assertFalse(stream.completed, label + ": the client closed the connection");
+            if (event_stage) {
+                assertLe(stream.sent, observed, label + ": only events that the server sent were read");
+            } else {
+                assertEq(0, observed, label + ": comments are not events");
+            }
+        }
+        assertEq(1, server.requests.size(), label);
+        return observed;
+    }
+
+    #! Describes an exception and the exceptions in its argument chain, for an assertion message
+    private static string describeError(*hash<ExceptionInfo> error) {
+        if (!error) {
+            return "no exception";
+        }
+        list<string> parts = ();
+        auto e = error;
+        for (int i = 0; i < 8 && e.typeCode() == NT_HASH && e.err; ++i) {
+            parts += sprintf("%s: %s", e.err, e.desc ?? "");
+            e = e.arg;
+        }
+        return parts.join(" <- ");
     }
 
     #! Returns True if the server has read the request of the last call
@@ -1525,6 +1590,172 @@ public class LlmStreamingTest inherits QUnit::Test {
                 (body, sub (hash<auto> chunk) {}));
         }
         assertEq(0, server.requests.size());
+    }
+
+    #! A cancel from another thread aborts a request whose response the server holds, at once and without a retry
+    facadeCallOptionsHeldTest() {
+        foreach string mode in (("http", "gemini", "anthropic")) {
+            foreach bool stream in ((False, True)) {
+                string ctx = sprintf("%s %s", mode, stream ? "chatCompletionsStream" : "chatCompletions");
+                # a retry would get a reply, so only a call that does not retry ends with the cancellation
+                server.script((<FakeReply>{"hold_headers": True}, completeReply(mode)));
+                LlmBackend llm = retryingBackendFor(mode);
+                CountingCancellation token();
+                Counter done(1);
+                background cancelOnSignal(token, server.request_queue, done);
+                on_exit {
+                    server.request_queue.push(False);
+                    done.waitForZero();
+                }
+                hash<auto> body = {"messages": userMessage("hi"), "timeout_ms": 3600000};
+                hash<LlmFacadeCallOptions> call_opts = <LlmFacadeCallOptions>{"cancellation": token};
+                int chunks = 0;
+                date start = now_us();
+                assertThrows("LLM-CANCELLED", "stopped by the user", sub () {
+                    if (stream) {
+                        llm.chatCompletionsStream(body, sub (hash<auto> chunk) { ++chunks; }, call_opts);
+                    } else {
+                        llm.chatCompletions(body, call_opts);
+                    }
+                }, NOTHING, ctx);
+                # the request timeout is an hour: only the cancellation ends the call this early
+                assertTrue((now_us() - start) < 20s, ctx + ": the call ends at once");
+                assertTrue(server.client_closed.get(30s), ctx + ": the connection is closed");
+                assertEq(0, chunks, ctx);
+                assertEq(1, server.getCallConnectionCount(), ctx + ": no retry is made");
+                assertEq(1, server.requests.size(), ctx);
+                assertFalse(server.requests[0].body.hasKey("cancellation"), ctx);
+                assertEq(0, token.getActiveCount(), ctx + ": the call leaves no handler on the token");
+            }
+        }
+    }
+
+    #! A cancel from another thread stops a stream after its first event while the next one is awaited
+    facadeCallOptionsMidstreamTest() {
+        foreach string mode in (("http", "gemini", "anthropic")) {
+            hash<FakeReply> reply = firstEventReply(mode);
+            reply.await_close = True;
+            server.script((reply, completeReply(mode)));
+            LlmBackend llm = retryingBackendFor(mode);
+            CountingCancellation token();
+            Queue delivered();
+            Counter done(1);
+            background cancelOnSignal(token, delivered, done);
+            on_exit {
+                delivered.push(False);
+                done.waitForZero();
+            }
+            list<string> deltas = ();
+            date start = now_us();
+            assertThrows("LLM-CANCELLED", "stopped by the user", sub () {
+                llm.chatCompletionsStream({"messages": userMessage("hi"), "timeout_ms": 3600000},
+                    sub (hash<auto> chunk) {
+                        *string content = chunk.choices[0].delta.content;
+                        if (content.val()) {
+                            deltas += content;
+                            # the cancel comes from another thread while the reader waits for the next event
+                            delivered.push(True);
+                        }
+                    }, <LlmFacadeCallOptions>{"cancellation": token});
+            }, NOTHING, mode);
+            assertTrue((now_us() - start) < 20s, mode + ": the stream ends at once");
+            assertEq(("first",), deltas, mode);
+            assertTrue(server.client_closed.get(30s), mode + ": the stream's connection is closed");
+            assertEq(1, server.getCallConnectionCount(), mode + ": no retry is made");
+            assertEq(0, token.getActiveCount(), mode);
+        }
+    }
+
+    #! A token cancelled before the call makes the call raise at once without sending anything
+    facadeCallOptionsPreCancelTest() {
+        LlmCancellation token();
+        token.cancel("stopped before the start");
+        hash<LlmFacadeCallOptions> call_opts = <LlmFacadeCallOptions>{"cancellation": token};
+        foreach string mode in (("http", "gemini", "anthropic")) {
+            server.script((completeReply(mode), completeReply(mode)));
+            LlmBackend llm = retryingBackendFor(mode);
+            hash<auto> body = {"messages": userMessage("hi")};
+            int chunks = 0;
+            assertThrows("LLM-CANCELLED", "stopped before the start", \llm.chatCompletions(), (body, call_opts),
+                mode);
+            assertThrows("LLM-CANCELLED", "stopped before the start", \llm.chatCompletionsStream(),
+                (body, sub (hash<auto> chunk) { ++chunks; }, call_opts), mode);
+            assertEq(0, chunks, mode);
+            assertEq(0, server.getCallConnectionCount(), mode + ": no connection is made");
+            assertEq(0, server.requests.size(), mode);
+        }
+    }
+
+    #! A call with a token that is not cancelled, or without call options, returns its response as before
+    facadeCallOptionsUncancelledTest() {
+        foreach string mode in (("http", "gemini", "anthropic")) {
+            foreach bool with_token in ((False, True)) {
+                string ctx = sprintf("%s %s", mode, with_token ? "with a token" : "without call options");
+                CountingCancellation token();
+                *hash<LlmFacadeCallOptions> call_opts = with_token
+                    ? <LlmFacadeCallOptions>{"cancellation": token}
+                    : NOTHING;
+                server.script(completeReply(mode));
+                LlmBackend llm = backendFor(mode);
+                string text;
+                hash<auto> rv = llm.chatCompletionsStream({"messages": userMessage("hi")}, sub (hash<auto> chunk) {
+                    text += chunk.choices[0].delta.content ?? "";
+                }, call_opts);
+                assertEq("first", text, ctx);
+                assertEq("first", rv.choices[0].message.content, ctx);
+                assertEq(1, server.requests.size(), ctx);
+                assertFalse(server.requests[0].body.hasKey("cancellation"), ctx);
+                assertEq(with_token, token.added > 0, ctx + ": only a call with a token registers a handler");
+                assertEq(0, token.getActiveCount(), ctx);
+                assertFalse(token.isCancelled(), ctx);
+            }
+        }
+        foreach bool with_token in ((False, True)) {
+            CountingCancellation token();
+            server.script(<FakeReply>{"content_type": MimeTypeJson, "body": make_json({"id": "c1",
+                "choices": ({"index": 0, "message": {"role": "assistant", "content": "done"},
+                    "finish_reason": "stop"},)})});
+            hash<auto> rv = openAiBackend().chatCompletions({"messages": userMessage("hi")},
+                with_token ? <LlmFacadeCallOptions>{"cancellation": token} : NOTHING);
+            assertEq("done", rv.choices[0].message.content);
+            assertEq(1, server.requests.size());
+            assertEq(with_token, token.added > 0);
+            assertEq(0, token.getActiveCount());
+        }
+    }
+
+    #! The body and the call options may give the same token, but not two different ones
+    facadeCallOptionsConflictTest() {
+        LlmBackend llm = openAiBackend();
+        LlmCancellation body_token();
+        LlmCancellation opts_token();
+        server.script(());
+        hash<auto> body = {"messages": userMessage("hi"), "cancellation": body_token};
+        hash<LlmFacadeCallOptions> call_opts = <LlmFacadeCallOptions>{"cancellation": opts_token};
+        assertThrows("LLM-REQUEST-ERROR", "different tokens", \llm.chatCompletions(), (body, call_opts));
+        assertThrows("LLM-REQUEST-ERROR", "different tokens", \llm.chatCompletionsStream(),
+            (body, sub (hash<auto> chunk) {}, call_opts));
+        assertEq(0, server.getCallConnectionCount());
+
+        # the same token in both places is one token
+        body_token.cancel("stopped by the user");
+        assertThrows("LLM-CANCELLED", "stopped by the user", \llm.chatCompletions(),
+            (body, <LlmFacadeCallOptions>{"cancellation": body_token}));
+        assertEq(0, server.requests.size());
+    }
+
+    #! Returns a backend for the mode that retries a failed request at once, so a retry would be seen
+    private LlmBackend retryingBackendFor(string mode) {
+        hash<string, string> models = {"http": "gpt-test", "gemini": "gemini-test", "anthropic": "claude-test"};
+        return new LlmBackend(<LlmBackendConfig>{
+            "mode": mode,
+            "url": "http://localhost:" + port,
+            "model": models{mode},
+            "api_key": mode + "-key",
+            "max_retries": 3,
+            "retry_delay_ms": 1,
+            "protocol": "h1",
+        });
     }
 
     cancelInFlightStreamTest() {

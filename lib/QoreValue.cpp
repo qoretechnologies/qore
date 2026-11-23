@@ -398,14 +398,57 @@ QoreValue QoreValue::resolveIndirect() const {
             // a weak reference does not keep its target alive, so it can already be deleted
             return o->isValid() ? QoreValue(o) : QoreValue();
         }
+        // borrowed, as documented: the caller reads it while it knows that it is referenced (see
+        // WeakListReferenceNode::borrow())
         case NT_WEAKREF_HASH:
-            return QoreValue(get<const WeakHashReferenceNode>()->get());
+            return QoreValue(get<const WeakHashReferenceNode>()->borrow());
         case NT_WEAKREF_LIST:
-            return QoreValue(get<const WeakListReferenceNode>()->get());
+            return QoreValue(get<const WeakListReferenceNode>()->borrow());
         default:
             break;
     }
     return *this;
+}
+
+QoreValue QoreValue::resolveIndirectRef() const {
+    // an opaque reference is resolved as in resolveIndirect(), with a reference of its own
+    if (isOpaqueObject()) {
+        return QoreValue(getOpaqueObject()).refSelf();
+    }
+    if (isOpaqueHash()) {
+        return QoreValue(getOpaqueHash()).refSelf();
+    }
+    if (isOpaqueList()) {
+        return QoreValue(getOpaqueList()).refSelf();
+    }
+
+    switch (getType()) {
+        case NT_WEAKREF: {
+            // the weak reference keeps the object allocated, but not referenced: a reference is taken only while
+            // its count is not zero, as a reference taken once the last one was released would make an object
+            // whose release has started reachable again
+            QoreObject* o = get<const WeakReferenceNode>()->get();
+            if (!o->optRef()) {
+                return QoreValue();
+            }
+            if (!o->isValid()) {
+                // the object has been deleted: its destructor has run, so the release of this reference runs none
+                ExceptionSink xsink;
+                o->deref(&xsink);
+                return QoreValue();
+            }
+            return QoreValue(o);
+        }
+        // a new reference to the list or hash, or a new empty one that cannot be changed if its free has started
+        // (qore#7198, qore#7231)
+        case NT_WEAKREF_HASH:
+            return QoreValue(get<const WeakHashReferenceNode>()->lock());
+        case NT_WEAKREF_LIST:
+            return QoreValue(get<const WeakListReferenceNode>()->lock());
+        default:
+            break;
+    }
+    return refSelf();
 }
 
 void QoreValue::getShortString(char* buf) const {
@@ -557,10 +600,11 @@ static bool qore_get_as_bool_lexical(const QoreValue& value) {
             const QoreObject* target = value.get<const WeakReferenceNode>()->get();
             return !Strict && target->isValid() && qore_object_ops(target).getAsBoolDefault();
         }
+        // the size of a list or hash, which reads as empty once it is freed (see WeakListReferenceNode::borrow())
         case NT_WEAKREF_LIST:
-            return !Strict && !value.get<const WeakListReferenceNode>()->get()->empty();
+            return !Strict && !value.get<const WeakListReferenceNode>()->borrow()->empty();
         case NT_WEAKREF_HASH:
-            return !Strict && !value.get<const WeakHashReferenceNode>()->get()->empty();
+            return !Strict && !value.get<const WeakHashReferenceNode>()->borrow()->empty();
         case NT_FUNCREF:
         case NT_RUNTIME_CLOSURE:
             return !Strict;
