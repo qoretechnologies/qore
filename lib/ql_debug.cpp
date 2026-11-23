@@ -9530,18 +9530,24 @@ public:
         XFD_ALL_FALLBACK, the operation waits for no events of its own object (so that only its extra fd is
         registered; an object without a descriptor would run it again at each step anyway), and the wake cannot
         record its socket (qore_dbg_close_wake_push_fails, as with no memory): the I/O thread's fallback, which wakes
-        all of its operations, must still run it.
+        all of its operations, must still run it.  With XFD_DRAIN_FALLBACK, the operation is the same, and the wake
+        records its socket, but the I/O thread cannot move it to its wake set (qore_dbg_close_wake_drain_fails): the
+        fallback must run it.  In both fallback modes, the fallback itself fails once (qore_dbg_close_wake_all_fails,
+        as with no memory), and must run again.
     */
     enum XfdCloseMode {
         XFD_NORMAL,
         XFD_POLL_DIFFERS,
         XFD_ALL_FALLBACK,
+        XFD_DRAIN_FALLBACK,
     };
     static void runPollableExtraFdClose(UnitTestCounters& c, XfdCloseMode mode) {
-        const bool all_fallback = mode == XFD_ALL_FALLBACK;
-        const std::string when = all_fallback ? " (extra fd of another Socket closed directly, wake fallback)"
+        const bool fallback = mode == XFD_ALL_FALLBACK || mode == XFD_DRAIN_FALLBACK;
+        const std::string when = mode == XFD_ALL_FALLBACK
+            ? " (extra fd of another Socket closed directly, wake fallback)"
+            : (mode == XFD_DRAIN_FALLBACK ? " (extra fd of another Socket closed directly, drain fallback)"
             : (mode == XFD_POLL_DIFFERS ? " (extra fd of another Socket closed directly, poll socket differs)"
-                : " (extra fd of another Socket closed directly)");
+                : " (extra fd of another Socket closed directly)"));
         ExceptionSink xsink;
         ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
         UT_ASSERT(c, !xsink, ("the controller is created" + when).c_str());
@@ -9600,7 +9606,7 @@ public:
         ReferenceHolder<QoreObject> queue_obj(&xsink);
         // the operation waits with its extra fd registered, without a time limit
         if (!submitExtraFdOp(c, **ctrl, main_obj, new PollableExtraOp(*notifier_obj, *other_obj, other,
-                all_fallback ? 0 : SOCK_POLLIN), "pollable-extra-fd-close-unit-test", queue_obj, xsink)) {
+                fallback ? 0 : SOCK_POLLIN), "pollable-extra-fd-close-unit-test", queue_obj, xsink)) {
             return;
         }
         ReferenceHolder<Queue> queue(static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink)),
@@ -9614,13 +9620,18 @@ public:
 
         // the other Socket is closed with the C++ close that bypasses the controller
         struct PushFailHelper {
-            explicit PushFailHelper(bool on) {
-                qore_dbg_close_wake_push_fails.store(on, std::memory_order_relaxed);
+            explicit PushFailHelper(XfdCloseMode mode) {
+                qore_dbg_close_wake_push_fails.store(mode == XFD_ALL_FALLBACK, std::memory_order_relaxed);
+                qore_dbg_close_wake_drain_fails.store(mode == XFD_DRAIN_FALLBACK, std::memory_order_relaxed);
+                qore_dbg_close_wake_all_fails.store(mode == XFD_ALL_FALLBACK || mode == XFD_DRAIN_FALLBACK ? 1 : 0,
+                    std::memory_order_relaxed);
             }
             ~PushFailHelper() {
                 qore_dbg_close_wake_push_fails.store(false, std::memory_order_relaxed);
+                qore_dbg_close_wake_drain_fails.store(false, std::memory_order_relaxed);
+                qore_dbg_close_wake_all_fails.store(0, std::memory_order_relaxed);
             }
-        } push_fail_helper(all_fallback);
+        } push_fail_helper(mode);
         qore_socket_private::get(*other->priv->socket)->close_and_reset();
 
         bool timed_out = false;
@@ -9633,6 +9644,10 @@ public:
             QoreValue err = exh ? exh->getKeyValue("err") : QoreValue();
             std::string what = err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : "no error";
             UT_ASSERT(c, what == "SOCKET-CLOSED", ("the operation fails as closed: " + what + when).c_str());
+        }
+        if (fallback) {
+            UT_ASSERT_EQ(c, 0, qore_dbg_close_wake_all_fails.load(std::memory_order_relaxed),
+                ("the fallback failed once before it ran the operation" + when).c_str());
         }
         xsink.clear();
         result.release().discard(&xsink);
@@ -27092,6 +27107,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runPollableExtraFdClose(c, AsyncIoDescriptorHoldTest::XFD_NORMAL);
     AsyncIoDescriptorHoldTest::runPollableExtraFdClose(c, AsyncIoDescriptorHoldTest::XFD_POLL_DIFFERS);
     AsyncIoDescriptorHoldTest::runPollableExtraFdClose(c, AsyncIoDescriptorHoldTest::XFD_ALL_FALLBACK);
+    AsyncIoDescriptorHoldTest::runPollableExtraFdClose(c, AsyncIoDescriptorHoldTest::XFD_DRAIN_FALLBACK);
     AsyncIoDescriptorHoldTest::runReplaceDescriptorGeneration(c);
     AsyncIoDescriptorHoldTest::runSharedRegistration(c);
     AsyncIoDescriptorHoldTest::runOwnedExtraFd(c);
