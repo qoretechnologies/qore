@@ -83,6 +83,10 @@ DLLLOCAL void qore_dbg_force_finalize_cancel(int loop, int64_t index);
 //! The metadata that marks the reference that the prologue of a fast entry takes to a boxed argument
 //! (QoreIRToLLVM::materializeOwnedFastEntries())
 #define QORE_FAST_ENTRY_ARG_REF_MD "qore.fast_entry_arg_ref"
+//! The metadata that marks a return of a fast entry before its prologue acquires its parameters (the stack check and
+//! the debugger entry), where the copy that takes its arguments over releases the arguments that it owns
+//! (QoreIRToLLVM::materializeOwnedFastEntries())
+#define QORE_FAST_ENTRY_EARLY_EXIT_MD "qore.fast_entry_early_exit"
 //! The infix of the name of a fast entry that takes its arguments over: \<fast entry\>.own.\<mask\>, the mask having
 //! a '1' for each parameter whose argument it takes over and a '0' for the others
 #define QORE_OWNED_FAST_ENTRY_INFIX ".own."
@@ -723,8 +727,12 @@ private:
     std::vector<llvm::Value*> fast_entry_converted_arg_refs;
     //! the block that returns from the debugger entry of an AOT fast entry (emitAOTDebugFastEntry())
     llvm::BasicBlock* debug_fast_entry_end = nullptr;
-    //! Emits the release of the references that the prologue of a fast entry took to its arguments in the paths that
-    //! leave the entry before its body runs: \a stack_overflow_bb and the debugger entry (issue #6105)
+    //! Marks the returns of the paths that leave a fast entry before its prologue acquires its parameters:
+    //! \a stack_overflow_bb and the debugger entry (QORE_FAST_ENTRY_EARLY_EXIT_MD)
+    /** The prologue acquires the parameters after the call is admitted (#7091), so the entry owns no reference at these
+        returns; the copy that takes its arguments over (materializeOwnedFastEntries()) owns those that its callers
+        hand over from its start, and releases them there (issue #6105)
+    */
     DLLLOCAL void emitFastEntryEarlyExitReleases(llvm::Module& module, llvm::BasicBlock* stack_overflow_bb);
     //! Emits the call of the fast entry \a owned_fn that takes over the arguments of \a take_over: the slots that it
     //! hands over are cleared right before the call (issue #6105)

@@ -132,6 +132,33 @@ bool QoreIRToLLVM::materializeOwnedFastEntries(llvm::Module& module, std::string
         for (llvm::Instruction* inst : erase) {
             inst->eraseFromParent();
         }
+        // the returns before the prologue acquires the parameters (the stack check and the debugger entry): the copy
+        // owns the arguments whose references it takes over from its start, and releases them there
+        {
+            std::vector<llvm::ReturnInst*> early_exits;
+            for (llvm::BasicBlock& bb : *owned) {
+                auto* ret = llvm::dyn_cast_or_null<llvm::ReturnInst>(bb.getTerminator());
+                if (ret && ret->getMetadata(QORE_FAST_ENTRY_EARLY_EXIT_MD)) {
+                    early_exits.push_back(ret);
+                }
+            }
+            if (!early_exits.empty() && std::find(taken.begin(), taken.end(), true) != taken.end()) {
+                llvm::FunctionCallee decref = module.getOrInsertFunction("qore_rt_decref",
+                    llvm::FunctionType::get(llvm::Type::getVoidTy(module.getContext()),
+                        {llvm::Type::getInt64Ty(module.getContext()),
+                         llvm::PointerType::getUnqual(module.getContext())}, false));
+                // the ExceptionSink is the last argument of a fast entry
+                llvm::Value* xsink = owned->getArg(owned->arg_size() - 1);
+                for (llvm::ReturnInst* ret : early_exits) {
+                    llvm::IRBuilder<> b(ret);
+                    for (size_t i = 0; i < taken.size(); ++i) {
+                        if (taken[i]) {
+                            b.CreateCall(decref, {owned->getArg(static_cast<unsigned>(i)), xsink});
+                        }
+                    }
+                }
+            }
+        }
         std::string owned_name = name.str();
         decl->replaceAllUsesWith(owned);
         decl->eraseFromParent();
@@ -265,25 +292,13 @@ llvm::CallInst* QoreIRToLLVM::emitOwnedFastEntryCall(llvm::Function* owned_fn, c
 
 // documented in QoreIRToLLVM.h
 void QoreIRToLLVM::emitFastEntryEarlyExitReleases(llvm::Module& module, llvm::BasicBlock* stack_overflow_bb) {
-    if (fast_entry_param_allocas.empty() && fast_entry_converted_arg_refs.empty()) {
-        return;
-    }
-    llvm::IRBuilderBase::InsertPoint saved_ip = builder->saveIP();
-    auto decref = module.getOrInsertFunction("qore_rt_decref",
-        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    (void)module;
     for (llvm::BasicBlock* bb : {stack_overflow_bb, debug_fast_entry_end}) {
         llvm::Instruction* exit = bb ? bb->getTerminator() : nullptr;
         if (!exit) {
             continue;
         }
         assert(llvm::isa<llvm::ReturnInst>(exit));
-        builder->SetInsertPoint(exit);
-        for (llvm::AllocaInst* alloca : fast_entry_param_allocas) {
-            builder->CreateCall(decref, {builder->CreateLoad(i64_type, alloca), xsink_arg});
-        }
-        for (llvm::Value* arg : fast_entry_converted_arg_refs) {
-            builder->CreateCall(decref, {arg, xsink_arg});
-        }
+        exit->setMetadata(QORE_FAST_ENTRY_EARLY_EXIT_MD, llvm::MDNode::get(ctx, {}));
     }
-    builder->restoreIP(saved_ip);
 }
