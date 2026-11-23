@@ -1,0 +1,12 @@
+%modern
+
+module OwnershipMarker {
+    version = "1.0";
+    desc = "empty marker used by the class injection ownership test";
+    author = "Qore Technologies";
+}
+
+public namespace OwnershipMarker {
+    public class ForeignTag {
+    }
+}

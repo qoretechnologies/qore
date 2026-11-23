@@ -830,6 +830,8 @@ constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 constexpr uint16_t QORE_AOT_CLASS_FLAGS_VERSION = 22;
 //! Class-flags bit: the class has a public member declaration in its hierarchy (has_public_memdecl)
 constexpr uint8_t QORE_AOT_CLASS_FLAG_PUBLIC_MEMDECL = 0x01;
+//! The declaring Program is the one serialized in this CLASSES record (16-bit class flags).
+constexpr uint16_t QORE_AOT_CLASS_DECLARED_BY_PROGRAM = 0x0040;
 //! First format version whose function records have no location table (see v21 above).
 constexpr uint16_t QORE_AOT_NO_LOCATION_TABLE_VERSION = 21;
 //! First format version in which a serialized background instruction can be of the helper kind.

@@ -2986,6 +2986,8 @@
     - the default @ref Qore::Logger::LoggerInterface::detail() "LoggerInterface::detail()" passes its format arguments
       to \c logArgs() as one list, so it no longer raises \c RUNTIME-OVERLOAD-ERROR with more than one
       (<a href="https://github.com/qoretechnologies/qore/issues/7197">issue 7197</a>)
+    - @ref Qore::Program::importClass() "Program::importClass()" checks class ownership when restricted code uses
+      class injection (<a href="https://github.com/qoretechnologies/qore/issues/7049">issue 7049</a>)
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0
