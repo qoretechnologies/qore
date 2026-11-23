@@ -1,0 +1,425 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# StreamSendBound.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# HttpServer::StreamSendBound: the send of an HTTP/2 or HTTP/3 response to a peer that does not take it fails after a
+# time without progress, or below a minimum rate if one is set; a peer that keeps taking the data is not cut off
+# (qoretechnologies/qore#7280).  The sends run against a socket that reports a full buffer, so no network is needed.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class StreamSendBoundTest
+
+#! a socket whose HTTP/2 and HTTP/3 stream sends report a full send buffer a given number of times
+class FullBufferSocket inherits Socket {
+    public {
+        #! the number of sends refused before one is accepted; -1 refuses every send
+        int full_sends;
+        #! how long each drain wait takes at most, in milliseconds
+        int wait_ms = 10;
+        #! the bytes that the peer takes per read of the progress count
+        int progress_step = 0;
+        #! the progress count
+        int progress = 0;
+        #! the results of the next drain waits; 1 (timed out) when none is left
+        list<int> drain_results = ();
+        #! an error raised by the next send
+        *string send_error;
+        #! the result of submitQuicStreamData() if set
+        *int quic_result;
+        #! the data accepted
+        list<binary> sent = ();
+    }
+
+    constructor(int full_sends) {
+        self.full_sends = full_sends;
+    }
+
+    nothing sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False) {
+        if (send_error) {
+            throw send_error, sprintf("stream %d", stream_id);
+        }
+        if (full()) {
+            throw "HTTP2-FLOW-CONTROL", sprintf("stream %d buffer full", stream_id);
+        }
+        sent += data;
+    }
+
+    int submitQuicStreamData(int session_id, int stream_id, *data body, softbool end_stream = False) {
+        if (send_error) {
+            throw send_error, sprintf("stream %d", stream_id);
+        }
+        if (exists quic_result) {
+            return quic_result;
+        }
+        if (full()) {
+            return 1;
+        }
+        sent += binary(body);
+        return 0;
+    }
+
+    int waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) {
+        return drainWait(timeout_ms);
+    }
+
+    int waitForQuicStreamDrain(int session_id, int stream_id, timeout timeout_ms = 5s) {
+        return drainWait(timeout_ms);
+    }
+
+    int getHttp2StreamTakenBytes(int stream_id) {
+        return readProgress();
+    }
+
+    int getQuicStreamAckedBytes(int session_id, int stream_id) {
+        return readProgress();
+    }
+
+    private int readProgress() {
+        progress += progress_step;
+        return progress;
+    }
+
+    private int drainWait(int timeout_ms) {
+        if (drain_results) {
+            return shift drain_results;
+        }
+        Counter never(1);
+        try {
+            never.waitForZero(min(timeout_ms, wait_ms));
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "COUNTER-TIMEOUT") {
+                rethrow;
+            }
+        }
+        return 1;
+    }
+
+    private bool full() {
+        if (!full_sends) {
+            return False;
+        }
+        if (full_sends > 0) {
+            --full_sends;
+        }
+        return True;
+    }
+}
+
+#! reports the bound settings that a request's handler is given
+class SettingsHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue settings();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        settings.push(cx."header-info"{"stream_send_min_rate", "stream_send_min_rate_window"});
+        return AbstractHttpRequestHandler::makeResponse(200, "ok");
+    }
+}
+
+#! reports the settings of the listener object that the handler is given
+class ViewHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue q();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        q.push({"rate": listener.getStreamSendMinRate(), "window": listener.getStreamSendMinRateWindow()});
+        return AbstractHttpRequestHandler::makeResponse(200, "ok");
+    }
+}
+
+#! responds with an endless body from a callback, on a stream whose data is held so that the client takes nothing
+class HeldStreamHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! reports each request once its stream is held
+        Queue held();
+        #! True to stop producing data
+        bool stop;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> hi = cx."header-info";
+        if (hi.http3) {
+            call_function("dbg_quic_hold_stream_data", hi.session_id, hi.stream_id);
+        } else {
+            call_function("dbg_http2_hold_stream_data", hi.stream_id);
+        }
+        held.push(True);
+        binary chunk = binary(strmul("x", 65536));
+        return <HttpResponseInfo>{"code": 200, "send_callback": auto sub () { return stop ? NOTHING : chunk; }};
+    }
+}
+
+class StreamSendBoundTest inherits QUnit::Test {
+    constructor() : QUnit::Test("StreamSendBound", "1.0") {
+        foreach bool http3 in ((False, True)) {
+            string v = http3 ? "HTTP/3" : "HTTP/2";
+            addTestCase(v + ": a send with room", \testSend(), http3);
+            addTestCase(v + ": a full buffer that drains", \testDrains(), http3);
+            addTestCase(v + ": no progress ends the send", \testStall(), http3);
+            addTestCase(v + ": progress keeps the send alive past the stall time", \testProgress(), http3);
+            addTestCase(v + ": one ended wait is retried", \testOneEndedWait(), http3);
+            addTestCase(v + ": a stream that stays ended fails", \testEnded(), http3);
+            addTestCase(v + ": no minimum rate by default", \testNoRate(), http3);
+            addTestCase(v + ": below the minimum rate", \testBelowRate(), http3);
+            addTestCase(v + ": the rate window spans the sends", \testRateAcrossSends(), http3);
+            addTestCase(v + ": a send error is raised", \testSendError(), http3);
+        }
+        addTestCase("HTTP/3: an unexpected send result", \testQuicResult());
+        addTestCase("invalid settings", \testInvalid());
+        addTestCase("the settings from the header info", \testHeaderInfo());
+        addTestCase("the listener options", \testListenerOptions());
+        addTestCase("the listener's settings reach the handler", \testListenerSettings());
+        addTestCase("HTTP/2: a real client below the rate gets a reset, not a hang", \testRealStalled(), False);
+        addTestCase("HTTP/3: a real client below the rate gets a reset, not a hang", \testRealStalled(), True);
+        addTestCase("a handler's view of the listener reports the settings", \testHandlerView());
+        addTestCase("a rate of 0 disables the check", \testRateDisabled());
+        set_return_value(main());
+    }
+
+    private send(StreamSendBound b, FullBufferSocket s, bool http3, *code<nothing()> wake) {
+        b.send(s, http3 ? 1 : NOTHING, 7, <01020304>, False, wake);
+    }
+
+    testSend(bool http3) {
+        FullBufferSocket s(0);
+        int wakes = 0;
+        send(new StreamSendBound(1s), s, http3, sub () { ++wakes; });
+        assertEq(1, s.sent.size());
+        assertEq(1, wakes, "the I/O thread is woken for the data");
+    }
+
+    testDrains(bool http3) {
+        FullBufferSocket s(3);
+        int wakes = 0;
+        send(new StreamSendBound(10s), s, http3, sub () { ++wakes; });
+        assertEq(1, s.sent.size(), "the same chunk is retried and sent once");
+        assertEq(4, wakes, "woken for each refused send and at the end");
+    }
+
+    testStall(bool http3) {
+        FullBufferSocket s(-1);
+        int start = clock_get_monotonic_us();
+        assertThrows("STREAM-SEND-TIMEOUT", "did not drain within 200 ms", \send(), (new StreamSendBound(200ms), s,
+            http3));
+        assertGe(190, (clock_get_monotonic_us() - start) / 1000, "after the stall time");
+        assertEq(0, s.sent.size());
+    }
+
+    testProgress(bool http3) {
+        # 40 waits of 25 ms: 1 s in all, five times the stall time, with progress in each
+        FullBufferSocket s(40);
+        s.wait_ms = 25;
+        s.progress_step = 1;
+        int start = clock_get_monotonic_us();
+        send(new StreamSendBound(200ms), s, http3);
+        assertGe(600, (clock_get_monotonic_us() - start) / 1000, "well past the stall time");
+        assertEq(1, s.sent.size());
+    }
+
+    testOneEndedWait(bool http3) {
+        FullBufferSocket s(2);
+        s.drain_results = (-1, 0);
+        send(new StreamSendBound(10s), s, http3);
+        assertEq(1, s.sent.size(), "a drain that found no data is not the end of the stream");
+    }
+
+    testEnded(bool http3) {
+        FullBufferSocket s(-1);
+        s.drain_results = (-1, -1);
+        assertThrows("STREAM-SEND-TIMEOUT", "ended with its send buffer full", \send(), (new StreamSendBound(10s), s,
+            http3));
+    }
+
+    testNoRate(bool http3) {
+        # progress of a byte per wait is far below any useful rate, but no rate is set
+        FullBufferSocket s(40);
+        s.wait_ms = 25;
+        s.progress_step = 1;
+        send(new StreamSendBound(10s), s, http3);
+        assertEq(1, s.sent.size());
+    }
+
+    testBelowRate(bool http3) {
+        FullBufferSocket s(-1);
+        s.wait_ms = 20;
+        s.progress_step = 1;
+        int start = clock_get_monotonic_us();
+        assertThrows("STREAM-SEND-TIMEOUT", "less than the minimum rate of 1048576", \send(),
+            (new StreamSendBound(1m, 1048576, 500ms), s, http3));
+        int ms = (clock_get_monotonic_us() - start) / 1000;
+        assertGe(450, ms, "after a whole window");
+        assertLt(30000, ms, "long before the stall time");
+    }
+
+    testRateAcrossSends(bool http3) {
+        StreamSendBound b(1m, 1048576, 500ms);
+        # the first send waits for less than the window and succeeds
+        FullBufferSocket s(12);
+        s.wait_ms = 25;
+        s.progress_step = 1;
+        send(b, s, http3);
+        assertEq(1, s.sent.size());
+        # the second continues the window instead of starting a new one
+        s.full_sends = -1;
+        int start = clock_get_monotonic_us();
+        assertThrows("STREAM-SEND-TIMEOUT", "less than the minimum rate", \send(), (b, s, http3));
+        assertLt(450, (clock_get_monotonic_us() - start) / 1000, "before a new window could have passed");
+    }
+
+    testSendError(bool http3) {
+        FullBufferSocket s(0);
+        s.send_error = "OTHER-ERROR";
+        assertThrows("OTHER-ERROR", \send(), (new StreamSendBound(1s), s, http3));
+    }
+
+    testQuicResult() {
+        FullBufferSocket s(0);
+        s.quic_result = 2;
+        assertThrows("STREAM-SEND-ERROR", "unexpected rv=2", \send(), (new StreamSendBound(1s), s, True));
+    }
+
+    testInvalid() {
+        assertThrows("STREAM-SEND-BOUND-ERROR", "must be positive", sub () { new StreamSendBound(0); });
+        assertThrows("SEND-RATE-ERROR", sub () { new StreamSendBound(1s, -1); });
+        assertThrows("SEND-RATE-ERROR", sub () { new StreamSendBound(1s, 1024, 0s); });
+    }
+
+    testHeaderInfo() {
+        # without settings: the default rate, whose window of 60 s this short send does not reach
+        FullBufferSocket s(40);
+        s.wait_ms = 25;
+        s.progress_step = 1;
+        send(StreamSendBound::forHeaderInfo(10s), s, False);
+        assertEq(1, s.sent.size());
+        FullBufferSocket s1(-1);
+        s1.wait_ms = 20;
+        s1.progress_step = 1;
+        assertThrows("STREAM-SEND-TIMEOUT", "minimum rate of 1048576", \send(), (StreamSendBound::forHeaderInfo(1m, {
+            "stream_send_min_rate": 1048576,
+            "stream_send_min_rate_window": 300ms,
+        }), s1, False));
+    }
+
+    testListenerOptions() {
+        HttpServer hs(<HttpServerOptionInfo>{});
+        on_exit hs.stop();
+        assertThrows("HTTPSERVER-ADDLISTENER-ERROR", "stream_send_min_rate", sub () {
+            hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0, "stream_send_min_rate": -1});
+        });
+        assertThrows("HTTPSERVER-ADDLISTENER-ERROR", "stream_send_min_rate_window", sub () {
+            hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0,
+                "stream_send_min_rate_window": 500us});
+        });
+        assertEq(1024, (<HttpListenerOptionInfo>{}).stream_send_min_rate, "on by default");
+        assertEq(1024, DefaultStreamSendMinRate);
+    }
+
+    testRealStalled(bool http3) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("requires a debug build");
+        }
+        HeldStreamHandler h();
+        HttpServer hs(<HttpServerOptionInfo>{});
+        on_exit {
+            h.stop = True;
+            call_function(http3 ? "dbg_quic_release_stream_data" : "dbg_http2_release_stream_data");
+            hs.stop();
+        }
+        hs.setDefaultHandler("held", h);
+        hs.waitForAsyncIo();
+        int port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": True,
+            "stream_send_min_rate": 1048576,
+            "stream_send_min_rate_window": 1s,
+        }).port;
+        hs.waitForAsyncIo();
+        int start = clock_get_monotonic_us();
+        *hash<ExceptionInfo> err;
+        try {
+            if (http3) {
+                HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
+                    "accept_all_certs": True,
+                    "request_timeout": 45s,
+                    "connect_timeout": 15s,
+                });
+                on_exit delete mgr;
+                mgr.request("https://127.0.0.1:" + port, "GET", "/", NOTHING, NOTHING);
+            } else {
+                HTTPClient c({"url": "https://127.0.0.1:" + port, "ssl_verify_cert": False, "http_version": "2.0",
+                    "timeout": 45s});
+                on_exit c.disconnect();
+                c.send(NOTHING, "GET", "/", NOTHING, False);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        int ms = (clock_get_monotonic_us() - start) / 1000;
+        assertEq(True, h.held.get(5s), "the stream was held");
+        assertEq(Type::Hash, err.typeCode() == NT_HASH ? Type::Hash : Type::NothingType, "the client got an error");
+        # the HTTP/3 client manager reports the reset in the description of its request error
+        assertRegex("RESET", err.err + ": " + err.desc, "the stream was reset");
+        assertGe(900, ms, "after a whole window");
+        assertLt(30000, ms, "without waiting for the client's own timeout");
+    }
+
+    testHandlerView() {
+        HttpServer hs(<HttpServerOptionInfo>{});
+        on_exit hs.stop();
+        ViewHandler h();
+        hs.setDefaultHandler("view", h);
+        int port = hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0,
+            "stream_send_min_rate": 4096, "stream_send_min_rate_window": 7s}).port;
+        HTTPClient c({"url": "http://localhost:" + port, "timeout": 30s});
+        on_exit c.disconnect();
+        c.get("/");
+        hash<auto> v = h.q.get(30s);
+        assertEq(4096, v.rate);
+        assertEq(7s, v.window);
+    }
+
+    testRateDisabled() {
+        # one byte per wait, far below the default rate, over more than a window
+        FullBufferSocket s(60);
+        s.wait_ms = 25;
+        s.progress_step = 1;
+        send(StreamSendBound::forHeaderInfo(10s, {"stream_send_min_rate": 0,
+            "stream_send_min_rate_window": 500ms}), s, False);
+        assertEq(1, s.sent.size());
+    }
+
+    testListenerSettings() {
+        SettingsHandler h();
+        HttpServer hs(<HttpServerOptionInfo>{});
+        on_exit hs.stop();
+        hs.setDefaultHandler("settings", h);
+        int dflt = hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int on = hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0,
+            "stream_send_min_rate": 2048, "stream_send_min_rate_window": 5s}).port;
+        foreach hash<auto> i in (({"port": dflt, "rate": 1024, "window": 60s},
+                 {"port": on, "rate": 2048, "window": 5s})) {
+            HTTPClient c({"url": "http://localhost:" + i.port, "timeout": 30s});
+            on_exit c.disconnect();
+            c.get("/");
+            hash<auto> v = h.settings.get(30s);
+            assertEq(i.rate, v.stream_send_min_rate);
+            assertEq(i.window, v.stream_send_min_rate_window);
+        }
+    }
+}

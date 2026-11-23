@@ -101,6 +101,14 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Streamed HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
+    A streamed HTTP/2 or HTTP/3 response that a handler thread sends is ended when its stream takes less than 1 KiB/s
+    while the server waits for it, so that a very slow client can no longer hold a handler thread; a client that keeps
+    taking data is no longer cut off after a fixed number of retries.  The rate applies to each stream, so a listener
+    that serves clients with many concurrent streams on a slow connection may need a lower value.  Set the
+    @ref HttpServer::HttpListenerOptionInfo::stream_send_min_rate "stream_send_min_rate" listener option to \c 0 to
+    disable the check (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>).
+
     @par A Lent Connection Gives Restricted Code Only Clients Bound to the Host's Target
     Code restricted from the \c NETWORK domain gets no synchronous client from a lent REST, YAML-RPC or server-sent
     event connection (\c PERMISSION-DENIED), and the HTTP clients that it gets connect only to the target of the code
@@ -2178,6 +2186,11 @@
       - see @ref httpclientdataprovider_v1_2 for all changes
 
     - @ref httpserverintro "HttpServer" module
+      - a streamed HTTP/2 or HTTP/3 response to a client that takes nothing for the stall time fails with
+        \c STREAM-SEND-TIMEOUT, and one that keeps taking the data is not cut off; the new
+        @ref HttpServer::HttpListenerOptionInfo::stream_send_min_rate "stream_send_min_rate" listener option sets a
+        minimum rate (1 KiB/s by default)
+        (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>)
       - async I/O for high-concurrency connection handling
         (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>) and HTTP/3 (see
         @ref httpserverhttp3)
