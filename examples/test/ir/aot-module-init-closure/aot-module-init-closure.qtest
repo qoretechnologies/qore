@@ -23,7 +23,8 @@
     closure that InitA's code creates during the initialization of InitB, and the closures of the loading Program
     and of a Program with a SandboxManager that loads InitA after it do not.  The output must be the same with the
     modules loaded from source and as modules compiled by qcc at -O0 and -O3, alone in a directory of the module
-    path, in the ast, ir, jit and tiered modes and on the IR tier of the tiered mode.
+    path, in the ast, ir, jit and tiered modes, and on the IR tier of the tiered mode with the modules loaded from
+    source.
 */
 class AotModuleInitClosureTest inherits QUnit::Test {
     public {
@@ -108,8 +109,13 @@ child: its closure qualifies: False
                 assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
                 assertEq(Expected, r.stdout, label);
             }
-            assertEq(Expected, ExecModeHarness::run_ir_tier(sprintf("%s %s -b --enable-debug --exec-mode=tiered %s",
-                env, qore_bin, script)), i.key + ", IR tier");
+            # the IR tier of the tiered mode is a tier of code that the run parses: the Program of a compiled module
+            # runs the module's code as native code, also a closure of the module when it is called, so only the
+            # modules loaded from source run on it
+            if (i.key == "source") {
+                assertEq(Expected, ExecModeHarness::run_ir_tier(sprintf("%s %s -b --enable-debug --exec-mode=tiered "
+                    "%s", env, qore_bin, script)), i.key + ", IR tier");
+            }
         }
     }
 
