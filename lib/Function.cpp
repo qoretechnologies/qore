@@ -2295,6 +2295,9 @@ QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFu
     if (qc && func->getClass()) {
         const MethodVariant* mv = reinterpret_cast<const MethodVariant*>(variant);
         ClassAccess va = mv->getAccess();
+        // the access that a variant of a parent class has in a method whose abstract variant it implements is checked
+        // when the variant is selected (skip_method_variant()): the variant object is also in the parent class's
+        // method, from which the selection may have taken it (qore#7277)
         if ((va > Public && !class_ctx) || (va == Internal
             && !qore_class_private::get(*mv->getClass())->sameClass(*qc))) {
             xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s(%s) is not accessible in this context",
@@ -3359,11 +3362,18 @@ static QoreStringNode* getNoopError(const QoreFunction* func, const QoreFunction
     return desc;
 }
 
-static bool skip_method_variant(const AbstractQoreFunctionVariant* v, const qore_class_private* class_ctx,
-        bool internal_access) {
+//! \a f is the method whose variant list has \a v
+static bool skip_method_variant(const QoreFunction* f, const AbstractQoreFunctionVariant* v,
+        const qore_class_private* class_ctx, bool internal_access) {
     assert(dynamic_cast<const MethodVariantBase*>(v));
+    assert(dynamic_cast<const MethodFunctionBase*>(f));
     const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(v);
     ClassAccess va = mvb->getAccess();
+    // a variant of a parent class that implements a more restrictive abstract variant of the method (qore#7277)
+    const MethodFunctionBase* mf = static_cast<const MethodFunctionBase*>(f);
+    if (mf->hasImplementedVariantAccess()) {
+        va = mf->getVariantAccess(v, va);
+    }
     // skip if the variant is not accessible
     return ((!class_ctx && va > Public) || (va == Internal && !internal_access));
 }
@@ -4301,7 +4311,7 @@ const QoreTypeInfo* QoreFunction::parseInferClassReceiverTypeInfo(const QoreProg
         }
 
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
-            if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+            if (last_class && skip_method_variant(aqf, *i, class_ctx, internal_access)) {
                 continue;
             }
 
@@ -4736,7 +4746,7 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
 
             // skip if the variant is not accessible or abstract
             if (last_class
-                && (skip_method_variant(*i, class_ctx, internal_access)
+                && (skip_method_variant(aqf, *i, class_ctx, internal_access)
                     || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                     continue;
             }
@@ -4920,7 +4930,7 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
                 for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
                     // skip if the variant is not accessible or abstract
                     if (last_class
-                        && (skip_method_variant(*i, class_ctx, internal_access)
+                        && (skip_method_variant(aqf, *i, class_ctx, internal_access)
                             || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                             continue;
                     }
@@ -5063,7 +5073,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
             // skip if the variant is not accessible or abstract
             if (last_class
-                && (skip_method_variant(*i, class_ctx, internal_access)
+                && (skip_method_variant(aqf, *i, class_ctx, internal_access)
                     || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                     continue;
             }
@@ -5183,7 +5193,7 @@ const AbstractQoreFunctionVariant* QoreFunction::checkVariant(ExceptionSink* xsi
             for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
                 // skip if the variant is not accessible or abstract
                 if (last_class
-                    && (skip_method_variant(*i, class_ctx, internal_access)
+                    && (skip_method_variant(aqf, *i, class_ctx, internal_access)
                         || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                         continue;
                 }
@@ -5251,7 +5261,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindExactVariant(Excepti
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
             // skip if the variant is not accessible or abstract
             if (last_class
-                && (skip_method_variant(*i, class_ctx, internal_access)
+                && (skip_method_variant(aqf, *i, class_ctx, internal_access)
                     || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                     continue;
             }
@@ -5373,7 +5383,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
         assert(!aqf->vlist.empty());
 
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
-            if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+            if (last_class && skip_method_variant(aqf, *i, class_ctx, internal_access)) {
                 continue;
             }
 
@@ -5615,7 +5625,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 }
 
                 for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
-                    if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+                    if (last_class && skip_method_variant(aqf, *i, class_ctx, internal_access)) {
                         continue;
                     }
                     bool strict_args = static_cast<bool>((*i)->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
@@ -5697,7 +5707,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 }
 
                 for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
-                    if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+                    if (last_class && skip_method_variant(aqf, *i, class_ctx, internal_access)) {
                         continue;
                     }
                     bool strict_args = static_cast<bool>((*i)->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
@@ -5922,7 +5932,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
         }
 
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
-            if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+            if (last_class && skip_method_variant(aqf, *i, class_ctx, internal_access)) {
                 continue;
             }
 
@@ -6243,7 +6253,7 @@ bool QoreFunction::parseHasExplicitTypeArgsVariant(const qore_class_private* cla
         }
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
             const AbstractQoreFunctionVariant* v = *i;
-            if ((last_class && skip_method_variant(v, class_ctx, internal_access))
+            if ((last_class && skip_method_variant(aqf, v, class_ctx, internal_access))
                     || !qore_get_variant_generic_signature(v)) {
                 continue;
             }
@@ -6312,7 +6322,7 @@ bool QoreFunction::parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* 
         }
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
             const AbstractQoreFunctionVariant* v = *i;
-            if (v == chosen || (last_class && skip_method_variant(v, class_ctx, internal_access))) {
+            if (v == chosen || (last_class && skip_method_variant(aqf, v, class_ctx, internal_access))) {
                 continue;
             }
             bool strict_args = static_cast<bool>(v->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
@@ -6392,7 +6402,7 @@ const QoreTypeInfo* QoreFunction::parseRuntimeNamedReturnType(const type_vec_t& 
         }
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
             const AbstractQoreFunctionVariant* v = *i;
-            if ((last_class && skip_method_variant(v, class_ctx, internal_access)) || !v->isNamedCallable()) {
+            if ((last_class && skip_method_variant(aqf, v, class_ctx, internal_access)) || !v->isNamedCallable()) {
                 continue;
             }
             bool strict_args = static_cast<bool>(v->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
@@ -6528,7 +6538,7 @@ const QoreTypeInfo* QoreFunction::parseRuntimeCallReturnType(const qore_class_pr
         }
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
             const AbstractQoreFunctionVariant* v = *i;
-            if (!all_variants && last_class && skip_method_variant(v, class_ctx, internal_access)) {
+            if (!all_variants && last_class && skip_method_variant(aqf, v, class_ctx, internal_access)) {
                 continue;
             }
             bool strict_args = static_cast<bool>(v->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
@@ -6610,7 +6620,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseNamedBindingConflict(
         }
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
             const AbstractQoreFunctionVariant* v = *i;
-            if (v == bind_variant || (last_class && skip_method_variant(v, class_ctx, internal_access))) {
+            if (v == bind_variant || (last_class && skip_method_variant(aqf, v, class_ctx, internal_access))) {
                 continue;
             }
             bool strict_args = static_cast<bool>(v->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
@@ -6766,7 +6776,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
         // check committed list
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
             // skip if the variant is not accessible
-            if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+            if (last_class && skip_method_variant(aqf, *i, class_ctx, internal_access)) {
                 continue;
             }
             AbstractFunctionSignature* sig = (*i)->getSignature();
@@ -7067,7 +7077,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
 
                 for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
                     // skip if the variant is not accessible
-                    if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+                    if (last_class && skip_method_variant(aqf, *i, class_ctx, internal_access)) {
                         continue;
                     }
 

@@ -12541,8 +12541,10 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
         const qore_method_private* mp = qore_method_private::get(*method);
         const MethodFunctionBase* mfb = mp->func;
 
-        // count user variants
-        uint32_t num_variants = 0;
+        // the user variants to write, with their positions in the variant list: then the abstract variants that
+        // concrete variants of parent classes implement, which are no longer in the list; the loader resolves them
+        // again, so that the class has the method that implements them, as when the program is parsed (qore#7277)
+        std::vector<std::pair<const AbstractQoreFunctionVariant*, size_t>> variants;
         {
             QoreFunctionIterator qfi(*static_cast<const QoreFunction*>(mfb));
             size_t variant_index = 0;
@@ -12554,27 +12556,32 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                 }
                 const AbstractQoreFunctionVariant* v = qfi.getVariant();
                 if (isAOTSerializableMethodVariant(method, v)) {
-                    ++num_variants;
+                    variants.emplace_back(v, variant_index);
                 }
                 ++variant_index;
             }
+            for (const AbstractQoreFunctionVariant* v : mfb->getReplacedAbstractVariants()) {
+                if (reinterpret_cast<const MethodVariantBase*>(v)->isAbstract()
+                        && isAOTSerializableMethodVariant(method, v)) {
+                    variants.emplace_back(v, variant_index++);
+                }
+            }
         }
-        writer.writeU32(num_variants);
+        writer.writeU32(static_cast<uint32_t>(variants.size()));
 
         // write user variant signatures
         {
             bool is_constructor = strcmp(method->getName(), "constructor") == 0;
             bool is_destructor = strcmp(method->getName(), "destructor") == 0;
             bool is_copy = strcmp(method->getName(), "copy") == 0;
-            QoreFunctionIterator qfi(*static_cast<const QoreFunction*>(mfb));
-            size_t variant_index = 0;
-            while (qfi.next()) {
+            for (const std::pair<const AbstractQoreFunctionVariant*, size_t>& vi : variants) {
+                size_t variant_index = vi.second;
                 if (variant_index && !(variant_index % 100)
                         && qore_check_cancel(nullptr, "AOT method variant serialization")) {
                     error = "operation cancelled during AOT method variant serialization";
                     return false;
                 }
-                const AbstractQoreFunctionVariant* v = qfi.getVariant();
+                const AbstractQoreFunctionVariant* v = vi.first;
                 if (isAOTSerializableMethodVariant(method, v)) {
                     const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(v);
                     // write access + flags before the signature
@@ -12746,7 +12753,6 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                         }
                     }
                 }
-                ++variant_index;
             }
         }
         ++method_index;
@@ -21640,10 +21646,10 @@ bool QoreAOTBinaryDeserializer::commitClassesImportAbstract(std::string& error) 
         std::iota(fallback_order.begin(), fallback_order.end(), 0);
         order = fallback_order;
     }
-    // Second pass: import abstract methods from parent classes and resolve them.
+    // Import the abstract methods of the parent classes; they are resolved in commitClassesResolveAbstract().
     // This must happen AFTER parseCommit() because concrete variants are in the
     // pending list until committed — parseHasVariantWithSignature() only searches
-    // the committed vlist. This mirrors parseInitPartialIntern() (QoreClass.cpp:4477).
+    // the committed vlist. This mirrors mergeAbstract() and parseInitPartialIntern() (lib/QoreClass.cpp).
     for (uint32_t i : order) {
         if (i >= class_list.size() || preexisting_classes.count(i)) {
             continue;
@@ -21656,31 +21662,39 @@ bool QoreAOTBinaryDeserializer::commitClassesImportAbstract(std::string& error) 
         if (!priv->scl) {
             continue;
         }
-        for (auto bi = priv->scl->begin(), be = priv->scl->end(); bi != be; ++bi) {
-            const QoreClass* parent = (*bi)->sclass;
-            if (!parent) {
-                continue;
-            }
-            const AbstractMethodMap& parent_ahm = qore_class_private::get(*parent)->ahm;
-            for (auto ai = parent_ahm.begin(), ae = parent_ahm.end(); ai != ae; ++ai) {
-                if (priv->ahm.find(ai->first) != priv->ahm.end()) {
+        // the abstract methods of every parent class are merged into the class's abstract method of the same name as
+        // source parsing merges them: first by qore_class_private::mergeAbstract(), when the class is initialized,
+        // which skips a parent class's abstract method without pending variants, then by
+        // qore_class_private::parseInitPartialIntern(); the variants of every parent class that the class's own
+        // method does not implement are merged (AbstractMethod::parseMergeBase() with the method), also into a method
+        // that the class has already (qore#7330), of two variants with the same signature the const one (qore#7317).
+        // Only the first parent class that declared a method was imported, so that the overloads that the other
+        // parent classes declare were lost (qore#7313).
+        for (int pass = 0; pass < 2; ++pass) {
+            for (auto bi = priv->scl->begin(), be = priv->scl->end(); bi != be; ++bi) {
+                QoreClass* parent = (*bi)->sclass;
+                if (!parent) {
                     continue;
                 }
-                // Check if we have a local concrete override (now in committed vlist)
-                auto mi = priv->hm.find(ai->first);
-                MethodFunctionBase* f = (mi != priv->hm.end())
-                    ? qore_method_private::get(*mi->second)->getFunction() : nullptr;
-                // issue #5773: the abstract variant's types are those of the specialization that the class inherits
-                if (f && f->parseHasVariantWithSignature(
-                        ai->second->vlist.begin()->second, priv->ahm.relaxed_match, priv->cls->getTypeInfo())) {
-                    // Resolved — concrete override matches abstract signature
-                    continue;
-                }
-                // Unresolved — import abstract method
-                std::unique_ptr<AbstractMethod> m(new AbstractMethod(priv->ahm.relaxed_match));
-                m->parseMergeBase(*(ai->second), f);
-                if (!m->empty()) {
-                    priv->ahm.insert(amap_t::value_type(ai->first, m.release()));
+                AbstractMethodMap& parent_ahm = qore_class_private::get(*parent)->ahm;
+                for (auto ai = parent_ahm.begin(), ae = parent_ahm.end(); ai != ae; ++ai) {
+                    if (!pass && ai->second->vlist.empty()) {
+                        continue;
+                    }
+                    auto mi = priv->hm.find(ai->first);
+                    MethodFunctionBase* f = (mi != priv->hm.end())
+                        ? qore_method_private::get(*mi->second)->getFunction() : nullptr;
+                    amap_t::iterator vi = priv->ahm.find(ai->first);
+                    if (vi != priv->ahm.end()) {
+                        vi->second->parseMergeBase(*(ai->second), f);
+                        continue;
+                    }
+                    std::unique_ptr<AbstractMethod> m(new AbstractMethod(priv->ahm.relaxed_match));
+                    m->parseMergeBase(*(ai->second), f);
+                    if (!m->empty()) {
+                        priv->ahm.insert(amap_t::value_type(ai->first, m.get()));
+                        m.release();
+                    }
                 }
             }
         }
@@ -21731,7 +21745,22 @@ bool QoreAOTBinaryDeserializer::commitClassesResolveAbstract(std::string& error)
             continue;
         }
         qore_class_private* priv = qore_class_private::get(*qc);
-        if (!priv->scl || priv->ahm.empty()) {
+        if (!priv->scl) {
+            continue;
+        }
+        // the methods that the parent classes created here by resolving abstract methods are in the inheritance
+        // lists of the class's methods, which commitClassesPrepare() built before (qore#7307)
+        priv->parseUpdateAbstractAncestors(true);
+        if (priv->ahm.empty()) {
+            continue;
+        }
+        // the abstract variants that commitClassesImportAbstract() imported from a parent class before that parent
+        // class resolved them here (the classes are resolved in topological order, parent classes first) are not
+        // pending in this class, as in qore_class_private::parseResolveAbstract(); otherwise they would be
+        // implemented again here, with the first concrete variant of the whole hierarchy (qore#7219, qore#7206)
+        priv->ahm.parseDropResolvedInParents(*priv, *priv->scl);
+        if (priv->ahm.empty()) {
+            priv->parse_resolve_abstract = true;
             continue;
         }
         // abstract resolution can synthesize a local method on this class; AbstractMethodMap::parseInit() gives it
@@ -21741,6 +21770,15 @@ bool QoreAOTBinaryDeserializer::commitClassesResolveAbstract(std::string& error)
         // so any later source-parse pass in the same Program doesn't
         // redundantly walk the same classes.
         priv->parse_resolve_abstract = true;
+    }
+    // the abstract variants that the classes have implemented (their pending_save lists) are released, as
+    // AbstractMethod::parseCommit() releases them when a parsed class is committed (qore#7313); a merge does not use
+    // a parent class's pending_save list (qore#7330), and resolution uses only the parent classes' pending variants
+    for (uint32_t i : order) {
+        if (i >= class_list.size() || preexisting_classes.count(i) || !class_list[i]) {
+            continue;
+        }
+        qore_class_private::get(*class_list[i])->ahm.parseCommit();
     }
     return true;
 }

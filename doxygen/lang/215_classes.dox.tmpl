@@ -520,6 +520,19 @@ string s = a.create(1);
     An abstract method can also be defined by another parent class of a class that inherits more than one class; a
     call of the method, also an unqualified or qualified call through \c self, then calls that definition, also when
     the class that declares the abstract variant has concrete variants of the method as well.\n\n
+    @anchor abstract_own_implementation A concrete variant of a class's own method implements the abstract variant
+    with its signature of each of its parent classes, also when other parent classes declare other overloads of the
+    method that the class itself does not implement, whatever the order of the parent classes (since %Qore 3.0):
+    @code{.py}
+class Sint { string m(int i) { return "Sint::m(int)"; } }
+class I1 { abstract string m(int i); }
+class I2 { abstract string m(string s); }
+class C3 inherits Sint, I1, I2 { string m(string s) { return "C3::m(string)"; } }  # Sint implements I1's m(int)
+
+C3 c3();
+c3.m(1);     # "Sint::m(int)"
+c3.m("a");   # "C3::m(string)"
+    @endcode
     @anchor abstract_parent_implementation A concrete variant of a parent class of the class that declares an abstract
     variant implements it for that class and its subclasses, also a @ref private_methods "private" variant: the method
     then has the access of the variants that implement it, so that a public abstract method implemented by a private
@@ -538,6 +551,65 @@ class X1 inherits A1, B1, C1 {}
 X1 x1();
 x1.m();       # "C1::m": P1::m() is private
 x1.viaB();    # "P1::m": B1's code can call P1::m()
+    @endcode
+    Each variant that implements an abstract variant has the more restrictive of its own access (in the method of the
+    class that has it) and of the access of the abstract declaration, also when another parent class declares the
+    abstract variant or a subclass declares it again, except that a variant of a class that a public path reaches keeps
+    its own access (see @ref multiple_path_inheritance).  This also applies when the class that declares the abstract
+    method inherits the implementing class with @ref private_inheritance "private" or <tt><b>private:internal</b></tt> access: the method
+    is a method of that class, declared by its abstract declaration, as a method that it implements with a method of
+    its own, so a public abstract method that a public method of a privately inherited class implements is public, as
+    the class declares it (the inherited class itself stays private: an object of the class is not an instance of it),
+    and a private or <tt><b>private:internal</b></tt> abstract method implemented in the same way is private or
+    <tt><b>private:internal</b></tt> (since %Qore 3.0).  A <tt><b>private:internal</b></tt> variant of a parent class
+    also implements an abstract variant, but it can only be called from its own class (see @ref private_methods), so
+    that a call from the code of any other class raises an exception:
+    @code{.py}
+class P2 { string m() { return "P2::m"; } }
+class A2 inherits private:internal P2 { abstract string m(); }          # public: P2::m() implements it for A2
+class B2 inherits private:internal P2 { private abstract string m(); }  # private, also implemented by P2::m()
+
+(new A2()).m();   # "P2::m"
+(new B2()).m();   # METHOD-IS-PRIVATE
+    @endcode
+    The access of an abstract declaration of a parent class is also at least that of the least restrictive path from
+    the class to the class that declares it, the access of a path being that of its most restrictive inheritance edge:
+    an abstract method that a class reaches only through @ref private_inheritance "private" or
+    <tt><b>private:internal</b></tt> inheritance does not make the method that implements it public, so that a method
+    of a class that the class also inherits privately stays inaccessible from outside the class hierarchy.  When
+    several parent classes declare the abstract variant, the least restrictive of these declarations applies, in any
+    order of the parent classes, unless the class declares it itself, as its own declaration overrides them.  A
+    subclass or another parent class that declares the abstract variant again does not make a method that implements
+    it private in a parent class public: the variant keeps that access (since %Qore 3.0):
+    @code{.py}
+class Secret { string m() { return "Secret::m"; } }
+class Iface { abstract string m(); }
+class X3 inherits private Secret, private Iface {}  # private: Iface is reached through private inheritance only
+class Y3 inherits private Secret, Iface {}          # public: Iface is inherited publicly
+class IfaceB { abstract string m(); }
+class W3 inherits private Secret, private Iface, IfaceB {}  # public: IfaceB is inherited publicly
+class Z3 inherits X3 { abstract string m(); }       # private: X3's method is private
+
+(new X3()).m();   # METHOD-IS-PRIVATE
+(new Y3()).m();   # "Secret::m"
+(new W3()).m();   # "Secret::m"
+(new Z3()).m();   # METHOD-IS-PRIVATE
+    @endcode
+    A variant of a class that a parent class inherits with <tt><b>private:internal</b></tt> access does not implement
+    an abstract variant of that parent class's subclasses, as that class is not in their class hierarchy (see
+    @ref private_inheritance): the class stays abstract unless a method of its own, a method of a parent class (also
+    one that the parent class implements with that variant) or a class that another path reaches implements it; the
+    class that inherits the class with <tt><b>private:internal</b></tt> access itself can implement an abstract
+    variant with it, as above (since %Qore 3.0):
+    @code{.py}
+class K4 inherits private:internal Secret {}
+class J4 inherits K4, Iface {}           # abstract: J4 does not reach Secret
+class P4 inherits K4, Secret, Iface {}   # Secret::m() implements m(): Secret is inherited publicly
+class Q4 inherits private:internal Secret, Iface {}
+class R4 inherits Q4, IfaceB {}          # Q4's method implements IfaceB's m()
+
+create_object("J4");   # ABSTRACT-CLASS-ERROR
+(new R4()).m();        # "Secret::m"
     @endcode
     Classes with undefined abstract methods cannot be instantiated.  Abstract methods cannot have a method body; an
     abstract method's declaration must be terminated with a semicolon (\c ";").  Furthermore, abstract methods cannot

@@ -187,10 +187,10 @@ struct AbstractMethod {
 
     DLLLOCAL ~AbstractMethod();
 
-    // merge changes from parent class method of the same name during parse initialization
-    DLLLOCAL void parseMergeBase(AbstractMethod& m, bool committed = false);
-
-    // merge changes from parent class method of the same name during parse initialization
+    //! merges the abstract variants of the parent class's method \a m of the same name during parse initialization
+    /** A concrete variant of the class's own method \a f (if any) implements the parent class's variant with its
+        signature, whether the class has the abstract method already or not (qore#7330)
+    */
     DLLLOCAL void parseMergeBase(AbstractMethod& m, MethodFunctionBase* f, bool committed = false);
 
     DLLLOCAL void parseAdd(MethodVariantBase* v);
@@ -2939,12 +2939,14 @@ public:
 
     //! @param receiver the class whose abstract variant \a v is: the type arguments of its generic bases are
     //! substituted in \a v's signature (issue #5773)
+    //! @param access the access of the variant returned in the method of the class that has it (qore#7277)
+    //! a private:internal edge of a parent class is not followed: the class does not reach that class (qore#7316)
     DLLLOCAL MethodVariantBase* matchNonAbstractVariant(const std::string& name, MethodVariantBase* v,
-            const QoreTypeInfo* receiver = nullptr) const;
+            ClassAccess& access, const QoreTypeInfo* receiver = nullptr) const;
 
     // runtime version for dynamically-created classes (e.g., JNI classes)
     DLLLOCAL MethodVariantBase* runtimeMatchNonAbstractVariant(const std::string& name, MethodVariantBase* v,
-        bool relaxed_match) const;
+        bool relaxed_match, ClassAccess& access) const;
 
     DLLLOCAL bool isBaseClass(QoreClass* qc, bool toplevel) const;
 
@@ -3422,7 +3424,12 @@ public:
         /** The methods' inheritance lists are built there, and each subclass's hierarchy is initialized through its
             base classes (issue #6106)
         */
-        hierarchy_initialized : 1 = false
+        hierarchy_initialized : 1 = false,
+        //! set when the class or one of its ancestors has created a method by resolving an abstract method
+        /** The inheritance lists of the methods of its subclasses are built again then (see
+            parseUpdateAbstractAncestors(); qore#7307)
+        */
+        abstract_method_created : 1 = false
         ;
 
     std::vector<QoreGenericTypeParam> type_params;
@@ -5929,6 +5936,20 @@ public:
     DLLLOCAL int parseResolveHierarchy();
     DLLLOCAL void parseResolveClassMembers();
     DLLLOCAL void parseResolveAbstract();
+    //! builds the inheritance lists of the class's methods again if a parent class has created a method by resolving
+    //! an abstract method since they were built (qore#7307)
+    /** Called when the abstract methods of the parent classes have been resolved, before the class's own: the lists
+        are built when the hierarchy is initialized, before abstract methods are resolved, so that the method that
+        resolving an abstract method creates in a parent class would be missing from the lists of its subclasses.
+
+        @param aot true for a class loaded from compiled code: the lists of all of its methods except the
+        constructor, destructor and copy method were built (QoreAOTBinaryDeserializer::commitClassesPrepare()),
+        otherwise those of its new methods except the special ones, as in initializeHierarchy()
+    */
+    DLLLOCAL void parseUpdateAbstractAncestors(bool aot);
+    //! runtime version of parseUpdateAbstractAncestors() for classes created dynamically (AbstractMethodMap::
+    //! runtimeInit())
+    DLLLOCAL void runtimeUpdateAbstractAncestors();
     DLLLOCAL void parseCommit();
     DLLLOCAL void parseCommitRuntimeInit(ExceptionSink* xsink);
     DLLLOCAL void parseRollback();

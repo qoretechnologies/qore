@@ -889,61 +889,31 @@ int AbstractMethod::parseCommit() {
 }
 
 // merge changes from parent class method of the same name during parse initialization
-void AbstractMethod::parseMergeBase(AbstractMethod& m, bool committed) {
-    //printd(5, "AbstractMethod::parseMergeBase(m: %p) this: %p m.pending_save: %d m.vlist: %d\n", &m, this,
-    //    !m.pending_save.empty(), !m.vlist.empty());
-    // move pending committed variants from our vlist that are in parent's pending_save list to our pending_save
-    for (auto& i : m.pending_save) {
-        const char* sig = i.second->getAbstractSignature();
-        vmap_t::iterator vi = vlist.find(sig);
-        if (vi != vlist.end()) {
-            /*
-            i.second->ref();
-            pending_save.insert(vmap_t::value_type(sig, i.second));
-            vi.second->deref();
-            */
-
-            pending_save.insert(vmap_t::value_type(sig, vi->second));
-            vlist.erase(vi);
-        }
-    }
-
-    // add new abstract methods from parent to our list - if they are not already in our vlist or in our pending_save list
-    for (auto& i : m.vlist) {
-        const char* sig = i.second->getAbstractSignature();
-        //printd(5, "AbstractMethod::parseMergeBase(m: %p) this: %p checking parent: '%s'\n", &m, this, sig);
-        if (pending_save.find(sig) != pending_save.end()) {
-            continue;
-        }
-        vmap_t::iterator vi = vlist.find(sig);
-        if (vi != vlist.end()) {
-            if (i.second->isConstMethod() && !vi->second->isConstMethod()) {
-                vi->second->deref();
-                i.second->ref();
-                vi->second = i.second;
-            }
-            continue;
-        }
-        //printd(5, "AbstractMethod::parseMergeBase(m: %p) this: %p adding to vlist from parent: '%s'\n", &m, this, sig);
-        i.second->ref();
-        vlist.insert(vmap_t::value_type(sig, i.second));
-    }
-}
-
-// merge changes from parent class method of the same name during parse initialization
+/** A concrete variant of the class's own method \a f implements the parent class's abstract variant with its
+    signature, whether the class has the abstract method already, from another parent class or its own abstract
+    declarations, or not: a class's own variant implements the abstract variants of every parent class, also when
+    another parent class declares an overload that the class's own method does not implement (qore#7330).
+*/
 void AbstractMethod::parseMergeBase(AbstractMethod& m, MethodFunctionBase* f, bool committed) {
     //printd(5, "AbstractMethod::parseMergeBase(m: %p, f: %p %s::%s) this: %p m.pending_save: %d m.vlist: %d\n", &m,
     //    f, f ? f->getClassName() : "n/a", f ? f->getName() : "n/a", this, !m.pending_save.empty(),
     //    !m.vlist.empty());
-    // move pending committed variants from our vlist that are in parent's pending_save list to our pending_save
-    for (auto& i : m.pending_save) {
-        const char* sig = i.second->getAbstractSignature();
-        vmap_t::iterator vi = vlist.find(sig);
-        if (vi != vlist.end()) {
-            pending_save.insert(vmap_t::value_type(sig, vi->second));
-            vlist.erase(vi);
+    // the variants that the parent class has implemented itself (its pending_save list) do not implement the class's
+    // variants of their signatures here: the class resolves them as with a committed parent class, whose pending_save
+    // list is empty (AbstractMethodMap::parseInit()), so that the class gets the method that implements them, with
+    // the const contract of its own declaration (qore#7330)
+
+    // issue #5773: the abstract variant's types are those of the specialization that the implementing class inherits
+    const QoreTypeInfo* receiver = f && f->getClass() ? f->getClass()->getTypeInfo() : nullptr;
+    // returns true if a concrete variant of the class's own method implements the abstract variant v; the class's own
+    // abstract declarations are in vlist already (qore_class_private::addUserMethod()) and stay there
+    auto own_implements = [f, receiver, this](MethodVariantBase* v) -> bool {
+        if (!f) {
+            return false;
         }
-    }
+        MethodVariantBase* ov = f->parseHasVariantWithSignature(v, relaxed_match, receiver);
+        return ov && !ov->isAbstract();
+    };
 
     // add new abstract methods from parent to our list - if they are not already in our vlist or in our pending_save
     // list
@@ -953,14 +923,24 @@ void AbstractMethod::parseMergeBase(AbstractMethod& m, MethodFunctionBase* f, bo
         //    "rm: %d) '%s'\n", &m, f, f ? f->getClassName() : "n/a", f ? f->getName() : "n/a", this, sig, f,
         //    f && f->parseHasVariantWithSignature(i.second, relaxed_match), relaxed_match, sig);
 
-        // issue #5773: the abstract variant's types are those of the specialization that the implementing class
-        // inherits
-        bool has_match = f && f->parseHasVariantWithSignature(i.second, relaxed_match,
-            f->getClass() ? f->getClass()->getTypeInfo() : nullptr);
-        if (has_match) {
+        if (own_implements(i.second)) {
+            vmap_t::iterator vi = vlist.find(sig);
+            if (vi != vlist.end()) {
+                // the variant with the signature that another parent class declared stays unimplemented unless the
+                // class's own method implements it as well (of a const and a non-const declaration, the const one is
+                // kept; qore#7317)
+                if (own_implements(vi->second)) {
+                    if (!pending_save.insert(*vi).second) {
+                        vi->second->deref();
+                    }
+                    vlist.erase(vi);
+                }
+                continue;
+            }
             // add to our pending_save
-            i.second->ref();
-            pending_save.insert(vmap_t::value_type(sig, i.second));
+            if (pending_save.insert(vmap_t::value_type(sig, i.second)).second) {
+                i.second->ref();
+            }
             continue;
         }
 
@@ -1082,6 +1062,133 @@ void AbstractMethod::checkAbstract(const char* cname, const char* mname, vmap_t&
     }
 }
 
+//! returns true if a path of public inheritance edges in \a scl reaches the class \a target (qore#7277)
+static bool reaches_class_publicly(const BCList& scl, const qore_class_private& target, qcp_set_t& visited) {
+    for (const BCNode* n : scl) {
+        if (n->access != Public || !n->sclass) {
+            continue;
+        }
+        qore_class_private* p = qore_class_private::get(*n->sclass);
+        if (p->sameClass(target)) {
+            return true;
+        }
+        if (p->scl && visited.insert(p).second && reaches_class_publicly(*p->scl, target, visited)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+typedef std::map<const qore_class_private*, ClassAccess> abstract_decl_access_map_t;
+
+//! returns the access of the abstract declaration of the method \a name with the abstract signature \a sig that the
+//! class \a qc declares itself, or \c Inaccessible if it declares none (qore#7288)
+/** The declaration is a variant of the class's own method, in its variant list or, once a concrete variant implements
+    it, in the abstract variants that the method replaced; the AOT loader restores both from the image, so that the
+    loaded class has the same declarations as the parsed one.
+*/
+static ClassAccess own_abstract_decl_access(const qore_class_private& qc, const char* name, const char* sig) {
+    const QoreMethod* m = qc.parseFindLocalMethod(name);
+    if (!m) {
+        return Inaccessible;
+    }
+    const MethodFunctionBase* f = qore_method_private::get(*m)->getFunction();
+    ClassAccess rv = Inaccessible;
+    auto check = [&](const AbstractQoreFunctionVariant* i) {
+        MethodVariantBase* v = const_cast<MethodVariantBase*>(METHVB_const(i));
+        if (v->isAbstract() && v->getClass() && qore_class_private::get(*v->getClass())->sameClass(qc)
+                && rv > v->getAccess() && !strcmp(v->getAbstractSignature(), sig)) {
+            rv = v->getAccess();
+        }
+    };
+    QoreFunctionIterator qfi(*static_cast<const QoreFunction*>(f));
+    while (qfi.next()) {
+        check(qfi.getVariant());
+    }
+    for (const AbstractQoreFunctionVariant* i : f->getReplacedAbstractVariants()) {
+        check(i);
+    }
+    return rv;
+}
+
+//! returns the least restrictive access that the class \a qc gives the abstract declarations of the method \a name
+//! with the abstract signature \a sig in its hierarchy, or \c Inaccessible if it has none (qore#7288)
+/** Each declaration has the more restrictive of its own access and of the access of the path from \a qc to the class
+    that declares it, the access of a path being that of its most restrictive inheritance edge; a class that declares
+    it itself gives it the access of its own declaration, which overrides those of its parent classes.  Every
+    declaration counts, not only the one that the class keeps of several with the same signature (the first parent's, or a const
+    one, at parse time; the first parent's in the AOT loader), so that the access does not depend on the order of the
+    parent classes, and is the same in the interpreter and in qcc executables.  A \c private:internal edge below the
+    first one of a path is not cut (as lookups from \a qc cut it), but gives the path \c Internal access, the most
+    restrictive one that a method of \a qc can have.  The access from each class is computed once (\a done), so that
+    the walk is linear in the hierarchy, not in its paths.
+*/
+static ClassAccess abstract_decl_access(const qore_class_private& qc, const char* name, const char* sig,
+        abstract_decl_access_map_t& done) {
+    abstract_decl_access_map_t::const_iterator i = done.find(&qc);
+    if (i != done.end()) {
+        return i->second;
+    }
+    // a declaration of the class itself overrides those of its parent classes, as a method of its own does
+    ClassAccess rv = own_abstract_decl_access(qc, name, sig);
+    if (rv == Inaccessible && qc.scl) {
+        for (const BCNode* n : *qc.scl) {
+            if (!n->sclass) {
+                continue;
+            }
+            ClassAccess pa = abstract_decl_access(*qore_class_private::get(*n->sclass), name, sig, done);
+            if (pa == Inaccessible) {
+                continue;
+            }
+            if (pa < n->access) {
+                pa = n->access;
+            }
+            if (pa < rv) {
+                rv = pa;
+                if (rv == Public) {
+                    break;
+                }
+            }
+        }
+    }
+    done[&qc] = rv;
+    return rv;
+}
+
+//! sets the access \a va (that of \a v in the method of the class that has it) of the concrete variant \a v that
+//! implements the abstract variant \a av of the method \a name in the class \a qc (qore#7277)
+/** The variant has at least the access of the abstract declaration, except that a variant of a class that a public
+    path from \a qc reaches has its own access, as the least restrictive path to a class does
+    (multiple_path_inheritance), and a variant of \a qc itself (runtimeInit()) is its own override.
+
+    The access of the abstract declaration is the least restrictive one of the declarations with the signature of
+    \a av in the hierarchy of \a qc, each with at least the access of the path from \a qc to its class: a declaration
+    that \a qc reaches only through private or private:internal inheritance does not make the method public
+    (qore#7288).
+*/
+static void abstract_variant_restrict_access(ClassAccess& va, const MethodVariantBase* v,
+        const MethodVariantBase* av, const qore_class_private& qc, const char* name) {
+    const QoreClass* vc = v->getClass();
+    if (vc) {
+        const qore_class_private& vcp = *qore_class_private::get(*vc);
+        qcp_set_t visited;
+        if (vcp.sameClass(qc) || (qc.scl && reaches_class_publicly(*qc.scl, vcp, visited))) {
+            va = v->getAccess();
+            return;
+        }
+    }
+    abstract_decl_access_map_t done;
+    ClassAccess aa = abstract_decl_access(qc, name, const_cast<MethodVariantBase*>(av)->getAbstractSignature(),
+        done);
+    // the declaration kept is in the hierarchy; its own access applies if it could not be found
+    if (aa == Inaccessible) {
+        aa = av->getAccess();
+    }
+    if (va < aa) {
+        va = aa;
+    }
+}
+
 // try to find match non-abstract variants in base classes (allows concrete variants to be inherited from another
 // parent class)
 void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
@@ -1091,8 +1198,12 @@ void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
         for (vmap_t::iterator vi = i->second->vlist.begin(), ve = i->second->vlist.end(); vi != ve;) {
             // if there is a matching non-abstract variant in any parent class, then move the variant from vlist to
             // pending_save
-            MethodVariantBase* v = scl->matchNonAbstractVariant(i->first, vi->second, qc.cls->getTypeInfo());
+            ClassAccess va = Public;
+            MethodVariantBase* v = scl->matchNonAbstractVariant(i->first, vi->second, va, qc.cls->getTypeInfo());
             if (v) {
+                // the variant has the more restrictive access of the abstract variant and of its own in the method of
+                // its class (qore#7277)
+                abstract_variant_restrict_access(va, v, vi->second, qc, i->first.c_str());
                 const char* sig = vi->second->getAbstractSignature();
                 i->second->pending_save.insert(vmap_t::value_type(sig, vi->second));
                 vmap_t::iterator ti = vi++;
@@ -1106,8 +1217,10 @@ void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
                     // the method of the class also has the variants that the parent classes define: the concrete
                     // variants of the class that declares the abstract variant are found through it (issue #6161)
                     scl->parseAddAncestors(m);
+                    // the inheritance lists of the subclasses' methods are built again with it (qore#7307)
+                    qc.abstract_method_created = true;
                 }
-                qore_method_private::get(*m)->getFunction()->replaceAbstractVariant(v);
+                qore_method_private::get(*m)->getFunction()->replaceAbstractVariant(v, va);
                 continue;
             }
             ++vi;
@@ -1148,7 +1261,7 @@ void AbstractMethodMap::parseDropResolvedInParents(const qore_class_private& qc,
                 ++vi;
                 continue;
             }
-            // as for a variant that a parent class implemented before the merge (AbstractMethod::parseMergeBase())
+            // the parent classes implement it, as a committed parent class's abstract method has no such variant
             if (!am.pending_save.insert(*vi).second) {
                 // the reference of the vlist entry is released if the variant is already saved
                 vi->second->deref();
@@ -1170,11 +1283,15 @@ void AbstractMethodMap::parseDropResolvedInParents(const qore_class_private& qc,
 void AbstractMethodMap::runtimeInit(qore_class_private& qc, BCList* scl) {
     //printd(5, "AbstractMethodMap::runtimeInit() this: %p cname: %s scl: %p ae: %d\n", this, qc.name.c_str(), scl,
     //    empty());
+    // the methods that the parent classes created by resolving abstract methods are in the inheritance lists of the
+    // class's methods (qore#7307)
+    qc.runtimeUpdateAbstractAncestors();
     for (amap_t::iterator i = begin(), e = end(); i != e;) {
         for (vmap_t::iterator vi = i->second->vlist.begin(), ve = i->second->vlist.end(); vi != ve;) {
             // if there is a matching non-abstract variant in any parent class, then move the variant from vlist to
             // pending_save
-            MethodVariantBase* v = scl->runtimeMatchNonAbstractVariant(i->first, vi->second, relaxed_match);
+            ClassAccess va = Public;
+            MethodVariantBase* v = scl->runtimeMatchNonAbstractVariant(i->first, vi->second, relaxed_match, va);
             if (!v) {
                 // also check the class's own local methods for a matching non-abstract variant;
                 // this handles the case where initializeBuiltin() merged abstract variants from
@@ -1187,9 +1304,14 @@ void AbstractMethodMap::runtimeInit(qore_class_private& qc, BCList* scl) {
                     if (v && v->isAbstract()) {
                         v = nullptr;
                     }
+                    if (v) {
+                        va = v->getAccess();
+                    }
                 }
             }
             if (v) {
+                // as in parseInit() (qore#7277)
+                abstract_variant_restrict_access(va, v, vi->second, qc, i->first.c_str());
                 const char* sig = vi->second->getAbstractSignature();
                 i->second->pending_save.insert(vmap_t::value_type(sig, vi->second));
                 vmap_t::iterator ti = vi++;
@@ -1203,8 +1325,10 @@ void AbstractMethodMap::runtimeInit(qore_class_private& qc, BCList* scl) {
                     // the method of the class also has the variants that the parent classes define: the concrete
                     // variants of the class that declares the abstract variant are found through it (issue #6161)
                     scl->addAncestors(m);
+                    // as in parseInit() (qore#7307)
+                    qc.abstract_method_created = true;
                 }
-                qore_method_private::get(*m)->getFunction()->replaceAbstractVariant(v);
+                qore_method_private::get(*m)->getFunction()->replaceAbstractVariant(v, va);
                 continue;
             }
             ++vi;
@@ -2611,20 +2735,20 @@ void qore_class_private::mergeAbstract() {
                     //printd(5, "qore_class_private::initializeIntern() this: %p '%s' skipping %s::%s(): vlist empty\n", this, name.c_str(), (*i).sclass->getName(), j.first.c_str());
                     continue;
                 }
+                // see if there are pending normal variants...
+                hm_method_t::iterator mi = hm.find(j.first);
+                MethodFunctionBase* f = mi == hm.end() ? nullptr : qore_method_private::get(*mi->second)->getFunction();
                 amap_t::iterator vi = ahm.find(j.first);
                 if (vi != ahm.end()) {
-                    vi->second->parseMergeBase(*(j.second), true);
+                    // the class's own variants implement the variants of every parent class (qore#7330)
+                    vi->second->parseMergeBase(*(j.second), f, true);
                     continue;
                 }
                 // now we import the abstract method to our class
                 std::unique_ptr<AbstractMethod> m(new AbstractMethod(ahm.relaxed_match));
-                // see if there are pending normal variants...
-                hm_method_t::iterator mi = hm.find(j.first);
 
                 // merge committed parent abstract variants with any pending local variants
-                m->parseMergeBase((*j.second), mi == hm.end()
-                    ? nullptr
-                    : qore_method_private::get(*mi->second)->getFunction(), true);
+                m->parseMergeBase((*j.second), f, true);
                 if (!m->empty()) {
                     ahm.insert(amap_t::value_type(j.first, m.release()));
                     //printd(5, "qore_class_private::initializeIntern() this: %p '%s' insert abstract method variant "
@@ -5785,7 +5909,7 @@ const QoreClass* BCList::findInHierarchy(const qore_class_private& qc) {
 }
 
 MethodVariantBase* BCList::matchNonAbstractVariant(const std::string& name, MethodVariantBase* v,
-        const QoreTypeInfo* receiver) const {
+        ClassAccess& access, const QoreTypeInfo* receiver) const {
     // the hierarchy is walked iteratively, depth first in the order of the base classes as the recursion that this
     // replaces, each class once: a class reached again through another path of a diamond hierarchy has been searched
     // with its ancestors already, without a match, so that the walk is linear in the hierarchy, not in its paths
@@ -5799,10 +5923,13 @@ MethodVariantBase* BCList::matchNonAbstractVariant(const std::string& name, Meth
             stack.pop();
             continue;
         }
-        const QoreClass* nqc = (*(*f.list)[f.next++]).sclass;
+        const BCNode& n = *(*f.list)[f.next++];
+        const QoreClass* nqc = n.sclass;
         // nqc may be 0 if there were a parse error with an unknown class earlier
         // also if the original abstract variant comes from the class being searched, then skip it
-        if (!nqc || v->getClass() == nqc) {
+        // a class that a parent class inherits with private:internal access is not in the hierarchy of the class:
+        // its variants do not implement the class's abstract variants (qore#7316)
+        if (!nqc || v->getClass() == nqc || (f.list != this && n.access >= Internal)) {
             continue;
         }
         QORE_CLASS_HIERARCHY_WALK_STEP();
@@ -5815,6 +5942,12 @@ MethodVariantBase* BCList::matchNonAbstractVariant(const std::string& name, Meth
             auto* mf = qore_method_private::get(*m)->getFunction();
             MethodVariantBase* ov = mf->parseHasVariantWithSignature(v, nqc->priv->ahm.relaxed_match, receiver);
             if (ov && !ov->isAbstract()) {
+                // the variant may be one of a parent class of nqc, with a more restrictive access in its method
+                // (qore#7277)
+                access = ov->getAccess();
+                if (mf->hasImplementedVariantAccess()) {
+                    access = mf->getVariantAccess(ov, access);
+                }
                 return ov;
             }
         }
@@ -5827,7 +5960,7 @@ MethodVariantBase* BCList::matchNonAbstractVariant(const std::string& name, Meth
 }
 
 MethodVariantBase* BCList::runtimeMatchNonAbstractVariant(const std::string& name, MethodVariantBase* v,
-        bool relaxed_match) const {
+        bool relaxed_match, ClassAccess& access) const {
     // the hierarchy is walked iteratively, each class once, as in matchNonAbstractVariant() (issue #6499)
     HierarchyWalkStack<HierarchyWalkFrame> stack;
     qcp_set_t visited;
@@ -5838,10 +5971,12 @@ MethodVariantBase* BCList::runtimeMatchNonAbstractVariant(const std::string& nam
             stack.pop();
             continue;
         }
-        const QoreClass* nqc = (*(*f.list)[f.next++]).sclass;
+        const BCNode& n = *(*f.list)[f.next++];
+        const QoreClass* nqc = n.sclass;
         // nqc may be nullptr if there were errors earlier
         // also if the original abstract variant comes from the class being searched, then skip it
-        if (!nqc || v->getClass() == nqc) {
+        // as in matchNonAbstractVariant() (qore#7316)
+        if (!nqc || v->getClass() == nqc || (f.list != this && n.access >= Internal)) {
             continue;
         }
         QORE_CLASS_HIERARCHY_WALK_STEP();
@@ -5854,6 +5989,11 @@ MethodVariantBase* BCList::runtimeMatchNonAbstractVariant(const std::string& nam
             auto* mf = qore_method_private::get(*m)->getFunction();
             MethodVariantBase* ov = mf->runtimeHasVariantWithSignature(v, relaxed_match);
             if (ov && !ov->isAbstract()) {
+                // as in matchNonAbstractVariant() (qore#7277)
+                access = ov->getAccess();
+                if (mf->hasImplementedVariantAccess()) {
+                    access = mf->getVariantAccess(ov, access);
+                }
                 return ov;
             }
         }
@@ -9544,18 +9684,20 @@ int qore_class_private::parseInitPartialIntern() {
                     amap_t::iterator vi = ahm.find(ai->first);
                     printd(5, "qore_class_private::parseInitPartialIntern() this: %p '%s' checking '%s::%s()' "
                         "found: %d\n", this, name.c_str(), (*i)->sclass->getName(), ai->first.c_str(), vi != ahm.end());
-                    if (vi != ahm.end()) {
-                        vi->second->parseMergeBase(*(ai->second));
-                        continue;
-                    }
-                    std::unique_ptr<AbstractMethod> m(new AbstractMethod(ahm.relaxed_match));
                     // see if there are pending normal variants...
                     hm_method_t::iterator mi = hm.find(ai->first);
                     printd(5, "qore_class_private::parseInitPartialIntern() this: %p '%s' looking for local "
                         "'%s': %d\n", this, name.c_str(), ai->first.c_str(), mi != hm.end());
-                    m->parseMergeBase(*(ai->second), mi == hm.end()
+                    MethodFunctionBase* f = mi == hm.end()
                         ? nullptr
-                        : qore_method_private::get(*mi->second)->getFunction());
+                        : qore_method_private::get(*mi->second)->getFunction();
+                    if (vi != ahm.end()) {
+                        // the class's own variants implement the variants of every parent class (qore#7330)
+                        vi->second->parseMergeBase(*(ai->second), f);
+                        continue;
+                    }
+                    std::unique_ptr<AbstractMethod> m(new AbstractMethod(ahm.relaxed_match));
+                    m->parseMergeBase(*(ai->second), f);
                     if (!m->empty()) {
                         ahm.insert(amap_t::value_type(ai->first, m.release()));
                     }
@@ -10323,12 +10465,75 @@ void qore_class_private::parseResolveAbstract() {
         }
         scl->parseResolveAbstract();
 
+        // the methods that the parent classes have created by resolving abstract methods are in the inheritance lists
+        // of the class's methods (qore#7307)
+        parseUpdateAbstractAncestors(false);
+
         // the abstract variants that the parent classes have implemented since they were merged are not pending here
         // (qore#7206)
         ahm.parseDropResolvedInParents(*this, *scl);
 
         // search for new concrete variants of abstract variants last
         ahm.parseInit(*this, scl);
+    }
+}
+
+//! returns true if a parent class in \a scl or one of its ancestors has created a method by resolving an abstract
+//! method (qore#7307)
+static bool parent_created_abstract_method(const BCList& scl) {
+    for (const BCNode* n : scl) {
+        if (n->sclass && qore_class_private::get(*n->sclass)->abstract_method_created) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//! returns true if the method of the name has an inheritance list
+/** As in initializeHierarchy(), where none of the special methods of a parsed class has been assigned yet
+    (checkSpecial()), and in insertBuiltinMethod(); for a class loaded from compiled code (\a aot), as in
+    QoreAOTBinaryDeserializer::commitClassesPrepare()
+*/
+static bool has_ancestor_list(const char* mname, bool aot) {
+    if (!strcmp(mname, "constructor") || !strcmp(mname, "destructor") || !strcmp(mname, "copy")) {
+        return false;
+    }
+    return aot || (strcmp(mname, "methodGate") && strcmp(mname, "memberGate") && strcmp(mname, "memberNotification"));
+}
+
+void qore_class_private::parseUpdateAbstractAncestors(bool aot) {
+    assert(scl);
+    if (!parent_created_abstract_method(*scl)) {
+        return;
+    }
+    // the subclasses build the lists of their methods again too
+    abstract_method_created = true;
+    for (auto& i : hm) {
+        QoreMethod* m = i.second;
+        MethodFunctionBase* f = qore_method_private::get(*m)->getFunction();
+        // a parsed class's methods are all new (a committed class is not resolved again)
+        if ((!aot && !f->committedEmpty()) || !has_ancestor_list(m->getName(), aot)) {
+            continue;
+        }
+        f->clearAncestors();
+        scl->parseAddAncestors(m);
+    }
+}
+
+void qore_class_private::runtimeUpdateAbstractAncestors() {
+    if (!scl || !parent_created_abstract_method(*scl)) {
+        return;
+    }
+    // as in parseUpdateAbstractAncestors()
+    abstract_method_created = true;
+    for (auto& i : hm) {
+        QoreMethod* m = i.second;
+        // the special methods have no inheritance lists (insertBuiltinMethod())
+        if (!has_ancestor_list(m->getName(), false)) {
+            continue;
+        }
+        qore_method_private::get(*m)->getFunction()->clearAncestors();
+        scl->addAncestors(m);
     }
 }
 
@@ -11572,6 +11777,11 @@ void MethodFunctionBase::replaceAbstractVariantIntern(MethodVariantBase* variant
             pending_save.push_back(*i);
             vlist.erase(i);
             vlist.push_back(variant);
+            // the method has a concrete variant now: a call does not skip it as an abstract method, also when the
+            // abstract variant that it replaces was its only variant (qore#7277)
+            if (is_abstract) {
+                is_abstract = false;
+            }
             //printd(5, "MethodFunctionBase::replaceAbstractVariantIntern() this: %p replacing %p ::%s%s in vlist\n",
             //    this, variant, getName(), variant->getAbstractSignature());
             return;
@@ -11585,16 +11795,49 @@ void MethodFunctionBase::replaceAbstractVariantIntern(MethodVariantBase* variant
     }
 }
 
-void MethodFunctionBase::replaceAbstractVariant(MethodVariantBase* variant) {
+ClassAccess MethodFunctionBase::getImplementedVariantAccess(const MethodVariantBase* v) const {
+    ClassAccess va = v->getAccess();
+    if (pending_save.empty() || v->isAbstract()) {
+        return va;
+    }
+    bool relaxed_match = qore_class_private::get(*getClass())->ahm.relaxed_match;
+    AbstractFunctionSignature& sig = *(const_cast<MethodVariantBase*>(v)->getSignature());
+    for (const AbstractQoreFunctionVariant* i : pending_save) {
+        const MethodVariantBase* av = METHVB_const(i);
+        if (av->isAbstract() && va < av->getAccess() && av->isSignatureIdentical(sig, relaxed_match)) {
+            va = av->getAccess();
+        }
+    }
+    return va;
+}
+
+void MethodFunctionBase::replaceAbstractVariant(MethodVariantBase* variant, ClassAccess min_access) {
     replaceAbstractVariantIntern(variant);
+
+    // the variant object is the parent class's: its access in this method is recorded here: the more restrictive of
+    // the access given, that of an abstract variant of this method that it replaced, and its own (qore#7277)
+    ClassAccess ma = variant->getAccess();
+    {
+        ClassAccess va = getImplementedVariantAccess(variant);
+        if (va < min_access) {
+            va = min_access;
+        }
+        if (va != ma) {
+            implemented_access.emplace_back(variant, va);
+        }
+    }
 
     // the method has the access of its least restrictive variant, now without the abstract variant replaced: a public
     // abstract method that only a private variant of a parent class implements is private, as a method that the class
-    // implements with a private variant of its own (qore#7206)
-    ClassAccess ma = variant->getAccess();
+    // implements with a private variant of its own (qore#7206); a variant that implements an abstract variant of the
+    // method has the more restrictive of both accesses, so that a private abstract method that a public variant of a
+    // privately inherited class implements stays private (qore#7277)
     access = Internal;
     for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
         ClassAccess va = METHVB_const(*i)->getAccess();
+        if (hasImplementedVariantAccess()) {
+            va = getVariantAccess(*i, va);
+        }
         if (access > va) {
             access = va;
         }
@@ -11603,7 +11846,10 @@ void MethodFunctionBase::replaceAbstractVariant(MethodVariantBase* variant) {
     if (!has_final && variant->isFinal()) {
         has_final = true;
     }
-    if (!has_private_internal_variants && ma == Internal) {
+    // a private:internal variant of a parent class is not a private:internal variant of the method's own class: the
+    // code of the class does not call the method first for it (runtimeFindCommittedMethodForEval()), as it cannot call
+    // the variant (qore#7277)
+    if (!has_private_internal_variants && ma == Internal && variant->getClass() == getClass()) {
         has_private_internal_variants = true;
     }
 }
@@ -13993,7 +14239,13 @@ bool MethodFunctionBase::hasInheritedPublicVariant() const {
         }
         const VList& ancestor_variants = static_cast<const MethodFunctionBase*>(i->func)->vlist;
         for (vlist_t::const_iterator vi = ancestor_variants.begin(), ve = ancestor_variants.end(); vi != ve; ++vi) {
-            if (METHVB_const(*vi)->getAccess() != Public) {
+            const MethodFunctionBase* af = static_cast<const MethodFunctionBase*>(i->func);
+            ClassAccess va = METHVB_const(*vi)->getAccess();
+            // the access of the variant in the ancestor's method (qore#7277)
+            if (af->hasImplementedVariantAccess()) {
+                va = af->getVariantAccess(*vi, va);
+            }
+            if (va != Public) {
                 continue;
             }
             const AbstractFunctionSignature* vs;
