@@ -195,7 +195,9 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       <a href="https://github.com/qoretechnologies/qore/issues/7052">issue 7052</a>)
     - the information and the ping results of a connection show its options through the new private method
       \c AbstractConnection::getSafeOptions(), which a connection whose options can hold credentials that its scheme
-      does not declare reimplements (issue #7017, issue #7070)
+      does not declare reimplements (issue #7017, issue #7070), and their safe URL through the new private method
+      \c AbstractConnection::getShownUrl(), which a connection whose safe URL can change after its creation
+      reimplements (issue #7275)
     - added @ref ConnectionProvider::AbstractConnection::setPostProcessing() "AbstractConnection::setPostProcessing()"
       and @ref ConnectionProvider::AbstractConnection::getPostProcessing() "AbstractConnection::getPostProcessing()",
       which refuse sandboxed code; the public static member
