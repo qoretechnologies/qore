@@ -28,10 +28,11 @@
 
     The program \c weak-reference-store-through-reference covers the weak and opaque assignments to a local that
     holds a reference (a local of a reference type, an untyped local, a parameter, a local given a reference as an
-    element of a list): the referenced lvalue is assigned with its own type, which converts the value (a softlist, a
-    \c hash<string, softint>) or refuses it before the weak reference is made.  In JIT code and qcc executables, the
-    store converted the value to the type of the local and assigned it to the referenced lvalue unconverted
-    (qore#7164).
+    element of a list): the referenced lvalue is assigned with its own type, which converts the value (a softlist of
+    a scalar) or refuses it before the weak reference is made: a value of another type, and a container that the
+    conversion would replace with a new one (a \c hash<auto> for a \c hash<string, softint>), which raises
+    \c RUNTIME-TYPE-ERROR (qore#7237).  In JIT code and qcc executables, the store converted the value to the type of
+    the local and assigned it to the referenced lvalue unconverted (qore#7164).
 
     The programs are in \c weak-reference-typed-store/.
 */

@@ -23,8 +23,8 @@ closure reference: value: [1]
 closure reference: after: []
 softlist<softint>: value: [3]
 softlist<softint>: after: []
-hash<string, softint>: value: {a: 2}
-hash<string, softint>: after: {}
+hash<string, softint>: RUNTIME-TYPE-ERROR
+hash<string, softint>: after: null
 hash<string, softint>: source: {a: "2"}
 held container: value: [1, 2]
 held container: after: [1, 2]

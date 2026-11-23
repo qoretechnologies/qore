@@ -8,7 +8,8 @@
 
 # a weak or opaque assignment to a variable that holds a reference assigns the referenced lvalue with its type: the
 # value is converted to the type of the referenced lvalue (a softlist takes a list of the value), and the weak
-# reference designates the converted value, which lives until the end of the statement (qore#7164)
+# reference designates the converted value, which lives until the end of the statement (qore#7164); a container that
+# the conversion would replace with a new one raises RUNTIME-TYPE-ERROR (qore#7237)
 
 softlist<auto> gsl;
 
@@ -94,11 +95,18 @@ sub string_softlist() {
     show("softlist<softint>: after", l);
 }
 
+# a weak assignment that would convert the container assigned to the type of the referenced lvalue raises, as the
+# weak reference would designate a copy that nothing else holds (#7237); the lvalue and the source are unchanged
 sub converted_hash() {
     hash<string, softint> h;
     reference r = \h;
     hash<auto> src = {"a": "2"};
-    show("hash<string, softint>: value", (r := src));
+    try {
+        r := src;
+        show("hash<string, softint>: no exception", h);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("hash<string, softint>: %s\n", ex.err);
+    }
     show("hash<string, softint>: after", h);
     show("hash<string, softint>: source", src);
 }
