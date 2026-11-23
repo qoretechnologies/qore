@@ -1,0 +1,854 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP, WebSocket and SSE connections and pings over loopback sockets, refused connections
+
+/*  ConnectionUpStatus.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+/*  A connection is not up until it is proven to be up (issue #7236): a connection that was never checked reports
+    up False with the status "not checked" and no last_check value; a successful ping or a connection made with
+    get() marks it up (issue #4789: a connection that was used is up without monitoring), and a failed
+    ping marks it down, also when the ping throws its error; an object acquired without connecting or an async object,
+    which connects on demand, proves nothing until the async client has made its first connection, which marks the
+    connection up as get() does (issue #7274).  A connection restored by deserialization or copied keeps
+    its state.  Checked with a test connection class and with REST, HTTP, WebSocket, SSE and SQLite connections.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires DataProvider
+%requires ConnectionProvider
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestClient
+%requires RestClientIo
+%requires HttpClientIo
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ServerSentEventHandler
+%requires ServerSentEventClient
+%requires DbDataProvider
+
+%exec-class ConnectionUpStatusTest
+
+#! a connection whose connections succeed or fail as the test sets
+class TestConnection inherits AbstractConnection {
+    public {
+        bool fail;
+    }
+
+    constructor(string name, bool fail = False) : AbstractConnection({
+        "name": name,
+        "url": "test://localhost",
+    }, {"monitor": False}) {
+        self.fail = fail;
+    }
+
+    string getType() {
+        return "test";
+    }
+
+    private object getImpl(bool connect = True, *hash<auto> rtopts) {
+        if (connect && fail) {
+            throw "TEST-CONNECT-ERROR", "cannot connect";
+        }
+        return new Mutex();
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return getImpl(connect, rtopts);
+    }
+}
+
+#! a connection whose ping makes a connection that takes ConnectTime and then fails
+class SlowPingConnection inherits TestConnection {
+    public {
+        const ConnectTime = 20ms;
+    }
+
+    constructor() : TestConnection("slow") {
+    }
+
+    private object getImpl(bool connect = True, *hash<auto> rtopts) {
+        # a busy wait, so that the connection takes at least ConnectTime
+        date end = now_us() + ConnectTime;
+        while (now_us() < end) {
+        }
+        return new Mutex();
+    }
+
+    private pingImpl() {
+        get();
+        throw "TEST-PING-ERROR", "the request failed";
+    }
+}
+
+#! records the paths of the requests and answers them with an OAuth2 token
+class TokenHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue paths();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        paths.push(hdr.path);
+        return makeResponse(200, "{\"access_token\": \"t\", \"token_type\": \"Bearer\", \"expires_in\": 3600}",
+            {"Content-Type": MimeTypeJson});
+    }
+}
+
+#! a polling monitor that reports the result of each ping
+class ResultMonitor inherits PollingConnectionMonitor {
+    private {
+        Queue results();
+    }
+
+    constructor() : PollingConnectionMonitor() {
+        ping_timeout = 5s;
+    }
+
+    hash<auto> waitForResult() {
+        return results.get(15s);
+    }
+
+    private failedToStartPing(string name, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::failedToStartPing(name, ex);
+        results.push({"result": "error", "ex": ex});
+    }
+
+    private handlePingSuccess(string name, date delta, *bool oldok) {
+        PollingConnectionMonitor::handlePingSuccess(name, delta, oldok);
+        results.push({"result": "OK"});
+    }
+
+    private handlePingFailed(string name, date delta, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::handlePingFailed(name, delta, ex);
+        results.push({"result": "error", "ex": ex});
+    }
+
+    private handlePingTimeout(string name, date delta) {
+        PollingConnectionMonitor::handlePingTimeout(name, delta);
+        results.push({"result": "timeout"});
+    }
+}
+
+#! answers every request with 200 OK, except the paths starting with /err, which get 500
+class OkHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path =~ /^\/?err/) {
+            return makeResponse(500, "ERROR", {"Content-Type": MimeTypeText});
+        }
+        return makeResponse(200, "OK", {"Content-Type": MimeTypeText});
+    }
+}
+
+#! code restricted from the network that uses connections lent to it
+const RestrictedCode = "%modern
+string sub do_ping(object conn) {
+    try {
+        hash<auto> h = conn.ping(True);
+        return h.ok ? \"OK\" : \"FAILED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub do_poll(object conn) {
+    try {
+        object op = conn.startPollConnect();
+        return \"STARTED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub retarget(object conn, string url) {
+    conn.url = url;
+    conn.real_url = url;
+    conn.real_opts.url = url;
+    return do_ping(conn);
+}
+";
+
+public class ConnectionUpStatusTest inherits QUnit::Test {
+    private {
+        HttpServer rest_server;
+        HttpServer ws_server;
+        HttpServer sse_server;
+        HttpServer token_server;
+        TokenHandler token_handler();
+        int token_port;
+        int rest_port;
+        int ws_port;
+        int sse_port;
+        #! a port where nothing listens
+        int closed_port;
+    }
+
+    constructor() : Test("ConnectionUpStatus", "1.0") {
+        Logger logger("server", LoggerLevel::getLevelError());
+
+        rest_server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        on_exit rest_server.stop();
+        rest_server.setDefaultHandler("ok", new OkHandler());
+        rest_port = rest_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+
+        ws_server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        on_exit ws_server.stop();
+        ws_server.setDefaultHandler("ws", new WebSocketHandler());
+        ws_port = ws_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+
+        sse_server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        on_exit sse_server.stop();
+        sse_server.setDefaultHandler("sse", new ServerSentEventHandler({"logger": logger}));
+        sse_port = sse_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+
+        token_server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        on_exit token_server.stop();
+        token_server.setDefaultHandler("token", token_handler);
+        token_port = token_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+
+        {
+            Socket s();
+            s.bind("127.0.0.1:0");
+            closed_port = s.getSocketInfo().port;
+        }
+
+        addTestCase("never checked", \neverCheckedTest());
+        addTestCase("successful ping", \pingSuccessTest());
+        addTestCase("successful connection", \connectSuccessTest());
+        addTestCase("unconnected object", \unconnectedTest());
+        addTestCase("failed ping", \pingFailedTest());
+        addTestCase("failed connection", \connectFailedTest());
+        addTestCase("transitions", \transitionTest());
+        addTestCase("failed ping time", \pingFailureTimeTest());
+        addTestCase("skipped automatic ping", \skippedAutomaticPingTest());
+        addTestCase("restored and copied", \restoredTest());
+        addTestCase("REST connection", \restTest());
+        addTestCase("unauthorized REST connection", \unauthorizedRestTest());
+        addTestCase("lent REST connection pinged by restricted code", \lentRestTest());
+        addTestCase("HTTP connection", \httpTest());
+        addTestCase("first connection of an async client", \asyncFirstConnectionTest());
+        addTestCase("WebSocket connection", \webSocketTest());
+        addTestCase("SSE connection", \sseTest());
+        addTestCase("SQLite connection", \sqliteTest());
+        set_return_value(main());
+    }
+
+    #! asserts that the connection was never checked
+    private assertNeverChecked(AbstractConnection conn, string label) {
+        assertFalse(conn.up, label);
+        assertEq("not checked", conn.status, label);
+        assertNothing(conn.last_check, label);
+        hash<ConnectionInfo> info = conn.getInfo();
+        assertFalse(info.up, label);
+        assertEq("not checked", info.status, label);
+        assertNothing(info.last_check, label);
+        hash<ConnectionDataInfo> dinfo = conn.getInfoAsData();
+        assertFalse(dinfo.up, label);
+        assertEq("not checked", dinfo.status, label);
+        assertFalse(conn.getExtendedInfo().up, label);
+    }
+
+    #! asserts that the connection was proven up at or after the given time
+    private assertUp(AbstractConnection conn, date since, string label) {
+        assertTrue(conn.up, label);
+        assertEq("OK", conn.status, label);
+        assertTrue(conn.last_check >= since, label);
+        hash<ConnectionInfo> info = conn.getInfo();
+        assertTrue(info.up, label);
+        assertEq("OK", info.status, label);
+        assertEq(conn.last_check, info.last_check, label);
+    }
+
+    #! asserts that the connection is down with an error status matching the regular expression
+    private assertDown(AbstractConnection conn, string status_regex, string label) {
+        assertFalse(conn.up, label);
+        assertRegex(status_regex, conn.status, label);
+        assertEq(Type::Date, conn.last_check.type(), label);
+        hash<ConnectionInfo> info = conn.getInfo();
+        assertFalse(info.up, label);
+        assertRegex(status_regex, info.status, label);
+    }
+
+    neverCheckedTest() {
+        assertNeverChecked(new TestConnection("test"), "test");
+        assertNeverChecked(new TestConnection("test-fail", True), "test-fail");
+        assertNeverChecked(new RestConnection("rest", "test", "rest://127.0.0.1:" + rest_port, {"monitor": False}),
+            "rest");
+        assertNeverChecked(new HttpConnection("http", "test", "http://127.0.0.1:" + rest_port, {"monitor": False}),
+            "http");
+        assertNeverChecked(new WebSocketConnectionObject("ws", "test", "ws://127.0.0.1:" + ws_port,
+            {"monitor": False}), "ws");
+        assertNeverChecked(new ServerSentEventClient::ServerSentEventConnection({
+            "name": "sse",
+            "url": "sse://127.0.0.1:" + sse_port,
+        }, {"monitor": False}), "sse");
+        assertNeverChecked(new DatasourceConnection("db", "test", "db://sqlite3:@:memory:"), "db");
+        # monitoring does not change the initial state
+        assertNeverChecked(new HttpConnection("http-monitored", "test", "http://127.0.0.1:" + rest_port), "monitored");
+    }
+
+    pingSuccessTest() {
+        TestConnection conn("test");
+        date start = now_us();
+        hash<PingInfo> ping = conn.ping();
+        assertTrue(ping.ok);
+        assertUp(conn, start, "ping()");
+
+        # ping(True) as well
+        conn = new TestConnection("test");
+        start = now_us();
+        assertTrue(conn.ping(True).ok);
+        assertUp(conn, start, "ping(True)");
+
+        # a successful ping brings a connection that is down up again
+        conn.handlePingFailed(0s, "simulated failure");
+        assertDown(conn, "^simulated failure$", "simulated failure");
+        start = now_us();
+        assertTrue(conn.ping().ok);
+        assertUp(conn, start, "ping() after failure");
+    }
+
+    #! issue #4789: a connection that was used successfully is up, also without monitoring
+    connectSuccessTest() {
+        TestConnection conn("test");
+        date start = now_us();
+        assertEq("Mutex", conn.get().className());
+        assertUp(conn, start, "get()");
+
+        conn = new TestConnection("test");
+        start = now_us();
+        assertEq("Mutex", conn.get(True).className());
+        assertUp(conn, start, "get(True)");
+
+        # an async object does not prove that the connection can be made: async objects connect on demand
+        conn = new TestConnection("test");
+        assertEq("Mutex", conn.getAsync().className());
+        assertNeverChecked(conn, "getAsync()");
+
+        # a connection that failed (not a ping) is marked up by a connection made with it
+        conn = new TestConnection("test", True);
+        assertThrows("TEST-CONNECT-ERROR", \conn.get());
+        conn.fail = False;
+        start = now_us();
+        conn.get();
+        assertUp(conn, start, "get() after a failed get()");
+    }
+
+    #! a connection that a ping found down comes up only with a successful ping, whose transition a monitor handles
+    transitionTest() {
+        TestConnection conn("test", True);
+        conn.ping();
+        assertDown(conn, "^TEST-CONNECT-ERROR: cannot connect$", "failed ping");
+        conn.fail = False;
+        conn.get();
+        assertDown(conn, "^TEST-CONNECT-ERROR: cannot connect$", "get() after a failed ping");
+        date start = now_us();
+        assertTrue(conn.ping().ok);
+        assertUp(conn, start, "ping() after a failed ping");
+        # once a ping found it up, a connection made with it proves it up again after a failed get()
+        conn.fail = True;
+        assertThrows("TEST-CONNECT-ERROR", \conn.get());
+        assertTrue(conn.up);
+        conn.fail = False;
+        conn.get();
+        assertUp(conn, start, "get() after a successful ping");
+
+        # the same for a failure reported by a monitor through handlePingFailed()
+        conn.handlePingFailed(0s, "monitor failure");
+        conn.get();
+        assertFalse(conn.up);
+        assertEq("monitor failure", conn.status);
+        conn.handlePingSuccess(0s);
+        assertTrue(conn.up);
+        assertEq("OK", conn.status);
+    }
+
+    #! the duration of a failed ping is measured from its start, also when it made a connection before it failed
+    pingFailureTimeTest() {
+        SlowPingConnection conn();
+        hash<PingInfo> ping = conn.ping();
+        assertFalse(ping.ok);
+        assertEq("TEST-PING-ERROR: the request failed", ping.info);
+        assertGe(SlowPingConnection::ConnectTime, ping.time);
+        assertFalse(conn.up);
+    }
+
+    #! an automatic ping that the connection's disabled automatic pings skip changes nothing
+    skippedAutomaticPingTest() {
+        string url = "http://127.0.0.1:" + closed_port;
+        HttpConnection conn("http", "test", url, {"monitor": False}, {"disable_automatic_pings": True});
+        hash<PingInfo> ping = conn.ping(PF_AUTOMATIC_PING);
+        assertTrue(ping.ok);
+        assertTrue(ping.ping_info.skipped);
+        assertNeverChecked(conn, "skipped automatic ping");
+        ping = conn.ping(PF_AUTOMATIC_PING | PF_THROW_EXCEPTION);
+        assertTrue(ping.ping_info.skipped);
+        assertNeverChecked(conn, "skipped automatic ping (PF_THROW_EXCEPTION)");
+
+        # a ping that is not automatic checks the connection
+        ping = conn.ping();
+        assertFalse(ping.ok);
+        assertNothing(ping.ping_info);
+        assertDown(conn, "SOCKET-CONNECT-ERROR", "ping()");
+        date last_check = conn.last_check;
+        string status = conn.status;
+        conn.ping(PF_AUTOMATIC_PING);
+        assertFalse(conn.up);
+        assertEq(status, conn.status);
+        assertEq(last_check, conn.last_check);
+
+        # and an automatic ping of a connection that does not disable them as well
+        conn = new HttpConnection("http", "test", url, {"monitor": False});
+        assertFalse(conn.ping(PF_AUTOMATIC_PING).ok);
+        assertDown(conn, "SOCKET-CONNECT-ERROR", "automatic ping");
+    }
+
+    #! an object acquired without connecting proves nothing
+    unconnectedTest() {
+        TestConnection conn("test");
+        assertEq("Mutex", conn.get(False).className());
+        assertNeverChecked(conn, "get(False)");
+        assertEq("Mutex", conn.getAsync(False).className());
+        assertNeverChecked(conn, "getAsync(False)");
+
+        # and does not change the state of a connection that is up
+        date start = now_us();
+        conn.ping();
+        assertUp(conn, start, "ping()");
+        conn.get(False);
+        assertUp(conn, start, "get(False) after ping()");
+    }
+
+    pingFailedTest() {
+        # a connection that was never checked
+        TestConnection conn("test", True);
+        hash<PingInfo> ping = conn.ping();
+        assertFalse(ping.ok);
+        assertEq("TEST-CONNECT-ERROR: cannot connect", ping.info);
+        assertDown(conn, "^TEST-CONNECT-ERROR: cannot connect$", "ping()");
+
+        # a connection that is up
+        conn = new TestConnection("test");
+        conn.get();
+        assertTrue(conn.up);
+        conn.fail = True;
+        assertFalse(conn.ping().ok);
+        assertDown(conn, "^TEST-CONNECT-ERROR: cannot connect$", "ping() after get()");
+
+        # a ping that throws its error marks the connection down as well
+        conn = new TestConnection("test");
+        conn.get();
+        assertTrue(conn.up);
+        conn.fail = True;
+        assertThrows("TEST-CONNECT-ERROR", "cannot connect", \conn.ping(), True);
+        assertDown(conn, "^TEST-CONNECT-ERROR: cannot connect$", "ping(True)");
+        # after a failed ping, a ping brings it up again (see transitionTest())
+        conn.fail = False;
+        assertTrue(conn.ping().ok);
+        assertTrue(conn.up);
+        conn.fail = True;
+        assertThrows("TEST-CONNECT-ERROR", "cannot connect", \conn.ping(), PF_THROW_EXCEPTION);
+        assertDown(conn, "^TEST-CONNECT-ERROR: cannot connect$", "ping(PF_THROW_EXCEPTION)");
+    }
+
+    #! issue #4852: a connection that cannot be made sets the status, but does not mark the connection down
+    connectFailedTest() {
+        TestConnection conn("test", True);
+        assertThrows("TEST-CONNECT-ERROR", \conn.get());
+        assertFalse(conn.up);
+        assertEq("TEST-CONNECT-ERROR: cannot connect", conn.status);
+        assertEq(Type::Date, conn.last_check.type());
+
+        conn = new TestConnection("test");
+        conn.get();
+        assertTrue(conn.up);
+        conn.fail = True;
+        assertThrows("TEST-CONNECT-ERROR", \conn.getAsync());
+        assertTrue(conn.up);
+        assertEq("TEST-CONNECT-ERROR: cannot connect", conn.status);
+    }
+
+    #! a connection restored by deserialization or copied keeps its state
+    restoredTest() {
+        TestConnection never("never");
+        TestConnection up("up");
+        up.get();
+        TestConnection down("down", True);
+        down.ping();
+
+        foreach TestConnection conn in ((never, up, down)) {
+            string label = conn.name;
+            TestConnection restored = Serializable::deserialize(Serializable::serialize(conn));
+            assertEq(conn.up, restored.up, label + ": restored");
+            assertEq(conn.status, restored.status, label + ": restored");
+            assertEq(conn.last_check, restored.last_check, label + ": restored");
+            assertEq(conn.getInfo().up, restored.getInfo().up, label + ": restored");
+
+            TestConnection copied = conn.copy();
+            assertEq(conn.up, copied.up, label + ": copied");
+            assertEq(conn.status, copied.status, label + ": copied");
+            assertEq(conn.last_check, copied.last_check, label + ": copied");
+        }
+        assertFalse(Serializable::deserialize(Serializable::serialize(never)).up);
+
+        # a connection serialized before ConnectionProvider 3.1 was up with the status "not checked"; it is restored
+        # as never checked
+        TestConnection old("old");
+        old.up = True;
+        TestConnection restored = Serializable::deserialize(Serializable::serialize(old));
+        assertNeverChecked(restored, "serialized as up and not checked");
+        assertTrue(Serializable::deserialize(Serializable::serialize(up)).up);
+        assertFalse(Serializable::deserialize(Serializable::serialize(down)).up);
+    }
+
+    restTest() {
+        string url = "rest://127.0.0.1:" + rest_port;
+
+        # issue #4789: a connection that was used is up without monitoring
+        RestConnection conn("rest", "test", url, {"monitor": False});
+        date start = now_us();
+        RestClient rc = conn.get();
+        assertEq("OK", rc.get("/x").body);
+        assertUp(conn, start, "get()");
+
+        # the async client connects on demand, so acquiring it proves nothing
+        conn = new RestConnection("rest", "test", url, {"monitor": False});
+        conn.getAsync();
+        assertNeverChecked(conn, "getAsync()");
+
+        # a ping that sends a request
+        hash<auto> ping_opts = {"ping_method": "GET", "ping_path": "/ping"};
+        conn = new RestConnection("rest", "test", url, {"monitor": False}, ping_opts);
+        start = now_us();
+        hash<PingInfo> ping = conn.ping();
+        assertTrue(ping.ok, ping.info);
+        assertUp(conn, start, "ping()");
+
+        # a ping without a ping request connects to the server, as the polling ping does
+        conn = new RestConnection("rest", "test", url, {"monitor": False}, {"token": "bogus"});
+        start = now_us();
+        ping = conn.ping();
+        assertTrue(ping.ok, ping.info);
+        assertUp(conn, start, "ping() without ping_method");
+        conn = new RestConnection("rest", "test", "rest://127.0.0.1:" + closed_port, {"monitor": False},
+            {"token": "bogus"});
+        ping = conn.ping();
+        assertFalse(ping.ok);
+        assertDown(conn, "SOCKET-CONNECT-ERROR", "ping() without ping_method of a closed port");
+        # an OAuth2 connection without a ping request pings without logging in: its token endpoint is not contacted
+        string token_url = "http://127.0.0.1:" + token_port + "/token";
+        hash<auto> oauth2_opts = {
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "oauth2_token_url": token_url,
+        };
+        conn = new RestConnection("rest", "test", url, {"monitor": False}, oauth2_opts);
+        start = now_us();
+        ping = conn.ping();
+        assertTrue(ping.ok, ping.info);
+        assertUp(conn, start, "OAuth2 ping() without ping_method");
+        assertEq(0, token_handler.paths.size(), "the token endpoint was not contacted");
+        # a request of the connection's client logs in, so the token endpoint is the one that a ping does not contact
+        RestClient oauth2_client = conn.get();
+        oauth2_client.get("/x");
+        assertEq("token", token_handler.paths.get(5s));
+
+        # as a monitor pings (the Qorus monitor pings with these flags)
+        conn = new RestConnection("rest", "test", "rest://127.0.0.1:" + closed_port, {"monitor": False},
+            {"token": "bogus"});
+        assertThrows("SOCKET-CONNECT-ERROR", \conn.ping(), PF_THROW_EXCEPTION | PF_AUTOMATIC_PING);
+        assertDown(conn, "SOCKET-CONNECT-ERROR", "automatic ping without ping_method of a closed port");
+
+        conn = new RestConnection("rest", "test", "rest://127.0.0.1:" + closed_port, {"monitor": False}, ping_opts);
+        assertFalse(conn.ping().ok);
+        assertDown(conn, "SOCKET-CONNECT-ERROR", "ping() of a closed port");
+    }
+
+    #! a connection whose configuration cannot work fails every ping with that error, also without ping_method
+    unauthorizedRestTest() {
+        string url = "rest://127.0.0.1:" + rest_port;
+        string token_base = "http://127.0.0.1:" + token_port;
+        hash<auto> auth_opts = {
+            "oauth2_grant_type": "authorization_code",
+            "oauth2_auth_url": token_base + "/authorize",
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "oauth2_redirect_url": token_base + "/callback",
+            "oauth2_token_url": token_base + "/token",
+        };
+        int token_requests = token_handler.paths.size();
+        string err_regex = "^OAUTH2-ERROR: .*not yet authorized";
+
+        RestConnection conn("auth", "test", url, {"monitor": False}, auth_opts);
+        assertFalse(conn.up);
+        assertRegex("not yet authorized", conn.status);
+        hash<PingInfo> ping = conn.ping();
+        assertFalse(ping.ok);
+        assertEq("OAUTH2-ERROR", ping.ex.err);
+        assertRegex("not yet authorized", ping.info);
+        assertDown(conn, err_regex, "ping()");
+        assertThrows("OAUTH2-ERROR", "not yet authorized", \conn.ping(), PF_THROW_EXCEPTION | PF_AUTOMATIC_PING);
+        assertDown(conn, err_regex, "automatic ping");
+
+        # the same through a polling monitor
+        RestConnection mconn("auth-monitored", "test", url, {"monitor": False}, auth_opts);
+        {
+            ResultMonitor monitor();
+            on_exit delete monitor;
+            monitor.add(mconn);
+            hash<auto> result = monitor.waitForResult();
+            assertEq("error", result.result);
+            assertEq("OAUTH2-ERROR", result.ex.err);
+            assertRegex("not yet authorized", result.ex.desc);
+        }
+        # the failed polling ping is a check: last_check is set
+        assertDown(mconn, err_regex, "polling ping");
+        assertEq(token_requests, token_handler.paths.size(), "the token endpoint was not contacted");
+
+        # once authorized, the connection pings normally: the auth flow's option update creates it again with the
+        # token...
+        conn = new RestConnection("auth", "test", url, {"monitor": False}, auth_opts + {"token": "t"});
+        date start = now_us();
+        ping = conn.ping();
+        assertTrue(ping.ok, ping.info);
+        assertUp(conn, start, "ping() after authorization");
+        # ... and a connection whose options get the token in place is checked again, not by its status
+        mconn.opts.token = "t";
+        start = now_us();
+        ping = mconn.ping();
+        assertTrue(ping.ok, ping.info);
+        assertUp(mconn, start, "ping() after the token was added to the options");
+        {
+            ResultMonitor monitor();
+            on_exit delete monitor;
+            mconn.handlePingFailed(0s, "reset");
+            monitor.add(mconn);
+            assertEq("OK", monitor.waitForResult().result);
+        }
+        assertTrue(mconn.up);
+        assertEq(token_requests, token_handler.paths.size(), "the token endpoint was not contacted");
+    }
+
+    #! code restricted from the network pings a lent REST connection without ping_method only at its own target
+    lentRestTest() {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.parse(RestrictedCode, "restricted");
+
+        # a lent connection: its target and up
+        RestConnection conn("lent", "test", "http://127.0.0.1:" + rest_port, {"monitor": False});
+        date start = now_us();
+        assertEq("OK", p.callFunction("do_ping", conn));
+        assertUp(conn, start, "a lent connection pinged by restricted code");
+
+        # another target: refused before any connection is attempted
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+        string other = "http://127.0.0.1:" + listener.getSocketInfo().port;
+        conn = new RestConnection("lent", "test", "http://127.0.0.1:" + rest_port, {"monitor": False});
+        assertEq("PERMISSION-DENIED", p.callFunction("retarget", conn, other));
+        assertDown(conn, "^PERMISSION-DENIED: ", "a retargeted lent connection pinged by restricted code");
+        assertEq("PERMISSION-DENIED", p.callFunction("do_poll", conn), "the polling ping of another target");
+        assertNothing(listener.accept(0), "no connection to the other target was attempted");
+
+        # a rest:// connection's proof has the connection's HTTP origin (its real URL, qore#7262): its ping connects to
+        # its own target
+        conn = new RestConnection("lent", "test", "rest://127.0.0.1:" + listener.getSocketInfo().port,
+            {"monitor": False});
+        assertEq("OK", p.callFunction("do_ping", conn), "a lent rest:// connection pinged by restricted code");
+        {
+            *Socket accepted = listener.accept(0);
+            assertTrue(exists accepted, "the ping of a lent rest:// connection connected to its own target");
+            if (accepted) {
+                accepted.close();
+            }
+        }
+        # code restricted from the network cannot create a connection itself
+        Program own(PO_NEW_STYLE | PO_NO_NETWORK);
+        own.parse("%modern
+%requires RestClient
+string sub own_ping(string url) {
+    try {
+        RestConnection c(\"own\", \"own\", url, {\"monitor\": False});
+        return c.ping(True).ok ? \"OK\" : \"FAILED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}", "own");
+        assertEq("PERMISSION-DENIED", own.callFunction("own_ping", other));
+        assertNothing(listener.accept(0), "the restricted code's own connection attempted no connection");
+
+        # an unrestricted ping is not checked
+        conn = new RestConnection("lent", "test", "rest://127.0.0.1:" + rest_port, {"monitor": False});
+        start = now_us();
+        assertTrue(conn.ping().ok);
+        assertUp(conn, start, "an unrestricted ping");
+    }
+
+    httpTest() {
+        string url = "http://127.0.0.1:" + rest_port;
+        HttpConnection conn("http", "test", url, {"monitor": False});
+        date start = now_us();
+        conn.get();
+        assertUp(conn, start, "get()");
+
+        conn = new HttpConnection("http", "test", url, {"monitor": False});
+        start = now_us();
+        assertTrue(conn.ping().ok);
+        assertUp(conn, start, "ping()");
+
+        conn = new HttpConnection("http", "test", "http://127.0.0.1:" + closed_port, {"monitor": False});
+        assertFalse(conn.ping().ok);
+        assertDown(conn, "SOCKET-CONNECT-ERROR", "ping() of a closed port");
+    }
+
+    #! the WebSocket connection checks itself in its own ping
+    webSocketTest() {
+        WebSocketConnectionObject conn("ws", "test", "ws://127.0.0.1:" + ws_port, {"monitor": False});
+        date start = now_us();
+        hash<PingInfo> ping = conn.ping();
+        assertTrue(ping.ok, ping.info);
+        assertUp(conn, start, "ping()");
+
+        conn = new WebSocketConnectionObject("ws", "test", "ws://127.0.0.1:" + closed_port, {"monitor": False});
+        assertFalse(conn.ping().ok);
+        assertDown(conn, "SOCKET-CONNECT-ERROR", "ping() of a closed port");
+    }
+
+    #! the SSE connection checks itself in its own ping
+    sseTest() {
+        ServerSentEventClient::ServerSentEventConnection conn({
+            "name": "sse",
+            "url": "sse://127.0.0.1:" + sse_port,
+        }, {"monitor": False});
+        date start = now_us();
+        hash<PingInfo> ping = conn.ping();
+        assertTrue(ping.ok, ping.info);
+        assertUp(conn, start, "ping()");
+
+        conn = new ServerSentEventClient::ServerSentEventConnection({
+            "name": "sse",
+            "url": "sse://127.0.0.1:" + closed_port,
+        }, {"monitor": False});
+        assertFalse(conn.ping().ok);
+        assertDown(conn, "SOCKET-CONNECT-ERROR", "ping() of a closed port");
+    }
+
+    sqliteTest() {
+        try {
+            load_module("sqlite3");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("the sqlite3 driver is not available");
+        }
+
+        # a connection used through its data provider is up
+        DatasourceConnection conn("db", "test", "db://sqlite3:@:memory:");
+        date start = now_us();
+        AbstractDataProvider prov = conn.getDataProvider();
+        assertEq("DbDataProvider", prov.className());
+        assertUp(conn, start, "getDataProvider()");
+
+        conn = new DatasourceConnection("db", "test", "db://sqlite3:@:memory:");
+        start = now_us();
+        assertTrue(conn.ping().ok);
+        assertUp(conn, start, "ping()");
+
+        # a database file in a directory that does not exist cannot be opened
+        string path = tmp_location() + DirSep + get_random_string() + DirSep + "x.db";
+        conn = new DatasourceConnection("db", "test", "db://sqlite3:@" + path);
+        assertNeverChecked(conn, "bad path");
+        assertFalse(conn.ping().ok);
+        assertDown(conn, ".+", "ping() of a database that cannot be opened");
+    }
+
+    #! the first connection of an async HTTP or REST client marks its connection up, as get() does (issue #7274)
+    asyncFirstConnectionTest() {
+        string rest_url = "rest://127.0.0.1:" + rest_port;
+        string http_url = "http://127.0.0.1:" + rest_port;
+
+        # REST: the async client connects on demand; its first request marks the connection up
+        RestConnection rconn("rest", "test", rest_url, {"monitor": False});
+        RestClientIo rest = rconn.getAsync();
+        assertNeverChecked(rconn, "REST getAsync()");
+        date start = now_us();
+        assertEq("OK", rest.restGet("/x").body);
+        assertUp(rconn, start, "REST first request");
+
+        # REST, a client acquired without connecting
+        rconn = new RestConnection("rest", "test", rest_url, {"monitor": False});
+        rest = rconn.getAsync(False);
+        assertNeverChecked(rconn, "REST getAsync(False)");
+        start = now_us();
+        rest.restGet("/x");
+        assertUp(rconn, start, "REST getAsync(False) first request");
+
+        # HTTP: the async client is a connection manager
+        HttpConnection hconn("http", "test", http_url, {"monitor": False});
+        HttpClientConnectionManager mgr = hconn.getAsync();
+        assertNeverChecked(hconn, "HTTP getAsync()");
+        start = now_us();
+        assertEq(200, mgr.request(http_url, "GET", "/x").status_code);
+        assertUp(hconn, start, "HTTP first request");
+
+        # the connection was made: a request that the server answers with an error status marks it up too; the
+        # status of the response is the business of a ping with a ping request
+        hconn = new HttpConnection("http", "test", http_url, {"monitor": False});
+        mgr = hconn.getAsync();
+        start = now_us();
+        assertEq(500, mgr.request(http_url, "GET", "/err").status_code);
+        assertUp(hconn, start, "HTTP first request answered with 500");
+
+        # a client that cannot connect changes nothing
+        string closed_url = "http://127.0.0.1:" + closed_port;
+        hconn = new HttpConnection("http", "test", closed_url, {"monitor": False});
+        mgr = hconn.getAsync();
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \mgr.request(), (closed_url, "GET", "/x"));
+        assertNeverChecked(hconn, "HTTP request to a closed port");
+        rconn = new RestConnection("rest", "test", "rest://127.0.0.1:" + closed_port, {"monitor": False});
+        rest = rconn.getAsync();
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \rest.restGet(), "/x");
+        assertNeverChecked(rconn, "REST request to a closed port");
+
+        # issue #4852: a connection that a ping found down stays down; only a ping brings it up
+        hconn = new HttpConnection("http", "test", http_url, {"monitor": False});
+        hconn.handlePingFailed(0s, "TEST-ERROR: down");
+        mgr = hconn.getAsync();
+        assertEq(200, mgr.request(http_url, "GET", "/x").status_code);
+        assertDown(hconn, "TEST-ERROR", "first request after a failed ping");
+
+        # the first connection only: later requests do not change the state again
+        hconn = new HttpConnection("http", "test", http_url, {"monitor": False});
+        mgr = hconn.getAsync();
+        mgr.request(http_url, "GET", "/x");
+        date first_check = hconn.last_check;
+        hconn.handlePingFailed(0s, "TEST-ERROR: down later");
+        mgr.request(http_url, "GET", "/x");
+        assertDown(hconn, "TEST-ERROR: down later", "a later request");
+        assertTrue(hconn.last_check >= first_check, "last_check");
+    }
+}

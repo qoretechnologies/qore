@@ -160,6 +160,7 @@
 #include <set>
 #include <system_error>
 #include <thread>
+#include <latch>
 
 //! gives the string node of a value: a string in either representation, or nullptr for any other value
 /** A string of up to QoreValue::SHORTSTR_MAX_BYTES bytes can be held inline, with no QoreStringNode (issue #7038):
@@ -12065,6 +12066,179 @@ private:
     }
 };
 
+//! The release of a work item that the module cleanup counts runs as counted work wherever it runs (qore#7339)
+/** QoreCallDispatcher::workerLoop() marks an item that the module cleanup counts as counted work while it runs and
+    releases its references (QoreModuleCleanupCountedWorkScope), so that its destructors can hand work over to another
+    thread with AsyncIoController::holdModuleCleanupWork() (qore#7239); the items that other code drains from the
+    queue or discards (a Program or an owner marked as shutting down, an item enqueued for a Program marked so, the
+    dispatcher's stop) are released in the calling thread, which must mark the release of a counted item in the same
+    way; the release of an uncounted item is not marked (unless the calling thread runs counted work itself).
+
+    The work items are put in the dispatcher's queue directly, so that no worker runs them; a debug hook in
+    releaseWorkItem() records whether the release runs as counted work, as a destructor that the release runs sees it.
+*/
+class AsyncIoReleaseCountedScopeTest {
+    typedef AsyncIoControllerPriv Ctrl;
+    typedef QoreCallDispatcher Disp;
+
+public:
+    static void run(UnitTestCounters& c) {
+        ownerMarkCase(c);
+        programMarkCase(c);
+        enqueueDiscardCase(c);
+        stopCase(c);
+    }
+
+private:
+    //! queues a work item of the Program for the owner directly in the dispatcher's queue, counted by the module
+    //! cleanup or not; counts its owner as enqueue() does
+    static void queueItem(Disp* cd, QoreProgram* pgm, const char* owner, bool counted) {
+        Disp::AsyncWorkItem item{nullptr, nullptr, nullptr, nullptr, Disp::DT_CALLBACK, nullptr, std::string()};
+        item.module_cleanup_work = counted;
+        item.pgm = pgm;
+        pgm->depRef();
+        AutoLocker al(cd->m);
+        item.owner = owner;
+        ++cd->active_per_owner[owner];
+        cd->async_queue.push_back(std::move(item));
+    }
+
+    //! creates a controller that is not started, with its dispatcher
+    static Ctrl* newCtrl(ExceptionSink& xsink) {
+        Ctrl* ctrl = new Ctrl(false, &xsink);
+        ctrl->ensureCallDispatcher();
+        return ctrl;
+    }
+
+    //! stops the controller and releases it on every exit path; the release hook is removed first
+    struct CtrlRelease {
+        Ctrl* ctrl;
+        ExceptionSink& xsink;
+
+        DLLLOCAL ~CtrlRelease() {
+            Disp::dbgSetReleaseHook(std::function<void()>());
+            ctrl->stopClear(&xsink);
+            ctrl->deref(&xsink);
+            xsink.clear();
+        }
+    };
+
+    //! 1: the items of an owner marked as shutting down are released in the calling thread, a counted one as counted
+    //! work, and the calling thread is not left marked
+    static void ownerMarkCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        // declared before the release guard, which removes the hook that refers to it
+        std::vector<bool> counted_releases;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        Disp* cd = ctrl->call_dispatcher.load();
+        QoreProgram* pgm = getProgram();
+        Disp::dbgSetReleaseHook([&counted_releases]() {
+            counted_releases.push_back(qore_module_cleanup_counted_work_running());
+        });
+        UT_ASSERT(c, !qore_module_cleanup_counted_work_running(), "the calling thread runs no counted work before");
+        queueItem(cd, pgm, "o7339-counted", true);
+        queueItem(cd, pgm, "o7339-uncounted", false);
+        cd->markOwnerShuttingDown("o7339-counted");
+        UT_ASSERT_EQ(c, 1, (int)counted_releases.size(), "the owner mark releases the item of the owner");
+        UT_ASSERT(c, counted_releases.size() == 1 && counted_releases[0],
+            "the release of the counted item runs as counted work");
+        UT_ASSERT(c, !qore_module_cleanup_counted_work_running(), "the calling thread runs no counted work after");
+        cd->markOwnerShuttingDown("o7339-uncounted");
+        UT_ASSERT_EQ(c, 2, (int)counted_releases.size(), "the owner mark releases the item of the other owner");
+        UT_ASSERT(c, counted_releases.size() == 2 && !counted_releases[1],
+            "the release of the uncounted item does not run as counted work");
+        cd->clearOwnerShuttingDown("o7339-counted");
+        cd->clearOwnerShuttingDown("o7339-uncounted");
+        UT_ASSERT(c, !xsink, "the marks raise no exception");
+    }
+
+    //! 2: the items of a Program marked as shutting down are released in the calling thread, a counted one as counted
+    //! work, an uncounted one not
+    static void programMarkCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        // declared before the release guard, which removes the hook that refers to it
+        std::vector<bool> counted_releases;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        Disp* cd = ctrl->call_dispatcher.load();
+        QoreProgram* pgm = getProgram();
+        Disp::dbgSetReleaseHook([&counted_releases]() {
+            counted_releases.push_back(qore_module_cleanup_counted_work_running());
+        });
+        queueItem(cd, pgm, "p7339", true);
+        queueItem(cd, pgm, "p7339", false);
+        cd->markProgramShuttingDown(pgm, &xsink);
+        UT_ASSERT_EQ(c, 2, (int)counted_releases.size(), "the Program mark releases both items");
+        UT_ASSERT(c, counted_releases.size() == 2 && counted_releases[0],
+            "the release of the counted item runs as counted work");
+        UT_ASSERT(c, counted_releases.size() == 2 && !counted_releases[1],
+            "the release of the uncounted item does not run as counted work");
+        UT_ASSERT(c, !qore_module_cleanup_counted_work_running(), "the calling thread runs no counted work after");
+        cd->clearProgramShuttingDown(pgm, &xsink);
+        UT_ASSERT(c, !xsink, "the mark and the clear raise no exception");
+    }
+
+    //! creates an item of the Program, counted by the module cleanup or not, that enqueue() takes as it is
+    static Disp::AsyncWorkItem newItem(QoreProgram* pgm, bool counted) {
+        Disp::AsyncWorkItem item{nullptr, nullptr, nullptr, nullptr, Disp::DT_CALLBACK, nullptr, std::string()};
+        item.module_cleanup_work = counted;
+        // the dependency reference that enqueue() takes for an item without a Program, released with the item
+        item.pgm = pgm;
+        pgm->depRef();
+        return item;
+    }
+
+    //! 3: an item enqueued for a Program marked as shutting down is discarded and released in the calling thread, a
+    //! counted one as counted work, an uncounted one not
+    static void enqueueDiscardCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        std::vector<bool> counted_releases;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        Disp* cd = ctrl->call_dispatcher.load();
+        QoreProgram* pgm = getProgram();
+        Disp::dbgSetReleaseHook([&counted_releases]() {
+            counted_releases.push_back(qore_module_cleanup_counted_work_running());
+        });
+        cd->markProgramShuttingDown(pgm, &xsink);
+        cd->enqueue(newItem(pgm, true));
+        cd->enqueue(newItem(pgm, false));
+        UT_ASSERT_EQ(c, 2, (int)counted_releases.size(), "both items are discarded and released at once");
+        UT_ASSERT(c, counted_releases.size() == 2 && counted_releases[0],
+            "the release of the discarded counted item runs as counted work");
+        UT_ASSERT(c, counted_releases.size() == 2 && !counted_releases[1],
+            "the release of the discarded uncounted item does not run as counted work");
+        UT_ASSERT(c, !qore_module_cleanup_counted_work_running(), "the calling thread runs no counted work after");
+        cd->clearProgramShuttingDown(pgm, &xsink);
+        UT_ASSERT(c, !xsink, "the discards raise no exception");
+    }
+
+    //! 4: the items left in the queue when the dispatcher stops are released by the stopping thread, a counted one as
+    //! counted work, an uncounted one not
+    static void stopCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        std::vector<bool> counted_releases;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        Disp* cd = ctrl->call_dispatcher.load();
+        QoreProgram* pgm = getProgram();
+        Disp::dbgSetReleaseHook([&counted_releases]() {
+            counted_releases.push_back(qore_module_cleanup_counted_work_running());
+        });
+        queueItem(cd, pgm, "s7339", true);
+        queueItem(cd, pgm, "s7339", false);
+        cd->stop(&xsink);
+        UT_ASSERT_EQ(c, 2, (int)counted_releases.size(), "the stop releases both items");
+        UT_ASSERT(c, counted_releases.size() == 2 && counted_releases[0],
+            "the release of the counted item runs as counted work");
+        UT_ASSERT(c, counted_releases.size() == 2 && !counted_releases[1],
+            "the release of the uncounted item does not run as counted work");
+        UT_ASSERT(c, !qore_module_cleanup_counted_work_running(), "the calling thread runs no counted work after");
+        UT_ASSERT(c, !xsink, "the stop raises no exception");
+    }
+};
+
 //! A socket closed by another thread while the I/O thread registers its descriptor with its event queue
 /** The I/O thread registers a socket's descriptor with the system's event queue of the thread (kqueue on macOS,
     epoll on Linux) when an operation on the socket waits for I/O, and changes the registration when the events it
@@ -21500,6 +21674,24 @@ static QoreValue f_dbg_async_io_wait_held_module_cleanup_work(const QoreListNode
         cls ? cls.c_str() : nullptr, get_param_value(params, 1).getAsBigInt());
 }
 
+//! Debug-only: waits until at least the given number of handles of handed-over module cleanup work are held, of
+//! those whose description (who took the handle and where) contains the string given, if any; False if the wait
+//! timed out (qore#7239)
+static QoreValue f_dbg_module_cleanup_wait_handles(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 count = get_param_value(params, 0).getAsBigInt();
+    // the string can be an inline short string, which has no node (issue #7038)
+    QoreStringDataHelper where(get_param_value(params, 2));
+    return qore_dbg_module_cleanup_wait_handles(count < 0 ? 0 : static_cast<size_t>(count),
+        where ? where.c_str() : nullptr, get_param_value(params, 1).getAsBigInt());
+}
+
+//! Debug-only: the number of handles of handed-over module cleanup work that are held (qore#7239)
+static QoreValue f_dbg_module_cleanup_handle_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64>(qore_module_cleanup_handle_count());
+}
+
 //! Debug-only: the held test-hook work that the module cleanup's drain releases (qore#7027); see
 //! AsyncIoControllerPriv::dbgModuleCleanupDrainReleases()
 static QoreValue f_dbg_async_io_module_cleanup_drain_releases(const QoreListNode* params, RuntimeConfig& rc,
@@ -24477,6 +24669,98 @@ static QoreValue f_dbg_run_method_cache_lifetime_tests(const QoreListNode* param
     return make_unit_test_result(c, xsink);
 }
 
+//! Checks the reference type cached in a value type (qore#7269)
+/** qore_get_complex_reference_type() returns the reference type cached in the value type without a lock; the cached
+    type must always be the entry of the cache of reference types for the value type, so that the type of a reference
+    has the same identity however it is looked up, also when threads look it up for the first time at once, and a type
+    retired with a destroyed declaration must not keep the reference type retired with it
+*/
+static void ut_reference_type_cache(UnitTestCounters& c) {
+    // a builtin type
+    const QoreTypeInfo* int_ref = qore_get_complex_reference_type(bigIntTypeInfo);
+    UT_ASSERT(c, int_ref && QoreTypeInfo::isReference(int_ref), "the reference type of int is a reference type");
+    UT_ASSERT(c, QoreTypeInfo::getUniqueReturnComplexReference(int_ref) == bigIntTypeInfo,
+        "the reference type of int refers to int");
+    UT_ASSERT(c, bigIntTypeInfo->getComplexReferenceTypeCache() == int_ref,
+        "the reference type of int is cached in int");
+    UT_ASSERT(c, qore_get_complex_reference_type(bigIntTypeInfo) == int_ref,
+        "the reference type of int is the same type when looked up again");
+
+    const QoreTypeInfo* list_type;
+    const QoreTypeInfo* list_ref;
+    {
+        QoreClassHolder cls(new QoreClass("DbgRefTypeCache", "::DbgRefTypeCache"));
+        const QoreTypeInfo* cls_type = static_cast<QoreClass*>(cls)->getTypeInfo();
+        UT_ASSERT(c, cls_type && !cls_type->getComplexReferenceTypeCache(),
+            "a new class type has no reference type cached");
+
+        // threads that look up the reference type of the new type for the first time at once get the same type
+        constexpr int thread_count = 8;
+        const QoreTypeInfo* results[thread_count] = {};
+        {
+            std::latch start(thread_count);
+            std::vector<std::thread> threads;
+            threads.reserve(thread_count);
+            // the threads are joined however this block is left; if a thread could not be started, the latch is
+            // released for the ones that were, so that they end
+            ON_BLOCK_EXIT([&threads, &start]() {
+                int missing = thread_count - static_cast<int>(threads.size());
+                if (missing > 0) {
+                    start.count_down(missing);
+                }
+                for (std::thread& t : threads) {
+                    if (t.joinable()) {
+                        t.join();
+                    }
+                }
+            });
+            for (int i = 0; i < thread_count; ++i) {
+                threads.emplace_back([&start, &results, cls_type, i]() {
+                    start.arrive_and_wait();
+                    results[i] = qore_get_complex_reference_type(cls_type);
+                });
+            }
+        }
+        const QoreTypeInfo* cls_ref = cls_type->getComplexReferenceTypeCache();
+        UT_ASSERT(c, cls_ref && QoreTypeInfo::getUniqueReturnComplexReference(cls_ref) == cls_type,
+            "the reference type of the class type is cached in it");
+        int same = 0;
+        for (const QoreTypeInfo* ti : results) {
+            if (ti == cls_ref) {
+                ++same;
+            }
+        }
+        UT_ASSERT_EQ(c, thread_count, same,
+            "threads that look up a reference type at once all get the cached reference type");
+        UT_ASSERT(c, qore_get_complex_reference_type(cls_type) == cls_ref,
+            "the reference type of the class type is the same type when looked up again");
+
+        // a type derived from the class type, which is retired, not freed, when the class is destroyed
+        list_type = qore_get_complex_list_type(cls_type);
+        list_ref = qore_get_complex_reference_type(list_type);
+        UT_ASSERT(c, list_type->getComplexReferenceTypeCache() == list_ref,
+            "the reference type of list<DbgRefTypeCache> is cached in it");
+        UT_ASSERT(c, QoreTypeInfo::getUniqueReturnComplexReference(list_ref) == list_type,
+            "the reference type of list<DbgRefTypeCache> refers to it");
+    }
+    // the class was destroyed: list<DbgRefTypeCache> and its reference type were retired together
+    UT_ASSERT(c, !list_type->getComplexReferenceTypeCache(),
+        "a type retired with a destroyed class keeps no reference type cached");
+    const QoreTypeInfo* list_ref2 = qore_get_complex_reference_type(list_type);
+    UT_ASSERT(c, list_ref2 && list_ref2 != list_ref,
+        "a retired type's reference type is a new entry of the cache, as without the cached type");
+    UT_ASSERT(c, list_type->getComplexReferenceTypeCache() == list_ref2,
+        "the new reference type of the retired type is cached in it");
+}
+
+//! Debug-only: runs the unit tests of the reference type cached in a value type (qore#7269)
+static QoreValue f_dbg_run_reference_type_cache_tests(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    UnitTestCounters c;
+    ut_reference_type_cache(c);
+    return make_unit_test_result(c, xsink);
+}
+
 //! Debug-only: returns the numbers of the recorded IR inline call sites that inline their calls and of those that a
 //! debugger attached to their callees' Program suspended (qore_ir_suspend_inline_states(), issue #6473)
 static QoreValue f_dbg_ir_inline_site_states(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
@@ -26708,6 +26992,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoStoppingThreadTest::run(c);
     AsyncIoPreservedSubmitTest::run(c);
     AsyncIoDispatcherCancelTest::run(c);
+    AsyncIoReleaseCountedScopeTest::run(c);
     AsyncIoFrameSendTest::run(c);
     ut_cond_wait_cancel_in_window(c);
     ut_parse_lock_sinkless_cycle_window(c);
@@ -30225,6 +30510,28 @@ bool qore_dbg_h3_client_error_hidden() {
     return dbg_h3_client_error_hidden.load(std::memory_order_acquire);
 }
 
+namespace {
+//! the calls of Socket::isHttp2() off the I/O thread that queried the TLS state with a poll operation (qore#7223)
+std::atomic<int64_t> dbg_is_http2_polls{0};
+}
+
+void qore_dbg_note_is_http2_poll() {
+    dbg_is_http2_polls.fetch_add(1, std::memory_order_relaxed);
+}
+
+//! returns the number of calls of Socket::isHttp2() off the I/O thread that queried the TLS state with a poll operation
+/** A call answers from the result of the ALPN negotiation recorded when the handshake completed, and queries the TLS
+    state only before the handshake completed (qore#7223)
+
+    @param reset if True, the count is set to 0 after it is read
+
+    @return the count
+*/
+static QoreValue f_dbg_is_http2_poll_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    bool reset = get_param_value(params, 0).getAsBool();
+    return reset ? dbg_is_http2_polls.exchange(0) : dbg_is_http2_polls.load();
+}
+
 //! makes the HTTP/3 client poll operations report no error, as if a connection left the connecting state without one
 /** For a test of how a connection race reports a leg that settled without an error (issue #6970): the error is
     recorded as usual, and only reading it returns nothing.
@@ -30276,11 +30583,13 @@ static QoreValue f_dbg_http2_hold_stream_data(const QoreListNode* params, Runtim
 }
 
 //! stops holding the buffered data of the HTTP/2 stream held with dbg_http2_hold_stream_data()
-/** The next send on the stream resumes it.
+/** The held streams are resumed; their data is written with the session's next write.
 */
 static QoreValue f_dbg_http2_release_stream_data(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     dbg_h2_hold_stream.store(-1, std::memory_order_release);
+    // a deferred stream is otherwise resumed only by its next send, which a closing connection never makes
+    Http2Session::dbgResumeHeldStreams();
     return QoreValue();
 }
 
@@ -32561,6 +32870,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
     qns.addBuiltinVariant("dbg_ir_inline_site_states", f_dbg_ir_inline_site_states, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);
+    qns.addBuiltinVariant("dbg_run_reference_type_cache_tests", f_dbg_run_reference_type_cache_tests, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_fail_next_module_init_barrier_records", f_dbg_fail_next_module_init_barrier_records,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
     qns.addBuiltinVariant("dbg_module_init_barrier_unrecorded", f_dbg_module_init_barrier_unrecorded, QCF_NO_FLAGS,
@@ -32669,6 +32980,13 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold",
         boolOrNothingTypeInfo, QORE_PARAM_NO_ARG, "stream_data");
+    qns.addBuiltinVariant("dbg_module_cleanup_wait_handles", f_dbg_module_cleanup_wait_handles, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 3,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms",
+        stringOrNothingTypeInfo, QORE_PARAM_NO_ARG, "where");
+    qns.addBuiltinVariant("dbg_module_cleanup_handle_count", f_dbg_module_cleanup_handle_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo, 0);
     qns.addBuiltinVariant("dbg_async_io_wait_held_module_cleanup_work", f_dbg_async_io_wait_held_module_cleanup_work,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 3,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
@@ -33150,6 +33468,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
     qns.addBuiltinVariant("dbg_http3_client_error_hidden", f_dbg_http3_client_error_hidden, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_is_http2_poll_count", f_dbg_is_http2_poll_count, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "reset");
     qns.addBuiltinVariant("dbg_async_io_registered_qore_ops", f_dbg_async_io_registered_qore_ops, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_http2_hold_stream_data", f_dbg_http2_hold_stream_data, QCF_NO_FLAGS,

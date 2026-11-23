@@ -990,6 +990,12 @@ static void qore_purge_derived_types_intern(const void* owner, std::set<const Qo
                 &cslon_map}) {
             for (tmap_t::iterator i = m->begin(); i != m->end();) {
                 if (dead.count(i->first)) {
+                    // the key is not freed yet: a destroyed type is purged before it is freed, and a retired one
+                    // is freed only after the threads that can read it have passed its epoch; a retired type
+                    // keeps no cached reference type that cr_map no longer holds for it
+                    if (m == &cr_map && i->first) {
+                        i->first->setComplexReferenceTypeCache(nullptr);
+                    }
                     retire(i->second);
                     i = m->erase(i);
                 } else {
@@ -3027,6 +3033,16 @@ const QoreTypeInfo* qore_get_complex_hard_reference_type(const QoreTypeInfo* vti
 }
 
 const QoreTypeInfo* qore_get_complex_reference_type(const QoreTypeInfo* vti) {
+    // every reference created at run time looks up its type here: the type cached in the value type is the entry of
+    // cr_map for it, so no lock is taken once the type exists (qore#7269); only a key of cr_map has it cached, which
+    // a type nested too deeply never is
+    if (vti) {
+        const QoreTypeInfo* rv = vti->getComplexReferenceTypeCache();
+        if (rv) {
+            return rv;
+        }
+    }
+
     if (qore_container_type_too_deep(vti)) {
         vti = autoTypeInfo;
     }
@@ -3034,12 +3050,19 @@ const QoreTypeInfo* qore_get_complex_reference_type(const QoreTypeInfo* vti) {
     AutoLocker al(ctl);
 
     tmap_t::iterator i = cr_map.lower_bound(vti);
-    if (i != cr_map.end() && i->first == vti)
+    if (i != cr_map.end() && i->first == vti) {
+        if (vti) {
+            vti->setComplexReferenceTypeCache(i->second);
+        }
         return i->second;
+    }
 
     QoreComplexReferenceTypeInfo* ti = qore_new_container_type<QoreComplexReferenceTypeInfo>(vti);
     derived_type_keys.insert(vti);
     cr_map.insert(i, tmap_t::value_type(vti, ti));
+    if (vti) {
+        vti->setComplexReferenceTypeCache(ti);
+    }
     return ti;
 }
 
@@ -6307,6 +6330,13 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 //printd(5, "cr: %p '%s' == %p '%s': %d\n", uTi(), QoreTypeInfo::getName(uTi()), ti, QoreTypeInfo::getName(ti), QoreTypeInfo::outputSuperSetOf(ti, uTi()));
                 // first check types before instantiating reference
                 if (QoreTypeInfo::outputSuperSetOf(ti, uTi())) {
+                    // a variable of the reference's type whose value the assignment below would leave as it is is
+                    // not read and assigned (qore#7264); -1: the exception that resolving the reference raises, as
+                    // for the error described below
+                    if (qore_reference_binding_keeps_value(r, uTi(), xsink)) {
+                        ok = true;
+                        break;
+                    }
                     // issue #2891: do not create a value in the source reference if none already exists
                     // do not process if there is no type restriction
                     // the value read from the lvalue is assigned back to the same lvalue in order to apply the

@@ -2365,6 +2365,10 @@ void QoreModuleManager::trySetModuleProgramUserDependencyLocked(const QoreProgra
                 if (run_time_only) {
                     runtime_dep_map.addDep(name, requirer);
                 }
+            } else {
+                // the module can be deleted first: the native modules that it requires are then required by the
+                // module whose Program holds its declarations (qore#7310)
+                runtime_importer_map.addDep(name, requirer);
             }
         } else if (strcmp(i->first, name) && !aot_user_dep_map.addDep(name, i->first)) {
             runtime_dep_map.addDep(name, i->first);
@@ -7229,9 +7233,19 @@ void QoreModuleManager::delUser() {
             // onComplete() and references enter the Programs of other modules, also of those whose teardown barrier
             // has passed: that work ends before the next module's Program is waited for (qore#6928)
             qore_module_cleanup_drain_work();
+            // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
+            // the modules: they are left as they are (see qore_cleanup(), qore#7239)
+            if (qore_module_cleanup_abandoned()) {
+                return;
+            }
         }
         qore_aot_clear_all_module_namespace_data(xsink);
         qore_module_cleanup_drain_work();
+        // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
+        // the modules: they are left as they are (see qore_cleanup(), qore#7239)
+        if (qore_module_cleanup_abandoned()) {
+            return;
+        }
 
         // break the cycles held up by opaque references ('@=') that user module programs own while all module
         // programs are still alive: such a cycle survives the namespace data cleared above, and an object that a
@@ -7248,6 +7262,11 @@ void QoreModuleManager::delUser() {
         // AOT user modules are binary modules, deleted after all user modules in cleanup()
         qore_aot_clear_all_module_opaque_targets(xsink);
         qore_module_cleanup_drain_work();
+        // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
+        // the modules: they are left as they are (see qore_cleanup(), qore#7239)
+        if (qore_module_cleanup_abandoned()) {
+            return;
+        }
     }
 
     // Phase 2 - delete the user modules and the native binary modules in dependency order
@@ -7267,6 +7286,11 @@ void QoreModuleManager::delUser() {
         // the work that the deletion of the last module handed over ends before the next module is deleted
         // (qore#6928)
         qore_module_cleanup_drain_work();
+        // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
+        // the modules: they are left as they are (see qore_cleanup(), qore#7239)
+        if (qore_module_cleanup_abandoned()) {
+            return;
+        }
         if (deleteUnrequiredNativeModule()) {
             continue;
         }
@@ -7309,6 +7333,11 @@ void QoreModuleManager::delUser() {
     }
     // the work that the deletion of the last module handed over
     qore_module_cleanup_drain_work();
+    // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
+    // the modules: they are left as they are (see qore_cleanup(), qore#7239)
+    if (qore_module_cleanup_abandoned()) {
+        return;
+    }
 
 #ifdef DEBUG
     // the work that the test hook still holds runs now, after the user modules have been deleted (qore#6928)
@@ -7496,9 +7525,60 @@ void QoreModuleManager::deleteUserModule(module_map_t::iterator i) {
     if (orig_name && map.find(orig_name) != map.end()) {
         orig_name = nullptr;
     }
+    // the modules whose Programs it was applied to at run time without a record require the native modules that it
+    // requires in its place (qore#7310)
+    passNativeRequirementsToImporters(m->getName());
     removeUserModuleDependency(m->getName(), orig_name);
     map.erase(i);
     delete m;
+}
+
+// documented in ModuleInfo.h
+void QoreModuleManager::passNativeRequirementsToImporters(const char* name) {
+    md_map_t::iterator ii = runtime_importer_map.find(name);
+    if (ii == runtime_importer_map.end()) {
+        return;
+    }
+    // the importers that are still loaded
+    strset_t importers;
+    for (const std::string& importer : ii->second) {
+        if (map.find(importer.c_str()) != map.end()) {
+            importers.insert(importer);
+        }
+    }
+    runtime_importer_map.erase(ii);
+    if (importers.empty()) {
+        return;
+    }
+    // the native binary modules that the module requires; an AOT module, which cleanup() deletes in the order of the
+    // requirements made with %requires, is not passed on
+    strset_t natives;
+    for (const auto& bi : binary_user_dep_map) {
+        if (bi.second.find(name) == bi.second.end()) {
+            continue;
+        }
+        module_map_t::iterator mi = map.find(bi.first.c_str());
+        std::vector<std::string> deps;
+        if (mi != map.end() && !mi->second->isUser() && getBinaryModuleDependencies(mi, deps)) {
+            natives.insert(bi.first);
+        }
+    }
+    // the user modules that the module requires
+    strset_t users;
+    md_map_t::iterator ri = rmd_map.find(name);
+    if (ri != rmd_map.end()) {
+        users = ri->second;
+    }
+    for (const std::string& importer : importers) {
+        for (const std::string& native : natives) {
+            binary_user_dep_map.addDep(native.c_str(), importer.c_str());
+        }
+        for (const std::string& user : users) {
+            if (user != importer && map.find(user.c_str()) != map.end()) {
+                runtime_importer_map.addDep(user.c_str(), importer.c_str());
+            }
+        }
+    }
 }
 
 //! The deletion rank of a module that cleanup() can delete: the module with the lowest rank is deleted first
@@ -7591,6 +7671,22 @@ void QoreModuleManager::cleanup() {
             auto ri = required_mods.find(aot);
             if (ri != required_mods.end()) {
                 ri->second.push_back(i->first);
+            }
+        }
+    }
+    // a user module requiring a user module applied to its Program at run time that requires it, a cycle that rmd_map
+    // does not record (see runtime_importer_map): a requirement at run time only, so that the cycle is broken at the
+    // module loaded, whose native modules it then requires in its place (qore#7310)
+    for (md_map_t::iterator i = runtime_importer_map.begin(), e = runtime_importer_map.end(); i != e; ++i) {
+        if (required_mods.find(i->first) == required_mods.end()) {
+            continue;
+        }
+        for (const std::string& importer : i->second) {
+            auto ri = required_mods.find(importer);
+            if (ri != required_mods.end()
+                    && std::find(ri->second.begin(), ri->second.end(), i->first) == ri->second.end()) {
+                ri->second.push_back(i->first);
+                runtime_required_mods[importer].insert(i->first);
             }
         }
     }

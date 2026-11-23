@@ -1772,6 +1772,10 @@ template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeDataToHashIntern(QoreHashNode* hash, SafeDerefHelper& sdh,
         ExceptionSink* xsink, LexicalSemanticPolicy policy, const qore_class_private* class_ctx,
         const qore_class_private* storage_ctx) const {
+    // a hash freed under a weak reference cannot be changed, as by the other changes (qore#7199)
+    if (qore_hash_private::get(*hash)->checkValid(xsink)) {
+        return;
+    }
     if (status == OS_DELETED) {
         makeAccessDeletedObjectException(xsink, theclass->getName());
         return;
