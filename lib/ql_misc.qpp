@@ -3293,7 +3293,8 @@ list<auto> l = splice(l2, 5);
     @see the @ref splice "splice operator"
 */
 list<auto> splice(list<auto> value, softint start) [flags=NAMED_ARGS] {
-    ReferenceHolder<QoreListNode> lst(value->copy(), xsink);
+    // a new value, which can be changed also when the list was freed under a weak reference (qore#7199)
+    ReferenceHolder<QoreListNode> lst(qore_list_private::get(*value)->copyValue(), xsink);
     ReferenceHolder<> holder(lst->splice(start), xsink);
     return *xsink ? QoreValue() : lst.release();
 }
@@ -3315,7 +3316,8 @@ list<auto> l = splice(l2, 5, 7);
     @see the @ref splice "splice operator"
 */
 list<auto> splice(list<auto> value, softint start, softint length) [flags=NAMED_ARGS] {
-    ReferenceHolder<QoreListNode> lst(value->copy(), xsink);
+    // a new value, which can be changed also when the list was freed under a weak reference (qore#7199)
+    ReferenceHolder<QoreListNode> lst(qore_list_private::get(*value)->copyValue(), xsink);
     ReferenceHolder<> holder(lst->splice(start, length), xsink);
     return *xsink ? QoreValue() : lst.release();
 }
@@ -3338,7 +3340,8 @@ list<auto> l = splice(l2, 5, 7, "hello");
     @see the @ref splice "splice operator"
 */
 list<auto> splice(list<auto> value, softint start, softint length, softlist<auto> replacement) [flags=NAMED_ARGS] {
-    ReferenceHolder<QoreListNode> lst(value->copy(), xsink);
+    // a new value, which can be changed also when the list was freed under a weak reference (qore#7199)
+    ReferenceHolder<QoreListNode> lst(qore_list_private::get(*value)->copyValue(), xsink);
     ReferenceHolder<> holder(lst->splice(start, length, replacement, xsink), xsink);
     return *xsink ? QoreValue() : lst.release();
 }

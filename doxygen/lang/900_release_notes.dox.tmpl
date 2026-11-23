@@ -2825,6 +2825,9 @@
       reference was released was copied, returned or passed to a call; changing such a list or hash through new
       references to it now raises \c LIST-ERROR or \c HASH-ERROR also when more than one is held
       (<a href="https://github.com/qoretechnologies/qore/issues/7163">issue 7163</a>)
+    - the \c splice and \c extract operators and the merge of a list, a hash or an object's members (\c +=) raise
+      \c LIST-ERROR or \c HASH-ERROR for a list or hash freed under a @ref weak_assignment_operator "weak reference", as
+      the other changes do (<a href="https://github.com/qoretechnologies/qore/issues/7199">issue 7199</a>)
     - @ref httpserverintro "HttpServer" answers a handler's informational response (1xx) other than 101 with an error
       instead of sending it as the final response
       (<a href="https://github.com/qoretechnologies/qore/issues/7222">issue 7222</a>)
