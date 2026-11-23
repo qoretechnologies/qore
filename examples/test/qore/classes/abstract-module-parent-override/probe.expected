@@ -1,0 +1,30 @@
+AMB::N8: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): N8::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+AMB::N9: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): N9::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+U8: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): U8::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+U8f: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): U8f::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+U8g: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): U8g::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+U8h: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): U8h::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+U8i: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): U8i::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+U8j: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): U8j::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+U8k: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): U8k::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+U8l: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): U8l::m(string); m(bool): Sbool::m(bool)
+U8n: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): U8n::m(string); m(bool): U8n::m(bool)
+U8b: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): U8b::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+U8c: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): RUNTIME-OVERLOAD-ERROR; m(string): U8c::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+U8d: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): RUNTIME-OVERLOAD-ERROR; m(string): U8d::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+U8e: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): RUNTIME-OVERLOAD-ERROR; m(string): U8e::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+V8: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): U8::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+V8b: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): V8b::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+V8c: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): U8::m(string); m(bool): V8c::m(bool)
+V8f: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): U8f::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+V9: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Sint::m(int); m(string): N9::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+W8: ABSTRACT-CLASS-ERROR
+U8 via: Sint::m(int); U8::m(string)
+V8 via: Sint::m(int); U8::m(string)
+typed U8: U8::m(string)
+typed V8: U8::m(string)
+typed U8f: U8f::m(string); Sint::m(int)
+typed U8f as N8: U8f::m(string)
+call reference U8f: U8f::m(string)
+call_object_method U8: U8::m(string)
+call_object_method V8b: V8b::m(string)

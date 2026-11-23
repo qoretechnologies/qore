@@ -535,7 +535,9 @@ class C inherits I1, I2, I3 {}
     @endcode
     @anchor abstract_own_implementation A concrete variant of a class's own method implements the abstract variant
     with its signature of each of its parent classes, also when other parent classes declare other overloads of the
-    method that the class itself does not implement, whatever the order of the parent classes (since %Qore 3.0):
+    method that the class itself does not implement, whatever the order of the parent classes and whether they were
+    parsed with the class or loaded from a module, also one compiled with \c qcc \c -m; the class's own variant then
+    overrides a parent class's variant with its signature (since %Qore 3.0):
     @code{.py}
 class Sint { string m(int i) { return "Sint::m(int)"; } }
 class I1 { abstract string m(int i); }
