@@ -438,12 +438,13 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
     }
 
     #! Returns the connection safe URL (without password info)
-    /** @return the connection safe URL (without password info)
+    /** @return the connection safe URL (without password info); the URL that the connection shows when this method
+        is called (see getShownUrl())
 
         @since %ConnectionProvider 1.7
     */
     string getSafeUrl() {
-        return safe_url;
+        return getShownUrl();
     }
 
     #! Returns True if the connection requires OAuth2 authorization before it can be used
@@ -688,7 +689,7 @@ conn.checkSandboxAccess(True);
         # Ping results are diagnostics, including when authentication fails. Apply
         # the same sensitive-option policy as getInfo() before returning either result.
         rv.opts = getSafeOptions(rv.opts);
-        rv.url = safe_url;
+        rv.url = getShownUrl();
 
         # issue #7236: an automatic ping of a connection whose automatic pings are disabled checks nothing, so it
         # leaves the state of the connection (up, status and last_check) as it is
@@ -807,7 +808,7 @@ conn.checkSandboxAccess(True);
         }
         h.opts = orig_opts;
         if (!opts.with_passwords) {
-            h.url = safe_url;
+            h.url = getShownUrl();
             delete h.url_hash.password;
             # remove all sensitive option values as well
             h.opts = getSafeOptions(h.opts);
@@ -817,6 +818,20 @@ conn.checkSandboxAccess(True);
             h.opts = h.opts{sort(keys h.opts)};
         }
         return h;
+    }
+
+    #! Returns the safe URL that the connection shows, made when it is shown
+    /** Used for getSafeUrl(), the \c url of the information (getInfo() without the \c with_passwords option) and
+        the ping results of the connection; the base implementation returns the \c safe_url member, which is made when
+        the connection is created; a connection whose safe URL depends on state that can change afterwards (such as
+        the drivers that are loaded) reimplements it to make the URL when it is shown (qore#7275)
+
+        @return the safe URL to show
+
+        @since ConnectionProvider 3.1
+    */
+    private string getShownUrl() {
+        return safe_url;
     }
 
     #! Returns the options of the connection without the values of its sensitive options

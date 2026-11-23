@@ -1370,6 +1370,11 @@
     the plain values of the options that a loaded driver so declares not sensitive and whose names name no credential
     (see @ref datasource_mask_options; issue #7070).
 
+    @par Sensitive DBI Database Names
+    A DBI driver whose database name can hold credentials declares @ref Qore::SQL::DBI_CAP_SENSITIVE_DBNAME, and the
+    masked forms that show a database name, as for \c db:// connections, always mask the database name of such a
+    loaded driver (see @ref datasource_mask_options; issue #7275).
+
     @par IPv6 Hosts in Datasource Strings
     A datasource string gives an IPv6 address as its host in brackets (ex: <tt>%[::1]:5432</tt>), and
     @ref Qore::SQL::make_datasource_string() "make_datasource_string()" writes one so (see

@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%requires DbDataProvider
+%requires ConnectionProvider
+
+%exec-class DatasourceConnectionSensitiveDbNameLoadTest
+
+#! The safe URL that a db:// connection shows follows the drivers loaded when it is shown (qore#7275)
+/** The connection is created before the "dbitest" module, whose "dbitestsensitivedb" driver declares
+    DBI_CAP_SENSITIVE_DBNAME, is loaded: the safe_url member made then shows the plain database name (the capability is
+    not known), and once the module is loaded, every safe URL that the connection shows masks it, consistent with the
+    url_hash of its information.  The module is loaded at run time, so this test runs in a process of its own.
+*/
+class DatasourceConnectionSensitiveDbNameLoadTest inherits QUnit::Test {
+    public {
+        const Plain = "plaindb7275";
+    }
+
+    constructor() : Test("DatasourceConnection safe URL after the driver is loaded", "1.0", \ARGV) {
+        addTestCase("the shown safe URL follows the loaded drivers", \shownUrl());
+        set_return_value(main());
+    }
+
+    shownUrl() {
+        assertFalse(inlist("dbitestsensitivedb", dbi_get_driver_list() ?? ()));
+        DatasourceConnection conn("c7275", "test", "db://dbitestsensitivedb:user/pass@" + Plain + "%dbhost");
+        # made at creation: the capability is not known, the character rule shows the plain name
+        assertEq("db://dbitestsensitivedb:****/****@" + Plain + "%dbhost", conn.safe_url);
+        assertEq(conn.safe_url, conn.getSafeUrl());
+
+        load_module("dbitest");
+        assertTrue(inlist("SensitiveDbName", dbi_get_driver_capability_list("dbitestsensitivedb")));
+
+        string masked = "db://dbitestsensitivedb:****/****@****%dbhost";
+        assertEq(masked, conn.getSafeUrl());
+        hash<ConnectionInfo> info = conn.getInfo();
+        assertEq(masked, info.url);
+        assertEq("****", info.url_hash.db);
+        assertFalse(sprintf("%y", info).find(Plain) >= 0);
+        assertFalse(sprintf("%y", conn.getInfo(False)).find(Plain) >= 0);
+        hash<ConnectionDataInfo> dinfo = conn.getInfoAsData();
+        assertEq(masked, dinfo.url);
+        assertFalse(sprintf("%y", dinfo).find(Plain) >= 0);
+        assertFalse(sprintf("%y", conn.getExtendedInfo()).find(Plain) >= 0);
+        assertFalse(sprintf("%y", conn.getExtendedInfoAsData()).find(Plain) >= 0);
+        hash<PingInfo> rv = conn.ping();
+        assertTrue(rv.ok, rv.info);
+        assertEq(masked, rv.url);
+        assertFalse(sprintf("%y", rv).find(Plain) >= 0);
+        # with passwords, the information has the configuration
+        assertEq(Plain, conn.getInfo({"with_passwords": True}).url_hash.db);
+    }
+}
