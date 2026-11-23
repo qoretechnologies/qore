@@ -26109,6 +26109,24 @@ static QoreValue f_dbg_get_scan_object_count(const QoreListNode* params, Runtime
     return q_get_scan_object_count();
 }
 
+//! returns the object count of an object, a hash or a list: the number of its values that need a recursive-reference
+//! scan (needs_scan()), or -1 for a value of another type
+/** Tests use it to check that the counts follow the values that the lvalue operations store and remove (qore#7348).
+*/
+static QoreValue f_dbg_get_scan_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreValue v = get_param_value(params, 0);
+    switch (v.getType()) {
+        case NT_OBJECT:
+            return static_cast<int64>(qore_object_private::get(*v.get<const QoreObject>())->getScanCount());
+        case NT_HASH:
+            return static_cast<int64>(qore_hash_private::getScanCount(*v.get<const QoreHashNode>()));
+        case NT_LIST:
+            return static_cast<int64>(qore_list_private::getScanCount(*v.get<const QoreListNode>()));
+        default:
+            return -1;
+    }
+}
+
 //! returns the number of references that recursive-reference scans have followed in the current thread
 /** A scan follows each reference of the graph it walks once, so tests use this to verify that the work of a scan
     grows linearly with the size of the graph it walks.
@@ -31261,6 +31279,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_scan_edge_count", f_dbg_get_scan_edge_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_scan_count", f_dbg_get_scan_count, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo,
+        1, autoTypeInfo, QORE_PARAM_NO_ARG, "value");
     qns.addBuiltinVariant("dbg_get_regex_utf_check_bytes", f_dbg_get_regex_utf_check_bytes, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_region_walk_count", f_dbg_get_region_walk_count, QCF_NO_FLAGS,

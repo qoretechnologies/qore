@@ -2780,6 +2780,8 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a write to a member of an object by its bare name in a method no longer counts the object as holding a value
+      that the @ref garbage_collection "garbage collector" must scan when it holds none (issue #7348)
     - The @ref garbage_collection "garbage collector" now collects object cycles through reversed
       lists and lists whose elements were converted in place (issue #7159).
     - @ref string_formatting "Value formatting" now displays a back-reference when several paths reach the same
