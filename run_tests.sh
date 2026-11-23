@@ -102,12 +102,9 @@ print_usage () {
   echo "                           since, or an include/ header that a module was built with but libqore was not;"
   echo "                           ccache's hard_link or file_clone can make a built change look older (see the"
   echo "                           comment of check_build() in run_tests.sh)."
-  echo "  QORE_MODULE_DIR_ONLY     When set, QORE_MODULE_DIR is the complete module path: the directories of the"
-  echo "                           installed modules that the build compiled its qmods against (listed by cmake in"
-  echo "                           qore-external-module-dirs.txt in the build directory) are not appended to it."
-  echo "                           Otherwise they are appended to QORE_MODULE_DIR (those it already holds are not"
-  echo "                           added again), so they are searched after it and before the module directories"
-  echo "                           compiled into the qore of the build (its installation prefix)."
+  echo "  QORE_MODULE_DIR_ONLY     Configured builds use QORE_EXTERNAL_MODULE_DIRS from CMake after the build and"
+  echo "                           source paths. Set QORE_MODULE_DIR_ONLY (even to an empty value) to use the"
+  echo "                           external paths in QORE_MODULE_DIR instead. Older builds keep their module paths."
   echo "  QORE_TEST_BUILD_JOBS     Jobs a test that builds a CMake project runs (default: the number of CPUs, at"
   echo "                           least 2), e.g. examples/test/ir/CMakeBuildHelpers*.qtest."
   echo "  QORE_TEST_PRESERVE_PROVIDER_ENV"
@@ -1461,19 +1458,22 @@ if [ -n "$BUILD_MODULE_DIRS" ]; then
         TEST_MODULE_DIRS="$BUILD_MODULE_DIRS"
     fi
 fi
-if [ -n "$TEST_MODULE_DIRS" ]; then
-    export QORE_MODULE_DIR=$TEST_MODULE_DIRS:$QORE_SOURCE_DIR/qlib:$QORE_MODULE_DIR
-else
-    export QORE_MODULE_DIR=$QORE_SOURCE_DIR/qlib:$QORE_MODULE_DIR
+# A build configured with the external path option uses exactly its recorded external paths. In particular, an
+# empty list excludes modules that a developer shell exposes through QORE_MODULE_DIR. Older builds had an additive
+# list; preserve their behaviour. A caller setting QORE_MODULE_DIR_ONLY explicitly still owns the external path.
+if [ -z "${QORE_MODULE_DIR_ONLY+set}" ] && [ -f "$QORE_BUILD_DIR/qore-external-module-dirs.txt" ] && \
+        grep -q '^QORE_EXTERNAL_MODULE_DIRS:STRING=' "$QORE_BUILD_DIR/CMakeCache.txt" 2>/dev/null; then
+    QORE_MODULE_DIR=$(cat "$QORE_BUILD_DIR/qore-external-module-dirs.txt")
+    export QORE_MODULE_DIR_ONLY=1
 fi
-# The directories of the installed modules that the build compiled its qlib qmods against (written by cmake): a qmod
-# requires the modules it was compiled with, and the build's qore does not search these directories when they are
-# outside its prefix, so without them the qmod falls back to its source (BINARY-MODULE-SOURCE-FALLBACK).  They come
-# last in QORE_MODULE_DIR, so the modules of the build and of this tree come first; qore searches QORE_MODULE_DIR before
-# the module directories compiled into it, so they also come before those of its installation prefix.  A directory
-# that QORE_MODULE_DIR already holds is not added again.  With QORE_MODULE_DIR_ONLY set, the caller gives the
-# complete module path (the CI jobs give a link farm of the native modules only), and none are added; qore reads it
-# as set even when it is empty.
+if [ -n "$TEST_MODULE_DIRS" ]; then
+    export QORE_MODULE_DIR=$TEST_MODULE_DIRS:$QORE_SOURCE_DIR/qlib${QORE_MODULE_DIR:+:$QORE_MODULE_DIR}
+else
+    export QORE_MODULE_DIR=$QORE_SOURCE_DIR/qlib${QORE_MODULE_DIR:+:$QORE_MODULE_DIR}
+fi
+# Older builds append their recorded paths after the caller directories.
+# A caller that sets QORE_MODULE_DIR_ONLY supplies its own external paths (the CI jobs use a native module farm).
+# The runtime treats even an empty QORE_MODULE_DIR_ONLY as set.
 if [ -z "${QORE_MODULE_DIR_ONLY+set}" ] && [ -f "$QORE_BUILD_DIR/qore-external-module-dirs.txt" ]; then
     _external_module_dirs=`cat "$QORE_BUILD_DIR/qore-external-module-dirs.txt"`
     _old_ifs=$IFS

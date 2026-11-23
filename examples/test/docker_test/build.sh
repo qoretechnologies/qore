@@ -49,7 +49,10 @@ cd build
 # the qmod build cache, when the job has one (see qmod-cache.sh)
 . "${QORE_SRC_DIR}/test/docker_test/qmod-cache.sh"
 qore_qmod_cache_setup "${QORE_SRC_DIR}"
-cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-debug} -DQORE_QCC_TEST_HOOKS=ON -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
+# Compile against the native module directory of this CI image.
+QORE_EXTERNAL_MODULE_DIRS=${QORE_EXTERNAL_MODULE_DIRS-$(qore --module-dir)}
+cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-debug} \
+    "-DQORE_EXTERNAL_MODULE_DIRS=${QORE_EXTERNAL_MODULE_DIRS}" -DQORE_QCC_TEST_HOOKS=ON -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
     ${QMOD_CACHE_ARG:+"${QMOD_CACHE_ARG}"}
 make -j${MAKE_JOBS}
 qore_qmod_cache_finish "${QORE_SRC_DIR}" "${QORE_SRC_DIR}/build"
