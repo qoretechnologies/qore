@@ -4487,8 +4487,14 @@ static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_module_init_frame_ca
     if (!frame_pgm || frame_pgm != td->module_init_frames.call_ctx) {
         return;
     }
+    // only the frame of a call's Program context helper (CodeEvaluationHelper) takes the call context as its Program;
+    // any other location that passes a Program, such as the frame of a call that the IR interpreter runs inline, passes
+    // the Program of the code that makes the call, which it keeps, even when it is the call context
     const ProgramThreadCountContextHelper* ch = dynamic_cast<const ProgramThreadCountContextHelper*>(stack_loc);
-    if (ch && ch == td->current_pgm_ctx && ch->getOldProgram()) {
+    if (!ch) {
+        return;
+    }
+    if (ch == td->current_pgm_ctx && ch->getOldProgram()) {
         current_pgm = ch->getOldProgram();
     } else {
         current_pgm = td->current_pgm;

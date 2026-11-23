@@ -29,7 +29,9 @@
 
     The init closure of a module (its \c init key) is part of its initialization: the frames of the calls that it
     makes name the module's Program however the module is loaded, by name or by path, from top-level code or from a
-    method, by trusted code or by a Program with restrictions (module-init-frames/probe-init-closure.q).
+    method, by trusted code or by a Program with restrictions (module-init-frames/probe-init-closure.q).  Code of the
+    loading Program that the initialization calls back keeps its own Program in the frames of the calls that it makes
+    into another Program, also when the IR interpreter runs them inline (module-init-frames/probe-reentry.q).
 */
 class ModuleInitFramesTest inherits QUnit::Test {
     public {
@@ -60,6 +62,10 @@ class ModuleInitFramesTest inherits QUnit::Test {
 
         #! the init closure of a module: the frames of its calls name the module's Program
         const InitClosure = "init-closure=module init-closure-fn=module";
+
+        #! the code of the loading Program that the initialization calls back: the frames of its calls into another
+        #! Program name the loading Program
+        const Reentry = "reentry-fn=loader reentry-static=loader";
     }
 
     private {
@@ -76,6 +82,7 @@ class ModuleInitFramesTest inherits QUnit::Test {
         addTestCase("the frames of a module's initialization name its Program", \testSource());
         addTestCase("the frames of an AOT module's initialization name its Program", \testAot());
         addTestCase("the frames of a module's init closure name its Program", \testInitClosure());
+        addTestCase("the code called back by a module's initialization keeps its Program", \testReentry());
         set_return_value(main());
     }
 
@@ -142,6 +149,17 @@ class ModuleInitFramesTest inherits QUnit::Test {
                             sprintf("%s: %s %s %s", mode, loader, place, how));
                     }
                 }
+            }
+        }
+    }
+
+    testReentry() {
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_JIT_SYNC_COMPILE=1 QORE_MODULE_DIR=%s%s%s",
+            libqore_dir, libqore_dir, fixtures, PathSep, ENV.QORE_MODULE_DIR ?? "");
+        foreach string mode in (ExecModes) {
+            foreach string how in (("name", "path")) {
+                assertEq(Reentry, run(sprintf("%s %s --exec-mode=%s %s/probe-reentry.q %s %s", env, qore_bin, mode,
+                    fixtures, how, fixtures)), sprintf("%s: %s", mode, how));
             }
         }
     }
