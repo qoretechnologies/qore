@@ -56,6 +56,10 @@
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QuicSession.h"
 #include "qore/intern/SocketSyncPoll.h"
+#include "qore/intern/QoreDatagramDispatcher.h"
+#include <qore/QoreSSLPrivateKey.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
 #include "qore/intern/qore_list_private.h"
 
 #include <bit>
@@ -24960,6 +24964,140 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
 
 #ifdef DEBUG
 //! A freshly generated QUIC batch has already armed ngtcp2's pacing timer before the poll deadline is read.
+//! The stateless resets of a QUIC listener (qore#6931): QoreDatagramDispatcher
+/** The static key of the stateless resets is derived from the listener's private key: the same private key gives the
+    same tokens (a restarted server resets the connections of the server before it), another one other tokens, and
+    the key is not the private key itself; a reset answers only a short-header packet, is smaller than it, ends with
+    the token of its connection ID and is rate-limited.
+*/
+class QuicStatelessResetTest {
+    typedef QoreDatagramDispatcher Disp;
+
+public:
+    static void run(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        ReferenceHolder<QoreSSLPrivateKey> k1(newKey(xsink), &xsink);
+        ReferenceHolder<QoreSSLPrivateKey> k2(newKey(xsink), &xsink);
+        UT_ASSERT(c, k1 && k2 && !xsink, "stateless reset: the test keys are generated");
+        if (!k1 || !k2 || xsink) {
+            xsink.clear();
+            return;
+        }
+        Disp d1, d1b, d2, none;
+        UT_ASSERT(c, d1.ensureStatelessResetKey(*k1) && d1b.ensureStatelessResetKey(*k1)
+            && d2.ensureStatelessResetKey(*k2), "stateless reset: the keys are derived");
+        UT_ASSERT(c, d1.ensureStatelessResetKey(*k1), "stateless reset: a second derivation keeps the key");
+        UT_ASSERT(c, !none.ensureStatelessResetKey(nullptr) && !none.hasStatelessResetKey(),
+            "stateless reset: no key without a private key");
+
+        uint8_t cid[Disp::ServerCidLen];
+        UT_ASSERT(c, RAND_bytes(cid, sizeof(cid)) == 1, "stateless reset: a connection ID is made");
+        uint8_t t1[NGTCP2_STATELESS_RESET_TOKENLEN], t1b[NGTCP2_STATELESS_RESET_TOKENLEN],
+            t2[NGTCP2_STATELESS_RESET_TOKENLEN], t3[NGTCP2_STATELESS_RESET_TOKENLEN];
+        UT_ASSERT(c, d1.makeStatelessResetToken(cid, sizeof(cid), t1) && d1b.makeStatelessResetToken(cid,
+            sizeof(cid), t1b) && d2.makeStatelessResetToken(cid, sizeof(cid), t2), "stateless reset: tokens are made");
+        UT_ASSERT(c, !memcmp(t1, t1b, sizeof(t1)), "stateless reset: the same private key gives the same token");
+        UT_ASSERT(c, memcmp(t1, t2, sizeof(t1)), "stateless reset: another private key gives another token");
+        uint8_t cid2[Disp::ServerCidLen];
+        memcpy(cid2, cid, sizeof(cid));
+        cid2[0] ^= 1;
+        UT_ASSERT(c, d1.makeStatelessResetToken(cid2, sizeof(cid2), t3) && memcmp(t1, t3, sizeof(t1)),
+            "stateless reset: another connection ID gets another token");
+        UT_ASSERT(c, !none.makeStatelessResetToken(cid, sizeof(cid), t3), "stateless reset: no token without a key");
+        UT_ASSERT(c, !d1.makeStatelessResetToken(cid, 0, t3), "stateless reset: no token for an empty connection ID");
+        // the key is derived, not the private key's DER itself
+        {
+            unsigned char* der = nullptr;
+            int derlen = i2d_PrivateKey(k1->getData(), &der);
+            ngtcp2_cid nc;
+            ngtcp2_cid_init(&nc, cid, sizeof(cid));
+            bool differs = derlen > 0 && !ngtcp2_crypto_generate_stateless_reset_token(t3, der,
+                static_cast<size_t>(derlen), &nc) && memcmp(t1, t3, sizeof(t1));
+            if (der) {
+                OPENSSL_clear_free(der, static_cast<size_t>(derlen));
+            }
+            UT_ASSERT(c, differs, "stateless reset: the token is not derived from the private key directly");
+        }
+
+        // a short-header packet of the connection ID
+        uint8_t pkt[1200];
+        UT_ASSERT(c, RAND_bytes(pkt, sizeof(pkt)) == 1, "stateless reset: a packet is made");
+        pkt[0] = 0x40 | (pkt[0] & 0x3f);
+        memcpy(pkt + 1, cid, sizeof(cid));
+        uint8_t out[Disp::StatelessResetMaxRandLen + NGTCP2_STATELESS_RESET_TOKENLEN];
+        size_t n = d1.makeStatelessReset(pkt, sizeof(pkt), out, sizeof(out), 1);
+        UT_ASSERT_EQ(c, (int)(Disp::StatelessResetMaxRandLen + NGTCP2_STATELESS_RESET_TOKENLEN), (int)n,
+            "stateless reset: a large packet gets a reset of the largest size");
+        UT_ASSERT(c, n && !memcmp(out + n - NGTCP2_STATELESS_RESET_TOKENLEN, t1, sizeof(t1)),
+            "stateless reset: the reset ends with the token of the connection ID");
+        UT_ASSERT(c, n && !(out[0] & 0x80) && (out[0] & 0x40),
+            "stateless reset: the reset has the form of a short-header packet");
+        n = d1.makeStatelessReset(pkt, 30, out, sizeof(out), 2);
+        UT_ASSERT_EQ(c, 29, (int)n, "stateless reset: the reset is smaller than a small packet");
+        n = d1.makeStatelessReset(pkt, 22, out, sizeof(out), 3);
+        UT_ASSERT_EQ(c, 21, (int)n, "stateless reset: the smallest packet that is answered gets the smallest reset");
+        UT_ASSERT_EQ(c, 0, (int)d1.makeStatelessReset(pkt, 21, out, sizeof(out), 4),
+            "stateless reset: a packet too small for a smaller reset gets none");
+        UT_ASSERT_EQ(c, 0, (int)d1.makeStatelessReset(pkt, sizeof(pkt), out, 20, 5),
+            "stateless reset: no reset without room for it");
+        pkt[0] |= 0x80;
+        UT_ASSERT_EQ(c, 0, (int)d1.makeStatelessReset(pkt, sizeof(pkt), out, sizeof(out), 6),
+            "stateless reset: a long-header packet gets no reset");
+        pkt[0] &= 0x7f;
+        UT_ASSERT_EQ(c, 0, (int)none.makeStatelessReset(pkt, sizeof(pkt), out, sizeof(out), 7),
+            "stateless reset: no reset without the key");
+
+        // the rate limit: a burst, then one more each refill time, up to the burst
+        Disp d3;
+        d3.ensureStatelessResetKey(*k1);
+        const uint64_t t0 = 1000;
+        int sent = 0;
+        for (int i = 0; i < Disp::StatelessResetBurst + 10; ++i) {
+            if (d3.makeStatelessReset(pkt, sizeof(pkt), out, sizeof(out), t0)) {
+                ++sent;
+            }
+        }
+        UT_ASSERT_EQ(c, Disp::StatelessResetBurst, sent, "stateless reset: a burst is limited");
+        UT_ASSERT_EQ(c, 0, (int)d3.makeStatelessReset(pkt, sizeof(pkt), out, sizeof(out),
+            t0 + Disp::StatelessResetRefillNs - 1), "stateless reset: none before the refill time");
+        UT_ASSERT(c, d3.makeStatelessReset(pkt, sizeof(pkt), out, sizeof(out), t0 + Disp::StatelessResetRefillNs),
+            "stateless reset: one more after the refill time");
+        UT_ASSERT_EQ(c, 0, (int)d3.makeStatelessReset(pkt, sizeof(pkt), out, sizeof(out),
+            t0 + Disp::StatelessResetRefillNs), "stateless reset: only one more");
+        sent = 0;
+        for (int i = 0; i < Disp::StatelessResetBurst + 10; ++i) {
+            if (d3.makeStatelessReset(pkt, sizeof(pkt), out, sizeof(out), t0 + 1000 * Disp::StatelessResetRefillNs)) {
+                ++sent;
+            }
+        }
+        UT_ASSERT_EQ(c, Disp::StatelessResetBurst, sent, "stateless reset: the refill is limited to the burst");
+    }
+
+private:
+    //! returns a new private key (EC P-256), or nullptr
+    static QoreSSLPrivateKey* newKey(ExceptionSink& xsink) {
+        EVP_PKEY* pkey = EVP_PKEY_Q_keygen(nullptr, nullptr, "EC", "P-256");
+        if (!pkey) {
+            return nullptr;
+        }
+        unsigned char* der = nullptr;
+        int derlen = i2d_PrivateKey(pkey, &der);
+        EVP_PKEY_free(pkey);
+        if (derlen <= 0 || !der) {
+            return nullptr;
+        }
+        SimpleRefHolder<BinaryNode> bin(new BinaryNode);
+        bin->append(der, static_cast<size_t>(derlen));
+        OPENSSL_clear_free(der, static_cast<size_t>(derlen));
+        QoreSSLPrivateKey* k = new QoreSSLPrivateKey(*bin, &xsink);
+        if (xsink) {
+            k->deref(&xsink);
+            return nullptr;
+        }
+        return k;
+    }
+};
+
 class QuicPacketPacingTest {
 public:
     static void run(UnitTestCounters& c) {
@@ -25601,6 +25739,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     QoreCaresSocketsTest::run(c);
     QoreCaresCheckTest::run(c);
     QuicPacketPacingTest::run(c);
+    QuicStatelessResetTest::run(c);
     ut_quic_send_batch_take_back(c);
 #ifndef _Q_WINDOWS
     HappyEyeballsLayeredConnectTest::run(c);
@@ -29251,6 +29390,20 @@ static QoreValue f_dbg_quic_wait_idle(const QoreListNode* params, RuntimeConfig&
     return dbg_quic_wait_until([&session]() { return !session->getBytesInFlight(); }, static_cast<int>(timeout_ms));
 }
 
+std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent{0};
+std::atomic<int64_t> qore_dbg_quic_stateless_resets_received{0};
+
+//! returns the stateless resets that the QUIC listeners of the process sent and that its QUIC clients received
+/** As a hash with the keys \c sent and \c received, counted since the process started (qore#6931)
+*/
+static QoreValue f_dbg_quic_stateless_reset_counts(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("sent", qore_dbg_quic_stateless_resets_sent.load(std::memory_order_relaxed), xsink);
+    h->setKeyValue("received", qore_dbg_quic_stateless_resets_received.load(std::memory_order_relaxed), xsink);
+    return h.release();
+}
+
 namespace {
 //! the HTTP/2 stream whose buffered data is held back, set by dbg_http2_hold_stream_data(); -1: none
 std::atomic<int64_t> dbg_h2_hold_stream{-1};
@@ -32269,6 +32422,8 @@ void init_debug_functions(QoreNamespace& qns) {
         "stream_id");
     qns.addBuiltinVariant("dbg_quic_release_stream_data", f_dbg_quic_release_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_stateless_reset_counts", f_dbg_quic_stateless_reset_counts, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_quic_wait_idle", f_dbg_quic_wait_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_http3_client_hide_error", f_dbg_http3_client_hide_error, QCF_NO_FLAGS,
