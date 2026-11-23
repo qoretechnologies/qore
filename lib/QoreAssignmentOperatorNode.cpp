@@ -905,11 +905,12 @@ QoreValue QoreAssignmentOperatorNode::evalLexicalWeak(ExceptionSink* xsink, bool
 }
 
 //! Makes a weak assignment of the value of \a new_value to \a left and returns the value of the assignment
-/** The value assigned, if it is a temporary, and a container that the type of the lvalue converts to a copy of its
-    own (ex: a hash<string, int> assigned to a hash variable), a temporary of the statement that only the weak reference
-    designates, live until the end of the statement (qore#7085); the copy is held after the lvalue is unlocked, as
-    releasing a value that the statement held before can run a destructor.  Out of line, so that the other assignments
-    keep their code.
+/** The value assigned, if it is a temporary, and a container that the type of the lvalue makes of it (ex: the list
+    that a softlist variable makes of a value that is not a list), a temporary of the statement that only the weak
+    reference designates, live until the end of the statement (qore#7085); the container is held after the lvalue is
+    unlocked, as releasing a value that the statement held before can run a destructor.  A list or hash assigned is
+    never replaced by a copy: the weak reference designates it (qore#7237).  Out of line, so that the other
+    assignments keep their code.
 
     @param policy the lexical semantic policy of the assignment, or nullptr for an assignment without one
     @param site the expression, which the copy held is keyed by

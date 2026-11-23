@@ -1,0 +1,33 @@
+list variable: [1, 2] (list<int>)
+hash variable: {a: 1} (hash<string, int>)
+any variable: [1, 2] (list<int>)
+softlist variable: [1, 2] (list<int>)
+*list variable: [1, 2] (list<int>)
+*hash variable: {a: 1} (hash<string, int>)
+list<auto!> variable: [1, 2] (list<int>)
+hash<auto!> variable: {a: 1} (hash<string, int>)
+auto! variable: [1, 2] (list<int>)
+list<int> variable: [1, 2] (list<int>)
+closure list variable: [1, 2] (list<int>)
+global list: [1, 2] (list<int>) hash: {a: 1} (hash<string, int>) thread_local list: [1, 2] (list<int>)
+changed: list [1, 2, 3] hash {a: 1, b: 2} any [1, 2, 3] softlist [1, 2, 3] *list [1, 2, 3] *hash {a: 1, b: 2} list<auto!> [1, 2, 3] hash<auto!> {a: 1, b: 2} auto! [1, 2, 3] closure [1, 2, 3] global [1, 2, 3] {a: 1, b: 2} thread_local [1, 2, 3]
+released: list [] hash {} closure [] global []
+untyped list element: [1, 2] (list<int>)
+list<list> element: [1, 2] (list<int>)
+untyped hash members: [1, 2] (list<int>) {a: 1} (hash<string, int>)
+hash<string, list> member: [1, 2] (list<int>) hash<string, hash> member: {a: 1} (hash<string, int>)
+hashdecl key: [1, 2] (list<int>)
+object members: [1, 2] (list<int>) {a: 1} (hash<string, int>) [1, 2] (list<int>) [1, 2] (list<int>)
+nested: [[1, 2]] (list<list<int>>)
+hashdecl kept: {a: 5} (hash<Decl>) {a: 5} (hash<Decl>)
+weak source: [1, 2] (list<int>) [1, 2] (list<int>)
+overload: list<string>
+changed: [1, 2, 3] [1, 2, 3] [1, 2, 3] {a: 1, c: 3} [1, 2, 3] {a: 1, c: 3} [1, 2, 3] [1, 2, 3] {a: 1, c: 3} [[1, 2], [9]] {a: 6} {a: 6} [1, 2, 3] [1, 2, 3]
+written through the element: [1, 2, 3, 4]
+released: [] [] [] {} [] [] [] [] {} [] []
+hashdecl: RUNTIME-TYPE-ERROR: <lvalue> expects type 'hash<Decl>', but got type 'hash' instead; kept {a: 0}
+list<softint>: refused (weak assignment); kept [0]
+list<list<softint>> element: refused (weak assignment); kept [[0]]
+hash<string, hash<string, softint>> member: refused (weak assignment); kept {}
+softlist from a hash: refused (weak assignment)
+list to hash: RUNTIME-TYPE-ERROR rejected

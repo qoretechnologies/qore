@@ -476,6 +476,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_raw_aot) },
     { "qore_rt_assign_local_aot", reinterpret_cast<void*>(&qore_rt_assign_local_aot) },
     { "qore_rt_aot_local_var", reinterpret_cast<void*>(&qore_rt_aot_local_var) },
+    { "qore_rt_coerce_value_weak", reinterpret_cast<void*>(&qore_rt_coerce_value_weak) },
+    { "qore_rt_coerce_value_weak_throwing", reinterpret_cast<void*>(&qore_rt_coerce_value_weak_throwing) },
+    { "qore_rt_coerce_value_weak_aot", reinterpret_cast<void*>(&qore_rt_coerce_value_weak_aot) },
+    { "qore_rt_coerce_value_weak_aot_throwing", reinterpret_cast<void*>(&qore_rt_coerce_value_weak_aot_throwing) },
     { "qore_rt_coerce_value_foreach",
         reinterpret_cast<void*>(&qore_rt_coerce_value_foreach) },
     { "qore_rt_coerce_value_foreach_throwing",
@@ -2707,7 +2711,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_assign_local_mode(LocalVar* var, uint64_t 
     qore_substitute_type_params_if_needed_inline())
 */
 static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_coerce_value_impl(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr,
-        ExceptionSink* xsink, bool normalize_weak_refs, const char* desc = "<lvalue>") {
+        ExceptionSink* xsink, bool normalize_weak_refs, const char* desc = "<lvalue>", bool weak = false) {
     // As in the IR local entry, closed and untyped values need no receiver-dependent substitution.
     if (QoreTypeInfo::hasType(ti) && ti->getContainsTypeParameterCache() != 0) {
         ti = qore_substitute_type_params_if_needed(ti);
@@ -2740,11 +2744,25 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_coerce_value_impl(const QoreTy
     if (val.needsRef()) {
         val.refSelf();
     }
+    // the container that a weak assignment assigns, with a reference of its own, which the conversion cannot consume
+    // (qore#7237; see LValueHelper::assign())
+    ValueHolder weak_source(xsink);
+    if (weak && (val.getType() == NT_LIST || val.getType() == NT_HASH)) [[unlikely]] {
+        weak_source = val.refSelf();
+    }
     QoreTypeInfo::acceptAssignment(ti, desc, val, xsink);
     if (!xsink || !*xsink) {
         // Keep StoreLocal coercion aligned with LValueHelper::assign(): no-narrow
         // lvalues store plain auto containers
         q_apply_no_narrow_container_type(ti, val, xsink);
+    }
+    if (weak_source && (!xsink || !*xsink)) [[unlikely]] {
+        int rc = qore_weak_assignment_conversion(*weak_source, val, desc, xsink);
+        if (rc) {
+            // the copy is released, and the weak reference designates the container assigned, or nothing is assigned
+            val.discard(xsink);
+            val = rc > 0 ? weak_source.release() : QoreValue();
+        }
     }
     uint64_t result = toBits(val);
     if (cleanup_ptr) {
@@ -2762,6 +2780,16 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_coerce_value_impl(const QoreTy
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint64_t value,
         uint64_t* cleanup_ptr, ExceptionSink* xsink) {
     return qore_rt_coerce_value_impl(ti, value, cleanup_ptr, xsink, true);
+}
+
+//! Coerces the value of a weak assignment to a local as qore_rt_coerce_value() does
+/** A list or hash that the local's type only strips is kept, as the weak reference designates the container assigned,
+    and one that it converts to another container is refused with an exception (qore#7237; see
+    qore_weak_assignment_conversion())
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_weak(const QoreTypeInfo* ti, uint64_t value,
+        uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    return qore_rt_coerce_value_impl(ti, value, cleanup_ptr, xsink, true, "<lvalue>", true);
 }
 
 //! Returns the flag that the reads of a typed variable of a foreach loop check, for a value stored in its cache
@@ -16674,6 +16702,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_aot(QoreAOTContext* ctx, int3
     return qore_rt_coerce_value(ti, value, cleanup_ptr, xsink);
 }
 
+//! As qore_rt_coerce_value_weak() for the local with the given AOT slot
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_weak_aot(QoreAOTContext* ctx, int32_t local_idx,
+        uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    assert(ctx && local_idx >= 0 && local_idx < ctx->num_locals);
+    const QoreTypeInfo* ti = ctx->locals[local_idx]->getTypeInfoForLValue();
+    return qore_rt_coerce_value_weak(ti, value, cleanup_ptr, xsink);
+}
+
 //! As qore_rt_coerce_element_value() for the local with the given AOT slot
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_element_value_aot(QoreAOTContext* ctx, int32_t local_idx,
         uint64_t value, uint64_t* cleanup_ptr, uint8_t* read_flag, ExceptionSink* xsink) {
@@ -16697,6 +16733,25 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_coerce_value_aot
         QoreAOTContext* ctx, int32_t local_idx, uint64_t value,
         uint64_t* cleanup_ptr, ExceptionSink* xsink) {
     uint64_t result = qore_rt_coerce_value_aot(ctx, local_idx, value, cleanup_ptr, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_coerce_value_weak_throwing(
+        const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_coerce_value_weak(ti, value, cleanup_ptr, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_coerce_value_weak_aot_throwing(
+        QoreAOTContext* ctx, int32_t local_idx, uint64_t value,
+        uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_coerce_value_weak_aot(ctx, local_idx, value, cleanup_ptr, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

@@ -3271,7 +3271,8 @@ static QoreValue assignGlobalVarValueStored(Var* var, const QoreValue& value, Ex
         return QoreValue();
     }
     // the value of a weak or opaque assignment is read while the helper keeps a container that the variable's type
-    // converted to a copy of its own (qore#7084)
+    // made of the value (the converted copy that an opaque reference owns, or the list that a softlist variable makes
+    // of a value that is not a list; qore#7084, qore#7237)
     QoreValue rv = helper.getReferencedValue();
     if (mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque) {
         evaluateOwnedWeakReferenceResult(rv, xsink);
@@ -20353,7 +20354,7 @@ load_local_done:
                     } else if (path_inst->result.isValid()) {
                         res = lvh.getReferencedValue();
                         // the value of a weak or opaque assignment is the value assigned, converted to the lvalue's
-                        // type, read while the helper keeps a container that the conversion copied (qore#7122)
+                        // type, read while the helper keeps a container that the conversion made (qore#7122, qore#7237)
                         if (path_inst->mode == AssignmentMode::Weak || path_inst->mode == AssignmentMode::Opaque) {
                             evaluateOwnedWeakReferenceResult(res, xsink);
                         }
