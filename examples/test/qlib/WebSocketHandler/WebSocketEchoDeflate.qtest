@@ -1,0 +1,123 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - asynchronous HTTP/1.1 WebSocket connections with the permessage-deflate extension
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The C++ echo mode of a WebSocket connection (WebSocketConnection::setEchoMode()) echoes a message compressed with
+# permessage-deflate compressed, with the RSV bits as received (qore#6774): before, the frame was echoed without its
+# RSV1 bit, so the client took the compressed bytes for the message (or failed a text message as one that is not valid
+# UTF-8).  A series of messages is echoed, as the client's inflater, with context takeover, sees the compressed
+# messages that its own deflater made, in the same order; a connection without the extension is unchanged.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires HttpServerUtil
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+
+%exec-class WebSocketEchoDeflateTest
+
+#! a hang guard only
+const HangGuard = 30s;
+
+class EchoConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        if (msg == "echo-on") {
+            # the messages are echoed in C++ from then on; set before the answer, so the next message is echoed
+            setEchoMode();
+            send("ok");
+        }
+    }
+}
+
+class EchoHandler inherits WebSocketHandler {
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoConnection(self);
+    }
+}
+
+class WebSocketEchoDeflateTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        int port;
+    }
+
+    constructor() : Test("WebSocketEchoDeflate", "1.0") {
+        addTestCase("echo mode with permessage-deflate", \testEcho(), True);
+        addTestCase("echo mode without an extension", \testEcho(), False);
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        server.setHandler("plain", "/plain", NOTHING, new EchoHandler());
+        server.setHandler("deflate", "/deflate", NOTHING,
+            new EchoHandler({"extensions": ("permessage-deflate",)}));
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    testEcho(bool use_deflate) {
+        Queue events();
+        hash<auto> opts = {
+            "url": sprintf("ws://127.0.0.1:%d/%s", port, use_deflate ? "deflate" : "plain"),
+            "http_version": "1.1",
+            "timeout": HangGuard,
+        };
+        if (use_deflate) {
+            opts.extensions = (new PerMessageDeflateExtension(),);
+        }
+        *WebSocketClient wsc;
+        wsc = new WebSocketClient(sub (*data msg) {
+            if (exists msg) {
+                events.push(msg);
+            } else {
+                events.push({"closed": wsc.getCloseCode(), "reason": wsc.getCloseReason()});
+            }
+        }, opts);
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+        wsc.send("echo-on");
+        assertEq("ok", events.get(HangGuard), "echo mode is on");
+
+        # compressible text, a short text, text that is not ASCII, a repetition (back references to the earlier
+        # messages with context takeover) and binary data
+        list<data> msgs = (
+            strmul("the quick brown fox jumps over the lazy dog ", 50),
+            "x",
+            "Grüße, Ελληνικά, 日本語",
+            strmul("the quick brown fox jumps over the lazy dog ", 50),
+            binary(strmul("binary data ", 40)),
+        );
+        foreach data msg in (msgs) {
+            wsc.send(msg);
+            auto got = events.get(HangGuard);
+            if (got.typeCode() == NT_HASH) {
+                fail(sprintf("message %d: the connection was closed: %y", $#, got));
+            }
+            assertEq(msg.type(), got.type(), sprintf("message %d: its type", $#));
+            assertTrue(got == msg, sprintf("message %d: echoed unchanged", $#));
+        }
+    }
+}

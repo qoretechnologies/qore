@@ -332,6 +332,15 @@ const DBI_CAP_HAS_BULK_LOAD = DBI_CAP_HAS_BULK_LOAD;
     @since %Qore 3.0
 */
 const DBI_CAP_LOCAL_ONLY = DBI_CAP_LOCAL_ONLY;
+
+//! DBI capability constant: the database name of the driver can hold credentials
+/** The database name of a loaded driver with this capability (a connection string or URL that can hold a password, a
+    key or a token) is always masked in the forms of a datasource that show a database name (\c show_db), as in the
+    safe URL and the information of a \c db:// connection; see @ref datasource_mask_options
+
+    @since %Qore 3.0
+*/
+const DBI_CAP_SENSITIVE_DBNAME = DBI_CAP_SENSITIVE_DBNAME;
 ///@}
 
 /** @defgroup sql_mutation_effects SQL Mutation Declared Effect Constants
@@ -2274,6 +2283,13 @@ int Datasource::transactionTid() [flags=CONSTANT] {
 /** @return a hash where the keys are valid option names, and the values are hashes with the following keys:
     - \c "desc": a string description of the option
     - \c "type": a string giving the data type restriction for the option
+    - \c "sensitive": @ref True if the driver declares the value of the option sensitive (a credential, or a
+      connection string or URL that can embed one); such a value is masked where %Qore shows the options of a
+      datasource (since %Qore 3.0)
+    - \c "showable": @ref True if the value of the option can be shown where %Qore shows the options of a
+      datasource: the driver registers the option with option flags, not sensitive, and its name names no credential
+      (see @ref datasource_mask_options); \c "sensitive": @ref False alone does not mean that the value can be shown,
+      as an option registered without option flags is masked as undeclared (since %Qore 3.0)
     - \c "value": the current value of the option
 
     @note in order to ensure atomicity when dealing with Datasource options, the transaction lock is acquired before executing this method if it was not already owned by the calling thread

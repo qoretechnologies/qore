@@ -623,6 +623,17 @@ private:
     const qore_class_private* qc;
     //! true if the reference was made for a method that the object's class does not have (issue #995)
     bool missing;
+    //! true if the method is looked up without a class context: \a qc has no private access to the object's class
+    /** A method call in the code that created the reference looks the method up without a class context in this case
+        (MethodCallNode::execImpl()) and selects its variants in the class context of that code (\a qc), as a call of
+        the reference does (qore#7220)
+    */
+    bool lookup_without_ctx = false;
+
+    //! returns the class context that a call looks the method up with (see lookup_without_ctx)
+    DLLLOCAL const qore_class_private* getLookupContext() const {
+        return lookup_without_ctx ? nullptr : qc;
+    }
     //! the Program of the code that created the reference, or nullptr if there was none, with PGM_WEAK_REF set if
     //! the reference holds a weak reference to it
     /** A call runs the method as a direct call in this Program would: called from another Program, the method runs

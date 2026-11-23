@@ -1,0 +1,169 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The response headers of a streaming request are delivered when they arrive, also when no body data comes with them
+# and the stream stays open, with HTTP/2 and HTTP/3: a server that answers an interactive stream with its status and
+# then waits for the client must not leave the client waiting for the status; the body data that follows is
+# delivered as data only, with no second header event (qoretechnologies/qore#7285)
+# test-platform: macos - HTTP/2 and HTTP/3 (QUIC) client streams over TLS and the response events of their sessions
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpClientStreamHeadersOnlyTest
+
+#! an interactive stream request that answers each message of the client with "pong:<message>"
+class PingStreamRequest inherits HttpServer::AbstractStreamRequest {
+    private {
+        list<binary> replies();
+    }
+
+    constructor(HttpServer::HttpListenerInterface listener, HttpServer::AbstractHttpRequestHandler handler,
+            Qore::Socket s, hash<auto> cx, hash<auto> hdr, auto body)
+            : HttpServer::AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    bool wantsInteractiveStreaming() {
+        return True;
+    }
+
+    bool needsContentEncoding() {
+        return False;
+    }
+
+    private hash<HttpServer::HttpHandlerResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpServer::HttpHandlerResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": "application/octet-stream"},
+        };
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+        if (v.data) {
+            replies += binary("pong:") + v.data;
+        }
+    }
+
+    private auto sendImpl() {
+        if (replies) {
+            return shift replies;
+        }
+    }
+}
+
+class PingStreamHandler inherits HttpServer::AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    private HttpServer::AbstractStreamRequest getStreamRequestImpl(HttpServer::HttpListenerInterface listener,
+            Qore::Socket s, hash<auto> cx, hash<auto> hdr, *data body) {
+        return new PingStreamRequest(listener, self, s, cx, hdr, body);
+    }
+
+    hash<HttpServer::HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(500, "unexpected non-streaming dispatch");
+    }
+}
+
+class HttpClientStreamHeadersOnlyTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        string url;
+
+        #! the number of messages of a stream
+        const Messages = 20;
+    }
+
+    constructor() : QUnit::Test("HttpClientStreamHeadersOnly", "1.0") {
+        addTestCase("the response headers of an open stream are delivered before any body data", \headersTest());
+        addTestCase("the body data after the headers comes without another header event", \dataTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("s", LoggerLevel::getLevelInfo())});
+        server.setHandler("ping", "/ping", NOTHING, new PingStreamHandler());
+        server.waitForAsyncIo();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
+            "cert": new SSLCertificate(CertPem), "key": new SSLPrivateKey(KeyPem), "enable_h3": True}).port;
+        server.waitForAsyncIo();
+        url = "https://127.0.0.1:" + port;
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    private HttpClientConnectionManager manager(string protocol) {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": protocol,
+            "accept_all_certs": True,
+            "connect_timeout": 15s,
+            "request_timeout": 30s,
+        });
+    }
+
+    #! starts an interactive stream; the server sends its status and waits for the client
+    private HttpClientIo::HttpClientStreamHandle startStream(HttpClientConnectionManager mgr) {
+        HttpClientIo::HttpClientStreamHandle st = mgr.acquireStream(url);
+        st.startStreaming("POST", "/ping", {"Content-Type": "application/octet-stream"}, True);
+        return st;
+    }
+
+    headersTest() {
+        foreach string protocol in ("h2", "h3") {
+            HttpClientConnectionManager mgr = manager(protocol);
+            on_exit delete mgr;
+            HttpClientIo::HttpClientStreamHandle st = startStream(mgr);
+            # nothing has been sent on the stream: the server sent only its response headers; a bound only guards
+            # against a hang
+            auto d = st.readData(20s);
+            assertEq(NT_HASH, d.typeCode(), protocol + ": the headers are an event of their own");
+            assertEq(200, d.status_code, protocol + ": the status is delivered");
+            assertEq("application/octet-stream", d.headers."content-type", protocol + ": the headers are delivered");
+            assertFalse(exists d.body, protocol + ": no body comes with the headers");
+            assertFalse(d.end_stream ?? False, protocol + ": the stream is open");
+            assertEq(200, st.getResponse().status_code, protocol + ": getResponse() has the status");
+
+            # the exchange goes on
+            st.sendData(binary("1"));
+            assertEq(binary("pong:1"), st.readData(20s), protocol + ": the reply is delivered");
+            st.writesDone();
+            d = st.readData(20s);
+            assertEq(NT_HASH, d.typeCode(), protocol + ": the end of the stream");
+            assertTrue(d.end_stream, protocol + ": the end of the stream");
+        }
+    }
+
+    dataTest() {
+        foreach string protocol in ("h2", "h3") {
+            HttpClientConnectionManager mgr = manager(protocol);
+            on_exit delete mgr;
+            HttpClientIo::HttpClientStreamHandle st = startStream(mgr);
+            assertEq(200, st.readData(20s).status_code, protocol + ": the headers come first");
+            # each message is answered before the next is sent, and every event after the headers is the data of a
+            # reply: an event without data would be a second header event
+            for (int i = 0; i < Messages; ++i) {
+                st.sendData(binary(i.toString()));
+                auto d = st.readData(20s);
+                assertEq(binary("pong:" + i), d, sprintf("%s: reply %d", protocol, i));
+            }
+            st.writesDone();
+            auto d = st.readData(20s);
+            assertTrue(d.typeCode() == NT_HASH && d.end_stream, protocol + ": then the end of the stream");
+        }
+    }
+}

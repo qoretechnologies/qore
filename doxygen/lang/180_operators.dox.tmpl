@@ -541,6 +541,7 @@ list<int> l1 = new list<int>(2);
     The delete operator deletes the contents of an lvalue. If the delete operator is called on an object, the object will be destroyed unconditionally. The delete operator does not return any value.\n<br>
     When called on a hash key, the key is removed from the hash entirely; when called on a list element, the element is assigned @ref nothing (i.e. the list size does not change); a list whose value type does not accept @ref nothing (ex: <tt>list&lt;int&gt;</tt>) becomes a list whose value type accepts it (<tt>list&lt;*int&gt;</tt>), or, if the declared type of the lvalue holding the list requires its value type, a \c RUNTIME-TYPE-ERROR exception is raised (see @ref list_holes; use @ref splice "splice" or @ref extract "extract" to remove elements from such a list).\n<br>
     When called on an object member, the member is removed as described in @ref remove_object_members.\n<br>
+    When the value of the \a lvalue is a weak reference to a list or a hash, the element, the key, the slice or the range is deleted from the list or the hash that the weak reference designates (see @ref remove_weak_reference).\n<br>
     The delete operator will delete multiple keys from a hash (i.e. delete a slice from a hash) when called on a hash dereferenced by a list of strings, giving the keys to delete (see example below).\n<br>
     The delete operator will also remove characters from strings, bytes from binary objects, and elements from lists as well.\n<br>
     @anchor remove_selector_list A list of selectors in square brackets (more than one selector, any of which can be an index range, ex: <tt>delete x[0, 2..3]</tt>) selects nothing from a value that is not a list, a string or a binary object: the selectors are evaluated in order and nothing is deleted; a single index on such a value deletes the value as a whole.\n<br>
@@ -583,6 +584,7 @@ delete l[2,5..7,8];
     The remove operator will remove and return a slice from a hash when called on a hash dereferenced by a list of strings, giving the keys to remove (see example below).\n<br>
     The remove operator will also remove characters from strings, bytes from binary objects, and elements from lists as well; when removing invalid or non-existant indices from strings and binary objects, no data is written to the output value, however in the case of a list lvalue, @ref nothing is written to the output list in these cases.  In case the same index is referenced multiple times, the value is repeated in the output value.\n<br>
     A list of selectors in square brackets (ex: <tt>remove x[0, 2..3]</tt>) selects nothing from a value that is not a list, a string or a binary object: the selectors are evaluated in order, nothing is removed and the value returned is @ref nothing; a single index on such a value removes the value as a whole (see @ref remove_selector_list).\n<br>
+    @anchor remove_weak_reference When the value of the \a lvalue is a weak reference to a list or a hash (see @ref weak_assignment_operator), an element, a key, a slice or a range is removed from the list or the hash that the weak reference designates, as an assignment through the weak reference changes it; the weak reference itself is not removed.  That list keeps its value type, which its owners share: an element of a list whose value type does not accept @ref nothing (ex: <tt>list&lt;int&gt;</tt>) cannot be removed through a weak reference (\c RUNTIME-TYPE-ERROR; note that a list whose type is narrowed from its values has such a type: <tt>list&lt;auto&gt; l = (1, 2)</tt> is a <tt>list&lt;int&gt;</tt>, and a <tt>list&lt;auto!&gt;</tt> or a <tt>list&lt;*int&gt;</tt> is not narrowed to it), and a list or a hash freed under the weak reference raises \c LIST-ERROR or \c HASH-ERROR.  Likewise, a member or a list of members of an object that the \a lvalue holds through a weak reference is removed from the object (see @ref remove_object_members).\n<br>
     The remove operator does not call destructors when operating on objects, but if removing an object from an lvalue or from a data structure within the \a lvalue causes the object to go out of scope, it will be destroyed, and then its destructor could throw an exception.\n<br>
     A @ref cast "cast" cannot be the \a lvalue of the remove operator, as a cast is a converted value and not storage that can be removed; a cast can still be used in a part of the \a lvalue that refers to a container (ex: <tt>remove cast<MyClass>(obj).member</tt>).\n<br>
     @anchor remove_object_members When the @ref remove "remove" or @ref delete "delete" operator is called on an object member, or on a list of object members:
@@ -2532,7 +2534,15 @@ if (x || y)
     performance with such graphs, however the programmer must ensure that the value has a valid
     strong reference elsewhere or the value will go out of scope.  Once the last strong reference to a hash or a
     list is released, a weak reference to it reads it as empty, and any attempt to change it through a new
-    reference raises \c HASH-ERROR or \c LIST-ERROR. Calling a method through a local weak reference to a destroyed
+    reference raises \c HASH-ERROR or \c LIST-ERROR.  A @ref new "new" expression made from it, and a value made
+    from it with another type, by a @ref cast "cast" or the conversion of a variable, a parameter, a member or a return
+    value of a type that converts it (ex: \c hash, <tt>list&lt;softint&gt;</tt> for a <tt>list&lt;int&gt;</tt>), is a
+    new hash or list that can be changed (empty, or with the default values of a @ref hashdecl "hashdecl"), while any
+    other value that keeps its type (ex: a cast to its own type or to its or-nothing type, or a variable of type
+    \c auto, <tt>hash&lt;auto&gt;</tt> or <tt>*list&lt;int&gt;</tt> for a <tt>list&lt;int&gt;</tt>) is the same freed
+    hash or list.  An element or a key assigned, removed or deleted through a
+    weak reference to a list or a hash changes the list or the hash that the weak reference designates (see
+    @ref remove_weak_reference). Calling a method through a local weak reference to a destroyed
     object raises \c OBJECT-ALREADY-DELETED, including pseudo-methods such as <tt>val()</tt> and calls from
     closures that capture the weak reference.  A weak reference held by a hash, a list or an object member reads as
     its target, also when the target is an object that has been destroyed: \c exists returns @ref True for the
@@ -2546,7 +2556,17 @@ if (x || y)
     or a class static variable) that holds a hash or a list shared with another owner, such as a literal of the
     program or another variable, the variable first gets a copy of its own, so that the weak reference designates the
     variable's own value and shows the changes later made through the variable; this is the same in every
-    @ref exec_mode_overview "execution mode".\n<br>
+    @ref exec_mode_overview "execution mode".  The same holds for an lvalue path from a variable, the object or a class
+    static variable: an object member (<tt>w := c.l</tt>), a member of the object (<tt>w := l</tt> in a method), a hash
+    key (<tt>w := h.k</tt>) or a list element (<tt>w := l[0]</tt>), each of whose steps is of a value declared with a
+    type when the code is parsed: a key of a hash, an element of a list (of a value whose type cannot be a string, a
+    binary or a buffer), or a public member declared in the class of the object, which has no
+    @ref memberGate_methods "memberGate()" method: the member, the key or the element first gets a copy of its own.
+    Such a path is evaluated once; one that leads to no value (a missing key, an index beyond the end or before the
+    start of a list) gives @ref nothing, as when it is read, and a member of an object that has been deleted, or a step
+    through a hash or a list that a weak reference designates and that no longer exists, raises an exception
+    (\c OBJECT-ALREADY-DELETED, \c HASH-ERROR, \c LIST-ERROR), as an assignment to it does.  A slice and any other
+    path (ex: a step of a value of no type, as in <tt>w := a.k</tt> with <tt>auto a</tt>) are read as before.\n<br>
     The value of the operator is the value assigned, converted to the type of the lvalue, as a strong reference: a
     variable, a container or a call that is given it holds the value.  A temporary value assigned, as in
     <tt>w := new C()</tt>, and a copy that the type of the lvalue makes of a container (ex: a

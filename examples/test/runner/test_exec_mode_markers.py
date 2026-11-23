@@ -204,6 +204,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   processes that set their own --exec-mode
         # - member-access-private-internal (#6640): its probe runs in child processes that set their own --exec-mode
         #   and in a qcc executable
+        # - member-lookup-paths (#7194): its probe runs in child processes that set their own --exec-mode and in a
+        #   qcc executable
         # - deleted-program-types (#5790): its probes, reflection.q and bounded.qr run in child processes that set
         #   their own --exec-mode
         # - method-reference-per-class (#6062): its probes run in child processes that set their own --exec-mode and
@@ -253,6 +255,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - AOTLinkUnresolvedReference (#6902): its checks run qcc and the executables that it links in child processes
         # - parquet-memory-pool (#6171): its checks run in child processes without an execution mode, natively and
         #   under valgrind
+        # - hash-equality (#7266): its probes run in child processes that set their own --exec-mode and as qcc
+        #   executables
         # - float-int-conversion (#6181): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
         # - broken-list-range-past-end (#5757): its check runs a legacy script, which only the AST interpreter runs,
@@ -391,6 +395,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/deleted-object-overload.qtest",
                                  "examples/test/qore/operators/empty-string-order.qtest",
                                  "examples/test/qore/operators/float-int-conversion.qtest",
+                                 "examples/test/qore/operators/hash-equality.qtest",
                                  "examples/test/qore/operators/UndefinedArithmetic-1.qtest",
                                  "examples/test/qore/operators/UndefinedArithmetic-2.qtest",
                                  "examples/test/qore/operators/UndefinedArithmetic-3.qtest",
@@ -431,6 +436,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/misc/reflection-typed-hash-module-caller.qtest",
                                  "examples/test/qore/misc/reflection-module-init-barrier-oom.qtest",
                                  "examples/test/qore/classes/member-access-private-internal.qtest",
+                                 "examples/test/qore/classes/member-lookup-paths.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
                                  "examples/test/ir/AOTNamedCallRefModules.qtest",

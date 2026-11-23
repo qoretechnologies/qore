@@ -1,0 +1,128 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module whose destructor starts a WebSocket server (HTTP/2 or HTTP/1.1) and a client when the module cleanup deletes
+# its data: the client's first frame blocks the server's handler in the thread that reads the stream; the
+# notification of the client's second frame, which the test hook holds until the cleanup waits for its work, then
+# reaches the stream's admission gate (WebSocketStreamProcessor::notifyIo() for HTTP/2, HttpWebSocketPollOperation for
+# HTTP/1.1) while that thread is in the loop, and hands itself over to it; the handler waits for that hand-over, and
+# the cleanup waits until the thread has processed the second frame before it deletes the data of the next module
+# (AbLater); see gate-client.qr (qore#7239)
+
+%modern
+
+%requires HttpServerUtil
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires HttpServerAsyncIo
+%requires AcKeeper
+%requires ../../../TestCertificates.qm
+
+module AbGate {
+    version = "1.0";
+    desc = "a WebSocket server whose admission gate takes a notification of the module cleanup's work";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AbGate {
+#! the server's connection: the frame "block" blocks the thread that reads the stream until the cleanup's work hands
+#! a notification of the stream over to it
+class GateWsConnection inherits WebSocketConnection {
+    private {
+        Counter blocked;
+    }
+
+    constructor(WebSocketHandler handler, Counter blocked) : WebSocketConnection(handler) {
+        self.blocked = blocked;
+    }
+
+    gotMessage(string msg) {
+        if (msg == "block") {
+            blocked.dec();
+            # the notification of the next frame finds this thread in the loop and hands the cleanup's work over to it
+            # at the stream's admission gate, which takes the handle in the file given
+            bool handed = call_function("dbg_module_cleanup_wait_handles", 1, 20s, GateHolder::gate_file);
+            printf("server frame blocked: work handed over: %y\n", handed);
+        } else {
+            printf("server got: %s\n", msg);
+        }
+        flush();
+    }
+}
+
+#! the WebSocket handler
+class GateWsHandler inherits WebSocketHandler {
+    private {
+        Counter blocked;
+    }
+
+    constructor(Counter blocked) {
+        self.blocked = blocked;
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new GateWsConnection(self, blocked);
+    }
+}
+
+#! starts the server and the client when the cleanup deletes it
+class GateConnector {
+    destructor() {
+        string http_version = GateHolder::http_version;
+        Counter blocked(1);
+        GateWsHandler ws_handler(blocked);
+        HttpServer server(<HttpServerOptionInfo>{});
+        server.setDefaultHandler("ws", ws_handler);
+        hash<HttpListenerOptionInfo> opts = <HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+        };
+        if (http_version == "2.0") {
+            opts += {
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+                "http_version": "2.0",
+            };
+        }
+        int port = server.addListener(opts).port;
+        WebSocketClient ws(sub (*data msg) {}, {
+            "url": sprintf("%s://127.0.0.1:%d", http_version == "2.0" ? "wss" : "ws", port),
+            "http_version": http_version,
+            "ssl_verify_cert": False,
+        });
+        ws.connect();
+        ws.send("block");
+        if (blocked.waitForZero(20s)) {
+            printf("the server's handler did not block\n");
+        }
+        # the notification of the next frame is held until the cleanup waits for its work
+        call_function("dbg_async_io_hold_module_cleanup_work", True, True);
+        ws.send("again");
+        string cls = http_version == "2.0" ? "Http2PollOperation" : "HttpWebSocketPollOperation";
+        if (!call_function("dbg_async_io_wait_held_module_cleanup_work", 1, 20s, cls)) {
+            printf("the server's notification of the frame was not held\n");
+        }
+        # the connections are kept until the cleanup deletes the data of AcKeeper
+        Keeper::keep = (server, ws);
+        printf("servers started\n");
+        flush();
+    }
+}
+
+#! the data of this module
+public class GateHolder {
+    public {
+        #! the HTTP version of the server
+        static string http_version = "2.0";
+        #! the file of the admission gate of the server's stream for that version
+        static string gate_file = "WebSocketHandler.qm";
+        #! starts the server when the cleanup deletes it
+        static GateConnector connector();
+    }
+}
+}

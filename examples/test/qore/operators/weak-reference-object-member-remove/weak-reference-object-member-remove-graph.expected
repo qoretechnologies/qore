@@ -1,0 +1,13 @@
+premature strong: collected early False name "peer"
+premature strong: collected after True
+premature weak: collected early False name "peer"
+premature weak: collected after True
+premature weak-slice: collected early False name "peer"
+premature weak-slice: collected after True
+premature weak-assign: collected early False name "peer"
+premature weak-assign: collected after True
+premature weak-member: collected early False name "peer"
+premature weak-member: collected after True
+leak strong: conn collected True op collected True
+leak weak: conn collected True op collected True
+leak weak-slice: conn collected True op collected True

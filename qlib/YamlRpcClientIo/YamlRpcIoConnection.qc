@@ -34,6 +34,11 @@ public namespace YamlRpcClientIo {
     on the above options
 */
 public class YamlRpcIoConnection inherits ConnectionProvider::HttpBasedConnection {
+    #! The client creates its connections with HttpClientIo and the creator's proof (qore#7262)
+    private bool hasBoundClient() {
+        return True;
+    }
+
     public {
         #! Real options for creating the YAML-RPC client
         hash<auto> real_opts;

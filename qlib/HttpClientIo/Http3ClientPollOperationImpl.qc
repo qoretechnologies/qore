@@ -130,6 +130,7 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
                 if (ex.err == "QUIC-HTTP3-ERROR" || ex.err == "QUIC-READ-ERROR"
                         || ex.err == "QUIC-RECV-ERROR" || ex.err == "HTTP3-IDLE-CLOSE"
                         || ex.err == "HTTP3-PEER-UNRESPONSIVE"
+                        || ex.err == "HTTP3-STATELESS-RESET"
                         || ex.err == "HTTP3-LOCAL-CLOSE" || ex.err == "HTTP3-PEER-CLOSE") {
                     self.setSubmitError(ex.err, ex.desc);
                 }
@@ -149,6 +150,8 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         @param connection owning HTTP client connection
         @param ssl_ca_file optional file containing trusted CA certificates
         @param ssl_ca_path optional directory containing trusted CA certificates
+        @param ssl_trust_store an in-memory trust store to verify the server with instead of the CA locations (since
+            %HttpClientIo 1.0, qoretechnologies/qore#7248)
         @param address_family the address family to connect in; if not set, the host name is resolved in all
         families and the family of the first address is used (see \a avoid_families)
         @param avoid_families address families not to connect in if the host name also resolves to an address in
@@ -165,11 +168,12 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *SSLCertificate client_cert, *SSLPrivateKey client_pk,
-            HttpClientConnection connection, *string ssl_ca_file, *string ssl_ca_path, *int address_family,
+            HttpClientConnection connection, *string ssl_ca_file, *string ssl_ca_path,
+            *SSLTrustStore ssl_trust_store, *int address_family,
             *list<int> avoid_families) :
             Http3ClientPollOperationBase(
                 Http3ClientPollOperation::createAndConfigureSocket(url_info, ssl_verify_mode, accept_all_certs, client_cert,
-                    client_pk, ssl_ca_file, ssl_ca_path),
+                    client_pk, ssl_ca_file, ssl_ca_path, ssl_trust_store),
                 url_info.host,
                 url_info.port,
                 connection,
@@ -615,7 +619,8 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         operation binds it once the remote address is resolved (see the constructor).
     */
     private static Socket createAndConfigureSocket(hash<auto> url_info, *int ssl_verify_mode, bool accept_all_certs,
-            *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path) {
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path,
+            *SSLTrustStore ssl_trust_store) {
         # the caller check of the operation, which this method runs first (qore#6981)
         HttpClientCallerExemption::check(ssl_ca_file, ssl_ca_path);
         Socket sock = http_client_tls_socket(url_info, client_cert, client_pk);
@@ -629,6 +634,11 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
 
         if (ssl_ca_file || ssl_ca_path) {
             sock.setSslCaLocations(ssl_ca_file, ssl_ca_path);
+        }
+
+        # an in-memory trust store, which takes precedence over the CA locations (qoretechnologies/qore#7248)
+        if (ssl_trust_store) {
+            sock.setSslTrustStore(ssl_trust_store);
         }
 
         return sock;

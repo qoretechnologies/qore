@@ -40,6 +40,7 @@
 #include "qore/intern/SocketRecvHttpLinePollOperation.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/ql_debug.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_SSLCertificate.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
@@ -1101,6 +1102,7 @@ public:
         MaxDatagramSize,
         DatagramSupported,
         FirstSessionStreamAcked,
+        StreamAcked,
     };
 
     DLLLOCAL QoreSocketObjectQuicQueryPollOperation(QoreSocketObject* sock, Action action,
@@ -1184,6 +1186,10 @@ public:
             case Action::FirstSessionStreamAcked:
                 setFirstSessionStreamAcked();
                 break;
+
+            case Action::StreamAcked:
+                setStreamAcked();
+                break;
         }
 
         if (*xsink) {
@@ -1235,6 +1241,11 @@ private:
 
     DLLLOCAL void setFirstSessionStreamAcked() {
         std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(sock);
+        output = session ? session->streamAckedBytes(stream_id) : static_cast<int64_t>(-1);
+    }
+
+    DLLLOCAL void setStreamAcked() {
+        std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(sock, session_id);
         output = session ? session->streamAckedBytes(stream_id) : static_cast<int64_t>(-1);
     }
 
@@ -2491,6 +2502,7 @@ public:
         IsSecure,
         SetAlpnProtocols,
         SetCaLocations,
+        SetTrustStore,
         GetAlpnProtocol,
         IsHttp2,
         VerifyPeerCertificate,
@@ -2513,11 +2525,23 @@ public:
         sock->ref();
     }
 
+    //! Sets or clears the in-memory trust store; takes a reference to it (qoretechnologies/qore#7248)
+    DLLLOCAL QoreSocketObjectTlsStatePollOperation(QoreSocketObject* sock, QoreSSLTrustStore* ts)
+            : sock(sock), action(Action::SetTrustStore), trust_store(ts) {
+        sock->ref();
+        if (ts) {
+            ts->ref();
+        }
+    }
+
     DLLLOCAL ~QoreSocketObjectTlsStatePollOperation() override {
         ExceptionSink xsink;
         output.discard(&xsink);
         if (xsink) {
             xsink.clear();
+        }
+        if (trust_store) {
+            trust_store->deref();
         }
         sock->deref(&xsink);
         if (xsink) {
@@ -2578,6 +2602,11 @@ public:
                 output = 0;
                 break;
 
+            case Action::SetTrustStore:
+                sp->setSslTrustStore(trust_store);
+                output = 0;
+                break;
+
             case Action::GetAlpnProtocol:
                 setAlpnValue(sp);
                 break;
@@ -2620,6 +2649,7 @@ private:
                 return static_cast<int64>(-1);
             case Action::SetAlpnProtocols:
             case Action::SetCaLocations:
+            case Action::SetTrustStore:
                 return static_cast<int64>(-1);
             case Action::GetCipherName:
             case Action::GetCipherVersion:
@@ -2654,6 +2684,8 @@ private:
     //! the CA locations for Action::SetCaLocations
     std::string ca_file;
     std::string ca_path;
+    //! the trust store for Action::SetTrustStore; a reference is held
+    QoreSSLTrustStore* trust_store = nullptr;
     bool done = false;
 };
 
@@ -4736,6 +4768,7 @@ QoreSocketObject::QoreSocketObject(QoreSocketObject& orig, int descriptor)
     }
     dst->ssl_ca_file = src->ssl_ca_file;
     dst->ssl_ca_path = src->ssl_ca_path;
+    dst->setSslTrustStore(src->ssl_trust_store);
     dst->async_io_route_key = getIoIdentityHash();
     // the connections accepted from a listener share its HTTP fast context (routes and extra headers): a change
     // reaches the connections that are already open
@@ -5653,6 +5686,24 @@ void QoreSocketObject::setSslCaLocations(const char* ca_file, const char* ca_pat
         -1, "setSslCaLocations", "tls-state", xsink), xsink);
 }
 
+void qore_socket_object_private::setSslTrustStore(QoreSSLTrustStore* ts, ExceptionSink* xsink) {
+    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
+        setSslTrustStoreForAsyncPoll(ts, xsink);
+        return;
+    }
+
+    ValueHolder rv(qore_socket_object_exec_poll_output(so, new QoreSocketObjectTlsStatePollOperation(so, ts),
+        -1, "setSslTrustStore", "tls-state", xsink), xsink);
+}
+
+void qore_socket_object_private::setSslTrustStoreForAsyncPoll(QoreSSLTrustStore* ts, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    if (priv->checkValid(xsink)) {
+        return;
+    }
+    qore_socket_private::get(*priv->socket)->setSslTrustStore(ts);
+}
+
 void qore_socket_object_private::setSslCaLocationsForAsyncPoll(const char* ca_file, const char* ca_path,
         ExceptionSink* xsink) {
     AutoLocker al(priv->m);
@@ -5719,6 +5770,27 @@ bool qore_socket_object_private::isHttp2(ExceptionSink* xsink) const {
         return priv->socket->isHttp2();
     }
 
+    // the protocol negotiated in a completed handshake is recorded, and is read without the TLS state and without a
+    // poll operation (qore#7223); only a handshake that has not completed is queried on the I/O thread
+    {
+        // -2: the connection has no TLS, and has negotiated nothing
+        int rec;
+        {
+            AutoLocker al(priv->m);
+            qore_socket_private::SslRef ssl = qore_socket_private::get(*priv->socket)->getSsl();
+            rec = ssl ? ssl->recordedHttp2() : -2;
+        }
+        if (rec == -2) {
+            return false;
+        }
+        if (rec >= 0) {
+            return rec;
+        }
+    }
+
+#ifdef DEBUG
+    qore_dbg_note_is_http2_poll();
+#endif
     ValueHolder rv(qore_socket_object_exec_poll_output(const_cast<QoreSocketObject*>(so),
         new QoreSocketObjectTlsStatePollOperation(const_cast<QoreSocketObject*>(so),
             QoreSocketObjectTlsStatePollOperation::Action::IsHttp2),
@@ -6390,6 +6462,10 @@ void qore_socket_object_private::dbgForceSslErrorSslAtNextWrite() {
     qore_socket_private::get(*priv->socket)->dbg_force_ssl_error_ssl.store(true, std::memory_order_release);
 }
 
+void qore_socket_object_private::dbgForceStagedWriteFailure() {
+    qore_socket_private::get(*priv->socket)->dbg_force_staged_write_failure.store(true, std::memory_order_release);
+}
+
 QoreHashNode* qore_socket_object_private::dbgGetStreamRecordCounts(int64_t session_id, ExceptionSink* xsink) {
     if (session_id) {
         std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(so, session_id);
@@ -7038,6 +7114,18 @@ int64_t qore_socket_object_quic_client_stream_acked(QoreSocketObject* s, int64_t
     return rv->getAsBigInt();
 }
 
+int64_t qore_socket_object_quic_stream_acked(QoreSocketObject* s, int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink) {
+    ValueHolder rv(qore_socket_object_exec_quic_query(s,
+        new QoreSocketObjectQuicQueryPollOperation(s,
+            QoreSocketObjectQuicQueryPollOperation::Action::StreamAcked, session_id, stream_id),
+        "getQuicStreamAckedBytes", xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    return rv->getAsBigInt();
+}
+
 int qore_socket_object_wait_stream_flushed(QoreSocketObject* s, bool http2, int64_t stream_id, int timeout_ms,
         ExceptionSink* xsink) {
     const char* method = http2 ? "waitForHttp2StreamFlushed" : "waitForQuicClientStreamFlushed";
@@ -7545,4 +7633,10 @@ void my_socket_priv::shutdownAllQuicStreamReads() {
     for (auto& sess : sessions) {
         sess->shutdownStreamReads();
     }
+}
+
+int64 qore_socket_object_private::getUnacknowledgedSendBytes() const {
+    // the lock keeps another thread from closing the descriptor, or from its number being reused, during the query
+    AutoLocker al(priv->m);
+    return qore_socket_private::getUnacknowledgedBytes(qore_socket_private::get(*priv->socket)->sock);
 }

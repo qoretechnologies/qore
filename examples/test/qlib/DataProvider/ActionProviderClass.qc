@@ -110,12 +110,22 @@ class ActionProviderClassBase inherits QUnit::Test {
             printf("modules not loaded: %y\n", load_errors);
         }
 
+        # only the applications without a scheme are checked, so only theirs are initialized: getAllApps() would run
+        # the lazy action registrations of every application, which build the action sets of their vendored REST
+        # schemas (about 50 s of CPU time for the modules of this tree in a debug build, and 3 GB of memory; #7253)
+        #
+        # the definitions of the registered applications, whose lazy registrations have not necessarily run; an
+        # application that a module registers with registerPendingApp() has none until it is initialized
+        hash<string, hash<DataProviderAppInfo>> apps = map {$1.name: $1},
+            DataProviderActionCatalog::getAllAppsNoInit();
+        DataProviderActionCatalog::initLoadedApps(select DataProviderActionCatalog::getAppNamesNoInit(), !apps{$1});
+        apps = map {$1.name: $1}, DataProviderActionCatalog::getAllAppsNoInit(), !$1.scheme.val();
+        # the pending and lazy action registrations of the applications without a scheme, as getAllApps() runs them
+        DataProviderActionCatalog::initLoadedApps(keys apps ?? ());
+
         list<hash<UnresolvableActionInfo>> unresolvable = ();
         int checked = 0;
-        foreach hash<DataProviderAppInfo> app in (DataProviderActionCatalog::getAllApps()) {
-            if (app.scheme.val()) {
-                continue;
-            }
+        foreach hash<DataProviderAppInfo> app in (map apps{$1}, sort(keys apps)) {
             list<string> owners = DataProviderActionCatalog::getModulePathsForApp(app.name) ?? ();
             # the applications that the TypeScript action interface registers, by the name of their owner module: the
             # catalog records a separated module by its directory and the module hash a module by its main file, so

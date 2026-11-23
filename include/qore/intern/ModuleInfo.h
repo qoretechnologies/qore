@@ -1169,6 +1169,16 @@ public:
         rollbackUserModuleDependency(saved);
     }
 
+    //! Passes the native module requirements of the user module \a name, which is being deleted, to the user modules
+    //! that it was applied to at run time without a record (runtime_importer_map) (qore#7310)
+    /** Each such module left requires the native modules that \a name requires, and it is recorded as an importer of
+        the user modules that \a name requires, whose native modules it then requires in their place when they are
+        deleted: the declarations that it imported can name the classes of any of them.  Called by
+        deleteUserModule(), with the mutex held or in the teardown at the end of the process (delUser(), cleanup()),
+        which runs in one thread; cleanup() also records each run-time import as a requirement of its own.
+    */
+    DLLLOCAL void passNativeRequirementsToImporters(const char* name);
+
     DLLLOCAL void removeUserModuleDependency(const char* name, const char* orig_name = 0) {
         //printd(5, "QoreModuleManager::removeUserModuleDependency() name: '%s' orig: '%s'\n", name,
         //    orig_name ? orig_name : "n/a");
@@ -1253,6 +1263,12 @@ public:
         calling this method.
     */
     DLLLOCAL bool hasUserModuleDependencyPath(const std::string& from, const std::string& to);
+
+#ifdef DEBUG
+    //! Test hook (dbg_module_load_waiters()): waits until at least \a count threads wait for the load of \a name
+    //! that another thread runs; returns false on timeout (qore#7232)
+    DLLLOCAL bool dbgWaitLoadWaiters(const char* name, unsigned count, int timeout_ms);
+#endif
 
     //! Attaches the child modules declared by \a mi with the %try-child-module parse directive
     /** Must be called with the mutex held and only after \a mi has been registered in the module map; the
@@ -1361,6 +1377,10 @@ private:
         ModuleLoadState state = MLS_INITIALIZING;
         std::string err;                        // valid iff state == MLS_FAILED
         std::string desc;                       // valid iff state == MLS_FAILED
+        // true if code that is sandboxed or acts for sandboxed code raised the failure: the waiters raise it marked
+        // (qore#7232); valid iff state == MLS_FAILED
+        bool err_sandboxed = false;
+        qore_program_id_t err_pgm_id = 0;       // the ID of the sandboxed Program of the failure, or 0
         unsigned waiters = 0;                   // cross-thread waiters currently parked on this entry
 
         DLLLOCAL ModuleLoadEntry(int tid) : owner_tid(tid) {}
@@ -1389,6 +1409,10 @@ protected:
         see qore_module_manager_mutex_attr()
     */
     QoreThreadLock mutex{qore_module_manager_mutex_attr()};
+#ifdef DEBUG
+    //! signaled when a thread starts to wait for the load of a module in another thread (see dbgWaitLoadWaiters())
+    QoreCondition dbg_load_waiter_cond;
+#endif
 
     // user module dependency map: module -> dependents
     ModMap md_map;
@@ -1408,6 +1432,13 @@ protected:
         records, and a static requirement recorded later removes the entry
     */
     ModMap runtime_dep_map;
+    //! user module -> the user modules whose Programs it was applied to at run time without being recorded as required
+    //! by them, as it requires them (a cycle; see trySetModuleProgramUserDependencyLocked()) (qore#7310)
+    /** Their Programs hold the declarations that they imported from it, which can name the classes of the native modules
+        that it requires: when it is deleted, they require those native modules in its place
+        (passNativeRequirementsToImporters()), so that such a native module is not deleted before them
+    */
+    ModMap runtime_importer_map;
 
     // module blacklist — name and reason are stored as std::string so the map owns
     // its own copies; callers pass through ephemeral buffers (TempEncodingHelper

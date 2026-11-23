@@ -607,6 +607,11 @@ static QoreValue evalTmpCallAndRef(AbstractFunctionCallNode* node, ExceptionSink
     return result;
 }
 
+// defined in JITRuntime.cpp (issue #7267)
+DLLLOCAL QoreObject* qore_rt_self_call_fast_object(const SelfFunctionCallNode* call);
+DLLLOCAL bool qore_rt_try_self_call_fast_object(QoreObject* self, const SelfFunctionCallNode* call, uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result);
+
 // Overload for QoreValue (used with ValueHolder::operator->())
 static QoreValue evalAndRef(QoreValue& val, ExceptionSink* xsink) {
     if (!val.hasNode()) {
@@ -2369,6 +2374,40 @@ static QoreListNode* buildArgListFromIROperands(
     }
     return arg_list;
 }
+
+//! The arguments of a call as NaN-boxed values read from their slots, which keep their references (issue #7267)
+class IRSelfCallArgs {
+public:
+    DLLLOCAL IRSelfCallArgs(const IRValueSlots& values, const std::vector<QoreIRValue>& operands)
+            : nargs(static_cast<int>(operands.size())) {
+        if (nargs > SmallBufSize) {
+            heap.reset(new uint64_t[nargs]);
+            args = heap.get();
+        }
+        for (int i = 0; i < nargs; ++i) {
+            args[i] = toBits(getIRValue(values, operands[i]));
+        }
+    }
+
+    IRSelfCallArgs(const IRSelfCallArgs&) = delete;
+    IRSelfCallArgs& operator=(const IRSelfCallArgs&) = delete;
+
+    //! returns the arguments, or nullptr if there are none
+    DLLLOCAL uint64_t* get() {
+        return nargs ? args : nullptr;
+    }
+
+    DLLLOCAL int size() const {
+        return nargs;
+    }
+
+private:
+    static constexpr int SmallBufSize = 8;
+    int nargs;
+    uint64_t buf[SmallBufSize];
+    uint64_t* args = buf;
+    std::unique_ptr<uint64_t[]> heap;
+};
 
 // Attempt the decomposed-background path for one of the five supported inner
 // expression shapes (self.method / foo(args) / Class::sm(args) / obj.method(args) /
@@ -8349,6 +8388,22 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 QoreValue arg = getIRValue(values, inv->operands[0]);
                 return fromBits(qore_rt_pseudo_type(toBits(arg)));
             }
+            // an unqualified call of a method of self (m()) on an object of the class of the call or of the method
+            // takes the fast method call path, with the references of the arguments given to the call (issue #7267);
+            // a call that cannot take it is made below, with the arguments as they were
+            if (op == QoreIROpcode::CallMethod) {
+                if (const SelfFunctionCallNode* self_call = qore_get_self_function_call_node(
+                        inv->expr.getInternalNode())) {
+                    if (QoreObject* self = qore_rt_self_call_fast_object(self_call)) {
+                        IRSelfCallArgs self_args(values, inv->operands);
+                        uint64_t result;
+                        if (qore_rt_try_self_call_fast_object(self, self_call, self_args.get(),
+                                GIVEN ? given->get() : nullptr, self_args.size(), xsink, result)) {
+                            return fromBits(result);
+                        }
+                    }
+                }
+            }
             QoreListNode* arg_list = buildArgListFromIROperands(inv->operands, 0,
                 inv->operands.size(), values);
             if (xsink && *xsink) {
@@ -10558,6 +10613,38 @@ DLLLOCAL QORE_IR_COLD_NOINLINE uint64_t irNewObjectGiven(const IRConsumedCallArg
     return rv;
 }
 
+//! makes an unqualified call of a method of self (m()) on an object that qore_rt_self_call_fast_object() returned,
+//! with the references of the temporary arguments that it consumes given to it (issue #7267)
+/** With the fast method call path if the call can take it; otherwise as the generic call makes it, with an argument
+    list that holds the last references of the arguments given to the call
+*/
+DLLLOCAL QORE_IR_COLD_NOINLINE QoreValue irCallSelfMethodGiven(const IRConsumedCallArgs& consumed,
+        const QoreIRInstruction* inst, const SelfFunctionCallNode* call, QoreObject* self, uint64_t* nanboxed_args,
+        int nargs, ExceptionSink* xsink) {
+    IRGivenCallArgs given(nargs, xsink);
+    consumed.give(inst, given);
+    uint64_t result;
+    if (qore_rt_try_self_call_fast_object(self, call, nanboxed_args, given.get(), nargs, xsink, result)) {
+        // a reference given to the call that it did not release is released when it returns
+        given.release();
+        return fromBits(result);
+    }
+    // the argument list takes references of its own, and the references given to the call are released: the list
+    // holds the last ones, which the call moves into its parameters, as the AST interpreter does
+    QoreListNode* arg_list = new QoreListNode(autoTypeInfo);
+    {
+        qore_list_private* priv = qore_list_private::get(*arg_list);
+        priv->reserve(nargs);
+        for (int i = 0; i < nargs; ++i) {
+            QoreValue val = fromBits(nanboxed_args[i]);
+            priv->pushIntern(val.needsRef() ? val.refSelf() : val);
+        }
+    }
+    given.release();
+    SelfFunctionCallNode clone(*call, arg_list);
+    return evalTmpCallAndRef(&clone, xsink);
+}
+
 DLLLOCAL QORE_IR_COLD_NOINLINE QoreValue irEvalInvokeGiven(const IRConsumedCallArgs& consumed,
         const QoreIRInvokeInstruction* inv, const IRValueSlots& values, ExceptionSink* xsink,
         const QoreIRFunction* func, const QoreIRBasicBlock* block, size_t ip, bool preserve_hash_key_weak_result) {
@@ -10596,6 +10683,8 @@ DLLLOCAL bool irInvokeDotEvalMethodDirectGiven(const IRConsumedCallArgs& consume
 DLLLOCAL uint64_t irNewObjectGiven(const IRConsumedCallArgs& consumed, QoreIRNewObjectInstruction* no_inst,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant, const QoreTypeInfo* object_type_info,
         uint64_t* nb_args, int nargs, ExceptionSink* xsink);
+DLLLOCAL QoreValue irCallSelfMethodGiven(const IRConsumedCallArgs& consumed, const QoreIRInstruction* inst,
+        const SelfFunctionCallNode* call, QoreObject* self, uint64_t* nanboxed_args, int nargs, ExceptionSink* xsink);
 DLLLOCAL QoreValue irEvalInvokeGiven(const IRConsumedCallArgs& consumed, const QoreIRInvokeInstruction* inv,
         const IRValueSlots& values, ExceptionSink* xsink, const QoreIRFunction* func, const QoreIRBasicBlock* block,
         size_t ip, bool preserve_hash_key_weak_result);
@@ -10728,6 +10817,10 @@ static QORE_INTERN_NOINLINE int qore_ir_run_lvalue_path_ternary(const QoreIRLVal
             ? "<splice operator>" : "<extract operator>")) {
         // a string enum lvalue refuses the plain string that the operation leaves, as in the AST interpreter
         // (qore#6195)
+        return -1;
+    } else if (vt == NT_LIST
+            && qore_list_private::get(*lvh.getValue().get<QoreListNode>())->checkValid(xsink)) {
+        // a list freed under a weak reference cannot be changed, as by the other changes (qore#7199)
         return -1;
     } else {
         size_t offset = static_cast<size_t>(offset_val.getAsBigInt());
@@ -11661,6 +11754,25 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             locals_slot_cache.set(container_slot_id, QoreValue());
         }
         discardContainerValueSlot(operand_slot_id, container_slot_id, false);
+    };
+    // Takes the reference that the container operand of a container store owns, before
+    // releaseContainerBookkeepingRefs() clears the operand slot: an lvalue load of a local that holds a weak reference
+    // to a list or hash reads the container with a reference of its own (qore#7198), which keeps the container until
+    // the store has changed it; the caller releases it after the store.  An operand that borrows its value (every
+    // other lvalue load) and the value of the local's initializer give nothing.
+    auto holdOwnedContainerOperand = [&](uint32_t container_slot_id, uint32_t vid) -> QoreValue {
+        if (vid >= values.size()
+                || (container_slot_id != UINT32_MAX && container_slot_id < local_init_slots.size()
+                    && local_init_slots[container_slot_id] == vid)
+                || !removeCleanupEntry(cleanup, vid)) {
+            return QoreValue();
+        }
+        QoreValue rv = values[vid];
+        values[vid] = QoreValue();
+        if (vid < load_slot_registered.size()) {
+            load_slot_registered[vid] = false;
+        }
+        return rv;
     };
 
     struct LocalInstantiationCleanup {
@@ -14865,7 +14977,7 @@ load_local_done:
                 if (base.getType() == NT_WEAKREF) {
                     QoreObject* o = base.get<const WeakReferenceNode>()->get();
                     if (o && o->isValid()) {
-                        out = o->evalMember(hka_inst->key_name.c_str(), xsink);
+                        out = qore_object_private::evalMember(o, hka_inst->key_name, xsink);
                     }
                     if (xsink && *xsink) {
                         unwindForException();
@@ -14897,7 +15009,7 @@ load_local_done:
                     out.refSelf();
                 } else if (base.getType() == NT_OBJECT) {
                     QoreObject* o = const_cast<QoreObject*>(base.get<const QoreObject>());
-                    out = o->evalMember(hka_inst->key_name.c_str(), xsink);
+                    out = qore_object_private::evalMember(o, hka_inst->key_name, xsink);
                     if (xsink && *xsink) {
                         unwindForException();
                         cleanupLocalCaches();
@@ -14952,6 +15064,9 @@ load_local_done:
                 QoreValue hash_val = getIRValue(values, hks_inst->operands[0]);
                 QoreValue val      = getIRValue(values, hks_inst->operands[1]);
                 ValueHolder val_holder(val.refSelf(), xsink);
+                // this frame's own reference to a hash read through a weak reference that the local holds, which
+                // keeps the hash until the store has changed it (see holdOwnedContainerOperand())
+                ValueHolder weak_container_hold(xsink);
                 // every error exit of the store returns from this lambda, so that the exception is dispatched to an
                 // enclosing catch block by the common tail below; a false return aborts without an exception
                 auto store_key = [&]() -> bool {
@@ -14964,18 +15079,23 @@ load_local_done:
                         // and the non-closure restriction
                         if ((hks_inst->container_lv || hks_inst->container)
                                 && !isClosureContainer(hks_inst->container_lv, hks_inst->container)) {
+                            weak_container_hold = holdOwnedContainerOperand(hks_inst->container_slot_id,
+                                hks_inst->operands[0].id);
                             releaseContainerBookkeepingRefs(hks_inst->container_slot_id,
                                 hks_inst->operands[0].id);
+                        }
+
+                        // check hashdecl key validity before copying or changing the hash: a key that the hashdecl
+                        // does not declare raises INVALID-MEMBER, as the AST interpreter and the store of a key
+                        // that is not constant (HashKeyStoreDynamic) raise it (qore#7365)
+                        if (qore_hash_private* hp = qore_hash_private::get(*h);
+                                hp->hashdecl && hp->checkLValueKey(hks_inst->key_name.c_str(), xsink)) {
+                            return true;
                         }
 
                         // Keep RHS referenced before COW, matching QoreAssignmentOperatorNode.
                         // This makes `h.b = h` copy the outer hash before storing the original.
                         if (h->reference_count() > 1) {
-                            // COW: create unique copy and update the local variable.
-                            // Pass new_h via TRANSFER (no refSelf) so the typed-lvalue coercion
-                            // in LValueHelper::assign takes the "unique" in-place branch for
-                            // hash<auto!> etc., leaving new_h in TLS at refcount 1.
-                            QoreHashNode* new_h = h->copy();  // refcount 1, unique
                             // Prefer container_lv (set at AOT deser time) over
                             // container->ref.id (fresh-parse path); the container
                             // VarRefNode is not serialized, so AOT-loaded closure
@@ -14992,6 +15112,17 @@ load_local_done:
                                     reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
                                 is_closure = (hks_inst->container->getType() == VT_CLOSURE);
                             }
+                            // a hash that the local designates through a weak reference is changed, not copied, as
+                            // the AST interpreter changes it (qore#7299)
+                            if (!is_closure && qore_weak_local_container_store(lv, h, hks_inst->key_name.c_str(), 0,
+                                    val, xsink)) {
+                                return true;
+                            }
+                            // COW: create unique copy and update the local variable.
+                            // Pass new_h via TRANSFER (no refSelf) so the typed-lvalue coercion
+                            // in LValueHelper::assign takes the "unique" in-place branch for
+                            // hash<auto!> etc., leaving new_h in TLS at refcount 1.
+                            QoreHashNode* new_h = h->copy();  // refcount 1, unique
                             if (is_closure) {
                                 assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
                             } else {
@@ -15113,6 +15244,9 @@ load_local_done:
                 qore_check_lvalue_key_not_slice(key_val, xsink);
                 // hash keys are stored in the default encoding
                 QoreHashKeyHelper key_str(key_val, xsink);
+                // this frame's own reference to a hash read through a weak reference that the local holds, which
+                // keeps the hash until the store has changed it (see holdOwnedContainerOperand())
+                ValueHolder weak_container_hold(xsink);
                 // every error exit of the store returns from this function, so that the exception is dispatched to an
                 // enclosing catch block below
                 auto store_dynamic_key = [&]() {
@@ -15128,6 +15262,8 @@ load_local_done:
                         // and the non-closure restriction
                         if ((hksd_inst->container_lv || hksd_inst->container)
                                 && !isClosureContainer(hksd_inst->container_lv, hksd_inst->container)) {
+                            weak_container_hold = holdOwnedContainerOperand(hksd_inst->container_slot_id,
+                                hksd_inst->operands[0].id);
                             releaseContainerBookkeepingRefs(hksd_inst->container_slot_id,
                                 hksd_inst->operands[0].id);
                         }
@@ -15138,8 +15274,6 @@ load_local_done:
                         }
 
                         if (h->reference_count() > 1) {
-                            // COW: see HashKeyStore above for rationale on *Transfer variants
-                            QoreHashNode* new_h = h->copy();  // refcount 1, unique
                             LocalVar* lv;
                             bool is_closure;
                             if (hksd_inst->container_lv) {
@@ -15150,6 +15284,14 @@ load_local_done:
                                     reinterpret_cast<const LocalVar*>(hksd_inst->container->ref.id));
                                 is_closure = (hksd_inst->container->getType() == VT_CLOSURE);
                             }
+                            // a hash that the local designates through a weak reference is changed, not copied, as
+                            // the AST interpreter changes it (qore#7299)
+                            if (!is_closure && qore_weak_local_container_store(lv, h, key_str.c_str(), 0, val,
+                                    xsink)) {
+                                return;
+                            }
+                            // COW: see HashKeyStore above for rationale on *Transfer variants
+                            QoreHashNode* new_h = h->copy();  // refcount 1, unique
                             if (is_closure) {
                                 assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
                             } else {
@@ -15276,6 +15418,9 @@ load_local_done:
                 // routes the exception to the instruction's exception target (i.e. the enclosing catch block).
                 // Returning directly from an error path here would make the exception bypass any enclosing
                 // try/catch in the same function
+                // this frame's own reference to a list read through a weak reference that the local holds, which
+                // keeps the list until the store has changed it (see holdOwnedContainerOperand())
+                ValueHolder weak_container_hold(xsink);
                 do {
                     if (list_val.getType() == NT_LIST) {
                         QoreListNode* l = list_val.get<QoreListNode>();
@@ -15286,6 +15431,8 @@ load_local_done:
                         // and the non-closure restriction
                         if ((lis_inst->container_lv || lis_inst->container)
                                 && !isClosureContainer(lis_inst->container_lv, lis_inst->container)) {
+                            weak_container_hold = holdOwnedContainerOperand(lis_inst->container_slot_id,
+                                lis_inst->operands[0].id);
                             releaseContainerBookkeepingRefs(lis_inst->container_slot_id,
                                 lis_inst->operands[0].id);
                         }
@@ -15293,9 +15440,6 @@ load_local_done:
                         // After the bookkeeping release, refcount = TLS (1) for an unshared
                         // container; trigger COW if there are additional external references.
                         if (l->reference_count() > 1) {
-                            // COW: see HashKeyStore above for rationale on *Transfer variants.
-                            // Same bug applies to list<auto!> type coercion in LValueHelper::assign.
-                            QoreListNode* new_l = l->copy();  // refcount 1, unique
                             // Prefer container_lv (resolved at AOT deser time) over
                             // container->ref.id (fresh-parse path); the container
                             // VarRefNode is not serialized, so AOT-loaded closure
@@ -15312,6 +15456,14 @@ load_local_done:
                                     reinterpret_cast<const LocalVar*>(lis_inst->container->ref.id));
                                 is_closure = (lis_inst->container->getType() == VT_CLOSURE);
                             }
+                            // a list that the local designates through a weak reference is changed, not copied, as
+                            // the AST interpreter changes it (qore#7299)
+                            if (!is_closure && qore_weak_local_container_store(lv, l, nullptr, index, val, xsink)) {
+                                break;
+                            }
+                            // COW: see HashKeyStore above for rationale on *Transfer variants.
+                            // Same bug applies to list<auto!> type coercion in LValueHelper::assign.
+                            QoreListNode* new_l = l->copy();  // refcount 1, unique
                             if (is_closure) {
                                 assignClosureVarValueTransfer(lv, QoreValue(new_l), xsink);
                             } else {
@@ -20461,22 +20613,32 @@ load_local_done:
                                 // Now remove/delete the final key/element from the container
                                 const LVPathStep& last_step = path_copy.back();
                                 // the type alone: getValue() would box a large int or a special float that the
-                                // parent stores natively in a new node (qore#6094)
+                                // parent stores natively in a new node (qore#6094); a list or a hash that the parent
+                                // holds through a weak reference (NT_WEAKREF_LIST, NT_WEAKREF_HASH) is changed itself
+                                // (qore#7306): the container helpers and qore_lvalue_remove_index() take the type of
+                                // the lvalue
                                 qore_type_t ct = lvh.getType();
                                 bool last_is_hash = (last_step.kind == LVPathStepKind::HashKeyConst
                                         || last_step.kind == LVPathStepKind::HashKey);
                                 bool last_is_hash_list = last_is_hash && last_step.slice_values.size() == 1
                                         && last_step.slice_values[0].getType() == NT_LIST;
                                 if ((last_step.kind == LVPathStepKind::HashKeySlice || last_is_hash_list)
-                                        && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
+                                        && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF
+                                            || ct == NT_WEAKREF_HASH)) {
                                     res = executeLVHashKeySliceRemove(lvh, ct, last_step,
                                             path_inst->unary_op, xsink);
                                 } else if ((last_step.kind == LVPathStepKind::HashKeyConst
-                                        || last_step.kind == LVPathStepKind::HashKey) && ct == NT_HASH) {
-                                    lvh.ensureUnique();
-                                    QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
-                                    res = h->takeKeyValue(last_step.name.c_str());
-                                    lvh.removedValue(res);
+                                        || last_step.kind == LVPathStepKind::HashKey)
+                                        && (ct == NT_HASH || ct == NT_WEAKREF_HASH)) {
+                                    QoreHashNode* h = lvh.getRemovalHash(ct);
+                                    if (h) {
+                                        // the hash of a weak reference is shared with its owners
+                                        // NOTHING if the key does not exist, also with HASH-ERROR for a freed
+                                        // hash
+                                        res = qore_hash_private::get(*h)->takeRemovedKey(
+                                            last_step.name.c_str(), xsink);
+                                        lvh.removedValue(res);
+                                    }
                                     pending_delete_finish = true;
                                 } else if ((last_step.kind == LVPathStepKind::HashKeyConst
                                         || last_step.kind == LVPathStepKind::HashKey)
@@ -20494,7 +20656,8 @@ load_local_done:
                                         || (last_step.kind == LVPathStepKind::ListIndex
                                             && last_step.slice_values.size() == 1
                                             && last_step.slice_values[0].getType() == NT_LIST))
-                                        && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
+                                        && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY
+                                            || ct == NT_WEAKREF_LIST)) {
                                     // a list of indexes, given in the code or by the value of the index expression
                                     res = executeLVListIndexSliceRemove(lvh, ct, last_step,
                                             path_inst->slice_ranges, path_inst->unary_op, xsink);
@@ -20509,7 +20672,8 @@ load_local_done:
                                         path_inst->unary_op == LVUnaryOp::Delete);
                                     pending_delete_finish = true;
                                 } else if (last_step.kind == LVPathStepKind::HashKeySlice
-                                        && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
+                                        && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF
+                                            || ct == NT_WEAKREF_HASH)) {
                                     res = executeLVHashKeySliceRemove(lvh, ct, last_step,
                                             path_inst->unary_op, xsink);
                                 } else if (last_step.kind == LVPathStepKind::ListRangeSlice) {
@@ -20669,6 +20833,10 @@ load_local_done:
                             || path_inst->unary_op == LVUnaryOp::Chomp
                             || path_inst->unary_op == LVUnaryOp::EnsureUnique);
                         LValueHelper lvh(xsink);
+                        // the source of a weak assignment is read as an rvalue reads it (qore#7242)
+                        if (path_inst->unary_op == LVUnaryOp::EnsureUnique) {
+                            lvh.setWeakSourceResolution();
+                        }
                         if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
                             if (no_vivify && !*xsink) {
                                 // navigatePath failed without error — lvalue doesn't exist, no-op
@@ -21634,7 +21802,6 @@ load_local_done:
             }
             // fallthrough
             case QoreIROpcode::Call:
-            case QoreIROpcode::CallMethod:
             case QoreIROpcode::CallStatic: {
                 // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
                 // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
@@ -21652,6 +21819,7 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
+            generic_call_checked:
                 // the call stack frame of the called code is located at the call
                 QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
                 // CallDirect/CallStaticDirect use their own instruction classes (with extra
@@ -21837,6 +22005,62 @@ load_local_done:
                     if (!used_operands) {
                         // Direct eval — avoids evalExprNode() overhead
                         res = evalAndRef(call_expr, xsink);
+                    }
+                }
+                if (xsink && *xsink) {
+                    res.discard(xsink);
+                    return returnAfterUnhandledException();
+                }
+                // Function call runs in its own frame and cannot modify caller's locals
+                invalidateExternalCaches();
+                setValueSlot(values, inst->result.id, res, xsink);
+                if (res.needsRef()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::CallMethod: {
+                // an unqualified call of a method of self (m()) on an object of the class of the call or of the method
+                // takes the fast method call path (issue #7267): with the references of the temporary arguments that it
+                // consumes given to it, as a CallMethodDirect call gives them; any other call, and one that cannot take
+                // it, is made by the generic call code, after the check of the call's target that the call makes
+                // itself; a case of its own, so that the other calls of the generic call code test nothing more
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get(), inst)) {
+                    inst = inst->fused_call_check.get();
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
+                const SelfFunctionCallNode* self_call = qore_get_self_function_call_node(
+                    static_cast<QoreIRExprInstruction*>(inst)->expr.getInternalNode());
+                QoreObject* self = self_call ? qore_rt_self_call_fast_object(self_call) : nullptr;
+                if (!self) {
+                    goto generic_call_checked;
+                }
+                QoreValue res;
+                {
+                    // the call stack frame of the called code is located at the call
+                    QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
+                    IRSelfCallArgs self_args(values, inst->operands);
+                    if (inst->interpreter_gives_call_args && hasConsumedCallArgs(inst)) {
+                        res = irCallSelfMethodGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,
+                            weak_load_temp_slots, borrowed_temp_remaining}, inst, self_call, self, self_args.get(),
+                            self_args.size(), xsink);
+                    } else {
+                        uint64_t result;
+                        if (!qore_rt_try_self_call_fast_object(self, self_call, self_args.get(), nullptr,
+                                self_args.size(), xsink, result)) {
+                            goto generic_call_checked;
+                        }
+                        res = fromBits(result);
                     }
                 }
                 if (xsink && *xsink) {
@@ -24528,7 +24752,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 if (*xsink) {
                     return QoreValue();
                 }
-                ValueHolder rv(o->evalMember(key.c_str(), xsink), xsink);
+                ValueHolder rv(qore_object_private::get(*o)->evalMember(key.c_str(), key.size(), xsink), xsink);
                 if (xsink && *xsink) {
                     return QoreValue();
                 }

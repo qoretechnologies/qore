@@ -281,6 +281,13 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - a stream handler that wants an HTTP/1.x request body with a \c Content-Length as a stream
+      (@ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()") gets it in binary
+      parts of at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize" bytes, each byte once, instead of
+      the whole body both as the constructor's argument and in one part; a body larger than
+      @ref HttpServer::DefaultBodyStreamThreshold "DefaultBodyStreamThreshold" is no longer read before the request
+      is dispatched, so that the memory that a streamed body needs is bounded
+      (<a href="https://github.com/qoretechnologies/qore/issues/7308">issue 7308</a>)
     - the stop notification of a listener (the \c stopc option of @ref HttpServer::HttpListenerOptionInfo
       "HttpListenerOptionInfo") is now also called when the server is destroyed while the listener is stopping, where
       it was skipped; an error that it raises is logged with the listener's logger
@@ -4588,12 +4595,32 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     */
     private *hash<auto> getRequestBody(HttpListener listener, Socket s, reference<hash<auto>> cx, hash<auto> hdr,
             *HttpServer::AbstractHttpRequestHandler handler, int max_body, bool is_multiplexed, bool want_streaming,
-            hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+            bool want_body_reader, hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         *data body;
         # the fields of the request that its body is read and decoded by (qore#6851)
         auto content_type = http_get_field(hdr, "content-type");
         auto content_encoding = http_get_field(hdr, "content-encoding");
         auto req_content_length = http_get_field(hdr, "content-length");
+        if (want_body_reader) {
+            # an HTTP/1.x body with a Content-Length that the stream handler reads in parts (qore#7308): a body that
+            # exceeds the maximum size is refused before any of it is read (one that the server read before the
+            # request was dispatched too, as for a body given whole), and the handler gets the parts from a reader,
+            # which gives the bytes read before the dispatch first, in the same parts as those read from the socket
+            int content_length = http_parse_content_length(req_content_length);
+            if (max_body > 0 && content_length > max_body) {
+                string etxt = sprintf("Content-Length %d exceeds maximum allowed body size %d",
+                    content_length, max_body);
+                listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
+                cx.close = True;
+                sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
+                    cx."response-encoding", hdr.method == "HEAD");
+                return NOTHING;
+            }
+            # the server keeps no copy of the bytes read before the dispatch: each byte reaches the handler once
+            *binary buffered = remove cx."header-info".body;
+            cx."header-info".body_reader = new Http1BodyReader(s, content_length, buffered, max_body);
+            return {"body": NOTHING};
+        }
         if (cx."header-info".body_streaming && !want_streaming) {
             # Handler doesn't support streaming — buffer body on handler thread
             # for backward compatibility (body was previously read by I/O thread)
@@ -5140,10 +5167,22 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 && handler
                 && handler.wantsBodyStreaming(cx, hdr);
 
+            # an HTTP/1.x body with a Content-Length that a stream handler wants as a stream (qore#7308): decided
+            # here, on the handler thread, also for a body that the server read before the request was dispatched,
+            # so that the handler gets the body in the same parts whatever its size; a handler that is not a stream
+            # handler has no way to read the parts, and always gets the body whole
+            bool want_body_reader = !is_multiplexed
+                && !want_streaming
+                && handler
+                && handler.stream
+                && !http_get_field(hdr, "transfer-encoding")
+                && http_parse_content_length(http_get_field(hdr, "content-length")) > 0
+                && handler.wantsBodyStreaming(cx, hdr);
+
             # the request body, read in a method of its own so that its locals and early returns are not part of the
             # frame of this method, which every request runs (qore#5759); NOTHING if the request was answered there
             *hash<auto> body_info = getRequestBody(listener, s, \cx, hdr, handler, max_body, is_multiplexed,
-                want_streaming, info, \async_response_out);
+                want_streaming, want_body_reader, info, \async_response_out);
             if (!body_info) {
                 return;
             }
@@ -5285,6 +5324,17 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 }
             }
 
+            # an HTTP/1.x body that the stream handler did not read completely (because it stopped reading, or the
+            # request was refused before it was called): the bytes that remain cannot be told apart from the next
+            # request, so the connection is closed after the response (qore#7308)
+            if (want_body_reader && cast<Http1BodyReader>(cx."header-info".body_reader).getRemaining()) {
+                cx.close = True;
+                # a response header that a stream request has already set
+                if (rv.hdr.Connection) {
+                    rv.hdr.Connection = "close";
+                }
+            }
+
             # An opt-in interactive bidirectional streaming handler
             # (AbstractStreamRequest::wantsInteractiveStreaming()) drives an interleaved
             # read/reply loop on its dedicated thread and sends the full response itself
@@ -5322,6 +5372,14 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         async_response_out = <HttpAsyncResponseInfo>{
                             "streaming": True,
                             "stream_type": rv.stream_type,
+                        };
+                    } else if (Http2HandlerSocket::hasResponseStarted(request_helper.handler_sock)
+                            || Http3HandlerSocket::hasResponseStarted(request_helper.handler_sock)) {
+                        # the handler submitted the response on its own stream itself: the controller sends no
+                        # other response on the stream, which would be a second response, a malformed message that
+                        # makes an HTTP/3 client fail the stream (qoretechnologies/qore#7212)
+                        async_response_out = <HttpAsyncResponseInfo>{
+                            "streaming": True,
                         };
                     } else {
                         # Async multiplexed mode: the handler claimed reply_sent but didn't actually
@@ -5781,6 +5839,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     rv.body = bzip2(rv.body, levels.bzip2);
                 }
                 if (rv.hdr."Content-Encoding") {
+                    # the handler's content-length was the length of the uncompressed body: the length of the body
+                    # sent is set when the response is sent, as for a response without one; a length that does not
+                    # match the body would make the response malformed (qoretechnologies/qore#7212)
+                    remove rv.hdr."Content-Length";
                     listener.log("cid %d: %s compressed %s: %d -> %d bytes (type: %s)", cx.id,
                         cx."header-info".http3 ? "HTTP/3" : cx."header-info".http2 ? "HTTP/2" : "HTTP/1.x",
                         rv.hdr."Content-Encoding", orig_size, rv.body.size(), rv.body.type());
@@ -6194,6 +6256,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         refs.ctrl @= asyncIo;
         refs.target @= asyncTarget;
         return sub (code<nothing()> c) {
+            # work of the module cleanup that leaves the end to another thread hands itself over to it (qore#7239)
+            c = HttpAsyncSocketIoController::wrapCleanupHandover(c, "HttpServer handler pool submitter");
             *HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = refs.ctrl;
             *HttpServerAsyncIo::HttpAsyncTarget target = refs.target;
             if (ctrl && target) {
@@ -9833,6 +9897,8 @@ class Http3HandlerSocket inherits Qore::Socket {
         bool ended;
         #! set by close(): no more I/O on the stream
         bool closed;
+        #! set when a response has been submitted on the handler's own stream through this object
+        bool response_started;
     }
 
     #! Creates the object for the given stream of a session of the listener's socket
@@ -9911,6 +9977,8 @@ class Http3HandlerSocket inherits Qore::Socket {
     AbstractPollOperation<auto> startPollQuicSendResponse(int session_id, int stream_id, int status_code,
             *hash<auto> headers, *data body) {
         checkStream(session_id, stream_id);
+        # the poll operation submits the response when it runs, which the handler socket does not see: the
+        # response is not recorded as started (qoretechnologies/qore#7212)
         return real.startPollQuicSendResponse(session_id, stream_id, status_code, headers, body);
     }
 
@@ -9927,6 +9995,10 @@ class Http3HandlerSocket inherits Qore::Socket {
     nothing submitQuicResponse(int session_id, int stream_id, int status_code, *hash<auto> headers, *data body) {
         checkStream(session_id, stream_id);
         real.submitQuicResponse(session_id, stream_id, status_code, headers, body);
+        # the response is started once the call has succeeded (qoretechnologies/qore#7212)
+        if (session_id == self.session_id && stream_id == self.stream_id) {
+            setResponseStarted();
+        }
     }
 
     # the methods that end the whole session are refused also for the handler's own session, which can carry
@@ -9969,12 +10041,18 @@ class Http3HandlerSocket inherits Qore::Socket {
     AbstractPollOperation<auto> startPollQuicSendStreamingResponse(int session_id, int stream_id, int status_code,
             *hash<auto> headers, InputStream body, *int chunk_size) {
         checkStream(session_id, stream_id);
+        # the poll operation submits the response when it runs, which the handler socket does not see: the
+        # response is not recorded as started (qoretechnologies/qore#7212)
         return real.startPollQuicSendStreamingResponse(session_id, stream_id, status_code, headers, body, chunk_size);
     }
 
     nothing submitQuicResponseStreaming(int session_id, int stream_id, int status_code, *hash<auto> headers) {
         checkStream(session_id, stream_id);
         real.submitQuicResponseStreaming(session_id, stream_id, status_code, headers);
+        # the response is started once the call has succeeded (qoretechnologies/qore#7212)
+        if (session_id == self.session_id && stream_id == self.stream_id) {
+            setResponseStarted();
+        }
     }
 
     int submitQuicStreamWebSocketClose(int session_id, int stream_id, binary frame, softbool end_stream = False) {
@@ -9995,7 +10073,18 @@ class Http3HandlerSocket inherits Qore::Socket {
     int submitQuicStreamingResponseWithStream(int session_id, int stream_id, int status_code, *hash<auto> headers,
             InputStream body) {
         checkStream(session_id, stream_id);
-        return real.submitQuicStreamingResponseWithStream(session_id, stream_id, status_code, headers, body);
+        auto rv = real.submitQuicStreamingResponseWithStream(session_id, stream_id, status_code, headers, body);
+        # the response is started once the call has succeeded and taken the response (0); with 1, nothing was
+        # submitted (qoretechnologies/qore#7212)
+        if (!rv && session_id == self.session_id && stream_id == self.stream_id) {
+            setResponseStarted();
+        }
+        return rv;
+    }
+
+    int getQuicStreamAckedBytes(int session_id, int stream_id) {
+        checkStream(session_id, stream_id);
+        return real.getQuicStreamAckedBytes(session_id, stream_id);
     }
 
     int waitForQuicStreamDrain(int session_id, int stream_id, timeout timeout_ms = 5s) {
@@ -10011,6 +10100,10 @@ class Http3HandlerSocket inherits Qore::Socket {
     nothing submitQuicConnectResponse(int session_id, int stream_id, int status_code, *hash<auto> headers) {
         checkStream(session_id, stream_id);
         real.submitQuicConnectResponse(session_id, stream_id, status_code, headers);
+        # the response is started once the call has succeeded (qoretechnologies/qore#7212)
+        if (session_id == self.session_id && stream_id == self.stream_id) {
+            setResponseStarted();
+        }
     }
 
     *binary readQuicConnectStreamData(int session_id, int stream_id) {
@@ -10186,6 +10279,24 @@ class Http3HandlerSocket inherits Qore::Socket {
             throw "HTTP3-HANDLER-SOCKET-ERROR", sprintf("the stream (%d) of this HTTP/3 request is closed",
                 stream_id);
         }
+    }
+
+    #! Returns @ref True "True" if the response of the request's stream was started on the given handler socket
+    /** The server does not send another response on a stream whose response the handler submitted itself
+        (qoretechnologies/qore#7212); the class is not exported, so only the module's code can call it
+    */
+    static bool hasResponseStarted(*Socket sock) {
+        return sock instanceof Http3HandlerSocket && cast<Http3HandlerSocket>(sock).isResponseStarted();
+    }
+
+    #! Records that a response was submitted on the handler's own stream
+    private:internal synchronized setResponseStarted() {
+        response_started = True;
+    }
+
+    #! Returns @ref True "True" if a response was submitted on the handler's own stream
+    private:internal synchronized bool isResponseStarted() {
+        return response_started;
     }
 }
 
@@ -10368,18 +10479,16 @@ class Http2HandlerSocket inherits Qore::Socket {
     AbstractPollOperation<auto> startPollSendHttp2Response(int stream_id, int status_code, *hash<auto> headers,
             *data body) {
         checkStream(stream_id);
-        if (stream_id == self.stream_id) {
-            setResponseStarted();
-        }
+        # the poll operation submits the response when it runs, which the handler socket does not see: the
+        # response is not recorded as started (qoretechnologies/qore#7212)
         return real.startPollSendHttp2Response(stream_id, status_code, headers, body);
     }
 
     AbstractPollOperation<auto> startPollSendHttp2StreamingResponse(int stream_id, int status_code,
             *hash<auto> headers, InputStream body, *int chunk_size) {
         checkStream(stream_id);
-        if (stream_id == self.stream_id) {
-            setResponseStarted();
-        }
+        # the poll operation submits the response when it runs, which the handler socket does not see: the
+        # response is not recorded as started (qoretechnologies/qore#7212)
         return real.startPollSendHttp2StreamingResponse(stream_id, status_code, headers, body, chunk_size);
     }
 
@@ -10393,25 +10502,28 @@ class Http2HandlerSocket inherits Qore::Socket {
 
     nothing submitHttp2Response(int stream_id, int status_code, *hash<auto> headers, *data body) {
         checkStream(stream_id);
+        real.submitHttp2Response(stream_id, status_code, headers, body);
+        # the response is started once the call has succeeded: a refused response leaves the stream to be
+        # reset by close() (qoretechnologies/qore#7212)
         if (stream_id == self.stream_id) {
             setResponseStarted();
         }
-        real.submitHttp2Response(stream_id, status_code, headers, body);
     }
 
     nothing submitHttp2ConnectResponse(int stream_id, int status_code, *hash<auto> headers) {
         checkStream(stream_id);
+        real.submitHttp2ConnectResponse(stream_id, status_code, headers);
+        # the response is started once the call has succeeded: a refused response leaves the stream to be
+        # reset by close() (qoretechnologies/qore#7212)
         if (stream_id == self.stream_id) {
             setResponseStarted();
         }
-        real.submitHttp2ConnectResponse(stream_id, status_code, headers);
     }
 
     AbstractPollOperation<auto> startPollSendHttp2ConnectResponse(int stream_id, int status_code, *hash<auto> headers) {
         checkStream(stream_id);
-        if (stream_id == self.stream_id) {
-            setResponseStarted();
-        }
+        # the poll operation submits the response when it runs, which the handler socket does not see: the
+        # response is not recorded as started (qoretechnologies/qore#7212)
         return real.startPollSendHttp2ConnectResponse(stream_id, status_code, headers);
     }
 
@@ -10427,10 +10539,12 @@ class Http2HandlerSocket inherits Qore::Socket {
 
     nothing submitHttp2StreamingResponseHeaders(int stream_id, int status_code, *hash<auto> headers) {
         checkStream(stream_id);
+        real.submitHttp2StreamingResponseHeaders(stream_id, status_code, headers);
+        # the response is started once the call has succeeded: a refused response leaves the stream to be
+        # reset by close() (qoretechnologies/qore#7212)
         if (stream_id == self.stream_id) {
             setResponseStarted();
         }
-        real.submitHttp2StreamingResponseHeaders(stream_id, status_code, headers);
     }
 
     nothing sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False) {
@@ -10470,10 +10584,13 @@ class Http2HandlerSocket inherits Qore::Socket {
 
     int submitHttp2StreamingResponseWithStream(int stream_id, int status_code, *hash<auto> headers, InputStream body) {
         checkStream(stream_id);
-        if (stream_id == self.stream_id) {
+        auto rv = real.submitHttp2StreamingResponseWithStream(stream_id, status_code, headers, body);
+        # the response is started once the call has succeeded and taken the response (0): a refused response, or
+        # one that was not submitted (1), leaves the stream to be reset by close() (qoretechnologies/qore#7212)
+        if (!rv && stream_id == self.stream_id) {
             setResponseStarted();
         }
-        return real.submitHttp2StreamingResponseWithStream(stream_id, status_code, headers, body);
+        return rv;
     }
 
     nothing cancelHttp2Stream(int stream_id) {
@@ -10530,6 +10647,19 @@ class Http2HandlerSocket inherits Qore::Socket {
     #! Records that the handler started the response of its stream
     private:internal synchronized setResponseStarted() {
         response_started = True;
+    }
+
+    #! Returns @ref True "True" if the response of the request's stream was started on the given handler socket
+    /** The server does not send another response on a stream whose response the handler submitted itself
+        (qoretechnologies/qore#7212); the class is not exported, so only the module's code can call it
+    */
+    static bool hasResponseStarted(*Socket sock) {
+        return sock instanceof Http2HandlerSocket && cast<Http2HandlerSocket>(sock).isResponseStarted();
+    }
+
+    #! Returns @ref True "True" if the response of the request's stream was started
+    private:internal synchronized bool isResponseStarted() {
+        return response_started;
     }
 
     #! Records a stream that the handler promised

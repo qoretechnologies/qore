@@ -93,10 +93,19 @@ class QccTestLibqoreTest inherits QUnit::Test {
             # libqore's install name is @rpath/libqore.<n>.dylib; the decoy qcc finds it in the decoy directory
             hash<auto> r = run(sprintf("otool -l %s", shellQuote(qcc)));
             list<string> rpaths = (r.out =~ x/cmd LC_RPATH\n\s+cmdsize \d+\n\s+path (.*) \(offset \d+\)/g) ?? ();
-            if (r.status || rpaths.size() != 1) {
-                throw "DECOY-ERROR", sprintf("%s records %y, not one library directory: %s", qcc, rpaths, r.out);
+            if (r.status) {
+                throw "DECOY-ERROR", sprintf("otool -l %s: %s", qcc, r.out);
             }
-            cmds += sprintf("install_name_tool -rpath %s %s %s", shellQuote(rpaths[0]), shellQuote(decoy_lib),
+            # a qcc linked against an LLVM installed in its own prefix records that directory as well; only the one
+            # that holds libqore is changed
+            string origin = dirname(realpath(qcc));
+            list<string> libqore_rpaths = select rpaths, is_file(replace(replace($1, "@loader_path", origin),
+                "@executable_path", origin) + "/" + base);
+            if (libqore_rpaths.size() != 1) {
+                throw "DECOY-ERROR", sprintf("%s records %y, not exactly one directory holding %s: %s", qcc, rpaths,
+                    base, r.out);
+            }
+            cmds += sprintf("install_name_tool -rpath %s %s %s", shellQuote(libqore_rpaths[0]), shellQuote(decoy_lib),
                 shellQuote(decoy_qcc));
             cmds += sprintf("codesign -f -s - %s", shellQuote(decoy_qcc));
         }

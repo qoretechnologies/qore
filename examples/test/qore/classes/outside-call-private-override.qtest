@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation and linking of method calls resolved when parsing
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class OutsideCallPrivateOverrideTest
+
+#! a call from outside the class hierarchy resolved when parsing calls the method that a call resolved at run time
+#! calls (qore#7211, qore#7218)
+/** A typed call from outside the class hierarchy skipped a private method that the caller cannot call and went on
+    into the parent classes of its class, while a call resolved at run time (an untyped call, call_object_method(),
+    a call reference through an untyped receiver) skips the parent classes of a private override: the typed call
+    called the overridden method (\c R2::m() in the diamond of qore#7211, \c P1::m() in a class tree) where the others
+    called the method of a later parent class or raised \c METHOD-IS-PRIVATE.  The same held for a call from code of a
+    class that the object's class reaches only through a \c private:internal edge (qore#7218), for a call reference
+    through a typed receiver and for a static method call by class name (and \c call_static_method()).  The parse-time
+    lookup of a caller outside the class hierarchy is now the lookup of the run-time calls: a private override hides
+    the methods of the name of its parent classes, and a call that the caller then cannot make is resolved at run time
+    (a normal method) or is a parse error (a call reference through a typed receiver, a static method call), as for a
+    class with only a private method of the name.  The output of every execution mode and of qcc executables (-O0,
+    -O3) must be the expected one.
+
+    The program is in \c outside-call-private-override/.
+*/
+class OutsideCallPrivateOverrideTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/outside-call-private-override";
+
+        const Name = "probe";
+    }
+
+    constructor() : QUnit::Test("OutsideCallPrivateOverrideTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT, tiered and IR-tier execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        set_return_value(main());
+    }
+
+    private string expected() {
+        return ReadOnlyFile::readTextFile(dir + "/" + Name + ".expected");
+    }
+
+    private string command(string mode) {
+        return sprintf("%s -b --enable-debug --exec-mode=%s %s/%s.q", qore_bin, mode, dir, Name);
+    }
+
+    private string run(string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command(mode));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        ExecModeHarness::check_native(r);
+        return r.stdout;
+    }
+
+    testAst() {
+        assertEq(expected(), run("ast"), "ast");
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), run(mode), mode);
+        }
+        # the IR tier of tiered execution runs the calls in the IR interpreter
+        assertEq(expected(), ExecModeHarness::run_ir_tier(command("tiered")), ExecModeHarness::IRTierName);
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC ?? ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        TmpDir tmp("qore-outside-call-private-override-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/%s-O%s", tmp.path, Name, opt);
+            int rc;
+            string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, Name), \rc);
+            if (rc || !is_file(exe)) {
+                testSkip("qcc is not available or cannot compile " + Name + ": " + out);
+            }
+            # -b must be the first argument of a compiled program
+            string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
+            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
+            assertEq(expected(), result, sprintf("-O%s", opt));
+        }
+    }
+}

@@ -1,10 +1,10 @@
 #!/bin/sh
 
 # The ThreadSanitizer job (test-tsan-ubuntu-amd64): builds qore, qcc and the binary modules that its tests load as a
-# Debug build with -fsanitize=thread in the C, C++ and linker flags (a single compilation unit build, as the other CI
-# builds), then runs with it the tests that compile C++ fixtures against libqore (which must get its sanitizer flags,
-# qore#6587 and qore#6682) and the qore/threads and qore/debug suites, with the options of "Running Tests Under
-# ThreadSanitizer" in CLAUDE.md.  The job fails when a test fails or when TSan writes a report (a report also makes
+# Debug build with -fsanitize=thread in the C, C++ and linker flags (a single compilation unit build split into unity
+# chunks: see the build below), then runs with it the tests that compile C++ fixtures against libqore (which must get
+# its sanitizer flags, qore#6587 and qore#6682) and the qore/threads and qore/debug suites, with the options of
+# "Running Tests Under ThreadSanitizer" in CLAUDE.md.  The job fails when a test fails or when TSan writes a report (a report also makes
 # the process exit with 66, but a report of a child process that a test does not check would be missed); the reports
 # are printed in the log and kept with the job's artifacts (tsan-reports/).
 #
@@ -38,6 +38,12 @@ fi
 export QORE_SRC_DIR
 
 export MAKE_JOBS=${MAKE_JOBS:-6}
+# libqore's single compilation unit with -fsanitize=thread needs more than 16 GiB of memory to compile (16.4 GiB on
+# batch AT, 16.2 GiB on AS, against the pod's limit: OOMKilled), so it is split into unity chunks that are compiled at
+# most TSAN_LIBQORE_JOBS at a time: 4 chunks at 2 jobs peak at about 13 GiB for the whole libqore build against 17.5
+# GiB for the single unit at 6 jobs, and build faster (262 s against 306 s on an x86_64 host)
+TSAN_SCU_CHUNKS=${TSAN_SCU_CHUNKS:-4}
+TSAN_LIBQORE_JOBS=${TSAN_LIBQORE_JOBS:-2}
 
 ${QORE_SRC_DIR}/test/docker_test/print-ci-provenance.sh || true
 
@@ -119,7 +125,8 @@ fi
 BUILD_START=$(date +%s)
 echo "=== TSan build start: $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
 cmake -S "${QORE_SRC_DIR}" -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE=debug -DQORE_QCC_TEST_HOOKS=ON \
-    -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX:-/usr} \
+    -DSINGLE_COMPILATION_UNIT=1 -DSINGLE_COMPILATION_UNIT_CHUNKS=${TSAN_SCU_CHUNKS} \
+    -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX:-/usr} \
     -DCMAKE_C_FLAGS="${TSAN_FLAGS}" -DCMAKE_CXX_FLAGS="${TSAN_FLAGS}" \
     -DCMAKE_EXE_LINKER_FLAGS="${TSAN_FLAGS}" -DCMAKE_SHARED_LINKER_FLAGS="${TSAN_FLAGS}" \
     -DCMAKE_MODULE_LINKER_FLAGS="${TSAN_FLAGS}"
@@ -129,6 +136,8 @@ cmake -S "${QORE_SRC_DIR}" -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE=debug -DQORE_QCC
 # load (json, reflection and yaml for QUnit and the test modules; logger_bin, i18n and linenoise for the debugger and
 # sandbox tests of qore/debug and qore/threads; dbitest, the mock DBI driver of Datasource/fork, which run_tests.sh
 # finds in the build's modules/ directory)
+# libqore first, at most TSAN_LIBQORE_JOBS units at a time (see TSAN_SCU_CHUNKS above), then the rest
+${NO_ASLR} cmake --build "${BUILD_DIR}" -j${TSAN_LIBQORE_JOBS} --target libqore
 ${NO_ASLR} cmake --build "${BUILD_DIR}" -j${MAKE_JOBS} --target qore qcc qore-aot-reseal qore-fork-before-init-test \
     json reflection yaml logger_bin i18n linenoise dbitest
 BUILD_END=$(date +%s)
@@ -152,6 +161,13 @@ TSAN_REPORT_DIR="${QORE_SRC_DIR}/tsan-reports"
 mkdir -p "${CORE_DIR}" "${TSAN_REPORT_DIR}"
 chown -R qore:qore ${QORE_SRC_DIR}
 
+TEST_LD_LIBRARY_PATH="${BUILD_DIR}"
+# every run of the TSan build's qore uses the TSan build's libqore: this job does not install its build (unlike
+# test-ubuntu.sh and test-alpine.sh), and the image's library path (/opt/lib, which LD_LIBRARY_PATH puts before the
+# binary's own run path) has the image's older libqore, which lacks the symbols that a newer qore needs (a job failed
+# with "undefined symbol: _Z31qore_set_module_cleanup_timeoutx" in the --module-dir call below)
+export LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+
 # the native modules of the image that this qore loads, in a link farm of the run's own (see ci-native-modules.sh and
 # test-ubuntu.sh)
 . "${QORE_SRC_DIR}/test/docker_test/ci-native-modules.sh"
@@ -162,7 +178,6 @@ qore_ci_native_module_farm "${BUILD_DIR}/qore" "${CI_NATIVE_MODULE_DIR}" "${SYST
 export QORE_MODULE_DIR=${QORE_SRC_DIR}/qlib:${CI_NATIVE_MODULE_DIR}
 export QORE_MODULE_DIR_ONLY=1
 
-TEST_LD_LIBRARY_PATH="${BUILD_DIR}"
 # see "Running Tests Under ThreadSanitizer" in CLAUDE.md
 TSAN_OPTIONS="suppressions=${QORE_SRC_DIR}/test/cpp/tsan.supp die_after_fork=0 report_thread_leaks=0 log_path=${TSAN_REPORT_DIR}/tsan"
 

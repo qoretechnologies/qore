@@ -847,6 +847,35 @@ authenticate();
 
     @since %Qore 3.0
 
+    @subsection sandbox_lent_connections Connections That the Host Lends
+
+    A connection object that the host creates and gives to restricted code is the host's: the code that it was lent
+    to uses the target that the host gave, not one of its own.  A connection object takes a proof of the code that
+    creates it (@ref HttpClientIo::HttpClientCreatorProof "HttpClientCreatorProof"), bound to its HTTP target (TLS or
+    not, host, port), its proxy and its CA certificate locations; the HTTP clients that it creates for code restricted
+    from the \c NETWORK domain (its async client from
+    @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()", the clients of the WebSocket, JSON-RPC,
+    YAML-RPC, MCP and A2A connections, a REST connection's async client) connect only to that target, through that
+    proxy, also if the restricted code changes the connection's members or the client.  A synchronous client of Qore
+    code (a @ref RestClient::RestClient "RestClient" or @ref YamlRpcClient::YamlRpcClient "YamlRpcClient", the
+    client of a server-sent event connection), which makes its requests for any caller from targets that the caller
+    can change, is not given to code restricted from the \c NETWORK domain: the connection's
+    @ref ConnectionProvider::AbstractConnection::get() "get()" and
+    @ref ConnectionProvider::AbstractConnection::getPollImpl() "getPollImpl()" raise \c PERMISSION-DENIED for it,
+    and it uses the connection's async client where that is bound.  A connection that restricted code looks up by
+    name and that is created for it then has no proof of the host (see @ref sandbox_caller_domains), so its clients
+    are refused to it.
+
+    @warning The connections whose clients are not HTTP clients (for example Telnet, SMTP, POP3, IMAP, FTP, Redis,
+    Memcached, MLLP and MongoDB connections) are not yet bound to their creator's target: their module code connects for the code that they were lent to, to the
+    target in the connection's members, which that code can change, and sends the connection's credentials there.
+    The parse options of the restricted code do not stop it; a @ref Qore::SandboxManager "SandboxManager" that
+    governs the code does, as its network policy decides the connections of the module code that it runs (see
+    <a href="https://github.com/qoretechnologies/qore/issues/7327">issue 7327</a>).  Lend such connections only to
+    code governed by a sandbox whose network policy allows just their targets.
+
+    @since %Qore 3.0
+
     @subsection sandbox_terminal_io The Terminal Is Not Lent
 
     A module is a capability (see @ref sandbox_caller_domains), but the terminal is not lent to code that is
@@ -900,7 +929,13 @@ authenticate();
     @ref Qore::parallel_foreach() "parallel_foreach()" raises again in the calling thread, and the error of
     a @ref Qore::Thread::Future "Future" that such code rejects (with @ref Qore::Thread::Promise::setError()
     "Promise::setError()", or by raising in @ref Qore::call_async() "call_async()"), whichever code then gets its
-    result.  Wherever and in
+    result.  The library also does work for such code where no sandbox context is applied, and keeps the origin
+    there (qore#7232, qore#7286): the exceptions and errors of an asynchronous I/O operation that such code submitted
+    (its steps on the controller's I/O thread, such as the error of a @ref Qore::PollPipeline "PollPipeline" that
+    rejects its result @ref Qore::Thread::Promise "Promise"; its completion, also when it is canceled; and the work
+    that its callback workers run for it), the failure of a module load of such code that
+    another thread waits for, and the exception of a stream of such code that the \c json and \c yaml modules read
+    or write.  Wherever and in
     whichever thread the library reports it (the unhandled exception report on @ref Qore::stderr "stderr" of a
     background thread, a @ref Qore::Thread::ThreadPool "ThreadPool" task, an asynchronous I/O timer, callback or task,
     the release of thread-local data or of thread resources, also when the host runs the code, and the error log lines
