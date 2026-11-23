@@ -26442,8 +26442,8 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
 }
 
 //! Parse module metadata from .qm source text
-/** Extracts name, version, desc, author, url, and license from the module { ... } block.
-    Falls back to deriving the module name from the filename label.
+/** Extracts the module name from the module declaration and the dependencies from the %requires directives; the
+    values of the module block are taken from the parsed block (see qoreAotModuleInfoFromContext()).
 */
 static bool parseModuleMetadataImpl(const char* source, int source_len, const char* label,
         QoreAOTModuleInfo& info, std::string& error) {
@@ -26504,69 +26504,10 @@ static bool parseModuleMetadataImpl(const char* source, int source_len, const ch
     }
     info.name = src.substr(name_start, name_end - name_start);
 
-    // Find the module block: everything between { and matching }
-    size_t brace_start = src.find('{', name_end);
-    if (brace_start == std::string::npos) {
-        error = "missing '{' after module declaration";
-        return false;
-    }
-    size_t brace_end = src.find('}', brace_start);
-    if (brace_end == std::string::npos) {
-        error = "missing '}' in module declaration";
-        return false;
-    }
-    std::string block = src.substr(brace_start + 1, brace_end - brace_start - 1);
-
-    // Parse key = "value" pairs
-    auto extractValue = [&](const std::string& key) -> std::string {
-        std::string pattern = key + " ";
-        size_t kpos = block.find(pattern);
-        if (kpos == std::string::npos) {
-            pattern = key + "=";
-            kpos = block.find(pattern);
-        }
-        if (kpos == std::string::npos) {
-            return "";
-        }
-        // Find '=' after key
-        size_t eq = block.find('=', kpos + key.size());
-        if (eq == std::string::npos) {
-            return "";
-        }
-        // Find opening quote
-        size_t q1 = block.find('"', eq + 1);
-        if (q1 == std::string::npos) {
-            return "";
-        }
-        // Find closing quote
-        size_t q2 = block.find('"', q1 + 1);
-        if (q2 == std::string::npos) {
-            return "";
-        }
-        return block.substr(q1 + 1, q2 - q1 - 1);
-    };
-
-    info.version = extractValue("version");
-    info.desc = extractValue("desc");
-    info.author = extractValue("author");
-    info.url = extractValue("url");
-    info.license = extractValue("license");
-
-    if (info.version.empty()) {
-        error = "module 'version' not found in module block";
-        return false;
-    }
-    if (info.desc.empty()) {
-        error = "module 'desc' not found in module block";
-        return false;
-    }
-    if (info.author.empty()) {
-        error = "module 'author' not found in module block";
-        return false;
-    }
-    if (info.license.empty()) {
-        info.license = "MIT";
-    }
+    // the values of the module block (version, desc, author, url, license) are taken from the block as the parser
+    // reads it, when the module's main file has been parsed (see qoreAotModuleInfoFromContext()), as the module
+    // loader takes them: a scan of the text here cannot read a block as the parser does (a brace or an escaped quote
+    // in a string, a closure in the block, a comment) and refused blocks that the loader accepts (qore#7315)
 
     // Extract non-reexport dependencies from %requires directives
     // These are exported so the module manager can load them before calling init.
@@ -26747,6 +26688,46 @@ static bool parseModuleMetadata(const char* source, int source_len, const char* 
         error = std::string(label) + ":" + std::to_string(line) + ": invalid UTF-8 in source";
     }
     return false;
+}
+
+//! Takes the metadata of a module from its parsed module block, as the module loader does
+/** The module block is read by the parser when the module's main file is parsed, which checks it as it does when the
+    module is loaded (QoreModuleDefContext::set()); a module without a version, description or author is refused with
+    the error of the loader (see QoreModuleManager::setupUserModule()) (qore#7315).
+
+    @param qmd the module definition context that the main file of the module was parsed with
+    @param path the path of the module, for the error message
+    @param info receives the metadata; its \c name is the name of the module
+    @param error receives the error message when the module is refused
+
+    @return true if the metadata is complete, false with @a error set if not
+*/
+static bool qoreAotModuleInfoFromContext(const QoreModuleDefContext& qmd, const std::string& path,
+        QoreAOTModuleInfo& info, std::string& error) {
+    auto missing = [&](const char* what) {
+        error = "module '" + path + "': feature '" + info.name + "': missing " + what;
+        return false;
+    };
+    const char* desc = qmd.get("desc");
+    if (!desc) {
+        return missing("description");
+    }
+    const char* version = qmd.get("version");
+    if (!version) {
+        return missing("version");
+    }
+    const char* author = qmd.get("author");
+    if (!author) {
+        return missing("author");
+    }
+    info.desc = desc;
+    info.version = version;
+    info.author = author;
+    const char* url = qmd.get("url");
+    info.url = url ? url : "";
+    const char* license = qmd.get("license");
+    info.license = license ? license : "MIT";
+    return true;
 }
 
 //! Map a license string to a qore_license_t enum value
@@ -28332,9 +28313,6 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     if (!parseModuleMetadata(source_text, source_len, label, mod_info, error)) {
         return false;
     }
-    printd(2, "AOT module: name='%s' version='%s' desc='%s'\n",
-        mod_info.name.c_str(), mod_info.version.c_str(), mod_info.desc.c_str());
-
     // Step 2: Parse the module source to get the namespace tree with functions
     // We need PO_IN_MODULE for the parser to handle the module block
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE | PO_NO_TOP_LEVEL_STATEMENTS
@@ -28389,6 +28367,15 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         // the module's parse options are checked as they are at the end of its source; the module header's
         // restrictions ended with the header, and closing the module context leaves the options as they are
         parsed_po = qpgm->getParseOptions();
+
+        // the metadata of the module block, as the parser read it (qore#7315)
+        if (!xsink.isException() && !qoreAotModuleInfoFromContext(mod_ctx, label ? label : "", mod_info, error)) {
+            mod_ctx.close();
+            qoreAotReportParseDiagnostics(wsink, true);
+            return false;
+        }
+        printd(2, "AOT module: name='%s' version='%s' desc='%s'\n",
+            mod_info.name.c_str(), mod_info.version.c_str(), mod_info.desc.c_str());
 
         // Capture init closure before mod_ctx destroys it
         if (!xsink.isException() && mod_ctx.hasInit()) {
@@ -28810,8 +28797,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         return false;
     }
 
-    printd(2, "AOT split module: name='%s' version='%s' desc='%s' dir='%s'\n",
-        mod_info.name.c_str(), mod_info.version.c_str(), mod_info.desc.c_str(), dir_str.c_str());
+    printd(2, "AOT split module: name='%s' dir='%s'\n", mod_info.name.c_str(), dir_str.c_str());
 
     // Step 5: Create QoreProgram and set up module context
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE | PO_NO_TOP_LEVEL_STATEMENTS
@@ -28861,6 +28847,12 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         }
         if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
+            return false;
+        }
+        // the metadata of the module block, as the parser read it in the main file (qore#7315)
+        if (!qoreAotModuleInfoFromContext(mod_ctx, qm_path, mod_info, error)) {
+            mod_ctx.close();
+            qoreAotReportParseDiagnostics(wsink, true);
             return false;
         }
 
@@ -32843,6 +32835,12 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             mod_ctx.close();
             return false;
         }
+        // the metadata of the module block, as the parser read it in the main file (qore#7315)
+        if (!qoreAotModuleInfoFromContext(mod_ctx, qm_path, mod_info, error)) {
+            mod_ctx.close();
+            qoreAotReportParseDiagnostics(wsink, true);
+            return false;
+        }
 
         QoreDir moduleDir(&xsink, QCS_DEFAULT, dir_canon.c_str());
         if (xsink.isException()) {
@@ -33380,9 +33378,8 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         return false;
     }
 
-    printd(2, "AOT aggregator: name='%s' version='%s' inputs=%zu dir='%s'\n",
-        mod_info.name.c_str(), mod_info.version.c_str(),
-        object_paths.size(), dir_str.c_str());
+    printd(2, "AOT aggregator: name='%s' inputs=%zu dir='%s'\n", mod_info.name.c_str(), object_paths.size(),
+        dir_str.c_str());
 
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE
         | PO_NO_TOP_LEVEL_STATEMENTS | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
@@ -33427,6 +33424,12 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         }
         if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
+            return false;
+        }
+        // the metadata of the module block, as the parser read it in the main file (qore#7315)
+        if (!qoreAotModuleInfoFromContext(mod_ctx, qm_path, mod_info, error)) {
+            mod_ctx.close();
+            qoreAotReportParseDiagnostics(wsink, true);
             return false;
         }
 
@@ -33961,9 +33964,8 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         return false;
     }
 
-    printd(2, "AOT archive: name='%s' version='%s' inputs=%zu dir='%s'\n",
-        mod_info.name.c_str(), mod_info.version.c_str(),
-        object_paths.size(), dir_str.c_str());
+    printd(2, "AOT archive: name='%s' inputs=%zu dir='%s'\n", mod_info.name.c_str(), object_paths.size(),
+        dir_str.c_str());
 
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE
         | PO_NO_TOP_LEVEL_STATEMENTS | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
@@ -34008,6 +34010,12 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         }
         if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
+            return false;
+        }
+        // the metadata of the module block, as the parser read it in the main file (qore#7315)
+        if (!qoreAotModuleInfoFromContext(mod_ctx, qm_path, mod_info, error)) {
+            mod_ctx.close();
+            qoreAotReportParseDiagnostics(wsink, true);
             return false;
         }
 

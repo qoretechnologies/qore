@@ -1,0 +1,13 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# a separated module whose block the module loader accepts and the scan of earlier qcc versions refused (qore#7315)
+
+%modern
+
+module BlockSplit {
+    version = "2.1";
+    /* a } in a block comment */
+    desc = "split {module} with an escaped \" and a }";
+    author = "Qore {Technologies}";
+    url = "https://qore.org";
+    license = "LGPL";
+}
