@@ -127,8 +127,9 @@ printf(\"%s %s %s\\n\", @NAME@::classify(), @NAME@::scriptDir(), get_module_hash
 ";
 
         #! the loads through a link to a module directory or to another directory: label -> (program, QORE_MODULE_DIR,
-        #! expected); the module keeps the path that the search found it by, also when it is library code, which is
-        #! judged where the link leads
+        #! expected); a module that is library code, which is judged where the link leads, keeps the path that the
+        #! search found it by in a directory of the process-wide module path, and otherwise (a path that the program
+        #! prepends or gives) the canonical path judged; a module that is not library code keeps the path given
         const RecordedLoads = (
             ("a source module, module path entry through a link", "rec-plain", "@D@/modslink",
                 "library @D@/modslink/ @D@/modslink/PlainProbe.qm"),
@@ -139,16 +140,63 @@ printf(\"%s %s %s\\n\", @NAME@::classify(), @NAME@::scriptDir(), get_module_hash
             ("a separated module, module path entry through a link", "rec-sep", "@D@/modslink",
                 "library @D@/modslink/SepProbe/ @D@/modslink/SepProbe/SepProbe.qm"),
             ("a source module, prepended path through a link", "rec-plain-p", "@D@/mods",
-                "library @D@/modslink/ @D@/modslink/PlainProbe.qm"),
+                "library @D@/mods/ @D@/mods/PlainProbe.qm"),
             ("an AOT module, prepended path through a link", "rec-aot-p", "@D@/mods",
-                "library @D@/modslink/ @D@/modslink/LinkedAot.qmod"),
+                "library @D@/mods/ @D@/mods/LinkedAot.qmod"),
             ("a split AOT module, prepended path through a link", "rec-split-p", "@D@/mods",
-                "library @D@/modslink/SplitProbe/ @D@/modslink/SplitProbe/SplitProbe.qmod"),
+                "library @D@/mods/SplitProbe/ @D@/mods/SplitProbe/SplitProbe.qmod"),
             ("a separated module, prepended path through a link", "rec-sep-p", "@D@/mods",
-                "library @D@/modslink/SepProbe/ @D@/modslink/SepProbe/SepProbe.qm"),
+                "library @D@/mods/SepProbe/ @D@/mods/SepProbe/SepProbe.qm"),
+            ("a source module, its path through a link", "rec-path-plain", "@D@/mods",
+                "library @D@/mods/ @D@/mods/PlainProbe.qm"),
+            ("an AOT module, its path through a link", "rec-path-aot", "@D@/mods",
+                "library @D@/mods/ @D@/mods/LinkedAot.qmod"),
+            ("a source module, its path through a link, by sandboxed code", "rec-sbx-path-plain", "@D@/mods",
+                "library @D@/mods/ @D@/mods/PlainProbe.qm"),
+            ("an AOT module, its path through a link, by sandboxed code", "rec-sbx-path-aot", "@D@/mods",
+                "library @D@/mods/ @D@/mods/LinkedAot.qmod"),
+            ("a source module, prepended path through a link, by sandboxed code", "rec-sbx-p-plain", "@D@/mods",
+                "library @D@/mods/ @D@/mods/PlainProbe.qm"),
+            ("an AOT module, prepended path through a link, by sandboxed code", "rec-sbx-p-aot", "@D@/mods",
+                "library @D@/mods/ @D@/mods/LinkedAot.qmod"),
             ("a module outside the module directories, prepended path through a link", "rec-out-p", "@D@/mods",
                 "not library @D@/outlink/ @D@/outlink/Out2Probe.qm"),
         );
+
+        #! a program that loads a module by its path through a link to the module directory, in its own Program or in a
+        #! sandboxed one, and prints what the module keeps; @LOAD@ and @NAME@ set
+        const ByPathRecorded = "%modern
+%new-style
+string path = get_script_dir() + \"../modslink/@FILE@\";
+@LOAD@
+printf(\"%s %s %s\\n\", call(\"@NAME@::classify\"), call(\"@NAME@::scriptDir\"), get_module_hash().@NAME@.filename);
+";
+
+        #! the loads of ByPathRecorded: name -> (module file, module, how it is loaded)
+        const PathPrograms = {
+            "rec-path-plain": ("PlainProbe.qm", "PlainProbe", "own"),
+            "rec-path-aot": ("LinkedAot.qmod", "LinkedAot", "own"),
+            "rec-sbx-path-plain": ("PlainProbe.qm", "PlainProbe", "sandboxed path"),
+            "rec-sbx-path-aot": ("LinkedAot.qmod", "LinkedAot", "sandboxed path"),
+            "rec-sbx-p-plain": ("PlainProbe.qm", "PlainProbe", "sandboxed prepend"),
+            "rec-sbx-p-aot": ("LinkedAot.qmod", "LinkedAot", "sandboxed prepend"),
+        };
+
+        #! how ByPathRecorded loads a module: in its own Program, by path in a sandboxed Program, or by name in a
+        #! sandboxed Program that prepends the link to the module directory
+        const PathLoads = {
+            "own": "load_module(path);
+code call = auto sub (string f) { return call_function(f); };",
+            "sandboxed path": "Program p(PO_NEW_STYLE);
+p.setSandboxManager(new SandboxManager());
+p.parse(\"sub load(string path) { load_module(path); }\", \"sandboxed\");
+p.callFunction(\"load\", path);
+code call = auto sub (string f) { return p.callFunction(f); };",
+            "sandboxed prepend": "Program p(PO_NEW_STYLE);
+p.setSandboxManager(new SandboxManager());
+p.parse(sprintf(\"%%prepend-module-path \\\"%s\\\"\\n%%requires @NAME@\\n\", dirname(path)), \"sandboxed\");
+code call = auto sub (string f) { return p.callFunction(f); };",
+        };
 
         #! the programs of RecordedLoads: name -> (prepended path or nothing, module)
         const RecordedPrograms = {
@@ -302,6 +350,10 @@ a link elsewhere to a file in a module directory: library @D@/mods/InitHelper.qm
         }
         writeFile(dir + "/scripts/by-name.q", ByName);
         writeFile(dir + "/scripts/debug-checks.q", DebugChecks);
+        foreach hash<auto> i in (PathPrograms.pairIterator()) {
+            string code = replace(replace(ByPathRecorded, "@LOAD@", PathLoads{i.value[2]}), "@FILE@", i.value[0]);
+            writeFile(dir + "/scripts/" + i.key + ".q", replace(code, "@NAME@", i.value[1]));
+        }
         foreach hash<auto> i in (RecordedPrograms.pairIterator()) {
             string prepend = i.value[0] ? sprintf("%%prepend-module-path \"%s\"", i.value[0]) : "";
             writeFile(dir + "/scripts/" + i.key + ".q", replace(replace(ByNameRecorded, "@PREPEND@", prepend),
