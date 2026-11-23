@@ -25,6 +25,24 @@
 #! Main namespace
 public namespace HttpClientIo {
 
+#! The register of the creator proofs that were issued and of their grants (qore#7262, qore#7236)
+/** Not public: only HttpClientCreatorProof uses it.  It is referenced by the class's static member and by every proof,
+    so it lives as long as any proof that is recorded in it
+*/
+class HttpClientCreatorProofRegistry {
+    public {
+        #! the lock of \c issued and \c grants
+        Mutex lock();
+
+        #! the proofs issued and not yet destroyed, by object
+        hash<string, bool> issued = {};
+
+        #! the grants of proofs to the next client of their target created in a thread (see
+        #! HttpClientCreatorProofGrant), by thread, innermost last; each has the \c id of its grant and its \c proof
+        hash<string, list<hash<auto>>> grants = {};
+    }
+}
+
 #! An opaque proof that the code that created a client passed the caller check of a connection manager (qore#7262)
 /** A client that creates its @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" lazily,
     when it connects or reconnects, or again when it is closed, takes a proof with forClient() when it is created and
@@ -74,15 +92,15 @@ public final class HttpClientCreatorProof {
         *string ca_file;
         *string ca_path;
 
-        #! the proofs issued and not yet destroyed, by object
-        static hash<string, bool> issued = {};
+        #! the register of the proofs that were issued and of their grants (see HttpClientCreatorProofRegistry)
+        static HttpClientCreatorProofRegistry registry();
 
-        #! the lock of \c issued and \c grants
-        static Mutex lock();
-
-        #! the grants of proofs to the next client of their target created in a thread (see
-        #! HttpClientCreatorProofGrant), by thread, innermost last; each has the \c id of its grant and its \c proof
-        static hash<string, list<hash<auto>>> grants = {};
+        #! the register that this proof is recorded in
+        /** Each proof keeps a reference to the register, so that the register outlives every proof that is recorded
+            in it: a proof can be destroyed after the static members of the class were cleared, when the program ends
+            and an object that holds a proof (a client or a connection manager) is released after them (qore#7236)
+        */
+        HttpClientCreatorProofRegistry reg;
 
         #! True for the schemes that use TLS, False for the plain ones, of the schemes that are mapped to HTTP
         const SchemeTls = {
@@ -102,14 +120,18 @@ public final class HttpClientCreatorProof {
         }
         ca_file = opts.ssl_ca_file;
         ca_path = opts.ssl_ca_path;
-        AutoLock al(lock);
-        issued{self.uniqueHash()} = True;
+        reg = registry;
+        AutoLock al(reg.lock);
+        reg.issued{self.uniqueHash()} = True;
     }
 
     #! Withdraws the proof
+    /** Uses the register that the proof was recorded in, which the proof keeps, so that it works whenever the proof is
+        destroyed, also after the static members of the class were cleared at the end of the program (qore#7236)
+    */
     destructor() {
-        AutoLock al(lock);
-        remove issued{self.uniqueHash()};
+        AutoLock al(reg.lock);
+        remove reg.issued{self.uniqueHash()};
     }
 
     #! A copy of a proof is not a proof
@@ -171,17 +193,18 @@ public final class HttpClientCreatorProof {
             # the origin of the client's URL (a URL has one origin at most)
             *string want = HttpClientCreatorProof::getOrigins(url).firstKey();
             if (want) {
-                AutoLock al(lock);
+                HttpClientCreatorProofRegistry r = registry;
+                AutoLock al(r.lock);
                 string tid = string(gettid());
-                if (*list<hash<auto>> l = grants{tid}) {
+                if (*list<hash<auto>> l = r.grants{tid}) {
                     for (int i = l.size() - 1; i >= 0; --i) {
                         HttpClientCreatorProof granted = l[i].proof;
                         if (granted.origins{want}) {
                             splice l, i, 1;
                             if (l) {
-                                grants{tid} = l;
+                                r.grants{tid} = l;
                             } else {
-                                remove grants{tid};
+                                remove r.grants{tid};
                             }
                             return granted;
                         }
@@ -194,8 +217,9 @@ public final class HttpClientCreatorProof {
 
     #! Returns True if the given object is a proof that this class issued
     static bool genuine(object proof) {
-        AutoLock al(lock);
-        return issued{proof.uniqueHash()} ?? False;
+        HttpClientCreatorProofRegistry r = registry;
+        AutoLock al(r.lock);
+        return r.issued{proof.uniqueHash()} ?? False;
     }
 
 
@@ -283,9 +307,9 @@ public final class HttpClientCreatorProof {
     */
     HttpClientCreatorProofGrant grantNext() {
         HttpClientCreatorProofGrant grant(self);
-        AutoLock al(lock);
+        AutoLock al(reg.lock);
         hash<auto> entry = {"id": grant.uniqueHash(), "proof": self};
-        grants{string(gettid())} += (entry,);
+        reg.grants{string(gettid())} += (entry,);
         return grant;
     }
 
@@ -293,16 +317,16 @@ public final class HttpClientCreatorProof {
     /** @param id the ID of the grant: the unique hash of its HttpClientCreatorProofGrant object
     */
     revokeGrant(string id) {
-        AutoLock al(lock);
+        AutoLock al(reg.lock);
         string tid = string(gettid());
-        *list<hash<auto>> l = grants{tid};
+        *list<hash<auto>> l = reg.grants{tid};
         for (int i = l.size() - 1; i >= 0; --i) {
             if (l[i].id == id && l[i].proof === self) {
                 splice l, i, 1;
                 if (l) {
-                    grants{tid} = l;
+                    reg.grants{tid} = l;
                 } else {
-                    remove grants{tid};
+                    remove reg.grants{tid};
                 }
                 return;
             }
