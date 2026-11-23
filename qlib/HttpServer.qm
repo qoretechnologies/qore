@@ -209,6 +209,10 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
       @ref HttpServer::HttpServer::removeHandlerFromListenerID() "removeHandlerFromListenerID()" also removes the propagated handler from the paired
       QUIC listener
     - Stopping a TCP listener also stops its paired QUIC listener
+    - A listener whose paired QUIC listener cannot be bound is not added: the listener method raises
+      \c HTTPSERVER-H3-BIND-ERROR, whose argument has the failures of the binds in its \c attempts key.  For a random
+      port (service \c 0), the listener is first created again on a fresh port, up to 10 times in all; each failure is
+      logged with its system error number
     - The \c Alt-Svc header is set per-listener so each TCP listener only advertises its own
       QUIC counterpart
 
@@ -1711,6 +1715,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+        @throw HTTPSERVER-H3-BIND-ERROR the paired QUIC listener of an HTTP/3 listener could not be bound (see
+        @ref httpserverhttp3)
 
         @note if \c bind begins with a "/" character then it is assumed to be a UNIX socket path and the \a family
         key of the \a info hash is ignored
@@ -1744,6 +1750,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+        @throw HTTPSERVER-H3-BIND-ERROR the paired QUIC listener of an HTTP/3 listener could not be bound (see
+        @ref httpserverhttp3)
 
         @note This method returns immediately after submitting setup work. Call
         @ref Qore::Thread::Future::get() "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
@@ -1775,6 +1783,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+        @throw HTTPSERVER-H3-BIND-ERROR the paired QUIC listener of an HTTP/3 listener could not be bound (see
+        @ref httpserverhttp3)
 
         @note if \c bind begins with a "/" character then it is assumed to be a UNIX socket path and the \a family
         key of the \a info hash is ignored
@@ -1803,6 +1813,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+        @throw HTTPSERVER-H3-BIND-ERROR the paired QUIC listener of an HTTP/3 listener could not be bound (see
+        @ref httpserverhttp3)
 
         @note This method returns immediately after submitting setup work. Call
         @ref Qore::Thread::Future::get() "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
@@ -1834,6 +1846,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+        @throw HTTPSERVER-H3-BIND-ERROR the paired QUIC listener of an HTTP/3 listener could not be bound (see
+        @ref httpserverhttp3)
 
         @note This method blocks until async I/O is ready to accept connections.
         Use @ref HttpServer::HttpServer::addListener "addListener(hash<HttpListenerOptionInfo>)" with \c sync: \c False to add listeners without blocking.
@@ -1863,6 +1877,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+        @throw HTTPSERVER-H3-BIND-ERROR the paired QUIC listener of an HTTP/3 listener could not be bound (see
+        @ref httpserverhttp3)
 
         @note This method returns immediately after submitting setup work. Call
         @ref Qore::Thread::Future::get() "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
@@ -1892,6 +1908,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+        @throw HTTPSERVER-H3-BIND-ERROR the paired QUIC listener of an HTTP/3 listener could not be bound (see
+        @ref httpserverhttp3)
 
         @note if \a sock begins with a "/" character then it is assumed to be a UNIX socket path and the \a family
         key is ignored
@@ -1927,6 +1945,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+        @throw HTTPSERVER-H3-BIND-ERROR the paired QUIC listener of an HTTP/3 listener could not be bound (see
+        @ref httpserverhttp3)
 
         @note This method returns immediately after submitting setup work. Call
         @ref Qore::Thread::Future::get() "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
@@ -4140,12 +4160,12 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
         # A "random port" request (service == "0") lets us transparently retry
         # if the kernel-assigned TCP port turns out to be taken on UDP by
-        # something else in the process — most commonly a still-lingering
-        # ephemeral UDP socket from a previous H3 client in the same test
-        # process.  For an explicit port the caller committed to that port
-        # and we fail loudly instead of silently degrading to TCP-only (the
-        # old behaviour would leave clients hitting QUIC-HANDSHAKE-TIMEOUT
-        # with no indication why).
+        # something else (EADDRINUSE) — most commonly the ephemeral UDP socket
+        # of a QUIC client.  Any other failure of the bind would fail on a
+        # fresh port as well, and is raised at once.  For an explicit port the
+        # caller committed to that port, so it is not retried.  A listener
+        # whose paired QUIC listener cannot be bound is never kept TCP-only:
+        # its HTTP/3 clients would get no answer (qore#7420).
         bool random_port = (info.service == "0");
         bool needs_h3 = enable_h3 && info.cert && info.key && (info.enable_h3 ?? True);
         int max_attempts = (random_port && needs_h3) ? 10 : 1;
@@ -4167,6 +4187,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 sprintf("there is already an active listener with name %y", info.name);
         }
 
+        # the failures of the binds of the paired QUIC listener, one per attempt: the error code, its description and
+        # the system error number, if any (qore#7420)
+        list<string> h3_failures = ();
         for (int attempt = 1; attempt <= max_attempts; ++attempt) {
 
             c.add();
@@ -4210,6 +4233,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             bool h3_ok = True;
             *string h3_err;
             *string h3_desc;
+            # the system error number of the failure, if the exception gives one
+            *int h3_errno;
             if (needs_h3) {
                 try {
                     # Use the actual listener socket info to get the resolved address
@@ -4263,29 +4288,30 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     h3_ok = False;
                     h3_err = ex.err;
                     h3_desc = ex.desc;
+                    if (ex.arg.typeCode() == NT_INT) {
+                        h3_errno = ex.arg;
+                    }
                 }
             }
 
             if (!h3_ok) {
-                if (random_port && attempt < max_attempts) {
-                    # Retry with a fresh random port.  Tear down everything
-                    # bound so far so the next iteration starts clean.  This
-                    # is strictly better than silently degrading to TCP-only
-                    # on a random-port listener, because the caller asked for
-                    # enable_h3 and has no way to observe that it didn't take.
-                    log("WARNING: attempt %d/%d: paired QUIC listener bind "
-                        "failed on port %d (%s: %s); retrying with a fresh "
-                        "random port", attempt, max_attempts,
-                        l.getInfo().port, h3_err, h3_desc);
-                    remove listeners{id};
-                    remove smap{effective_sock};
-                    remove nmap{info.name};
-                    try { l.stop(); } catch () {}
-                    # l.stop() drives listenerStopped() which already calls
-                    # c.done(); only decrement here if l.stop() didn't get
-                    # there (i.e. threw before reaching it).  Mirrors the
-                    # WAITGROUP-ERROR defense in listenerStopped() at the
-                    # top of this class.
+                int failed_port = l.getInfo().port;
+                # the description of a system error has the error's text already
+                string failure = sprintf("attempt %d/%d on port %d: %s: %s%s", attempt, max_attempts, failed_port,
+                    h3_err, h3_desc, exists h3_errno ? sprintf(" (errno %d)", h3_errno) : "");
+                push h3_failures, failure;
+                # Tear down everything bound so far: a retry starts clean, and a listener whose paired QUIC listener
+                # could not be bound is not kept: the caller asked for HTTP/3 and has no way to observe that it did
+                # not take, and its clients would get no answer to their QUIC datagrams (qore#7420)
+                remove listeners{id};
+                remove smap{effective_sock};
+                remove nmap{info.name};
+                try { l.stop(); } catch () {}
+                # once the listener has stopped, l.stop() has called listenerStopped(), which decremented the count
+                # of running listeners for it; only a stop that failed before that leaves it to be done here
+                # (qore#7420: it was done in both cases, so each failed attempt decremented the count of another
+                # running listener, and stop() no longer waited for it)
+                if (!l.isStopped()) {
                     try {
                         c.done();
                     } catch (hash<ExceptionInfo> ex) {
@@ -4293,40 +4319,29 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             rethrow;
                         }
                     }
+                }
+                if (random_port && attempt < max_attempts && h3_errno == EADDRINUSE) {
+                    # a random port: retry on a fresh port (the kernel-assigned TCP port can be taken on UDP by
+                    # something else, such as the ephemeral UDP socket of a QUIC client)
+                    log("WARNING: paired QUIC listener bind failed, %s; retrying with a fresh random port", failure);
                     continue;
                 }
                 if (!random_port) {
-                    # Explicit port — caller committed to this port; we can't
-                    # pick a different one behind their back.  Roll back the
-                    # TCP listener and surface a hard error so misconfiguration
-                    # (port in use, no IPv6 support, etc.) is visible.
-                    log("ERROR: failed to bind paired QUIC listener on "
-                        "explicit port %s: %s: %s",
-                        info.service, h3_err, h3_desc);
-                    remove listeners{id};
-                    remove smap{effective_sock};
-                    remove nmap{info.name};
-                    try { l.stop(); } catch () {}
-                    # See the random_port retry branch above for rationale.
-                    try {
-                        c.done();
-                    } catch (hash<ExceptionInfo> ex) {
-                        if (ex.err != "WAITGROUP-ERROR") {
-                            rethrow;
-                        }
-                    }
+                    # an explicit port: the caller committed to that port; we can't pick a different one behind
+                    # their back
+                    log("ERROR: failed to bind paired QUIC listener on explicit port %s: %s", info.service,
+                        failure);
                     throw "HTTPSERVER-H3-BIND-ERROR",
-                        sprintf("failed to bind paired HTTP/3 UDP listener on "
-                            "requested port %s: %s: %s",
-                            info.service, h3_err, h3_desc);
+                        sprintf("failed to bind paired HTTP/3 UDP listener on requested port %s: %s: %s",
+                            info.service, h3_err, h3_desc), {"attempts": h3_failures};
                 }
-                # random_port && attempt == max_attempts: retries exhausted.
-                # Keep the TCP listener running (we already told the caller we
-                # have a bind) but log a clear warning that H3 is disabled.
-                log("WARNING: exhausted %d QUIC-bind attempts for random-port "
-                    "listener %d; continuing with TCP-only (no H3) on port %d: "
-                    "last error: %s: %s",
-                    max_attempts, id, l.getInfo().port, h3_err, h3_desc);
+                # a random port whose attempts are exhausted, or whose bind failed with an error that a fresh port
+                # does not change
+                log("ERROR: failed to bind the paired QUIC listener of a random-port listener in %d attempt(s): %s",
+                    attempt, h3_failures.join("; "));
+                throw "HTTPSERVER-H3-BIND-ERROR",
+                    sprintf("failed to bind paired HTTP/3 UDP listener on a random port in %d attempt(s); last: %s",
+                        attempt, failure), {"attempts": h3_failures};
             }
 
             # the fast routes of the server, if any, are answered for the connections accepted from the listener, with
@@ -7737,6 +7752,13 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     stopNoWait() {
         background stop();
+    }
+
+    #! Returns @ref True once the listener has stopped
+    /** The server's count of running listeners was decremented for the listener when it stopped
+    */
+    bool isStopped() {
+        return stopped;
     }
 
 %ifdef QoreDebug
