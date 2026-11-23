@@ -24448,12 +24448,22 @@ static QORE_INTERN_NOINLINE __attribute__((cold)) qore_type_t qore_rt_pseudo_wea
     return v.getType() == NT_WEAKREF_LIST ? NT_LIST : NT_HASH;
 }
 
-//! the size of the target of a weak container reference \a v, read without a reference: the size of a list or a hash
-//! that is being freed is a size that it has during its free (see WeakListReferenceNode::borrow())
+//! the size of the target of a weak container reference \a v
+/** The size is read with a reference to the target, as the pseudo-method dispatch reads it
+    (pseudo_classes_dispatch_weak()): without one, another thread can release the target's last reference and free it
+    meanwhile, which writes the size that is read (the length of a list, the member list of a hash) without
+    synchronization.  A target whose last reference was released gives an empty stand-in.  The release of the
+    reference can be the target's last one, whose free can run destructors: their exceptions are handled as those of
+    the other releases that have no exception sink of the caller (see WeakListReferenceNode::getAsBoolImpl())
+*/
 static QORE_INTERN_NOINLINE __attribute__((cold)) int64_t qore_rt_pseudo_weak_target_size(const QoreValue& v) {
-    return v.getType() == NT_WEAKREF_LIST
-        ? static_cast<int64_t>(v.get<const WeakListReferenceNode>()->borrow()->size())
-        : static_cast<int64_t>(v.get<const WeakHashReferenceNode>()->borrow()->size());
+    ExceptionSink xsink;
+    if (v.getType() == NT_WEAKREF_LIST) {
+        ReferenceHolder<QoreListNode> target(v.get<const WeakListReferenceNode>()->lock(), &xsink);
+        return static_cast<int64_t>(target->size());
+    }
+    ReferenceHolder<QoreHashNode> target(v.get<const WeakHashReferenceNode>()->lock(), &xsink);
+    return static_cast<int64_t>(target->size());
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_typeCode(uint64_t val_bits) {
