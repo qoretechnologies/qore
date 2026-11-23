@@ -777,6 +777,9 @@ private:
     DLLLOCAL void releaseIntern(ExceptionSink* xsink);
 };
 
+//! raises the exception for binding a reference to a member that runs Qore code under the assignment's lock (qore#7380)
+DLLLOCAL void qore_raise_reference_bind_user_code(QoreObject* object, const char* member, ExceptionSink* xsink);
+
 class LValueHelper final {
     friend struct qore_type_safe_ref_helper_priv_t;
     friend class LValueRemoveHelper;
@@ -1234,6 +1237,15 @@ public:
     //! Resolves a reference only to read its value, without creating a missing value when \a for_remove is true
     /** isWriteProtected() then tells whether the variable that the reference names could have been written
     */
+    //! tag of the constructors that resolve a reference for binding it during a type check (qore#7380)
+    struct ReferenceBind {};
+
+    //! resolves the reference for reading to bind it; can reuse a lock that the assignment of this thread holds
+    DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadAccess, ReferenceBind);
+
+    //! resolves the reference for writing to bind it; can reuse a lock that the assignment of this thread holds
+    DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReferenceBind);
+
     DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadAccess, bool for_remove);
 
     DLLLOCAL LValueHelper(ExceptionSink* xsink, bool for_assignment = false);
@@ -1287,6 +1299,22 @@ public:
         assert(read_access == RA_ELEMENT);
         read_only_resolution = true;
         write_protected = true;
+    }
+
+    //! Records that this helper resolves a reference under a lock of the assignment being type-checked (qore#7380)
+    /** The lvalue is then only read: the assignment holds pointers into the data that the lock guards.
+    */
+    DLLLOCAL void noteReusedBindLock() {
+        read_only_resolution = true;
+        read_value_only = true;
+        write_protected = true;
+    }
+
+    //! Returns true if this helper resolved its lvalue under a lock of the assignment being type-checked
+    /** For a helper made with a ReferenceBind constructor, where only noteReusedBindLock() sets read_value_only
+    */
+    DLLLOCAL bool hasReusedBindLock() const {
+        return read_value_only;
     }
 
     //! Returns true if the variable read through a reference could not have been written through it
