@@ -1,0 +1,16 @@
+an unrelated class, a base-typed variable: parse: illegal access to private member 'x' of class 'A'
+a subclass of A, a base-typed variable: parse: illegal access to private member 'x' of class 'A'
+a subclass of A, an optional base-typed variable: parse: illegal access to private member 'x' of class 'A'
+a subclass of A, its own type: parse: illegal access to member 'x' of class 'A', which class 'S' inherits through a class inherited with private:internal
+a subclass of A, auto: INVALID-MEMBER: 'x' is not a registered member of class 'S'
+a subclass of A, object: INVALID-MEMBER: 'x' is not a registered member of class 'S'
+a subclass of A, a dynamic access: INVALID-MEMBER: 'x' is not a registered member of class 'S'
+a subclass of A, a base-typed write: parse: illegal access to private member 'x' of class 'A'
+a subclass of A, an auto write: INVALID-MEMBER: 'x' is not a registered member of class 'S'
+a subclass of A, a method of A through a base-typed variable: 1
+a subclass of A, the public member through a base-typed variable: 2
+a subclass of Mid, a base-typed variable: parse: illegal access to private member 'x' of class 'A'
+a subclass of Mid, auto: INVALID-MEMBER: 'x' is not a registered member of class 'S'
+A's code, a base-typed variable: 1
+A's code, auto, on an object of a subclass of Mid: 1
+A's code, an auto write, on an object of a subclass of Mid: 5

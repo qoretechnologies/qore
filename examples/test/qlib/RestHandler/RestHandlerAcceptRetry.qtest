@@ -60,7 +60,7 @@ class AcceptRetryRestHandler inherits RestHandler {
         addClass(new AcceptRetryRestClass());
     }
 
-    responseSerializationError(hash<auto> cx, *hash<auto> aih, reference rv) {
+    responseSerializationRetry(hash<auto> cx, *hash<auto> aih, reference<hash<HttpHandlerResponseInfo>> rv) {
         ++hook_calls;
         switch (action) {
             case HookAction::Sse:
@@ -116,7 +116,7 @@ class AcceptRetryListener inherits HttpListenerInterface {
     logError(string fmt, ...) {}
 }
 
-#! A response that RestHandler::responseSerializationError() makes serializable is sent (qore#7250)
+#! A response that RestHandler::responseSerializationRetry() makes serializable is sent (qore#7250)
 /** The handler is called directly, without a server
 */
 class RestHandlerAcceptRetryTest inherits QUnit::Test {

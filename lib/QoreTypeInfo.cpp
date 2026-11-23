@@ -5217,11 +5217,11 @@ const QoreTypeInfo* getTypeInfoForValue(const AbstractQoreNode* n) {
         case NT_HASH:
             return static_cast<const QoreHashNode*>(n)->getTypeInfo();
         case NT_WEAKREF_HASH:
-            return static_cast<const WeakHashReferenceNode*>(n)->get()->getTypeInfo();
+            return static_cast<const WeakHashReferenceNode*>(n)->getTypeInfo();
         case NT_LIST:
             return static_cast<const QoreListNode*>(n)->getTypeInfo();
         case NT_WEAKREF_LIST:
-            return static_cast<const WeakListReferenceNode*>(n)->get()->getTypeInfo();
+            return static_cast<const WeakListReferenceNode*>(n)->getTypeInfo();
         case NT_BUFFER:
             return static_cast<const QoreBufferNode*>(n)->getTypeInfo();
         case NT_PLUGIN_VALUE:
@@ -6162,7 +6162,8 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
             if (t == NT_HASH) {
                 hd = n.get<const QoreHashNode>()->getHashDecl();
             } else if (t == NT_WEAKREF_HASH) {
-                hd = n.get<const WeakHashReferenceNode>()->get()->getHashDecl();
+                // a hash keeps its hashdecl when it is freed
+                hd = n.get<const WeakHashReferenceNode>()->borrow()->getHashDecl();
             }
             if (hd) {
                 const typed_hash_decl_private* target = typed_hash_decl_private::get(*uHd());
@@ -6201,9 +6202,10 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     ok = true;
                     break;
                 }
-                QoreHashNode* h = n.get<WeakHashReferenceNode>()->get();
+                // checked with a reference of its own, or as a new empty hash if it was freed (qore#7198)
+                ReferenceHolder<QoreHashNode> h(n.get<WeakHashReferenceNode>()->lock(), xsink);
                 bool err = false;
-                ok = acceptInputComplexHashImpl(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, h,
+                ok = acceptInputComplexHashImpl(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, *h,
                     err, policy);
                 if (err) {
                     return true;
@@ -6233,9 +6235,10 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     ok = true;
                     break;
                 }
-                QoreListNode* l = n.get<WeakListReferenceNode>()->get();
+                // checked with a reference of its own, or as a new empty list if it was freed (qore#7198)
+                ReferenceHolder<QoreListNode> l(n.get<WeakListReferenceNode>()->lock(), xsink);
                 bool err = false;
-                ok = acceptInputComplexListImpl(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, l,
+                ok = acceptInputComplexListImpl(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, *l,
                     err, policy);
                 if (err) {
                     return true;
@@ -6304,6 +6307,13 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 //printd(5, "cr: %p '%s' == %p '%s': %d\n", uTi(), QoreTypeInfo::getName(uTi()), ti, QoreTypeInfo::getName(ti), QoreTypeInfo::outputSuperSetOf(ti, uTi()));
                 // first check types before instantiating reference
                 if (QoreTypeInfo::outputSuperSetOf(ti, uTi())) {
+                    // a variable of the reference's type whose value the assignment below would leave as it is is
+                    // not read and assigned (qore#7264); -1: the exception that resolving the reference raises, as
+                    // for the error described below
+                    if (qore_reference_binding_keeps_value(r, uTi(), xsink)) {
+                        ok = true;
+                        break;
+                    }
                     // issue #2891: do not create a value in the source reference if none already exists
                     // do not process if there is no type restriction
                     // the value read from the lvalue is assigned back to the same lvalue in order to apply the
@@ -6605,7 +6615,8 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
             if (ot == NT_HASH) {
                 hd = n.get<const QoreHashNode>()->getHashDecl();
             } else if (ot == NT_WEAKREF_HASH) {
-                hd = n.get<const WeakHashReferenceNode>()->get()->getHashDecl();
+                // a hash keeps its hashdecl when it is freed
+                hd = n.get<const WeakHashReferenceNode>()->borrow()->getHashDecl();
             }
             if (hd) {
                 const typed_hash_decl_private* target = typed_hash_decl_private::get(*uHd());
@@ -6638,7 +6649,8 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
                 h = n.get<const QoreHashNode>();
                 ti = h->getValueTypeInfo();
             } else if (ot == NT_WEAKREF_HASH) {
-                h = n.get<const WeakHashReferenceNode>()->get();
+                // its type and its size, which reads as empty once it is freed (see WeakHashReferenceNode::borrow())
+                h = n.get<const WeakHashReferenceNode>()->borrow();
                 ti = h->getValueTypeInfo();
             }
             if (!h) {
@@ -6682,7 +6694,8 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
                 l = n.get<const QoreListNode>();
                 ti = l->getValueTypeInfo();
             } else if (ot == NT_WEAKREF_LIST) {
-                l = n.get<const WeakListReferenceNode>()->get();
+                // its type and its size, which reads as empty once it is freed (see WeakListReferenceNode::borrow())
+                l = n.get<const WeakListReferenceNode>()->borrow();
                 ti = l->getValueTypeInfo();
             }
             if (l) {
@@ -6752,7 +6765,8 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
                 if (ot == NT_HASH) {
                     h = qore_hash_private::get(*n.get<const QoreHashNode>());
                 } else if (ot == NT_WEAKREF_HASH) {
-                    h = qore_hash_private::get(*n.get<const WeakHashReferenceNode>()->get());
+                    // its type, which does not change when it is freed
+                    h = qore_hash_private::get(*n.get<const WeakHashReferenceNode>()->borrow());
                 }
                 if (h) {
                     if (h->hashdecl || h->complexTypeInfo) {
@@ -6766,7 +6780,8 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
                 if (ot == NT_LIST) {
                     l = qore_list_private::get(*n.get<const QoreListNode>());
                 } else if (ot == NT_WEAKREF_LIST) {
-                    l = qore_list_private::get(*n.get<const WeakListReferenceNode>()->get());
+                    // its type, which does not change when it is freed
+                    l = qore_list_private::get(*n.get<const WeakListReferenceNode>()->borrow());
                 }
                 if (l) {
                     if (l->complexTypeInfo) {
@@ -6843,8 +6858,31 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsValue(const QoreTypeInfo* ti, con
 // returns the list or hash that a call argument is or refers to, if any, and whether its element type is untyped,
 // as the element type of a container built at runtime without a declared element type is; a hashdecl hash is a
 // declared structure, not generic data, and is left to the hashdecl rules
+namespace {
+//! holds the list or hash of a weak reference with a reference of its own while a call argument is checked (qore#7198)
+/** The release, which can run destructors, is out of the path of the other values, as is the ExceptionSink that it
+    needs.
+*/
+struct QoreCallArgWeakTarget {
+    AbstractQoreNode* target = nullptr;
+
+    DLLLOCAL ~QoreCallArgWeakTarget() {
+        if (target) [[unlikely]] {
+            release(target);
+        }
+    }
+
+    DLLLOCAL static QORE_INTERN_NOINLINE void release(AbstractQoreNode* target) {
+        ExceptionSink xsink;
+        target->deref(&xsink);
+    }
+};
+}
+
+// the list or hash of a weak reference is held by \a weak_target with a reference of its own, or is a new empty one if
+// it was freed (qore#7198)
 static QORE_INTERN_ALWAYS_INLINE void qore_get_call_arg_container(const QoreValue& n, const QoreListNode*& l, const QoreHashNode*& h,
-        bool& untyped) {
+        bool& untyped, QoreCallArgWeakTarget& weak_target) {
     l = nullptr;
     h = nullptr;
     untyped = false;
@@ -6852,15 +6890,25 @@ static QORE_INTERN_ALWAYS_INLINE void qore_get_call_arg_container(const QoreValu
         case NT_LIST:
             l = n.get<const QoreListNode>();
             break;
-        case NT_WEAKREF_LIST:
-            l = n.get<const WeakListReferenceNode>()->get();
+
+        case NT_WEAKREF_LIST: {
+            QoreListNode* target = n.get<const WeakListReferenceNode>()->lock();
+            weak_target.target = target;
+            l = target;
             break;
+        }
+
         case NT_HASH:
             h = n.get<const QoreHashNode>();
             break;
-        case NT_WEAKREF_HASH:
-            h = n.get<const WeakHashReferenceNode>()->get();
+
+        case NT_WEAKREF_HASH: {
+            QoreHashNode* target = n.get<const WeakHashReferenceNode>()->lock();
+            weak_target.target = target;
+            h = target;
             break;
+        }
+
         default:
             return;
     }
@@ -6950,7 +6998,8 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArgImpl(const QoreTypeInfo* t
     const QoreListNode* l;
     const QoreHashNode* h;
     bool untyped;
-    qore_get_call_arg_container(n, l, h, untyped);
+    QoreCallArgWeakTarget weak_target;
+    qore_get_call_arg_container(n, l, h, untyped, weak_target);
     // empty untyped containers keep the rule of issue #2647, and empty typed containers have no elements to check
     if ((!l && !h) || (l ? l->empty() : h->empty()) || !hasType(ti)) {
         qore_type_result_e rv = policy.value(ti, n, true);

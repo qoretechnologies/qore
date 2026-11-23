@@ -791,7 +791,9 @@ examples/test/qlib/CsvUtil/csvutil.qtest	1.0	0.0	-	1.0	1.0	-	-	2.0	1.0	1.0
 examples/test/qlib/CustomerIoDataProvider/CustomerIoDataProvider.qtest	4.0	4.0	-	4.0	5.0	-	-	4.0	4.0	3.0
 examples/test/qlib/DataProvider/ActionCatalogDeferredOwner.qtest	0.0	0.0	-	0.0	0.0	-	-	1.0	0.0	1.0
 examples/test/qlib/DataProvider/ActionCatalogReentrantScheme.qtest	0.0	0.0	-	1.0	1.0	-	-	0.0	1.0	1.0
-examples/test/qlib/DataProvider/ActionProviderClass.qtest	128.0	47.0	-	52.0	61.0	-	-	133.0	69.0	57.0
+examples/test/qlib/DataProvider/ActionProviderClass-1.qtest	80.3	29.5	-	32.6	38.3	-	-	83.4	43.3	35.7
+examples/test/qlib/DataProvider/ActionProviderClass-2.qtest	47.7	17.5	-	19.4	22.7	-	-	49.6	25.7	21.3
+examples/test/qlib/DataProvider/ActionProviderClass-3.qtest	1.0	1.0	-	1.0	1.0	-	-	1.0	1.0	1.0
 examples/test/qlib/DataProvider/AppExternalIo.qtest	2.0	1.0	-	1.0	1.0	-	-	1.0	2.0	2.0
 examples/test/qlib/DataProvider/AppNamesNoInit.qtest	0.0	0.0	-	1.0	0.0	-	-	0.0	1.0	1.0
 examples/test/qlib/DataProvider/AsyncDataProvider.qtest	0.0	1.0	-	0.0	1.0	-	-	1.0	1.0	0.0

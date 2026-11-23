@@ -55,6 +55,7 @@
 #include "qore/intern/QC_LoggerInterfaceBase.h"
 #include "qore/intern/QC_AsyncIoController.h"
 #include "qore/intern/QC_SSLCertificate.h"
+#include "qore/intern/QC_SSLTrustStore.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
 #include "qore/intern/QC_ProgramControl.h"
 #include "qore/intern/QC_Program.h"
@@ -1685,6 +1686,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     // add system object types
     qns.addSystemClass(initTimeZoneClass(qns));
     qns.addSystemClass(initSSLCertificateClass(qns));
+    qns.addSystemClass(initSSLTrustStoreClass(qns));
     qns.addSystemClass(initSSLPrivateKeyClass(qns));
     // FastCell and HttpFastRoutes must be before Socket, which takes HttpFastRoutes in Socket::setHttpFastRoutes()
     qns.addSystemClass(initFastCellClass(qns));
@@ -5841,40 +5843,30 @@ const QoreNamespace& QoreNamespaceConstIterator::get() const {
     return *priv->get()->ns;
 }
 
-//! returns the namespaces of a namespace map in the order in which they were declared (issue #7171)
-std::vector<QoreNamespace*> qore_namespaces_in_declaration_order(const nsmap_t& m) {
-    return qore_decl_ordered<nsmap_t, QoreNamespace*>(m, [](const QoreNamespace* n) {
-        return qore_ns_private::get(*n)->decl_seq;
-    });
-}
-
 class qore_namespace_namespace_iterator {
 public:
-    DLLLOCAL qore_namespace_namespace_iterator(const qore_ns_private* ns)
-            : v(qore_namespaces_in_declaration_order(ns->nsl.nsmap)) {
+    DLLLOCAL qore_namespace_namespace_iterator(const qore_ns_private* ns) :
+        ns(ns), i(ns->nsl.nsmap.end()) {
     }
 
     DLLLOCAL bool next() {
-        if (!started) {
-            started = true;
-            i = 0;
-        } else if (i < v.size()) {
+        if (i == ns->nsl.nsmap.end()) {
+            i = ns->nsl.nsmap.begin();
+        } else {
             ++i;
         }
-        return i < v.size();
+        return (i != ns->nsl.nsmap.end());
     }
 
     const QoreNamespace& get() const {
-        assert(started && i < v.size());
-        assert(v[i]);
-        return *v[i];
+        assert(i != ns->nsl.nsmap.end());
+        assert(i->second);
+        return *i->second;
     }
 
 private:
-    //! the namespaces in the order of their declaration
-    std::vector<QoreNamespace*> v;
-    size_t i = 0;
-    bool started = false;
+    const qore_ns_private* ns;
+    nsmap_t::const_iterator i;
 };
 
 QoreNamespaceNamespaceIterator::QoreNamespaceNamespaceIterator(const QoreNamespace& ns) : priv(new qore_namespace_namespace_iterator(qore_ns_private::get(ns))) {
@@ -5894,31 +5886,28 @@ const QoreNamespace& QoreNamespaceNamespaceIterator::get() const {
 
 class qore_namespace_function_iterator {
 public:
-    DLLLOCAL qore_namespace_function_iterator(const qore_ns_private* ns)
-            : v(ns->func_list.getEntriesInDeclarationOrder()) {
+    DLLLOCAL qore_namespace_function_iterator(const qore_ns_private* ns) :
+        ns(ns), i(ns->func_list.end()) {
     }
 
     DLLLOCAL bool next() {
-        if (!started) {
-            started = true;
-            i = 0;
-        } else if (i < v.size()) {
+        if (i == ns->func_list.end()) {
+            i = ns->func_list.begin();
+        } else {
             ++i;
         }
-        return i < v.size();
+        return (i != ns->func_list.end());
     }
 
     const QoreExternalFunction& get() const {
-        assert(started && i < v.size());
-        assert(v[i]->getFunction());
-        return *reinterpret_cast<const QoreExternalFunction*>(v[i]->getFunction());
+        assert(i != ns->func_list.end());
+        assert(i->second->getFunction());
+        return *reinterpret_cast<const QoreExternalFunction*>(i->second->getFunction());
     }
 
 private:
-    //! the function entries in the order of their declaration (issue #7171)
-    std::vector<FunctionEntry*> v;
-    size_t i = 0;
-    bool started = false;
+    const qore_ns_private* ns;
+    fl_map_t::const_iterator i;
 };
 
 QoreNamespaceFunctionIterator::QoreNamespaceFunctionIterator(const QoreNamespace& ns) : priv(new qore_namespace_function_iterator(qore_ns_private::get(ns))) {

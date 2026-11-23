@@ -9344,12 +9344,13 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
     }
 
     #! Returns @ref True if debug collection is enabled
-    /** @return @ref True if a debug collector is registered
+    /** @return @ref True if a debug collector is registered and has not been deleted
 
         @since DataProvider 3.3
     */
     bool debugCollectionEnabled() {
-        return debug_collector.val();
+        # the same check as in collectDebugInfo(): True for an object without members, False for a deleted object
+        return debug_collector ? True : False;
     }
 
     #! Returns @ref True if the data provider supports being used as a pipeline processor

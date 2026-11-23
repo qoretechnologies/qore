@@ -203,14 +203,16 @@ void qore_async_io_trace(const char* fmt, ...) {
     va_end(args);
     if (blen < 0) blen = 0;
     if (blen >= (int)sizeof(body)) blen = sizeof(body) - 1;
+    // the names and text that the code that submitted work chose stay on the trace line (qore#7216): the line
+    // breaks of the body are escaped, except the one that ends it
+    bool nl = blen > 0 && body[blen - 1] == '\n';
+    QoreString line(prefix, (size_t)plen);
+    qore_append_line_safe_text(line, body, (size_t)(nl ? blen - 1 : blen), false);
+    if (nl) {
+        line.concat('\n');
+    }
     // Single atomic write — no interleaving between threads
-    char combined[4096 + 256];
-    int total = plen + blen;
-    if (total >= (int)sizeof(combined)) total = sizeof(combined) - 1;
-    memcpy(combined, prefix, plen);
-    memcpy(combined + plen, body, (size_t)(total - plen));
-    combined[total] = '\0';
-    fputs(combined, stderr);
+    fputs(line.c_str(), stderr);
 }
 
 #endif // DEBUG || DEBUG_ASYNC_IO

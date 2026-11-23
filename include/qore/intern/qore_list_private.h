@@ -63,10 +63,10 @@ struct qore_list_private {
     //! true once the list has been freed (see QoreListNode::derefImpl())
     bool freed : 1;
     //! true if the weak holders of the list hold one reference of their own since its free started (see
-    //! QoreContainerWeakRefs)
-    bool weak_hold : 1;
+    //! QoreContainerWeakRefs); not in the bit field, as lockWeak() reads it while the free writes the bit field
+    bool weak_hold = false;
 
-    DLLLOCAL qore_list_private() : finalized(false), vlist(false), valid(true), freed(false), weak_hold(false) {
+    DLLLOCAL qore_list_private() : finalized(false), vlist(false), valid(true), freed(false) {
     }
 
     DLLLOCAL ~qore_list_private() {
@@ -399,6 +399,10 @@ struct qore_list_private {
     }
 
     DLLLOCAL int mergeNative(const QoreListNode* list, ExceptionSink* xsink) {
+        // a list freed under a weak reference cannot be changed (qore#7199)
+        if (checkValid(xsink)) {
+            return -1;
+        }
         reserve(length + list->size());
         ConstListIterator i(list);
         while (i.next()) {
@@ -424,6 +428,10 @@ struct qore_list_private {
     }
 
     DLLLOCAL int merge(const QoreListNode* list, ExceptionSink* xsink) {
+        // a list freed under a weak reference cannot be changed (qore#7199)
+        if (checkValid(xsink)) {
+            return -1;
+        }
         reserve(length + list->size());
         ConstListIterator i(list);
         while (i.next()) {
@@ -434,6 +442,10 @@ struct qore_list_private {
     }
 
     DLLLOCAL int merge(const QoreListNode* list, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+        // a list freed under a weak reference cannot be changed (qore#7199)
+        if (checkValid(xsink)) {
+            return -1;
+        }
         reserve(length + list->size());
         ConstListIterator i(list);
         size_t count = 0;
@@ -735,7 +747,10 @@ struct qore_list_private {
         // Transfer every owned representation, including inline enum references.
         entry[offset].clear();
 
-        if (needs_scan(rv)) {
+        // no value of a list whose scan count is zero needs a scan (see QoreListNode::shift()); incScanCount()
+        // asserts the count of a value that does
+        assert(obj_count || !needs_scan(rv));
+        if (obj_count && needs_scan(rv)) {
             incScanCount(-1);
         }
 
@@ -913,6 +928,46 @@ public:
         p->valid = false;
         p->freed = true;
         l.weakDeref();
+    }
+
+    //! Returns a new reference to a list that a weak reference holds, or a new empty list that cannot be changed if
+    //! its last reference was released (qore#7198; see WeakListReferenceNode::lock())
+    /** A reference is never taken to a list whose free has started: its count is zero then, or its weak holders hold
+        one reference of their own (\c weak_hold, see QoreContainerWeakRefs), which is taken after \c weak_hold is
+        set; a reference taken while the list is referenced keeps its free from starting.  So \c weak_hold is read
+        after the count was raised from a value that is not zero: either its value is that of the free, or no free can
+        set it meanwhile.
+    */
+    DLLLOCAL static QoreListNode* lockWeak(QoreListNode& l) {
+        // the reference is taken as QoreReferenceCounter::optRef() takes it, inline
+        int count = l.references.load();
+        while (count > 0) {
+            if (l.references.compare_exchange_weak(count, count + 1)) {
+                return !l.priv->weak_hold ? &l : lockWeakFreeing(l);
+            }
+        }
+        return getFreedStandIn(l);
+    }
+
+    //! Releases the reference that lockWeak() took to a list whose free has started, and returns a new empty list
+    /** The reference is not the list's last, as the caller holds a weak reference, and therefore its weak holders hold
+        theirs.
+    */
+    DLLLOCAL static __attribute__((noinline)) QoreListNode* lockWeakFreeing(QoreListNode& l) {
+#ifdef DEBUG
+        bool last =
+#endif
+        l.ROdereference();
+        assert(!last);
+        return getFreedStandIn(l);
+    }
+
+    //! Returns a new empty list with the type of a list whose last reference was released, which cannot be changed
+    //! (qore#7198; see lockWeak())
+    DLLLOCAL static __attribute__((noinline)) QoreListNode* getFreedStandIn(const QoreListNode& l) {
+        QoreListNode* rv = l.priv->getCopy();
+        rv->priv->valid = false;
+        return rv;
     }
 
     DLLLOCAL static void setNeedsEval(QoreListNode& l) {

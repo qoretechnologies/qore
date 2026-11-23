@@ -46,6 +46,9 @@ public class Http3StreamContext inherits AbstractStreamContext {
         #! True once the end of the stream has been sent
         bool ended = False;
 
+        #! True once the stream has been reset by abort()
+        bool reset = False;
+
         Socket sock;
         int session_id;
         int stream_id;
@@ -185,11 +188,14 @@ public class Http3StreamContext inherits AbstractStreamContext {
         again, so a peer that reads more slowly than data is sent slows the sender down instead of losing the data.
 
         @param data the binary payload to send
-        @param timeout_ms the maximum time to wait for the stream send buffer to drain; a value less than or equal to
-        zero waits without a limit
+        @param timeout_ms the maximum time that the stream send buffer may make no progress: the time starts again
+        whenever the peer has acknowledged more of the stream's data (see
+        @ref Qore::Socket::getQuicStreamAckedBytes()), so that a large send that a slow or loaded peer takes does not
+        fail while it is taken; a value less than or equal to zero waits without a limit
         @param end_stream if @ref True, signals end of stream after this data
 
-        @throw STREAM-SEND-TIMEOUT the stream send buffer did not drain in time; the data was not sent
+        @throw STREAM-SEND-TIMEOUT the peer acknowledged no data for this time, or the stream ended with its send
+        buffer full; the data was not sent
         @throw SOCKET-SYNC-ON-IO-THREAD-ERROR the stream send buffer is full and this method was called on the async
         I/O controller's I/O path, where it cannot wait
 
@@ -205,22 +211,42 @@ public class Http3StreamContext inherits AbstractStreamContext {
                 wake_callback();
             }
         }
-        # the deadline is on the monotonic clock: a step of the system clock does not change the wait
-        int deadline = timeout_ms > 0 ? clock_get_monotonic_us() / 1000 + timeout_ms : 0;
+        # the wait is bounded by the timeout of STALLED time, not of total time: a large message that the peer takes
+        # slowly (a loaded host) makes progress all the while (issue #7252, as on the client: #6968).  The deadline
+        # moves only when the count grows, so an unknown count (-1: the stream or session is gone) ends the wait
+        # on the monotonic clock, in milliseconds
+        *int stall_deadline;
+        int last_acked = -1;
+        # the waits in a row that found the stream ended, with the send still refused
+        int ended_waits = 0;
         while (sock.submitQuicStreamData(session_id, stream_id, data, end_stream) == 1) {
             # the data already queued must be sent before the stream can drain
             if (wake_callback) {
                 wake_callback();
             }
             int wait_ms = -1;
-            if (deadline) {
-                wait_ms = deadline - clock_get_monotonic_us() / 1000;
+            if (timeout_ms > 0) {
+                int now = clock_get_monotonic_us() / 1000;
+                int acked = sock.getQuicStreamAckedBytes(session_id, stream_id);
+                if (!stall_deadline || acked > last_acked) {
+                    last_acked = acked;
+                    stall_deadline = now + timeout_ms;
+                }
+                wait_ms = stall_deadline - now;
                 if (wait_ms <= 0) {
                     throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/3 stream %d: the send buffer did not drain within %d "
-                        "ms; %d bytes were not sent", stream_id, timeout_ms, data.size());
+                        "ms and the peer acknowledged no data meanwhile; %d bytes were not sent", stream_id,
+                        timeout_ms, data.size());
                 }
             }
-            sock.waitForQuicStreamDrain(session_id, stream_id, wait_ms);
+            # 0: drained, 1: timed out, -1: the stream has no data staged any more (sent or closed); the send is made
+            # again in each case; a stream that has ended and still refuses it will never take it
+            if (sock.waitForQuicStreamDrain(session_id, stream_id, wait_ms) >= 0) {
+                ended_waits = 0;
+            } else if (++ended_waits > 1) {
+                throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/3 stream %d: the stream ended with its send buffer full; "
+                    "%d bytes were not sent", stream_id, data.size());
+            }
         }
         # the stream was ended with the data: it is not ended again
         if (end_stream) {
@@ -326,6 +352,32 @@ public class Http3StreamContext inherits AbstractStreamContext {
         ended = True;
         try {
             sock.submitQuicStreamData(session_id, stream_id, NOTHING, True);
+            if (wake_callback) {
+                wake_callback();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "SOCKET-NOT-OPEN" && ex.err != "QUIC-ERROR"
+                    && ex.err != "QUIC-HTTP3-ERROR") {
+                rethrow;
+            }
+        }
+    }
+
+    #! Aborts the stream with \c RESET_STREAM and \c STOP_SENDING and releases its state and the data not yet sent
+    /** Also for a stream that was ended already: an end of the stream (\c FIN) that is staged behind data that the
+        peer acknowledges none of never reaches it (qore#7325).  The stream is reset once; the errors of a stream or
+        session that has ended already are ignored.
+
+        @since AsyncSocketIo 1.0
+    */
+    abort() {
+        if (reset) {
+            return;
+        }
+        reset = True;
+        ended = True;
+        try {
+            sock.cancelQuicStream(session_id, stream_id);
             if (wake_callback) {
                 wake_callback();
             }

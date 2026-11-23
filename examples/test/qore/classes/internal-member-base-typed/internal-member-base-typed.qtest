@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of member access in class hierarchies
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class InternalMemberBaseTypedTest
+
+#! Regression test for issue #7258: a subclass reads or writes a private:internal member of its base class through a
+#! variable of the base class's type
+/** The access was parsed when the variable's declared type was the base class (or an optional one) although the
+    subclass cannot use the member, and failed only at run time (through auto and object it raises INVALID-MEMBER); it
+    is now refused at parse time, as it is through a variable of the subclass's own type.  The class that declares the
+    member and the classes on its private:internal path still use it through any reference (#6800), and the methods and
+    the public members of the base class are still used.
+
+    InternalMemberBaseTyped.q parses and runs each case in a child Program; its output must be the one in
+    InternalMemberBaseTyped.expected in every execution mode, on the IR tier and in programs compiled with qcc -O0
+    and -O3.
+*/
+class InternalMemberBaseTypedTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/InternalMemberBaseTyped.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/InternalMemberBaseTyped.expected");
+    }
+
+    constructor() : QUnit::Test("private:internal member through a base-typed variable", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/internal-member-base-typed";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

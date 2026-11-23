@@ -101,6 +101,18 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par A Lent Connection Gives Restricted Code Only Clients Bound to the Host's Target
+    Code restricted from the \c NETWORK domain gets no synchronous client from a lent REST, YAML-RPC or server-sent
+    event connection (\c PERMISSION-DENIED), and the HTTP clients that it gets connect only to the target of the code
+    that created the connection (see @ref sandbox_lent_connections;
+    <a href="https://github.com/qoretechnologies/qore/issues/7262">issue 7262</a>).
+
+    @par A Weak Assignment From a Member, a Hash Key or a List Element Designates Its Own Container
+    A @ref weak_assignment_operator "weak assignment" from a member, a hash key or a list element first gives a shared
+    container a copy of its own, as from a variable, so that a change through it no longer changes another owner, and
+    one through a deleted object or a freed weak container raises an exception, as an assignment does, in every
+    execution mode (<a href="https://github.com/qoretechnologies/qore/issues/7242">issue 7242</a>).
+
     @par Library Code Does Not Use the Terminal for Code That Is Restricted From It
     The builtins that use the terminal refuse a caller restricted with @ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"
     also in library code, and the standard modules (also a host's logger, for the lines that library code writes for
@@ -128,6 +140,18 @@
     one reached through private inheritance) that its own hierarchy overrides when an earlier parent class of the
     object's class reaches that parent class first (see @ref multiple_inheritance_order;
     <a href="https://github.com/qoretechnologies/qore/issues/6798">issue 6798</a>).
+
+    @par A Connection That Was Never Checked Is Not Up
+    A connection is not up until a successful ping or connection proves it up: one that was never checked reports
+    \c up @ref False with the status \c "not checked", and a REST connection's ping without \c ping_method connects
+    to the server (see @ref ConnectionProvider::AbstractConnection::up "AbstractConnection::up";
+    <a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>).
+
+    @par A Private Override Hides Its Parent Class's Method from Calls Resolved When Parsing
+    Code outside a class hierarchy can no longer call a parent class's method that the class overrides with a
+    @ref private_methods "private" one through a variable of the class: the call raises \c METHOD-IS-PRIVATE, as with an
+    untyped variable, and a call reference or static call of it is a parse error; call it through the parent class
+    instead (see @ref private_methods; <a href="https://github.com/qoretechnologies/qore/issues/7211">issue 7211</a>).
 
     @par Private Access Needs the Class Itself
     Private access needs the class of the object's hierarchy itself: another declaration with the same name and
@@ -1315,11 +1339,21 @@
     <a href="https://github.com/qoretechnologies/qore/issues/7179">issue 7179</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Hash Identity Test
+    @ref <hash>::isSame() "<hash>::isSame()" tests in a constant time whether two hashes are the same hash value
+    (identity, not equality; <a href="https://github.com/qoretechnologies/qore/issues/7240">issue 7240</a>).
+
     @par Isolation Domains (Tenants)
     A host assigns its sandboxes to tenants with
     @ref Qore::SandboxManager::setIsolationDomain() "SandboxManager::setIsolationDomain()", and a trusted build that one
     tenant's code calls never runs another tenant's code or uses its %Program (see @ref sandbox_isolation_domains;
     <a href="https://github.com/qoretechnologies/qore/issues/6536">issue 6536</a>).
+
+    @par In-Memory TLS Trust Stores
+    An @ref Qore::SSLTrustStore "SSLTrustStore" holds CA certificates in memory that verify servers on every connection
+    path without reading a file (\c ssl_trust_store option, @ref Qore::Socket::setSslTrustStore() "setSslTrustStore()"),
+    and @ref Qore::get_default_ssl_ca_locations() "get_default_ssl_ca_locations()" returns the default CA locations
+    (<a href="https://github.com/qoretechnologies/qore/issues/7248">issue 7248</a>).
 
     @par Masked Datasource Descriptions for Messages
     @ref Qore::SQL::mask_datasource(string) "mask_datasource()" (for a datasource string or a
@@ -1328,6 +1362,13 @@
     @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool") give the description
     of a datasource that %Qore uses in its own exceptions, with the driver, host and port, and the user name, password
     and database name masked as \c "****", for exception messages and logs (issue #6988).
+
+    @par Sensitive DBI Driver Options
+    A DBI driver registers its options with option flags (\c QDBI_OPT_SENSITIVE in the C++ API, given as the
+    \c "sensitive" key of @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()"), and the masked forms
+    that identify a connection and @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()" show only
+    the plain values of the options that a loaded driver so declares not sensitive and whose names name no credential
+    (see @ref datasource_mask_options; issue #7070).
 
     @par IPv6 Hosts in Datasource Strings
     A datasource string gives an IPv6 address as its host in brackets (ex: <tt>%[::1]:5432</tt>), and
@@ -2268,6 +2309,9 @@
         asynchronous client of a connection that awaits authorization is created without logging in (see
         @ref restclientv2_7 for every change in behavior;
         <a href="https://github.com/qoretechnologies/qore/issues/6906">issue 6906</a>)
+      - OAuth2 client credentials that trusted code supplies can be sealed into a client: they are used for its token
+        requests but never given out (see @ref RestClient::SealedOAuth2Credentials "SealedOAuth2Credentials";
+        <a href="https://github.com/qoretechnologies/qore/issues/7248">issue 7248</a>)
       - see @ref restclientv2_7 for all changes
 
     - @ref restschemavalidatorintro "RestSchemaValidator" and @ref swaggerintro "Swagger" modules
@@ -2751,6 +2795,18 @@
       method call in the caller's code calls: they refused a later parent class's public method behind a private one,
       and called a method of a privately inherited class from outside it
       (<a href="https://github.com/qoretechnologies/qore/issues/7207">issue 7207</a>)
+    - a typed call from outside the class hierarchy calls the method that a call resolved at run time calls, and a call
+      reference through a typed receiver and a static method call there are refused as at run time: they called a
+      parent class's method that a private method overrides (see @ref private_methods;
+      <a href="https://github.com/qoretechnologies/qore/issues/7211">issue 7211</a>)
+    - a typed call from code of a class that the object's class reaches only through \c private:internal inheritance
+      raises \c METHOD-IS-PRIVATE, as an untyped call does, for a private method that overrides a parent class's
+      public one (see @ref private_methods;
+      <a href="https://github.com/qoretechnologies/qore/issues/7218">issue 7218</a>)
+    - a @ref call_reference "call reference" to a method made by code of a class without private access to the object's
+      class refers to the method that a call from that code calls: it was called with that class context and could
+      call a method of a privately inherited class (see @ref private_inheritance;
+      <a href="https://github.com/qoretechnologies/qore/issues/7220">issue 7220</a>)
     - the C++ API \c QoreObject::deleteMemberValue() removes a member as the @ref delete "delete" operator does (see
       @ref remove_object_members); it removed the key of a declared member, and a member that held an object failed an
       assertion in debug builds and left the object's reference scan count wrong
@@ -2762,13 +2818,23 @@
     - the strings of \c ARGV and \c QORE_ARGV are tagged with the
       @ref default_encoding "default character encoding" of the process, where they were tagged \c UTF-8 whatever the
       default encoding (see @ref command_line_processing; issue #7045)
+    - fixed reading a list or hash through a @ref weak_assignment_operator "weak reference" while another thread
+      freed it, which read its entries as they were freed; such a read now gives an empty list or hash that cannot be
+      changed (<a href="https://github.com/qoretechnologies/qore/issues/7198">issue 7198</a>)
     - fixed a crash when a @ref weak_assignment_operator "weak reference" to a list or hash whose last strong
       reference was released was copied, returned or passed to a call; changing such a list or hash through new
       references to it now raises \c LIST-ERROR or \c HASH-ERROR also when more than one is held
       (<a href="https://github.com/qoretechnologies/qore/issues/7163">issue 7163</a>)
+    - the \c splice and \c extract operators and the merge of a list, a hash or an object's members (\c +=) raise
+      \c LIST-ERROR or \c HASH-ERROR for a list or hash freed under a @ref weak_assignment_operator "weak reference", as
+      the other changes do (<a href="https://github.com/qoretechnologies/qore/issues/7199">issue 7199</a>)
     - @ref httpserverintro "HttpServer" answers a handler's informational response (1xx) other than 101 with an error
       instead of sending it as the final response
       (<a href="https://github.com/qoretechnologies/qore/issues/7222">issue 7222</a>)
+    - the HTTP/2 and HTTP/3 response methods of the @ref Qore::Socket "Socket" class and the interactive stream requests
+      of @ref httpserverintro "HttpServer" refuse an informational status (1xx) as a final response, which made the
+      client fail the connection with its other streams or wait for the response forever
+      (<a href="https://github.com/qoretechnologies/qore/issues/7212">issue 7212</a>)
     - generic specialization and compiled programs retain all declared alternatives of a @ref union_type "union type"
       that begins with a parameterized class, and code compiled with such a union before this fix must be recompiled
       (<a href="https://github.com/qoretechnologies/qore/issues/7147">issue 7147</a>)
@@ -2882,13 +2948,6 @@
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0
-    - the namespaces, functions and enums of a namespace are enumerated by the \c reflection module
-      (@ref Qore::Reflection::Namespace::getNamespaces() "Namespace::getNamespaces()",
-      @ref Qore::Reflection::Namespace::getFunctions() "Namespace::getFunctions()",
-      @ref Qore::Reflection::Namespace::getEnums() "Namespace::getEnums()") in the order in which they were declared;
-      before, the order depended on how often the namespace had been copied, so a program compiled with \c qcc
-      returned another one than the interpreter
-      (<a href="https://github.com/qoretechnologies/qore/issues/7171">issue 7171</a>)
     - a call reference obtained by a class-scoped method name for an object applies the access rule of a method call
       on the object, where code of a subclass could get a reference to a parent class's private method through an
       object of another subclass (<a href="https://github.com/qoretechnologies/qore/issues/6806">issue 6806</a>)
@@ -3029,6 +3088,12 @@
       parameter that is not valid raises \c INVALID-PATH-COMPONENT then, instead of failing each request with a 500
       response; a content type that a request accepts is no longer taken as a regular expression (see @ref http1_7,
       @ref swagger_2_6 and @ref restschemavalidator_2_5; issue #6603)
+    - @ref httpserverutilintro "HttpServerUtil" and @ref httpserverintro "HttpServer" modules: a stream handler that
+      wants an HTTP/1.x request body with a \c Content-Length as a stream gets it in bounded binary parts, each byte
+      once, instead of the whole body twice, held in memory (see @ref http1_7 and @ref httputil1_6; issue #7308)
+    - @ref resthandlerintro "RestHandler" module: an HTTP/1.x Connect or DataStream request body with a
+      \c Content-Length reaches its stream handler in bounded parts, as over HTTP/2 and HTTP/3 (see @ref rh_1_6_8;
+      issue #7323)
     - @ref httpserverutilintro "HttpServerUtil" and @ref httpserverintro "HttpServer" modules: state that a request
       handler leaves on a server thread (its persistence, its close notification and its user thread context) is
       kept for that handler only, so that a handler of another tenant that runs on the same thread later neither sees
@@ -4327,8 +4392,9 @@
       and raises \c DESERIALIZATION-ERROR for a value, list or hash larger than the data that follows it, instead of
       reserving the size given in the data first (issue #6502)
     - a user module that a module loads at run time with @ref Qore::load_module() "load_module()" is deleted after
-      that module when the process ends, together with the native modules it requires, so the cleanup no longer uses
-      the declarations of a native module that was already deleted (issue #6501)
+      that module when the process ends, together with the native modules it requires, and when the loaded module
+      requires that module, those native modules are still deleted after it, so the cleanup no longer uses the
+      declarations of a native module that was already deleted (issues #6501, #7310)
     - in the C++ API, \c QoreString::parseBase64UrlToString() and \c QoreStringNode::parseBase64UrlToString()
       without an encoding argument decode base64url instead of base64, as the overloads with one do (issue #6621)
     - code of a @ref Qore::Program "Program" could be associated with the thread-local data of another Program in

@@ -366,6 +366,22 @@ struct AioAppRestriction {
     qore_program_id_t app_id = 0;
 };
 
+//! The timers that the calling code may cancel by ID (qore#7010)
+/** Code that is sandboxed cancels only the timers of the application that it runs for; if it runs for no known
+    application, only the timers for no application that its own work added (see
+    AsyncIoControllerPriv::timerCancelAllowed()); trusted code cancels any timer
+*/
+struct AioTimerRestriction {
+    //! true if the calling code is sandboxed
+    bool restricted = false;
+    //! true if the calling code is sandboxed but runs for no known application
+    bool none = false;
+    //! the application whose timers the calling code may cancel, if \a restricted and not \a none
+    qore_program_id_t app_id = 0;
+    //! the generation of the calling code's work (runtime_get_thread_generation())
+    uint64_t gen = 0;
+};
+
 //! the application that the code of a callback of an operation runs for (qore#7010)
 DLLLOCAL extern thread_local qore_program_id_t aio_callback_app_id;
 DLLLOCAL extern thread_local bool aio_callback_app_set;
@@ -387,6 +403,7 @@ private:
 };
 
 class QoreCallDispatcher {
+    friend class AsyncIoDispatcherCancelTest;
 public:
     //! Dispatch type for async work items
     enum DispatchType {
@@ -631,6 +648,18 @@ public:
     */
     DLLLOCAL bool dbgWaitOnCompleteQueued(int64_t count, int timeout_ms);
 
+    //! Debug-only: makes the given allocation of markProgramShuttingDown() in the calling thread fail with
+    //! std::bad_alloc (1 = the first), 0 for none (qore#7226)
+    DLLLOCAL static void dbgSetMarkAllocFailAt(int n);
+
+    //! Debug-only: a function that releaseWorkItem() calls in the calling thread before it releases an item, as the
+    //! destructor that releasing an item runs could (qore#7226); empty for none
+    DLLLOCAL static void dbgSetReleaseHook(std::function<void()> hook);
+
+    //! Debug-only: the number of calls of markProgramShuttingDown() and clearProgramShuttingDown() in progress; the
+    //! dispatcher must not be deleted while one is in progress (qore#7226)
+    std::atomic<int> dbg_users{0};
+
     //! Debug-only: the number of onComplete() calls dispatched so far
     DLLLOCAL int64_t dbgOnCompleteDispatched() const {
         return dbg_on_complete_dispatched.load(std::memory_order_acquire);
@@ -644,7 +673,9 @@ public:
         is set).
 
         This call also drops any already-queued items belonging to \a pgm and
-        releases their object references in-place.  The combined mark + drain
+        releases their object references in-place, except the release items (DT_RELEASE), which are parked and
+        released in the Program by clearProgramShuttingDown(), as release items enqueued after the mark are; the memory
+        for the items is reserved before any state is changed (qore#7226).  The combined mark + drain
         runs under the dispatcher lock, closing the race where a worker pops
         a pgm-owned item between an out-of-band mark and a separate drain
         and then derefs an spop_obj whose underlying class has just been torn
@@ -857,6 +888,8 @@ class AsyncIoControllerPriv : public AbstractPrivateData {
     friend class AsyncIoClosedPollableTest;
     friend class AsyncIoStaleReadinessTest;
     friend class AsyncIoStoppingThreadTest;
+    friend class AsyncIoDispatcherCancelTest;
+    friend class AsyncIoPreservedSubmitTest;
     friend class AsyncIoFrameSendTest;
 #endif
     friend class QoreCallDispatcher;  // for enqueueContinuePollResult from worker thread
@@ -1340,6 +1373,13 @@ public:
         @param xsink for exception handling
     */
     DLLLOCAL void cancelByProgram(QoreProgram* pgm, ExceptionSink* xsink);
+
+    //! Marks the Program as shutting down in the current dispatcher, again until the dispatcher is one that was marked
+    /** The mark drains and releases the Program's queued items: releasing one can run a destructor that stops the
+        controller, which replaces the dispatcher, and makes a delivery, which creates a new one; the new dispatcher is
+        marked too, so that no item of the Program is left on an unmarked dispatcher (qore#7226)
+    */
+    DLLLOCAL void remarkProgram(QoreProgram* pgm, ExceptionSink* xsink);
 
     //! Cancels for the module cleanup the operations and timers of work of the cleanup that it does not count
     /** Called by the module cleanup when it waits for its work (qore_module_cleanup_drain_work()), on its own thread:
@@ -1959,9 +1999,10 @@ private:
         qore_program_id_t cb_app_id = 0;
         //! True if module code added the timer for an application with restrictions (see app_pgm_id)
         bool for_app = false;
-        //! The generation of the thread that added the timer (runtime_get_thread_generation(), which unlike its TID is
-        //! never reused): module code that runs for no application (the code of a thread that module code started)
-        //! cancels only the timers for no application that its own thread added (qore#7010)
+        //! The generation of the work that added the timer (runtime_get_thread_generation(), which unlike a TID is
+        //! never reused, and which a pooled or reused thread takes from the work item that it runs): module code that
+        //! runs for no application (the code of a thread that module code started) cancels only the timers for no
+        //! application that its own work added (qore#7010)
         uint64_t adder_gen = 0;
         //! The ID of the application Program that module code added the timer for, if for_app is set
         /** Module code running for an application with restrictions can cancel only the timers added for the same
@@ -2104,6 +2145,15 @@ private:
         }
 
         MpscQueue<Command> cmdq;          //!< Lock-free command queue for this thread
+        //! The submissions (SubmitOp commands) for this thread while it reads no commands (guarded by the lock)
+        /** A stopping thread keeps the submissions that it finds in its last command drain here, and a submission
+            routed to the thread after that drain or while it is stopped is kept here too; they are moved to the
+            command queue when the thread is started again (startIntern()).  Unlike the command queue, the controller
+            can see them: cancelByProgram() takes the submissions of its Program and cancels them while the Program is
+            still valid, as an operation of the Program must not be admitted after its cancellation (qore#7225), and
+            stop() releases them.
+        */
+        std::vector<Command> preserved_submits;
         std::atomic<bool> running{false};  //!< True when this thread accepts commands
         int tid = 0;                       //!< Thread ID (0 if not running)
         int thread_idx = 0;                //!< Index in io_threads vector
@@ -2125,6 +2175,11 @@ private:
         */
         bool exit_cancel_done = false;
 #ifdef DEBUG
+        //! Test hook: when set, the stopping thread waits on \c dbg_cond before its last command drain until it is
+        //! cleared, so that a command queued meanwhile is found by that drain
+        bool dbg_hold_before_drain = false;
+        //! Test hook: true while the thread waits before its last command drain
+        bool dbg_held_before_drain = false;
         //! Test hook: when set, the thread waits on \c dbg_cond after its last command drain until it is cleared
         bool dbg_hold_after_drain = false;
         //! Test hook: true while the thread waits after its last command drain
@@ -2497,6 +2552,17 @@ private:
         operation
     */
     DLLLOCAL static AioAppRestriction cancelRestriction(bool& none);
+
+    //! Returns the timers that the calling code may cancel by ID (qore#7010)
+    DLLLOCAL static AioTimerRestriction timerCancelRestriction();
+
+    //! Returns true if code with the given restriction may cancel the timer (qore#7010)
+    /** Code that is sandboxed cancels only the timers of the application that it runs for (TimerInfo::cb_app_id), as
+        timer IDs can be guessed; if it runs for no known application (the code of a thread that module code started,
+        which can serve every caller of the module, qore#6208), only the timers for no application that its own work
+        added (TimerInfo::adder_gen).  Trusted code cancels any timer
+    */
+    DLLLOCAL static bool timerCancelAllowed(const AioTimerRestriction& restrict_app, const TimerInfo& tinfo);
 
     //! Returns true if a submission takes the key of an operation that the submitting code may not replace
     /** Sandboxed code replaces only an operation of its own application, or its own operation object; if it runs for
@@ -2890,12 +2956,34 @@ private:
     */
     DLLLOCAL void refuseSubmit(Command& cmd, QoreHashNode* cancel_ex, ExceptionSink* xsink);
 
+    //! Returns the operation of a SubmitOp command as it is described when it is admitted; the payload of \a cmd
+    //! passes to the returned entry, whose cleanup() releases it
+    DLLLOCAL PollInfo takeSubmitPollInfo(Command& cmd);
+
+    //! Takes the preserved submissions of the given Program from a thread that reads no commands (qore#7225)
+    /** The caller holds the lock; the operations are appended to \a out, to be canceled by the caller
+
+        @param tp the thread
+        @param pgm the Program whose submissions are taken
+        @param out the operations taken
+    */
+    DLLLOCAL void takeProgramSubmitsLocked(IoThreadContext& tp, QoreProgram* pgm, std::vector<PollInfo>& out);
+
+
+    //! Dispatches the notifications of the streams of an HTTP/2 or HTTP/3 operation: onStreamData() for the streams that
+    //! have data or ended, and the transmission results of watched responses
+    /** Called after a poll step and after the abort of a canceled operation (qoretechnologies/qore#7241)
+    */
+    DLLLOCAL void dispatchStreamNotifications(SocketPollOperationBase* spop_base, QoreObject* spop_obj,
+        const std::string& op_owner, const AsyncIoSandboxContext& op_sandbox_ctx, qore_program_id_t op_app_id);
+
     //! Records that the caller of the CancelByProgram command with this completion waits for the operation's
     //! deferred cancellation (qore#6703)
     DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD void attachDeferredCancel(PollInfo& pinfo,
             AsyncOpCompletion* completion);
 
-    //! Marks the Program in the current dispatcher, which discards its queued items; out of memory ends the process
+    //! Marks the Program in the current dispatcher and in any that replaces it during the mark, which discards its
+    //! queued items; out of memory ends the process
     /** A discarded step's result can be what a deferred cancellation waits for (see cancelByProgram())
     */
     DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD void markProgramNoFail(QoreProgram* pgm,
@@ -3402,6 +3490,16 @@ private:
 
     //! Shared call dispatcher for async callback/abort delivery (lazily created, atomic for lock-free check)
     std::atomic<QoreCallDispatcher*> call_dispatcher{nullptr};
+    //! dispatchers that a stop() replaced while cancelByProgram() ran in the stopping thread, with that thread's ID;
+    //! stopped, and deleted when the outermost cancelByProgram() of that thread returns, as it can still use them
+    //! (guarded by m; qore#7226)
+    std::vector<std::pair<int, QoreCallDispatcher*>> retired_dispatchers;
+#ifdef DEBUG
+    //! test hook: called by cancelByProgram() in a worker thread after it has queued its commands (qore#7225)
+    std::function<void()> dbg_cancel_by_program_queued;
+    //! test hook: the start of an I/O thread fails (qore#7225)
+    bool dbg_fail_io_thread_start = false;
+#endif
 
     //! Configured max callback workers; 0 = auto
     int max_callback_workers = 0;

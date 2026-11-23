@@ -621,6 +621,20 @@ public:
     DLLLOCAL int checkMemberAccess(const char* mem, const qore_class_private* class_ctx,
             const qore_class_private*& member_class_ctx) const;
 
+    //! as checkMemberAccess() for the member name \a mem of \a len bytes (qore#7194)
+    DLLLOCAL int checkMemberAccess(const char* mem, size_t len, const qore_class_private* class_ctx,
+            const qore_class_private*& member_class_ctx) const;
+
+    //! returns the value of the member \a mem of \a len bytes as QoreObject::evalMember() (qore#7194)
+    DLLLOCAL QoreValue evalMember(const char* mem, size_t len, ExceptionSink* xsink);
+
+    //! returns the value of the member \a mem of \a obj as QoreObject::evalMember() (qore#7194)
+    /** Not inline, so that a call from the IR interpreter's dispatch loop is as small as a call of
+        QoreObject::evalMember(); \a mem is a key without a NUL character (made from a C string)
+    */
+    DLLLOCAL static QORE_INTERN_NOINLINE QoreValue evalMember(QoreObject* obj, const std::string& mem,
+            ExceptionSink* xsink);
+
     DLLLOCAL int checkMemberAccess(const char* mem, const qore_class_private* class_ctx,
             const qore_class_private*& member_class_ctx, ExceptionSink* xsink) const {
         int rc = checkMemberAccess(mem, class_ctx, member_class_ctx);
@@ -642,9 +656,17 @@ public:
     DLLLOCAL int checkMemberAccessGetTypeInfo(ExceptionSink* xsink, const char* mem,
             const qore_class_private* class_ctx, const qore_class_private*& member_class_ctx,
             const QoreTypeInfo*& typeInfo, bool* declared = nullptr) const {
+        return checkMemberAccessGetTypeInfo(xsink, mem, strlen(mem), class_ctx, member_class_ctx, typeInfo,
+            declared);
+    }
+
+    //! as above for the member name \a mem of \a len bytes (qore#7194)
+    DLLLOCAL int checkMemberAccessGetTypeInfo(ExceptionSink* xsink, const char* mem, size_t len,
+            const qore_class_private* class_ctx, const qore_class_private*& member_class_ctx,
+            const QoreTypeInfo*& typeInfo, bool* declared = nullptr) const {
         assert(!member_class_ctx);
         const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
-        const QoreMemberInfo* mi = theclass_priv->runtimeGetMemberInfo(mem, class_ctx);
+        const QoreMemberInfo* mi = theclass_priv->runtimeGetMemberInfo(mem, len, class_ctx);
         if (declared) {
             *declared = mi != nullptr;
         }

@@ -90,11 +90,12 @@ public class AbstractStreamContext {
         failing; the default implementation calls @ref sendData().
 
         @param data the binary payload to send
-        @param timeout_ms the maximum time to wait for the stream send buffer to drain; a value less than or equal to
-        zero waits without a limit
+        @param timeout_ms the maximum time that the stream send buffer may make no progress (the peer takes none of
+        the stream's data); a value less than or equal to zero waits without a limit
         @param end_stream if @ref True, signals end of stream after this data
 
-        @throw STREAM-SEND-TIMEOUT the stream send buffer did not drain in time; the data was not sent
+        @throw STREAM-SEND-TIMEOUT the peer took none of the data for this time, or the stream ended with its send
+        buffer full; the data was not sent
 
         @since AsyncSocketIo 1.0
     */
@@ -221,6 +222,22 @@ public class AbstractStreamContext {
     */
     close() {
         # no-op by default; Http3StreamContext overrides
+    }
+
+    #! Aborts the stream: the data not yet sent is discarded and the peer is told that the stream was cancelled
+    /** For a connection that is dropped without delivering what it has not sent yet, for example a client that took
+        none of the data for the send timeout (qore#7325): unlike @ref close(), which ends the stream after the data
+        already queued, so that a peer that grants no flow-control credit is never told, and the stream and its send
+        buffer stay until the session ends, the stream is reset at once (HTTP/2 \c RST_STREAM, HTTP/3
+        \c RESET_STREAM and \c STOP_SENDING) and its state and buffered data are released.  Errors are ignored, as
+        the peer or the session may have ended the stream already.
+
+        The default implementation calls @ref close()
+
+        @since AsyncSocketIo 1.0
+    */
+    abort() {
+        close();
     }
 }
 
