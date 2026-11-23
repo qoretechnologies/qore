@@ -204,10 +204,7 @@ Program p(opts);
       @ref background "background" operator (ex: \c "background c()" or \c "background o.m()" in module code that
       was given \c c or \c o), in every execution mode; a closure that is only an argument of the call (ex:
       \c "background f(c, x + 1)") is given by the code that starts the thread to the code that it calls, and is not
-      refused; a known limitation of code compiled with \c qcc (a module or an executable): it does not give the
-      callee when the new thread computes the arguments or the callee of the call, and refuses every closure, call
-      reference and object of such code that the expression takes when the thread starts, also one that is only an
-      argument of a call of trusted code (ex: \c "background call_function(\\hc(), c)")
+      refused, also in code compiled with \c qcc (a module or an executable)
       (<a href="https://github.com/qoretechnologies/qore/issues/7087">issue 7087</a>)
     - code of such a %Program that the expression of the @ref background "background" operator calls itself, which
       is not a value when the thread starts: a callable or object that the new thread computes (an element of a list,

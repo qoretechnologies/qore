@@ -652,6 +652,10 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      - no format change, but the code that a v50 compiler wrote differs (an image must be rebuilt): string literals
 //!        that an earlier compiler folded with the encoding of the source tagged as the default encoding are
 //!        materialized as UTF-8 CONST_STRING values, as the source is decoded as UTF-8 (qore#6816, qore#6815)
+//! v52 (the reader refuses v51 and older images, also those that a qcc executable embeds):
+//!      - a serialized background instruction of the helper kind (group 62) has an i32 after the helper's self mode:
+//!        the callee of its expression as the lowering classified it (QoreIRBackgroundInstruction::helper_callee:
+//!        the index of the parameter that holds the callee, QBH_CHECK_IN_THREAD or QBH_CALLEE_UNKNOWN; qore#7087)
 //! The shared format version for the changes in batch AL (see v48 above).
 constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
 //! The shared format version for the changes in batch AM (see v49 above).
@@ -668,10 +672,14 @@ constexpr uint16_t QORE_AOT_BATCH_AO_VERSION = 51;
 constexpr uint16_t QORE_AOT_STATIC_METHOD_REF_TARGET_VERSION = 49;
 static_assert(QORE_AOT_STATIC_METHOD_REF_TARGET_VERSION == QORE_AOT_BATCH_AM_VERSION,
     "the format changes of batch AM share one format version (v49)");
-//! Old compiled artifacts must be rebuilt (see v51 above): the reader refuses older images, the program image of a qcc
-//! executable included (qore_aot_run_v3() reads it before anything else); the reader of a v51 image always has the temp
-//! scopes of its IR (qore#6742) and the local unwind locations of its IR functions (qore#6672)
-constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AO_VERSION;
+//! First format version whose serialized background helpers record the callee of their expression (see v52 above,
+//! qore#7087)
+constexpr uint16_t QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION = 52;
+//! Old compiled artifacts must be rebuilt (see v52 above): the reader refuses older images, the program image of a qcc
+//! executable included (qore_aot_run_v3() reads it before anything else); the reader of a v52 image always has the temp
+//! scopes of its IR (qore#6742), the local unwind locations of its IR functions (qore#6672) and the callee of each
+//! background helper (qore#7087)
+constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
 //! Variant-flags bit of FUNCTIONS and METHODS records (QORE_AOT_FEAT_METHOD_SYNC): the variant is synchronized
@@ -811,7 +819,7 @@ static_assert(QORE_AOT_TEMP_SCOPES_VERSION == QORE_AOT_BATCH_AN_VERSION,
 constexpr uint16_t QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION = 51;
 static_assert(QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION == QORE_AOT_BATCH_AO_VERSION,
     "the format changes of batch AO share one format version (v51)");
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AO_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION;
 
 //! The tag of the runtime location of a serialized IR instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
 enum class QoreAOTStmtLocTag : uint8_t {
