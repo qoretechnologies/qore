@@ -987,6 +987,10 @@ QuicSession::QuicSession() : session_id_(next_session_id_.fetch_add(1, std::memo
 }
 
 QuicSession::~QuicSession() {
+    // server sessions are recorded for dbg_quic_wait_idle() (see createServer())
+    if (is_server_) {
+        qore_dbg_quic_unregister_session(session_id_);
+    }
 #ifdef DEBUG
     // the extended-CONNECT buffers are released with the session (issue #5821)
     for (auto& i : connect_stream_data_) {
@@ -1246,6 +1250,8 @@ std::shared_ptr<QuicSession> QuicSession::createServer(
     session->setMaxHeaderListSize(sock->getMaxHeaderSize());
     // Clear the temporary socket pointer; it was only needed during init
     session->clearSockPtr();
+    // a handler of a request of the session can find it by its ID with dbg_quic_wait_idle() (issue #7354)
+    qore_dbg_quic_register_session(session);
     return session;
 }
 
@@ -2339,6 +2345,10 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
 #ifdef DEBUG
     quic_test_count_rx(is_server_);
 #endif
+    // the packet can have acknowledged the data in flight (issue #7354)
+    if (qore_dbg_quic_idle_waiters.load(std::memory_order_acquire)) {
+        qore_dbg_quic_notify_idle_waiters();
+    }
 
     return 0;
 }
@@ -2465,6 +2475,10 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
 
     // Signal pending write once for the entire batch
     pending_write_.store(true, std::memory_order_release);
+    // the packets can have acknowledged the data in flight (issue #7354)
+    if (qore_dbg_quic_idle_waiters.load(std::memory_order_acquire)) {
+        qore_dbg_quic_notify_idle_waiters();
+    }
 
     return 0;
 }
@@ -2693,6 +2707,14 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                 }
             }
 
+            // a stream whose streamed response broke its declared length in this iteration is reset in this cycle:
+            // the next iteration applies the reset and writes it; the session's next write cycle can come only when
+            // the peer sends something, and a peer that has nothing in flight and waits for the response sends
+            // nothing (issue #7354)
+            if (!pending_length_resets_.empty()) {
+                continue;
+            }
+
             ASYNC_IO_TRACE("QuicSession::writePacketsLocked nwrite=0 session=%lld stream_id=%lld total_packets=%d bytes_cwnd_left=%llu pending_datagrams=%zu\n",
                 (long long)getSessionId(), (long long)stream_id, total_packets,
                 (unsigned long long)ngtcp2_conn_get_cwnd_left(conn_),
@@ -2750,7 +2772,8 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
         }
     }
 
-    // a reset found in the last iteration is sent with the next write
+    // a reset found in an iteration that ended the loop otherwise (a full batch, or a connection that is closing) is
+    // sent with the next write
     if (!pending_length_resets_.empty()) {
         applyLengthResetsLocked();
         pending_write_.store(true, std::memory_order_release);

@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/3 (QUIC) server streams and the write cycles of the QUIC session
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# An HTTP/3 server resets a stream whose streamed response breaks its content-length in the write cycle that finds
+# it, also when that cycle has nothing else to send (qoretechnologies/qore#7354): before, the reset was only
+# recorded for a later write, and a connection with nothing in flight and nothing to acknowledge had no later write
+# until the client sent something, so the client waited for its request timeout (the server writes again when a
+# handler returns, which hid it unless that write ran in the same cycle as the data's, as under load).  The case is
+# forced: the handler sends the response headers, waits until the client has acknowledged them
+# (dbg_quic_wait_idle()), sends the data, or the end of the stream, that breaks the length, and returns only after
+# the client's request has ended.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerHttp3LengthResetTest
+
+#! a hang guard only
+const Timeout = 20s;
+
+#! the request timeout of the client, which the reset must beat
+const RequestTimeout = 10s;
+
+#! sends a streamed response whose content breaks its declared length after the client acknowledged the headers
+class LengthHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! receives the result of each wait for the session to be idle
+        Queue idle();
+        #! the handler returns when an entry is pushed, after the client's request has ended: its return makes the
+        #! server write on the session again, which would send what the data's own write cycle left unsent
+        Queue release();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        string c = (hdr.path =~ x/([^\/]+)$/)[0];
+        int sid = cx."header-info".stream_id;
+        int session_id = cx."header-info".session_id;
+        switch (c) {
+            case "long":
+                # more content than declared
+                s.submitQuicResponseStreaming(session_id, sid, 200, {"content-length": "2"});
+                idle.push(dbg_quic_wait_idle(session_id, Timeout));
+                s.submitQuicStreamData(session_id, sid, binary("longer"), True);
+                waitRelease();
+                break;
+            case "short":
+                # the end of the stream before the declared content
+                s.submitQuicResponseStreaming(session_id, sid, 200, {"content-length": "100"});
+                s.submitQuicStreamData(session_id, sid, binary("short"));
+                idle.push(dbg_quic_wait_idle(session_id, Timeout));
+                s.submitQuicStreamData(session_id, sid, binary(), True);
+                waitRelease();
+                break;
+            default:
+                return <HttpResponseInfo>{"code": 404, "body": "unknown case"};
+        }
+        return <HttpResponseInfo>{"code": 200, "reply_sent": True};
+    }
+
+    private waitRelease() {
+        # bounded, so that the server ends if a failed test leaves the handler unreleased
+        try {
+            release.get(Timeout);
+        } catch () {
+        }
+    }
+}
+
+class PlainHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{"code": 200, "body": "ok"};
+    }
+}
+
+class HttpServerHttp3LengthResetTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        LengthHandler handler();
+        string url;
+    }
+
+    constructor() : Test("HttpServerHttp3LengthReset", "1.0") {
+        addTestCase("content longer than declared resets the stream in the cycle that finds it", \resetTest(),
+            "long");
+        addTestCase("a stream ended before its declared content is reset in the cycle that finds it", \resetTest(),
+            "short");
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("s", LoggerLevel::getLevelInfo())});
+        server.setHandler("length", "/length", NOTHING, handler);
+        server.setDefaultHandler("plain", new PlainHandler());
+        server.waitForAsyncIo();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
+            "cert": new SSLCertificate(CertPem), "key": new SSLPrivateKey(KeyPem), "enable_h3": True}).port;
+        server.waitForAsyncIo();
+        url = "https://127.0.0.1:" + port;
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    resetTest(string c) {
+        handler.idle.clear();
+        handler.release.clear();
+        # the handler is released whatever happens
+        on_exit handler.release.push(True);
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "connect_timeout": Timeout,
+            "request_timeout": RequestTimeout,
+        });
+        on_exit delete mgr;
+        assertEq(200, mgr.request(url, "GET", "/").status_code, "the connection is up");
+
+        *hash<ExceptionInfo> err;
+        try {
+            mgr.request(url, "GET", "/length/" + c);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        assertTrue(handler.idle.get(Timeout), "the client acknowledged the headers before the data was sent");
+        assertEq(Type::Hash, err.type(), "the request fails");
+        assertRegex("RESET", err.desc, "the stream is reset, before the request times out");
+        assertEq(200, mgr.request(url, "GET", "/").status_code, "the connection goes on");
+    }
+}
