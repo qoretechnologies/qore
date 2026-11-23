@@ -145,6 +145,7 @@
 #include <qore/QoreEnumDecl.h>
 
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/qore_number_private.h"
 #include "qore/intern/QoreIRBuilder.h"
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRVerifier.h"
@@ -4095,6 +4096,20 @@ private:
     const size_t len;
 };
 
+bool qore_aot_format_number(const QoreNumberNode& number, QoreString& str) {
+    // Keep the usual decimal spelling while the exponent is bounded by the stored precision.
+    // Beyond that range fixed-point notation pads the significand with arbitrarily many zeros.
+    mpfr_srcptr value = qore_number_private::get(number)->num;
+    mpfr_exp_t exponent = mpfr_regular_p(value) ? mpfr_get_exp(value) : 0;
+    mpfr_prec_t precision = mpfr_get_prec(value);
+    ExceptionSink xsink;
+    if (number.toStringRoundTrip(str, exponent > precision || exponent < -precision, &xsink)) {
+        xsink.clear();
+        return false;
+    }
+    return true;
+}
+
 bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
     const uint32_t start_pos = position();
     auto fail = [this, start_pos, &v]() -> bool {
@@ -4241,11 +4256,8 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                 // string LENGTH, which is unrelated to the number's own, so digits alone rebuild a
                 // DIFFERENT number.  See issue #5461 and QORE_AOT_NUMBER_PRECISION_VERSION.
                 QoreString str;
-                ExceptionSink xsink;
-                if (num->toStringRoundTrip(str, false, &xsink) || xsink) {
-                    xsink.clear();
-                    str.clear();
-                    num->toString(str, QORE_NF_RAW);
+                if (!qore_aot_format_number(*num, str)) {
+                    return fail();
                 }
                 writeU32(static_cast<uint32_t>(str.size()));
                 writeStringRef(str.c_str(), str.size());
@@ -13849,14 +13861,11 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     // QoreNumberNode: number literal constant; the precision follows the digits (see #5461 and
     // QORE_AOT_NUMBER_PRECISION_VERSION) because digits alone rebuild a different number
     if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
-        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NUMBER));
         QoreString str;
-        ExceptionSink xsink;
-        if (num->toStringRoundTrip(str, false, &xsink) || xsink) {
-            xsink.clear();
-            str.clear();
-            num->toString(str);
+        if (!qore_aot_format_number(*num, str)) {
+            return false;
         }
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NUMBER));
         writer.writeStringRef(str.c_str());
         writer.writeStringRef(std::to_string(num->getPrec()).c_str());
         return true;
