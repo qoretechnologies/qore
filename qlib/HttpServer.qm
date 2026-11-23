@@ -4160,12 +4160,12 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
         # A "random port" request (service == "0") lets us transparently retry
         # if the kernel-assigned TCP port turns out to be taken on UDP by
-        # something else in the process — most commonly a still-lingering
-        # ephemeral UDP socket from a previous H3 client in the same test
-        # process.  For an explicit port the caller committed to that port
-        # and we fail loudly instead of silently degrading to TCP-only (the
-        # old behaviour would leave clients hitting QUIC-HANDSHAKE-TIMEOUT
-        # with no indication why).
+        # something else (EADDRINUSE) — most commonly the ephemeral UDP socket
+        # of a QUIC client.  Any other failure of the bind would fail on a
+        # fresh port as well, and is raised at once.  For an explicit port the
+        # caller committed to that port, so it is not retried.  A listener
+        # whose paired QUIC listener cannot be bound is never kept TCP-only:
+        # its HTTP/3 clients would get no answer (qore#7420).
         bool random_port = (info.service == "0");
         bool needs_h3 = enable_h3 && info.cert && info.key && (info.enable_h3 ?? True);
         int max_attempts = (random_port && needs_h3) ? 10 : 1;
@@ -4296,8 +4296,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
             if (!h3_ok) {
                 int failed_port = l.getInfo().port;
+                # the description of a system error has the error's text already
                 string failure = sprintf("attempt %d/%d on port %d: %s: %s%s", attempt, max_attempts, failed_port,
-                    h3_err, h3_desc, exists h3_errno ? sprintf(" (errno %d: %s)", h3_errno, strerror(h3_errno)) : "");
+                    h3_err, h3_desc, exists h3_errno ? sprintf(" (errno %d)", h3_errno) : "");
                 push h3_failures, failure;
                 # Tear down everything bound so far: a retry starts clean, and a listener whose paired QUIC listener
                 # could not be bound is not kept: the caller asked for HTTP/3 and has no way to observe that it did
@@ -4306,17 +4307,20 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 remove smap{effective_sock};
                 remove nmap{info.name};
                 try { l.stop(); } catch () {}
-                # l.stop() drives listenerStopped() which already calls c.done(); only decrement here if l.stop()
-                # didn't get there (i.e. threw before reaching it).  Mirrors the WAITGROUP-ERROR defense in
-                # listenerStopped() at the top of this class.
-                try {
-                    c.done();
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err != "WAITGROUP-ERROR") {
-                        rethrow;
+                # once the listener has stopped, l.stop() has called listenerStopped(), which decremented the count
+                # of running listeners for it; only a stop that failed before that leaves it to be done here
+                # (qore#7420: it was done in both cases, so each failed attempt decremented the count of another
+                # running listener, and stop() no longer waited for it)
+                if (!l.isStopped()) {
+                    try {
+                        c.done();
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err != "WAITGROUP-ERROR") {
+                            rethrow;
+                        }
                     }
                 }
-                if (random_port && attempt < max_attempts) {
+                if (random_port && attempt < max_attempts && h3_errno == EADDRINUSE) {
                     # a random port: retry on a fresh port (the kernel-assigned TCP port can be taken on UDP by
                     # something else, such as the ephemeral UDP socket of a QUIC client)
                     log("WARNING: paired QUIC listener bind failed, %s; retrying with a fresh random port", failure);
@@ -4331,12 +4335,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         sprintf("failed to bind paired HTTP/3 UDP listener on requested port %s: %s: %s",
                             info.service, h3_err, h3_desc), {"attempts": h3_failures};
                 }
-                # a random port whose attempts are exhausted
-                log("ERROR: failed to bind the paired QUIC listener of a random-port listener in %d attempts: %s",
-                    max_attempts, h3_failures.join("; "));
+                # a random port whose attempts are exhausted, or whose bind failed with an error that a fresh port
+                # does not change
+                log("ERROR: failed to bind the paired QUIC listener of a random-port listener in %d attempt(s): %s",
+                    attempt, h3_failures.join("; "));
                 throw "HTTPSERVER-H3-BIND-ERROR",
-                    sprintf("failed to bind paired HTTP/3 UDP listener on a random port in %d attempts; last: %s",
-                        max_attempts, failure), {"attempts": h3_failures};
+                    sprintf("failed to bind paired HTTP/3 UDP listener on a random port in %d attempt(s); last: %s",
+                        attempt, failure), {"attempts": h3_failures};
             }
 
             # the fast routes of the server, if any, are answered for the connections accepted from the listener, with
@@ -7747,6 +7752,13 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     stopNoWait() {
         background stop();
+    }
+
+    #! Returns @ref True once the listener has stopped
+    /** The server's count of running listeners was decremented for the listener when it stopped
+    */
+    bool isStopped() {
+        return stopped;
     }
 
 %ifdef QoreDebug
