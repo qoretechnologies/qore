@@ -84,11 +84,10 @@ public:
     }
 
     //! returns true if the body reads the implicit index (\c $#) of the statement (qore#7270)
-    /** Only a \c $# in the body itself reads it: the code that the body calls, the closures created in it and a fold
-        expression in it cannot refer to it (qore#5690), and the code that an operator in the body runs for each
-        element reads the index of that operator; see QoreParseImplicitElementScope.  The statement sets the
-        thread's implicit index for each element only if the body reads it; true until the statement has been parse
-        initialized.
+    /** Counts the reads of \c $# in the body; code in the body that has an index scope of its own does not count
+        (see QoreParseImplicitElementScope).  The code that the body calls, the closures created in it and a fold
+        expression in it cannot refer to the index (qore#5690).  The statement sets the thread's implicit index for
+        each element only if the body reads it; true until the statement has been parse initialized.
     */
     DLLLOCAL bool readsImplicitElement() const {
         return reads_implicit_element;
