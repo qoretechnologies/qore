@@ -2013,6 +2013,11 @@ struct qore_socket_private : public QoreReferenceCounter {
     //! one-shot, set with QoreSocketObject::dbgForceSslErrorSslAtNextWrite()
     std::atomic<bool> dbg_force_ssl_error_ssl{false};
 
+    //! Debug-only: the next TLS write that can stage its ciphertext finds the socket buffer full, stages it, and the
+    //! drain of the staged ciphertext then fails as when the peer reset the connection; one-shot, set with
+    //! dbg_force_staged_write_failure()
+    std::atomic<bool> dbg_force_staged_write_failure{false};
+
     //! Debug-only: prepares an abortive close if one was requested; returns true if so (close_m held)
     DLLLOCAL bool dbgAbortiveCloseLocked() {
         if (!dbg_abortive_close.load(std::memory_order_acquire)) {

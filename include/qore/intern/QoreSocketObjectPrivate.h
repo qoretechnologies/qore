@@ -582,6 +582,10 @@ public:
     //! Debug-only: the next SSL write fails with SSL_ERROR_SSL while errno holds EPIPE
     DLLLOCAL void dbgForceSslErrorSslAtNextWrite();
 
+    //! Debug-only: the next TLS write stages its ciphertext, as with a full socket buffer, and the drain of it fails as
+    //! when the peer reset the connection
+    DLLLOCAL void dbgForceStagedWriteFailure();
+
     //! Debug-only: returns the number of records that a session of the socket keeps for its streams, by kind
     /** Called via the @c dbg_socket_stream_records() debug builtin in @ref lib/ql_debug.cpp, so tests can show that
         a long-lived session does not keep records for the streams it has finished.

@@ -111,8 +111,6 @@ stream.close();
 
     @subsection AnthropicRestClientv1_0 AnthropicRestClient v1.0
     - initial release
-    - the LLM provider makes asynchronous chat calls, streamed or not, without holding a thread while the response
-      is awaited (@ref QoreLlmUtils::AbstractLlmProvider::chatAsync() "AbstractLlmProvider::chatAsync()")
 */
 
 %requires json

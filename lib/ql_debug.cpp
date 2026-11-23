@@ -20109,6 +20109,29 @@ static QoreValue f_dbg_force_ssl_error_ssl(const QoreListNode* params, RuntimeCo
     return QoreValue();
 }
 
+//! Debug-only: the next TLS write of a socket finds the socket buffer full, so its ciphertext is staged, and the
+//! drain of the staged ciphertext fails as when the peer reset the connection (errno EPIPE)
+/** The write is reported as a write that the peer's reset made fail without staging is: SOCKET-SSL-ERROR with the
+    errno, the socket staying open (qore#7383: macOS stages such a write when its smaller send buffer fills first).
+    DEBUG builds only.
+*/
+static QoreValue f_dbg_force_staged_write_failure(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreSocketObject> sock(obj
+        ? reinterpret_cast<QoreSocketObject*>(const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET,
+            xsink))
+        : nullptr, xsink);
+    if (*xsink || !sock) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_force_staged_write_failure() requires a Socket argument");
+        }
+        return QoreValue();
+    }
+    qore_socket_object_private(sock).dbgForceStagedWriteFailure();
+    return QoreValue();
+}
+
 //! Debug-only: returns the number of TLS close_notify alerts sent so far (SSL_shutdown() calls on close)
 static QoreValue f_dbg_ssl_close_notify_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return qore_dbg_ssl_close_notify_count.load(std::memory_order_relaxed);
@@ -32075,6 +32098,8 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, 1, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_force_ssl_error_ssl", f_dbg_force_ssl_error_ssl, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_force_staged_write_failure", f_dbg_force_staged_write_failure, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_ssl_close_notify_count", f_dbg_ssl_close_notify_count, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_fail_http1_header_read_op", f_dbg_fail_http1_header_read_op, QCF_NO_FLAGS,
