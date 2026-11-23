@@ -2794,6 +2794,11 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the body of a plain function and of a closure created outside a class runs with its own
+      @ref Qore::Program "Program" as the Program of the calls that it makes, as a method runs with its class's, in
+      every execution mode: the frames of its calls name it (@ref Qore::CallStackInfo "CallStackInfo" \c programid),
+      and so do the checks of the calling code that read them; they named the code that called it in some execution
+      modes (<a href="https://github.com/qoretechnologies/qore/issues/7394">issue 7394</a>)
     - @ref Qore::HTTPClient::getURL() "HTTPClient::getURL()", @ref Qore::HTTPClient::getProxyURL() "getProxyURL()"
       and @ref Qore::HTTPClient::getSafeProxyURL() "getSafeProxyURL()" give an IPv6 host in brackets and the path of a
       UNIX domain socket with every reserved character encoded; the URL was ambiguous without them, and

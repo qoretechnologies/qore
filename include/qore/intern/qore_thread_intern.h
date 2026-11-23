@@ -2860,6 +2860,38 @@ private:
     QoreProgram* pgm;
 };
 
+//! Sets the call Program context of the body of a plain function that a fast call path runs in another Program
+/** A call of user code runs the body of a plain function with the call Program context of the Program it runs in
+    (CodeContextHelperBase, qore#7394); the fast call paths that run the body without that call (the runtime
+    fast-call helpers, the native cross-module calls of AOT code and the inline calls of the IR interpreter) set it
+    with this helper when the call entered another Program, and restore the caller's when it is destroyed, also on
+    an exceptional exit.  A call within one Program keeps the caller's, which is already the Program's own.  The
+    helper is a local of the runtime: native code does not know its size (see CalleeContextHelper, which it does)
+*/
+class QoreFunctionCallProgramContextHelper {
+public:
+    //! \a exec_pgm is the Program that the call entered, \a caller_pgm the one it was made from
+    DLLLOCAL QoreFunctionCallProgramContextHelper(QoreProgram* exec_pgm, QoreProgram* caller_pgm) {
+        if (exec_pgm && exec_pgm != caller_pgm) {
+            old = get_set_program_call_context(exec_pgm);
+            switched = true;
+        }
+    }
+
+    DLLLOCAL ~QoreFunctionCallProgramContextHelper() {
+        if (switched) {
+            set_program_call_context(old);
+        }
+    }
+
+    QoreFunctionCallProgramContextHelper(const QoreFunctionCallProgramContextHelper&) = delete;
+    QoreFunctionCallProgramContextHelper& operator=(const QoreFunctionCallProgramContextHelper&) = delete;
+
+private:
+    QoreProgram* old = nullptr;
+    bool switched = false;
+};
+
 class ModuleReExportHelper {
 protected:
     QoreAbstractModule* m;
@@ -3285,11 +3317,19 @@ public:
     DLLLOCAL CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
             ExceptionSink* xsink, bool ref_obj, QoreClassSourceProgramInfo& spgm_info);
 
+    //! as the first constructor; \a user_code is true for the body of user code (CT_USER)
+    /** The body of user code that has neither a class nor an object (a plain function, a closure created outside a
+        class) runs with the call Program context of the Program that it runs in, as a method runs with that of its
+        class (qore#7394); builtin code keeps the call Program context of its caller, which is the code that called it
+    */
+    DLLLOCAL CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
+            ExceptionSink* xsink, bool ref_obj, bool user_code);
+
     DLLLOCAL ~CodeContextHelperBase();
 
 private:
     DLLLOCAL void init(const char* code, QoreObject* obj, const qore_class_private* c, bool ref_obj,
-            QoreClassSourceProgramInfo* spgm_info);
+            QoreClassSourceProgramInfo* spgm_info, bool user_code = false);
 };
 
 //! Runs the body of a plain function or a static method in its own object and class context
@@ -4374,7 +4414,7 @@ class CodeContextHelper : public CodeContextHelperBase {
 public:
     DLLLOCAL CodeContextHelper(ExceptionSink* xs, int t, const char* c, QoreObject* obj = nullptr,
             const qore_class_private* cls = nullptr, bool ref_obj = true) :
-        CodeContextHelperBase(c, obj, cls, xs, ref_obj) {
+        CodeContextHelperBase(c, obj, cls, xs, ref_obj, t == CT_USER) {
     }
 };
 

@@ -1,0 +1,94 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# FcxLib.qm - test module: what library code sees of the code that calls it (qore#7394)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module FcxLib {
+    version = "1.0";
+    desc = "test module: what library code sees of the code that calls it";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace FcxLib {
+public class Lib {
+    #! the user frames of the call stack, from the innermost: "function=programid"
+    static list<string> frames() {
+        list<string> rv = ();
+        foreach hash<auto> h in (get_thread_call_stack()) {
+            if (h.type == "user") {
+                rv += sprintf("%s=%d", h.function, h.programid);
+            }
+        }
+        return rv;
+    }
+
+    #! the frames, through a static method of this module that a plain function of this module calls
+    static list<string> viaStatic() {
+        return Lib::frames();
+    }
+
+    #! the ID of this module's Program: the Program that the frame of a call that this module's code makes names
+    static int ownId() {
+        return get_thread_call_stack()[0].programid;
+    }
+
+    #! the ID of the Program of the caller
+    static int callerId() {
+        return get_thread_call_stack()[1].programid;
+    }
+
+    #! what the checks of the calling code give
+    static string checks() {
+        return Lib::checksIntern();
+    }
+
+    #! the checks of the calling code
+    static string checksIntern() {
+        return sprintf("sandboxed=%y registration=%y process=%y database=%y terminal=%y restricted=%y",
+            SandboxManager::isSandboxed(), SandboxManager::isProcessWideRegistrationAllowed(),
+            SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL), SandboxManager::isCallerRestricted(DOM_DATABASE),
+            SandboxManager::isTerminalIoAllowed(), SandboxManager::isRestricted());
+    }
+
+    #! the process-control capability of the code that called this method, by its frame
+    static string callerMask() {
+        return (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) ? "restricted" : "open";
+    }
+}
+
+#! a plain function of this module that calls a static method of this module
+public list<string> sub libs() {
+    return Lib::viaStatic();
+}
+
+#! a plain function of this module whose own body makes the checks of the calling code
+public string sub libcheck() {
+    return sprintf("sandboxed=%y registration=%y process=%y database=%y terminal=%y restricted=%y",
+        SandboxManager::isSandboxed(), SandboxManager::isProcessWideRegistrationAllowed(),
+        SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL), SandboxManager::isCallerRestricted(DOM_DATABASE),
+        SandboxManager::isTerminalIoAllowed(), SandboxManager::isRestricted());
+}
+
+#! a plain function of this module that makes the checks through a static method of this module
+public string sub libcheck_static() {
+    return Lib::checks();
+}
+
+#! a plain function of this module that calls a builtin that refuses sandboxed callers
+public string sub libregister() {
+    try {
+        SandboxManager::checkProcessWideRegistration("register for the test");
+        return "granted";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! a plain function of this module that calls code that the caller gave
+public auto sub libcall(code c) {
+    return c();
+}
+}

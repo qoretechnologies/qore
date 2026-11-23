@@ -1,0 +1,168 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - JIT and AOT code generation, native and IR fast calls into other Programs, and sandboxes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%exec-class FunctionCallContextTest
+
+#! The body of a function and of a closure runs with the call Program context of its own Program (qore#7394)
+/** The frames of the calls that code makes name the Program of that code, and the checks of the calling code that
+    library code makes see the code that calls it, in every execution mode, before and after the calls have run often
+    enough to run on other paths (the IR fast paths and native code), and in programs compiled with qcc.  The worker
+    (function-call-context/fcx-worker.q) prints a line per case:
+
+    - the frames of the calls that a closure of a child Program makes when the host calls it: of a function, a static
+      method, a method, a function of a library module, and through those, of the child Program and of the library
+    - what a library module (function-call-context/FcxLib.qm) sees of a sandboxed and of a restricted child Program
+      that calls it: from a plain function whose body makes the checks, through a static method, from the static
+      method, directly and from a closure that the host calls; a plain function that calls a builtin that refuses
+      sandboxed callers refuses them; the host's code that such a Program calls is the calling code
+    - the plain functions of the standard modules that check the code that calls them, called by such a Program
+*/
+class FunctionCallContextTest inherits QUnit::Test {
+    public {
+        #! the lines of the worker
+        const Expected = (
+            "closure-function: Lib::frames:T g:T <anonymous closure>:host HostCls::run:host",
+            "closure-function-warm: Lib::frames:T g:T <anonymous closure>:host HostCls::run:host",
+            "closure-static: Lib::frames:T TS::s:T <anonymous closure>:host HostCls::run:host",
+            "closure-static-warm: Lib::frames:T TS::s:T <anonymous closure>:host HostCls::run:host",
+            "closure-module: Lib::frames:T <anonymous closure>:host HostCls::run:host",
+            "closure-module-warm: Lib::frames:T <anonymous closure>:host HostCls::run:host",
+            "closure-method: Lib::frames:T TS::m:T <anonymous closure>:host HostCls::run:host",
+            "closure-method-warm: Lib::frames:T TS::m:T <anonymous closure>:host HostCls::run:host",
+            "closure-function-chain: Lib::frames:T g:T g1:T <anonymous closure>:host HostCls::run:host",
+            "closure-function-chain-warm: Lib::frames:T g:T g1:T <anonymous closure>:host HostCls::run:host",
+            "closure-function-static: Lib::frames:T TS::s:T gs:T <anonymous closure>:host HostCls::run:host",
+            "closure-function-static-warm: Lib::frames:T TS::s:T gs:T <anonymous closure>:host HostCls::run:host",
+            "closure-module-function: Lib::frames:M Lib::viaStatic:M libs:T <anonymous closure>:host HostCls::run:host",
+            "closure-module-function-warm: Lib::frames:M Lib::viaStatic:M libs:T <anonymous closure>:host HostCls::run:host",
+            "host-module-function: Lib::frames:M Lib::viaStatic:M libs:host",
+            "call-function: Lib::frames:T g:T g1:T",
+            "TS-direct: sandboxed=True registration=False process=False database=False terminal=True restricted=True",
+            "TS-direct-closure: sandboxed=True registration=False process=False database=False terminal=True restricted=True",
+            "TS-direct-closure-warm: sandboxed=True registration=False process=False database=False terminal=True restricted=True",
+            "TS-static: sandboxed=True registration=False process=False database=False terminal=True restricted=True",
+            "TS-static-closure: sandboxed=True registration=False process=False database=False terminal=True restricted=True",
+            "TS-static-closure-warm: sandboxed=True registration=False process=False database=False terminal=True restricted=True",
+            "TS-method: sandboxed=True registration=False process=False database=False terminal=True restricted=True",
+            "TS-method-closure: sandboxed=True registration=False process=False database=False terminal=True restricted=True",
+            "TS-method-closure-warm: sandboxed=True registration=False process=False database=False terminal=True restricted=True",
+            "TS-register: SANDBOX-REGISTRATION-ERROR",
+            "TS-register-closure: SANDBOX-REGISTRATION-ERROR",
+            "TS-register-closure-warm: SANDBOX-REGISTRATION-ERROR",
+            "TS-host-code-via-library: sandboxed=True registration=False process=False database=False terminal=True restricted=True",
+            "TS-host-code: sandboxed=True registration=False process=False database=False terminal=True restricted=True",
+            "TS-host-code-mask: open",
+            "TR-direct: sandboxed=False registration=True process=True database=True terminal=False restricted=False",
+            "TR-direct-closure: sandboxed=False registration=True process=True database=True terminal=False restricted=False",
+            "TR-direct-closure-warm: sandboxed=False registration=True process=True database=True terminal=False restricted=False",
+            "TR-static: sandboxed=False registration=True process=True database=True terminal=False restricted=False",
+            "TR-static-closure: sandboxed=False registration=True process=True database=True terminal=False restricted=False",
+            "TR-static-closure-warm: sandboxed=False registration=True process=True database=True terminal=False restricted=False",
+            "TR-method: sandboxed=False registration=True process=True database=True terminal=False restricted=False",
+            "TR-method-closure: sandboxed=False registration=True process=True database=True terminal=False restricted=False",
+            "TR-method-closure-warm: sandboxed=False registration=True process=True database=True terminal=False restricted=False",
+            "TR-register: granted",
+            "TR-register-closure: granted",
+            "TR-register-closure-warm: granted",
+            "TR-host-code-via-library: sandboxed=False registration=True process=False database=False terminal=True restricted=False",
+            "TR-host-code: sandboxed=False registration=True process=False database=False terminal=True restricted=False",
+            "TR-host-code-mask: open",
+            "TS-lib-yaml-handlers: []",
+            "TS-lib-yaml-handlers-closure: []",
+            "TS-lib-yaml-registry: YAML-TAG-REGISTRATION-DENIED",
+            "TS-lib-yaml-registry-closure: YAML-TAG-REGISTRATION-DENIED",
+            "TS-lib-async-controller: own",
+            "TS-lib-async-controller-closure: own",
+            "TR-lib-yaml-handlers: []",
+            "TR-lib-yaml-handlers-closure: []",
+            "TR-lib-yaml-registry: granted",
+            "TR-lib-yaml-registry-closure: granted",
+            "TR-lib-async-controller: global",
+            "TR-lib-async-controller-closure: global",
+            "TR-frame-retry-unit: PERMISSION-DENIED",
+            "TR-frame-retry-unit-mk: PERMISSION-DENIED",
+            "TR-frame-retry-unit-mk-warm: PERMISSION-DENIED",
+            "TR-frame-retry-unit-mk_direct: PERMISSION-DENIED",
+            "TR-frame-retry-unit-mk_direct-warm: PERMISSION-DENIED",
+            "TR-frame-eager-types: PERMISSION-DENIED",
+            "TR-frame-eager-types-mk: PERMISSION-DENIED",
+            "TR-frame-eager-types-mk-warm: PERMISSION-DENIED",
+            "TR-frame-eager-types-mk_direct: PERMISSION-DENIED",
+            "TR-frame-eager-types-mk_direct-warm: PERMISSION-DENIED"
+        );
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string dir = get_script_dir() + DirSep + "function-call-context";
+        string worker = dir + DirSep + "fcx-worker.q";
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("FunctionCallContextTest", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_LIBDIR="
+            + quote(libdir) + " QORE_MODULE_DIR=" + quote(dir + PathSep + (ENV.QORE_MODULE_DIR ?? "")) + " ";
+        addTestCase("each execution mode", \testModes());
+        addTestCase("each execution mode with the default thresholds", \testDefaultThresholds());
+        addTestCase("qcc executables", \testCompiled());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! the expected output of the worker
+    private static string expected() {
+        return (map $1 + "\n", Expected).join("");
+    }
+
+    #! the output of the worker without the module loader's warnings
+    private static string strip(string out) {
+        return (map $1 + "\n", out.split("\n"), $1 && $1 !~ /BINARY-MODULE-SOURCE-FALLBACK|^warning encountered/).join("");
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), strip(ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode="
+                + mode + " " + quote(worker), ExecModeHarness::NativeCheck::None)), mode);
+        }
+        assertEq(expected(), strip(ExecModeHarness::run_ir_tier(prefix + quote(qore_bin)
+            + " -b --enable-debug --exec-mode=tiered " + quote(worker))), ExecModeHarness::IRTierName);
+    }
+
+    #! the calls run on the tiers that the default thresholds choose: a call runs on the IR tier or with the AST
+    #! interpreter until it is compiled
+    testDefaultThresholds() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = backquote(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=" + mode + " "
+                + quote(worker) + " 2>&1");
+            assertEq(expected(), strip(out), mode);
+        }
+    }
+
+    testCompiled() {
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        TmpDir tmp("qore-function-call-context-exe-");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "fcx-worker" + opt;
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -o " + quote(exe) + " " + quote(worker));
+            assertTrue(is_file(exe), "qcc " + opt + " produced the executable");
+            assertEq(expected(), strip(ExecModeHarness::run_any(prefix + quote(exe) + " -b")), "qcc " + opt);
+        }
+    }
+}

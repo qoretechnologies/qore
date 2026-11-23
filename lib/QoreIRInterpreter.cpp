@@ -6859,6 +6859,8 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
         if (inst->cached_switches_context) {
             callee_context.emplace(thread_data);
         }
+        // the body of a plain function runs with the call Program context of the Program it runs in (qore#7394)
+        QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, caller_pgm);
         ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
             nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
             nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);

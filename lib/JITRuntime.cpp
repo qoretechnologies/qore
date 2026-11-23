@@ -13787,6 +13787,8 @@ struct QoreRtCrossModuleCallState {
     std::optional<ProgramThreadCountContextHelper> ptcch;
     std::optional<ThreadSafeLocalVarRuntimeEnvironmentHelper> closure_env_clear;
     std::optional<QoreRtUserCallOverrideHelper> po_override;
+    //! the call Program context of the function's body, which runs in another Program (qore#7394)
+    std::optional<QoreFunctionCallProgramContextHelper> call_ctx;
     std::optional<RuntimeContextSwap> runtime_context;
     std::optional<CallSiteProgram> call_site_pgm;
 };
@@ -13883,6 +13885,10 @@ extern "C" DLLEXPORT int qore_rt_enter_cross_module_call(QoreAOTContext* ctx, in
     // a normal function call: a calling closure's captured locals do not shadow the callee's
     state->closure_env_clear.emplace(nullptr);
     state->po_override.emplace(exec_pgm, uvb, caller_pgm);
+    // the body of the function runs with the call Program context of the Program it runs in (qore#7394)
+    if (exec_pgm != caller_pgm) {
+        state->call_ctx.emplace(exec_pgm, caller_pgm);
+    }
     // A native fast entry inherits the caller's statement and uses the callee's parse options.
     const QoreProgramLocation* parse_loc = uvb->getUserSignature()->getParseLocation();
     if (parse_loc) {
@@ -14313,6 +14319,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_t(const QoreFunction
             argv_context = &function_context;
         }
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
+        // the body of a plain function runs with the call Program context of the Program it runs in (qore#7394)
+        QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, caller_pgm);
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp{args, nargs, CONSUME ? arg_cleanups : nullptr};
@@ -14960,6 +14968,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_with_target_t(uint64
             argv_context = &function_context;
         }
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
+        // the body of a plain function runs with the call Program context of the Program it runs in (qore#7394)
+        QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, caller_pgm);
         execJITWithDeopt<CONSUME>(uvb, call_name, [target_fn](ExceptionSink* xs, bool& /*inv*/) {
             return target_fn(xs);
         }, val, xsink, caller_pgm, nullptr, exec_pgm,
@@ -20310,6 +20320,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
                 argv_context = &function_context;
             }
             QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
+            // the body of a plain function runs with the call Program context of the Program it runs in (qore#7394)
+            QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, caller_pgm);
             if (uvb->hasCachedFunction()) {
                 execJITWithDeopt<CONSUME>(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
                     return uvb->execCachedFunction(xs, inv);
