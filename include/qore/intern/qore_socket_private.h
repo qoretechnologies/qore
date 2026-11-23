@@ -4125,6 +4125,35 @@ public:
         }
     }
 
+    //! Sets the state of a UNIX socket connection, if the socket was not closed since it had the given descriptor
+    //! generation; returns false if it was (qore#7156)
+    /** Set with @ref close_m held, where a close reads and clears the socket's path
+    */
+    DLLLOCAL bool setUnixConnectedIfGeneration(uint32_t gen, const char* path) {
+        CloseLockHelper cl(*this);
+        if (sock == QORE_INVALID_SOCKET || fd_generation != gen) {
+            return false;
+        }
+        socketname = path;
+        sfamily = AF_UNIX;
+        return true;
+    }
+
+    //! Closes the socket's descriptor only if the socket has the given descriptor generation (qore#7156)
+    /** A connection that failed closes the descriptor that it gave the socket, but not one that another caller gave
+        the socket after a close
+    */
+    DLLLOCAL void closeIfGeneration(uint32_t gen) {
+        {
+            CloseLockHelper cl(*this);
+            if (sock == QORE_INVALID_SOCKET || fd_generation != gen) {
+                return;
+            }
+            close_and_reset_locked();
+        }
+        runPendingCloseWakes();
+    }
+
     //! Sets the state of the connection that the socket's descriptor has, if the socket was not closed since it had
     //! the given descriptor generation; returns false if it was (qore#7003)
     /** Set with @ref close_m held, where a close resets it
@@ -5539,6 +5568,12 @@ DLLLOCAL extern std::atomic<void (*)()> qore_dbg_unix_connect_before_adopt;
 /** For the C++ unit tests of a close of the socket by another thread while the check uses it (qore#7156)
 */
 DLLLOCAL extern std::atomic<void (*)(int)> qore_dbg_unix_connect_before_check;
+
+//! Debug builds: if set, called by a UNIX socket connection after its check and before the connection's state is set
+/** For the C++ unit tests of a close of the socket by another thread at that point (qore#7156)
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_unix_connect_before_connected;
+
 //! Debug builds: if set, called by a happy-eyeballs connection after the socket took the winner's descriptor and
 //! before the connection's state is set
 /** For the C++ unit tests of a close of the socket by another thread at that point (qore#7003)
