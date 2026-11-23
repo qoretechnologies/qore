@@ -874,6 +874,15 @@ void QoreHashNode::deleteKey(const QoreString* key, ExceptionSink* xsink) {
     priv->deleteKey(tmp.c_str(), xsink);
 }
 
+QoreValue qore_hash_private::takeRemovedKey(const char* key, ExceptionSink* xsink) {
+    bool exists;
+    QoreValue rv = takeKeyValueIntern(key, exists);
+    if (!exists) {
+        checkRemovalValid(xsink);
+    }
+    return rv;
+}
+
 QoreValue QoreHashNode::takeKeyValue(const char* key) {
     assert(reference_count() == 1);
     return priv->takeKeyValueIntern(key);
