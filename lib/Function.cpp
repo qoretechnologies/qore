@@ -3255,6 +3255,22 @@ int UserSignature::resolveTypes() {
     return err;
 }
 
+UserSignature::~UserSignature() {
+    // type-parameter types are cached by signature address, which the next signature allocated can reuse
+    qore_purge_derived_types(this, nullptr, nullptr);
+    for (ptype_vec_t::iterator i = parseTypeList.begin(), e = parseTypeList.end(); i != e; ++i) {
+        delete* i;
+    }
+    delete parseReturnTypeInfo;
+}
+
+const QoreTypeInfo* UserSignature::parseGetReturnTypeInfo(int& err) const {
+    if (const_cast<UserSignature*>(this)->resolve() && !err) {
+        err = -1;
+    }
+    return returnTypeInfo;
+}
+
 int UserSignature::resolve() {
     if (resolved) {
         return 0;
