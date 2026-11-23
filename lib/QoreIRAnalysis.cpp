@@ -10744,7 +10744,13 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
                 return true;
             }
             std::unordered_set<uint32_t> visiting;
-            if (qore_ir_value_is_proven_assigned(func,
+            // a local whose type accepts NOTHING stores NULL as NOTHING (*int i = NULL;), so a value that can be NULL
+            // does not make it assigned (qore#7372)
+            const QoreIRValueFacts* value_facts = func.getValueFacts(store->operands[0]);
+            bool may_store_nothing = QoreTypeInfo::parseAcceptsReturns(store->local->getTypeInfo(), NT_NOTHING)
+                && (!value_facts || !QoreTypeInfo::hasType(value_facts->type_info)
+                    || QoreTypeInfo::parseReturns(value_facts->type_info, NT_NULL) != QTI_NOT_EQUAL);
+            if (!may_store_nothing && qore_ir_value_is_proven_assigned(func,
                     store->operands[0], definitions, &known, visiting,
                     check_count)) {
                 known.insert(store->local);
