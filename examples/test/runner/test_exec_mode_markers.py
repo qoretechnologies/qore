@@ -208,6 +208,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   qcc executable
         # - hash-copy (#7265): its probe runs in child processes that set their own --exec-mode and in a qcc
         #   executable
+        # - thread-data-clear-reentrant (#7265): its probe runs in child processes that set their own --exec-mode
         # - deleted-program-types (#5790): its probes, reflection.q and bounded.qr run in child processes that set
         #   their own --exec-mode
         # - method-reference-per-class (#6062): its probes run in child processes that set their own --exec-mode and
@@ -444,6 +445,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/member-access-private-internal.qtest",
                                  "examples/test/qore/classes/member-lookup-paths.qtest",
                                  "examples/test/qore/vars/hash-copy.qtest",
+                                 "examples/test/qore/threads/thread-data-clear-reentrant.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
                                  "examples/test/ir/AOTNamedCallRefModules.qtest",

@@ -94,6 +94,48 @@ const TypedHashDecl* qore_hash_private::getInheritingHashDecl(const TypedHashDec
     return nullptr;
 }
 
+void qore_hash_private::clear(ExceptionSink* xsink, bool reverse) {
+    // the keys (and their hashes) of the members with values, in the order in which their values are freed: a member
+    // is looked up again before its value is freed, as the code that freed the values before can have deleted it
+    std::vector<std::pair<std::string, size_t>> keys;
+    while (true) {
+        keys.clear();
+        keys.reserve(member_list.size());
+        auto add_key = [&keys](const HashMember* m) {
+            if (!m->val.isNothing()) {
+                keys.emplace_back(m->key, m->hash);
+            }
+        };
+        if (reverse) {
+            for (qhlist_t::reverse_iterator i = member_list.rbegin(), e = member_list.rend(); i != e; ++i) {
+                add_key(*i);
+            }
+        } else {
+            for (qhlist_t::iterator i = member_list.begin(), e = member_list.end(); i != e; ++i) {
+                add_key(*i);
+            }
+        }
+        if (keys.empty()) {
+            break;
+        }
+        for (const std::pair<std::string, size_t>& k : keys) {
+            HashMember* m = findMember(qore_hash_lookup_key(k.first.c_str(), k.first.size(), k.second));
+            if (!m || m->val.isNothing()) {
+                continue;
+            }
+            // the value is taken from its member before it is freed
+            QoreValue v = m->val;
+            m->val = QoreValue();
+            if (needs_scan(v)) {
+                incScanCount(-1);
+            }
+            v.discard(xsink);
+        }
+    }
+    // no member has a value, so no code runs when the members are deleted
+    freeMembers(xsink);
+}
+
 HashMember* qore_hash_private::createMemberKnownAbsent(const char* key) {
     return addMemberKnownAbsent(new HashMember(qore_hash_lookup_key(key)));
 }

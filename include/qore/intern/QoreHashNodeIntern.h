@@ -144,10 +144,17 @@ struct DLLLOCAL qore_hash_member_key_eq {
 typedef std::unordered_map<HashMember*, qhlist_t::iterator, qore_hash_member_key_hash,
     qore_hash_member_key_eq> hm_hm_t;
 #ifdef __GLIBCXX__
-// the hash of each key is in its member (see qore_hash_member_key_hash), so the node of the map is not larger than
-// the node of a map of a const char* key without the hash: 3 pointers
+// the hash of each key is in its member (see qore_hash_member_key_hash), so libstdc++ does not keep it in the node of
+// the map: the node is 3 words (the next pointer, the member and its place in the member list)
 static_assert(!std::__cache_default<HashMember*, qore_hash_member_key_hash>::value,
     "the key map of a hash must not keep a second copy of the hash of each key");
+#endif
+//! the words of a node of the key map of a hash (see qore_hash_private::sbMemberSize())
+#ifdef _LIBCPP_VERSION
+// libc++ always keeps the hash of the key in the node
+#define QORE_HASH_MAP_NODE_WORDS 4
+#else
+#define QORE_HASH_MAP_NODE_WORDS 3
 #endif
 
 //! the searches of the key map of a hash are functions of their own with the map's search inlined (qore#7265)
@@ -161,7 +168,7 @@ static_assert(!std::__cache_default<HashMember*, qore_hash_member_key_hash>::val
 #endif
 
 // QoreHashIterator private class
-class qhi_priv {
+class DLLLOCAL qhi_priv {
 public:
     qhlist_t::iterator i;
     bool val;
@@ -216,7 +223,7 @@ public:
     }
 };
 
-class qore_hash_private {
+class DLLLOCAL qore_hash_private {
 public:
     qhlist_t member_list;
     hm_hm_t hm;
@@ -244,10 +251,12 @@ public:
     }
 
     //! the estimated memory of a member: the member, its key and its node in the member list and in the key map
-    /** the node of the key map: the next pointer, the member and its place in the member list (see hm_hm_t)
+    /** the node of the key map: the next pointer, the member and its place in the member list, and with libc++ the
+        hash of the key (see hm_hm_t)
     */
     DLLLOCAL static size_t sbMemberSize(const HashMember* m) {
-        return sizeof(HashMember) + m->key.size() + 3 * sizeof(void*) + 2 * sizeof(void*) + sizeof(qhlist_t::iterator);
+        return sizeof(HashMember) + m->key.size() + QORE_HASH_MAP_NODE_WORDS * sizeof(void*) + 2 * sizeof(void*)
+            + sizeof(qhlist_t::iterator);
     }
 
     //! Accounts a member that was added
@@ -296,9 +305,11 @@ public:
         h.needs_eval_flag = true;
     }
 
+    //! frees the members of a hash that has no other reference and that no code can reach (an object's members when
+    //! the object is released)
     DLLLOCAL static void clear(QoreHashNode& h, ExceptionSink* xsink, bool reverse = false) {
         assert(h.is_unique());
-        h.priv->clear(xsink, reverse);
+        h.priv->freeMembers(xsink, reverse);
     }
 
     DLLLOCAL int checkValid(ExceptionSink* xsink) {
@@ -1030,34 +1041,19 @@ public:
         return ha.swap(val);
     }
 
-    //! Empties a hash that stays in use (an object's members before it is released, a thread's data)
+    //! Empties a hash that stays in use (a thread's data)
     /** Unlike derefImpl(), the hash is not marked as freed: marking it made a hash that is used again, such as the
         thread-local data of a pooled thread, reject changes, and made its eventual release look like the release of
         a freed hash.
+
+        Code that runs when a value is freed (a destructor) can read and change the hash (ex: thread-local data):
+        the values are freed one at a time in the order of the members, each taken from its member first, while the
+        values not freed yet can still be read; no iterator of the member list is held while a value is freed, and no
+        member is deleted while it is in the key map, which reads the hashes of the members in a bucket when it is
+        searched (see hm_hm_t; qore#7265).  The values that code adds while the hash is cleared are freed in the
+        same way, and the members are deleted when no member has a value.
     */
-    /** Code that runs when a value is freed (a destructor) can read the hash (ex: thread-local data), so the members
-        stay in the key map, and are not deleted, until all values have been freed; a member whose value has been
-        freed has no value.  The key map reads the hashes of the members in a bucket when it is searched (see
-        hm_hm_t), so no member is deleted while it is in the map (qore#7265).
-    */
-    DLLLOCAL void clear(ExceptionSink* xsink, bool reverse) {
-        auto free_value = [xsink](HashMember* m) {
-            QoreValue v = m->val;
-            m->val = QoreValue();
-            v.discard(xsink);
-        };
-        if (reverse) {
-            for (qhlist_t::reverse_iterator i = member_list.rbegin(), e = member_list.rend(); i != e; ++i) {
-                free_value(*i);
-            }
-        } else {
-            for (qhlist_t::iterator i = member_list.begin(), e = member_list.end(); i != e; ++i) {
-                free_value(*i);
-            }
-        }
-        // members added by code that ran when the values were freed are freed here
-        freeMembers(xsink);
-    }
+    DLLLOCAL void clear(ExceptionSink* xsink, bool reverse);
 
     DLLLOCAL size_t size() const {
         return member_list.size();
