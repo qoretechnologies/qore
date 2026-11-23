@@ -2063,8 +2063,12 @@ struct qore_socket_private : public QoreReferenceCounter {
             hook();
         }
 #endif
+        // nothing may leave a close, which a destructor can make
         for (auto& w : wakes) {
-            (*w)();
+            try {
+                (*w)();
+            } catch (...) {
+            }
         }
     }
 
@@ -2287,7 +2291,7 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     //! Configured TCP_USER_TIMEOUT (ms); 0 = unset, applied at connect.
     /** Set via QoreSocket::setUserTimeout.  Re-applied at every successful
-        TCP connect inside confirmConnected() so it survives disconnect/
+        TCP connect by applyTcpUserTimeout() so it survives disconnect/
         reconnect cycles.  Has no effect on UNIX-domain or UDP sockets.
         On platforms without TCP_USER_TIMEOUT (BSD/macOS/Windows) the
         value is stored but no kernel option is set.
@@ -2823,6 +2827,8 @@ public:
         if (sock != QORE_INVALID_SOCKET) {
             return false;
         }
+        // a close of a socket without a descriptor wakes no operation: one that waits for the resolver of its host
+        // ends at the resolver's next reply or timeout (no leak, no reuse of a descriptor; qore#7371)
         ++fd_generation;
         return true;
     }
@@ -2953,7 +2959,8 @@ public:
             CloseLockHelper cl(*this);
             if (sock == QORE_INVALID_SOCKET) {
                 // a connection that is being made (ex: resolving its host) gives the socket no descriptor after a
-                // close (see SocketConnectInetHappyEyeballsPollState::socketChanged(), qore#7003)
+                // close (see SocketConnectInetHappyEyeballsPollState::socketChanged(), qore#7003); the close wakes no
+                // operation: one that waits for the resolver ends at its next reply or timeout (qore#7371)
                 ++fd_generation;
                 return 0;
             }
@@ -2991,6 +2998,9 @@ public:
         // the caller closes the old descriptor, unless a use of it closes it when it ends with it
         close_old = true;
         if (shared_fd && shared_fd->fd == old_fd && shared_fd.use_count() > 1) {
+            // the close wakes of the replaced descriptor's registration holds are not run: the replacement is made
+            // in a step of the operation that has the registration (a connection that takes another attempt's
+            // descriptor, a QUIC migration), which updates its registration after the step (harmless)
             shared_fd->close_on_release = true;
             close_old = false;
         }
@@ -3202,9 +3212,19 @@ public:
         if (shared_fd && shared_fd->fd == sock && shared_fd.use_count() > 1) {
             shared_fd->close_on_release = true;
             // the async I/O registrations of the descriptor are woken once the close lock is released: an inert
-            // descriptor (below) replaces the one registered, which the event loop drops without an event (qore#7003)
-            pending_close_wakes.insert(pending_close_wakes.end(), shared_fd->close_wakes.begin(),
-                shared_fd->close_wakes.end());
+            // descriptor (below) replaces the one registered, which the event loop drops without an event (qore#7003);
+            // the descriptor's wakes run once, as it is given up once (a hold that sets a wake later runs it at once)
+            if (pending_close_wakes.empty()) {
+                pending_close_wakes.swap(shared_fd->close_wakes);
+            } else {
+                try {
+                    pending_close_wakes.insert(pending_close_wakes.end(), shared_fd->close_wakes.begin(),
+                        shared_fd->close_wakes.end());
+                } catch (...) {
+                    // no memory: the close goes on, its registrations are not woken (an exception may not leave a
+                    // close, which a destructor can make)
+                }
+            }
 #ifndef _Q_WINDOWS
             // a connection attempt in progress holds the descriptor (qore#6962): the shutdown does not stop a
             // connection that is being established, so the connection is closed now and the number is kept by an
@@ -3375,7 +3395,8 @@ public:
                 rc = close_and_reset_locked();
             } else {
                 // a connection that is being made (ex: resolving its host) gives the socket no descriptor after a
-                // close (see SocketConnectInetHappyEyeballsPollState::socketChanged(), qore#7003)
+                // close (see SocketConnectInetHappyEyeballsPollState::socketChanged(), qore#7003); the close wakes no
+                // operation: one that waits for the resolver ends at its next reply or timeout (qore#7371)
                 ++fd_generation;
             }
         }
@@ -4158,7 +4179,17 @@ public:
     //! the given descriptor generation; returns false if it was (qore#7003)
     /** Set with @ref close_m held, where a close resets it
     */
-    DLLLOCAL bool setConnectedIfGeneration(uint32_t gen, int family, int type, int protocol, int new_port) {
+    /** The state, the host name (for SNI, issue #3053), where the connection leads, and the connected event are set
+        and sent in the section with @ref close_m held where the generation is checked, where a close resets them:
+        a close after it comes after the connection, and its events after the connected event
+
+        @param host the host name of the connection, or nullptr
+        @param dests where the connection leads
+
+        @return true if the socket has the connection, false if it was closed (nothing is set then)
+    */
+    DLLLOCAL bool setConnectedIfGeneration(uint32_t gen, int family, int type, int protocol, int new_port,
+            const char* host, std::shared_ptr<const QoreConnectionDestinations> dests) {
         CloseLockHelper cl(*this);
         if (sock == QORE_INVALID_SOCKET || fd_generation != gen) {
             return false;
@@ -4167,23 +4198,29 @@ public:
         stype = type;
         sprot = protocol;
         port = new_port;
-        return true;
-    }
-
-    DLLLOCAL void confirmConnected(const char* host) {
-        resetCloseInterrupt();
         listening = false;
-        do_connected_event();
-
-        // issue #3053: save hostname for SNI
         if (host) {
             client_target = host;
         }
+        resetCloseInterrupt();
+        // the destinations' lock nests in close_m, as in the close
+        setConnectedDestinations(std::move(dests));
+        // the connected event is sent with close_m held, as the close sends its closed event, which orders them (no
+        // connected event after a closed one); it takes only the event queue's locks (event_queue_m, then the
+        // Queue's own lock), calls no user code and does not block: pushAndTakeRef() ignores a size limit and only
+        // signals waiters, and an event refused by a deleted queue is released while the socket still references
+        // its argument, so no destructor runs
+        do_connected_event();
+        return true;
+    }
 
-        // Re-apply configured TCP_USER_TIMEOUT on the new fd if set.  Only
-        // meaningful for TCP (skips UNIX-domain and UDP).
+    //! Sets the configured TCP user timeout of a TCP connection that the socket has (re-applied on each connection)
+    /** @param family the connection's address family, as given to setConnectedIfGeneration()
+        @param type the connection's socket type, as given to setConnectedIfGeneration()
+    */
+    DLLLOCAL void applyTcpUserTimeout(int family, int type) {
 #ifdef TCP_USER_TIMEOUT
-        if (tcp_user_timeout_ms > 0 && (sfamily == AF_INET || sfamily == AF_INET6) && stype == SOCK_STREAM) {
+        if (tcp_user_timeout_ms > 0 && (family == AF_INET || family == AF_INET6) && type == SOCK_STREAM) {
             // the descriptor is used through a hold: a close by another thread meanwhile cannot give its number to
             // another socket while the option is set (qore#7003)
             IoUseHelper io_use(*this);
@@ -5579,6 +5616,11 @@ DLLLOCAL extern std::atomic<void (*)()> qore_dbg_unix_connect_before_connected;
 /** For the C++ unit tests of a close of the socket by another thread at that point (qore#7003)
 */
 DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_before_connected;
+
+//! Debug builds: if set, called by a happy-eyeballs connection after its state was set
+/** For the C++ unit tests of a close of the socket by another thread at that point (qore#7003)
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_after_connected;
 
 #ifndef _Q_WINDOWS
 //! Debug builds: if not 0, the connect checked fails with this error after its pending error was read as 0

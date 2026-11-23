@@ -169,7 +169,7 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
 
     // Apply TCP_USER_TIMEOUT if the manager configured it.  The value is
     // stored on the socket and re-applied by qore_socket_private at the
-    // post-connect hook (confirmConnected).
+    // post-connect hook (applyTcpUserTimeout()).
     if (manager_) {
         int ut_ms = manager_->getOptions().tcp_user_timeout_ms;
         if (ut_ms > 0) {

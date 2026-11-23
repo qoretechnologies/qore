@@ -5946,7 +5946,12 @@ bool qore_descriptor_hold_set_close_wake(const std::shared_ptr<void>& hold, std:
     if (!hold || !std::get_deleter<qore_socket_private::DescriptorHold::Deleter>(hold)) {
         return false;
     }
-    static_cast<qore_socket_private::DescriptorHold*>(hold.get())->setCloseWake(std::move(wake));
+    try {
+        static_cast<qore_socket_private::DescriptorHold*>(hold.get())->setCloseWake(std::move(wake));
+    } catch (...) {
+        // no memory: the registration has no wake
+        return false;
+    }
     return true;
 }
 
@@ -10040,27 +10045,32 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
         hook();
     }
 #endif
-    // the connection's state is set with the socket's close lock held, only if the socket was not closed since it
-    // took the descriptor; otherwise the connection fails as closed (qore#7003)
-    if (!sock->setConnectedIfGeneration(sock_gen, wp.family, wp.socktype, wp.protocol, prt)) {
-        closeAllFds();
-        qore_socket_raise_canceled("connect", xsink);
-        return;
-    }
-    sock->resetCloseInterrupt();
-
-    // Close all other fds
-    closeAllFds();
-
     // the connection leads to the address connected to, and, for a proxy, to the destination the proxy connects to
     assert(destinations);
     if (destinations) {
         destinations->add(host.c_str(), reinterpret_cast<const struct sockaddr*>(&wp.addr), wp.addrlen,
             qore_socket_sandbox_proto(wp.family, wp.socktype));
-        sock->setConnectedDestinations(std::move(destinations));
     }
+    // the connection's state, host name, destinations and connected event are set with the socket's close lock held,
+    // only if the socket was not closed since it took the descriptor; otherwise the connection fails as closed
+    // (qore#7003)
+    if (!sock->setConnectedIfGeneration(sock_gen, wp.family, wp.socktype, wp.protocol, prt, host.c_str(),
+            std::move(destinations))) {
+        closeAllFds();
+        qore_socket_raise_canceled("connect", xsink);
+        return;
+    }
+#ifdef DEBUG
+    // a test closes the socket here, as another thread can after the connection was made
+    if (void (*hook)() = qore_dbg_connect_after_connected.load(std::memory_order_acquire)) {
+        hook();
+    }
+#endif
 
-    sock->confirmConnected(host.c_str());
+    // Close all other fds
+    closeAllFds();
+
+    sock->applyTcpUserTimeout(wp.family, wp.socktype);
 
     printd(5, "SocketConnectInetHappyEyeballsPollState::assignWinner() host: %s family: %s\n",
         host.c_str(), q_af_to_str(wp.family));
@@ -10075,6 +10085,7 @@ std::atomic<void (*)(int)> qore_dbg_connect_before_adopt{nullptr};
 std::atomic<void (*)()> qore_dbg_connect_in_resolve{nullptr};
 std::atomic<bool> qore_dbg_connect_fail_held_attempt{false};
 std::atomic<void (*)()> qore_dbg_connect_before_connected{nullptr};
+std::atomic<void (*)()> qore_dbg_connect_after_connected{nullptr};
 std::atomic<void (*)()> qore_dbg_before_close_wakes{nullptr};
 std::atomic<void (*)()> qore_dbg_unix_connect_before_adopt{nullptr};
 std::atomic<void (*)(int)> qore_dbg_unix_connect_before_check{nullptr};
@@ -10352,7 +10363,9 @@ int SocketConnectUnixPollState::checkConnection(ExceptionSink* xsink) {
         d->add(name.c_str(), reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr), QSEC_NET_UNIX);
         sock->setConnectedDestinations(std::move(d));
     }
-    sock->confirmConnected(nullptr);
+    sock->resetCloseInterrupt();
+    sock->listening = false;
+    sock->do_connected_event();
     return 0;
 }
 #endif

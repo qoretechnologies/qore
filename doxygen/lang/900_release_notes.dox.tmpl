@@ -2923,9 +2923,8 @@
       the attempt's descriptor again when the connect operation was destroyed, closing any descriptor that had been
       given the number meanwhile, such as an HTTP client's event notifier
       (<a href="https://github.com/qoretechnologies/qore/issues/6962">issue 6962</a>)
-    - a connection attempt of a @ref Qore::Socket "Socket" closed while the attempt was in progress could still use
-      the descriptor's number after the socket had closed it; the close ends the connection being established at once
-      and the number stays reserved until the connect operation ends
+    - a connection of a @ref Qore::Socket "Socket" closed by another thread while it was being made could still use
+      the closed socket; it now fails as closed
       (<a href="https://github.com/qoretechnologies/qore/issues/7003">issue 7003</a>)
     - a UNIX socket connection of a @ref Qore::Socket "Socket" closed by another thread while it was being made could
       still use the descriptor's number or give the closed socket a descriptor; the connection now fails as closed

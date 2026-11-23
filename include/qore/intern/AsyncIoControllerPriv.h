@@ -2041,6 +2041,8 @@ private:
     struct CloseWakeQueue {
         QoreThreadLock l;
         std::vector<std::string> hashes;
+        //! set when a socket could not be added (no memory): the thread wakes all of its sockets
+        bool all = false;
         //! the thread's notifier, referenced; none for a context without one (a context that a test makes)
         QoreEventNotifier* notifier;
 
