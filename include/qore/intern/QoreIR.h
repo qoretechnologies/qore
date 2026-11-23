@@ -1621,15 +1621,6 @@ enum class QoreIRInstClass : uint8_t {
         return c == inst_class_id; \
     }
 
-//! The kind of a check of a release in the body of a functional loop (a CheckException; qore#6072)
-/** The body of a map, select or fold expression keeps the values of an element until the next element replaces them;
-    the release of one whose type can hold an object can run a destructor that raises an exception.  The lowering puts
-    a CheckException after each container, at the start of each call's continuation, after the Phis of each block and
-    at the loop's back-edge (QoreIRLowering::LoopBodyRegion), with the value whose release it checks as its operand
-    (none at a back-edge).  qore_ir_prune_release_checks() removes those of the values that cannot hold an object and
-    those that an append with the same handler follows, and clears the operands of the others.  The IR interpreter
-    executes every CheckException alike.
-*/
 //! QoreIRInstruction::restore_on_exception_exit: whether and when the frame's exit on an exception restores an
 //! implicit context (or releases an operator's iterator) that the instruction set
 enum class QoreIRExceptionExitRestore : uint8_t {
@@ -1646,6 +1637,15 @@ enum class QoreIRExceptionExitRestore : uint8_t {
     AfterHandlers,
 };
 
+//! The kind of a check of a release in the body of a functional loop (a CheckException; qore#6072)
+/** The body of a map, select or fold expression keeps the values of an element until the next element replaces them;
+    the release of one whose type can hold an object can run a destructor that raises an exception.  The lowering puts
+    a CheckException after each container, at the start of each call's continuation, after the Phis of each block and
+    at the loop's back-edge (QoreIRLowering::LoopBodyRegion), with the value whose release it checks as its operand
+    (none at a back-edge).  qore_ir_prune_release_checks() removes those of the values that cannot hold an object and
+    those that an append with the same handler follows, and clears the operands of the others.  The IR interpreter
+    executes every CheckException alike.
+*/
 enum class QoreIRReleaseCheck : uint8_t {
     None,       //!< not a release check
     Pending,    //!< a release check that qore_ir_prune_release_checks() has not decided yet (it has its operand)
