@@ -49,6 +49,8 @@ const SwaggerDoc = {
 const TenantCode = "
 %modern
 %requires reflection
+%requires OpenApi3
+%requires json
 
 string sub read_records(object schema) {
     try {
@@ -66,6 +68,48 @@ string sub read_records(object schema) {
     }
 }
 
+# records the undo of a write with a value of its own, directly, in a build of a schema of its own, and in a callback
+# that trusted code runs in a build of the shared schema
+list<string> sub record_undo(object shared, code run_build) {
+    list<string> l = ();
+    try {
+        shared.recordTypeBuildUndo({\"restore\": sub (hash<auto> r) {}, \"prev\": \"tenant\"});
+        l += \"recorded\";
+    } catch (hash<ExceptionInfo> ex) {
+        l += ex.err;
+    }
+    try {
+        OpenApi3Schema own = OpenApi3Loader::fromString(make_json({\"openapi\": \"3.0.0\", \"info\": {\"title\": \"x\",
+            \"version\": \"1\"}, \"paths\": {}}), True);
+        own.runTypeBuild(sub () {
+            own.recordTypeBuildUndo({\"restore\": sub (hash<auto> r) {}, \"prev\": \"tenant\"});
+        });
+        l += \"recorded\";
+    } catch (hash<ExceptionInfo> ex) {
+        l += ex.err;
+    }
+    try {
+        run_build(sub () {
+            shared.recordTypeBuildUndo({\"restore\": sub (hash<auto> r) {}, \"prev\": \"tenant\"});
+        });
+        l += \"recorded\";
+    } catch (hash<ExceptionInfo> ex) {
+        l += ex.err;
+    }
+    l += sprintf(\"undoing: %y\", shared.isUndoingTypeBuild(1));
+    return l;
+}
+
+# builds a type of the shared schema
+string sub build_ref(object shared, string name) {
+    try {
+        shared.getTypeForReference(name);
+        return \"built\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
 string sub call_restore(object so) {
     try {
         call_object_method(so, \"getCacheUndoRestore\");
@@ -75,6 +119,24 @@ string sub call_restore(object so) {
     }
 }
 ";
+
+# a document of the host whose type builds fail on demand, when they build the type of an integer
+class FailingSchema inherits OpenApi3Schema {
+    public {
+        bool fail;
+    }
+
+    constructor(string src) : OpenApi3Schema(src, parse_json(src)) {
+    }
+
+    AbstractDataProviderType getType(string path, string typestr, *string format, *SchemaObject arrayItems,
+            bool required = True, *bool strict) {
+        if (fail && typestr == "integer") {
+            throw "HOST-ERROR", "the build fails";
+        }
+        return OpenApi3Schema::getType(path, typestr, format, arrayItems, required, strict);
+    }
+}
 
 # the value of a member of an object, read with Reflection by trusted test code
 auto sub member(object o, string name) {
@@ -265,4 +327,28 @@ doc.getTypeForReference("Other");
     p.parse(TenantCode, "tenant");
     printf("a tenant reads the records with Reflection: %s; calls the method that gives the restore code: %s\n",
         p.callFunction("read_records", doc), p.callFunction("call_restore", thing));
+    # trusted code that runs a callback of the tenant in a build of the shared schema
+    code run_build = sub (code callback) {
+        doc.runTypeBuild(sub () { callback(); });
+    };
+    printf("a tenant records the undo of a write: %y\n", p.callFunction("record_undo", doc, run_build));
+
+    # the library records the writes of a build that a tenant starts, which is undone if it fails
+    FailingSchema fdoc(make_json(OpenApi3Doc + {"components": {"schemas": {
+        "Item": {"type": "object", "properties": {
+            "name": {"type": "string"},
+            "count": {"type": "integer"},
+        }},
+    }}}));
+    hash<string, object> fsos = fdoc.components.schemas + {"Item.name": fdoc.components.schemas.Item.properties.name};
+    fdoc.fail = True;
+    hash<auto> before = caches(fdoc, fsos);
+    string rv = p.callFunction("build_ref", fdoc, "Item");
+    printf("a build that a tenant starts and that fails: %s, the caches are as before: %y\n", rv,
+        same(before, caches(fdoc, fsos)));
+    fdoc.fail = False;
+    rv = p.callFunction("build_ref", fdoc, "Item");
+    printf("a build that a tenant starts and that succeeds: %s, the type is cached: %y, the field of the string: %y\n",
+        rv, exists fdoc.components.schemas.Item.dataType,
+        exists member(fdoc.components.schemas.Item.properties.name, "fieldmap").name);
 }

@@ -302,12 +302,22 @@ Program p = tenant();
     int uses = member_size(so, "usemap");
     printf("a tenant builds fields from its strings and defaults: %s, the schema's field caches grew: %y\n",
         p.callFunction("build_fields", so, 50), member_size(so, "fieldmap") > fields || member_size(so, "usemap") > uses);
-    object field = so.getField("name");
+    # the field of the property in the type that a build of the schema cached
+    object field = shared.getTypeForReference("Thing").getFields().name;
     printf("the tenant gets the field that the schema cached: %y\n", p.callFunction("get_field", so, "name") == field);
     object tt = p.callFunction("get_type", shared, "/tenant/x", "integer");
     printf("the tenant gets the type that it built again: %y; another tenant gets its own: %y\n",
         tt == p.callFunction("get_type", shared, "/tenant/x", "integer"),
         tt != tenant().callFunction("get_type", shared, "/tenant/x", "integer"));
+}
+
+# a build that a tenant starts fills the schema's own caches, which every caller then reads
+{
+    OpenApi3Schema shared = OpenApi3Loader::fromString(make_json(OpenApi3Doc), True);
+    p.callFunction("token_default", shared);
+    printf("a tenant's build: the document's type cache has entries: %y, the field cache of a property: %y\n",
+        member_size(shared, "typemap") > 0,
+        member_size(shared.components.schemas.Thing.properties.name, "fieldmap") > 0);
 }
 
 # the request body defaults of REST clients

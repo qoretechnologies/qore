@@ -5,12 +5,10 @@ the scope changes the object after a tenant callback returns: changed, cached: "
 a tenant destructor in a scope: ["the destructor in the scope: SHARED-OBJECT-ERROR"], cached: "orig"
 a tenant shares its own object: SHARED-OBJECT-ERROR, can share: False, shared: False
 trusted code: can share: True
-the caller of a method, from the tenant: a direct call: sandboxed
-the caller of a method, from the tenant: a trusted helper: trusted
-the caller of a method, from the tenant: Reflection: REFLECTION-ACCESS-ERROR
-the caller of a method, from the tenant: call_object_method(): sandboxed
-the caller of a method, from the tenant: a tenant callback that trusted code runs: sandboxed
-the caller of a method, from trusted code: trusted
+the tenant's code through wrappers of the class: a tenant callback in a closure of the class: SHARED-OBJECT-ERROR
+the tenant's code through wrappers of the class: a method of a tenant object through a call reference of the class: SHARED-OBJECT-ERROR
+the tenant's code through wrappers of the class: a method of a tenant object in a closure of the class: SHARED-OBJECT-ERROR
+the object: cached: "orig"
 a tenant sets a value: changed
 the tenant reads it: "tenant 1"; another tenant: null; trusted code: null; another owner: null
 trusted code sets a value: trusted code reads "trusted", the tenant reads "tenant 1"

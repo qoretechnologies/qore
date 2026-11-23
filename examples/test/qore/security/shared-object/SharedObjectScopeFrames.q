@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # Code that sandboxed code calls in an update scope of a shared object acts for sandboxed code: it cannot change the
 # object, open another update scope or share objects, also when it is code of the object's class; only trusted code
-# shares objects; SandboxManager::isCalledBySandboxedCode() gives the sandbox of the code that called a method; the
+# shares objects; the code of a tenant that trusted code runs in closures of its own cannot change the object; the
 # per-Program cache keeps the values of an object for one Program, for trusted code of the Program of a class of the
 # object only, bounded and released with the Program (qore#6843); see shared-object-scope-frames.qtest
 
@@ -40,25 +40,25 @@ public class SharedCache {
         SandboxManager::updateSharedObject(self, sub () { remove o; });
     }
 
-    #! returns whether the code that called this method is sandboxed
-    string who() {
-        return SandboxManager::isCalledBySandboxedCode() ? "sandboxed" : "trusted";
+    #! calls a callback of its caller from a closure of its own
+    auto wrapCallback(code callback) {
+        code wrapper = auto sub () { return callback(); };
+        return wrapper();
     }
 
-    #! runs a callback of its caller
-    auto runCallback(code callback) {
-        return callback();
+    #! calls a method of an object of its caller through a call reference that it makes
+    auto wrapMethodReference(object o) {
+        code ref = \o.run();
+        return ref();
+    }
+
+    #! calls a method of an object of its caller from a closure of its own
+    auto wrapObject(object o) {
+        return (auto sub () { return o.run(); })();
     }
 
     string snapshot() {
         return sprintf("cached: %y", cached);
-    }
-}
-
-#! trusted code that calls a method for its caller
-public class TrustedHelper {
-    static string who(SharedCache t) {
-        return t.who();
     }
 }
 
@@ -163,19 +163,26 @@ string sub share_own() {
         SandboxManager::isSharedObject(own));
 }
 
-list<string> sub who(SharedCache t) {
+class TenantRunner {
+    private {
+        code action;
+    }
+    constructor(code action) {
+        self.action = action;
+    }
+    auto run() {
+        return action();
+    }
+}
+
+# the code of the tenant that the class runs through wrappers of its own changes the object
+list<string> sub wrapped(SharedCache t) {
+    code change = string sub () { return try_change(sub () { t.fillUnscoped(); }); };
     return (
-        \"a direct call: \" + t.who(),
-        \"a trusted helper: \" + TrustedHelper::who(t),
-        \"Reflection: \" + (string sub () {
-            try {
-                return cast<Reflection::NormalMethod>(Reflection::Class::getClass(t).getMethod(\"who\")).call(t);
-            } catch (hash<ExceptionInfo> ex) {
-                return ex.err;
-            }
-        })(),
-        \"call_object_method(): \" + call_object_method(t, \"who\"),
-        \"a tenant callback that trusted code runs: \" + t.runCallback(string sub () { return t.who(); }),
+        \"a tenant callback in a closure of the class: \" + t.wrapCallback(change),
+        \"a method of a tenant object through a call reference of the class: \"
+            + t.wrapMethodReference(new TenantRunner(change)),
+        \"a method of a tenant object in a closure of the class: \" + t.wrapObject(new TenantRunner(change)),
     );
 }
 
@@ -263,11 +270,11 @@ Program p = tenant();
 printf("a tenant shares its own object: %s\n", p.callFunction("share_own"));
 printf("trusted code: can share: %y\n", SandboxManager::canShareObjects());
 
-# the sandbox of the code that called a method
+# the code of the tenant that the class runs in closures of its own
 {
     SharedCache t = shared_cache();
-    map printf("the caller of a method, from the tenant: %s\n", $1), p.callFunction("who", t);
-    printf("the caller of a method, from trusted code: %s\n", t.who());
+    map printf("the tenant's code through wrappers of the class: %s\n", $1), p.callFunction("wrapped", t);
+    printf("the object: %s\n", t.snapshot());
 }
 
 # the per-Program cache

@@ -8,3 +8,6 @@ a nested build that fails: the outer write is kept: True, the inner write is und
 a build with records and code: BUILD-ERROR, undone: ["last code record: the field is cached: True", "first code record: the field is cached: False"]
 a replaced type: BUILD-ERROR, restored: True, the same object: True, intact: True
 a tenant reads the records with Reflection: REFLECTION-ACCESS-ERROR; calls the method that gives the restore code: METHOD-DOES-NOT-EXIST
+a tenant records the undo of a write: ["SHARED-OBJECT-ERROR", "recorded", "SHARED-OBJECT-ERROR", "undoing: False"]
+a build that a tenant starts and that fails: HOST-ERROR, the caches are as before: True
+a build that a tenant starts and that succeeds: built, the type is cached: True, the field of the string: True

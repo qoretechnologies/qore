@@ -15,14 +15,15 @@
 
 %exec-class SharedObjectScopeFramesTest
 
-#! Regression test for qore#6843: the frames of update scopes, sharing objects, callers and the per-Program cache
+#! Regression test for qore#6843: the frames of update scopes, sharing objects and the per-Program cache
 /** Code that a tenant (a sandboxed Program) calls in an update scope of a shared object (a callback, a destructor)
     cannot change the object, open another scope or share objects, also through a method of the object's class; the
-    scope changes the object after the callback returns; a tenant cannot share objects;
-    SandboxManager::isCalledBySandboxedCode() gives the sandbox of the code that called a method; the per-Program cache
+    scope changes the object after the callback returns; a tenant cannot share objects; the code of a tenant that
+    trusted code runs in closures and call references of its own cannot change a shared object; the per-Program cache
     keeps the values of an object for one Program, for trusted code of the Program of a class of the object only (not
-    for a tenant directly, through Reflection or a subclass, nor for trusted code of another Program), bounded (also by the library's own limit), releasing replaced values, the
-    values of deleted owners and, with the Program, all others, reporting the exception of a value.
+    for a tenant directly, through Reflection or a subclass, nor for trusted code of another Program), bounded (also
+    by the library's own limit), releasing replaced values, the values of deleted owners and, with the Program, all
+    others, reporting the exception of a value.
 
     SharedObjectScopeFrames.q checks these; its output must be the one in SharedObjectScopeFrames.expected in every
     execution mode, and in programs compiled with qcc -O0 and -O3.

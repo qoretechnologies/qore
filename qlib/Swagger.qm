@@ -1248,22 +1248,17 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
     }
 
     #! Returns the data type corresponding to the values
-    /** For a document that is shared by every Program (see
-        @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()"), a type that a sandboxed caller
-        asks for directly (see @ref Qore::SandboxManager::isCalledBySandboxedCode() "SandboxManager::isCalledBySandboxedCode()")
-        is taken from the document's type cache if it is there, and otherwise built with no cache write, and kept in the
-        per-Program cache of the caller (qore#6843)
+    /** A document that is shared by every Program (see
+        @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()") writes its type cache only in
+        its own type builds (see
+        @ref RestSchemaValidator::AbstractRestSchemaValidator::runTypeBuild() "AbstractRestSchemaValidator::runTypeBuild()"):
+        a type asked for outside a type build of the document is taken from its type cache if it is there, and
+        otherwise built with no cache write, and kept in the per-Program cache of the calling code (qore#6843)
     */
     AbstractDataProviderType getType(string path, string typestr, *string format, *SchemaObject arrayItems,
             bool required = True) {
-        if (SandboxManager::isCalledBySandboxedCode() && SandboxManager::isSharedObject(self)) {
-            return getCallerType(path, typestr, format, arrayItems, required);
-        }
-        # the types of a shared document are cached in type builds, which share them as the document is
         if (!isTypeBuildActive() && SandboxManager::isSharedObject(self)) {
-            return runTypeBuild(AbstractDataProviderType sub () {
-                return getType(path, typestr, format, arrayItems, required);
-            });
+            return getCallerType(path, typestr, format, arrayItems, required);
         }
         string id;
         if (*AbstractDataProviderType rv = checkType(path, typestr, format, arrayItems, required, \id)) {
@@ -1274,7 +1269,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         if (isTypeBuildActive()) {
             # the type built from the document, which is shared as the document is (qore#6843)
             recordTypeBuildCache(rv);
-            bool had_outer = typemap.hasKey(id);
+            bool had_outer = exists typemap && typemap.hasKey(id);
             recordTypeBuildUndo({
                 "restore": getTypeUndoRestore(),
                 "id": id,
@@ -1282,6 +1277,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
                 "prev": typemap{id}{key},
                 "had_key": had_outer && typemap{id}.typeCode() == NT_HASH && typemap{id}.hasKey(key),
                 "had_outer": had_outer,
+                "had_cache": exists typemap,
             });
         }
         update_shared_cache(self, sub () { typemap{id}{key} = rv; });
@@ -1306,11 +1302,14 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
                 if (!record.had_outer) {
                     remove typemap{record.id};
                 }
+                if (!record.had_cache) {
+                    remove typemap;
+                }
             }
         });
     }
 
-    #! Returns a type that a sandboxed caller of a shared document asks for; see getType()
+    #! Returns a type asked for outside a type build of a shared document; see getType()
     private AbstractDataProviderType getCallerType(string path, string typestr, *string format,
             *SchemaObject arrayItems, bool required) {
         # the unique hash of a schema object that the document did not build is the caller's

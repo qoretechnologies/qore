@@ -14,6 +14,7 @@ a tenant builds types from its strings: built, the schema's type cache grew: Fal
 a tenant builds fields from its strings and defaults: built, the schema's field caches grew: False
 the tenant gets the field that the schema cached: True
 the tenant gets the type that it built again: True; another tenant gets its own: True
+a tenant's build: the document's type cache has entries: True, the field cache of a property: True
 the host builds a type with its REST client: default "host-secret"
 a tenant builds the type without a REST client: default null
 trusted code builds the type without a REST client: default null

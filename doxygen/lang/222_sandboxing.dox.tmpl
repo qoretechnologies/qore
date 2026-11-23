@@ -722,13 +722,14 @@ authenticate();
     it in the per-%Program cache of the calling code
     (@ref Qore::SandboxManager::setProgramCacheValue() "SandboxManager::setProgramCacheValue()" and
     @ref Qore::SandboxManager::getProgramCacheValue() "SandboxManager::getProgramCacheValue()"), where only trusted code
-    of the %Program of a class of the object can read it, bounded, and released with the %Program.  A method of such a class tells
-    whether the data that it is given comes from sandboxed code with
-    @ref Qore::SandboxManager::isCalledBySandboxedCode() "SandboxManager::isCalledBySandboxedCode()", which judges the
-    code that called the method, so that the library's own code that builds what the object keeps for a sandboxed
-    caller still fills the shared caches.  The shared REST schemas keep in this way the types and fields that a
-    sandboxed caller builds from its own data (with the public type and field builders), the response types of the
-    caller's own types, and, for every caller, the variants of their types with the request body defaults of a REST
+    of the %Program of a class of the object can read it, bounded, and released with the %Program.  The shared REST
+    schemas write their caches only in their own type builds
+    (@ref RestSchemaValidator::AbstractRestSchemaValidator::runTypeBuild() "AbstractRestSchemaValidator::runTypeBuild()"),
+    which only the schema's code and the library code that builds its types run (sandboxed code cannot run a type build
+    of a shared schema, and code that sandboxed code supplied cannot change it in one): the types and fields asked for
+    outside a type build, with the data of whichever caller, are read from the schema's caches and otherwise built
+    without writing them and kept in the per-%Program cache; so are the response types of types that the schema did
+    not build, and, for every caller, the variants of the schema's types with the request body defaults of a REST
     client: such a variant is a copy of the schema's own type that shares every field and type of it but the fields
     with a default, and the code of the REST client runs before any type build of the schema, never in one.  Setting the environment variable
     \c QORE_SHARED_OBJECT_TRACE reports each refused change of a shared object, and each refused mark, on standard

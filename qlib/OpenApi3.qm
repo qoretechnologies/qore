@@ -1944,15 +1944,17 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
     }
 
     #! Returns the data type for the given type specification
-    /** For a document that is shared by every Program (see
-        @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()"), a type that a sandboxed caller
-        asks for directly (see @ref Qore::SandboxManager::isCalledBySandboxedCode() "SandboxManager::isCalledBySandboxedCode()")
-        is taken from the document's type cache if it is there, and otherwise built with no type build and no cache
-        write, and kept in the per-Program cache of the caller (qore#6843)
+    /** A document that is shared by every Program (see
+        @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()") writes its type cache only in
+        its own type builds (see
+        @ref RestSchemaValidator::AbstractRestSchemaValidator::runTypeBuild() "AbstractRestSchemaValidator::runTypeBuild()"):
+        a type asked for outside a type build of the document is taken from its type cache if it is there, and
+        otherwise built with no type build and no cache write, and kept in the per-Program cache of the calling code
+        (qore#6843)
     */
     AbstractDataProviderType getType(string path, string typestr, *string format, *SchemaObject arrayItems,
             bool required = True, *bool strict) {
-        if (SandboxManager::isCalledBySandboxedCode() && SandboxManager::isSharedObject(self)) {
+        if (!isTypeBuildActive() && SandboxManager::isSharedObject(self)) {
             return getCallerType(path, typestr, format, arrayItems, required, strict);
         }
         if (!isTypeBuildActive()) {
@@ -1969,7 +1971,7 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
         return rv;
     }
 
-    #! Returns a type that a sandboxed caller of a shared document asks for; see getType()
+    #! Returns a type asked for outside a type build of a shared document; see getType()
     private AbstractDataProviderType getCallerType(string path, string typestr, *string format,
             *SchemaObject arrayItems, bool required, *bool strict) {
         # the unique hash of a schema object that the document did not build is the caller's
@@ -2006,7 +2008,7 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
     #! Caches a type, recording the write in the type build in progress
     private setCachedType(string id, string key, AbstractDataProviderType t) {
         if (isTypeBuildActive()) {
-            bool had_outer = typemap.hasKey(id);
+            bool had_outer = exists typemap && typemap.hasKey(id);
             recordTypeBuildUndo({
                 "restore": getTypeUndoRestore(),
                 "id": id,
@@ -2014,6 +2016,7 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
                 "prev": typemap{id}{key},
                 "had_key": had_outer && typemap{id}.typeCode() == NT_HASH && typemap{id}.hasKey(key),
                 "had_outer": had_outer,
+                "had_cache": exists typemap,
             });
         }
         # the type built from the document, which is shared as the document is (qore#6843)
@@ -2038,6 +2041,9 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
                 remove typemap{record.id}{record.key};
                 if (!record.had_outer) {
                     remove typemap{record.id};
+                }
+                if (!record.had_cache) {
+                    remove typemap;
                 }
             }
         });
