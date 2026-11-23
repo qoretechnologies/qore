@@ -198,12 +198,20 @@ QoreHashNode* qore_hash_private::getSlice(const QoreListNode* value_list, Except
 }
 
 void qore_hash_private::merge(const qore_hash_private& h, ExceptionSink* xsink) {
+    // a hash freed under a weak reference cannot be changed (qore#7199)
+    if (checkValid(xsink)) {
+        return;
+    }
     for (auto& i : h.member_list) {
         setKeyValue(i->key, i->val.refSelf(), xsink);
     }
 }
 
 void qore_hash_private::mergeNative(const qore_hash_private& h, ExceptionSink* xsink) {
+    // a hash freed under a weak reference cannot be changed (qore#7199)
+    if (checkValid(xsink)) {
+        return;
+    }
     for (auto& i : h.member_list) {
         hash_assignment_priv ha(*this, i->key.c_str());
         ha.assignNative(i->val.refSelf(), xsink);
@@ -211,6 +219,10 @@ void qore_hash_private::mergeNative(const qore_hash_private& h, ExceptionSink* x
 }
 
 void qore_hash_private::merge(const qore_hash_private& h, SafeDerefHelper& sdh, ExceptionSink* xsink) {
+    // a hash freed under a weak reference cannot be changed (qore#7199)
+    if (checkValid(xsink)) {
+        return;
+    }
     for (auto& i : h.member_list) {
         setKeyValue(i->key, i->val.refSelf(), sdh, xsink);
     }
@@ -218,6 +230,10 @@ void qore_hash_private::merge(const qore_hash_private& h, SafeDerefHelper& sdh, 
 
 void qore_hash_private::merge(const qore_hash_private& h, SafeDerefHelper& sdh, ExceptionSink* xsink,
         LexicalSemanticPolicy policy) {
+    // a hash freed under a weak reference cannot be changed (qore#7199)
+    if (checkValid(xsink)) {
+        return;
+    }
     size_t count = 0;
     for (auto& i : h.member_list) {
         if (++count % 100 == 0 && qore_check_cancel(xsink, "hash merge")) {
@@ -1011,22 +1027,27 @@ bool QoreHashNode::compareHard(const QoreHashNode* h, ExceptionSink* xsink) cons
         return 1;
     }
 
-    ConstHashIterator hi(this);
-    while (hi.next()) {
-        hm_hm_t::const_iterator j = h->priv->findIter(hi.getKey());
-        if (j == h->priv->hm.end())
-            return 1;
-
+    // an exception raised before makes the first member unequal, also when the inline comparison compares it
+    if (xsink && !priv->empty() && *xsink) {
+        return 1;
+    }
+    // the members are compared in the order of this hash, as a lookup of each of its keys in the other hash does
+    // (qore#7266)
+    return !priv->membersEqual(*h->priv, [xsink](const QoreValue& lv, const QoreValue& rv) -> bool {
+        // two ints or two floats compare as QoreValue::isEqualHard() compares them (a NaN is not equal to itself)
+        if (lv.isInt()) {
+            if (rv.isInt()) {
+                return lv.getInt() == rv.getInt();
+            }
+        } else if (lv.isFloat() && rv.isFloat()) {
+            return lv.getDouble() == rv.getDouble();
+        }
         // the sink is optional in this API: without one, an exception means that the hashes are not equal
         if (xsink) {
-            if (!hi.get().isEqualHard((*j->second)->val, xsink) || *xsink) {
-                return 1;
-            }
-        } else if (!hi.get().isEqualHard((*j->second)->val)) {
-            return 1;
+            return lv.isEqualHard(rv, xsink) && !*xsink;
         }
-    }
-    return 0;
+        return lv.isEqualHard(rv);
+    });
 }
 
 bool QoreHashNode::derefImpl(ExceptionSink* xsink) {
