@@ -221,6 +221,20 @@ list<auto> sub mkl() {
     return l;
 }
 
+auto sub pass_through(auto v) {
+    return v;
+}
+
+class PassThrough {
+    auto get(auto v) {
+        return v;
+    }
+
+    static auto getStatic(auto v) {
+        return v;
+    }
+}
+
 hash<auto> sub param_observe(hash<auto> p) {
     p.b = 2;
     return p;
@@ -245,6 +259,38 @@ sub share_points_of_moves() {
     al[0] = 9;
     printf("move of a list by += into an empty local: %y\n", gwl);
 
+    # the same in a try block, where the operation can raise an exception that the block handles
+    try {
+        auto tx;
+        tx += mk();
+        tx.b = 2;
+        printf("move by += into an empty local in a try block: %y\n", gw);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("move by += in a try block: %s\n", ex.err);
+    }
+
+    # += on NULL assigns the value added as well
+    auto nx = NULL;
+    nx += mk();
+    nx.b = 2;
+    printf("move by += into a local holding NULL: %y\n", gw);
+
+    # a variable declared with a type is converted to it by +=, which copies the container
+    *hash<auto> tyx;
+    tyx += mk();
+    tyx.b = 2;
+    printf("copy by += into an empty typed local: %y\n", gw);
+
+    # the temporary of each iteration is moved into the variable of that iteration
+    list<auto> ws = ();
+    for (int i = 0; i < 2; ++i) {
+        auto lx;
+        lx += mk();
+        lx.i = i;
+        ws += gw;
+    }
+    printf("move by += in a loop: %y\n", ws);
+
     list<auto> l = (mk(),);
     l[0].b = 2;
     printf("move into a list element: %y\n", gw);
@@ -264,31 +310,66 @@ sub share_points_of_moves() {
 
     param_observe(mk());
     printf("move into a parameter: %y\n", gw);
+
+    # the parameter takes a copy also when the function only returns it
+    auto px = pass_through(mk());
+    px.b = 2;
+    printf("move into an untyped parameter that the function returns: %y\n", gw);
+
+    PassThrough pt();
+    auto mx = pt.get(mk());
+    mx.b = 2;
+    printf("move into an untyped parameter that a method returns: %y\n", gw);
+
+    auto sx = PassThrough::getStatic(mk());
+    sx.b = 2;
+    printf("move into an untyped parameter that a static method returns: %y\n", gw);
 }
 
-const Cases = {
-    "local_assignment": \local_assignment(),
-    "nested_target": \nested_target(),
-    "parameter": \parameter(),
-    "parameter_observed": \parameter_observed(),
-    "list_element": \list_element(),
-    "hash_key": \hash_key(),
-    "object_member": \object_member(),
-    "return_value": \return_value(),
-    "foreach_variable": \foreach_variable(),
-    "member_path": \member_path(),
-    "moves": \moves(),
-    "copy_on_write": \copy_on_write(),
-    "share_points_of_moves": \share_points_of_moves(),
-};
+#! runs a case by its name: each case is called by name, so that JIT and tiered execution run it as native code
+#! (a call through a call reference runs on the IR tier, and is compiled only when it returns)
+sub run_case(string name) {
+    switch (name) {
+        case "local_assignment": local_assignment(); break;
+        case "nested_target": nested_target(); break;
+        case "parameter": parameter(); break;
+        case "parameter_observed": parameter_observed(); break;
+        case "list_element": list_element(); break;
+        case "hash_key": hash_key(); break;
+        case "object_member": object_member(); break;
+        case "return_value": return_value(); break;
+        case "foreach_variable": foreach_variable(); break;
+        case "member_path": member_path(); break;
+        case "moves": moves(); break;
+        case "copy_on_write": copy_on_write(); break;
+        case "share_points_of_moves": share_points_of_moves(); break;
+    }
+}
 
+const CaseNames = (
+    "local_assignment",
+    "nested_target",
+    "parameter",
+    "parameter_observed",
+    "list_element",
+    "hash_key",
+    "object_member",
+    "return_value",
+    "foreach_variable",
+    "member_path",
+    "moves",
+    "copy_on_write",
+    "share_points_of_moves",
+);
+
+# a case named on the command line runs alone
 *string only = ARGV[0];
-foreach hash<auto> i in (Cases.pairIterator()) {
-    if (!only || only == i.key) {
+foreach string n in (CaseNames) {
+    if (!only || only == n) {
         try {
-            call_function(i.value);
+            run_case(n);
         } catch (hash<ExceptionInfo> ex) {
-            printf("%s: %s: %s\n", i.key, ex.err, ex.desc);
+            printf("%s: %s: %s\n", n, ex.err, ex.desc);
         }
     }
 }

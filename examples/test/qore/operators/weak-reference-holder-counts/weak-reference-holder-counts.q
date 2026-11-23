@@ -180,26 +180,42 @@ bool sub check_count(reference<auto> v, int expected) {
     return exists_function("dbg_get_scan_count") ? call_function("dbg_get_scan_count", \v) == expected : True;
 }
 
-const Cases = {
-    "list_element_then_remove": \list_element_then_remove(),
-    "hash_key_then_remove": \hash_key_then_remove(),
-    "append_then_remove": \append_then_remove(),
-    "cycle_through_weak_write": \cycle_through_weak_write(),
-    "weak_write_then_weak_remove": \weak_write_then_weak_remove(),
-    "slice_remove_from_pinned_list": \slice_remove_from_pinned_list(),
-    "expression_source_copy": \expression_source_copy(),
-    "slice_path_source_copy": \slice_path_source_copy(),
-    "member_gate_declared_member": \member_gate_declared_member(),
-};
+#! runs a case by its name: each case is called by name, so that JIT and tiered execution run it as native code
+#! (a call through a call reference runs on the IR tier, and is compiled only when it returns)
+sub run_case(string name) {
+    switch (name) {
+        case "list_element_then_remove": list_element_then_remove(); break;
+        case "hash_key_then_remove": hash_key_then_remove(); break;
+        case "append_then_remove": append_then_remove(); break;
+        case "cycle_through_weak_write": cycle_through_weak_write(); break;
+        case "weak_write_then_weak_remove": weak_write_then_weak_remove(); break;
+        case "slice_remove_from_pinned_list": slice_remove_from_pinned_list(); break;
+        case "expression_source_copy": expression_source_copy(); break;
+        case "slice_path_source_copy": slice_path_source_copy(); break;
+        case "member_gate_declared_member": member_gate_declared_member(); break;
+    }
+}
+
+const CaseNames = (
+    "list_element_then_remove",
+    "hash_key_then_remove",
+    "append_then_remove",
+    "cycle_through_weak_write",
+    "weak_write_then_weak_remove",
+    "slice_remove_from_pinned_list",
+    "expression_source_copy",
+    "slice_path_source_copy",
+    "member_gate_declared_member",
+);
 
 # a case named on the command line runs alone
 *string only = ARGV[0];
-foreach hash<auto> i in (Cases.pairIterator()) {
-    if (!only || only == i.key) {
+foreach string n in (CaseNames) {
+    if (!only || only == n) {
         try {
-            call_function(i.value);
+            run_case(n);
         } catch (hash<ExceptionInfo> ex) {
-            printf("%s: %s: %s\n", i.key, ex.err, ex.desc);
+            printf("%s: %s: %s\n", n, ex.err, ex.desc);
         }
     }
 }

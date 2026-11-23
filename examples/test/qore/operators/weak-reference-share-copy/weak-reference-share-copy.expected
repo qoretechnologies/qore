@@ -18,9 +18,16 @@ copy on write hash: hsrc: {x: {y: 9}, z: {q: 2}}, hb: {x: {y: 9}}
 move into a local: {a: 1, b: 2}
 move by += into an empty local: {a: 1, b: 2}
 move of a list by += into an empty local: [9]
+move by += into an empty local in a try block: {a: 1, b: 2}
+move by += into a local holding NULL: {a: 1, b: 2}
+copy by += into an empty typed local: {}
+move by += in a loop: [{a: 1, i: 0}, {a: 1, i: 1}]
 move into a list element: {}
 move into a hash key: {}
 move into a global: {}
 move into a closure variable: {}
 move into a parameter: {}
+move into an untyped parameter that the function returns: {}
+move into an untyped parameter that a method returns: {}
+move into an untyped parameter that a static method returns: {}
 done

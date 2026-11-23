@@ -178,26 +178,42 @@ sub string_and_binary_indexes() {
     printf("member of a string index: %y\n", w);
 }
 
-const Cases = {
-    "literal_through_member": sub () { literal_through_member(1); literal_through_member(2); },
-    "literal_through_local": sub () { literal_through_local(1); literal_through_local(2); },
-    "ancestor_then_container": \ancestor_then_container(),
-    "steps_read_as_before": \steps_read_as_before(),
-    "untyped_object_root": \untyped_object_root(),
-    "reads_once": \reads_once(),
-    "private_member": \private_member(),
-    "deleted_weak_object": \deleted_weak_object(),
-    "string_and_binary_indexes": \string_and_binary_indexes(),
-};
+#! runs a case by its name: each case is called by name, so that JIT and tiered execution run it as native code
+#! (a call through a call reference runs on the IR tier, and is compiled only when it returns)
+sub run_case(string name) {
+    switch (name) {
+        case "literal_through_member": literal_through_member(1); literal_through_member(2); break;
+        case "literal_through_local": literal_through_local(1); literal_through_local(2); break;
+        case "ancestor_then_container": ancestor_then_container(); break;
+        case "steps_read_as_before": steps_read_as_before(); break;
+        case "untyped_object_root": untyped_object_root(); break;
+        case "reads_once": reads_once(); break;
+        case "private_member": private_member(); break;
+        case "deleted_weak_object": deleted_weak_object(); break;
+        case "string_and_binary_indexes": string_and_binary_indexes(); break;
+    }
+}
+
+const CaseNames = (
+    "literal_through_member",
+    "literal_through_local",
+    "ancestor_then_container",
+    "steps_read_as_before",
+    "untyped_object_root",
+    "reads_once",
+    "private_member",
+    "deleted_weak_object",
+    "string_and_binary_indexes",
+);
 
 # a case named on the command line runs alone
 *string only = ARGV[0];
-foreach hash<auto> i in (Cases.pairIterator()) {
-    if (!only || only == i.key) {
+foreach string n in (CaseNames) {
+    if (!only || only == n) {
         try {
-            call_function(i.value);
+            run_case(n);
         } catch (hash<ExceptionInfo> ex) {
-            printf("%s: %s: %s\n", i.key, ex.err, ex.desc);
+            printf("%s: %s: %s\n", n, ex.err, ex.desc);
         }
     }
 }

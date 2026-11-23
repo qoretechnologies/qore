@@ -241,7 +241,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_weak_source_container", reinterpret_cast<void*>(&qore_rt_weak_source_container) },
     { "qore_rt_weak_share_copy", reinterpret_cast<void*>(&qore_rt_weak_share_copy) },
     { "qore_rt_take_store_value", reinterpret_cast<void*>(&qore_rt_take_store_value) },
-    { "qore_rt_add_assign_take_operand", reinterpret_cast<void*>(&qore_rt_add_assign_take_operand) },
+    { "qore_rt_add_assign_release_operand", reinterpret_cast<void*>(&qore_rt_add_assign_release_operand) },
+    { "qore_rt_weak_share_param", reinterpret_cast<void*>(&qore_rt_weak_share_param) },
+    { "qore_rt_weak_share_borrowed_param", reinterpret_cast<void*>(&qore_rt_weak_share_borrowed_param) },
     { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
     { "qore_rt_take_param", reinterpret_cast<void*>(&qore_rt_take_param) },
     { "qore_rt_take_param_aot", reinterpret_cast<void*>(&qore_rt_take_param_aot) },
@@ -2588,20 +2590,45 @@ extern "C" DLLEXPORT uint64_t qore_rt_take_store_value(uint64_t value, uint64_t*
     return value;
 }
 
-//! returns the value that += on an lvalue without a value gives: \a value, the operand, with a reference of its own
-/** When \a value is a list or hash that a weak reference designates and \a slot, the cleanup slot of the operand's
-    temporary, whose only use is the operation, holds it, the slot's reference is given to the result and the slot is
-    cleared, as the AST interpreter gives the operand's reference to the lvalue (doPlusEqualsOnLValue()), so that a
-    local variable that takes it moves it as from an assignment (qore#7342); any other value is given a reference of
-    its own, and its temporary is released at the end of the statement, as in the AST interpreter
+//! releases the reference of the operand's temporary when += on an lvalue without a value gave the operand (qore#7342)
+/** \a value is the result of the operation, which compiled code passes only when it is the operand itself: on an
+    lvalue without a value, += gives the value added with a reference of its own (qore_compound_assign_value()).  When
+    it is a list or hash that a weak reference designates and \a slot, the cleanup slot of the operand's temporary,
+    whose last use is the operation, holds it, the slot's reference is released and the slot cleared, so that the
+    result holds the reference that the temporary held, as the AST interpreter gives the operand's reference to the
+    lvalue (doPlusEqualsOnLValue()), and a local variable that takes it moves it as from an assignment.  Any other value
+    stays in its temporary until the end of the statement, as in the AST interpreter.  The result holds the container,
+    so releasing the slot's reference runs no destructor.
 */
-extern "C" DLLEXPORT uint64_t qore_rt_add_assign_take_operand(uint64_t value, uint64_t* slot) {
+extern "C" DLLEXPORT void qore_rt_add_assign_release_operand(uint64_t value, uint64_t* slot) {
     QoreValue v = fromBits(value);
-    if (slot && *slot == value && v.isPlainPointer() && qore_weak_designated_container(v.getPtr())) {
-        *slot = toBits(QoreValue());
-        return value;
+    if (!slot || *slot != value || !v.isPlainPointer() || !qore_weak_designated_container(v.getPtr())) {
+        return;
     }
-    return toBits(v.refSelf());
+    *slot = toBits(QoreValue());
+    ExceptionSink xsink;
+    v.discard(&xsink);
+    assert(!xsink);
+}
+
+//! takes \a value, the argument that the fast entry of native code binds to a parameter, and returns it, or a copy of
+//! its own for a list or hash that a weak reference designates, as LocalVar::instantiateIntern() binds it (qore#7342)
+extern "C" DLLEXPORT uint64_t qore_rt_weak_share_param(uint64_t value) {
+    QoreValue v = fromBits(value);
+    if (qore_weak_shared(v)) [[unlikely]] {
+        return toBits(qore_weak_share_copy(v, nullptr));
+    }
+    return value;
+}
+
+//! returns a copy of its own of \a value, an argument that the fast entry of native code borrows for a parameter, for
+//! a list or hash that a weak reference designates, owned by the caller, or NOTHING for any other value (qore#7342)
+extern "C" DLLEXPORT uint64_t qore_rt_weak_share_borrowed_param(uint64_t value) {
+    QoreValue v = fromBits(value);
+    if (qore_weak_shared(v)) [[unlikely]] {
+        return toBits(qore_weak_share_copy(v.refSelf(), nullptr));
+    }
+    return toBits(QoreValue());
 }
 
 //! Assigns a value to a local on the runtime stack

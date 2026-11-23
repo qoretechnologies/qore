@@ -8002,11 +8002,13 @@ static QoreValue newComplexFromOperand(IRValueSlots& values, IRCleanupSlots& cle
     it moves it as from an assignment.  Any other value stays in its temporary until the end of the statement: the
     result holds it then, but its temporary is released at the same point as in the AST interpreter.
 */
-static void releaseAddAssignOperand(const QoreIRFunction& func, IRValueSlots& values, IRCleanupSlots& cleanup,
-        QoreIRValue operand, const QoreValue& res, const std::vector<uint32_t>& value_use_counts,
-        const std::unordered_map<uint32_t, int32_t>& borrowed_slots, const std::vector<int32_t>& borrowed_temps,
-        ExceptionSink* xsink) {
-    if (!res.isPlainPointer() || !operand.isValid() || operand.id >= values.size()) {
+/** The caller calls it only when the result is the node of the operand (addAssignGaveOperand()).
+*/
+static QORE_INTERN_NOINLINE __attribute__((cold)) void releaseAddAssignOperand(const QoreIRFunction& func,
+        IRValueSlots& values, IRCleanupSlots& cleanup, QoreIRValue operand, const QoreValue& res,
+        const std::vector<uint32_t>& value_use_counts, const std::unordered_map<uint32_t, int32_t>& borrowed_slots,
+        const std::vector<int32_t>& borrowed_temps, ExceptionSink* xsink) {
+    if (!operand.isValid() || operand.id >= values.size()) {
         return;
     }
     const QoreValue& v = values[operand.id];
@@ -8022,6 +8024,11 @@ static void releaseAddAssignOperand(const QoreIRFunction& func, IRValueSlots& va
         // the result holds the container, so releasing the temporary's reference runs no destructor
         fromBits(owned).discard(xsink);
     }
+}
+
+//! returns true if \a res, the result of += , is the node of its operand \a right, as when the lvalue had no value
+static QORE_INTERN_ALWAYS_INLINE bool addAssignGaveOperand(const QoreValue& res, const QoreValue& right) {
+    return res.isPlainPointer() && right.isPlainPointer() && res.getPtr() == right.getPtr();
 }
 #endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
@@ -11464,6 +11471,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         }
                     }
 
+                    // a weakly designated container is bound as a copy of its own, as by
+                    // LocalVar::instantiateIntern() (qore#7342)
+                    if (qore_weak_shared(val)) [[unlikely]] {
+                        val = qore_weak_share_copy(val, xsink);
+                    }
                     locals_slot_cache.set(sid, val);
                     locals_instantiated[sid] = true;
                     if (sid < locals_ir_only.size()) {
@@ -14086,7 +14098,7 @@ dispatch_folded_step_host:
                     }
                 }
                 if (inv->invoke_opcode == QoreIROpcode::AddAssignAny && inv->operands.size() > 1
-                        && !(xsink && *xsink)) {
+                        && !(xsink && *xsink) && addAssignGaveOperand(res, getIRValue(values, inv->operands[1]))) {
                     releaseAddAssignOperand(func, values, cleanup, inv->operands[1], res, value_use_counts,
                         weak_load_temp_slots, borrowed_temp_remaining, xsink);
                 }
@@ -19952,7 +19964,7 @@ load_local_done:
                     cleanupLocalCaches();
                     return exitAfterUnwind();
                 }
-                if (inst->opcode == QoreIROpcode::AddAssignAny) {
+                if (inst->opcode == QoreIROpcode::AddAssignAny && addAssignGaveOperand(res, right)) [[unlikely]] {
                     releaseAddAssignOperand(func, values, cleanup, inst->operands[1], res, value_use_counts,
                         weak_load_temp_slots, borrowed_temp_remaining, xsink);
                 }

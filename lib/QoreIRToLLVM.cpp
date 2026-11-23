@@ -1769,8 +1769,12 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
             llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_take_store_value",
             llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
-    module.getOrInsertFunction("qore_rt_add_assign_take_operand",
-            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_add_assign_release_operand",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_weak_share_param",
+            llvm::FunctionType::get(i64_type, {i64_type}, false));
+    module.getOrInsertFunction("qore_rt_weak_share_borrowed_param",
+            llvm::FunctionType::get(i64_type, {i64_type}, false));
 
     // Invoke helpers
     module.getOrInsertFunction("qore_rt_invoke_expr",
@@ -3854,7 +3858,25 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                 // value that the parameter owns: it is not borrowed (qore#6032); the variable of an `auto!` parameter
                 // has the type `auto`, its lvalue type is `auto!` (qore#6059)
                 const bool strip_any = q_type_strips_complex_type(var->getTypeInfoForLValue());
+                // a parameter that can be given a list or a hash binds a weakly designated container as a copy of its
+                // own, as LocalVar::instantiateIntern() does (qore#7342)
+                const QoreTypeInfo* param_ti = var->getTypeInfo();
+                const bool may_be_container = !QoreTypeInfo::hasType(param_ti)
+                    || QoreTypeInfo::parseReturns(param_ti, NT_HASH) != QTI_NOT_EQUAL
+                    || QoreTypeInfo::parseReturns(param_ti, NT_LIST) != QTI_NOT_EQUAL;
                 if (!strip_any && fast_entry_borrowed_args && fast_entry_borrowed_args->count(key)) {
+                    if (may_be_container) {
+                        // the copy is owned by the frame, which releases it at its exit with the parameters; the
+                        // borrowed argument is not
+                        auto share_fn = module.getOrInsertFunction("qore_rt_weak_share_borrowed_param",
+                                llvm::FunctionType::get(i64_type, {i64_type}, false));
+                        llvm::Value* copy = init.CreateCall(share_fn, {arg_val});
+                        llvm::AllocaInst* copy_slot = storage.CreateAlloca(i64_type, nullptr, "param_share_copy");
+                        init.CreateStore(copy, copy_slot);
+                        fast_entry_param_allocas.push_back(copy_slot);
+                        arg_val = init.CreateSelect(init.CreateICmpEQ(copy,
+                            llvm::ConstantInt::get(i64_type, VAL_NOTHING)), arg_val, copy);
+                    }
                     init.CreateStore(arg_val, alloca);
                     set_fast_entry_reference_flag();
                     local_allocas[key] = LocalCacheSlot(alloca);
@@ -3891,6 +3913,11 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                         auto strip_fn = module.getOrInsertFunction("qore_rt_strip_any_param",
                                 llvm::FunctionType::get(i64_type, {i64_type}, false));
                         arg_val = init.CreateCall(strip_fn, {arg_val});
+                    }
+                    if (may_be_container) {
+                        auto share_fn = module.getOrInsertFunction("qore_rt_weak_share_param",
+                                llvm::FunctionType::get(i64_type, {i64_type}, false));
+                        arg_val = init.CreateCall(share_fn, {arg_val});
                     }
                     init.CreateStore(arg_val, alloca);
                     set_fast_entry_reference_flag();
@@ -23857,8 +23884,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 prepareAutoLocalStringAppend(*inv, boxValue(lhs, inv->operands[0].id), module, llvm_func);
                 auto helper = module.getOrInsertFunction("qore_rt_add_assign_local_any",
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {boxValue(lhs, inv->operands[0].id),
-                    boxValue(rhs, inv->operands[1].id), xsink_arg});
+                llvm::Value* rhs_boxed = boxValue(rhs, inv->operands[1].id);
+                result = builder->CreateCall(helper, {boxValue(lhs, inv->operands[0].id), rhs_boxed, xsink_arg});
+                emitAddAssignOperandRelease(inv, rhs_boxed, result, llvm_func, module);
             } else if (!inv->operands.empty() && isBinaryInvokeOpcode(inv->invoke_opcode)
                     && inv->operands.size() >= 2) {
                 // Binary invoke: use pre-evaluated operands with qore_rt_binary_op
@@ -23874,6 +23902,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {llvm::Type::getInt32Ty(ctx), i64_type, i64_type, ptr_type}, false));
                 result = builder->CreateCall(helper,
                         {opcode_val, lhs_boxed, rhs_boxed, xsink_arg});
+                if (inv->invoke_opcode == QoreIROpcode::AddAssignAny) {
+                    emitAddAssignOperandRelease(inv, rhs_boxed, result, llvm_func, module);
+                }
                 // No reloadAllLocalsFromRuntime — pure computation
 
             } else if (inv->invoke_opcode == QoreIROpcode::AddString
@@ -37063,6 +37094,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Instruction::Add, llvm::Instruction::FAdd,
                 inst->auto_local_string_append ? "qore_rt_add_assign_local_any" : "qore_rt_add_assign_any",
                 inst, lhs_boxed, rhs_boxed, llvm_func, module, true);
+            emitAddAssignOperandRelease(inst, rhs_boxed, result, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -41548,6 +41580,37 @@ llvm::Value* QoreIRToLLVM::emitAnyCmpFastPath(llvm::CmpInst::Predicate int_pred,
     return phi;
 }
 
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitAddAssignOperandRelease(const QoreIRInstruction* inst, llvm::Value* rhs,
+        llvm::Value* result, llvm::Function* llvm_func, llvm::Module& module) {
+    if (!inst || inst->operands.size() < 2) {
+        return;
+    }
+    uint32_t rhs_id = inst->operands[1].id;
+    auto uses_it = operand_remaining_uses.find(rhs_id);
+    if ((uses_it != operand_remaining_uses.end() && uses_it->second > 1) || weak_store_results.count(rhs_id)
+            || !irValueMayBeContainer(rhs_id)) {
+        return;
+    }
+    // the slot is made after the operation, where every path of it has given the result; a value without a cleanup
+    // slot of its own (not an owned temporary) has none
+    llvm::Value* slot = promoteSsaEntryToAlloca(rhs_id, module, llvm_func);
+    if (!slot) {
+        return;
+    }
+    llvm::BasicBlock* release_bb = llvm::BasicBlock::Create(ctx, "ca_release_operand", llvm_func);
+    llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(ctx, "ca_release_operand_cont", llvm_func);
+    // the result is the operand itself only when the lvalue had no value
+    builder->CreateCondBr(builder->CreateICmpEQ(result, rhs), release_bb, cont_bb,
+        llvm::MDBuilder(ctx).createBranchWeights(1, 1 << 20));
+    builder->SetInsertPoint(release_bb);
+    auto release_fn = module.getOrInsertFunction("qore_rt_add_assign_release_operand",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    builder->CreateCall(release_fn, {result, slot});
+    builder->CreateBr(cont_bb);
+    builder->SetInsertPoint(cont_bb);
+}
+
 // Emit inline LLVM fast-path for .any compound assignments (AddAssignAny/SubAssignAny/etc).
 // Type-checks operands for int+int and float+float, falls back to helper for mixed types.
 // For AddAssignAny (handle_nothing=true), returns rhs if lhs is NOTHING.
@@ -41568,20 +41631,7 @@ llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::Bina
     llvm::BasicBlock* slow_bb = llvm::BasicBlock::Create(ctx, "ca_slow_path", llvm_func);
     llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "ca_merge", llvm_func);
 
-    // For AddAssignAny, if lhs is NOTHING, return rhs with incremented ref count; the cleanup slot of an operand
-    // whose only remaining use is this operation and that can be a list or a hash is given to
-    // qore_rt_add_assign_take_operand(), which gives its reference to the result for a weakly designated container,
-    // so that a local that takes it moves it, as the interpreters do (qore#7342).  The slot is made here, before the
-    // branch, as promoteSsaEntryToAlloca() stores the value at the insert point.
-    llvm::Value* rhs_slot = nullptr;
-    if (handle_nothing && inst && inst->operands.size() > 1) {
-        uint32_t rhs_id = inst->operands[1].id;
-        auto uses_it = operand_remaining_uses.find(rhs_id);
-        if ((uses_it == operand_remaining_uses.end() || uses_it->second <= 1) && !weak_store_results.count(rhs_id)
-                && irValueMayBeNothing(inst->operands[0].id) && irValueMayBeContainer(rhs_id)) {
-            rhs_slot = promoteSsaEntryToAlloca(rhs_id, module, llvm_func);
-        }
-    }
+    // For AddAssignAny, if lhs is NOTHING, return rhs with incremented ref count
     llvm::BasicBlock* nothing_bb = nullptr;
     llvm::Value* nothing_result = nullptr;
     if (handle_nothing) {
@@ -41605,13 +41655,7 @@ llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::Bina
                 llvm::MDBuilder(ctx).createBranchWeights(1, 1 << 20));
             builder->SetInsertPoint(nothing_ref_bb);
         }
-        if (rhs_slot) {
-            auto take_fn = module.getOrInsertFunction("qore_rt_add_assign_take_operand",
-                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-            nothing_result = builder->CreateCall(take_fn, {rhs, rhs_slot});
-        } else {
-            nothing_result = emitHelperRef(module, rhs);
-        }
+        nothing_result = emitHelperRef(module, rhs);
         builder->CreateBr(merge_bb);
         nothing_bb = builder->GetInsertBlock();
     }

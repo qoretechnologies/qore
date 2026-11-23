@@ -2022,6 +2022,15 @@ private:
     bool irValueMayBeNothing(uint32_t value_id) const;
     //! Returns true if the IR value can be a list or a hash at runtime: it is boxed, and its type does not exclude both
     bool irValueMayBeContainer(uint32_t value_id) const;
+    //! Emits the release of the reference of the operand's temporary after += on an lvalue without a value gave it
+    /** The result is then the operand itself, with a reference of its own; when the operand is an owned temporary
+        whose last use is the operation and that can be a list or a hash, qore_rt_add_assign_release_operand()
+        releases its slot's reference for a list or hash that a weak reference designates, so that the result holds
+        the only reference and a local that takes it moves it, as the AST interpreter gives the operand's reference to
+        the lvalue (qore#7342)
+    */
+    void emitAddAssignOperandRelease(const QoreIRInstruction* inst, llvm::Value* rhs, llvm::Value* result,
+        llvm::Function* llvm_func, llvm::Module& module);
     //! Returns the type path argument of the return type of a method that AOT-compiled code reads a member for
     //! directly (a getter, an assignment or a compound assignment that returns the member), or a null pointer
     //! when the return type accepts no value
