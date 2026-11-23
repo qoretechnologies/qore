@@ -5935,7 +5935,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     object getPollImpl() {
         # the synchronous client is not given to code restricted from NETWORK (qore#7262; see
         # HttpBasedConnection::checkLentClientTarget())
-        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+        if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             checkLentClientTarget();
         }
         return getPingClient();

@@ -24,6 +24,15 @@ p.parse("%modern
 %requires CapRegistry
 class Sub inherits CapProbe::Conn {
 }
+# a request of a connection manager: its error code, or DONE
+string sub req(object m, string url) {
+    try {
+        m.request(url, \"GET\", \"/\");
+        return \"DONE\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
 # connections of the library that the host lends: their client is created when they are used
 string sub lent_client(object c, bool async) {
     try {
@@ -48,6 +57,14 @@ hash<auto> sub run(CapProbe::Conn lent, code host_ref, hash<string, list<auto>> 
     # does not outlive itself
     object made = make_in_grant();
     h.made_in_grant_get = made.get();
+    # the async client of a lent HTTP connection uses the network for the restricted code (the lent capability), but
+    # only to the target of the connection's creator (qore#7262): its own target is reached (nothing listens there),
+    # another origin is refused
+    {
+        object m = lent_connections.bound[0].getAsync(False);
+        h.lent_bound_own = req(m, lent_connections.bound[2]);
+        h.lent_bound_other = req(m, lent_connections.bound[3]);
+    }
     foreach hash<auto> i in (lent_connections.pairIterator()) {
         h{\"lent_connection_\" + i.key} = lent_client(i.value[0], i.value[1]);
     }
@@ -96,6 +113,16 @@ hash<string, list<auto>> lent_connections = {
     "smtp": (new SmtpClient::SmtpConnection("c", "d", sprintf("smtp://127.0.0.1:%d", port), {"monitor": False}),
         False),
 };
+# a lent HTTP connection to a port where nothing listens: its target and another origin (qore#7262)
+{
+    Socket s();
+    s.bind("127.0.0.1:0");
+    int closed = s.getSocketInfo().port;
+    s.close();
+    string own = sprintf("http://127.0.0.1:%d/", closed);
+    lent_connections.bound = (new ConnectionProvider::HttpConnection("b", "d", own, {"monitor": False}), True, own,
+        sprintf("http://localhost:%d/", closed));
+}
 CapRegistry::register(lent);
 code make_in_grant = SandboxManager::createSystemPolicyCall(\CapRegistry::make());
 map printf("%s=%y\n", $1.key, $1.value), p.callFunction("run", lent, \lent.probe(), lent_connections,

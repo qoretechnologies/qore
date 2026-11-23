@@ -647,11 +647,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         \c FILESYSTEM and CA certificate locations are given
     */
     private:internal static checkCreator(*hash<HttpClientConnectionManagerOptions> opts) {
-        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+        if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             throw "PERMISSION-DENIED", "the calling code may not create an HTTP client connection manager, as it is "
                 "restricted from the NETWORK functional domain";
         }
-        if ((opts.ssl_ca_file || opts.ssl_ca_path) && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+        if ((opts.ssl_ca_file || opts.ssl_ca_path) && SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
             throw "PERMISSION-DENIED", "the calling code may not give an HTTP client connection manager CA "
                 "certificate locations, as it is restricted from the FILESYSTEM functional domain";
         }

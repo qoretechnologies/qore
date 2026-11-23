@@ -129,11 +129,11 @@ public final class HttpClientCreatorProof {
         @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK functional domain
     */
     static HttpClientCreatorProof get(string url, *hash<auto> opts) {
-        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+        if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             throw "PERMISSION-DENIED", "the calling code may not create an HTTP client connection manager, as it is "
                 "restricted from the NETWORK functional domain";
         }
-        return new HttpClientCreatorProof(!SandboxManager::isCallerRestricted(DOM_FILESYSTEM),
+        return new HttpClientCreatorProof(!SandboxManager::isLentToRestricted(DOM_FILESYSTEM),
             HttpClientCreatorProof::getOrigins(url), opts);
     }
 
@@ -145,10 +145,10 @@ public final class HttpClientCreatorProof {
         such code is refused when it creates its manager
     */
     static *HttpClientCreatorProof tryGet(*string url, *hash<auto> opts) {
-        if (!url.val() || SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+        if (!url.val() || SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             return;
         }
-        return new HttpClientCreatorProof(!SandboxManager::isCallerRestricted(DOM_FILESYSTEM),
+        return new HttpClientCreatorProof(!SandboxManager::isLentToRestricted(DOM_FILESYSTEM),
             HttpClientCreatorProof::getOrigins(url), opts);
     }
 
