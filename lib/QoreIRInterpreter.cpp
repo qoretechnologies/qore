@@ -21777,7 +21777,6 @@ load_local_done:
             }
             // fallthrough
             case QoreIROpcode::Call:
-            case QoreIROpcode::CallMethod:
             case QoreIROpcode::CallStatic: {
                 // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
                 // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
@@ -21795,6 +21794,7 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
+            generic_call_checked:
                 // the call stack frame of the called code is located at the call
                 QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
                 // CallDirect/CallStaticDirect use their own instruction classes (with extra
@@ -21858,31 +21858,6 @@ load_local_done:
                             }
                         }
                         used_operands = true;
-                    }
-                }
-                // an unqualified call of a method of self (m()) on an object of the class of the call or of the
-                // method takes the fast method call path (issue #7267): with the references of the temporary arguments
-                // that it consumes given to it, as a CallMethodDirect call gives them; a call that cannot take it is
-                // made below, with the arguments as they were
-                if (!used_operands && effective_opcode == QoreIROpcode::CallMethod) {
-                    if (const SelfFunctionCallNode* self_call = qore_get_self_function_call_node(
-                            call_expr.getInternalNode())) {
-                        if (QoreObject* self = qore_rt_self_call_fast_object(self_call)) {
-                            IRSelfCallArgs self_args(values, inst->operands);
-                            if (inst->interpreter_gives_call_args && hasConsumedCallArgs(inst)) {
-                                res = irCallSelfMethodGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,
-                                    weak_load_temp_slots, borrowed_temp_remaining}, inst, self_call, self,
-                                    self_args.get(), self_args.size(), xsink);
-                                used_operands = true;
-                            } else {
-                                uint64_t result;
-                                if (qore_rt_try_self_call_fast_object(self, self_call, self_args.get(), nullptr,
-                                        self_args.size(), xsink, result)) {
-                                    res = fromBits(result);
-                                    used_operands = true;
-                                }
-                            }
-                        }
                     }
                 }
                 if (!inst->operands.empty() && !used_operands) {
@@ -22005,6 +21980,62 @@ load_local_done:
                     if (!used_operands) {
                         // Direct eval — avoids evalExprNode() overhead
                         res = evalAndRef(call_expr, xsink);
+                    }
+                }
+                if (xsink && *xsink) {
+                    res.discard(xsink);
+                    return returnAfterUnhandledException();
+                }
+                // Function call runs in its own frame and cannot modify caller's locals
+                invalidateExternalCaches();
+                setValueSlot(values, inst->result.id, res, xsink);
+                if (res.needsRef()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::CallMethod: {
+                // an unqualified call of a method of self (m()) on an object of the class of the call or of the method
+                // takes the fast method call path (issue #7267): with the references of the temporary arguments that it
+                // consumes given to it, as a CallMethodDirect call gives them; any other call, and one that cannot take
+                // it, is made by the generic call code, after the check of the call's target that the call makes
+                // itself; a case of its own, so that the other calls of the generic call code test nothing more
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get(), inst)) {
+                    inst = inst->fused_call_check.get();
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
+                const SelfFunctionCallNode* self_call = qore_get_self_function_call_node(
+                    static_cast<QoreIRExprInstruction*>(inst)->expr.getInternalNode());
+                QoreObject* self = self_call ? qore_rt_self_call_fast_object(self_call) : nullptr;
+                if (!self) {
+                    goto generic_call_checked;
+                }
+                QoreValue res;
+                {
+                    // the call stack frame of the called code is located at the call
+                    QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
+                    IRSelfCallArgs self_args(values, inst->operands);
+                    if (inst->interpreter_gives_call_args && hasConsumedCallArgs(inst)) {
+                        res = irCallSelfMethodGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,
+                            weak_load_temp_slots, borrowed_temp_remaining}, inst, self_call, self, self_args.get(),
+                            self_args.size(), xsink);
+                    } else {
+                        uint64_t result;
+                        if (!qore_rt_try_self_call_fast_object(self, self_call, self_args.get(), nullptr,
+                                self_args.size(), xsink, result)) {
+                            goto generic_call_checked;
+                        }
+                        res = fromBits(result);
                     }
                 }
                 if (xsink && *xsink) {
