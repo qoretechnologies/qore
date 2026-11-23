@@ -2798,6 +2798,8 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref RestClient::AbstractRestConnection::getAsync() "RestConnection::getAsync(False, rtopts)" accepts
+      string-valued runtime options when it adds the default \c skip_login flag (issue #7408).
     - @ref Qore::HTTPClient::getURL() "HTTPClient::getURL()", @ref Qore::HTTPClient::getProxyURL() "getProxyURL()"
       and @ref Qore::HTTPClient::getSafeProxyURL() "getSafeProxyURL()" give an IPv6 host in brackets and the path of a
       UNIX domain socket with every reserved character encoded; the URL was ambiguous without them, and
