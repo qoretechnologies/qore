@@ -1,0 +1,125 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/3 (QUIC) client connections closed between the client's checks and a submit
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# qore#7385: when the session of an HTTP/3 connection is found closed while a request is submitted on it (its idle
+# timeout, or the peer response timeout of an earlier request, expired between the client's checks and the submit),
+# the request is refused with the error of the close, and the connection is closed, so that HTTPClient's connection
+# manager does not give it out again.  Before, only the poll operation was closed, not the connection (and not even
+# the operation for HTTP3-PEER-UNRESPONSIVE): the dead connection stayed ready in the manager's pool, and every later
+# request of the client failed with HTTP3-STATE-ERROR (or HTTP3-PEER-UNRESPONSIVE again).  The closes are forced at
+# the submit with the DEBUG-build hooks QORE_QUIC_TEST_IDLE_CLOSE_AT_SUBMIT and
+# QORE_QUIC_TEST_UNRESPONSIVE_CLOSE_AT_SUBMIT, each of which closes the session of the next request submitted after
+# the variable gets a new value; the cases skip in other builds.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires ../../../TestCertificates.qm
+
+%exec-class HttpClientH3ClosedAtSubmitTest
+
+#! a hang guard only
+const Timeout = 20s;
+
+#! Answers every request, and counts the POST requests
+class CountingHandler inherits AbstractHttpRequestHandler {
+    public {
+        Counter posts();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.method == "POST") {
+            posts.inc();
+        }
+        return <HttpResponseInfo>{"code": 200, "body": "ok"};
+    }
+}
+
+class HttpClientH3ClosedAtSubmitTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        CountingHandler handler();
+        *string url;
+        #! the values given to the hooks, each of which arms one once
+        int hook_values = 0;
+    }
+
+    constructor() : Test("HttpClientH3ClosedAtSubmitTest", "1.0") {
+        addTestCase("an HTTP/3 connection idle-closed at a submit is not used again", \closedAtSubmitTest(),
+            ("QORE_QUIC_TEST_IDLE_CLOSE_AT_SUBMIT", "HTTP3-IDLE-CLOSE"));
+        addTestCase("an HTTP/3 connection closed at a submit for lack of a response is not used again",
+            \closedAtSubmitTest(), ("QORE_QUIC_TEST_UNRESPONSIVE_CLOSE_AT_SUBMIT", "HTTP3-PEER-UNRESPONSIVE"));
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("h3-closed-at-submit", LoggerLevel::getLevelWarn()),
+        });
+        server.setDefaultHandler("count", handler);
+        try {
+            url = sprintf("https://127.0.0.1:%d", server.addQuicListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            }).port);
+        } catch (hash<ExceptionInfo> ex) {
+            # QUIC is not available; the test is skipped
+        }
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+        }
+    }
+
+    #! arms the hook: it closes the session of the next request submitted
+    private armHook(string var) {
+        setenv(var, sprintf("%d", ++hook_values));
+    }
+
+    closedAtSubmitTest(string var, string err) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip(var + " is only available in a library-debug build");
+        }
+        if (!url) {
+            testSkip("QUIC is not available");
+        }
+        on_exit unsetenv(var);
+        HTTPClient hc({"url": url, "http_version": "3.0", "ssl_verify_cert": False, "timeout": Timeout});
+        on_exit hc.disconnect();
+        assertEq(200, hc.send(NOTHING, "GET", "/").status_code, "the connection is up");
+        int posts = handler.posts.getCount();
+
+        # the request is refused with the error of the close, and is not sent
+        armHook(var);
+        *hash<ExceptionInfo> ex;
+        try {
+            hc.send("refused", "POST", "/");
+            fail("a request on a connection closed at its submit must be refused");
+        } catch (hash<ExceptionInfo> ex1) {
+            ex = ex1;
+        }
+        unsetenv(var);
+        assertEq(err, ex.err, sprintf("the submit is refused with the error of the close (%s)", ex.desc));
+        assertRegex("the request was not sent", ex.desc ?? "", "the description says that the request was not sent");
+        assertEq(posts, handler.posts.getCount(), "the refused request did not reach the server");
+
+        # the next requests take a new connection
+        assertEq(200, hc.send("next", "POST", "/").status_code, "the next request is answered");
+        assertEq(posts + 1, handler.posts.getCount(), "the server got the next request once");
+        assertEq(200, hc.send(NOTHING, "GET", "/").status_code, "the request after it is answered too");
+    }
+}
