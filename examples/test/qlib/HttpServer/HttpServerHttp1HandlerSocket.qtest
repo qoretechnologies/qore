@@ -1775,9 +1775,12 @@ class NoView inherits AbstractHttpRequestHandler {
                 r = "closed";
             }
             assertTrue(r == "returned" || r == "closed", path + ": the request ends: " + r);
-            # the thread's read ends at the longest timeout of the socket, or with the end of the request
+            # the thread's read ends at the longest timeout of the socket (SOCKET-TIMEOUT), or when the end of the
+            # request, which waits for it as long, closes the connection's socket (READ-HTTP-CHUNK-ERROR, or another
+            # SOCKET-* error): both take the same time from the start of the read and the end of the request, so that
+            # either can come first
             string err = cast<object>(handler).ended.get(HangGuard);
-            assertTrue(err == "SOCKET-TIMEOUT" || err == "HTTP-HANDLER-SOCKET-ERROR" || err =~ /^SOCKET-/,
+            assertTrue(err =~ /^SOCKET-/ || err == "READ-HTTP-CHUNK-ERROR" || err == "HTTP-HANDLER-SOCKET-ERROR",
                 path + ": the read ends: " + err);
             assertNeq("ok", err, path + ": the read reads no body that the client did not send");
 
