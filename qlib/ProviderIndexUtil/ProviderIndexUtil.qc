@@ -4873,7 +4873,8 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     static setIndexFileOpenTestHook(*code hook) [dom=PROCESS_CONTROL] {
         # the index and its configuration are process-wide (qore#6747)
         ProviderIndexUtil::checkChange("set the test hook of");
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", "cannot set an index test hook from a context with restricted process control";
         }
         # test hooks are for trusted test code only

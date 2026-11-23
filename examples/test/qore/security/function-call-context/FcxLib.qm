@@ -53,6 +53,11 @@ public class Lib {
             SandboxManager::isTerminalIoAllowed(), SandboxManager::isRestricted());
     }
 
+    #! a static method of this module that invokes code that the caller gave with an argument
+    static auto call1(code c, auto a) {
+        return c(a);
+    }
+
     #! the process-control capability of the code that called this method, by its frame
     static string callerMask() {
         return (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) ? "restricted" : "open";
@@ -85,6 +90,11 @@ public string sub libregister() {
     } catch (hash<ExceptionInfo> ex) {
         return ex.err;
     }
+}
+
+#! a plain function of this module that invokes code that the caller gave with an argument
+public auto sub libcall1(code c, auto a) {
+    return c(a);
 }
 
 #! a plain function of this module that calls code that the caller gave

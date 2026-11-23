@@ -196,13 +196,17 @@ public class DataProviderRetryUtil {
         longer than @ref DefaultTransportRetryDelayUnit
 
         @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it (since DataProvider 3.12)
         @throw TRANSPORT-RETRY-DELAY-ERROR the unit is an absolute date/time value, is negative, or is longer than
         @ref DefaultTransportRetryDelayUnit
 
         @since DataProvider 3.11
     */
     static setTransportRetryDelayUnit(date unit) {
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        # the unit is process-wide: sandboxed code does not change it for every other caller (qore#7394)
+        SandboxManager::checkProcessWideRegistration("change the transport retry delay unit of the process");
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", "Cannot change the transport retry delay unit of the process from a context "
                 "with restricted process control";
         }

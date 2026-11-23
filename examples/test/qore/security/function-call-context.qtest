@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires ../../TestInterpreter.qm
+%requires Util
 %requires FsUtil
 %requires ../../ExecModeHarness.qm
 %exec-class FunctionCallContextTest
@@ -98,7 +99,27 @@ class FunctionCallContextTest inherits QUnit::Test {
             "TR-frame-eager-types-mk: PERMISSION-DENIED",
             "TR-frame-eager-types-mk-warm: PERMISSION-DENIED",
             "TR-frame-eager-types-mk_direct: PERMISSION-DENIED",
-            "TR-frame-eager-types-mk_direct-warm: PERMISSION-DENIED"
+            "TR-frame-eager-types-mk_direct-warm: PERMISSION-DENIED",
+            "TR-pc-scheme-direct: PERMISSION-DENIED / warm PERMISSION-DENIED",
+            "TR-pc-scheme-library-function: PERMISSION-DENIED / warm PERMISSION-DENIED",
+            "TR-pc-scheme-library-static: PERMISSION-DENIED / warm PERMISSION-DENIED",
+            "TR-pc-scheme-library-closure: PERMISSION-DENIED / warm PERMISSION-DENIED",
+            "TR-pc-eager-direct: PERMISSION-DENIED / warm PERMISSION-DENIED",
+            "TR-pc-eager-library-function: PERMISSION-DENIED / warm PERMISSION-DENIED",
+            "TR-pc-eager-library-static: PERMISSION-DENIED / warm PERMISSION-DENIED",
+            "TR-pc-retry-direct: PERMISSION-DENIED / warm PERMISSION-DENIED",
+            "TR-pc-retry-library-function: PERMISSION-DENIED / warm PERMISSION-DENIED",
+            "TR-pc-retry-library-static: PERMISSION-DENIED / warm PERMISSION-DENIED",
+            "TS-pc-scheme-direct: DATA-PROVIDER-REGISTRATION-DENIED / warm DATA-PROVIDER-REGISTRATION-DENIED",
+            "TS-pc-scheme-library-function: DATA-PROVIDER-REGISTRATION-DENIED / warm DATA-PROVIDER-REGISTRATION-DENIED",
+            "TS-pc-scheme-library-static: DATA-PROVIDER-REGISTRATION-DENIED / warm DATA-PROVIDER-REGISTRATION-DENIED",
+            "TS-pc-scheme-library-closure: DATA-PROVIDER-REGISTRATION-DENIED / warm DATA-PROVIDER-REGISTRATION-DENIED",
+            "TS-pc-eager-direct: SANDBOX-REGISTRATION-ERROR / warm SANDBOX-REGISTRATION-ERROR",
+            "TS-pc-eager-library-function: SANDBOX-REGISTRATION-ERROR / warm SANDBOX-REGISTRATION-ERROR",
+            "TS-pc-eager-library-static: SANDBOX-REGISTRATION-ERROR / warm SANDBOX-REGISTRATION-ERROR",
+            "TS-pc-retry-direct: SANDBOX-REGISTRATION-ERROR / warm SANDBOX-REGISTRATION-ERROR",
+            "TS-pc-retry-library-function: SANDBOX-REGISTRATION-ERROR / warm SANDBOX-REGISTRATION-ERROR",
+            "TS-pc-retry-library-static: SANDBOX-REGISTRATION-ERROR / warm SANDBOX-REGISTRATION-ERROR"
         );
     }
 
@@ -117,6 +138,7 @@ class FunctionCallContextTest inherits QUnit::Test {
         addTestCase("each execution mode", \testModes());
         addTestCase("each execution mode with the default thresholds", \testDefaultThresholds());
         addTestCase("qcc executables", \testCompiled());
+        addTestCase("the frame checks of the standard modules", \testFrameChecks());
         set_return_value(main());
     }
 
@@ -151,6 +173,61 @@ class FunctionCallContextTest inherits QUnit::Test {
                 + quote(worker) + " 2>&1");
             assertEq(expected(), strip(out), mode);
         }
+    }
+
+    #! every check of the standard modules of the process-control restriction of the code that called a method, by the
+    #! frame of the call (Program::getCallerCapabilityMask()), is paired with the check of the calling code that walks
+    #! the call chain (SandboxManager::isCallerRestricted()): library code that calls the method for that code is the
+    #! frame's caller, and does not hide the code that called it
+    testFrameChecks() {
+        string qlib = normalize_dir(get_script_dir() + DirSep + ".." + DirSep + ".." + DirSep + ".." + DirSep + ".."
+            + DirSep + "qlib");
+        int checks = 0;
+        list<string> unpaired = ();
+        foreach string path in (sources(qlib)) {
+            if (path !~ /\.(qm|qc)$/) {
+                continue;
+            }
+            list<string> lines = ReadOnlyFile::readTextFile(path).split("
+");
+            for (int i = 0; i < lines.size(); ++i) {
+                string line = lines[i];
+                if (line !~ /Program::getCallerCapabilityMask\(/ || line =~ /^\s*(#|\*|\/\*)/) {
+                    continue;
+                }
+                ++checks;
+                # the chain check is in the same condition or, for a check of every frame, before it in the function
+                bool paired = False;
+                for (int j = max(0, i - 8); j < min(lines.size(), i + 3); ++j) {
+                    if (lines[j] =~ /SandboxManager::isCallerRestricted\(DOM_PROCESS_CONTROL\)/) {
+                        paired = True;
+                        break;
+                    }
+                }
+                if (!paired) {
+                    unpaired += sprintf("%s:%d", path, i + 1);
+                }
+            }
+        }
+        # the checks of the release this was written for: the test must have found them
+        assertGe(12, checks, "frame checks found");
+        assertEq((), unpaired, "frame checks without the check of the call chain");
+    }
+
+    #! returns the paths of the Qore sources under \a dir
+    private static list<string> sources(string dir) {
+        list<string> rv = ();
+        Dir d();
+        d.chdir(dir);
+        foreach string f in (d.listFiles()) {
+            if (f =~ /\.(qm|qc)$/) {
+                rv += dir + DirSep + f;
+            }
+        }
+        foreach string sub_dir in (d.listDirs()) {
+            rv += sources(dir + DirSep + sub_dir);
+        }
+        return rv;
     }
 
     testCompiled() {

@@ -232,3 +232,71 @@ foreach string which in (("retry-unit", "eager-types")) {
         printf("TR-frame-%s-%s-warm: %s\n", which, how, warm);
     }
 }
+
+# 5) the process-wide setters and registries of the standard modules that refuse code restricted from process control,
+# called by a Program restricted from process control and by a sandboxed Program: directly, through a call reference
+# that a function of a library invokes with an argument, through one that a static method of a library invokes, and
+# through the closure of a library function (DataStreamUtil::ds_get_send()), cold and after many calls
+const ProcessControl = "%modern
+%requires FcxLib
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestSchemaActions
+%requires DataStreamUtil
+# the call of a setter or a registry: its error code, or \"granted\"
+string sub outcome(code c) {
+    try {
+        auto r = c();
+        if (r.typeCode() == NT_HASH && r.\"DataStream-Error\") {
+            return (r.\"DataStream-Error\" =~ x/^([-A-Z]+)/)[0] ?? \"error\";
+        }
+        return \"granted\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+# the call reference to the method and the argument of the call
+list<auto> sub target(string which) {
+    switch (which) {
+        case \"scheme\":
+            return (\\ConnectionProvider::ConnectionSchemeCache::deregisterScheme(), \"fcx-no-such-scheme\");
+        case \"eager\":
+            return (\\RestSchemaActions::RestSchemaActionSet::setEagerResponseTypes(), False);
+    }
+    return (\\DataProvider::DataProviderRetryUtil::setTransportRetryDelayUnit(),
+        DataProvider::DataProviderRetryUtil::getTransportRetryDelayUnit());
+}
+string sub call(string which, string how) {
+    (code f, auto a) = target(which);
+    switch (how) {
+        case \"direct\":
+            return outcome(auto sub () { return f(a); });
+        case \"library-function\":
+            return outcome(auto sub () { return FcxLib::libcall1(f, a); });
+        case \"library-static\":
+            return outcome(auto sub () { return FcxLib::Lib::call1(f, a); });
+    }
+    # the closure of a library function, which calls the call reference with the data that it encodes
+    return outcome(DataStreamUtil::ds_get_send(auto sub () { return \"fcx-no-such-scheme\"; }, f));
+}
+";
+Program pcr(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+pcr.parse(ProcessControl, "TR-pc");
+Program pcs(PO_NEW_STYLE);
+pcs.setSandboxManager(new SandboxManager());
+pcs.parse(ProcessControl, "TS-pc");
+foreach hash<auto> i in ({"TR": pcr, "TS": pcs}.pairIterator()) {
+    foreach string which in (("scheme", "eager", "retry")) {
+        foreach string how in (("direct", "library-function", "library-static", "library-closure")) {
+            if (how == "library-closure" && which != "scheme") {
+                continue;
+            }
+            string cold = i.value.callFunction("call", which, how);
+            string warm;
+            for (int j = 0; j < 300; ++j) {
+                warm = i.value.callFunction("call", which, how);
+            }
+            printf("%s-pc-%s-%s: %s / warm %s\n", i.key, which, how, cold, warm);
+        }
+    }
+}

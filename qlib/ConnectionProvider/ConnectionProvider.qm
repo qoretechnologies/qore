@@ -184,6 +184,10 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
 
 
     @section connectionprovider_3_1 ConnectionProvider 3.1
+    - @ref ConnectionProvider::ConnectionSchemeCache::deregisterScheme() "ConnectionSchemeCache::deregisterScheme()"
+      refuses code restricted with @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL" also when it calls the
+      method through library code, such as a library function that it gives a call reference to the method
+      (<a href="https://github.com/qoretechnologies/qore/issues/7394">issue 7394</a>)
     - a connection is a capability of the code that creates it: code restricted from the functional domain of a
       connection's clients (\c NETWORK, \c FILESYSTEM or \c DATABASE) cannot create the connection, by a constructor
       or by deserialization (\c PERMISSION-DENIED), while a connection that unrestricted code created and lends to it
