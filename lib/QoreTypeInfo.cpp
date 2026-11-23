@@ -8965,22 +8965,59 @@ const QoreTypeInfo* QoreTypeInfo::getReturnComplexBufferOrNothing(const QoreType
     return ti->return_vec[0].spec.getComplexBuffer();
 }
 
-void QoreTypeInfo::getNodeType(QoreString& str, const QoreValue& n) {
+bool QoreTypeInfo::diagnosticNamesCollide(const QoreTypeInfo* left, const QoreTypeInfo* right) {
+    if (!left || !right || left == right) {
+        return false;
+    }
+    const QoreClass* left_class = getReturnClass(left);
+    const QoreClass* right_class = getReturnClass(right);
+    if (left_class && right_class && !strcmp(left_class->getName(), right_class->getName())
+            && strcmp(left_class->getPath(), right_class->getPath())) {
+        return true;
+    }
+    // Includes classes nested in containers and generic arguments.
+    return !strcmp(getName(left), getName(right)) && strcmp(getPath(left), getPath(right));
+}
+
+std::string QoreTypeInfo::diagnosticTypePath(const QoreTypeInfo* ti) {
+    const QoreClass* cls = getReturnClass(ti);
+    if (cls && dynamic_cast<const QoreClassTypeInfo*>(ti)) {
+        return std::string(ti->tname.c_str()[0] == '*' ? "*object<" : "object<")
+            + qore_class_private::diagnosticPath(*cls) + ">";
+    }
+    return getPath(ti);
+}
+
+void QoreTypeInfo::describeTypeComparison(QoreString& str, const QoreTypeInfo* left, const char* separator,
+        const QoreTypeInfo* right) {
+    if (diagnosticNamesCollide(left, right)) {
+        str.sprintf("%s%s%s", diagnosticTypePath(left).c_str(), separator, diagnosticTypePath(right).c_str());
+    } else {
+        getThisType(left, str);
+        str.concat(separator);
+        getThisType(right, str);
+    }
+}
+
+void QoreTypeInfo::describeTypeMismatch(QoreString& str, const QoreValue& n) const {
+    bool qualify = diagnosticNamesCollide(this, n.getFullTypeInfo());
+    str.sprintf("expects type '%s', but got ", qualify ? diagnosticTypePath(this).c_str() : tname.c_str());
     qore_type_t nt = n.getType();
     if (nt == NT_NOTHING) {
         str.concat("no value");
         return;
     }
     if (nt != NT_OBJECT) {
-        str.sprintf("type '%s'", n.getFullTypeName());
+        str.sprintf("type '%s'", qualify ? n.getFullTypeName(true) : n.getFullTypeName());
         return;
     }
     const QoreObject* obj = n.get<const QoreObject>();
+    const char* name = qualify ? qore_class_private::diagnosticPath(*obj->getClass()) : obj->getClassName();
     if (!obj->isValid()) {
-        str.sprintf("no value (deleted object of class '%s')", obj->getClassName());
+        str.sprintf("no value (deleted object of class '%s')", name);
         return;
     }
-    str.sprintf("an object of class '%s'", obj->getClassName());
+    str.sprintf("an object of class '%s'", name);
 }
 
 void QoreTypeInfo::ptext(QoreString& str, const char* arg_type, int param_num, const char* param_name) {
@@ -9032,8 +9069,7 @@ int QoreTypeInfo::doTypeException(const char* arg_type, int param_num, const cha
 
     SimpleRefHolder<QoreStringNode> desc(new QoreStringNode);
     QoreTypeInfo::ptext(**desc, arg_type, param_num, param_name);
-    desc->sprintf("expects type '%s', but got ", tname.c_str());
-    QoreTypeInfo::getNodeType(**desc, n);
+    describeTypeMismatch(**desc, n);
     desc->concat(" instead");
     // the structured diagnostic of the error, for tools and coding assistants; see QoreRuntimeDiagnostic.h
     const char* container = nullptr;
@@ -9063,7 +9099,10 @@ int QoreTypeInfo::doTypeException(const char* arg_type, int param_num, const cha
 }
 
 QoreHashNode* QoreTypeInfo::makeRuntimeDiagnostic(const QoreValue& n, const char* container) const {
-    std::vector<std::pair<std::string, std::string>> facts = {{"expectedType", tname.c_str()}};
+    bool qualify = diagnosticNamesCollide(this, n.getFullTypeInfo());
+    std::vector<std::pair<std::string, std::string>> facts = {
+        {"expectedType", qualify ? diagnosticTypePath(this) : tname.c_str()}
+    };
     if (n.isNothing()) {
         return qore_make_runtime_diagnostic(QORE_RTD_NO_VALUE_FOR_TYPE,
             "a value of this type is required, but there is no value (NOTHING), as for a variable that was declared "
@@ -9073,7 +9112,7 @@ QoreHashNode* QoreTypeInfo::makeRuntimeDiagnostic(const QoreValue& n, const char
              "declare an optional type, such as *int, where no value is expected"});
     } else {
         QoreString actual;
-        facts.push_back({"actualType", n.getFullTypeName(false, actual)});
+        facts.push_back({"actualType", n.getFullTypeName(qualify, actual)});
         if (container) {
             facts.push_back({"container", container});
             return qore_make_runtime_diagnostic(QORE_RTD_CONTAINER_VALUE_TYPE,
@@ -9094,8 +9133,8 @@ int QoreTypeInfo::doObjectHashDeclTypeException(const char* arg_type, const char
         ExceptionSink* xsink) const {
     assert(xsink);
     SimpleRefHolder<QoreStringNode> desc(new QoreStringNode);
-    desc->sprintf("%s '%s' expects type '%s', but got ", arg_type, param_name, tname.c_str());
-    QoreTypeInfo::getNodeType(**desc, n);
+    desc->sprintf("%s '%s' ", arg_type, param_name);
+    describeTypeMismatch(**desc, n);
     desc->concat(" instead");
     ReferenceHolder<QoreHashNode> diag(makeRuntimeDiagnostic(n, nullptr), nullptr);
     xsink->raiseExceptionArg("RUNTIME-TYPE-ERROR", diag.release(), desc.release());

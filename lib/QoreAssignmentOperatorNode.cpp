@@ -117,13 +117,15 @@ QoreDiagnosticMetadata qore_make_lvalue_type_diagnostic(const QoreValue& left,
         const QoreTypeInfo* expected, const QoreTypeInfo* actual, bool narrowed, const char* base_id,
         const char* operation) {
     QoreDiagnosticMetadata metadata(narrowed ? "NARROWED-CONTAINER-TYPE-MISMATCH" : base_id);
-    metadata.addFact("expectedType", get_type_name(expected));
-    metadata.addFact("actualType", get_type_name(actual));
+    bool qualify = QoreTypeInfo::diagnosticNamesCollide(expected, actual);
+    std::string expected_name = qualify ? QoreTypeInfo::diagnosticTypePath(expected) : get_type_name(expected);
+    metadata.addFact("expectedType", expected_name.c_str());
+    metadata.addFact("actualType", qualify ? QoreTypeInfo::diagnosticTypePath(actual).c_str() : get_type_name(actual));
     metadata.addFact("operation", operation);
 
     if (!narrowed) {
         QoreStringMaker hint("use a value compatible with '%s' or change the explicitly declared type",
-            get_type_name(expected));
+            expected_name.c_str());
         metadata.hint = hint.c_str();
         return metadata;
     }
@@ -638,9 +640,7 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         QoreStringNode* edesc = new QoreStringNodeMaker("lvalue for %sassignment operator '%s' expects ",
             mode == AssignmentMode::Weak ? "weak " : (mode == AssignmentMode::Opaque ? "opaque " : ""),
             op_name);
-        QoreTypeInfo::getThisType(error_ti, *edesc);
-        edesc->concat(", but right-hand side is ");
-        QoreTypeInfo::getThisType(error_rhs_ti, *edesc);
+        QoreTypeInfo::describeTypeComparison(*edesc, error_ti, ", but right-hand side is ", error_rhs_ti);
 
         // Add context about type narrowing if applicable
         if (has_narrowed_type && !is_direct_auto_assignment) {

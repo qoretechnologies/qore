@@ -306,9 +306,7 @@ int QoreMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
                     && !qore_minus_parse_type_is_unknown(rightTypeInfo)
                     && QoreTypeInfo::returnsSingle(leftTypeInfo) && QoreTypeInfo::returnsSingle(rightTypeInfo)) {
                 QoreStringNode* edesc = new QoreStringNode("subtracting ");
-                QoreTypeInfo::getThisType(rightTypeInfo, *edesc);
-                edesc->concat(" from ");
-                QoreTypeInfo::getThisType(leftTypeInfo, *edesc);
+                QoreTypeInfo::describeTypeComparison(*edesc, rightTypeInfo, " from ", leftTypeInfo);
                 edesc->concat(" is an invalid operation and always returns NOTHING");
                 qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION,
                     "INVALID-OPERATION", edesc);

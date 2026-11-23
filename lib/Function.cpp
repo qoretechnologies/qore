@@ -3317,9 +3317,7 @@ int UserSignature::resolve() {
             if (!QoreTypeInfo::parseAccepts(typeList[i], argTypeInfo)) {
                 QoreStringNode* desc = new QoreStringNode;
                 desc->sprintf("parameter '%s' expects ", names[i].c_str());
-                QoreTypeInfo::getThisType(typeList[i], *desc);
-                desc->concat(", but the default value is ");
-                QoreTypeInfo::getThisType(argTypeInfo, *desc);
+                QoreTypeInfo::describeTypeComparison(*desc, typeList[i], ", but the default value is ", argTypeInfo);
                 desc->concat(" instead");
                 qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
                 if (!err) {
