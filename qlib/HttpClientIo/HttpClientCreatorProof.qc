@@ -87,9 +87,9 @@ public final class HttpClientCreatorProof {
         #! True for the schemes that use TLS, False for the plain ones, of the schemes that are mapped to HTTP
         const SchemeTls = {
             "http": False, "ws": False, "jsonrpc": False, "jsonrpcio": False, "yamlrpc": False, "yamlrpcio": False,
-            "mcp": False, "a2a": False, "sewiows": False,
+            "mcp": False, "a2a": False, "sewiows": False, "rest": False,
             "https": True, "wss": True, "jsonrpcs": True, "jsonrpcios": True, "yamlrpcs": True, "yamlrpcios": True,
-            "mcps": True, "a2as": True, "sewiowss": True,
+            "mcps": True, "a2as": True, "sewiowss": True, "rests": True,
         };
     }
 
@@ -222,6 +222,31 @@ public final class HttpClientCreatorProof {
                 proxy_info.port ?? 0);
     }
 
+    #! Returns True if the proof allows a connection to the given URL through the given proxy
+    /** The origin of the URL and the proxy are derived as for the proof itself (see the class description): this is
+        the check for a client that is not created with the proof, such as a synchronous client that a connection
+        object creates (see @ref ConnectionProvider::AbstractConnection::checkLentNetworkTarget()
+        "AbstractConnection::checkLentNetworkTarget()")
+
+        @param url the URL that the client connects to
+        @param proxy_url the URL of the client's proxy, if any
+
+        @return True if the origin of \a url is one that the proof allows and \a proxy_url is its proxy (or both have
+        none)
+    */
+    bool allowsUrl(string url, *string proxy_url) {
+        *string key = HttpClientCreatorProof::getOrigins(url).firstKey();
+        if (!key || !origins{key}) {
+            return False;
+        }
+        if (proxy_url.val()) {
+            # an ambiguous or invalid proxy URL has no key and matches nothing, also not a proof's own such proxy
+            *string key = HttpClientCreatorProof::getProxyKey(proxy_url);
+            return exists proxy && key.val() && proxy == key;
+        }
+        return !exists proxy;
+    }
+
     #! Returns True if the proof allows the given CA certificate locations
     /** @param file the CA certificate file, if any
         @param path the CA certificate directory, if any
@@ -291,7 +316,7 @@ public final class HttpClientCreatorProof {
         } catch (hash<ExceptionInfo> ex) {
             return {};
         }
-        if (!u.host.val()) {
+        if (!u.host.val() || HttpClientCreatorProof::ambiguousHost(url, u.host)) {
             return {};
         }
         # a UNIX domain socket target: plain HTTP with port 0, as the manager connects to it
@@ -305,6 +330,28 @@ public final class HttpClientCreatorProof {
         return {HttpClientCreatorProof::getKey(tls, u.host, u.port ?? (tls ? 443 : 80)): True};
     }
 
+    #! Returns True if the host of a URL is an IPv6 address without brackets
+    /** Its end and the start of the port cannot be told apart, so such a URL allows nothing (a client can render an
+        IPv6 host without brackets; RFC 3986 requires them)
+    */
+    private:internal static bool ambiguousHost(string url, string host) {
+        # a URL that is not valid in its encoding cannot be checked: it is ambiguous (qore#6553)
+        try {
+            if (host !~ /:/ || host =~ /^\//) {
+                return False;
+            }
+            # the host and port of the authority follow its last "@": userinfo can hold brackets too
+            string hostport = (url =~ x/^[^\/]*\/\/([^\/?#]*)/)[0] ?? "";
+            int at = hostport.rfind("@");
+            if (at >= 0) {
+                hostport = hostport.substr(at + 1);
+            }
+            return hostport !~ /^\[/;
+        } catch (hash<ExceptionInfo> ex) {
+            return True;
+        }
+    }
+
     #! Returns the \c "host:port" key of a proxy URL
     private:internal static *string getProxyKey(string url) {
         hash<auto> u;
@@ -313,7 +360,7 @@ public final class HttpClientCreatorProof {
         } catch (hash<ExceptionInfo> ex) {
             return "";
         }
-        if (!u.host.val()) {
+        if (!u.host.val() || HttpClientCreatorProof::ambiguousHost(url, u.host)) {
             return "";
         }
         bool tls = (u.protocol == "https");

@@ -351,6 +351,7 @@ public class RestConnectionKeyFallbackTest inherits QUnit::Test {
         assertTrue(conn.needsAuth());
         # it cannot connect until it has them and is authorized
         assertFalse(conn.getInfo().up);
+        assertNeq("not checked", conn.getInfo().status);
         assertEq("authorization_code", conn.getConnectionOptions().oauth2_grant_type);
 
         conn = new ApiKeyConnection({"oauth2_client_id": "id", "oauth2_client_secret": "secret"});
@@ -383,7 +384,7 @@ public class RestConnectionKeyFallbackTest inherits QUnit::Test {
                 new TokenFirstConnection(authorized)) {
             string cls = conn.className();
             assertFalse(conn.nonOAuth2(), cls);
-            assertTrue(conn.getInfo().up, cls);
+            assertEq("not checked", conn.getInfo().status, cls);
             assertFalse(conn.needsAuth(), cls);
             assertEq("authorization_code", conn.grantType(), cls);
             assertTrue(conn.getExtendedInfo().oauth2, cls);
@@ -450,7 +451,7 @@ public class RestConnectionKeyFallbackTest inherits QUnit::Test {
             conn = create_object(cls, {"token": "access-1", "oauth2_client_id": "id", "oauth2_client_secret": "s"});
             assertFalse(conn.nonOAuth2(), cls);
             assertEq("authorization_code", conn.grantType(), cls);
-            assertTrue(conn.getInfo().up, cls);
+            assertEq("not checked", conn.getInfo().status, cls);
             assertEq("id", conn.getConnectionOptions().oauth2_client_id, cls);
         }
     }
@@ -462,6 +463,7 @@ public class RestConnectionKeyFallbackTest inherits QUnit::Test {
         assertFalse(site.nonOAuth2());
         assertEq("authorization_code", site.grantType());
         assertFalse(site.getInfo().up);
+        assertNeq("not checked", site.getInfo().status);
 
         # a site with HTTP basic authentication does: the alternative names no credential, so the generic ones count
         site = new SiteConnection({"site": "example", "username": "user@example.com", "password": "api-token"});
@@ -502,7 +504,7 @@ public class RestConnectionKeyFallbackTest inherits QUnit::Test {
         assertFalse(conn.nonOAuth2());
         assertEq("password", conn.grantType());
         assertTrue(conn.getFeatures(){RestConnection::RCF_OAUTH2_PASSWORD});
-        assertTrue(conn.getInfo().up);
+        assertEq("not checked", conn.getInfo().status);
     }
 
     #! A connection whose scheme offers no fallback is unchanged
@@ -660,7 +662,7 @@ public class RestConnectionKeyFallbackTest inherits QUnit::Test {
             "oauth2_refresh_token": "refresh-1",
             "oauth2_token_expiry": now_us() + 1h,
         });
-        assertTrue(kit.getInfo().up);
+        assertEq("not checked", kit.getInfo().status);
         assertTrue(kit.getExtendedInfo().oauth2);
         hash<auto> opts = kit.getConnectionOptions();
         assertEq(KitRestClientBase::DefaultTokenUrl, opts.oauth2_token_url);
@@ -685,7 +687,7 @@ public class RestConnectionKeyFallbackTest inherits QUnit::Test {
             "token": "access-1",
             "oauth2_refresh_token": "refresh-1",
         });
-        assertTrue(apollo.getInfo().up);
+        assertEq("not checked", apollo.getInfo().status);
         assertTrue(apollo.getExtendedInfo().oauth2);
         opts = apollo.getConnectionOptions();
         assertEq(ApolloRestClientBase::DefaultTokenUrl, opts.oauth2_token_url);
@@ -705,7 +707,8 @@ public class RestConnectionKeyFallbackTest inherits QUnit::Test {
     private assertKeyOnly(AbstractRestConnection conn, *string label) {
         string cls = label ?? conn.className();
         hash<auto> info = conn.getInfo();
-        assertTrue(info.up, cls + ": " + (info.status ?? ""));
+        # never checked (so not up, issue #7236) and not marked as unable to connect
+        assertEq("not checked", info.status, cls);
         assertFalse(conn.needsAuth(), cls);
         *hash<string, bool> features = conn.getFeatures();
         foreach string feature in (RestConnection::RCF_OAUTH2, RestConnection::RCF_OAUTH2_AUTH,

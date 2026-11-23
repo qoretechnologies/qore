@@ -733,6 +733,15 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" is thread-safe.
     */
     public class RestClientIo inherits RestClient::AbstractRestClient {
+        private:internal {
+            #! The proof of the code that created the client, given to the manager that it creates (qore#7262)
+            /** Taken when the client is created (see HttpClientIo::HttpClientCreatorProof::forClient()): a client that
+                trusted code, or a connection that trusted code created, creates for restricted code is the creator's,
+                bound to the creator's target, proxy and CA locations
+            */
+            *HttpClientIo::HttpClientCreatorProof creator_proof;
+        }
+
         private {
             #! Connection manager for HTTP/2 and HTTP/3 connections
             HttpClientIo::HttpClientConnectionManager mgr;
@@ -1555,7 +1564,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                     cookie_jar = new HttpClientIo::CookieJar();
                 }
             } else {
-                mgr = buildManager(opts, credentials);
+                # the manager is the creator's, also for restricted code that was lent the client or its connection
+                # (qore#7262)
+                creator_proof = HttpClientIo::HttpClientCreatorProof::forClient(url, {"proxy": opts.proxy});
+                mgr = buildManager(opts, credentials, creator_proof);
                 mgr_owner = new RestClientIoConnectionManagerOwner(mgr);
                 cookie_jar = mgr.getCookieJar();
             }
@@ -5420,7 +5432,8 @@ rest.addSensitiveHeaders("Qorus-Token");
         }
 
         private:internal static HttpClientIo::HttpClientConnectionManager buildManager(hash<auto> opts,
-                *hash<RestClient::RestConnectionTlsCredentials> credentials) {
+                *hash<RestClient::RestConnectionTlsCredentials> credentials,
+                *HttpClientIo::HttpClientCreatorProof proof) {
             hash<HttpClientIo::HttpClientConnectionManagerOptions> mgr_opts();
             if (opts.connect_timeout) {
                 mgr_opts.connect_timeout = opts.connect_timeout;
@@ -5501,7 +5514,9 @@ rest.addSensitiveHeaders("Qorus-Token");
             if (client_pk) {
                 mgr_opts.client_pk = client_pk;
             }
-            return new HttpClientIo::HttpClientConnectionManager(mgr_opts);
+            return proof
+                ? new HttpClientIo::HttpClientConnectionManager(mgr_opts, proof)
+                : new HttpClientIo::HttpClientConnectionManager(mgr_opts);
         }
 
         #! Loads an X.509 client certificate from \c ssl_cert_path or \c ssl_cert_data

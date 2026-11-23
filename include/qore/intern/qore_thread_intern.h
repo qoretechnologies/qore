@@ -2707,6 +2707,42 @@ DLLLOCAL void thread_ensure_local_program_data();
 DLLLOCAL int thread_ref_set(const lvalue_ref* r);
 DLLLOCAL void thread_ref_remove(const lvalue_ref* r);
 
+//! Checks whether resolving a reference in the current thread can raise an exception before its lvalue is reached
+/** This makes the checks of RuntimeReferenceHelperBase without changing the thread's state: it enters no Program and
+    does not add the reference to the thread's references being resolved (qore#7264)
+
+    @param pgm the reference's Program (lvalue_ref::pgm)
+    @param r the reference
+    @param xsink for the exception of the stack check
+
+    @return 1 if the resolution can raise nothing before its lvalue: the reference's Program is the one that the thread
+    runs (entering it does nothing), the stack is within its limit and the reference is not being resolved by the
+    thread; 0 if the Program would have to be entered or the reference is being resolved (the caller resolves it with
+    RuntimeReferenceHelper, which raises the exception if any); -1 if \c STACK-LIMIT-EXCEEDED was raised in \a xsink,
+    as RuntimeReferenceHelper would raise it
+*/
+DLLLOCAL int qore_reference_resolution_check(const QoreProgram* pgm, const lvalue_ref* r, ExceptionSink* xsink);
+
+//! Starts the resolution of a reference whose lvalue needs neither its Program to be entered nor its object context
+/** For the fast read of a reference (qore_local_reference_eval(), qore#7268): this makes the checks of
+    RuntimeReferenceHelperBase as qore_reference_resolution_check() does, and if they pass, adds the reference to the
+    thread's references being resolved, as RuntimeReferenceHelperBase does; the caller removes it with
+    thread_ref_remove() when it has read the lvalue.  Neither the Program nor the object context are entered: the
+    caller must use the lvalue only in ways that depend on neither, or resolve the reference with
+    RuntimeReferenceHelper instead (after removing it).
+
+    @param pgm the reference's Program (lvalue_ref::pgm)
+    @param r the reference
+    @param xsink for the exception of the stack check
+
+    @return 1 if the reference was added; 0 if the Program would have to be entered or the reference is being resolved
+    (nothing is changed, and the caller resolves the reference with RuntimeReferenceHelper, which raises the exception
+    if any); -1 if \c STACK-LIMIT-EXCEEDED was raised in \a xsink, as RuntimeReferenceHelper would raise it
+
+    Throws std::bad_alloc, with nothing changed, if the reference cannot be added, as RuntimeReferenceHelper does
+*/
+DLLLOCAL int qore_reference_fast_resolution_enter(const QoreProgram* pgm, const lvalue_ref* r, ExceptionSink* xsink);
+
 // pushes a new argv reference counter
 DLLLOCAL void new_argv_ref();
 

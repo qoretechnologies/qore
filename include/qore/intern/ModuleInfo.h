@@ -1169,6 +1169,16 @@ public:
         rollbackUserModuleDependency(saved);
     }
 
+    //! Passes the native module requirements of the user module \a name, which is being deleted, to the user modules
+    //! that it was applied to at run time without a record (runtime_importer_map) (qore#7310)
+    /** Each such module left requires the native modules that \a name requires, and it is recorded as an importer of
+        the user modules that \a name requires, whose native modules it then requires in their place when they are
+        deleted: the declarations that it imported can name the classes of any of them.  Called by
+        deleteUserModule(), with the mutex held or in the teardown at the end of the process (delUser(), cleanup()),
+        which runs in one thread; cleanup() also records each run-time import as a requirement of its own.
+    */
+    DLLLOCAL void passNativeRequirementsToImporters(const char* name);
+
     DLLLOCAL void removeUserModuleDependency(const char* name, const char* orig_name = 0) {
         //printd(5, "QoreModuleManager::removeUserModuleDependency() name: '%s' orig: '%s'\n", name,
         //    orig_name ? orig_name : "n/a");
@@ -1422,6 +1432,13 @@ protected:
         records, and a static requirement recorded later removes the entry
     */
     ModMap runtime_dep_map;
+    //! user module -> the user modules whose Programs it was applied to at run time without being recorded as required
+    //! by them, as it requires them (a cycle; see trySetModuleProgramUserDependencyLocked()) (qore#7310)
+    /** Their Programs hold the declarations that they imported from it, which can name the classes of the native modules
+        that it requires: when it is deleted, they require those native modules in its place
+        (passNativeRequirementsToImporters()), so that such a native module is not deleted before them
+    */
+    ModMap runtime_importer_map;
 
     // module blacklist — name and reason are stored as std::string so the map owns
     // its own copies; callers pass through ephemeral buffers (TempEncodingHelper
