@@ -1,0 +1,269 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket frames over loopback sockets and the async I/O controller
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The UTF-8 and close-frame rules of the WebSocket poll operations (qore#6604, qore#6755) apply to
+# PollPipeline::addWsDecodeFrame() and to the poll operations' sendText() too (qore#6775):
+# - addWsDecodeFrame(): a complete, uncompressed text frame that is not valid UTF-8 raises WEBSOCKET-DECODE-ERROR with
+#   the close code 1007 in its argument; a close frame with a one-byte payload or a status code that may not be
+#   received with 1002, and one whose reason is not valid UTF-8 with 1007; valid frames are decoded as before
+# - sendText() of the server's and of the client's poll operation sends a string in another encoding converted to
+#   UTF-8 (RFC 6455 section 5.6); before, its bytes were sent as they were, and the peer failed the connection
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+
+%exec-class WebSocketDecodeUtf8RulesTest
+
+#! a hang guard only
+const Timeout = 20s;
+
+#! text that is not ASCII, in an encoding other than UTF-8
+const Latin1Text = "Grüße aus Köln";
+
+#! decodes one WebSocket frame received on its socket
+class DecodePipeline inherits PollPipeline {
+    constructor(Socket s) : PollPipeline(s) {
+        setGoal("decode");
+        # 0: receive; 1: a complete frame is decoded, otherwise 2: the pipeline yields to the event loop until more
+        # can be received; 3: decode
+        addRecvWsFrame();
+        addBranchOnHasFrame(3, 2);
+        addYield(0);
+        addWsDecodeFrame();
+    }
+}
+
+class RecvConnection inherits WebSocketConnection {
+    private {
+        Queue q;
+    }
+
+    constructor(WebSocketHandler handler, Queue q) : WebSocketConnection(handler) {
+        self.q = q;
+    }
+
+    gotMessage(string msg) {
+        q.push(msg);
+    }
+
+    connectionClosed() {
+        q.push({"closed": getCloseCode()});
+    }
+}
+
+class RecvHandler inherits WebSocketHandler {
+    public {
+        Queue q();
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new RecvConnection(self, q);
+    }
+}
+
+class WebSocketDecodeUtf8RulesTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        RecvHandler handler();
+        int port;
+    }
+
+    constructor() : Test("WebSocketDecodeUtf8Rules", "1.0") {
+        addTestCase("addWsDecodeFrame(): valid frames", \decodeValidTest());
+        addTestCase("addWsDecodeFrame(): a text frame that is not valid UTF-8", \decodeInvalidTextTest());
+        addTestCase("addWsDecodeFrame(): invalid close frames", \decodeInvalidCloseTest());
+        addTestCase("the server's sendText() converts to UTF-8", \serverSendTextTest());
+        addTestCase("the client's sendText() converts to UTF-8", \clientSendTextTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        server.setDefaultHandler("ws", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    #! a connected pair of plain sockets: the client and the server's accepted socket
+    static list<Socket> socketPair() {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        Socket client();
+        client.connect("127.0.0.1:" + listener.getSocketInfo().port, Timeout);
+        Socket peer = listener.accept(Timeout);
+        listener.close();
+        return (client, peer);
+    }
+
+    #! an unmasked frame as a server sends it
+    static binary frame(int op, binary payload, bool fin = True, int rsv_bits = 0) {
+        return ws_encode_frame(payload, op, False, fin, rsv_bits);
+    }
+
+    #! decodes the frame with a pipeline on the receiving socket; returns the decoded hash or the exception
+    static hash<auto> decode(binary frame) {
+        list<Socket> sp = WebSocketDecodeUtf8RulesTest::socketPair();
+        Socket client = sp[0];
+        Socket peer = sp[1];
+        on_exit {
+            client.close();
+            peer.close();
+        }
+        peer.send(frame);
+        DecodePipeline pp(client);
+        *hash<SocketPollInfo> pi = pp.continuePoll();
+        if (pi) {
+            hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
+                "sock": pi.socket,
+                "spop": pp,
+                "owner": "ws-decode-test",
+                "to": Timeout,
+            });
+            if (result.ex) {
+                return {"ex": result.ex};
+            }
+        }
+        return pp.getOutput();
+    }
+
+    #! asserts that decoding the frame fails with the close code
+    private assertDecodeFails(binary frame, int close_code, string label) {
+        hash<auto> r = decode(frame);
+        assertEq("WEBSOCKET-DECODE-ERROR", r.ex.err, label);
+        assertEq(close_code, r.ex.arg.close_code, label + ": close code");
+    }
+
+    #! a close frame payload: the status code and the reason bytes
+    static binary closePayload(int code, binary reason = binary()) {
+        return parse_hex_string(sprintf("%04x", code)) + reason;
+    }
+
+    decodeValidTest() {
+        hash<auto> h = decode(frame(WSOP_Text, binary("héllo")));
+        assertEq("text", h.type);
+        assertEq("héllo", h.data);
+
+        # a fragment and a compressed frame cannot be checked alone: they are decoded as received
+        h = decode(frame(WSOP_Text, <c3>, False));
+        assertEq("text", h.type, "a fragment");
+        assertFalse(h.fin, "a fragment");
+        h = decode(frame(WSOP_Text, <ff0102>, True, WS_RSV1));
+        assertEq("text", h.type, "a compressed frame");
+        assertTrue(h.rsv1, "a compressed frame");
+
+        h = decode(frame(WSOP_Close, closePayload(1000, binary("bye"))));
+        assertEq("close", h.type);
+        assertEq(1000, h.close_code);
+        assertEq("bye", h.data);
+
+        h = decode(frame(WSOP_Close, binary()));
+        assertEq(1005, h.close_code, "an empty close frame");
+        assertNothing(h.data, "an empty close frame");
+
+        h = decode(frame(WSOP_Close, closePayload(3000)));
+        assertEq(3000, h.close_code, "an application code");
+
+        h = decode(frame(WSOP_Binary, <ff00ff>));
+        assertEq("binary", h.type);
+        assertEq(<ff00ff>, h.data);
+    }
+
+    decodeInvalidTextTest() {
+        assertDecodeFails(frame(WSOP_Text, <ff>), WSCC_InvalidData, "an invalid byte");
+        assertDecodeFails(frame(WSOP_Text, <c3>), WSCC_InvalidData, "a truncated character");
+        assertDecodeFails(frame(WSOP_Text, <eda080>), WSCC_InvalidData, "a surrogate");
+    }
+
+    decodeInvalidCloseTest() {
+        assertDecodeFails(frame(WSOP_Close, <03>), WSCC_ProtocolError, "a one-byte payload");
+        assertDecodeFails(frame(WSOP_Close, closePayload(1005)), WSCC_ProtocolError, "1005 may not be received");
+        assertDecodeFails(frame(WSOP_Close, closePayload(1006)), WSCC_ProtocolError, "1006 may not be received");
+        assertDecodeFails(frame(WSOP_Close, closePayload(999)), WSCC_ProtocolError, "a code below 1000");
+        assertDecodeFails(frame(WSOP_Close, closePayload(1000, <ff>)), WSCC_InvalidData,
+            "a reason that is not valid UTF-8");
+    }
+
+    #! reads one unmasked frame; returns its opcode and payload
+    static hash<auto> readFrame(Socket s) {
+        binary hdr = s.recvBinary(2, Timeout);
+        int len = hdr[1] & 0x7f;
+        if (len == 126) {
+            binary ext = s.recvBinary(2, Timeout);
+            len = (ext[0] << 8) | ext[1];
+        }
+        return {"op": hdr[0] & 0x0f, "payload": len ? s.recvBinary(len, Timeout) : binary()};
+    }
+
+    serverSendTextTest() {
+        string latin1 = convert_encoding(Latin1Text, "ISO-8859-1");
+        assertEq("ISO-8859-1", latin1.encoding());
+        list<Socket> sp = socketPair();
+        Socket client = sp[0];
+        Socket peer = sp[1];
+        on_exit {
+            client.close();
+            peer.close();
+        }
+        HttpServerAsyncIo::HttpWebSocketPollOperation op(peer);
+        op.sendText(latin1);
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                *hash<SocketPollInfo> pi = op.continuePoll();
+                if (pi) {
+                    AsyncIoController::exec(<SocketPollOperationInfo>{
+                        "sock": pi.socket,
+                        "spop": op,
+                        "owner": "ws-sendtext-test",
+                        "to": Timeout,
+                    });
+                }
+            } catch () {
+            }
+        }();
+        hash<auto> f = readFrame(client);
+        assertEq(WSOP_Text, f.op, "a text frame");
+        assertTrue(f.payload == binary(convert_encoding(Latin1Text, "UTF-8")), "the payload is UTF-8");
+        # the client closes the connection, which ends the operation
+        client.send(ws_encode_frame(closePayload(1000), WSOP_Close, True));
+        done.waitForZero(Timeout);
+    }
+
+    clientSendTextTest() {
+        handler.q.clear();
+        string latin1 = convert_encoding(Latin1Text, "ISO-8859-1");
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": sprintf("ws://127.0.0.1:%d", port),
+            "http_version": "1.1",
+            "timeout": Timeout,
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+        wsc.send(latin1);
+        auto got = handler.q.get(Timeout);
+        assertEq(Latin1Text, got, "the server received the text");
+    }
+}
