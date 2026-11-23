@@ -2860,21 +2860,31 @@ private:
     QoreProgram* pgm;
 };
 
+//! Sets the call Program context of the thread to its current Program, as CodeContextHelperBase does for the body of
+//! user code without a class or an object, if it is not that already (qore#7394)
+/** @param old set to the call Program context replaced, if it was replaced
+
+    @return true if the call Program context was replaced
+*/
+DLLLOCAL bool qore_set_function_call_program_context(QoreProgram*& old);
+
 //! Sets the call Program context of the body of a plain function that a fast call path runs in another Program
 /** A call of user code runs the body of a plain function with the call Program context of the Program it runs in
     (CodeContextHelperBase, qore#7394); the fast call paths that run the body without that call (the runtime
     fast-call helpers, the native cross-module calls of AOT code and the inline calls of the IR interpreter) set it
-    with this helper when the call entered another Program, and restore the caller's when it is destroyed, also on
-    an exceptional exit.  A call within one Program keeps the caller's, which is already the Program's own.  The
-    helper is a local of the runtime: native code does not know its size (see CalleeContextHelper, which it does)
+    with this helper when the call entered another Program, and restore the caller's when it is destroyed, also on an
+    exceptional exit.  It takes the call Program context as CodeContextHelperBase does: the current Program, which
+    the call has entered, written only if the thread does not have it already.  A call within one Program keeps the
+    caller's, which is that Program already, as the code of the caller runs with it (that is the rule this enforces),
+    so that the fast calls within a Program make no thread-local lookup for it.  The helper is a local of the runtime:
+    native code does not know its size (see CalleeContextHelper, which it does)
 */
 class QoreFunctionCallProgramContextHelper {
 public:
     //! \a exec_pgm is the Program that the call entered, \a caller_pgm the one it was made from
     DLLLOCAL QoreFunctionCallProgramContextHelper(QoreProgram* exec_pgm, QoreProgram* caller_pgm) {
         if (exec_pgm && exec_pgm != caller_pgm) {
-            old = get_set_program_call_context(exec_pgm);
-            switched = true;
+            switched = qore_set_function_call_program_context(old);
         }
     }
 
