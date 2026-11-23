@@ -381,7 +381,8 @@ public final class HttpClientCreatorProof {
 
     #! Returns True if a URL that allowsUrl() checks has an authority and no user information (qore#7236)
     /** The URL must be of the \c "scheme://authority" form, the authority (ending at the first \c "/", \c "?" or
-        \c "#") must have no \c "@", and parse_url() must give no user name or password: a URL that a client renders
+        \c "#") must have no \c "@" and must not be followed by \c "?" or \c "#" (which a client reads as part of the
+        host when a path follows), and parse_url() must give no user name or password: a URL that a client renders
         with its credentials, which the code that was lent the connection can set (a password with \c "@host:port/"
         or \c "@host?"), can be read as another target
 
@@ -393,6 +394,12 @@ public final class HttpClientCreatorProof {
         try {
             *list<*string> m = url =~ x/^[A-Za-z][-A-Za-z0-9+.]*:\/\/([^\/?#]*)/;
             if (!m || !(m[0] ?? "").val() || (m[0] ?? "") =~ /@/) {
+                return False;
+            }
+            # an authority followed by "?" or "#" is ambiguous: a client's URL with a path after it (QoreURL ends the
+            # authority at the first "/" and reads "?" as a query only when no path follows) has another host and port
+            # than the URL without the path, as a target-only URL is given (qore#7236)
+            if (url =~ /^[A-Za-z][-A-Za-z0-9+.]*:\/\/[^\/?#]*[?#]/) {
                 return False;
             }
             hash<auto> u = parse_url(url);

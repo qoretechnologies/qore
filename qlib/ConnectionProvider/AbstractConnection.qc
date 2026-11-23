@@ -1399,7 +1399,9 @@ conn.checkSandboxAccess(True);
     final private string getLentTargetUrl(string url) {
         try {
             hash<UrlInfo> u = parse_url(url);
-            if (u.host.val()) {
+            # a host (not a socket path) with "?", "#", "/" or white space is not rebuilt: a client can read the host of
+            # such a URL otherwise than parse_url() reads the URL (qore#7236)
+            if (u.host.val() && (u.host =~ /^\// || u.host !~ /[?#\/\s]/)) {
                 string rv = (u.protocol ?? "http") + "://";
                 if (u.host =~ /^\//) {
                     if (!u.port) {
