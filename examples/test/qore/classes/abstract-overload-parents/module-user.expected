@@ -1,0 +1,19 @@
+AOP::X12: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Secret2::m(int); m(string): Secret2::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+AOP::X21: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Secret2::m(int); m(string): Secret2::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+AOP::XPPS12: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Secret2::m(int); m(string): RUNTIME-OVERLOAD-ERROR; m(bool): RUNTIME-OVERLOAD-ERROR
+AOP::B: m(nothing): A::m(); m(integer): RUNTIME-OVERLOAD-ERROR; m(string): RUNTIME-OVERLOAD-ERROR; m(bool): RUNTIME-OVERLOAD-ERROR
+AOP::C: ABSTRACT-CLASS-ERROR
+AOP::C3: m(nothing): A::m(); m(integer): SInt::m(int); m(string): RUNTIME-OVERLOAD-ERROR; m(bool): RUNTIME-OVERLOAD-ERROR
+AOP::Q: ABSTRACT-CLASS-ERROR
+AOP::R: ABSTRACT-CLASS-ERROR
+AOP::H5: ABSTRACT-CLASS-ERROR
+AOP::M2: ABSTRACT-CLASS-ERROR
+UX12b: ABSTRACT-CLASS-ERROR
+UX12s: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Secret2::m(int); m(string): Secret2::m(string); m(bool): SBool::m(bool)
+UX21s: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): Secret2::m(int); m(string): Secret2::m(string); m(bool): SBool::m(bool)
+UC: ABSTRACT-CLASS-ERROR
+UC2: m(nothing): A::m(); m(integer): Secret2::m(int); m(string): Secret2::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+UR: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): SInt::m(int); m(string): UR::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+UM2: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): SInt::m(int); m(string): SStr::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+UM2r: m(nothing): RUNTIME-OVERLOAD-ERROR; m(integer): SInt::m(int); m(string): SStr::m(string); m(bool): RUNTIME-OVERLOAD-ERROR
+AOP::XPPS12 via: Secret2::m(int) Secret2::m(string)
