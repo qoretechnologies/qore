@@ -421,6 +421,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     }
 
     private:internal {
+        #! The code called once when the first request is submitted on a connection (see setFirstConnectionCallback())
+        *code<nothing()> first_connection_callback;
+
+        #! Serializes the first connection callback
+        Mutex first_connection_lock();
+
         #! Credentials for target TLS handshakes, omitted from the subclass-visible options
         transient *hash<HttpClientOriginTlsCredentials> origin_tls_credentials;
 
@@ -916,7 +922,40 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         if (from_pool) {
             stream.markConnectionReused();
         }
+        # the first request submitted on a connection tells the code waiting for the first connection (qore#7274)
+        if (first_connection_callback) {
+            stream.setSubmittedCallback(\notifyFirstConnection());
+        }
         return stream;
+    }
+
+    #! Sets the code that is called once, when the first request is submitted on a connection of this manager
+    /** A request can be submitted only on a connection that is established: connected, and with the TLS handshake
+        made for HTTPS.  The code is therefore called once a connection of the manager was made successfully, whatever
+        the request's result; a connection that cannot be made (a closed port, a refused certificate) never calls it.
+        It is called once, in the thread that submitted the request, and is then removed; an exception that it raises
+        is logged and ignored.  @ref ConnectionProvider::AbstractConnection::getAsync() "AbstractConnection::getAsync()"
+        sets it to mark its connection up when the client that it created was first connected (qore#7274).
+
+        @param cb the code to call, or @ref nothing to remove the code set before
+
+        @since HttpClientIo 1.0
+    */
+    setFirstConnectionCallback(*code<nothing()> cb) {
+        AutoLock al(first_connection_lock);
+        first_connection_callback = cb;
+    }
+
+    #! Calls the first connection callback once, if it is still set
+    private:internal notifyFirstConnection() {
+        *code<nothing()> cb;
+        {
+            AutoLock al(first_connection_lock);
+            cb = remove first_connection_callback;
+        }
+        if (cb) {
+            cb();
+        }
     }
 
     #! Ensures a connection to the given URL is being established, returning an EventNotifier
