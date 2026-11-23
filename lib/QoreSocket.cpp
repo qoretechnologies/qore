@@ -5380,6 +5380,16 @@ private:
             return 0;
         }
 
+        // the limit is applied before the chunk is read, so that no memory is allocated for data over it (issue
+        // 7417)
+        int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
+        int64 max_chunked_body_size = priv.max_chunked_body_size.load(std::memory_order_relaxed);
+        if (max_chunked_body_size > 0 && chunk_size > max_chunked_body_size - body_size) {
+            xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
+                body_size + static_cast<int64>(chunk_size), max_chunked_body_size);
+            return -1;
+        }
+
         current_chunk_size = chunk_size;
         state = State::RecvChunkData;
         return 0;
@@ -10603,7 +10613,13 @@ int SocketRecvPacketPollState::continuePollIntern(ExceptionSink* xsink) {
 
 SocketRecvPollState::SocketRecvPollState(ExceptionSink* xsink, qore_socket_private* sock, size_t size) : sock(sock),
         bin(new BinaryNode), size(size) {
-    if (bin->preallocate(size)) {
+    // the buffer grows as the data arrives; the size to receive can come from the peer (issue 7417)
+    allocated = QORE_MIN(size, MaxPrealloc);
+    // the data in the socket buffer is taken first
+    if (sock->buflen > allocated) {
+        allocated = QORE_MIN(size, sock->buflen);
+    }
+    if (bin->preallocate(allocated)) {
         xsink->outOfMemory();
         return;
     }
@@ -10642,6 +10658,20 @@ int SocketRecvPollState::continuePoll(ExceptionSink* xsink) {
     return rc;
 }
 
+int SocketRecvPollState::grow(ExceptionSink* xsink) {
+    // the buffer is doubled up to the size to receive, so that the memory follows the data received
+    size_t new_size = allocated > size / 2 ? size : QORE_MAX(allocated * 2, static_cast<size_t>(4096));
+    if (new_size > size) {
+        new_size = size;
+    }
+    if (bin->preallocate(new_size)) {
+        xsink->outOfMemory();
+        return -1;
+    }
+    allocated = new_size;
+    return 0;
+}
+
 int SocketRecvPollState::continuePollIntern(ExceptionSink* xsink) {
     if (received == size) {
         return 0;
@@ -10658,12 +10688,15 @@ int SocketRecvPollState::continuePollIntern(ExceptionSink* xsink) {
     unsigned loop = 0;
 
     while (true) {
+        if (received == allocated && grow(xsink)) {
+            return -1;
+        }
         ssize_t rc;
         if (SSLSocketHelper* ssl = io_use.getSsl()) {
             size_t real_io = 0;
             rc = ssl->doNonBlockingIo(xsink, "read",
                 reinterpret_cast<void*>(const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()) + received)),
-                size - received, SslAction::READ, real_io);
+                allocated - received, SslAction::READ, real_io);
             if (rc > 0) {
                 retry_tls_read = ssl->mustRetryRead();
             }
@@ -10709,7 +10742,7 @@ int SocketRecvPollState::continuePollIntern(ExceptionSink* xsink) {
 #else
                 reinterpret_cast<void*>(const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()) + received)),
 #endif
-                size - received, 0);
+                allocated - received, 0);
             //printd(5, "SocketRecvPollState::continuePoll() left: %ld rc: %d errno: %d)\n", size - received, rc,
             //    errno);
             if (*xsink) {
@@ -20386,6 +20419,15 @@ int SocketReadHttpChunkedBodyPollOperation::handleChunkSize(ExceptionSink* xsink
         return 0;
     }
 
+    // the limit is applied before the chunk is read, so that no memory is allocated for data over it (issue 7417)
+    int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
+    int64 max_chunked_body_size = priv->getMaxChunkedBodySize();
+    if (max_chunked_body_size > 0 && chunk_size > max_chunked_body_size - body_size) {
+        xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
+            body_size + static_cast<int64>(chunk_size), max_chunked_body_size);
+        return -1;
+    }
+
     current_chunk_size = chunk_size;
     chunked_body_state = ChunkedBodyState::RECV_CHUNK_DATA;
     return 0;
@@ -20867,6 +20909,16 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkSize(ExceptionSink
             return nullptr;
         }
         return continuePoll(xsink);
+    }
+
+    // the limit of the socket is applied before the chunk is read, so that no memory is allocated for data over it
+    // (issue 7417)
+    int64 max_chunked_body_size = my_socket_priv::getPriv(*sock_obj)->getMaxChunkedBodySize();
+    if (max_chunked_body_size > 0 && chunk_size > max_chunked_body_size - static_cast<int64>(body->size())) {
+        xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
+            static_cast<int64>(body->size()) + static_cast<int64>(chunk_size), max_chunked_body_size);
+        body_state = BodyState::DONE;
+        return nullptr;
     }
 
     // Read chunk data + trailing CRLF (chunk_size + 2 bytes)

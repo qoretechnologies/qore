@@ -1420,9 +1420,20 @@ private:
     //! Receives data; continuePoll() records received data on the socket
     DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
 
+    //! Makes room in the buffer for more data; returns -1 if the memory cannot be allocated
+    DLLLOCAL int grow(ExceptionSink* xsink);
+
+    //! the most memory allocated for the data before any of it has been received
+    /** The size to receive can come from the peer (a Content-Length or a chunk size), so the buffer grows as the
+        data arrives instead of being allocated for the whole size at once (issue 7417)
+    */
+    static constexpr size_t MaxPrealloc = 1024 * 1024;
+
     qore_socket_private* sock;
     SimpleRefHolder<BinaryNode> bin;
     size_t size;
+    //! the size of the buffer allocated for the data
+    size_t allocated = 0;
     bool retry_tls_read = false;
     size_t received = 0;
 };

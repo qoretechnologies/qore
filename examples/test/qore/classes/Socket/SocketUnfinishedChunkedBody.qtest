@@ -94,6 +94,7 @@ class SocketUnfinishedChunkedBodyTest inherits QUnit::Test {
         addTestCase("chunk size values", \chunkSizeTest());
         addTestCase("chunk data without a line end", \chunkDataEndTest());
         addTestCase("data that ends before the end of the body", \endOfDataTest());
+        addTestCase("a chunk larger than the limit or the memory", \largeChunkTest());
         addTestCase("closing the socket", \closeTest());
         set_return_value(main());
     }
@@ -261,6 +262,40 @@ class SocketUnfinishedChunkedBodyTest inherits QUnit::Test {
                 ex = readBody(conn, reader, 5s);
             }
             assertTrue(exists ex, reader);
+            checkRefused(conn, reader);
+        }
+    }
+
+    largeChunkTest() {
+        # chunk sizes that no memory can hold: a reader fails without allocating memory for the chunk, with the
+        # size limit as without it, and leaves the socket unable to read a header
+        foreach string size in (("ffffffffffff", "7ffffffffffffffd", "7fffffffffffff")) {
+            foreach Reader reader in (Readers) {
+                foreach int limit in ((0, 4096)) {
+                    string label = sprintf("%s: %y limit %d", reader, size, limit);
+                    hash<auto> client = startClient(reader, (size + "\r\nhello\r\n",));
+                    on_exit client.done.dec();
+                    Socket conn = client.server.accept(5s);
+                    on_exit conn.close();
+                    if (limit) {
+                        conn.setMaxChunkedBodySize(limit);
+                    }
+                    *hash<ExceptionInfo> ex = readBody(conn, reader, 250ms);
+                    # with a limit, the chunk is refused before it is read; without one, the reader waits for the
+                    # data of the chunk
+                    assertEq(limit ? "HTTP-BODY-TOO-LARGE" : "SOCKET-TIMEOUT", ex.err, label);
+                    checkRefused(conn, label);
+                }
+            }
+        }
+        # a size over the largest that can be read is refused as a chunk size
+        foreach Reader reader in (Readers) {
+            hash<auto> client = startClient(reader, ("ffffffffffffffff\r\nhello\r\n",));
+            on_exit client.done.dec();
+            Socket conn = client.server.accept(5s);
+            on_exit conn.close();
+            *hash<ExceptionInfo> ex = readBody(conn, reader, 250ms);
+            assertEq("READ-HTTP-CHUNK-ERROR", ex.err, reader);
             checkRefused(conn, reader);
         }
     }

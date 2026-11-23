@@ -109,7 +109,12 @@ class UnfinishedBodyHandler inherits AbstractHttpRequestHandler {
                 s.readHTTPChunkedBodyBinary(5s);
                 break;
 
-            # "none" and the other requests do not read a body
+            case "read":
+                # the body is read by the handler's base class
+                getMessageBody(s, hdr, body);
+                break;
+
+            # "none", "noread" and the other requests do not read a body
         }
         return makeResponse(200, "served " + hdr.path, {"Content-Type": "text/plain"});
     }
@@ -131,6 +136,8 @@ class HttpServerUnfinishedChunkedBodyTest inherits QUnit::Test {
         HttpServer server;
         UnfinishedBodyHandler handler();
         int port;
+        #! the port of a listener with a maximum request body size
+        int limited_port;
     }
 
     constructor() : Test("HttpServerUnfinishedChunkedBodyTest", "1.0") {
@@ -141,6 +148,7 @@ class HttpServerUnfinishedChunkedBodyTest inherits QUnit::Test {
         addTestCase("a body over the size limit", \limitTest());
         addTestCase("a body read to its end", \fullTest());
         addTestCase("a body that the handler does not read", \noneTest());
+        addTestCase("a chunk larger than the limit or the memory", \largeChunkTest());
 
         server = new HttpServer(<HttpServerOptionInfo>{
             "logger": new Logger("test", LoggerLevel::getLevelFatal()),
@@ -148,6 +156,8 @@ class HttpServerUnfinishedChunkedBodyTest inherits QUnit::Test {
         on_exit delete server;
         server.setDefaultHandler("unfinished", handler);
         port = server.addListener(<HttpListenerOptionInfo>{"service": 0, "node": "127.0.0.1"}).port;
+        limited_port = server.addListener(<HttpListenerOptionInfo>{"service": 0, "node": "127.0.0.1",
+            "max_request_body_size": 4096}).port;
         server.waitForAsyncIo();
         set_return_value(main());
     }
@@ -209,6 +219,44 @@ class HttpServerUnfinishedChunkedBodyTest inherits QUnit::Test {
         assertFalse(inlist("smuggled-none", handler.served));
     }
 
+    largeChunkTest() {
+        # a chunk size that no memory can hold, in a body that the handler reads or that the server reads after the
+        # handler: the server keeps running and serving other requests
+        foreach string size in (("ffffffffffff", "7ffffffffffffffd")) {
+            foreach string path in (("read", "noread")) {
+                # with a maximum body size, the request is refused before the chunk is read
+                {
+                    Socket c = connect(limited_port);
+                    on_exit c.close();
+                    c.send(header(path + "-limited") + size + "\r\nhello\r\n");
+                    hash<auto> resp = readResponse(c);
+                    assertEq("close", resp.connection, path);
+                    *hash<auto> next;
+                    try {
+                        next = readResponse(c);
+                    } catch (hash<ExceptionInfo> ex) {
+                    }
+                    assertNothing(next, path);
+                }
+                # without one, the server waits for the data of the chunk, and serves other requests meanwhile
+                Socket c = connect();
+                on_exit c.close();
+                c.send(header(path + "-unlimited") + size + "\r\nhello\r\n");
+                checkServed(sprintf("%s %s", path, size));
+            }
+        }
+    }
+
+    #! checks that the server answers a request on another connection
+    private checkServed(string label) {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /other HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> resp = readResponse(c);
+        assertEq(200, resp.status_code, label);
+        assertEq("served other", resp.body, label);
+    }
+
     #! sends a request with the given chunked body; checks that the connection is closed after the response
     private checkClosed(string path, string body, int code = 200) {
         Socket c = connect();
@@ -243,9 +291,9 @@ class HttpServerUnfinishedChunkedBodyTest inherits QUnit::Test {
         return sprintf("%x\r\n%s\r\n%x\r\n%s\r\n0\r\n\r\n", chunk1.size(), chunk1, chunk2.size(), chunk2);
     }
 
-    private Socket connect() {
+    private Socket connect(*int p) {
         Socket c();
-        c.connect("127.0.0.1:" + port, 10s);
+        c.connect("127.0.0.1:" + (p ?? port), 10s);
         return c;
     }
 
