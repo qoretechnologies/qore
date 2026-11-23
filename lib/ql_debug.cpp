@@ -392,6 +392,17 @@ static QoreValue f_dbg_environment_lookups(const QoreListNode* params, RuntimeCo
     return static_cast<int64>(qore_env_lookup_count.load(std::memory_order_relaxed));
 }
 
+//! Returns the number of resolutions of the type of an AOT instanceof so far (qore#7416)
+static QoreValue f_dbg_aot_instanceof_resolves(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64>(qore_aot_instanceof_resolve_count.load(std::memory_order_relaxed));
+}
+
+//! Maps every type path to one set of the AOT instanceof type cache (or not); returns the previous setting (qore#7416)
+static QoreValue f_dbg_aot_instanceof_one_set(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_aot_instanceof_one_set.exchange(get_param_value(params, 0).getAsBool(), std::memory_order_relaxed);
+}
+
 static QoreValue f_dbg_generic_cache_counts(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
     h->setKeyValue("specializations", qore_live_generic_specializations.load(std::memory_order_relaxed), xsink);
@@ -32483,6 +32494,10 @@ void init_debug_functions(QoreNamespace& qns) {
         "found_dir", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG, "found_rel");
     qns.addBuiltinVariant("dbg_environment_lookups", f_dbg_environment_lookups, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_aot_instanceof_resolves", f_dbg_aot_instanceof_resolves, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_aot_instanceof_one_set", f_dbg_aot_instanceof_one_set, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, softBoolTypeInfo, QORE_PARAM_NO_ARG, "on");
     qns.addBuiltinVariant("dbg_retired_type_declarations", f_dbg_retired_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_type_declaration_groups", f_dbg_type_declaration_groups, QCF_NO_FLAGS,
