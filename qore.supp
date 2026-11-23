@@ -173,11 +173,16 @@
 # given to another file, while it was registered; it then reports the
 # registration with an error, as poll(2) reports POLLNVAL.  The unit test
 # ut_event_loop_always_ready closes such a file on purpose, and
-# valgrind --track-fds reports the fstat() of the closed number.
+# valgrind --track-fds reports the fstat() of the closed number.  The entry is
+# limited to that test, so that a stale registration of a regular file is
+# still reported elsewhere; "..." between the frames matches a libc whose
+# fstat() calls another function (musl: __fstatat()).
 
 {
    event_loop_always_ready_fstat_of_closed_file
    CoreError:FdBadUse
-   fun:fstat*
+   ...
    fun:*QoreEventLoop*addAlwaysReadyEvents*
+   ...
+   fun:*ut_event_loop_always_ready*
 }

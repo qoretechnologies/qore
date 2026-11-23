@@ -2022,6 +2022,48 @@ private:
         uint64_t last_id = 0;
     };
 
+    //! The sockets of an I/O thread that closes made by other threads woke (qore#7003)
+    /** A close of a socket that bypasses the controller (ex: an HTTP/2 abort, the destructor of an HTTP client) can
+        replace the registered descriptor with an inert one, which the event loop drops without an event; the close
+        adds the socket here and notifies the thread, which runs the socket's operations again (see
+        wake_socket_hashes), and they see the close.
+
+        The queue has a lock of its own, which is a leaf: nothing is called and no other lock is taken with it held
+        (the close adds the socket with it held and notifies the thread after releasing it; the I/O thread moves the
+        sockets to its wake set with it held), so a close can be made by a thread that holds the controller's lock or
+        another socket's lock.  The queue is shared by the wakes of the thread's registration holds and keeps a
+        reference of the thread's notifier: a close that comes after the thread stopped, or after the controller was
+        destroyed, adds the socket to a queue that nothing drains any more and notifies a notifier that does nothing
+        once it is closed; only the thread's event loop drains the queue.
+    */
+    struct CloseWakeQueue {
+        QoreThreadLock l;
+        std::vector<std::string> hashes;
+        //! the thread's notifier, referenced; none for a context without one (a context that a test makes)
+        QoreEventNotifier* notifier;
+
+        DLLLOCAL explicit CloseWakeQueue(QoreEventNotifier* notifier) : notifier(notifier) {
+            if (notifier) {
+                notifier->ref();
+            }
+        }
+
+        DLLLOCAL ~CloseWakeQueue() {
+            if (notifier) {
+                ExceptionSink xsink;
+                notifier->deref(&xsink);
+                xsink.clear();
+            }
+        }
+
+        CloseWakeQueue(const CloseWakeQueue&) = delete;
+        CloseWakeQueue& operator=(const CloseWakeQueue&) = delete;
+    };
+
+    //! Returns the wake of a registration hold of a socket's descriptor that the I/O thread has registered: it adds
+    //! the socket to the thread's close wakes and notifies the thread (see CloseWakeQueue)
+    DLLLOCAL static std::function<void()> makeCloseWake(IoThreadContext& t, const std::string& sock_hash);
+
     struct IoThreadContext {
         //! Release the event loop and notifier on resize, failed setup, or destruction
         DLLLOCAL ~IoThreadContext();
@@ -2129,6 +2171,9 @@ private:
 
         //! Socket hashes that need re-polling
         std::unordered_set<std::string> wake_socket_hashes;
+        //! The sockets that closes made by other threads woke (see makeCloseWake()); made by the thread when it first
+        //! needs it
+        std::shared_ptr<CloseWakeQueue> close_wakes;
 
         //! IDs of the operations needing their first continuePoll (empty cached_sock_hash)
         std::vector<uint64_t> new_entry_ids;
@@ -2334,6 +2379,7 @@ private:
     */
     mutable QoreThreadLock sock_route_lock;
     std::unordered_map<std::string, int> sock_to_thread;  //!< sock_hash → thread index
+
     std::unordered_map<QoreObject*, std::string> obj_to_sock_hash;  //!< QoreObject* → sock_hash for wakeSocketByObject
     std::unordered_map<std::string, unsigned> provisional_sock_routes; //!< submit-time route refcounts
 
