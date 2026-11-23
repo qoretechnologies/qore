@@ -12,6 +12,7 @@
 %requires OpenApi3
 %requires StripeDataProvider
 %requires json
+%requires reflection
 
 const SwaggerDoc = {
     "swagger": "2.0",
@@ -137,4 +138,27 @@ p.parse(TenantCode, "tenant");
 printf("Swagger: %s\n", p.callFunction("build_and_validate", SwaggerLoader::fromString(make_json(SwaggerDoc), True)));
 printf("OpenAPI 3: %s\n", p.callFunction("build_and_validate",
     OpenApi3Loader::fromString(make_json(OpenApi3Doc), True)));
+# the number of entries in the field caches of the schemas of the parameters of a Stripe operation, read with Reflection
+# by trusted test code
+int sub param_field_entries(string path) {
+    OpenApi3Schema stripe = StripeSchema::getSchema();
+    object pio = stripe.paths.match(path);
+    object op = pio.getOperation("get", path);
+    int n = 0;
+    foreach object param in ((pio.parameters + op.parameters).iterator()) {
+        foreach Class c in (Class::getClass(param.schema).getClassHierarchy()) {
+            foreach AbstractClassMember m in (c.getMembers()) {
+                if ((m.getName() == "fieldmap" || m.getName() == "usemap") && m instanceof NormalMember) {
+                    n += cast<NormalMember>(m).getValue(param.schema).size();
+                }
+            }
+        }
+    }
+    return n;
+}
+
+int before = param_field_entries("/v1/balance/history");
 printf("Stripe:\n%s\n", p.callFunction("stripe_builds"));
+# the shared caches of the schema hold the fields of every parameter, which the type builds of the actions made
+printf("the tenant's builds of Stripe actions filled the shared field caches of their parameters: %d entries\n",
+    param_field_entries("/v1/balance/history") - before);
