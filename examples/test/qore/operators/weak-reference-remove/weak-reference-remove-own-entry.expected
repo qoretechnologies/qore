@@ -1,0 +1,23 @@
+remove own entry: the list 3
+delete own entry: 3
+remove range over own entry: 2 [3]
+remove elements with own entry: 2 [1]
+remove own key: the hash ["a", "b"]
+delete own key: ["a"]
+remove keys with own key: ["self", "a"] ["b"]
+remove own key, deeper: the hash ["a"]
+delete own entry, deeper: 2
+remove range over own entry, deeper: 2 [3]
+remove keys with own key and an object: ["self", "o"]
+hash slice destroyed
+remove elements with own entry and an object: 2
+list slice destroyed
+hash: removed
+hash destroyed
+after hash
+list: removed
+list destroyed
+after list
+range: removed
+range destroyed
+after range
