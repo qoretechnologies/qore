@@ -11746,8 +11746,16 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
         }
         writer.writeU16(flags);
 
-        // domain
-        writer.writeI64(priv->domain);
+        // domain: the loader adds the domains of the class's parents as they are loaded (qore#7400)
+        int64 class_domain = priv->domain;
+#ifdef DEBUG
+        // test hook: writes a class as a module compiled before its parent classes were placed in their functional
+        // domains does, without the domains it inherits, so that a test checks that the loader adds them
+        if (QoreEnvironmentValue no_domain_holder("QORE_AOT_TEST_NO_CLASS_DOMAIN"); no_domain_holder.c_str()) {
+            class_domain = 0;
+        }
+#endif
+        writer.writeI64(class_domain);
 
         // Parser-produced class signature hash. Runtime class compatibility
         // uses this hash to compare same-named classes across Program objects;
@@ -18489,6 +18497,11 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
                 // Add base class to this class with proper access level
                 qc->addBaseClass(const_cast<QoreClass*>(base),
                     static_cast<ClassAccess>(pbc.access), pbc.is_virtual);
+                // the class is in the functional domains of its parent class as it is loaded, as when the class is
+                // parsed (BCNode::initialize()): the value stored in the module is the one of the parents when the
+                // module was compiled, and a parent may have been placed in a domain since (qore#7400); the base
+                // classes of the module were resolved first, with the domains of their own parents
+                qore_class_private::get(*qc)->domain |= qore_class_private::get(*base)->domain;
                 if (!pbc.type_path.empty()) {
                     std::string type_error;
                     const QoreTypeInfo* base_type = type_resolver->resolve(pbc.type_path.c_str(), type_error);
