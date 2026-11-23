@@ -182,6 +182,68 @@ sub moves() {
     printf("move call result: wf: %y\n", wf);
 }
 
+# a copy-on-write copy of a container that holds a weakly designated one shares it, as any copy of a container does
+# (4b): the weak reference keeps designating the container that both holders hold
+sub copy_on_write() {
+    list<auto> src = ((1, 2), 3);
+    auto wl;
+    wl := src[0];
+    list<auto> b = src;
+    src[1] = 4;
+    wl[0] = 9;
+    printf("copy on write: src: %y, b: %y\n", src, b);
+    hash<auto> hsrc = {"x": {"y": 1}};
+    auto wh;
+    wh := hsrc.x;
+    hash<auto> hb = hsrc;
+    hsrc.z = {"q": 2};
+    wh.y = 9;
+    printf("copy on write hash: hsrc: %y, hb: %y\n", hsrc, hb);
+}
+
+our auto gw;
+our hash<auto> gstore;
+
+hash<auto> sub mk() {
+    hash<auto> h = {"a": 1};
+    gw := h;
+    return h;
+}
+
+hash<auto> sub param_observe(hash<auto> p) {
+    p.b = 2;
+    return p;
+}
+
+# a container that nothing else holds keeps its identity only when a local variable takes it; any other share point
+# copies a weakly designated container, also when nothing else holds it (David 2c, qore#7342): the weak reference
+# then designates the temporary, which the statement releases
+sub share_points_of_moves() {
+    hash<auto> local = mk();
+    local.b = 2;
+    printf("move into a local: %y\n", gw);
+
+    list<auto> l = (mk(),);
+    l[0].b = 2;
+    printf("move into a list element: %y\n", gw);
+
+    hash<auto> hl = {"k": mk()};
+    hl.k.b = 2;
+    printf("move into a hash key: %y\n", gw);
+
+    gstore = mk();
+    gstore.b = 2;
+    printf("move into a global: %y\n", gw);
+
+    hash<auto> cv;
+    code c = sub () { cv = mk(); cv.b = 2; };
+    c();
+    printf("move into a closure variable: %y\n", gw);
+
+    param_observe(mk());
+    printf("move into a parameter: %y\n", gw);
+}
+
 const Cases = {
     "local_assignment": \local_assignment(),
     "nested_target": \nested_target(),
@@ -194,6 +256,8 @@ const Cases = {
     "foreach_variable": \foreach_variable(),
     "member_path": \member_path(),
     "moves": \moves(),
+    "copy_on_write": \copy_on_write(),
+    "share_points_of_moves": \share_points_of_moves(),
 };
 
 *string only = ARGV[0];

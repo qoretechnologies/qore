@@ -174,8 +174,8 @@ sub member_gate_declared_member() {
 }
 
 # true if the object count of the container that \a v names is as expected (dbg_get_scan_count() exists in debug
-# builds only); the container is read through the reference, as a container that holds a weakly referenced one is
-# passed to a function as a copy of its own
+# builds only); the container is read through the reference, as a container that a weak reference designates is passed
+# to a function as a copy of its own
 bool sub check_count(reference<auto> v, int expected) {
     return exists_function("dbg_get_scan_count") ? call_function("dbg_get_scan_count", \v) == expected : True;
 }

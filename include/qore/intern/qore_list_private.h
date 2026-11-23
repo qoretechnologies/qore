@@ -232,8 +232,10 @@ struct qore_list_private {
 
     DLLLOCAL void copyIntern(qore_list_private& l) const {
         l.reserve(length);
+        // a copy is not a new holder of the entries: a weakly designated container in the list is shared with the
+        // copy (qore#7342)
         for (size_t i = 0; i < length; ++i) {
-            l.pushIntern(entry[i].refSelf());
+            l.initEntryShared(l.length, entry[i].refSelf());
         }
     }
 
@@ -501,6 +503,17 @@ struct qore_list_private {
         }
         target = entry[index];
         entry[index].clear();
+    }
+
+    //! Initializes a new slot with a value that the list shares with the container it is copied from, without the
+    //! share check of initEntry() (qore#7342)
+    DLLLOCAL void initEntryShared(size_t index, QoreValue val) {
+        QoreValue& slot = getEntryReference(index);
+        assert(slot.isNothing());
+        slot = val;
+        if (needs_scan(val)) {
+            incScanCount(1);
+        }
     }
 
     //! Initialize a new slot, possibly out of order when binding named arguments.

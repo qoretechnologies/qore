@@ -538,12 +538,15 @@ DLLLOCAL bool needs_scan(const AbstractQoreNode* n);
 DLLLOCAL bool needs_scan(const QoreValue& v);
 //! returns true if the list or hash \a n gives a new holder a copy (out of line; see qore_weak_shared())
 DLLLOCAL bool qore_weak_shared_container(const AbstractQoreNode* n);
+//! returns true if the list or hash \a n gives a local variable that it is stored in a copy (out of line; see
+//! qore_weak_shared_local())
+DLLLOCAL bool qore_weak_shared_local_container(const AbstractQoreNode* n);
 //! returns true if \a n is a list or hash that a weak reference designates, whatever holds it (qore#7342)
 DLLLOCAL bool qore_weak_designated_container(const AbstractQoreNode* n);
-//! returns true if \a v is a list or hash that a new holder takes as a copy of its own: a weak reference designates
-//! it, and another strong holder holds it, so that it is shared, not moved (qore#7342); the tag and the type are tested
-//! inline
-static inline bool qore_weak_shared(const QoreValue& v) {
+//! returns true if \a v is a list or hash that a new holder other than a local variable takes as a copy of its own: a
+//! weak reference designates it (David, qore#7342: every share point copies it, also when nothing else holds it); the
+//! tag and the type are tested inline
+static QORE_INTERN_ALWAYS_INLINE bool qore_weak_shared(const QoreValue& v) {
     // QoreValue::getType() is not inline
     if (!v.isPlainPointer()) {
         return false;
@@ -551,6 +554,18 @@ static inline bool qore_weak_shared(const QoreValue& v) {
     const AbstractQoreNode* n = v.getPtr();
     qore_type_t t = n->getType();
     return (t == NT_HASH || t == NT_LIST) && qore_weak_shared_container(n);
+}
+
+//! returns true if \a v is a list or hash that a local variable that it is stored in takes as a copy of its own: a
+//! weak reference designates it and another strong holder holds it; one that nothing else holds is moved, and the
+//! weak references follow it (David, qore#7342)
+static QORE_INTERN_ALWAYS_INLINE bool qore_weak_shared_local(const QoreValue& v) {
+    if (!v.isPlainPointer()) {
+        return false;
+    }
+    const AbstractQoreNode* n = v.getPtr();
+    qore_type_t t = n->getType();
+    return (t == NT_HASH || t == NT_LIST) && qore_weak_shared_local_container(n);
 }
 //! takes \a v, a list or hash that qore_weak_shared() is true for, and returns a copy of its own (qore#7342); the
 //! values in it are shared
@@ -560,7 +575,7 @@ DLLLOCAL QORE_INTERN_NOINLINE __attribute__((cold)) QoreValue qore_weak_share_co
 /** A container that qore_weak_shared() is true for needs a scan (a weak reference pins it), so the test is made only
     for such a value
 */
-static inline bool qore_store_needs_scan(QoreValue& v) {
+static QORE_INTERN_ALWAYS_INLINE bool qore_store_needs_scan(QoreValue& v) {
     if (!needs_scan(v)) {
         return false;
     }

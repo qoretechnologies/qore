@@ -2921,9 +2921,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_weak_source_container(uint64_t value) {
     return toBits(qore_weak_source_container(fromBits(value)));
 }
 
-//! takes \a value, a weakly shared container, and returns a copy of its own (see qore_weak_share_copy(), qore#7342)
+//! takes \a value, a weakly designated container that the compiled code stores in a local variable, and returns it if
+//! nothing else holds it (a move), or a copy of its own (see qore_weak_shared_local(), qore#7342)
 extern "C" DLLEXPORT uint64_t qore_rt_weak_share_copy(uint64_t value, ExceptionSink* xsink) {
-    return toBits(qore_weak_share_copy(fromBits(value), xsink));
+    QoreValue v = fromBits(value);
+    if (v.getInternalNode()->is_unique()) {
+        return value;
+    }
+    return toBits(qore_weak_share_copy(v, xsink));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_weak_value(uint64_t value, ExceptionSink* xsink) {

@@ -3993,9 +3993,11 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
         }
     }
 
-    // a weakly shared container is assigned as a copy of its own (qore#7342); a weak assignment designates it, and an
-    // opaque one keeps the reference
-    if (mode != AssignmentMode::Weak && mode != AssignmentMode::Opaque && qore_weak_shared(n)) [[unlikely]] {
+    // a weakly designated container is assigned as a copy of its own (qore#7342): to a local variable while another
+    // holder holds it (one that nothing else holds is moved), to any other lvalue always; a weak assignment designates
+    // it, and an opaque one keeps the reference
+    if (mode != AssignmentMode::Weak && mode != AssignmentMode::Opaque
+            && (val && val == local_var_lvalue ? qore_weak_shared_local(n) : qore_weak_shared(n))) [[unlikely]] {
         n = qore_weak_share_copy(n, vl.xsink);
     }
 
@@ -6014,6 +6016,8 @@ int LocalVarValue::getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeI
 
     // note: type info is not stored at runtime for local variables
     lvh.setValue((QoreLValueGeneric&)val, val.assigned && refTypeInfo ? refTypeInfo : typeInfo);
+    // a local variable, which an assignment can move a weakly designated container into (qore#7342)
+    lvh.setLocalVariableLValue();
     return 0;
 }
 

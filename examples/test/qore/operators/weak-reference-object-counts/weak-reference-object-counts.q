@@ -198,8 +198,8 @@ sub same_container_twice_keys() {
 }
 
 # the number of values that need a scan that the container that \a v names holds (dbg_get_scan_count() exists in
-# debug builds only); the container is read through the reference, as a container that holds a weakly referenced one
-# is passed to a function as a copy of its own
+# debug builds only); the container is read through the reference, as a container that a weak reference designates is
+# passed to a function as a copy of its own
 int sub object_count(reference<auto> v) {
     return exists_function("dbg_get_scan_count") ? call_function("dbg_get_scan_count", \v) : 0;
 }

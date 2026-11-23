@@ -108,9 +108,9 @@
     <a href="https://github.com/qoretechnologies/qore/issues/7262">issue 7262</a>).
 
     @par A Value Given a Weakly Referenced Hash or List Holds a Copy of Its Own
-    A variable, a parameter, a list element, a hash key or an object member given a hash or a list that a
-    @ref weak_assignment_operator "weak reference" designates, and that another holder holds, holds a copy of its own,
-    so that a change through the weak reference no longer reaches it
+    A parameter, a list element, a hash key, an object member or a variable given a hash or a list that a
+    @ref weak_assignment_operator "weak reference" designates holds a copy of its own (a local variable only while
+    another holder holds it), so that a change through the weak reference no longer reaches it
     (<a href="https://github.com/qoretechnologies/qore/issues/7342">issue 7342</a>).
 
     @par A Weak Reference Made From an Expression Designates a Copy of Its Own

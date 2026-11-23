@@ -1220,6 +1220,9 @@ private:
     //! set when the source of a weak assignment reaches a step that an lvalue cannot take: the value reached and the
     //! steps left, which the caller reads after the lvalue is released (see WeakSourceRead, qore#7351)
     std::unique_ptr<WeakSourceRead> weak_source_read;
+    //! the value of the local variable that the helper resolved, if any (setLocalVariableLValue()): an assignment to it
+    //! moves a weakly designated container that nothing else holds, as any other share point copies it (qore#7342)
+    const QoreLValueGeneric* local_var_lvalue = nullptr;
     //! the declared types of the references resolved on a path resolved for delete or remove that name the current
     //! value: the one deciding whether the value can be a list<*T> (ref_list_type) and the one deciding whether it
     //! can be a container with a widened element or value type (ref_decl_type); set up by startRemovalPath(), set by
@@ -1305,6 +1308,11 @@ public:
     //! Resolves the path that navigatePath() is given as the source of a weak assignment (see WeakSourceAccess)
     DLLLOCAL void setWeakSourceResolution() {
         weak_source_resolution = true;
+    }
+
+    //! Records that the value that the helper is set to is the value of a local variable (see local_var_lvalue)
+    DLLLOCAL void setLocalVariableLValue() {
+        local_var_lvalue = val;
     }
 
     //! Returns the read of the source of a weak assignment that reached a step that an lvalue cannot take, if any

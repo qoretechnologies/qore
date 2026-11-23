@@ -793,14 +793,15 @@ public:
     }
 
     DLLLOCAL void copyIntern(qore_hash_private& h) const {
-        // copy all members to new object
+        // copy all members to new object; a copy is not a new holder of the values: a weakly designated container in
+        // the hash is shared with the copy, without the share check of a member store (qore#7342)
         for (auto& i : member_list) {
-            hash_assignment_priv ha(h, i->key.c_str());
-#ifdef DEBUG
-            assert(ha.swap(i->val.refSelf()).isNothing());
-#else
-            ha.swap(i->val.refSelf());
-#endif
+            assert(!h.findMember(i->key.c_str()));
+            HashMember* member = h.createMemberKnownAbsent(i->key.c_str());
+            member->val = i->val.refSelf();
+            if (needs_scan(member->val)) {
+                h.incScanCount(1);
+            }
         }
     }
 

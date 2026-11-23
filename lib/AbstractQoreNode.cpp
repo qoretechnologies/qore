@@ -1221,13 +1221,15 @@ void qore_weak_target_pin(const QoreValue& v) {
 }
 
 bool qore_weak_shared_container(const AbstractQoreNode* n) {
-    // a container with no other strong holder is moved, not shared: it keeps its identity, and the weak references
-    // follow it (David, qore#7342)
-    if (n->is_unique()) {
-        return false;
-    }
     return n->getType() == NT_LIST ? qore_list_private::weakShared(*static_cast<const QoreListNode*>(n))
         : qore_hash_private::weakShared(*static_cast<const QoreHashNode*>(n));
+}
+
+bool qore_weak_shared_local_container(const AbstractQoreNode* n) {
+    // the count of the weak references first, which is zero for nearly every container; a container with no other
+    // strong holder is moved into the local variable, not shared: it keeps its identity, and the weak references follow
+    // it (David, qore#7342)
+    return qore_weak_shared_container(n) && !n->is_unique();
 }
 
 bool qore_weak_designated_container(const AbstractQoreNode* n) {
@@ -1251,11 +1253,6 @@ void qore_weak_holder(const AbstractQoreNode* n, int dt) {
 }
 
 QoreValue qore_weak_share_copy(QoreValue v, ExceptionSink* xsink) {
-    // a container with no other strong holder is moved (see qore_weak_shared_container()); the JIT's inline test does
-    // not test the reference count
-    if (v.getInternalNode()->is_unique()) {
-        return v;
-    }
     ExceptionSink local_xsink;
     if (!xsink) {
         xsink = &local_xsink;

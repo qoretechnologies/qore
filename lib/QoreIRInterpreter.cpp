@@ -13514,11 +13514,14 @@ dispatch_folded_step_host:
                         stored = checked.release();
                         // Track element type for correct list<T> type info at runtime
                         priv->setListTypeFromNewElementType(stored.getTypeInfo());
+                        // a weakly shared container is stored as a copy of its own, as by the JIT's
+                        // qore_rt_list_set_value() (qore#7342)
+                        bool scan = qore_store_needs_scan(stored);
                         priv->getEntryReference(static_cast<size_t>(index)) = stored;
                         if (static_cast<size_t>(index) >= priv->length) {
                             priv->length = static_cast<size_t>(index) + 1;
                         }
-                        if (needs_scan(stored)) {
+                        if (scan) {
                             priv->incScanCount(1);
                         }
                     }
@@ -17085,14 +17088,14 @@ load_local_done:
                     // object one more time, which is a garbage-collection scan for an object holding objects
                     bool transfer = !normalized_weak_ref && store_mode == AssignmentMode::Normal
                         && operand.isValid() && operand.id < values.size()
-                        // the value of a weak or opaque store stays held by the statement (qore#7342)
-                        && !(operand.id < func.interpreter_weak_store_results.size()
-                            && func.interpreter_weak_store_results[operand.id])
                         && operand.id < value_use_counts.size() && value_use_counts[operand.id] == 1
                         && values[operand.id].hasNode() && hasCleanupEntry(cleanup, operand.id)
                         && !weak_load_temp_slots.count(operand.id)
                         && !(operand.id < borrowed_temp_remaining.size()
-                            && borrowed_temp_remaining[operand.id] > 0);
+                            && borrowed_temp_remaining[operand.id] > 0)
+                        // the value of a weak or opaque store stays held by the statement (qore#7342)
+                        && !(operand.id < func.interpreter_weak_store_results.size()
+                            && func.interpreter_weak_store_results[operand.id]);
                     QoreValue stored;
                     if (transfer) {
                         // the slot's reference belongs to the local now, or is released by a failed coercion
@@ -17105,7 +17108,7 @@ load_local_done:
                     // a weakly shared container is stored as a copy of its own, as by an assignment (qore#7342); a
                     // weak or opaque store keeps the container that it designates
                     if (store_mode != AssignmentMode::Weak && store_mode != AssignmentMode::Opaque
-                            && qore_weak_shared(stored)) [[unlikely]] {
+                            && qore_weak_shared_local(stored)) [[unlikely]] {
                         stored = qore_weak_share_copy(stored, xsink);
                     }
                     if (xsink && *xsink) {
@@ -17156,13 +17159,13 @@ load_local_done:
                 bool transfer_owned_operand = !normalized_weak_ref
                     && operand.isValid()
                     && operand.id < values.size()
-                    // the value of a weak or opaque store stays held by the statement (qore#7342)
-                    && !(operand.id < func.interpreter_weak_store_results.size()
-                        && func.interpreter_weak_store_results[operand.id])
                     && operand.id < value_use_counts.size()
                     && value_use_counts[operand.id] == 1
                     && values[operand.id].hasNode()
-                    && hasCleanupEntry(cleanup, operand.id);
+                    && hasCleanupEntry(cleanup, operand.id)
+                    // the value of a weak or opaque store stays held by the statement (qore#7342)
+                    && !(operand.id < func.interpreter_weak_store_results.size()
+                        && func.interpreter_weak_store_results[operand.id]);
 
                 // Track this slot as local-owned for DGC container scan
                 if (operand.id >= 0) {

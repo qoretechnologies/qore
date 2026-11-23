@@ -2884,7 +2884,11 @@ const QoreWeakSharedLayout& qore_weak_shared_layout() {
                 break;
             }
         }
-        assert(o.type);
+        // the inline test reads the type there: a layout that it cannot find is a hard error
+        if (!o.type) {
+            fprintf(stderr, "qore: cannot find the type field of a node for the JIT's weak share test\n");
+            abort();
+        }
         return o;
     }();
     return off;
