@@ -2812,6 +2812,11 @@
       its requests no longer reach another origin for the restricted code; a client that is given a shared connection
       manager takes no proof and is not bound
       (<a href="https://github.com/qoretechnologies/qore/issues/7295">issue 7295</a>)
+    - the thread-local data of a @ref Qore::Thread::ThreadPool "ThreadPool" worker that a destructor saved with
+      \c save_thread_data() while the data of the worker's task was released, in a
+      Program family that had been released before, is released too and no longer reaches the next task of the worker;
+      the release repeats until no data is left, and refuses what destructors save in its last pass, so that it always
+      ends (<a href="https://github.com/qoretechnologies/qore/issues/7398">issue 7398</a>)
     - @ref Qore::HTTPClient::getURL() "HTTPClient::getURL()", @ref Qore::HTTPClient::getProxyURL() "getProxyURL()"
       and @ref Qore::HTTPClient::getSafeProxyURL() "getSafeProxyURL()" give an IPv6 host in brackets and the path of a
       UNIX domain socket with every reserved character encoded; the URL was ambiguous without them, and
