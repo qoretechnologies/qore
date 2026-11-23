@@ -464,6 +464,64 @@ Inputs of an aggregated `.qmod` (`qcc -m --from-objects`) are not checked
 individually: the glue object records the identity of the aggregating qcc, and
 the build-system contract below keeps the `.qo` inputs current.
 
+## AOT Module Builtin API Identity
+
+A qmod's code can have the metadata of the builtin classes, functions and
+constants that it uses built in, and that metadata is defined in libqore's qpp
+files, whose code is not part of the runtime identity: the functional domains
+that a class of the module inherits from a builtin base class are stored with
+the class, the functional domains that the module's code uses are stored in
+the image and checked against the restrictions of a Program loading it, and
+the IR optimizer folds, hoists and merges calls of builtin variants by their
+code flags and functional domains. So a module compiled before a builtin class
+gained a functional domain keeps its old domains (a restricted Program that
+would refuse the module's source at parse time loads the module), and one whose
+call of a builtin function was folded keeps the folded value (qore#7183). Such
+a module is out of date, as one whose source has changed:
+
+- **Identity.** qpp writes the API metadata of a qpp file with
+  `--api-metadata` (`<name>.api.json`): the metadata of `--metadata` without the
+  documentation and the source path, so the names, parents, functional domains,
+  code flags, signatures, access and modifiers of its classes and methods, and
+  its functions, constants, hashdecls and enums. The libqore build writes it for
+  every qpp file of the library (`qore_wrap_qpp_value(... APILIST ...)`), and
+  `cmake/QoreWriteBuiltinApiIdentity.cmake` hashes (SHA-256) the names and
+  contents of those files, in the order of their names, into
+  `include/qore/intern/qore_builtin_api_identity.h`;
+  `lib/qore_aot_runtime_identity.cpp` defines it as
+  `qore_builtin_api_identity`. A change to the documentation or the code of a
+  builtin method or function, or to any other source of libqore, does not
+  change it. Builtin classes, functions and constants that C++ code defines
+  without qpp are not covered.
+- **Recording.** qcc records the identity of its libqore in the module metadata
+  record (version 5, `QoreAOTModuleFileInfo::builtin_api_identity`; see
+  "Module Metadata Section"), and in `BUILD_INFO` (`builtin-api-identity`) for
+  inspection; `qcc --version` and `qcc --dump-info` print it. Tests compile a
+  module against other builtin API metadata with
+  `QORE_AOT_TEST_BUILTIN_API_IDENTITY`
+  (`examples/test/ir/AOTModuleBuiltinApiIdentity.qtest`).
+- **Checking.** `QoreModuleManager::loadBinaryModuleFromPath()` reads the record
+  before mapping the module and raises `AOT-MODULE-STALE` for a module that
+  records another identity than the runtime's, naming both: the source module
+  beside it is loaded instead with a `BINARY-MODULE-SOURCE-FALLBACK` warning,
+  and without one the module is not loaded. Unlike the runtime identity, the
+  module is never mapped. A module registered statically in an executable
+  (`qore_aot_register_into_program_v2()`) is refused the same way, as it has no
+  source. The program code of an executable that qcc links (`qore_aot_run_v3()`)
+  is not checked: only its `BUILD_INFO` records the identity, and it must be
+  linked again after its Qore library's builtin API has changed.
+- **Rebuilding.** The `qore-builtin-api-identity` target rewrites the header in
+  every build, only when the identity changes, and every qmod of the Qore build
+  depends on the header, so the qmods are compiled again exactly when the API
+  metadata changes. `qcc --check-module-sources`, which the build of the AOT
+  modules runs before compiling them (qore#6598), also finds a module of
+  another identity out of date, so a build tree or a module build outside the
+  Qore tree compiles it again for the libqore that checks it.
+
+The qmod build cache (`design/qmod-build-cache.md`) keys on the content of every
+file of `lib/`, the qpp files included, so it never supplies a module compiled
+against other builtin API metadata.
+
 ## Module Metadata Section
 
 qcc stores the metadata that the loader needs before it maps an AOT `.qmod` --
@@ -534,8 +592,12 @@ option list, which came with AOT format version 44
 (`QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION`), and version 4 the three
 fields of the declared domains, with AOT format version 45
 (`QORE_AOT_MODULE_INFO_DOMAINS_VERSION`), so that the format that a module
-reports tells which record it has; a runtime reads only its own record version
-and refuses any other, asking for the module to be rebuilt. Every string is
+reports tells which record it has; version 5 adds the builtin API identity of
+the compiling libqore (64 lowercase hexadecimal digits; see "AOT Module Builtin
+API Identity"). A runtime reads only its own record version and refuses any
+other, asking for the module to be rebuilt; `qcc --check-module-sources` finds
+a module whose record it cannot read out of date, so the build compiles it
+again. Every string is
 nonempty and contains no NUL; payloads are bounded to 16 MiB and 65,536 entries
 per list. `QoreAOTModuleFileInfo` in `include/qore/intern/QoreAOTBinary.h`
 documents the layout.

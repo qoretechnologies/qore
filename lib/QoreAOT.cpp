@@ -2301,6 +2301,12 @@ std::string qore_aot_get_compile_runtime_identity() {
     return test_identity && !test_identity.str().empty() ? test_identity.str() : qore_aot_runtime_identity;
 }
 
+std::string qore_aot_get_compile_builtin_api_identity() {
+    // a copy: the value read from the environment is only valid while it is held
+    QoreEnvironmentValue test_identity("QORE_AOT_TEST_BUILTIN_API_IDENTITY");
+    return test_identity && !test_identity.str().empty() ? test_identity.str() : qore_builtin_api_identity;
+}
+
 //! Append producer/build diagnostics to the AOT metadata blob.
 /** BUILD_INFO is informational.  Nothing about the source file's state on disk, such as its modification time, is
     recorded: an artifact depends only on the content it was compiled from, so compiling the same content again
@@ -2323,6 +2329,7 @@ static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* bina
     add("qore-version", std::to_string(QORE_VERSION_MAJOR) + "."
         + std::to_string(QORE_VERSION_MINOR) + "." + std::to_string(QORE_VERSION_PATCH));
     add("aot-runtime-identity", qore_aot_get_compile_runtime_identity());
+    add("builtin-api-identity", qore_aot_get_compile_builtin_api_identity());
     add("aot-format-version", std::to_string(QORE_AOT_BINARY_VERSION));
     add("supported-features", std::to_string(QORE_AOT_SUPPORTED_FEATURES));
     add("max-opcode", std::to_string(QORE_IR_MAX_OPCODE));
@@ -27569,6 +27576,8 @@ static bool buildAOTModuleInfoRecord(const QoreAOTModuleInfo& mod_info, QoreProg
     QoreAOTModuleFileInfo info;
     info.module_name = mod_info.name;
     info.dependencies = mod_info.dependencies;
+    // the builtin metadata that the module's code can have built in (qore#7183)
+    info.builtin_api_identity = qore_aot_get_compile_builtin_api_identity();
     info.unavailable_optional_modules = pp->unavailable_try_modules;
     // the modules the module was compiled with, by name: the module loader checks those it loads for the module;
     // the names of the files of a depfile do not say which of them are modules (an %include file can have the name
