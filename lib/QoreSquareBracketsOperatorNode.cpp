@@ -392,6 +392,21 @@ int QoreSquareBracketsOperatorNode::parseCheckValueTypes(const QoreListNode* ln)
     return err;
 }
 
+//! the value of the operator for its evaluated operands; see QoreSquareBracketsOperatorNode::evalOnValues()
+static QORE_INTERN_ALWAYS_INLINE QoreValue qore_square_brackets_values(QoreProgram* pgm, const QoreValue l,
+        const QoreValue r, bool string_index_char, bool negative_offsets, ExceptionSink* xsink) {
+    if (qore_plugin_value_may_have_operation(l)) {
+        bool plugin_matched = false;
+        QoreValue plugin_result = qore_plugin_try_dispatch_binary(pgm, "subscript",
+            QorePluginHelperAbi::SubscriptValue, l, r, plugin_matched, xsink);
+        if (*xsink || plugin_matched) {
+            return plugin_result;
+        }
+    }
+
+    return QoreSquareBracketsOperatorNode::doSquareBrackets(l, r, true, string_index_char, negative_offsets, xsink);
+}
+
 QoreValue QoreSquareBracketsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder lh(left, xsink);
     if (*xsink)
@@ -417,16 +432,12 @@ QoreValue QoreSquareBracketsOperatorNode::evalImpl(bool& needs_deref, ExceptionS
     if (*xsink)
         return QoreValue();
 
-    if (qore_plugin_value_may_have_operation(*lh)) {
-        bool plugin_matched = false;
-        QoreValue plugin_result = qore_plugin_try_dispatch_binary(getProgram(), "subscript",
-            QorePluginHelperAbi::SubscriptValue, *lh, *rh, plugin_matched, xsink);
-        if (*xsink || plugin_matched) {
-            return plugin_result;
-        }
-    }
+    return qore_square_brackets_values(getProgram(), *lh, *rh, string_index_char, negative_offsets, xsink);
+}
 
-    return doSquareBrackets(*lh, *rh, true, string_index_char, negative_offsets, xsink);
+QoreValue QoreSquareBracketsOperatorNode::evalOnValues(QoreProgram* pgm, const QoreValue l, const QoreValue r,
+        bool string_index_char, bool negative_offsets, ExceptionSink* xsink) {
+    return qore_square_brackets_values(pgm, l, r, string_index_char, negative_offsets, xsink);
 }
 
 QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreValue l, const QoreParseListNode* pln,

@@ -20737,6 +20737,12 @@ load_local_done:
                         }
                         if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
                             if (no_vivify && !*xsink) {
+                                // the source of a weak assignment whose path reached a step that an lvalue cannot
+                                // take is read as the operators read it (qore#7351)
+                                if (path_inst->unary_op == LVUnaryOp::EnsureUnique) [[unlikely]] {
+                                    lvh.finishWeakSourceRead(res);
+                                    return *xsink ? -1 : 0;
+                                }
                                 // navigatePath failed without error — lvalue doesn't exist, no-op
                                 return 0;
                             }

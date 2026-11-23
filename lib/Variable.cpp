@@ -1394,6 +1394,128 @@ LValueHelper::~LValueHelper() {
     for (RObject* o : removal_objects) {
         o->tDeref();
     }
+
+    // a read of the source of a weak assignment that the caller did not take (qore#7351)
+    if (weak_source_read) [[unlikely]] {
+        weak_source_read->clear(vl.xsink);
+    }
+}
+
+WeakSourceRead::~WeakSourceRead() {
+    if (value.hasNode() || !steps.empty()) {
+        ExceptionSink xsink;
+        clear(&xsink);
+    }
+}
+
+void WeakSourceRead::clear(ExceptionSink* xsink) {
+    value.discard(xsink);
+    value = QoreValue();
+    for (Step& step : steps) {
+        step.key.discard(xsink);
+    }
+    steps.clear();
+}
+
+void WeakSourceRead::addStep(const QoreValue& key, bool member, bool string_index_char, bool negative_offsets) {
+    QoreValue k = key.refSelf();
+    try {
+        steps.push_back({k, member, string_index_char, negative_offsets});
+    } catch (...) {
+        k.discard(nullptr);
+        throw;
+    }
+}
+
+//! returns the value that a read of the next step of a path reads from \a v, with a reference: the container or the
+//! object of a weak reference, as a read through the path gives it
+static QoreValue qore_weak_source_read_operand(const QoreValue& v) {
+    switch (v.getType()) {
+        case NT_WEAKREF_HASH:
+            return reinterpret_cast<const WeakHashReferenceNode*>(v.getInternalNode())->lock();
+        case NT_WEAKREF_LIST:
+            return reinterpret_cast<const WeakListReferenceNode*>(v.getInternalNode())->lock();
+        case NT_WEAKREF: {
+            QoreObject* o = reinterpret_cast<const WeakReferenceNode*>(v.getInternalNode())->get();
+            return o ? QoreValue(o->refSelf()) : QoreValue();
+        }
+        default:
+            return v.refSelf();
+    }
+}
+
+QoreValue WeakSourceRead::read(QoreProgram* pgm, ExceptionSink* xsink) {
+    ValueHolder rv(value, xsink);
+    value = QoreValue();
+    for (Step& step : steps) {
+        ValueHolder key(step.key, xsink);
+        step.key = QoreValue();
+        if (*xsink) {
+            continue;
+        }
+        ValueHolder operand(qore_weak_source_read_operand(*rv), xsink);
+        QoreValue next = step.member
+            ? QoreHashObjectDereferenceOperatorNode::evalOnValues(*operand, *key, xsink)
+            : QoreSquareBracketsOperatorNode::evalOnValues(pgm, *operand, *key, step.string_index_char,
+                step.negative_offsets, xsink);
+        rv = next;
+    }
+    steps.clear();
+    return *xsink ? QoreValue() : rv.release();
+}
+
+bool LValueHelper::finishWeakSourceRead(QoreValue& res) {
+    if (!weak_source_read) {
+        return false;
+    }
+    std::unique_ptr<WeakSourceRead> rest = std::move(weak_source_read);
+    ExceptionSink* xsink = vl.xsink;
+    // the steps left can run Qore code (memberGate(), accessors), which must not run under the lvalue's locks
+    finishForCallback();
+    if (*xsink) {
+        rest->clear(xsink);
+        return true;
+    }
+    ValueHolder v(rest->read(getProgram(), xsink), xsink);
+    if (!*xsink) {
+        res = qore_weak_source_read_operand(*v);
+    }
+    return true;
+}
+
+int LValueHelper::weakSourceReadStep(const QoreValue& key, bool member, bool string_index_char,
+        bool negative_offsets) {
+    assert(weak_source_resolution);
+    if (!weak_source_read) {
+        // the value reached, which the step is read from
+        weak_source_read.reset(new WeakSourceRead(getValue().refSelf()));
+        clearPtr();
+    }
+    weak_source_read->addStep(key, member, string_index_char, negative_offsets);
+    return -1;
+}
+
+bool LValueHelper::weakSourceIndexNeedsRead(const QoreValue& index) const {
+    if (index.getType() == NT_LIST) {
+        return true;
+    }
+    switch (getType()) {
+        case NT_LIST:
+        case NT_WEAKREF_LIST:
+        case NT_HASH:
+        case NT_WEAKREF_HASH:
+        case NT_NOTHING:
+            return false;
+        default:
+            return true;
+    }
+}
+
+bool LValueHelper::weakSourceMemberIsLValue(QoreObject* o, const char* mem) {
+    const qore_class_private* cls = qore_class_private::get(*o->getClass());
+    // memberGate() gives a member that the object does not have, and an accessor runs Qore code, which a read runs
+    // after the lvalue is released
+    return !cls->memberGate && !cls->findAccessorMember(mem);
 }
 
 //! the nesting depth from which removedValue() continues without recursion (qore#6117)
@@ -1976,7 +2098,9 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
     if (*vl.xsink)
         return -1;
 
-    if (qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
+    // a list of indexes is a slice, which is not an lvalue; the source of a weak assignment reads it as the operator
+    // reads it (qore#7351)
+    if (!weak_source_resolution && qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
         return -1;
     }
 
@@ -1990,7 +2114,13 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
     int parent_rc = doLValue(op->getLeft(), for_remove);
     assignment_only = final_assignment;
     if (parent_rc) {
-        return -1;
+        // the source of a weak assignment that stopped before reads this step as the operator does (qore#7351)
+        return weak_source_read ? weakSourceReadStep(*rh, false, op->hasStringIndexChar(), negative_offsets) : -1;
+    }
+    // the source of a weak assignment reads a slice, and an index of a value that is not a list or a hash, as the
+    // operator reads them (qore#7351)
+    if (weak_source_resolution && weakSourceIndexNeedsRead(*rh)) [[unlikely]] {
+        return weakSourceReadStep(*rh, false, op->hasStringIndexChar(), negative_offsets);
     }
     // an element of a write-protected variable is resolved without creating it (see setReadOnlyResolution()), as is
     // one on the path of a reference whose value is read
@@ -2136,7 +2266,9 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
         return -1;
     }
 
-    if (qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
+    // a list of indexes is a slice, which is not an lvalue; the source of a weak assignment reads it as the operator
+    // reads it (qore#7351)
+    if (!weak_source_resolution && qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
         return -1;
     }
 
@@ -2150,7 +2282,13 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
     int parent_rc = doLValue(op->getLeft(), rc, for_remove);
     assignment_only = final_assignment;
     if (parent_rc) {
-        return -1;
+        // the source of a weak assignment that stopped before reads this step as the operator does (qore#7351)
+        return weak_source_read ? weakSourceReadStep(*rh, false, op->hasStringIndexChar(), negative_offsets) : -1;
+    }
+    // the source of a weak assignment reads a slice, and an index of a value that is not a list or a hash, as the
+    // operator reads them (qore#7351)
+    if (weak_source_resolution && weakSourceIndexNeedsRead(*rh)) [[unlikely]] {
+        return weakSourceReadStep(*rh, false, op->hasStringIndexChar(), negative_offsets);
     }
     // an element of a write-protected variable is resolved without creating it (see setReadOnlyResolution()), as is
     // one on the path of a reference whose value is read
@@ -2498,13 +2636,15 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
         return -1;
     }
 
-    // a list of keys is a slice, which is not an lvalue, as doListLValue() checks for a list of indexes
-    if (qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
+    // a list of keys is a slice, which is not an lvalue, as doListLValue() checks for a list of indexes; the source of
+    // a weak assignment reads it as the operator reads it (qore#7351)
+    bool weak_slice = weak_source_resolution && rh->getType() == NT_LIST;
+    if (!weak_slice && qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
         return -1;
     }
 
     // convert to default character encoding
-    QoreHashKeyHelper mem(*rh, vl.xsink);
+    QoreHashKeyHelper mem(weak_slice ? QoreValue() : *rh, vl.xsink);
     if (*vl.xsink) {
         return -1;
     }
@@ -2514,7 +2654,11 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     int parent_rc = doLValue(op->getLeft(), for_remove);
     assignment_only = final_assignment;
     if (parent_rc) {
-        return -1;
+        // the source of a weak assignment that stopped before reads this step as the operator does (qore#7351)
+        return weak_source_read ? weakSourceReadStep(*rh, true) : -1;
+    }
+    if (weak_slice) [[unlikely]] {
+        return weakSourceReadStep(*rh, true);
     }
 
     qore_type_t t = getType();
@@ -2539,6 +2683,12 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     read_only_resolution = read_value_only;
     write_protected = false;
 
+    // the source of a weak assignment reads a member that an lvalue does not give as a read does (through memberGate()
+    // or an accessor) as the operator reads it (qore#7351)
+    if (weak_source_resolution && (!o || !weakSourceMemberIsLValue(o, mem.c_str()))) [[unlikely]] {
+        return weakSourceReadStep(*rh, true);
+    }
+
     return doObjLValue(o, mem.c_str(), for_remove || read_value_only);
 }
 
@@ -2555,13 +2705,15 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
         return -1;
     }
 
-    // a list of keys is a slice, which is not an lvalue, as doListLValue() checks for a list of indexes
-    if (qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
+    // a list of keys is a slice, which is not an lvalue, as doListLValue() checks for a list of indexes; the source of
+    // a weak assignment reads it as the operator reads it (qore#7351)
+    bool weak_slice = weak_source_resolution && rh->getType() == NT_LIST;
+    if (!weak_slice && qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
         return -1;
     }
 
     // convert to default character encoding
-    QoreHashKeyHelper mem(*rh, vl.xsink);
+    QoreHashKeyHelper mem(weak_slice ? QoreValue() : *rh, vl.xsink);
     if (*vl.xsink) {
         return -1;
     }
@@ -2571,7 +2723,11 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     int parent_rc = doLValue(op->getLeft(), rc, for_remove);
     assignment_only = final_assignment;
     if (parent_rc) {
-        return -1;
+        // the source of a weak assignment that stopped before reads this step as the operator does (qore#7351)
+        return weak_source_read ? weakSourceReadStep(*rh, true) : -1;
+    }
+    if (weak_slice) [[unlikely]] {
+        return weakSourceReadStep(*rh, true);
     }
 
     qore_type_t t = getType();
@@ -2597,6 +2753,10 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     write_protected = false;
 
     const qore_class_private* class_ctx = rc.getClass() ? rc.getClass() : runtime_get_class();
+    // see doHashObjLValue() above (qore#7351)
+    if (weak_source_resolution && (!o || !weakSourceMemberIsLValue(o, mem.c_str()))) [[unlikely]] {
+        return weakSourceReadStep(*rh, true);
+    }
     return doObjLValue(o, mem.c_str(), for_remove || read_value_only, class_ctx);
 }
 
@@ -3145,15 +3305,27 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
     for (uint32_t i = 1; i < num_steps; ++i) {
         assignment_only = final_assignment && i + 1 == num_steps;
         const LVPathStep& step = steps[i];
+        // the source of a weak assignment that reached a step that an lvalue cannot take reads the rest of the path
+        // as the operators read it (qore#7351)
+        if (weak_source_read) [[unlikely]] {
+            weakSourceReadPathStep(step);
+            continue;
+        }
         qore_type_t t = val ? val->getType() : qv->getType();
         switch (step.kind) {
             case LVPathStepKind::HashKeyConst:
             case LVPathStepKind::HashKey: {
-                // a list of keys is a slice, which is not an lvalue (remove and delete take a slice at the end of
-                // the path without navigating it), as doHashObjLValue() checks
-                if (step.slice_values.size() == 1
-                        && qore_check_lvalue_key_not_slice(step.slice_values[0], vl.xsink)) {
-                    return -1;
+                if (step.slice_values.size() == 1) {
+                    // the source of a weak assignment reads a slice as the operator does (qore#7351)
+                    if (weak_source_resolution && step.slice_values[0].getType() == NT_LIST) [[unlikely]] {
+                        weakSourceReadPathStep(step);
+                        continue;
+                    }
+                    // a list of keys is a slice, which is not an lvalue (remove and delete take a slice at the end
+                    // of the path without navigating it), as doHashObjLValue() checks
+                    if (qore_check_lvalue_key_not_slice(step.slice_values[0], vl.xsink)) {
+                        return -1;
+                    }
                 }
                 // Check if the target is an object — use doObjLValue instead of doHashLValue
                 QoreObject* o = nullptr;
@@ -3161,6 +3333,13 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                     o = getValue().get<const WeakReferenceNode>()->get();
                 } else if (t == NT_OBJECT) {
                     o = getValue().get<QoreObject>();
+                }
+                // the source of a weak assignment reads a member that an lvalue does not give as a read does (through
+                // memberGate() or an accessor) as the operator reads it, as doHashObjLValue() does (qore#7351)
+                if (weak_source_resolution && (t == NT_WEAKREF || t == NT_OBJECT)
+                        && (!o || !weakSourceMemberIsLValue(o, step.name.c_str()))) [[unlikely]] {
+                    weakSourceReadPathStep(step);
+                    continue;
                 }
                 if (o) {
                     if (doObjLValue(o, step.name.c_str(), for_remove)) {
@@ -3174,6 +3353,14 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                 break;
             }
             case LVPathStepKind::ListIndex: {
+                // the source of a weak assignment reads a slice, and an index of a value that is not a list or a
+                // hash, as the operator reads them, as doListLValue() does (qore#7351)
+                if (weak_source_resolution
+                        && weakSourceIndexNeedsRead(step.slice_values.size() == 1 ? step.slice_values[0]
+                            : QoreValue(step.index))) [[unlikely]] {
+                    weakSourceReadPathStep(step);
+                    continue;
+                }
                 // a list of indexes is a slice, as doListLValue() checks
                 if (step.slice_values.size() == 1
                         && qore_check_lvalue_key_not_slice(step.slice_values[0], vl.xsink)) {
@@ -3358,7 +3545,25 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
         }
     }
 
-    return 0;
+    // the source of a weak assignment that the caller reads (qore#7351)
+    return weak_source_read ? -1 : 0;
+}
+
+void LValueHelper::weakSourceReadPathStep(const LVPathStep& step) {
+    if (step.kind == LVPathStepKind::ListIndex) {
+        weakSourceReadStep(step.slice_values.size() == 1 ? step.slice_values[0] : QoreValue(step.index), false,
+            !runtime_check_parse_option(QoreParseOptions::NO_STRING_INDEX_CHAR),
+            runtime_check_parse_option(PO_NEGATIVE_OFFSETS));
+        return;
+    }
+    assert(step.kind == LVPathStepKind::HashKeyConst || step.kind == LVPathStepKind::HashKey);
+    // the evaluated key of a dynamic step, or the name of a constant one
+    if (step.slice_values.size() == 1) {
+        weakSourceReadStep(step.slice_values[0], true);
+        return;
+    }
+    ValueHolder key(new QoreStringNode(step.name.c_str()), vl.xsink);
+    weakSourceReadStep(*key, true);
 }
 
 //! Returns the container kind an lvalue's type came from; QLVTS_None without a helper

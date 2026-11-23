@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class WeakSourceUntypedPathTest
+
+#! the source of a weak assignment that is a path whose steps have no type at parse time (qore#7351)
+/** The container that such a path holds was not made unique: a weak reference taken of it designated a literal of the
+    program that the path shared, which a change through the weak reference then changed, and a container reached
+    through a weak reference to an ancestor was copied by a later write, which the weak reference did not see.  The
+    steps are now checked when they run; a step that an lvalue cannot take (a slice, a member read through
+    memberGate(), an index of a string or a binary) reads the rest of the path as the operators do, with its keys
+    evaluated once.  Every mode must print the expected output.
+
+    The program is in \c weak-source-untyped-path/.
+*/
+class WeakSourceUntypedPathTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/weak-source-untyped-path";
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+        const Programs = ("weak-source-untyped-path",);
+    }
+
+    constructor() : QUnit::Test("WeakSourceUntypedPathTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT and tiered execution print the expected output", \testModes());
+        addTestCase("qcc executables print the expected output", \testCompiled());
+        set_return_value(main());
+    }
+
+    private string expected(string name) {
+        return ReadOnlyFile::readTextFile(dir + "/" + name + ".expected");
+    }
+
+    private string run(string name, string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=%s %s/%s.q", qore_bin, mode, dir, name));
+        assertEq(0, r.rc, sprintf("%s %s: exit status (output: %y)", name, mode, r.out));
+        return r.stdout;
+    }
+
+    testAst() {
+        foreach string name in (Programs) {
+            assertEq(expected(name), run(name, "ast"), name + " ast");
+        }
+    }
+
+    testModes() {
+        foreach string name in (Programs) {
+            foreach string mode in (Modes) {
+                if (mode == "ast") {
+                    continue;
+                }
+                assertEq(expected(name), run(name, mode), name + " " + mode);
+            }
+        }
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            *string path = backquote("command -v qcc 2>/dev/null");
+            trim path;
+            if (!path) {
+                testSkip("qcc is not available");
+            }
+            qcc_bin = path;
+        }
+        TmpDir tmp("qore-weak-source-untyped-path-");
+        foreach string name in (Programs) {
+            foreach string opt in (("0", "3")) {
+                string exe = sprintf("%s/%s-O%s", tmp.path, name, opt);
+                int rc;
+                string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, name), \rc);
+                assertEq(0, rc, sprintf("%s -O%s: qcc compiles the program: %s", name, opt, out));
+                if (rc || !is_file(exe)) {
+                    continue;
+                }
+                # -b must be the first argument of a compiled program
+                string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
+                assertEq(0, rc, sprintf("%s -O%s: exit status (output: %y)", name, opt, result));
+                assertEq(expected(name), result, sprintf("%s -O%s", name, opt));
+            }
+        }
+    }
+}

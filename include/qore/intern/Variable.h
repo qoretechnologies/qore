@@ -777,6 +777,50 @@ private:
     DLLLOCAL void releaseIntern(ExceptionSink* xsink);
 };
 
+//! the source of a weak assignment read as an rvalue reads it, from the first step of its path that an lvalue cannot
+//! take (qore#7351)
+/** A slice, a member that the object gives through memberGate() or an accessor or that is not declared public, an index
+    of a value that is not a list or a hash: the lvalue stops there, and the value it reached and the steps left, with
+    their evaluated keys and indexes, are read as the operators read them after the lvalue is released, as
+    memberGate() and the accessors run Qore code.  The keys are not evaluated again.
+*/
+class WeakSourceRead {
+public:
+    //! takes the reference of \a value, the value of the path where the lvalue stopped
+    DLLLOCAL explicit WeakSourceRead(QoreValue value) : value(value) {
+    }
+
+    //! releases the values that read() did not take
+    DLLLOCAL ~WeakSourceRead();
+
+    //! adds a step, with a reference of its own to \a key; a member or key step (\a member) or an index step with the
+    //! string_index_char and negative_offsets of its operator
+    DLLLOCAL void addStep(const QoreValue& key, bool member, bool string_index_char, bool negative_offsets);
+
+    //! returns the value of the path read from the value where the lvalue stopped; the caller owns the reference
+    /** in the Program \a pgm, from which the plugins of an index step are dispatched; the values are released
+    */
+    DLLLOCAL QoreValue read(QoreProgram* pgm, ExceptionSink* xsink);
+
+    //! releases the values
+    DLLLOCAL void clear(ExceptionSink* xsink);
+
+private:
+    struct Step {
+        //! the evaluated key or index, with a reference
+        QoreValue key;
+        //! true for a member or key step, false for an index step
+        bool member;
+        bool string_index_char;
+        bool negative_offsets;
+    };
+
+    //! the value of the path read so far, with a reference
+    QoreValue value;
+    //! the steps left, from the step where the lvalue stopped to the last one
+    std::vector<Step> steps;
+};
+
 class LValueHelper final {
     friend struct qore_type_safe_ref_helper_priv_t;
     friend class LValueRemoveHelper;
@@ -1166,6 +1210,9 @@ private:
     //! setWeakSourceResolution()): an element that does not exist (also an index beyond the start of a list) is no
     //! lvalue, without an exception, as an rvalue read of it gives no value (qore#7242)
     bool weak_source_resolution = false;
+    //! set when the source of a weak assignment reaches a step that an lvalue cannot take: the value reached and the
+    //! steps left, which the caller reads after the lvalue is released (see WeakSourceRead, qore#7351)
+    std::unique_ptr<WeakSourceRead> weak_source_read;
     //! the declared types of the references resolved on a path resolved for delete or remove that name the current
     //! value: the one deciding whether the value can be a list<*T> (ref_list_type) and the one deciding whether it
     //! can be a container with a widened element or value type (ref_decl_type); set up by startRemovalPath(), set by
@@ -1252,6 +1299,38 @@ public:
     DLLLOCAL void setWeakSourceResolution() {
         weak_source_resolution = true;
     }
+
+    //! Returns the read of the source of a weak assignment that reached a step that an lvalue cannot take, if any
+    /** The caller reads it (WeakSourceRead::read()) after the helper is released; see WeakSourceRead (qore#7351)
+    */
+    DLLLOCAL std::unique_ptr<WeakSourceRead> takeWeakSourceRead() {
+        return std::move(weak_source_read);
+    }
+
+    //! Reads the source of a weak assignment that navigatePath() stopped at a step that an lvalue cannot take
+    /** Returns false if it did not stop there.  Otherwise finishes the helper (see finishForCallback()), which is
+        empty afterwards, and reads the rest of the path as the operators read it, in the current Program; \a res is
+        the value read, with a weak reference read as its target, as an rvalue weak assignment reads it, or NOTHING
+        after an exception (qore#7351).
+    */
+    DLLLOCAL __attribute__((cold)) bool finishWeakSourceRead(QoreValue& res);
+
+    //! Stops resolving the source of a weak assignment at the current value, which the step given is read from, or
+    //! adds the step to the read of a source that stopped before; returns -1 (qore#7351)
+    DLLLOCAL __attribute__((cold)) int weakSourceReadStep(const QoreValue& key, bool member,
+            bool string_index_char = false, bool negative_offsets = false);
+
+    //! adds the step of a path that navigatePath() is given to the read of the source of a weak assignment, which
+    //! stops at the current value if it did not before (see weakSourceReadStep(), qore#7351)
+    DLLLOCAL __attribute__((cold)) void weakSourceReadPathStep(const LVPathStep& step);
+
+    //! returns true if the step with the evaluated \a index from the current value is read as the operator reads it:
+    //! a slice (a list of indexes), or an index of a value that is not a list or a hash (qore#7351)
+    DLLLOCAL bool weakSourceIndexNeedsRead(const QoreValue& index) const;
+
+    //! returns true if the member \a mem of \a o is read through an lvalue as an rvalue reads it: a member without
+    //! accessors, in a class without memberGate(); the access to the member is checked as for a read (qore#7351)
+    DLLLOCAL static bool weakSourceMemberIsLValue(QoreObject* o, const char* mem);
 
     //! Finishes the parent lvalue before a callback that can replace or remove it
     /** The caller must first retain the target object. Completes counts, locks, reference Program entries,

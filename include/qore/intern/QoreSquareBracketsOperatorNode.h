@@ -90,6 +90,14 @@ public:
         return negative_offsets;
     }
 
+    //! Returns the value of the operator for the evaluated operands \a l and \a r, as evalImpl() gives it
+    /** For an operator without an offset list with a range, in the Program \a pgm (which plugins are dispatched
+        from), with the operator's string_index_char and negative_offsets.  The source of a weak assignment whose path
+        an lvalue cannot take reads the rest of the path with it (qore#7351).
+    */
+    DLLLOCAL static QoreValue evalOnValues(QoreProgram* pgm, const QoreValue l, const QoreValue r,
+            bool string_index_char, bool negative_offsets, ExceptionSink* xsink);
+
     //! sets what parseInit() sets for %modern code, for an operator of compiled code
     /** For an operator that a reader of compiled code (AOT) creates, whose parseInit() is not called (qore#6294):
         compiled code is %modern (negative offsets, string index characters), and an offset list with a range is a

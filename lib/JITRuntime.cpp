@@ -18931,6 +18931,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             lvh.setWeakSourceResolution();
         }
         if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
+            // the source of a weak assignment whose path reached a step that an lvalue cannot take is read as the
+            // operators read it (qore#7351)
+            if (inst->unary_op == LVUnaryOp::EnsureUnique && !*xsink && lvh.finishWeakSourceRead(res)) [[unlikely]] {
+                return toBits(res);
+            }
             return toBits(QoreValue());
         }
         switch (inst->unary_op) {

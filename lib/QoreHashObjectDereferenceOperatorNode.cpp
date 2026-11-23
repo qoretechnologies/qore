@@ -318,6 +318,32 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
     return err;
 }
 
+//! the value of the operator for its evaluated operands; see QoreHashObjectDereferenceOperatorNode::evalOnValues()
+static QORE_INTERN_ALWAYS_INLINE QoreValue qore_hash_object_deref_values(const QoreValue l, const QoreValue r,
+        ExceptionSink* xsink) {
+    if (l.getType() == NT_HASH) {
+        const QoreHashNode* h = l.get<const QoreHashNode>();
+
+        if (r.getType() == NT_LIST)
+            return qore_hash_private::get(*h)->getSlice(r.get<const QoreListNode>(), xsink);
+
+        QoreStringNodeValueHelper key(r);
+        QoreValue v = h->getKeyValue(**key, xsink);
+        return *xsink ? QoreValue() : v.refSelf();
+    }
+    if (l.getType() != NT_OBJECT)
+        return QoreValue();
+
+    QoreObject* o = const_cast<QoreObject*>(l.get<const QoreObject>());
+
+    if (r.getType() == NT_LIST)
+        return qore_object_ops(o).getSlice(r.get<const QoreListNode>(), xsink);
+
+    QoreStringNodeValueHelper key(r);
+    ValueHolder rv(o->evalMember(*key, xsink), xsink);
+    return *xsink ? QoreValue() : rv.release();
+}
+
 QoreValue QoreHashObjectDereferenceOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder lh(left, xsink);
     if (*xsink)
@@ -337,25 +363,10 @@ QoreValue QoreHashObjectDereferenceOperatorNode::evalImpl(bool& needs_deref, Exc
     if (*xsink)
         return QoreValue();
 
-    if (lh->getType() == NT_HASH) {
-        const QoreHashNode* h = lh->get<const QoreHashNode>();
+    return qore_hash_object_deref_values(*lh, *rh, xsink);
+}
 
-        if (rh->getType() == NT_LIST)
-            return qore_hash_private::get(*h)->getSlice(rh->get<const QoreListNode>(), xsink);
-
-        QoreStringNodeValueHelper key(*rh);
-        QoreValue v = h->getKeyValue(**key, xsink);
-        return *xsink ? QoreValue() : v.refSelf();
-    }
-    if (lh->getType() != NT_OBJECT)
-        return QoreValue();
-
-    QoreObject* o = const_cast<QoreObject*>(lh->get<const QoreObject>());
-
-    if (rh->getType() == NT_LIST)
-        return qore_object_ops(o).getSlice(rh->get<const QoreListNode>(), xsink);
-
-    QoreStringNodeValueHelper key(*rh);
-    ValueHolder rv(o->evalMember(*key, xsink), xsink);
-    return *xsink ? QoreValue() : rv.release();
+QoreValue QoreHashObjectDereferenceOperatorNode::evalOnValues(const QoreValue l, const QoreValue r,
+        ExceptionSink* xsink) {
+    return qore_hash_object_deref_values(l, r, xsink);
 }
