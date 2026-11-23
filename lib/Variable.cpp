@@ -814,7 +814,7 @@ void LValueHelper::writeWeakPathChanges(const AbstractQoreNode* leaf) {
             progress = true;
         }
         if (!progress) {
-            // strong containment has no cycle: the edges left are written in the order of the path
+            // strong containment has no cycle: the edges left are written from the end of the path
             assert(false);
             for (size_t c = ocvec.size(); c-- > 1;) {
                 if (!ocvec[c].edge_written) {
