@@ -4469,18 +4469,24 @@ static void publish_popped_stack_location(ThreadData* td, const QoreStackLocatio
     AutoLocker al(td->stack_walk_lck);
 }
 
-//! Returns the Program of the code that makes a call whose frame is pushed in the initialization of a module's
-//! Program (qore#7289; see QoreModuleInitFrames)
-/** The Program that was current before the call: the one that the call's Program context helper replaced if the call
-    switched the thread to another Program, otherwise the current one
+//! Sets the Program of the code that makes a call whose frame is pushed in the initialization of a module's Program
+//! (qore#7289; see QoreModuleInitFrames)
+/** A call made while the call context is the one that the code loading the module set is made by the code that ran
+    before the call: the Program that the call's Program context helper replaced if the call switched the thread to
+    another Program, otherwise the current one.  Out of line and cold, so that the frame push, which is inlined in the
+    call path, only tests whether a module's initialization runs.
 */
-static QORE_INTERN_NOINLINE QoreProgram* qore_module_init_frame_caller(ThreadData* td,
-        const QoreStackLocation* stack_loc) {
+static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_module_init_frame_caller(ThreadData* td,
+        const QoreStackLocation* stack_loc, QoreProgram* frame_pgm, QoreProgram*& current_pgm) {
+    if (!frame_pgm || frame_pgm != td->module_init_frames.call_ctx) {
+        return;
+    }
     const ProgramThreadCountContextHelper* ch = dynamic_cast<const ProgramThreadCountContextHelper*>(stack_loc);
     if (ch && ch == td->current_pgm_ctx && ch->getOldProgram()) {
-        return ch->getOldProgram();
+        current_pgm = ch->getOldProgram();
+    } else {
+        current_pgm = td->current_pgm;
     }
-    return td->current_pgm;
 }
 
 // called when pushing a new location on the stack
@@ -4495,9 +4501,8 @@ const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* st
     current_pgm = frame_pgm ? frame_pgm : td->current_pgm;
     // in the initialization of a module's Program, a call made while the call context is the one that the code
     // loading the module set is made by the code that ran before the call (qore#7289)
-    if (__builtin_expect(td->module_init_frames.pgm != nullptr, 0) && frame_pgm
-            && frame_pgm == td->module_init_frames.call_ctx) {
-        current_pgm = qore_module_init_frame_caller(td, stack_loc);
+    if (__builtin_expect(td->module_init_frames.pgm != nullptr, 0)) {
+        qore_module_init_frame_caller(td, stack_loc, frame_pgm, current_pgm);
     }
     current_stmt = td->runtime_statement;
     // a call site is the location of the frame that took it, if any, never of a frame that the callee pushes
@@ -4518,9 +4523,8 @@ const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLoca
     current_pgm = frame_pgm ? frame_pgm : td->current_pgm;
     // in the initialization of a module's Program, a call made while the call context is the one that the code
     // loading the module set is made by the code that ran before the call (qore#7289)
-    if (__builtin_expect(td->module_init_frames.pgm != nullptr, 0) && frame_pgm
-            && frame_pgm == td->module_init_frames.call_ctx) {
-        current_pgm = qore_module_init_frame_caller(td, stack_loc);
+    if (__builtin_expect(td->module_init_frames.pgm != nullptr, 0)) {
+        qore_module_init_frame_caller(td, stack_loc, frame_pgm, current_pgm);
     }
     current_stmt = td->runtime_statement;
     // a call site is the location of the frame that took it, if any, never of a frame that the callee pushes
