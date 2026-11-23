@@ -7233,9 +7233,19 @@ void QoreModuleManager::delUser() {
             // onComplete() and references enter the Programs of other modules, also of those whose teardown barrier
             // has passed: that work ends before the next module's Program is waited for (qore#6928)
             qore_module_cleanup_drain_work();
+            // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
+            // the modules: they are left as they are (see qore_cleanup(), qore#7239)
+            if (qore_module_cleanup_abandoned()) {
+                return;
+            }
         }
         qore_aot_clear_all_module_namespace_data(xsink);
         qore_module_cleanup_drain_work();
+        // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
+        // the modules: they are left as they are (see qore_cleanup(), qore#7239)
+        if (qore_module_cleanup_abandoned()) {
+            return;
+        }
 
         // break the cycles held up by opaque references ('@=') that user module programs own while all module
         // programs are still alive: such a cycle survives the namespace data cleared above, and an object that a
@@ -7252,6 +7262,11 @@ void QoreModuleManager::delUser() {
         // AOT user modules are binary modules, deleted after all user modules in cleanup()
         qore_aot_clear_all_module_opaque_targets(xsink);
         qore_module_cleanup_drain_work();
+        // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
+        // the modules: they are left as they are (see qore_cleanup(), qore#7239)
+        if (qore_module_cleanup_abandoned()) {
+            return;
+        }
     }
 
     // Phase 2 - delete the user modules and the native binary modules in dependency order
@@ -7271,6 +7286,11 @@ void QoreModuleManager::delUser() {
         // the work that the deletion of the last module handed over ends before the next module is deleted
         // (qore#6928)
         qore_module_cleanup_drain_work();
+        // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
+        // the modules: they are left as they are (see qore_cleanup(), qore#7239)
+        if (qore_module_cleanup_abandoned()) {
+            return;
+        }
         if (deleteUnrequiredNativeModule()) {
             continue;
         }
@@ -7313,6 +7333,11 @@ void QoreModuleManager::delUser() {
     }
     // the work that the deletion of the last module handed over
     qore_module_cleanup_drain_work();
+    // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
+    // the modules: they are left as they are (see qore_cleanup(), qore#7239)
+    if (qore_module_cleanup_abandoned()) {
+        return;
+    }
 
 #ifdef DEBUG
     // the work that the test hook still holds runs now, after the user modules have been deleted (qore#6928)
