@@ -2068,6 +2068,14 @@ private:
     //! the socket to the thread's close wakes and notifies the thread (see CloseWakeQueue)
     DLLLOCAL static std::function<void()> makeCloseWake(IoThreadContext& t, const std::string& sock_hash);
 
+    //! Returns the socket hash that wakes the operation (see pollsSocket())
+    DLLLOCAL static std::string closeWakeKey(const PollInfo& pinfo) {
+        if (!pinfo.cached_sock_hash.empty()) {
+            return pinfo.cached_sock_hash;
+        }
+        return pinfo.sock ? pinfo.sock->getIoIdentityHash() : std::string();
+    }
+
     struct IoThreadContext {
         //! Release the event loop and notifier on resize, failed setup, or destruction
         DLLLOCAL ~IoThreadContext();

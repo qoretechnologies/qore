@@ -11964,8 +11964,8 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, uint64_t op_id,
                     // a close of the object that bypasses the controller wakes the operation, also one made since the
                     // hold was taken (qore#7003)
                     OpCache::node_t* node = t.cache.findId(op_id);
-                    if (node && node->second.sock) {
-                        qore_descriptor_hold_set_close_wake(hold, makeCloseWake(t, getSocketHash(node->second.sock)));
+                    if (node) {
+                        qore_descriptor_hold_set_close_wake(hold, makeCloseWake(t, closeWakeKey(node->second)));
                     }
                     t.extra_fd_holds[{op_id, fd}] = std::move(hold);
                 }
