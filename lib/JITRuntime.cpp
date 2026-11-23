@@ -811,10 +811,6 @@ extern "C" DLLEXPORT uint64_t qore_fast_now_ms(ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_now(ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_time(ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_length(uint64_t arg_bits, ExceptionSink* xsink);
-// Phase 5.2c: Pseudo-method fast-calls (read-only, non-mutating)
-extern "C" DLLEXPORT uint64_t qore_fast_any_size(uint64_t arg_bits, ExceptionSink* xsink);
-extern "C" DLLEXPORT uint64_t qore_fast_hash_keys(uint64_t arg_bits, ExceptionSink* xsink);
-extern "C" DLLEXPORT uint64_t qore_fast_hash_values(uint64_t arg_bits, ExceptionSink* xsink);
 // Phase 5.3: Additional fast-path optimizations
 extern "C" DLLEXPORT uint64_t qore_fast_trim(uint64_t arg_bits, ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_abs(uint64_t arg_bits, ExceptionSink* xsink);
@@ -12613,32 +12609,6 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
         }
     }
 
-    // Phase 5.2c: Pseudo-method fast-call detection
-    // Handle <type>::method() pseudo-method calls without QoreListNode allocation
-    if (auto* method_call = qore_get_method_call_node(expr.getInternalNode())) {
-        if (method_call->isPseudo()) {
-            const char* mname = method_call->getName();
-            if (mname && nargs == 1) {
-                // Phase 5.2c: Pseudo-methods on built-in types (read-only, non-mutating)
-                if (fromBits(args[0]).getType() == NT_STRING) {
-                    if (!strcmp(mname, "length")) {
-                        return qore_fast_length(args[0], xsink);
-                    }
-                    if (!strcmp(mname, "size")) {
-                        return qore_fast_strlen(args[0], xsink);
-                    }
-                }
-                if (!strcmp(mname, "length") || !strcmp(mname, "size")) {
-                    return qore_fast_any_size(args[0], xsink);
-                } else if (!strcmp(mname, "keys")) {
-                    return qore_fast_hash_keys(args[0], xsink);
-                } else if (!strcmp(mname, "values")) {
-                    return qore_fast_hash_values(args[0], xsink);
-                }
-            }
-        }
-    }
-
     // an unqualified call of a method of self (m()) on an object of the class of the call or of the method takes the
     // fast method call path, as a call of a method of an object of the resolved class does (issue #7267)
     if (const SelfFunctionCallNode* call = qore_get_self_function_call_node(expr.getInternalNode())) {
@@ -12838,105 +12808,6 @@ extern "C" DLLEXPORT uint64_t qore_fast_length(uint64_t arg_bits, ExceptionSink*
         return toBits(static_cast<int64_t>(0));
     }
     return qore_fast_builtin_call("Qore::length", arg, xsink);
-}
-
-extern "C" DLLEXPORT uint64_t qore_fast_any_size(uint64_t arg_bits, ExceptionSink* xsink) {
-    // Returns size of any collection (hash, list) or length of string
-    // Equivalent to: int size(any val) { ... }
-    QoreValue arg = fromBits(arg_bits);
-
-    // Handle an inline short string: its length in characters, as for a string node below
-    if (arg.isShortString()) {
-        return qore_fast_length(arg_bits, xsink);
-    }
-
-    // Handle null/nothing
-    if (!arg.hasNode()) {
-        return toBits(0);
-    }
-
-    const AbstractQoreNode* node = arg.getInternalNode();
-
-    // Handle hash
-    if (auto* hash = dynamic_cast<const QoreHashNode*>(node)) {
-        return toBits(static_cast<int64_t>(hash->size()));
-    }
-
-    // Handle list
-    if (auto* list = dynamic_cast<const QoreListNode*>(node)) {
-        return toBits(static_cast<int64_t>(list->size()));
-    }
-
-    // Handle string
-    // note: safe; the node of arg, whose inline short string returns above (arg.isShortString())
-    if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
-        return toBits(static_cast<int64_t>(str->length()));
-    }
-
-    // Handle binary
-    if (auto* bin = dynamic_cast<const BinaryNode*>(node)) {
-        return toBits(static_cast<int64_t>(bin->size()));
-    }
-
-    // Other types have no size
-    return toBits(0);
-}
-
-extern "C" DLLEXPORT uint64_t qore_fast_hash_keys(uint64_t arg_bits, ExceptionSink* xsink) {
-    // Returns list of hash keys
-    // Equivalent to: list<string> keys(hash<auto, auto> val) { ... }
-    QoreValue arg = fromBits(arg_bits);
-
-    ReferenceHolder<QoreListNode> keys(new QoreListNode(stringTypeInfo), xsink);
-
-    // Handle null/nothing
-    if (!arg.hasNode()) {
-        return toBits(keys.release());
-    }
-
-    const AbstractQoreNode* node = arg.getInternalNode();
-
-    // Handle hash
-    if (auto* hash = dynamic_cast<const QoreHashNode*>(node)) {
-        // Iterate over all keys and add to result list
-        ConstHashIterator hi(hash);
-        while (hi.next()) {
-            QoreStringNode* key = new QoreStringNode(hi.getKey());
-            qore_list_private::get(*keys)->push(key, xsink);
-        }
-    }
-
-    return toBits(keys.release());
-}
-
-extern "C" DLLEXPORT uint64_t qore_fast_hash_values(uint64_t arg_bits, ExceptionSink* xsink) {
-    // Returns list of hash values
-    // Equivalent to: list<auto> values(hash<auto, auto> val) { ... }
-    QoreValue arg = fromBits(arg_bits);
-
-    ReferenceHolder<QoreListNode> vals(new QoreListNode(autoTypeInfo), xsink);
-
-    // Handle null/nothing
-    if (!arg.hasNode()) {
-        return toBits(vals.release());
-    }
-
-    const AbstractQoreNode* node = arg.getInternalNode();
-
-    // Handle hash
-    if (auto* hash = dynamic_cast<const QoreHashNode*>(node)) {
-        // Iterate over all values and add to result list
-        ConstHashIterator hi(hash);
-        while (hi.next()) {
-            QoreValue v = hi.get();
-            if (v.needsRef()) {
-                v.refSelf();
-            }
-            qore_list_private::get(*vals)->push(v, xsink);
-        }
-    }
-
-    return toBits(vals.release());
 }
 
 // --- Phase 5.3: Additional fast-path optimizations ---
