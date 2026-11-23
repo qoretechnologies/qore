@@ -935,8 +935,19 @@ static QORE_INTERN_NOINLINE QoreValue qore_weak_assign_hold_copy(const QoreValue
         }
         assert(!*xsink);
 
-        // the container assigned, to recognize a copy made by the conversion
+        // the container assigned, to recognize a copy made by the conversion; a source held weakly is assigned as
+        // its container (qore#7405)
         const AbstractQoreNode* assigned_node = new_value->hasNode() ? new_value->getInternalNode() : nullptr;
+        switch (get_node_type(assigned_node)) {
+            case NT_WEAKREF_HASH:
+                assigned_node = static_cast<const WeakHashReferenceNode*>(assigned_node)->borrow();
+                break;
+            case NT_WEAKREF_LIST:
+                assigned_node = static_cast<const WeakListReferenceNode*>(assigned_node)->borrow();
+                break;
+            default:
+                break;
+        }
 
         if (policy) {
             if (v.assign(new_value.takeReferencedValue(), "<lvalue>", *policy, !ident, AssignmentMode::Weak)) {
@@ -980,6 +991,10 @@ static QORE_INTERN_NOINLINE QoreValue qore_weak_assign_hold_copy(const QoreValue
     return rv;
 }
 
+//! the operand of an assignment whose value is given to the holder (see evalInternImpl()): an lvalue, as the
+//! expression of the assignment is, so that the holder takes a reference to the operand and copies nothing
+static const QoreValue qore_no_operand;
+
 template <bool Lexical, bool Weak>
 QORE_INTERN_ALWAYS_INLINE QoreValue QoreAssignmentOperatorNode::evalInternImpl(ExceptionSink* xsink,
         bool& needs_deref, AssignmentMode mode) const {
@@ -1000,7 +1015,10 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreAssignmentOperatorNode::evalInternImpl(E
     // assign the source meanwhile
     ValueHolder unique_source(xsink);
     bool source_read = false;
-    if (mode == AssignmentMode::Weak) {
+    // only the weak assignment operator makes a weak assignment (evalInternWeak(), evalLexicalWeak()): the code is not
+    // part of the other assignments
+    if constexpr (Weak) {
+        assert(mode == AssignmentMode::Weak);
         if (weakSourceMadeUnique()) {
             LValueHelper source(right, xsink, LValueHelper::WeakSourceAccess());
             if (*xsink) {
@@ -1009,21 +1027,29 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreAssignmentOperatorNode::evalInternImpl(E
             // a path that leads to no value (a missing key, an index beyond the end of a list, a step through NOTHING)
             // gives NOTHING, as an rvalue read of it does, without being evaluated again
             if (source) {
-                // a weak reference held by the source and a value of another type are left as they are; the operand
-                // evaluates a weak reference to its target
+                // a weak reference to a list or a hash held by the source and a value of another type are left as
+                // they are, and a weak reference to an object reads as its target (qore_weak_assignment_source())
                 if (source.getType() == NT_HASH || source.getType() == NT_LIST) {
                     source.ensureUnique();
                 }
-                unique_source = source.getReferencedValue();
+                // a list or a hash is held weakly while the target is resolved (qore#7405)
+                unique_source = qore_weak_assignment_source(source.getReferencedValue(), xsink);
             }
             source_read = true;
         }
     }
 
     // the operand is a statement of its own where the other execution modes evaluate it so
-    QoreMutationOperandHolder new_value(left, source_read ? *unique_source : right, true, xsink);
+    // the value read from the source is the operand as it is: it is not evaluated, which would read a weak reference
+    // to a container that the assignment holds of its source (qore#7405) as its container
+    QoreMutationOperandHolder new_value(left, (Weak && source_read) ? qore_no_operand : right, true, xsink);
     if (*xsink)
         return QoreValue();
+    if constexpr (Weak) {
+        if (source_read) {
+            new_value.setValue(unique_source.release(), true);
+        }
+    }
 
     if (broken_int) {
         // convert the value to an int unconditionally

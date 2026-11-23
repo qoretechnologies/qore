@@ -1248,6 +1248,12 @@ public:
     */
     DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, WeakSourceAccess);
 
+    //! Resolves the lvalue that a reference designates as the source of a weak assignment (see WeakSourceAccess)
+    /** For a local with IR storage that holds a reference (qore#7405): a missing element or key is no lvalue, and
+        nothing is created, as for the source given as an expression
+    */
+    DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, WeakSourceAccess);
+
     //! Resolves the path that navigatePath() is given as the source of a weak assignment (see WeakSourceAccess)
     DLLLOCAL void setWeakSourceResolution() {
         weak_source_resolution = true;
@@ -1870,6 +1876,9 @@ public:
             LexicalSemanticPolicy policy);
 
     DLLLOCAL QoreValue removeValue(bool for_del);
+
+    //! replaces a weak reference to a list or a hash given to a weak assignment with its container (qore#7405)
+    DLLLOCAL __attribute__((cold)) void lockWeakAssignmentSource(QoreValue& n);
     DLLLOCAL QoreValue remove(bool& static_assignment);
 
     DLLLOCAL void setDelta(int dt) {

@@ -1131,6 +1131,27 @@ DLLLOCAL QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* co
 */
 DLLLOCAL QoreValue qore_value_copy_on_write(QoreValue& v);
 
+//! Returns the value that a weak assignment holds of its source while it resolves its target (qore#7405)
+/** A list or a hash, which an lvalue holds, is held through a weak reference: a strong reference of the assignment's
+    own would make the container shared, so that a copy-on-write step of the target's path, which can pass through it
+    (h.w := h), copied it, and the weak reference assigned, as every weak reference to the containers below it, would
+    designate the original, which nothing holds.  The store locks the weak reference after the path is resolved (see
+    LValueHelper::assign()).  A weak reference to an object is returned as its target, as the source is read in the
+    other execution modes; any other value is returned as it is.
+
+    @param v the value read from the source, with a reference that the call takes over
+*/
+DLLLOCAL QoreValue qore_weak_assignment_source(QoreValue v, ExceptionSink* xsink);
+
+//! qore_weak_assignment_source() for the value that a local with IR storage holds, which the caller keeps
+/** The value returned has a reference of its own.  A weak reference to a list or a hash is given as it is; a
+    reference, which the local holds in its slot, is resolved, and the lvalue that it designates is read as the unique
+    step of the source reads a variable: a shared list or hash is made unique first (qore#5756, qore#7405).
+
+    @return the operand of the weak assignment; NOTHING if an exception was raised
+*/
+DLLLOCAL QoreValue qore_weak_assignment_source_borrowed(const QoreValue& v, ExceptionSink* xsink);
+
 #ifndef HAVE_ATOLL
 #ifdef HAVE_STRTOIMAX
 static inline long long atoll(const char* str) {

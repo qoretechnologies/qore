@@ -2567,6 +2567,13 @@ if (x || y)
     through a hash or a list that a weak reference designates and that no longer exists, raises an exception
     (\c OBJECT-ALREADY-DELETED, \c HASH-ERROR, \c LIST-ERROR), as an assignment to it does.  A slice and any other
     path (ex: a step of a value of no type, as in <tt>w := a.k</tt> with <tt>auto a</tt>) are read as before.\n<br>
+    The operator does not keep the hash or the list of such a variable or path alive while it resolves its lvalue: it
+    holds it through a weak reference until it assigns it.  An lvalue whose path passes through the source (ex:
+    <tt>h.w := h</tt>, <tt>h.a.b.w := h</tt>) is therefore changed in place: the weak reference designates the
+    container that the variable holds, and the weak references to the containers below it on the path (ex:
+    <tt>h.a.x := h.a.b</tt>) keep designating them.  If another thread releases the source meanwhile (ex: while a key
+    or an index of the lvalue is evaluated), the weak reference designates a freed hash or list, as described above, in
+    every @ref exec_mode_overview "execution mode".\n<br>
     The value of the operator is the value assigned, converted to the type of the lvalue, as a strong reference: a
     variable, a container or a call that is given it holds the value.  A temporary value assigned, as in
     <tt>w := new C()</tt>, and a copy that the type of the lvalue makes of a container (ex: a

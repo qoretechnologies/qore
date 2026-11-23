@@ -176,6 +176,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_incref", reinterpret_cast<void*>(&qore_rt_incref) },
     { "qore_rt_unique_container", reinterpret_cast<void*>(&qore_rt_unique_container) },
     { "qore_rt_unique_local_aot", reinterpret_cast<void*>(&qore_rt_unique_local_aot) },
+    { "qore_rt_weak_assignment_source", reinterpret_cast<void*>(&qore_rt_weak_assignment_source) },
+    { "qore_rt_weak_assignment_source_local_aot",
+        reinterpret_cast<void*>(&qore_rt_weak_assignment_source_local_aot) },
     { "qore_rt_decref", reinterpret_cast<void*>(&qore_rt_decref) },
     { "qore_rt_decref_nothrow", reinterpret_cast<void*>(&qore_rt_decref_nothrow) },
     { "qore_rt_throw", reinterpret_cast<void*>(&qore_rt_throw) },
@@ -1128,6 +1131,10 @@ extern "C" DLLEXPORT int64_t qore_rt_is_null_or_nothing(uint64_t val) {
 }
 
 // --- Refcount helpers ---
+
+extern "C" DLLEXPORT uint64_t qore_rt_weak_assignment_source(uint64_t val, ExceptionSink* xsink) {
+    return toBits(qore_weak_assignment_source_borrowed(fromBits(val), xsink));
+}
 
 extern "C" DLLEXPORT uint64_t qore_rt_unique_container(uint64_t val) {
     bool copied = false;
@@ -16615,6 +16622,30 @@ extern "C" DLLEXPORT void qore_rt_unique_local_aot(QoreAOTContext* ctx, int32_t 
     }
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_weak_assignment_source_local_aot(QoreAOTContext* ctx, int32_t idx,
+        ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    LocalVar* var = ctx->locals[idx];
+    // the step of an AOT body local: the lowering gives the step of a closure variable a path of its own
+    assert(!var || !var->closureUse());
+    LocalVarValue* lvar = var ? thread_try_find_lvar(var) : nullptr;
+    if (!lvar) {
+        return toBits(QoreValue());
+    }
+    switch (lvar->val.getType()) {
+        case NT_HASH:
+        case NT_LIST:
+        case NT_WEAKREF:
+        case NT_WEAKREF_HASH:
+        case NT_WEAKREF_LIST:
+        case NT_REFERENCE:
+            // a node: QoreLValue::getValue() returns the value held, without a new node (qore#6094)
+            return toBits(qore_weak_assignment_source_borrowed(lvar->val.getValue(), xsink));
+        default:
+            return toBits(lvar->val.getReferencedValue());
+    }
+}
+
 extern "C" DLLEXPORT void qore_rt_clear_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     qore_rt_clear_local(ctx->locals[idx], xsink);
@@ -19011,21 +19042,20 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     lvh.ensureUnique();
                 }
                 // the value of the variable as it is read, taken under the lock of the variable (qore#5847); a weak
-                // reference that the variable holds reads as its target
+                // reference to an object that the variable holds reads as its target; a list or a hash is held weakly
+                // while the target is resolved, and a weak reference to one is kept as it is: the store locks it
+                // (qore#7405)
                 res = lvh.getReferencedValue();
                 switch (res.getType()) {
-                    case NT_WEAKREF:
-                    case NT_WEAKREF_HASH:
-                    case NT_WEAKREF_LIST: {
+                    case NT_WEAKREF: {
                         ValueHolder weak_holder(res, xsink);
-                        // a list or hash is read with a new reference, or as a new empty one if it was freed (qore#7198)
-                        res = res.getType() == NT_WEAKREF
-                            ? QoreValue(weak_holder->get<const WeakReferenceNode>()->get()).refSelf()
-                            : res.getType() == NT_WEAKREF_HASH
-                            ? QoreValue(weak_holder->get<const WeakHashReferenceNode>()->lock())
-                            : QoreValue(weak_holder->get<const WeakListReferenceNode>()->lock());
+                        res = QoreValue(weak_holder->get<const WeakReferenceNode>()->get()).refSelf();
                         break;
                     }
+                    case NT_HASH:
+                    case NT_LIST:
+                        res = qore_weak_assignment_source(res, xsink);
+                        break;
                     default:
                         break;
                 }

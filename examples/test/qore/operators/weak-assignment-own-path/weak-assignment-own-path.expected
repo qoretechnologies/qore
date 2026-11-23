@@ -1,0 +1,19 @@
+root: ["w", "k"]
+inner: ["b", "w", "k"]
+holder: ["b", "w", "k"]
+list: 3 3
+x after the assignment: 1
+x after a store: ["k", "w", "k2"]
+up and down: ["k", "w", "k2", "o"]
+shared: ["a", "w", "k"] other: ["a"]
+local untyped: ["w", "k"]
+local typed: ["k", "w", "k2"] ["a"]
+member: ["w", "k"]
+uncaptured untyped: ["w", "k"]
+uncaptured cascade: ["k", "w", "k2"]
+reference source: ["a", "b"]
+reference source after the variable changed: {}
+reference to a missing key: [] null
+weak object source: True
+global: ["w", "k"]
+closure: ["w", "k"]

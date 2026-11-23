@@ -849,6 +849,21 @@ LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool 
     }
 }
 
+LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, WeakSourceAccess)
+        : vl(xsink), weak_source_resolution(true) {
+    startRemovalPath();
+    try {
+        RuntimeReferenceHelper rh(ref, xsink);
+        if (!*xsink && !doLValue(lvalue_ref::get(&ref)->vexp, true)) {
+            // see LValueHelper(const ReferenceNode&, ExceptionSink*, bool, bool)
+            adoptReferenceProgram(rh.takeProgramEntry());
+        }
+    } catch (...) {
+        ref_pgms.release(nullptr);
+        throw;
+    }
+}
+
 LValueHelper::LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
@@ -3760,6 +3775,51 @@ int LValueHelper::assignNative(QoreValue n, const char* desc) {
     return assignImpl<false, true>(n, desc, true, AssignmentMode::Normal, {});
 }
 
+QoreValue qore_weak_assignment_source_borrowed(const QoreValue& v, ExceptionSink* xsink) {
+    switch (v.getType()) {
+        // a weak reference changes only the container's weak count, not its value
+        case NT_HASH:
+            return new WeakHashReferenceNode(
+                static_cast<QoreHashNode*>(const_cast<AbstractQoreNode*>(v.getInternalNode())));
+        case NT_LIST:
+            return new WeakListReferenceNode(
+                static_cast<QoreListNode*>(const_cast<AbstractQoreNode*>(v.getInternalNode())));
+        case NT_WEAKREF:
+            return QoreValue(v.get<const WeakReferenceNode>()->get()).refSelf();
+        case NT_REFERENCE: {
+            // the lvalue that the reference designates is the source, read under its lock as the source given as an
+            // expression is: a missing element or key is no lvalue, and nothing is created
+            LValueHelper source(*v.get<const ReferenceNode>(), xsink, LValueHelper::WeakSourceAccess());
+            if (!source) {
+                return QoreValue();
+            }
+            if (source.getType() == NT_HASH || source.getType() == NT_LIST) {
+                source.ensureUnique();
+            }
+            return qore_weak_assignment_source(source.getReferencedValue(), xsink);
+        }
+        default:
+            return v.refSelf();
+    }
+}
+
+void LValueHelper::lockWeakAssignmentSource(QoreValue& n) {
+    QoreValue target;
+    switch (n.getType()) {
+        case NT_WEAKREF_HASH:
+            target = n.get<const WeakHashReferenceNode>()->lock();
+            break;
+        case NT_WEAKREF_LIST:
+            target = n.get<const WeakListReferenceNode>()->lock();
+            break;
+        default:
+            return;
+    }
+    // the weak reference is released with the helper's temporaries, after the lvalue is unlocked
+    saveTemp(n);
+    n = target;
+}
+
 template <bool Lexical, bool Native>
 int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, AssignmentMode mode,
         LexicalSemanticPolicy policy) {
@@ -3767,6 +3827,12 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
     assert(!*vl.xsink);
     if (n.hasNode() && n.getInternalNode() == &Nothing) {
         n.set(static_cast<AbstractQoreNode*>(nullptr));
+    }
+    // the source of a weak assignment, held weakly while the path was resolved (qore#7405), is assigned as its
+    // container, which the lvalue's type checks as it checks any other value, or as a new empty one that cannot be
+    // changed if another thread released it meanwhile (qore#7163)
+    if (mode == AssignmentMode::Weak) [[unlikely]] {
+        lockWeakAssignmentSource(n);
     }
 
     //printd(5, "LValueHelper::assign() this: %p '%s' ti: %p '%s' check_types: %d n: '%s' (%d) val: %p qv: %p\n",
