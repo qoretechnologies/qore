@@ -123,6 +123,9 @@ public class HttpClientStreamHandle {
         #! Logger
         *LoggerInterface logger;
 
+        #! Called once when a request has been submitted on the stream (see setSubmittedCallback())
+        *code<nothing()> submitted_callback;
+
         #! True if a pending stream reservation is held on the connection
         bool reservation_held = False;
 
@@ -579,9 +582,43 @@ public class HttpClientStreamHandle {
         @return @ref True if the stream was cancelled while its request was submitted
     */
     private bool recordSubmittedStream(int sid) {
+        bool cancelled;
+        *code<nothing()> cb;
+        {
+            AutoLock al(lock);
+            stream_id = sid;
+            cancelled = state == HttpClientStreamState::Cancelled;
+            cb = remove submitted_callback;
+        }
+        # the request is on a connection that is established (qore#7274); the callback runs outside the lock
+        if (cb && !cancelled) {
+            try {
+                cb();
+            } catch (hash<ExceptionInfo> ex) {
+                if (logger) {
+                    logger.error("the callback of a submitted request raised an exception: %s: %s", ex.err, ex.desc);
+                }
+            }
+        }
+        return cancelled;
+    }
+
+    #! Sets the code that is called once when a request has been submitted on the stream
+    /** A request can be submitted only on a connection that is established (connected, and with the TLS handshake
+        made for HTTPS), so the call tells that a connection of the stream's connection manager was made
+        successfully; it does not tell whether the request succeeds.  The code is called once, in the thread that
+        submitted the request, outside of any lock of the stream; an exception that it raises is logged and ignored.
+        It is not called for a request that was cancelled while it was submitted.
+
+        @param cb the code to call, or @ref nothing to remove it
+
+        @note Internal API: used by @ref HttpClientConnectionManager::setFirstConnectionCallback()
+
+        @since HttpClientIo 1.0
+    */
+    setSubmittedCallback(*code<nothing()> cb) {
         AutoLock al(lock);
-        stream_id = sid;
-        return state == HttpClientStreamState::Cancelled;
+        submitted_callback = cb;
     }
 
     #! Ends a submission started on this stream

@@ -142,10 +142,12 @@
     <a href="https://github.com/qoretechnologies/qore/issues/6798">issue 6798</a>).
 
     @par A Connection That Was Never Checked Is Not Up
-    A connection is not up until a successful ping or connection proves it up: one that was never checked reports
-    \c up @ref False with the status \c "not checked", and a REST connection's ping without \c ping_method connects
-    to the server (see @ref ConnectionProvider::AbstractConnection::up "AbstractConnection::up";
-    <a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>).
+    A connection is not up until a successful ping or connection (also the first connection of its async HTTP or
+    REST client) proves it up: one that was never checked reports \c up @ref False with the status \c "not checked",
+    and a REST connection's ping without \c ping_method connects to the server (see
+    @ref ConnectionProvider::AbstractConnection::up "AbstractConnection::up";
+    <a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>,
+    <a href="https://github.com/qoretechnologies/qore/issues/7274">issue 7274</a>).
 
     @par A Private Override Hides Its Parent Class's Method from Calls Resolved When Parsing
     Code outside a class hierarchy can no longer call a parent class's method that the class overrides with a

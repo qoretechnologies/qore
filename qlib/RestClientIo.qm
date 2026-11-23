@@ -1604,6 +1604,25 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             return mgr;
         }
 
+        #! Sets the code that is called once, when the first request is submitted on a connection of the client
+        /** See @ref HttpClientIo::HttpClientConnectionManager::setFirstConnectionCallback(); the code is set on the
+            connection manager that the client created, and not on a shared connection manager given to it, whose
+            connections are also those of other clients.
+
+            @param cb the code to call, or @ref nothing to remove the code set before
+
+            @return @ref True if the code was set, @ref False if the client uses a shared connection manager
+
+            @since RestClientIo 1.0
+        */
+        bool setFirstConnectionCallback(*code<nothing()> cb) {
+            if (!owns_mgr) {
+                return False;
+            }
+            mgr.setFirstConnectionCallback(cb);
+            return True;
+        }
+
         #! Starts a persistent (connection-scoped) session that pins one connection
         /** Leases an exclusive connection from the pool and returns a
             @ref RestClientIo::RestPersistentSession handle.  Requests run inside

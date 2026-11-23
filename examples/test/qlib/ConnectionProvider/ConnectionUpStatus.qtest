@@ -27,7 +27,8 @@
     up False with the status "not checked" and no last_check value; a successful ping or a connection made with
     get() marks it up (issue #4789: a connection that was used is up without monitoring), and a failed
     ping marks it down, also when the ping throws its error; an object acquired without connecting or an async object,
-    which connects on demand, proves nothing.  A connection restored by deserialization or copied keeps
+    which connects on demand, proves nothing until the async client has made its first connection, which marks the
+    connection up as get() does (issue #7274).  A connection restored by deserialization or copied keeps
     its state.  Checked with a test connection class and with REST, HTTP, WebSocket, SSE and SQLite connections.
 */
 
@@ -43,6 +44,8 @@
 %requires HttpServerUtil
 %requires HttpServer
 %requires RestClient
+%requires RestClientIo
+%requires HttpClientIo
 %requires WebSocketUtil
 %requires WebSocketHandler
 %requires WebSocketClient
@@ -152,9 +155,12 @@ class ResultMonitor inherits PollingConnectionMonitor {
     }
 }
 
-#! answers every request with 200 OK
+#! answers every request with 200 OK, except the paths starting with /err, which get 500
 class OkHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path =~ /^\/?err/) {
+            return makeResponse(500, "ERROR", {"Content-Type": MimeTypeText});
+        }
         return makeResponse(200, "OK", {"Content-Type": MimeTypeText});
     }
 }
@@ -243,6 +249,7 @@ public class ConnectionUpStatusTest inherits QUnit::Test {
         addTestCase("unauthorized REST connection", \unauthorizedRestTest());
         addTestCase("lent REST connection pinged by restricted code", \lentRestTest());
         addTestCase("HTTP connection", \httpTest());
+        addTestCase("first connection of an async client", \asyncFirstConnectionTest());
         addTestCase("WebSocket connection", \webSocketTest());
         addTestCase("SSE connection", \sseTest());
         addTestCase("SQLite connection", \sqliteTest());
@@ -777,5 +784,71 @@ string sub own_ping(string url) {
         assertNeverChecked(conn, "bad path");
         assertFalse(conn.ping().ok);
         assertDown(conn, ".+", "ping() of a database that cannot be opened");
+    }
+
+    #! the first connection of an async HTTP or REST client marks its connection up, as get() does (issue #7274)
+    asyncFirstConnectionTest() {
+        string rest_url = "rest://127.0.0.1:" + rest_port;
+        string http_url = "http://127.0.0.1:" + rest_port;
+
+        # REST: the async client connects on demand; its first request marks the connection up
+        RestConnection rconn("rest", "test", rest_url, {"monitor": False});
+        RestClientIo rest = rconn.getAsync();
+        assertNeverChecked(rconn, "REST getAsync()");
+        date start = now_us();
+        assertEq("OK", rest.restGet("/x").body);
+        assertUp(rconn, start, "REST first request");
+
+        # REST, a client acquired without connecting
+        rconn = new RestConnection("rest", "test", rest_url, {"monitor": False});
+        rest = rconn.getAsync(False);
+        assertNeverChecked(rconn, "REST getAsync(False)");
+        start = now_us();
+        rest.restGet("/x");
+        assertUp(rconn, start, "REST getAsync(False) first request");
+
+        # HTTP: the async client is a connection manager
+        HttpConnection hconn("http", "test", http_url, {"monitor": False});
+        HttpClientConnectionManager mgr = hconn.getAsync();
+        assertNeverChecked(hconn, "HTTP getAsync()");
+        start = now_us();
+        assertEq(200, mgr.request(http_url, "GET", "/x").status_code);
+        assertUp(hconn, start, "HTTP first request");
+
+        # the connection was made: a request that the server answers with an error status marks it up too; the
+        # status of the response is the business of a ping with a ping request
+        hconn = new HttpConnection("http", "test", http_url, {"monitor": False});
+        mgr = hconn.getAsync();
+        start = now_us();
+        assertEq(500, mgr.request(http_url, "GET", "/err").status_code);
+        assertUp(hconn, start, "HTTP first request answered with 500");
+
+        # a client that cannot connect changes nothing
+        string closed_url = "http://127.0.0.1:" + closed_port;
+        hconn = new HttpConnection("http", "test", closed_url, {"monitor": False});
+        mgr = hconn.getAsync();
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \mgr.request(), (closed_url, "GET", "/x"));
+        assertNeverChecked(hconn, "HTTP request to a closed port");
+        rconn = new RestConnection("rest", "test", "rest://127.0.0.1:" + closed_port, {"monitor": False});
+        rest = rconn.getAsync();
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \rest.restGet(), "/x");
+        assertNeverChecked(rconn, "REST request to a closed port");
+
+        # issue #4852: a connection that a ping found down stays down; only a ping brings it up
+        hconn = new HttpConnection("http", "test", http_url, {"monitor": False});
+        hconn.handlePingFailed(0s, "TEST-ERROR: down");
+        mgr = hconn.getAsync();
+        assertEq(200, mgr.request(http_url, "GET", "/x").status_code);
+        assertDown(hconn, "TEST-ERROR", "first request after a failed ping");
+
+        # the first connection only: later requests do not change the state again
+        hconn = new HttpConnection("http", "test", http_url, {"monitor": False});
+        mgr = hconn.getAsync();
+        mgr.request(http_url, "GET", "/x");
+        date first_check = hconn.last_check;
+        hconn.handlePingFailed(0s, "TEST-ERROR: down later");
+        mgr.request(http_url, "GET", "/x");
+        assertDown(hconn, "TEST-ERROR: down later", "a later request");
+        assertTrue(hconn.last_check >= first_check, "last_check");
     }
 }
