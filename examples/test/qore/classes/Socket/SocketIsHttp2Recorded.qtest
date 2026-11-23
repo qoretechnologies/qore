@@ -1,0 +1,127 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - TLS handshakes with ALPN on loopback sockets
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Socket::isHttp2() answers from the result of the ALPN negotiation recorded when the TLS handshake completed
+# (qore#7223): the negotiated protocol does not change after the handshake, so the call neither queries the TLS state
+# with a poll operation through the async I/O controller on each call (about 80,000 instructions) nor reports False
+# when that query cannot be made.  Checked on the client and on the server's accepted socket, for "h2", "http/1.1",
+# a TLS connection without ALPN, a plain connection and a socket that is not connected; the polls are counted with a
+# debug hook (dbg_is_http2_poll_count()).
+
+%modern
+
+%requires ../../../TestCertificates.qm
+%requires QUnit
+
+%exec-class SocketIsHttp2RecordedTest
+
+#! a hang guard only
+const Timeout = 20s;
+
+#! the calls made in each case
+const Calls = 100;
+
+class SocketIsHttp2RecordedTest inherits QUnit::Test {
+    constructor() : QUnit::Test("SocketIsHttp2Recorded", "1.0") {
+        addTestCase("h2: the client and the server's socket answer from the recorded negotiation", \testAlpn(),
+            (("h2", "http/1.1"), ("h2", "http/1.1"), True));
+        addTestCase("http/1.1 negotiated", \testAlpn(), (("h2", "http/1.1"), ("http/1.1",), False));
+        addTestCase("TLS without ALPN", \testAlpn(), (NOTHING, NOTHING, False));
+        addTestCase("plain connection and an unconnected socket", \testPlain());
+        set_return_value(main());
+    }
+
+    setUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the library is not built with debugging");
+        }
+    }
+
+    #! calls isHttp2() Calls times; returns the result of the calls and the polls that they made
+    static hash<auto> measure(Socket s) {
+        call_function("dbg_is_http2_poll_count", True);
+        bool rv = s.isHttp2();
+        for (int i = 1; i < Calls; ++i) {
+            if (s.isHttp2() != rv) {
+                throw "TEST-ERROR", "isHttp2() changed its answer";
+            }
+        }
+        return {"result": rv, "polls": call_function("dbg_is_http2_poll_count", True)};
+    }
+
+    testAlpn(*list<string> server_protos, *list<string> client_protos, bool h2) {
+        Queue port_q();
+        Queue server_q();
+        # the client measures first, then the server: the poll count is the process's
+        Counter client_done(1);
+        Counter server_done(1);
+        background sub () {
+            on_exit server_done.dec();
+            try {
+                Socket server();
+                server.bind("127.0.0.1:0");
+                server.listen();
+                server.setCertificate(new SSLCertificate(TestCertificates::CertPem));
+                server.setPrivateKey(new SSLPrivateKey(TestCertificates::KeyPem));
+                if (server_protos) {
+                    server.setAlpnProtocols(server_protos);
+                }
+                port_q.push(server.getSocketInfo().port);
+                Socket peer = server.acceptSSL(Timeout);
+                on_exit peer.close();
+                client_done.waitForZero(Timeout);
+                server_q.push(SocketIsHttp2RecordedTest::measure(peer));
+            } catch (hash<ExceptionInfo> ex) {
+                port_q.push(ex);
+                server_q.push(ex);
+            }
+        }();
+        auto port = port_q.get(Timeout);
+        if (port.typeCode() == NT_HASH) {
+            fail(sprintf("server: %s: %s", port.err, port.desc));
+        }
+        Socket client();
+        on_exit client.close();
+        if (client_protos) {
+            client.setAlpnProtocols(client_protos);
+        }
+        client.connectSSL("127.0.0.1:" + port, Timeout);
+        hash<auto> c = measure(client);
+        client_done.dec();
+        auto s = server_q.get(Timeout);
+        server_done.waitForZero(Timeout);
+        if (s.err) {
+            fail(sprintf("server: %s: %s", s.err, s.desc));
+        }
+
+        assertEq(h2, c.result, "the client's answer");
+        assertEq(0, c.polls, "the client's calls make no poll operation");
+        assertEq(h2, s.result, "the server's answer");
+        assertEq(0, s.polls, "the server's calls make no poll operation");
+        assertEq(h2 ? "h2" : (client_protos && server_protos ? "http/1.1" : NOTHING), client.getAlpnProtocol(),
+            "the negotiated protocol");
+    }
+
+    testPlain() {
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+        Socket client();
+        on_exit client.close();
+        client.connect("127.0.0.1:" + port, Timeout);
+        Socket peer = server.accept(Timeout);
+        on_exit peer.close();
+        hash<auto> c = measure(client);
+        assertFalse(c.result, "a plain connection is not HTTP/2 negotiated with ALPN");
+        assertEq(0, c.polls, "the calls make no poll operation");
+
+        Socket unconnected();
+        c = measure(unconnected);
+        assertFalse(c.result, "an unconnected socket");
+        assertEq(0, c.polls, "the calls make no poll operation");
+    }
+}

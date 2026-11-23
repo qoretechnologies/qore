@@ -200,7 +200,10 @@ nothing getDBIDriverCapabilities() [flags=NOOP,DEPRECATED] {
         valid in its encoding, or has a control or bidirectional formatting character, a separator of a datasource \
         string (\c "@", \c "%", \c "{", \c "}", \c "(", \c ")"), or \c "=", \c ";" or \c "://", as a database \
         name can be a connection string of its own with credentials (a PostgreSQL conninfo string or URI, an ODBC \
-        string); a database name that is shown is given in UTF-8
+        string); the database name of a loaded driver that declares \
+        @ref Qore::SQL::DBI_CAP_SENSITIVE_DBNAME "DBI_CAP_SENSITIVE_DBNAME" (its database name can hold \
+        credentials) is always masked (the capability of a driver that is not loaded is not known, and the driver is \
+        never loaded to mask a datasource); a database name that is shown is given in UTF-8
     |\c show_options|\c bool|the character encoding and the names of the options are shown; the value of an \
         option is shown only under the rule below; every other option value is masked as \c "****"
 

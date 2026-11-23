@@ -37,6 +37,7 @@
 #include "qore/intern/QoreStatementTemps.h"
 #include <qore/QoreSandboxManager.h>
 #include <openssl/err.h>
+#include <openssl/rand.h>
 #include <limits>
 
 #ifdef __linux__
@@ -107,6 +108,7 @@
 #include <mutex>
 #include <cerrno>
 #include <map>
+#include <random>
 
 // syscall() and __NR_membarrier come from the Linux includes above
 #if defined(__linux__) && __has_include(<linux/membarrier.h>)
@@ -1027,8 +1029,12 @@ public:
         //! after it is the Program that created the capability, whose sandbox governs the build, also when it was
         //! already current when the barrier was set (its code called the capability), so it is never hidden
         bool build = false;
-        //! the Program of the library module initialized under the barrier, once it exists, or nullptr; never set
-        //! for a lift or for the barrier of a deferred initialization (see qore_module_init_set_program())
+        //! the Program of the library module initialized under the barrier, once it exists, or nullptr: the first
+        //! library Program created under it (a module loaded from source or the load of a qcc-compiled module), the
+        //! module's own Program on the barrier under which a qcc-compiled module is initialized when it is first
+        //! applied to a Program (qore#7335), or the Program of the closure that a deferred initialization runs
+        //! (call_module_init_closure()); never set for a lift or for the barrier of a trusted build (see
+        //! qore_module_init_set_program())
         const QoreProgram* module_pgm = nullptr;
         //! for the barrier of a trusted build: the Program that created the capability, whose restrictions apply to
         //! the code of the build as those of its calling code, also when its own code called the capability (no
@@ -5973,6 +5979,51 @@ std::atomic<bool> module_cleanup_timeout_set{false};
 std::atomic<int64> module_cleanup_start_us{-1};
 //! true once the module cleanup has reached its deadline and canceled the work that it waited for
 std::atomic<bool> module_cleanup_deadline_reached{false};
+//! the time that the module cleanup waits after its deadline for the handles of work handed over to another thread
+//! (qore_module_cleanup_hold_work()), in milliseconds, or -1 for the default (qore#7239)
+std::atomic<int64> module_cleanup_handover_grace_ms{-1};
+//! true once qore_set_module_cleanup_handover_grace() has set it, which the environment variable then does not
+std::atomic<bool> module_cleanup_handover_grace_set{false};
+//! true once the module cleanup has stopped waiting for handles that were not released in time: the modules and
+//! their Programs are left as they are, as the threads that hold the handles can still run in them (qore#7239)
+std::atomic<bool> module_cleanup_abandoned{false};
+}
+
+//! the work of the module cleanup that the current thread runs and that the cleanup counts: the owner of the
+//! dispatcher item, if any (see QoreModuleCleanupCountedWorkScope)
+thread_local const std::string* qore_module_cleanup_counted_owner = nullptr;
+//! true while the current thread runs a dispatcher item that the module cleanup counts
+thread_local bool qore_module_cleanup_counted_item_running = false;
+
+int qore_set_module_cleanup_handover_grace(int64 grace_ms) {
+    if (grace_ms < 0) {
+        return -1;
+    }
+    module_cleanup_handover_grace_ms.store(grace_ms, std::memory_order_relaxed);
+    module_cleanup_handover_grace_set.store(true, std::memory_order_relaxed);
+    return 0;
+}
+
+int64 qore_get_module_cleanup_handover_grace() {
+    int64 grace = module_cleanup_handover_grace_ms.load(std::memory_order_relaxed);
+    if (grace >= 0) {
+        return grace;
+    }
+    int64 timeout = qore_get_module_cleanup_timeout();
+    return timeout > QORE_DEFAULT_MODULE_CLEANUP_HANDOVER_GRACE_MS ? timeout
+        : QORE_DEFAULT_MODULE_CLEANUP_HANDOVER_GRACE_MS;
+}
+
+bool qore_module_cleanup_abandoned() {
+    return module_cleanup_abandoned.load(std::memory_order_acquire);
+}
+
+bool qore_cleanup_left_library() {
+    return qore_module_cleanup_abandoned();
+}
+
+bool qore_module_cleanup_counted_work_running() {
+    return qore_module_cleanup_counted_item_running || qore_module_cleanup_task_running;
 }
 
 int qore_set_module_cleanup_timeout(int64 timeout_ms) {
@@ -6009,6 +6060,27 @@ void qore_init_module_cleanup_timeout() {
     module_cleanup_timeout_ms.store(v, std::memory_order_relaxed);
 }
 
+void qore_init_module_cleanup_handover_grace() {
+    if (module_cleanup_handover_grace_set.load(std::memory_order_relaxed)) {
+        return;
+    }
+    const char* env = getenv("QORE_MODULE_CLEANUP_HANDOVER_GRACE");
+    if (!env) {
+        return;
+    }
+    // a non-negative decimal integer of milliseconds, nothing else
+    char* end = nullptr;
+    errno = 0;
+    long long v = *env >= '0' && *env <= '9' ? strtoll(env, &end, 10) : -1;
+    if (v < 0 || errno || !end || *end) {
+        fprintf(stderr, "error: QORE_MODULE_CLEANUP_HANDOVER_GRACE='%s' is not valid: expecting a non-negative integer "
+            "number of milliseconds; the default is used\n", env);
+        fflush(stderr);
+        return;
+    }
+    module_cleanup_handover_grace_ms.store(v, std::memory_order_relaxed);
+}
+
 bool qore_module_cleanup_deadline_passed() {
     return module_cleanup_deadline_reached.load(std::memory_order_acquire);
 }
@@ -6041,6 +6113,7 @@ struct QoreModuleCleanupWork : public QoreForkHandler {
         // in the child, so the condition is initialized again
         qore_condition_ops(&cond).reinitAfterFork();
         count = 0;
+        handles.clear();
         forked = true;
 #ifdef DEBUG
         dbg_held = false;
@@ -6053,8 +6126,11 @@ struct QoreModuleCleanupWork : public QoreForkHandler {
     //! true in a child process created with fork(): work that the forking thread held when the count was reset can
     //! end in it, which is not counted
     bool forked = false;
-    //! the number of pieces of work counted (see QoreModuleCleanupWorkFlag)
+    //! the number of pieces of work counted (see QoreModuleCleanupWorkFlag), including the handles below
     size_t count = 0;
+    //! the handles of counted work handed over to another thread that are still held, with who took them and where
+    //! (qore_module_cleanup_hold_work(), qore#7239); each one is counted in @ref count
+    std::map<int64, std::string> handles;
 #ifdef DEBUG
     //! true if the dbg_async_io_hold_module_cleanup_work() test hook has held work that the cleanup must release
     bool dbg_held = false;
@@ -6087,6 +6163,151 @@ void qore_module_cleanup_work_end() {
     }
 }
 
+bool qore_module_cleanup_handle_held(int64 id) {
+    if (id <= 0) {
+        return false;
+    }
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    AutoLocker al(work.lock);
+    return work.handles.find(id) != work.handles.end();
+}
+
+size_t qore_module_cleanup_handle_count() {
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    AutoLocker al(work.lock);
+    return work.handles.size();
+}
+
+#ifdef DEBUG
+bool qore_dbg_module_cleanup_wait_handles(size_t count, const char* where, int64 timeout_ms) {
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    int64 deadline_us = q_clock_getmicros_monotonic() + timeout_ms * 1000;
+    AutoLocker al(work.lock);
+    // every change of the state is broadcast on the condition (see qore_module_cleanup_hold_work())
+    while (true) {
+        size_t n = 0;
+        for (auto& i : work.handles) {
+            if (!where || i.second.find(where) != std::string::npos) {
+                ++n;
+            }
+        }
+        if (n >= count) {
+            break;
+        }
+        int64 remaining_us = deadline_us - q_clock_getmicros_monotonic();
+        if (remaining_us <= 0) {
+            return false;
+        }
+        work.cond.wait2(work.lock, (remaining_us + 999) / 1000);
+    }
+    return true;
+}
+#endif
+
+//! Returns a new random handle id (positive or 0) for qore_module_cleanup_hold_work(); called without the lock
+/** The id comes from the cryptographically secure generator of OpenSSL, so that code cannot predict the handles of
+    other work from the handles that it takes itself; if that generator fails, from a Mersenne Twister of the thread
+    seeded from the random device, or, if that throws, from the clock
+*/
+static int64 qore_module_cleanup_new_handle_id() {
+    uint64_t v = 0;
+    if (RAND_bytes(reinterpret_cast<unsigned char*>(&v), sizeof v) != 1) {
+        ERR_clear_error();
+        thread_local std::unique_ptr<std::mt19937_64> fallback_rng;
+        if (!fallback_rng) {
+            uint64_t seed;
+            try {
+                std::random_device rd;
+                seed = (static_cast<uint64_t>(rd()) << 32) ^ rd();
+            } catch (std::exception&) {
+                seed = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count())
+                    ^ reinterpret_cast<uintptr_t>(&v);
+            }
+            fallback_rng.reset(new std::mt19937_64(seed));
+        }
+        v = (*fallback_rng)();
+    }
+    return static_cast<int64>(v & 0x7fffffffffffffffull);
+}
+
+int64 qore_module_cleanup_hold_work(const std::string& where) {
+    // only the work that the cleanup counts can hand it over, so that a handle cannot keep the cleanup waiting for
+    // work that it does not wait for in the first place
+    if (!qore_module_cleanup_counted_work_running()) {
+        return 0;
+    }
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    try {
+        // a random handle that other code cannot guess, so that it cannot release a handle of other work or run code
+        // as work of the cleanup with it (see runModuleCleanupWork()); drawn without the lock, which is a leaf lock
+        int64 id = qore_module_cleanup_new_handle_id();
+        SafeLocker sl(work.lock);
+        // checked under the lock, which the cleanup holds when it drops the handles
+        if (qore_module_cleanup_abandoned()) {
+            return 0;
+        }
+        // a collision (or 0), which is very unlikely, is drawn again, also without the lock
+        while (!id || work.handles.find(id) != work.handles.end()) {
+            sl.unlock();
+            id = qore_module_cleanup_new_handle_id();
+            sl.lock();
+            if (qore_module_cleanup_abandoned()) {
+                return 0;
+            }
+        }
+        work.handles.emplace(id, where);
+        ++work.count;
+        // a cleanup that waits without a time limit for the other work waits for the handles until the end of the
+        // grace period from now on
+        work.cond.broadcast();
+        return id;
+    } catch (std::bad_alloc&) {
+        // without memory, the work is not handed over: the cleanup does not wait for it, as before
+        return 0;
+    }
+}
+
+bool qore_module_cleanup_release_work(int64 id) {
+    if (id <= 0) {
+        return false;
+    }
+    QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
+    AutoLocker al(work.lock);
+    // a handle released before, or that the cleanup no longer counts once it stopped waiting for it
+    std::map<int64, std::string>::iterator i = work.handles.find(id);
+    if (i == work.handles.end()) {
+        return false;
+    }
+    work.handles.erase(i);
+    assert(work.count);
+    if (!--work.count) {
+        work.cond.broadcast();
+    }
+    return true;
+}
+
+//! stops counting the handles that are still held; returns their descriptions; called with the lock held
+static std::vector<std::string> qore_module_cleanup_drop_handles(QoreModuleCleanupWork& work) {
+    std::vector<std::string> names;
+    try {
+        names.reserve(work.handles.size());
+        for (auto& i : work.handles) {
+            names.push_back(i.second);
+        }
+    } catch (std::bad_alloc&) {
+        // the handles are dropped anyway; the warning then names fewer of them
+    }
+    assert(work.count >= work.handles.size());
+    work.count -= work.handles.size();
+    work.handles.clear();
+    // the threads that hold them can still run in the Programs of the modules: those are left as they are
+    module_cleanup_abandoned.store(true, std::memory_order_release);
+    if (!work.count) {
+        work.cond.broadcast();
+    }
+    return names;
+}
+
 #ifdef DEBUG
 void qore_dbg_module_cleanup_work_held() {
     QoreModuleCleanupWork& work = QoreModuleCleanupWork::get();
@@ -6107,7 +6328,9 @@ static size_t qore_module_cleanup_work_count() {
 /** With \a deadline_us >= 0 (a time of q_clock_getmicros_monotonic()), the wait ends at that time: returns true if it
     ended there with work still counted
 */
-static bool qore_module_cleanup_wait_work(bool after_cancel, int64 deadline_us) {
+static void qore_module_cleanup_report_dropped_handles(const std::vector<std::string>& names);
+
+static bool qore_module_cleanup_wait_work(bool after_cancel, int64 deadline_us, int64 handle_deadline_us) {
 #ifdef DEBUG
     if (after_cancel) {
         qore_dbg_module_cleanup_drain_point(QDMCDP_WAIT_AFTER_CANCEL);
@@ -6134,6 +6357,21 @@ static bool qore_module_cleanup_wait_work(bool after_cancel, int64 deadline_us) 
             return false;
         }
         if (deadline_us < 0) {
+            // after the deadline: the work handed over to other threads is waited for until the end of the grace
+            // period (qore_get_module_cleanup_handover_grace()); then the handles that are still held are no longer
+            // waited for, and the modules are left as they are; the other work is waited for as before (qore#7239)
+            if (!work.handles.empty()) {
+                int64 remaining_us = handle_deadline_us - q_clock_getmicros_monotonic();
+                if (remaining_us <= 0) {
+                    std::vector<std::string> names = qore_module_cleanup_drop_handles(work);
+                    sl.unlock();
+                    qore_module_cleanup_report_dropped_handles(names);
+                    sl.lock();
+                    continue;
+                }
+                work.cond.wait2(work.lock, (remaining_us + 999) / 1000);
+                continue;
+            }
             work.cond.wait(work.lock);
             continue;
         }
@@ -6144,6 +6382,33 @@ static bool qore_module_cleanup_wait_work(bool after_cancel, int64 deadline_us) 
         // rounded up, so that the wait does not end before the deadline
         work.cond.wait2(work.lock, (remaining_us + 999) / 1000);
     }
+}
+
+//! writes the warning that the cleanup no longer waits for the handles of work handed over to other threads
+static void qore_module_cleanup_report_dropped_handles(const std::vector<std::string>& names) {
+    char head[256];
+    snprintf(head, sizeof head, "warning: the module cleanup at the end of the process waited " QLLD " ms after its "
+        "deadline (QORE_MODULE_CLEANUP_HANDOVER_GRACE) for %zu piece%s of work handed over to other threads, which "
+        "did not end; the modules are left as they are:", qore_get_module_cleanup_handover_grace(), names.size(),
+        names.size() == 1 ? "" : "s");
+    // written with one call, so that the output of other threads does not split it
+    try {
+        std::string msg = head;
+        for (size_t i = 0; i < names.size(); ++i) {
+            msg += i ? ", " : " ";
+            msg += names[i];
+        }
+        msg += '\n';
+        fputs(msg.c_str(), stderr);
+    } catch (std::bad_alloc&) {
+        fputs(head, stderr);
+        for (size_t i = 0; i < names.size(); ++i) {
+            fputs(i ? ", " : " ", stderr);
+            fputs(names[i].c_str(), stderr);
+        }
+        fputc('\n', stderr);
+    }
+    fflush(stderr);
 }
 
 void qore_module_cleanup_report_canceled(int kind, const std::vector<std::string>& names) {
@@ -6213,10 +6478,16 @@ void qore_module_cleanup_drain_work() {
             || __builtin_add_overflow(deadline_us, start_us, &deadline_us)) {
         deadline_us = std::numeric_limits<int64>::max();
     }
+    int64 grace_us;
+    int64 handle_deadline_us;
+    if (__builtin_mul_overflow(qore_get_module_cleanup_handover_grace(), static_cast<int64>(1000), &grace_us)
+            || __builtin_add_overflow(grace_us, deadline_us, &handle_deadline_us)) {
+        handle_deadline_us = std::numeric_limits<int64>::max();
+    }
     bool after_cancel = false;
     while (true) {
         bool timed = !module_cleanup_deadline_reached.load(std::memory_order_acquire);
-        if (qore_module_cleanup_wait_work(after_cancel, timed ? deadline_us : -1)) {
+        if (qore_module_cleanup_wait_work(after_cancel, timed ? deadline_us : -1, handle_deadline_us)) {
             // set before the cancel round: the work of the cleanup cannot start new asynchronous work from now on,
             // and the rounds that follow cancel all of its operations that are not canceled yet
             module_cleanup_deadline_reached.store(true, std::memory_order_release);
@@ -11277,7 +11548,21 @@ private:
     }
 };
 
-static ExternalThreadReaper external_thread_reaper;
+// allocated, and destroyed at static destruction by the object below unless the module cleanup stopped waiting for
+// work that it handed over to other threads (qore#7239): those threads can still run then (qore_cleanup() left the
+// library as it is), and the reaper, whose destruction stops it and expects no active native thread, is left as it is
+// with them, so that its condition is not destroyed while it waits on it
+static ExternalThreadReaper* external_thread_reaper_ptr = new ExternalThreadReaper;
+static ExternalThreadReaper& external_thread_reaper = *external_thread_reaper_ptr;
+namespace {
+struct ExternalThreadReaperDestroyer {
+    ~ExternalThreadReaperDestroyer() {
+        if (!qore_module_cleanup_abandoned()) {
+            delete external_thread_reaper_ptr;
+        }
+    }
+} external_thread_reaper_destroyer;
+}
 
 void qore_stop_external_thread_reaper() {
     external_thread_reaper.stop();

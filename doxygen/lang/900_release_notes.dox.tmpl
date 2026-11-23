@@ -142,10 +142,12 @@
     <a href="https://github.com/qoretechnologies/qore/issues/6798">issue 6798</a>).
 
     @par A Connection That Was Never Checked Is Not Up
-    A connection is not up until a successful ping or connection proves it up: one that was never checked reports
-    \c up @ref False with the status \c "not checked", and a REST connection's ping without \c ping_method connects
-    to the server (see @ref ConnectionProvider::AbstractConnection::up "AbstractConnection::up";
-    <a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>).
+    A connection is not up until a successful ping or connection (also the first connection of its async HTTP or
+    REST client) proves it up: one that was never checked reports \c up @ref False with the status \c "not checked",
+    and a REST connection's ping without \c ping_method connects to the server (see
+    @ref ConnectionProvider::AbstractConnection::up "AbstractConnection::up";
+    <a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>,
+    <a href="https://github.com/qoretechnologies/qore/issues/7274">issue 7274</a>).
 
     @par A Private Override Hides Its Parent Class's Method from Calls Resolved When Parsing
     Code outside a class hierarchy can no longer call a parent class's method that the class overrides with a
@@ -1369,6 +1371,11 @@
     that identify a connection and @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()" show only
     the plain values of the options that a loaded driver so declares not sensitive and whose names name no credential
     (see @ref datasource_mask_options; issue #7070).
+
+    @par Sensitive DBI Database Names
+    A DBI driver whose database name can hold credentials declares @ref Qore::SQL::DBI_CAP_SENSITIVE_DBNAME, and the
+    masked forms that show a database name, as for \c db:// connections, always mask the database name of such a
+    loaded driver (see @ref datasource_mask_options; issue #7275).
 
     @par IPv6 Hosts in Datasource Strings
     A datasource string gives an IPv6 address as its host in brackets (ex: <tt>%[::1]:5432</tt>), and
@@ -2780,6 +2787,15 @@
       UNIX domain socket with every reserved character encoded; the URL was ambiguous without them, and
       @ref Qore::HTTPClient::getProxyURL() "getProxyURL()" takes the parts of the URL to give, as \c getURL() does
       (<a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>)
+    - an operation on a container that raises an exception after changing it, such as a hash merge that stores a
+      key before it refuses another one, keeps the object counts of the containers above it and is seen by the
+      @ref garbage_collection "garbage collector", which collects a cycle that it made (issue #7322)
+    - a change through an lvalue path that reaches a container again through a
+      @ref weak_assignment_operator "weak reference" changes the object count of each container holding the changed
+      one once, where it failed an assertion or counted an object twice (issue #7321)
+    - the @ref garbage_collection "garbage collector" collects a cycle through a hash, list or object holding an
+      object that a member was removed from, which it missed, and a write to a member by its bare name no longer
+      counts the object as holding a value to scan when it holds none (issue #7348)
     - The @ref garbage_collection "garbage collector" now collects object cycles through reversed
       lists and lists whose elements were converted in place (issue #7159).
     - @ref string_formatting "Value formatting" now displays a back-reference when several paths reach the same

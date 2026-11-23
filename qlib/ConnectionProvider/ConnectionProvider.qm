@@ -195,14 +195,18 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       <a href="https://github.com/qoretechnologies/qore/issues/7052">issue 7052</a>)
     - the information and the ping results of a connection show its options through the new private method
       \c AbstractConnection::getSafeOptions(), which a connection whose options can hold credentials that its scheme
-      does not declare reimplements (issue #7017, issue #7070)
+      does not declare reimplements (issue #7017, issue #7070), and their safe URL through the new private method
+      \c AbstractConnection::getShownUrl(), which a connection whose safe URL can change after its creation
+      reimplements (issue #7275)
     - added @ref ConnectionProvider::AbstractConnection::setPostProcessing() "AbstractConnection::setPostProcessing()"
       and @ref ConnectionProvider::AbstractConnection::getPostProcessing() "AbstractConnection::getPostProcessing()",
       which refuse sandboxed code; the public static member
       @ref ConnectionProvider::AbstractConnection::post_processing "AbstractConnection::post_processing", which any code
       can read, is deprecated (<a href="https://github.com/qoretechnologies/qore/issues/6749">issue 6749</a>)
     - a connection that was never checked is not up: @ref ConnectionProvider::AbstractConnection::up "up" is
-      @ref False until a successful ping or connection proves it up; such a connection keeps the status
+      @ref False until a successful ping or connection proves it up (also the first connection of an async HTTP or
+      REST client that @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()" created, issue #7274);
+      such a connection keeps the status
       \c "not checked" and no \c last_check value (also when it was serialized as up before this version); a failed
       ping marks a connection down also when its error is thrown, and an automatic ping that disabled automatic pings
       skip leaves its state as it is
