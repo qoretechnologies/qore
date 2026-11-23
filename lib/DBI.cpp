@@ -82,6 +82,7 @@ struct dbi_cap_hash dbi_cap_list[] =
   { DBI_CAP_HAS_COLUMNAR_SELECT,    "HasColumnarSelect" },
   { DBI_CAP_HAS_BULK_LOAD,          "HasBulkLoad" },
   { DBI_CAP_LOCAL_ONLY,             "LocalOnly" },
+  { DBI_CAP_SENSITIVE_DBNAME,       "SensitiveDbName" },
 };
 
 #define NUM_DBI_CAPS (sizeof(dbi_cap_list) / sizeof(dbi_cap_hash))
@@ -90,9 +91,17 @@ struct qore_dbi_mlist_private {
     dbi_method_list_t l;
     dbi_opt_map_t omap;
 
-    DLLLOCAL void registerOption(const char* name, const char* desc, const QoreTypeInfo* type = 0) {
+    //! registers an option; \a declared is true for the variant with option flags, which decides whether the option
+    //! is sensitive (qore#7070)
+    DLLLOCAL void registerOption(const char* name, const char* desc, const QoreTypeInfo* type, int flags,
+            bool declared) {
         assert(omap.find(name) == omap.end());
-        omap[name] = DbiOptInfo(desc, type);
+        // fail-closed: a flag that this library does not know (of a driver built for a later library) can mean that
+        // the value must not be shown, so the option counts as sensitive (qore#7070)
+        if (flags & ~QDBI_OPT_SENSITIVE) {
+            flags = QDBI_OPT_SENSITIVE;
+        }
+        omap[name] = DbiOptInfo(desc, type, flags & QDBI_OPT_SENSITIVE, declared);
     }
 
     DLLLOCAL static qore_dbi_mlist_private* get(const qore_dbi_method_list& ml) {
@@ -288,7 +297,13 @@ void qore_dbi_method_list::add(int code, q_dbi_option_get_t method) {
 }
 
 void qore_dbi_method_list::registerOption(const char* name, const char* desc, const QoreTypeInfo* type) {
-    priv->registerOption(name, desc, type);
+    // no decision about the sensitivity of the option: it counts as undeclared, and its value is never shown in a
+    // masked form of a datasource (qore#7070)
+    priv->registerOption(name, desc, type, 0, false);
+}
+
+void qore_dbi_method_list::registerOption(const char* name, const char* desc, const QoreTypeInfo* type, int flags) {
+    priv->registerOption(name, desc, type, flags, true);
 }
 
 DbiArgHelper::DbiArgHelper(const QoreListNode* ol, bool numeric, ExceptionSink* xs) : orig(ol), nl(0), xsink(xs) {
@@ -922,6 +937,61 @@ void q_ds_append_masked_hash(QoreString& str, const QoreHashNode* h) {
     q_ds_append_masked_flags(str, h, 0);
 }
 
+static QoreStringNode* q_ds_shown_option_value(const QoreValue v);
+
+// returns true if the name of an option can name a credential or a connection string or URL that can embed one: it
+// has one of the words below, without case, anywhere in it; the value of such an option is masked whatever the
+// driver declares (defense in depth against an option declared not sensitive by mistake; qore#7070)
+bool q_dbi_option_name_is_sensitive(const char* key) {
+    static const char* words[] = {"pass", "pwd", "secret", "token", "key", "cred", "conn", "url", "dsn", "auth"};
+    for (const char* p = key; *p; ++p) {
+        for (const char* w : words) {
+            if (!strncasecmp(p, w, strlen(w))) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// the one path for the value of a driver option in every masked form of a datasource (the safe URL, the masked hash,
+// the options of a db:// connection's information and ping results, mask_datasource_options()): returns the value
+// to show as a string, or nullptr if the value is masked: if the driver is not loaded (\a dd is nullptr), if the
+// option cannot be shown (see qore_dbi_private::isOptionShowable(): also if its name can name a credential, see
+// q_dbi_option_name_is_sensitive()), or if the value cannot be shown in a datasource
+// string (see q_ds_shown_option_value()) (qore#7070)
+static QoreStringNode* q_dbi_shown_option(const qore_dbi_private* dd, const char* key, const QoreValue v) {
+    if (!dd || !dd->isOptionShowable(key)) {
+        return nullptr;
+    }
+    return q_ds_shown_option_value(v);
+}
+
+QoreHashNode* q_dbi_mask_options(const char* driver, const QoreHashNode* opts) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
+    if (!opts || opts->empty()) {
+        return rv.release();
+    }
+    // the driver is looked up among the drivers already loaded only: masking never loads a module, which could fail
+    // or be refused; fail-closed, every value is masked when the driver is not loaded (qore#7070)
+    const qore_dbi_private* dd = nullptr;
+    if (q_dbi_valid_driver_name(driver)) {
+        DBIDriver* d = qore_dbi_driver_list_ops(DBI).find_intern(driver);
+        if (d) {
+            dd = qore_dbi_private::get(*d);
+        }
+    }
+    ConstHashIterator i(opts);
+    while (i.next()) {
+        // the value of an option that the driver declares not sensitive is shown only as the masked forms of a
+        // datasource show it: as a string, if it can be shown in a datasource string (see q_ds_masked_hash()); a value
+        // such as a URL or a connection string with credentials, or a container, is masked as well
+        QoreStringNode* val = q_dbi_shown_option(dd, i.getKey(), i.get());
+        rv->setKeyValue(i.getKey(), val ? val : new QoreStringNode(QORE_DS_MASK), nullptr);
+    }
+    return rv.release();
+}
+
 // parses a datasource string for its masked description; returns the hash of its parts, or nullptr if it cannot be
 // parsed or is ambiguous, with \a driver set to its driver name if it starts with a valid one; never raises an
 // exception
@@ -1109,6 +1179,35 @@ static bool q_ds_valid_name(const char* name, size_t len) {
     return true;
 }
 
+// returns the string form of the value of an option for a masked datasource, if it can be shown in a datasource string:
+// a string, an integer, a floating-point number, an arbitrary-precision number or a boolean whose string form has only
+// printable ASCII characters, none of the separators of a datasource string or of its option block (@ % { } ( ) , =),
+// no ";" and no "://"; nullptr otherwise, then the value is masked (fail-closed; qore#7070)
+static QoreStringNode* q_ds_shown_option_value(const QoreValue v) {
+    switch (v.getType()) {
+        case NT_STRING:
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_NUMBER:
+        case NT_BOOLEAN:
+            break;
+        default:
+            return nullptr;
+    }
+    QoreStringValueHelper str(v);
+    // a string in an encoding that is not ASCII-compatible has bytes that are not printable ASCII and is masked
+    for (const char* p = str->c_str(), *e = p + str->size(); p < e; ++p) {
+        unsigned char c = static_cast<unsigned char>(*p);
+        if (c < 0x20 || c > 0x7e || strchr("@%{}(),=;", c)) {
+            return nullptr;
+        }
+    }
+    if (strstr(str->c_str(), "://")) {
+        return nullptr;
+    }
+    return new QoreStringNode(str->c_str());
+}
+
 QoreHashNode* q_ds_masked_hash(const QoreHashNode* h, unsigned flags) {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
     // the values can be inline short strings, which have no QoreStringNode; the helpers hold their bytes, and a value
@@ -1117,8 +1216,22 @@ QoreHashNode* q_ds_masked_hash(const QoreHashNode* h, unsigned flags) {
     rv->setKeyValue("type", new QoreStringNode(type && q_dbi_valid_driver_name(type.c_str()) ? type.c_str()
         : QORE_DS_MASK), nullptr);
     rv->setKeyValue("user", new QoreStringNode(QORE_DS_MASK), nullptr);
+    // the driver is looked up among the drivers already loaded only, and only for the forms that show more than the
+    // masked description: masking never loads a module
+    const qore_dbi_private* dd = nullptr;
+    if ((flags & (QDS_MASK_SHOW_DB | QDS_MASK_SHOW_OPTIONS)) && type && q_dbi_valid_driver_name(type.c_str())) {
+        DBIDriver* d = qore_dbi_driver_list_ops(DBI).find_intern(type.c_str());
+        if (d) {
+            dd = qore_dbi_private::get(*d);
+        }
+    }
     {
-        QoreStringNode* db = (flags & QDS_MASK_SHOW_DB) && h ? q_ds_shown_db_name(h->getKeyValue("db")) : nullptr;
+        // the database name of a loaded driver that declares that its database name can hold credentials
+        // (DBI_CAP_SENSITIVE_DBNAME) is always masked; otherwise it is shown only under the rule of
+        // q_ds_valid_db_name() (qore#7275); the capability of a driver that is not loaded is not known, so the rule
+        // alone decides then
+        QoreStringNode* db = (flags & QDS_MASK_SHOW_DB) && h && !(dd && (dd->getCaps() & DBI_CAP_SENSITIVE_DBNAME))
+            ? q_ds_shown_db_name(h->getKeyValue("db")) : nullptr;
         rv->setKeyValue("db", db ? db : new QoreStringNode(QORE_DS_MASK), nullptr);
     }
     if (!h) {
@@ -1143,7 +1256,11 @@ QoreHashNode* q_ds_masked_hash(const QoreHashNode* h, unsigned flags) {
     if (flags & QDS_MASK_SHOW_OPTIONS) {
         QoreValue opts = h->getKeyValue("options");
         if (opts.getType() == NT_HASH && !opts.get<const QoreHashNode>()->empty()) {
-            // no driver declares which of its options hold secrets, so every value is masked (qore#7070)
+            // the value of an option is shown only if the driver is already loaded and declares the option without
+            // declaring it sensitive (QDBI_OPT_SENSITIVE), and if the value can be shown in a datasource string;
+            // every other value is masked: an option of a driver that is not loaded, that the driver does not declare
+            // (such as an option of a driver with DBI_CAP_OPTION_PASSTHRU) or that it declares sensitive (qore#7070);
+            // the driver is never loaded here
             ReferenceHolder<QoreHashNode> oh(new QoreHashNode(autoTypeInfo), nullptr);
             bool valid = true;
             ConstHashIterator i(opts.get<const QoreHashNode>());
@@ -1153,7 +1270,8 @@ QoreHashNode* q_ds_masked_hash(const QoreHashNode* h, unsigned flags) {
                     valid = false;
                     break;
                 }
-                oh->setKeyValue(key, new QoreStringNode(QORE_DS_MASK), nullptr);
+                QoreStringNode* val = q_dbi_shown_option(dd, key, i.get());
+                oh->setKeyValue(key, val ? val : new QoreStringNode(QORE_DS_MASK), nullptr);
             }
             if (valid) {
                 rv->setKeyValue("options", oh.release(), nullptr);
@@ -1218,7 +1336,9 @@ void q_ds_append_masked_flags(QoreString& str, const QoreHashNode* h, unsigned f
                 str.concat(',');
             }
             first = false;
-            str.sprintf("%s=" QORE_DS_MASK, i.getKey());
+            // each value is QORE_DS_MASK or a string that can be shown (see q_ds_masked_hash())
+            QoreStringDataHelper val(i.get());
+            str.sprintf("%s=%s", i.getKey(), val ? val.c_str() : QORE_DS_MASK);
         }
         str.concat('}');
     } else if (!opts.isNothing()) {

@@ -421,6 +421,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     }
 
     private:internal {
+        #! The code called once when the first request is submitted on a connection (see setFirstConnectionCallback())
+        *code<nothing()> first_connection_callback;
+
+        #! Serializes the first connection callback
+        Mutex first_connection_lock();
+
         #! Credentials for target TLS handshakes, omitted from the subclass-visible options
         transient *hash<HttpClientOriginTlsCredentials> origin_tls_credentials;
 
@@ -435,6 +441,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             creations (see HttpClientCallerExemption)
         */
         bool creator_checked;
+
+        #! The proof that the manager was created with for code that could not create one itself (qore#7262)
+        /** The manager then creates connections only to the origins that the proof allows: the target of the client
+            that its trusted creator gave
+        */
+        *HttpClientCreatorProof bound_proof;
     }
 
     #! Creates a new connection manager with the given options
@@ -445,8 +457,54 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     constructor(*hash<HttpClientConnectionManagerOptions> opts) {
         HttpClientConnectionManager::checkCreator(opts);
+        initManager(opts);
+    }
+
+    #! Creates a new connection manager for a client whose creator passed the caller check (qore#7262)
+    /** A client that creates its manager lazily (when it connects or reconnects, or again when it is closed) gives the
+        proof that it took with @ref HttpClientIo::HttpClientCreatorProof::get() "HttpClientCreatorProof::get()" when
+        it was created, so the code that created the client decides, not the code that uses it
+
+        @param opts configuration options including protocol selection
+        @param proof the proof of the code that created the client
+
+        @throw PERMISSION-DENIED the proof was not issued by @ref HttpClientIo::HttpClientCreatorProof
+        "HttpClientCreatorProof", or CA certificate locations are given and the code that took the proof was
+        restricted from the \c FILESYSTEM functional domain
+
+        @since HttpClientIo 1.0
+    */
+    constructor(*hash<HttpClientConnectionManagerOptions> opts, HttpClientCreatorProof proof) {
+        if (!HttpClientCreatorProof::genuine(proof)) {
+            throw "PERMISSION-DENIED", "the HTTP client creator proof given was not issued by HttpClientCreatorProof";
+        }
+        # code that could create a manager itself does not need the proof: the manager is the one that it would create
+        try {
+            HttpClientConnectionManager::checkCreator(opts);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "PERMISSION-DENIED") {
+                rethrow;
+            }
+            if (!proof.allowsCaLocations(opts.ssl_ca_file, opts.ssl_ca_path)) {
+                throw "PERMISSION-DENIED", "the code that created the HTTP client did not give these CA certificate "
+                    "locations, or could not give a connection manager any, as it was restricted from the FILESYSTEM "
+                    "functional domain";
+            }
+            # the manager creates connections only to the target that the proof is bound to
+            bound_proof = proof;
+        }
+        initManager(opts);
+    }
+
+    #! Initializes the manager once its creator was checked
+    private:internal initManager(*hash<HttpClientConnectionManagerOptions> opts) {
         creator_checked = True;
         self.opts = opts ?? <HttpClientConnectionManagerOptions>{};
+        # a trust store verifies server certificates: it implies verification unless a verification mode is given, so
+        # that it is not ignored (qoretechnologies/qore#7248)
+        if (self.opts.ssl_trust_store && !exists self.opts.ssl_verify_mode) {
+            self.opts.ssl_verify_mode = SSL_VERIFY_PEER;
+        }
         self.logger = self.opts.logger;
         origin_tls_credentials = remove self.opts.origin_tls_credentials;
         if (origin_tls_credentials) {
@@ -608,10 +666,25 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     #! Grants the exemption of the manager's own creations, if its creator passed its caller check (qore#6981)
     /** @throw PERMISSION-DENIED the creator of the manager did not pass its caller check
     */
-    private:internal HttpClientCallerExemption getExemption() {
+    private:internal HttpClientCallerExemption getExemption(hash<auto> url_info, *hash<auto> proxy_info) {
         if (!creator_checked) {
             throw "PERMISSION-DENIED", "the HTTP client connection manager was not created by code that passed its "
                 "caller check, so it does not create connections";
+        }
+        # a manager created with a proof for restricted code creates connections only with what the proof is bound
+        # to: the client's target, its proxy and its CA locations, also if they were changed since (qore#7262)
+        if (bound_proof) {
+            checkBoundOrigin(url_info);
+            if (!bound_proof.allowsProxy(proxy_info)) {
+                throw "PERMISSION-DENIED", "the HTTP client connection manager was created for a client whose "
+                    "target was given by trusted code; it does not create connections through another proxy than "
+                    "the client's, or without the client's proxy";
+            }
+            if (!bound_proof.allowsCaLocations(opts.ssl_ca_file, opts.ssl_ca_path)) {
+                throw "PERMISSION-DENIED", "the HTTP client connection manager was created for a client whose "
+                    "target was given by trusted code; it does not create connections with other CA certificate "
+                    "locations";
+            }
         }
         return new HttpClientCallerExemption();
     }
@@ -628,6 +701,15 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     #! Returns the AsyncSocketIoController
     AsyncSocketIo::AsyncSocketIoController getController() {
         return controller;
+    }
+
+    #! Returns the in-memory trust store that server certificates are verified against, if any
+    /** The object gives out no certificate; see @ref Qore::SSLTrustStore "SSLTrustStore"
+
+        @since %HttpClientIo 1.0 (qoretechnologies/qore#7248)
+    */
+    *SSLTrustStore getSslTrustStore() {
+        return opts.ssl_trust_store;
     }
 
     #! Returns the cookie jar (NOTHING if cookies are disabled)
@@ -840,7 +922,40 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         if (from_pool) {
             stream.markConnectionReused();
         }
+        # the first request submitted on a connection tells the code waiting for the first connection (qore#7274)
+        if (first_connection_callback) {
+            stream.setSubmittedCallback(\notifyFirstConnection());
+        }
         return stream;
+    }
+
+    #! Sets the code that is called once, when the first request is submitted on a connection of this manager
+    /** A request can be submitted only on a connection that is established: connected, and with the TLS handshake
+        made for HTTPS.  The code is therefore called once a connection of the manager was made successfully, whatever
+        the request's result; a connection that cannot be made (a closed port, a refused certificate) never calls it.
+        It is called once, in the thread that submitted the request, and is then removed; an exception that it raises
+        is logged and ignored.  @ref ConnectionProvider::AbstractConnection::getAsync() "AbstractConnection::getAsync()"
+        sets it to mark its connection up when the client that it created was first connected (qore#7274).
+
+        @param cb the code to call, or @ref nothing to remove the code set before
+
+        @since HttpClientIo 1.0
+    */
+    setFirstConnectionCallback(*code<nothing()> cb) {
+        AutoLock al(first_connection_lock);
+        first_connection_callback = cb;
+    }
+
+    #! Calls the first connection callback once, if it is still set
+    private:internal notifyFirstConnection() {
+        *code<nothing()> cb;
+        {
+            AutoLock al(first_connection_lock);
+            cb = remove first_connection_callback;
+        }
+        if (cb) {
+            cb();
+        }
     }
 
     #! Ensures a connection to the given URL is being established, returning an EventNotifier
@@ -960,7 +1075,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 # turns a single dead-server failure into a 45s+ hang.
                 if (isHttp3ConnectionCloseError(ex.err)) {
                     if (!h3_close_retried && retries < max_retries
-                            && canRetryRequest(method, stream, ex.err)) {
+                            && canRetryRequest(method, stream, ex)) {
                         h3_close_retried = True;
                         ++retries;
                         log(LoggerLevel::DEBUG, "streaming %s, retrying once on fresh connection (%d/%d)",
@@ -971,8 +1086,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     }
                     rethrow;
                 }
-                if (isConnectionError(ex.err) && retries < max_retries
-                        && canRetryRequest(method, stream)) {
+                if ((isConnectionError(ex.err) || isUnsentOnPooledConnection(ex, stream)) && retries < max_retries
+                        && canRetryRequest(method, stream, ex)) {
                     ++retries;
                     log(LoggerLevel::DEBUG, "streaming connection error %s, retrying (%d/%d)",
                         ex.err, retries, max_retries);
@@ -1092,7 +1207,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 }
                 if (isHttp3ConnectionCloseError(ex.err)) {
                     if (!h3_close_retried && retries < max_retries
-                            && canRetryRequest(method, stream, ex.err)) {
+                            && canRetryRequest(method, stream, ex)) {
                         h3_close_retried = True;
                         ++retries;
                         log(LoggerLevel::DEBUG, "async %s, retrying once on fresh connection (%d/%d)",
@@ -1103,10 +1218,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     }
                     rethrow;
                 }
-                if ((isCapacityError(ex.err) || isConnectionError(ex.err))
-                        && retries < max_retries && canRetryRequest(method, stream)) {
+                if ((isCapacityError(ex.err) || isConnectionError(ex.err) || isUnsentOnPooledConnection(ex, stream))
+                        && retries < max_retries && canRetryRequest(method, stream, ex)) {
                     ++retries;
-                    if (isConnectionError(ex.err)) {
+                    if (isConnectionError(ex.err) || isUnsentOnPooledConnection(ex, stream)) {
                         log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)",
                             ex.err, retries, max_retries);
                         evictDeadConnections(url);
@@ -2341,6 +2456,7 @@ printf("%d connection(s) migrated\n", migrated);
             }
             # connections take an integer port; 0 marks the UNIX domain socket target
             url_info.port = 0;
+            checkBoundOrigin(url_info);
             return url_info;
         }
         if (!url_info.protocol) {
@@ -2353,7 +2469,21 @@ printf("%d connection(s) migrated\n", migrated);
         if (!url_info.port) {
             url_info.port = url_info.protocol == "https" ? 443 : 80;
         }
+        checkBoundOrigin(url_info);
         return url_info;
+    }
+
+    #! Refuses a request target that a manager bound to its client's target does not allow (qore#7262)
+    /** Checked for every request, also one that a pooled connection serves (the pool is keyed by host and port), and
+        again when a connection is created
+    */
+    private:internal checkBoundOrigin(hash<auto> url_info) {
+        if (bound_proof && !bound_proof.allowsOrigin(url_info.protocol == "https", url_info.host ?? "",
+                url_info.port ?? 0)) {
+            throw "PERMISSION-DENIED", sprintf("the HTTP client connection manager was created for a client whose "
+                "target was given by trusted code; it does not create connections to %s://%s:%d",
+                url_info.protocol ?? "", url_info.host ?? "", url_info.port ?? 0);
+        }
     }
 
 
@@ -2843,7 +2973,8 @@ printf("%d connection(s) migrated\n", migrated);
     private hash<auto> prepareH3Probe(hash<auto> url_info, string key) {
         AutoWriteLock al(pool_lock);
         h3_probe_times{key} = clock_get_monotonic_us();
-        if (!origin_tls_credentials && alt_svc_port_map.hasKey(key)) {
+        # (a manager bound to the target of a lent client keeps its port, see HttpClientCreatorProof)
+        if (!origin_tls_credentials && !bound_proof && alt_svc_port_map.hasKey(key)) {
             url_info.port = alt_svc_port_map{key};
         }
         return url_info;
@@ -2942,10 +3073,10 @@ printf("%d connection(s) migrated\n", migrated);
     */
     private:internal Http1ClientConnection newHttp1Connection(hash<auto> url_info, *hash<auto> proxy_info) {
         hash<auto> target = getTlsTarget(url_info);
-        HttpClientCallerExemption exemption = getExemption();
+        HttpClientCallerExemption exemption = getExemption(url_info, proxy_info);
         return new Http1ClientConnection(target, opts.connect_timeout, logger, 1, opts.ssl_verify_mode,
             opts.accept_all_certs, proxy_info, origin_tls_credentials.cert ?? opts.client_cert,
-            origin_tls_credentials.key ?? opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
+            origin_tls_credentials.key ?? opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path, opts.ssl_trust_store);
     }
 
     #! Internal: creates an HTTP/2 connection with the exemption of the manager's own creations (qore#6981)
@@ -2954,11 +3085,11 @@ printf("%d connection(s) migrated\n", migrated);
     private:internal Http2ClientConnection newHttp2Connection(hash<auto> url_info, *hash<auto> proxy_info,
             bool offer_http11) {
         hash<auto> target = getTlsTarget(url_info);
-        HttpClientCallerExemption exemption = getExemption();
+        HttpClientCallerExemption exemption = getExemption(url_info, proxy_info);
         return new Http2ClientConnection(target, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs, proxy_info,
             origin_tls_credentials.cert ?? opts.client_cert, origin_tls_credentials.key ?? opts.client_pk,
-            opts.ssl_ca_file, opts.ssl_ca_path, offer_http11);
+            opts.ssl_ca_file, opts.ssl_ca_path, opts.ssl_trust_store, offer_http11);
     }
 
     #! Internal: creates an HTTP/3 connection with the exemption of the manager's own creations (qore#6981)
@@ -2966,11 +3097,11 @@ printf("%d connection(s) migrated\n", migrated);
     */
     private:internal Http3ClientConnection newHttp3Connection(hash<auto> url_info, *list<int> avoid_families) {
         hash<auto> target = getTlsTarget(url_info);
-        HttpClientCallerExemption exemption = getExemption();
+        HttpClientCallerExemption exemption = getExemption(url_info);
         return new Http3ClientConnection(target, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
             origin_tls_credentials.cert ?? opts.client_cert, origin_tls_credentials.key ?? opts.client_pk,
-            opts.ssl_ca_file, opts.ssl_ca_path, NOTHING, avoid_families);
+            opts.ssl_ca_file, opts.ssl_ca_path, opts.ssl_trust_store, NOTHING, avoid_families);
     }
 
     #! Internal: creates a connection for an explicitly selected or cached protocol
@@ -4642,7 +4773,9 @@ printf("%d connection(s) migrated\n", migrated);
         @ref requestAsync()), and the request operations of the RestClientIo module.  A request is sent again, on a
         connection acquired anew:
         - whatever its method, if the server refused it without processing it (see
-          @ref isRefusedRequestErrorStatic()), or if it was not submitted
+          @ref isRefusedRequestErrorStatic()), if it was not submitted, or if it was never written because the
+          server closed the pooled HTTP/1.1 connection just before (see @ref isUnsentRequestErrorStatic()), also
+          when the server's data came before the first request on a connection taken from the pool
         - once, if its HTTP/3 connection closed or failed to read, and it was not submitted, its method is idempotent,
           or the transport proves that it was not processed
         - if its connection failed or was at capacity, and it was not submitted, or its method is idempotent
@@ -4688,7 +4821,7 @@ printf("%d connection(s) migrated\n", migrated);
         # HTTP3-CONNECTION-CLOSED / HTTP3-READ-ERROR are retried once only — see acquireAndStartStreaming for the
         # rationale
         if (isHttp3ConnectionCloseError(ex.err)) {
-            if (state.h3_close_retried || !canRetryRequest(method, stream, ex.err)) {
+            if (state.h3_close_retried || !canRetryRequest(method, stream, ex)) {
                 return False;
             }
             state.h3_close_retried = True;
@@ -4698,9 +4831,10 @@ printf("%d connection(s) migrated\n", migrated);
             evictDeadConnections(url);
             return True;
         }
-        if ((isCapacityError(ex.err) || isConnectionError(ex.err)) && canRetryRequest(method, stream)) {
+        if ((isCapacityError(ex.err) || isConnectionError(ex.err) || isUnsentOnPooledConnection(ex, stream))
+                && canRetryRequest(method, stream, ex)) {
             ++state.retries;
-            if (isConnectionError(ex.err)) {
+            if (isConnectionError(ex.err) || isUnsentOnPooledConnection(ex, stream)) {
                 log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)", ex.err,
                     state.retries, max_retries);
                 evictDeadConnections(url);
@@ -4760,20 +4894,54 @@ printf("%d connection(s) migrated\n", migrated);
     /** Connection-only failures can be retried for any method.  After stream
         submission, only idempotent methods are retried automatically, unless
         the transport itself proves the peer never processed the request (see
-        @ref isUnprocessedOnReusedConnection()), or the server refused it (see
+        @ref isUnprocessedOnReusedConnection()), the request was never written (see
+        @ref isUnsentRequestErrorStatic()), or the server refused it (see
         @ref isRefusedRequestErrorStatic()).
 
         @param method the request method
         @param stream the failed stream handle, if any
-        @param err the transport error code that failed the request, when the
-            caller has one; omitted by callers that retry before any error
-            classification
+        @param ex the error that failed the request, when the caller has one; omitted by callers that retry before
+        any error classification
     */
     private bool canRetryRequest(string method, *HttpClientStreamHandle stream,
-            *string err) {
+            *hash<ExceptionInfo> ex) {
+        *string err = ex.err;
         return isConnectionOnlyFailure(stream) || isIdempotentMethod(method)
             || isUnprocessedOnReusedConnection(err, stream)
-            || (err.val() && isRefusedRequestErrorStatic(err));
+            || (err.val() && isRefusedRequestErrorStatic(err))
+            || (ex && isUnsentRequestErrorStatic(ex));
+    }
+
+    #! Returns @ref True if the error of a request says that the request was never written
+    /** The check that precedes the send of a request on an HTTP/1.1 keep-alive connection finds that the server
+        closed the connection (or sent the response with which it closed it, such as a 408) and does not write the
+        request; the error (\c HTTP1-CONNECTION-CLOSED) then has \c request_sent set to @ref False in its argument.
+        Nothing reached the server, so the request can be sent again on a new connection whatever its method
+        (qore#7278).
+
+        @param ex the error of a request
+
+        @return @ref True if the error says that the request was never written
+
+        @since HttpClientIo 1.0
+    */
+    static bool isUnsentRequestErrorStatic(hash<ExceptionInfo> ex) {
+        return ex.arg.typeCode() == NT_HASH && ex.arg.hasKey("request_sent") && ex.arg.request_sent === False;
+    }
+
+    #! Internal: True if a request taken to a pooled connection was never written because of what the server did
+    /** Data that the server sent before the first request on a connection taken from the pool (a connection that
+        finished connecting after its request gave up, for example) is how the server closed the idle connection,
+        such as a 408 (\c HTTP1-UNEXPECTED-DATA with \c request_sent set to @ref False): nothing reached the
+        server, and the request is sent again on a new connection like after any other connection error (qore#7345).
+        On a connection created for the request, the same data is a protocol problem of the server, and the error
+        ends the request.
+
+        @param ex the error of the request
+        @param stream the failed stream handle, if any
+    */
+    private bool isUnsentOnPooledConnection(hash<ExceptionInfo> ex, *HttpClientStreamHandle stream) {
+        return stream && stream.wasConnectionReused() && isUnsentRequestErrorStatic(ex);
     }
 
     #! Internal: True when a pooled connection died before the peer processed the request

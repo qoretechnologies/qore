@@ -675,7 +675,7 @@ static const auto& forbidden_headers = getForbiddenHopByHopHeaders();
 template<typename HeaderRange>
 static void buildRegularHeaders(std::vector<nghttp2_nv>& nva,
         std::vector<std::string>& lowered_names, const HeaderRange& headers,
-        bool skip_host) {
+        bool skip_host, bool response = false) {
     for (const auto& h : headers) {
         // Lowercase in-place
         std::string lname(h.first);
@@ -691,7 +691,8 @@ static void buildRegularHeaders(std::vector<nghttp2_nv>& nva,
         if (skip_host && lname == "host") {
             continue;
         }
-        if (forbidden_headers.count(lname)) {
+        // a response does not send te either (qoretechnologies/qore#7212)
+        if (response ? isForbiddenResponseHeader(lname) : forbidden_headers.count(lname) > 0) {
             continue;
         }
         lowered_names.push_back(std::move(lname));
@@ -906,10 +907,29 @@ int Http2Session::submitResponse(int32_t stream_id, int status_code,
     return submitResponseImpl(stream_id, status_code, headers, body, body_len, xsink);
 }
 
+//! Raises an exception and returns -1 if a status is not one of a final response (qoretechnologies/qore#7212, #7222)
+/** An informational (1xx) status is never a final response: a 101 on an HTTP/2 or HTTP/3 stream is malformed and makes
+    the peer fail the stream or the whole connection, with the other streams on it, and another 1xx leaves the peer
+    waiting for the final response; refused here, at the lowest layer, so that no path of the server can send one
+*/
+static int h2_check_final_status(int status_code, const char* err, ExceptionSink* xsink) {
+    if (status_code < 200 || status_code > 599) {
+        xsink->raiseException(err, "the status of a final response must be between 200 and 599; got %d%s",
+            status_code, (status_code >= 100 && status_code < 200)
+                ? " (an informational status is not a final response)" : "");
+        return -1;
+    }
+    return 0;
+}
+
+
 template<typename HeaderRange>
 int Http2Session::submitResponseImpl(int32_t stream_id, int status_code,
         const HeaderRange& headers,
         const void* body, size_t body_len, ExceptionSink* xsink) {
+    if (h2_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return -1;
+    }
     // is_server is set once at construction and never changes — safe to read without lock
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit response on client session");
@@ -932,18 +952,7 @@ int Http2Session::submitResponseImpl(int32_t stream_id, int status_code,
     // Add regular headers, filtering out pseudo and forbidden headers
     std::vector<std::string> lowered_names;
     lowered_names.reserve(headers.size());
-    buildRegularHeaders(nva, lowered_names, headers, false /* skip_host */);
-
-    nghttp2_data_provider* data_prd = nullptr;
-    std::unique_ptr<DataProviderContext> provider_ctx;
-
-    if (body && body_len > 0) {
-        provider_ctx = std::make_unique<DataProviderContext>();
-        provider_ctx->h2 = this;
-        provider_ctx->provider.source.ptr = provider_ctx.get();
-        provider_ctx->provider.read_callback = dataProviderReadCallback;
-        data_prd = &provider_ctx->provider;
-    }
+    buildRegularHeaders(nva, lowered_names, headers, false /* skip_host */, true /* response */);
 
     printd(5, "submitResponse() stream_id=%d status=%d body_len=%zu nva.size=%zu\n",
         stream_id, status_code, body_len, nva.size());
@@ -959,6 +968,28 @@ int Http2Session::submitResponseImpl(int32_t stream_id, int status_code,
         return 0;
     }
 
+    // a malformed response is never sent (qoretechnologies/qore#7212)
+    QoreHttpResponseBodyRule rule(status_code, nullptr);
+    if (checkResponseLocked(stream_id, status_code, nva, body && body_len ? static_cast<int64>(body_len) : 0, rule,
+            xsink)) {
+        return -1;
+    }
+    // a response without content sends no body, as with HTTP/1.1
+    if (rule.noBody()) {
+        body_len = 0;
+    }
+
+    nghttp2_data_provider* data_prd = nullptr;
+    std::unique_ptr<DataProviderContext> provider_ctx;
+
+    if (body && body_len > 0) {
+        provider_ctx = std::make_unique<DataProviderContext>();
+        provider_ctx->h2 = this;
+        provider_ctx->provider.source.ptr = provider_ctx.get();
+        provider_ctx->provider.read_callback = dataProviderReadCallback;
+        data_prd = &provider_ctx->provider;
+    }
+
     if (body && body_len > 0) {
         pending_body_data[stream_id] = BodyData(body, body_len);
     }
@@ -969,6 +1000,10 @@ int Http2Session::submitResponseImpl(int32_t stream_id, int status_code,
             nghttp2_strerror(rv));
         return -1;
     }
+    // trailers can follow the response now (qoretechnologies/qore#7212)
+    if (Http2StreamInfo* rs = getStream(stream_id)) {
+        rs->response_submitted = true;
+    }
 
     if (provider_ctx) {
         pending_data_providers.emplace(stream_id, std::move(provider_ctx));
@@ -978,6 +1013,9 @@ int Http2Session::submitResponseImpl(int32_t stream_id, int status_code,
 
 int Http2Session::submitResponseStreaming(int32_t stream_id, int status_code,
         const qore_http_header_pairs_t& headers, ExceptionSink* xsink) {
+    if (h2_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return -1;
+    }
     // is_server is set once at construction and never changes — safe to read without lock
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit response on client session");
@@ -1000,7 +1038,7 @@ int Http2Session::submitResponseStreaming(int32_t stream_id, int status_code,
     // Add regular headers, filtering out pseudo and forbidden headers
     std::vector<std::string> lowered_names;
     lowered_names.reserve(headers.size());
-    buildRegularHeaders(nva, lowered_names, headers, false /* skip_host */);
+    buildRegularHeaders(nva, lowered_names, headers, false /* skip_host */, true /* response */);
 
     // Create a deferred data provider - body will be fed via sendStreamData()
     auto provider_ctx = std::make_unique<DataProviderContext>();
@@ -1023,12 +1061,29 @@ int Http2Session::submitResponseStreaming(int32_t stream_id, int status_code,
         return 0;
     }
 
+    // a malformed response is never sent: the length of the streamed content is enforced by
+    // dataProviderReadCallback() (qoretechnologies/qore#7212)
+    QoreHttpResponseBodyRule rule(status_code, nullptr);
+    if (checkResponseLocked(stream_id, status_code, nva, -1, rule, xsink)) {
+        return -1;
+    }
+
     int rv = nghttp2_submit_response(session, stream_id, nva.data(), nva.size(),
         &provider_ctx->provider);
     if (rv != 0) {
         xsink->raiseException("HTTP2-ERROR", "failed to submit streaming response: %s",
             nghttp2_strerror(rv));
         return -1;
+    }
+    if (rule.noBody() || rule.streamLength() >= 0) {
+        StreamedResponseRule& sr = streamed_response_rules[stream_id];
+        sr.no_body = rule.noBody();
+        sr.content_length = rule.streamLength();
+        sr.provided = 0;
+    }
+    // trailers can follow the response now (qoretechnologies/qore#7212)
+    if (Http2StreamInfo* rs = getStream(stream_id)) {
+        rs->response_submitted = true;
     }
 
     pending_data_providers.emplace(stream_id, std::move(provider_ctx));
@@ -2834,6 +2889,7 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
     h2->stream_send_limits.erase(stream_id);
     h2->stream_refused_len.erase(stream_id);
     h2->stream_taken_total.erase(stream_id);
+    h2->streamed_response_rules.erase(stream_id);
     // Wake controller-backed waitForStreamDrain() poll operations for this stream.
     h2->notifyStreamDrain();
     // If an InputStream is active for this stream, mark it EOF so
@@ -2849,6 +2905,27 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
         if (iit != h2->stream_input_streams_.end()) {
             iit->second.eof = true;
         }
+    }
+    return 0;
+}
+
+int Http2Session::checkResponseLocked(int32_t stream_id, int status_code, const std::vector<nghttp2_nv>& nva,
+        int64 body_len, QoreHttpResponseBodyRule& rule, ExceptionSink* xsink) {
+    Http2StreamInfo* stream = getStream(stream_id);
+    // a second response on the stream would be a malformed message
+    if (stream && stream->response_submitted) {
+        xsink->raiseException("HTTP2-ERROR", "response already submitted for stream %d", stream_id);
+        return -1;
+    }
+    rule = QoreHttpResponseBodyRule(status_code, stream ? stream->method.c_str() : nullptr);
+    for (const nghttp2_nv& nv : nva) {
+        rule.add(reinterpret_cast<const char*>(nv.name), nv.namelen, reinterpret_cast<const char*>(nv.value),
+            nv.valuelen);
+    }
+    std::string err = rule.check(body_len);
+    if (!err.empty()) {
+        xsink->raiseException("HTTP2-ERROR", "%s", err.c_str());
+        return -1;
     }
     return 0;
 }
@@ -2873,6 +2950,51 @@ void dbg_h2_note_held_session(Http2Session* h2) {
 #endif
 
 ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t stream_id,
+        uint8_t* buf, size_t length, uint32_t* data_flags, nghttp2_data_source* source,
+        void* user_data) {
+    DataProviderContext* ctx = static_cast<DataProviderContext*>(source->ptr);
+    Http2Session* h2 = ctx ? ctx->h2 : static_cast<Http2Session*>(user_data);
+    auto rit = h2 ? h2->streamed_response_rules.find(stream_id) : decltype(h2->streamed_response_rules)::iterator();
+    if (!h2 || rit == h2->streamed_response_rules.end()) {
+        return dataProviderReadCallbackIntern(session, stream_id, buf, length, data_flags, source, user_data);
+    }
+    ssize_t rv = dataProviderReadCallbackIntern(session, stream_id, buf, length, data_flags, source, user_data);
+    if (rv < 0) {
+        return rv;
+    }
+    // the call does not change the map: the reference is valid
+    StreamedResponseRule& sr = rit->second;
+    // a response without content sends none of the data given for it (qoretechnologies/qore#7212): the data buffered
+    // for the stream is drained and dropped in this call, so that its end, if given, is reached without another
+    // call, which nothing would make after a deferral
+    if (sr.no_body) {
+        while (rv > 0 && !(*data_flags & NGHTTP2_DATA_FLAG_EOF)) {
+            rv = dataProviderReadCallbackIntern(session, stream_id, buf, length, data_flags, source, user_data);
+            if (rv < 0) {
+                return rv;
+            }
+        }
+        if (*data_flags & NGHTTP2_DATA_FLAG_EOF) {
+            return 0;
+        }
+        // nothing more is buffered: the stream is resumed when more data or its end is given
+        return NGHTTP2_ERR_DEFERRED;
+    }
+    // content longer or shorter than declared would make the response malformed: the stream is reset with
+    // RST_STREAM (INTERNAL_ERROR) instead (qoretechnologies/qore#7212)
+    sr.provided += static_cast<uint64_t>(rv);
+    if (sr.provided > static_cast<uint64_t>(sr.content_length)
+            || ((*data_flags & NGHTTP2_DATA_FLAG_EOF) && sr.provided != static_cast<uint64_t>(sr.content_length))) {
+        qore_async_io_log(QORE_LOG_LEVEL_WARN, "HTTP/2: the streamed response on stream %d has %s content (%llu "
+            "bytes) than its content-length (%lld); the stream is reset", stream_id,
+            sr.provided > static_cast<uint64_t>(sr.content_length) ? "more" : "less",
+            (unsigned long long)sr.provided, (long long)sr.content_length);
+        return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+    }
+    return rv;
+}
+
+ssize_t Http2Session::dataProviderReadCallbackIntern(nghttp2_session* session, int32_t stream_id,
         uint8_t* buf, size_t length, uint32_t* data_flags, nghttp2_data_source* source,
         void* user_data) {
     (void)session;
@@ -3547,6 +3669,12 @@ int Http2Session::submitTrailers(int32_t stream_id,
             return -1;
         }
     } else {
+        // trailers before the response would be a header block without :status, which the client rejects: a server
+        // sends them only after the response (qoretechnologies/qore#7212)
+        if (is_server && (!stream || !stream->response_submitted)) {
+            xsink->raiseException("HTTP2-ERROR", "cannot send trailers on stream %d before its response", stream_id);
+            return -1;
+        }
         // No data provider — submit trailers directly (body already complete)
         // lowered_names keeps the lowercased header name strings alive while nghttp2_nv
         // pointers reference their .c_str() data; must outlive the nghttp2_submit_trailer call
@@ -3597,6 +3725,9 @@ void Http2Session::setStreamType(int32_t stream_id, Http2StreamType type) {
 
 int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
         const qore_http_header_pairs_t& headers, ExceptionSink* xsink) {
+    if (h2_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return -1;
+    }
     std::lock_guard<std::recursive_mutex> lg(m);
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit CONNECT response on client session");
@@ -3611,6 +3742,11 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
     Http2StreamInfo* stream = getStream(stream_id);
     if (!stream) {
         xsink->raiseException("HTTP2-ERROR", "stream %d not found", stream_id);
+        return -1;
+    }
+    // a second response on the stream would be a malformed message (qoretechnologies/qore#7212)
+    if (stream->response_submitted) {
+        xsink->raiseException("HTTP2-ERROR", "response already submitted for stream %d", stream_id);
         return -1;
     }
 
@@ -3645,7 +3781,7 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
         // RFC 7540 Section 8.1.2.2: Skip connection-specific headers (forbidden in HTTP/2)
         std::string lname = h.first;
         std::transform(lname.begin(), lname.end(), lname.begin(), ::tolower);
-        if (forbidden_headers.count(lname)) {
+        if (isForbiddenResponseHeader(lname)) {
             continue;
         }
         // Store lowercase name
@@ -3656,6 +3792,15 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
             lowered_names.back().size(), h.second.size(), NGHTTP2_NV_FLAG_NONE
         };
         nva.push_back(nv);
+    }
+
+    // a 2xx response other than 204 opens the tunnel, and the client drops its content-length; any other response is
+    // checked as every response, so that it is never malformed (qoretechnologies/qore#7212; see
+    // QoreHttpResponseBodyRule)
+    const bool tunnel = status_code >= 200 && status_code < 300 && status_code != 204;
+    QoreHttpResponseBodyRule rule(status_code, "CONNECT");
+    if (!tunnel && checkResponseLocked(stream_id, status_code, nva, -1, rule, xsink)) {
+        return -1;
     }
 
     std::unique_ptr<DataProviderContext> provider_ctx = std::make_unique<DataProviderContext>();
@@ -3672,6 +3817,13 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
         xsink->raiseException("HTTP2-ERROR", "failed to submit CONNECT response: %s",
             nghttp2_strerror(rv));
         return -1;
+    }
+    stream->response_submitted = true;
+    if (!tunnel && (rule.noBody() || rule.streamLength() >= 0)) {
+        StreamedResponseRule& sr = streamed_response_rules[stream_id];
+        sr.no_body = rule.noBody();
+        sr.content_length = rule.streamLength();
+        sr.provided = 0;
     }
     if (http2DebugEnabled()) {
         fprintf(stderr, "HTTP2 DEBUG: submitConnectResponse ok stream=%d\n", stream_id);

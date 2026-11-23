@@ -55,6 +55,7 @@
 #include "qore/intern/QC_LoggerInterfaceBase.h"
 #include "qore/intern/QC_AsyncIoController.h"
 #include "qore/intern/QC_SSLCertificate.h"
+#include "qore/intern/QC_SSLTrustStore.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
 #include "qore/intern/QC_ProgramControl.h"
 #include "qore/intern/QC_Program.h"
@@ -1686,6 +1687,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     // add system object types
     qns.addSystemClass(initTimeZoneClass(qns));
     qns.addSystemClass(initSSLCertificateClass(qns));
+    qns.addSystemClass(initSSLTrustStoreClass(qns));
     qns.addSystemClass(initSSLPrivateKeyClass(qns));
     // FastCell and HttpFastRoutes must be before Socket, which takes HttpFastRoutes in Socket::setHttpFastRoutes()
     qns.addSystemClass(initFastCellClass(qns));

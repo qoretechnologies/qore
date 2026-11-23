@@ -1,0 +1,24 @@
+list index store: [1, 2, 3]
+list element +=: [11, 2, 3]
+list push: PUSH-ERROR
+list unshift: UNSHIFT-ERROR
+list +=: RUNTIME-TYPE-ERROR
+list splice: EXTRACT-ERROR
+list extract: EXTRACT-ERROR
+list pop: POP-ERROR
+list shift: SHIFT-ERROR
+list dynamic index store: [11, 7, 3]
+l: [11, 7, 3]
+hash key store: {a: 1, b: 2}
+hash dynamic key store: {a: 1, b: 2, c: 3}
+hash key +=: {a: 11, b: 2, c: 3}
+hash +=: RUNTIME-TYPE-ERROR
+hash remove: {a: 11, c: 3}
+hash delete: {a: 11}
+hash -=: RUNTIME-TYPE-ERROR
+h: {a: 11}
+auto list: [1, 2, 3]
+auto hash: {a: 1, b: 2}
+loop: [0, 1, 2, 3, 4]
+shared: a [1, 2] b [1]
+freed: LIST-ERROR

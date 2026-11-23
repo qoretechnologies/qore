@@ -8755,6 +8755,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
         // Keep RHS referenced before COW, matching QoreAssignmentOperatorNode.
         // This makes `h.b = h` copy the outer hash before storing the original.
         if (h->reference_count() > 1) {
+            // a hash that the local designates through a weak reference is changed, not copied, as the AST
+            // interpreter changes it: native code reads it with a reference of its own (qore#7198, qore#7299)
+            if (qore_weak_local_container_store(var, h, key, 0, val, xsink)) {
+                return *xsink ? toBits(QoreValue()) : value_bits;
+            }
             // COW: transfer the unique copy's reference to the local — no
             // refSelf, so LValueHelper::assign()'s typed-lvalue paths (e.g.
             // the hash<auto!> no-narrow strip) retag it in place instead of
@@ -8821,6 +8826,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
             // node the local actually stores (borrowed against its reference).
             LocalVar* var = ctx && local_slot < static_cast<uint32_t>(ctx->num_locals)
                 ? ctx->locals[local_slot] : nullptr;
+            // a hash that the local designates through a weak reference is changed, not copied, as the AST
+            // interpreter changes it: native code reads it with a reference of its own (qore#7198, qore#7299)
+            if (qore_weak_local_container_store(var, h, key, 0, val, xsink)) {
+                return *xsink ? toBits(QoreValue()) : value_bits;
+            }
             QoreValue stored = qore_rt_assign_local_transfer(var,
                 QoreValue(h->copy()), xsink);
             if (*xsink || stored.getType() != NT_HASH) {
@@ -8909,6 +8919,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         // Any ref beyond the lvalue's own runtime slot is real sharing and must
         // trigger COW; LLVM-side reload/cache refs are cleared before this helper.
         if (l->reference_count() > 1) {
+            // a list that the local designates through a weak reference is changed, not copied, as the AST
+            // interpreter changes it: native code reads it with a reference of its own (qore#7198, qore#7299)
+            if (qore_weak_local_container_store(var, l, nullptr, index, val, xsink)) {
+                return *xsink ? toBits(QoreValue()) : val_bits;
+            }
             // COW: transfer the unique copy's reference to the local — no
             // refSelf, so LValueHelper::assign()'s typed-lvalue paths (e.g.
             // the list<auto!> no-narrow strip) retag it in place instead of
@@ -9017,6 +9032,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
             // node the local actually stores (borrowed against its reference).
             LocalVar* var = ctx && local_slot < static_cast<uint32_t>(ctx->num_locals)
                 ? ctx->locals[local_slot] : nullptr;
+            // a list that the local designates through a weak reference is changed, not copied, as the AST
+            // interpreter changes it: native code reads it with a reference of its own (qore#7198, qore#7299)
+            if (qore_weak_local_container_store(var, l, nullptr, index, val, xsink)) {
+                return *xsink ? toBits(QoreValue()) : val_bits;
+            }
             QoreValue stored = qore_rt_assign_local_transfer(var,
                 QoreValue(l->copy()), xsink);
             if (*xsink || stored.getType() != NT_LIST) {
@@ -17595,12 +17615,11 @@ static int qore_rt_get_self_member_lvalue(const char* member_name,
     if (qore_rt_check_closure_self_valid(obj, xsink)) {
         return -1;
     }
-    qore_object_private* obj_private = qore_object_private::get(*obj);
+    // getLValue() sets the object context: the object is on the path once (qore#7348)
     if (qore_object_private::getLValue(*obj, member_name, lvh,
             runtime_get_class(), false, xsink)) {
         return -1;
     }
-    lvh.setObjectContext(obj_private);
 
     const ReferenceNode* ref = lvh.getReference();
     if (!ref) {
@@ -18136,6 +18155,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_update(
 QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
         const LVPathStep& last_step, LVUnaryOp unary_op,
         ExceptionSink* xsink) {
+    // a list or a hash that the lvalue holds through a weak reference is changed itself (qore#7306)
+    ct = LValueHelper::getRemovalType(ct);
     const bool is_delete = (unary_op == LVUnaryOp::Delete);
     // a single key whose value is a list (a HashKey step) is a slice: each element is a key; in a list of keys (a
     // HashKeySlice step) each value is one key, even if it is a list, as in the AST interpreter (LValueRemoveHelper::
@@ -18160,8 +18181,8 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
     };
 
     if (ct == NT_HASH) {
-        lvh.ensureUnique();
-        QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
+        // the lvalue's own hash or the hash of a weak reference that it holds, which is changed itself (qore#7306)
+        QoreHashNode* h = lvh.getRemovalHash(lvh.getType());
         if (!h) {
             return QoreValue();
         }
@@ -18187,8 +18208,12 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
         })) {
             return QoreValue();
         }
+        // nothing is removed: a hash freed under a weak reference, which is empty, cannot be changed
+        if (rvh->empty() && hp->checkRemovalValid(xsink)) {
+            return QoreValue();
+        }
         if (old_count && !qore_hash_private::getScanCount(*h)) {
-            lvh.setDelta(-1);
+            lvh.setRemovalDelta(-1, lvh.getType() == NT_WEAKREF_HASH);
         }
         lvh.removedValue(QoreValue(*rvh));
         if (is_delete) {
@@ -18248,6 +18273,8 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
 QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         const LVPathStep& last_step, const std::vector<bool>& slice_ranges, LVUnaryOp unary_op,
         ExceptionSink* xsink) {
+    // a list or a hash that the lvalue holds through a weak reference is changed itself (qore#7306)
+    ct = LValueHelper::getRemovalType(ct);
     const bool is_delete = (unary_op == LVUnaryOp::Delete);
     // a negative index counts from the end with negative offsets, as in the AST interpreter (do_list_value(),
     // do_string_value() and do_binary_value() in Variable.cpp), which compiled code always has
@@ -18283,8 +18310,8 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
     };
 
     if (ct == NT_LIST) {
-        lvh.ensureUnique();
-        QoreListNode* l = lvh.getValue().get<QoreListNode>();
+        // the lvalue's own list or the list of a weak reference that it holds, which is changed itself (qore#7306)
+        QoreListNode* l = lvh.getRemovalList(lvh.getType());
         if (!l) {
             return QoreValue();
         }
@@ -18325,6 +18352,10 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
                 return QoreValue();
             }
         }
+        // nothing is removed: a list freed under a weak reference, which is empty, cannot be changed
+        if (iset.empty() && qore_list_private::get(*l)->checkRemovalValid(xsink)) {
+            return QoreValue();
+        }
         if (vtype && vtype != anyTypeInfo) {
             qore_list_private::get(**v)->complexTypeInfo
                     = qore_get_complex_list_type(vtype);
@@ -18346,7 +18377,7 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         }
         if (needs_scan(*v)) {
             if (!qore_list_private::getScanCount(*l)) {
-                lvh.setDelta(-1);
+                lvh.setRemovalDelta(-1, lvh.getType() == NT_WEAKREF_LIST);
             }
         }
         // dereference the spliced-out entries once the lvalue locks are released: a destructor is
@@ -18464,6 +18495,8 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
 QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
         const LVPathStep& last_step, LVUnaryOp unary_op,
         ExceptionSink* xsink) {
+    // a list or a hash that the lvalue holds through a weak reference is changed itself (qore#7306)
+    ct = LValueHelper::getRemovalType(ct);
     const bool is_delete = (unary_op == LVUnaryOp::Delete);
     if (last_step.slice_values.size() != 2) {
         xsink->raiseException("IR-EXEC-ERROR", "ListRangeSlice remove requires start and stop operands");
@@ -18474,7 +18507,20 @@ QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
     int64 start = 0;
     int64 stop = 0;
     int64 seq_size = 0;
-    QoreValue seq = lvh.getValue();
+    // a list that the lvalue holds through a weak reference is changed itself (qore#7306)
+    const qore_type_t lt = lvh.getType();
+    QoreListNode* weak_list = nullptr;
+    if (lt == NT_WEAKREF_LIST) [[unlikely]] {
+        weak_list = lvh.getRemovalList(lt);
+        if (!weak_list) {
+            return QoreValue();
+        }
+    } else if (ct == NT_LIST
+        && qore_list_private::get(*lvh.getValue().get<QoreListNode>())->checkValid(xsink)) {
+        // a copy of a list freed under a weak reference cannot be changed, also by an empty range (qore#7163)
+        return QoreValue();
+    }
+    QoreValue seq = weak_list ? QoreValue(weak_list) : lvh.getValue();
     if (!QoreSquareBracketsRangeOperatorNode::getEffectiveRange(seq, start, stop, seq_size,
             last_step.slice_values[0], last_step.slice_values[1], false, negative_offsets, xsink)) {
         if (*xsink || is_delete) {
@@ -18501,13 +18547,14 @@ QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
     }
 
     if (ct == NT_LIST) {
-        lvh.ensureUnique();
-        QoreListNode* l = lvh.getValue().get<QoreListNode>();
+        QoreListNode* l = weak_list ? weak_list : lvh.getRemovalList(lt);
         if (!l) {
             return QoreValue();
         }
+        assert(weak_list || l->reference_count() == 1);
         size_t orig_size = l->size();
-        ReferenceHolder<QoreListNode> nl(l->extract(start, stop - start + 1), xsink);
+        // the list of a weak reference is shared with its owners
+        ReferenceHolder<QoreListNode> nl(qore_list_private::get(*l)->extract(start, stop - start + 1), xsink);
         if (stop >= static_cast<int64>(orig_size)) {
             // the elements past the end of the list are NOTHING, so the removed list has the or-nothing element
             // type of the list, as in the AST interpreter (LValueRemoveHelper::doRemove(); qore#6434)
@@ -18685,18 +18732,23 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             }
             lvh.startContainerRemoval();
             // the type alone: getValue() would box a large int or a special float that the parent stores
-            // natively in a new node (qore#6094)
+            // natively in a new node (qore#6094); a list or a hash that the parent holds through a weak reference
+            // (NT_WEAKREF_LIST, NT_WEAKREF_HASH) is changed itself (qore#7306): the container helpers and
+            // qore_lvalue_remove_index() take the type of the lvalue
             qore_type_t ct = lvh.getType();
             if ((last_is_hash_slice || last_is_hash_list)
-                    && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
+                    && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF || ct == NT_WEAKREF_HASH)) {
                 res = executeLVHashKeySliceRemove(lvh, ct, last_step,
                         inst->unary_op, xsink);
                 handled_multistep_remove = true;
-            } else if (last_is_hash && ct == NT_HASH) {
-                lvh.ensureUnique();
-                QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
-                res = h->takeKeyValue(last_step.name.c_str());
-                lvh.removedValue(res);
+            } else if (last_is_hash && (ct == NT_HASH || ct == NT_WEAKREF_HASH)) {
+                QoreHashNode* h = lvh.getRemovalHash(ct);
+                if (h) {
+                    // the hash of a weak reference is shared with its owners
+                    // NOTHING if the key does not exist, also with HASH-ERROR for a freed hash
+                    res = qore_hash_private::get(*h)->takeRemovedKey(last_step.name.c_str(), xsink);
+                    lvh.removedValue(res);
+                }
                 pending_delete_finish = true;
                 handled_multistep_remove = true;
             } else if (last_is_hash && (ct == NT_OBJECT || ct == NT_WEAKREF)) {
@@ -18711,7 +18763,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 }
                 handled_multistep_remove = true;
             } else if (last_is_list && ct != NT_NOTHING
-                    && !(last_is_list_slice && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY))) {
+                    && !(last_is_list_slice && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY
+                        || ct == NT_WEAKREF_LIST))) {
                 // a list-valued index selects a slice only of a list, a string or a binary object; any other value is
                 // removed itself, as with the AST and IR interpreters
                 // as the remove operator does: an element of a list, a character of a string or a byte of a
@@ -18721,12 +18774,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 res = qore_lvalue_remove_index(lvh, last_step.index, xsink, inst->unary_op == LVUnaryOp::Delete);
                 pending_delete_finish = true;
                 handled_multistep_remove = true;
-            } else if (last_is_hash_slice && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
+            } else if (last_is_hash_slice
+                    && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF || ct == NT_WEAKREF_HASH)) {
                 res = executeLVHashKeySliceRemove(lvh, ct, last_step,
                         inst->unary_op, xsink);
                 handled_multistep_remove = true;
             } else if (last_is_list_slice
-                    && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
+                    && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY || ct == NT_WEAKREF_LIST)) {
                 res = executeLVListIndexSliceRemove(lvh, ct, last_step,
                         inst->slice_ranges, inst->unary_op, xsink);
                 pending_delete_finish = pending_delete_direct_list = true;
@@ -18739,7 +18793,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 pending_delete_finish = pending_delete_direct_list = true;
                 handled_multistep_remove = true;
             } else {
-                // any other parent - no value, a weak reference to a hash, a scalar - has nothing to remove, as with
+                // any other parent - no value, a scalar - has nothing to remove, as with
                 // the IR interpreter and the AST interpreter (LValueRemoveHelper), which remove a key only from a
                 // hash or an object
                 handled_multistep_remove = true;
@@ -18872,6 +18926,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             || inst->unary_op == LVUnaryOp::Chomp
             || inst->unary_op == LVUnaryOp::EnsureUnique);
         LValueHelper lvh(xsink);
+        // the source of a weak assignment is read as an rvalue reads it (qore#7242)
+        if (inst->unary_op == LVUnaryOp::EnsureUnique) {
+            lvh.setWeakSourceResolution();
+        }
         if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
             return toBits(QoreValue());
         }
@@ -19235,6 +19293,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
             ? "<splice operator>" : "<extract operator>")) {
         // a string enum lvalue refuses the plain string that the operation leaves, as in the AST interpreter
         // (qore#6195)
+        return toBits(QoreValue());
+    } else if (vt == NT_LIST
+            && qore_list_private::get(*lvh.getValue().get<QoreListNode>())->checkValid(xsink)) {
+        // a list freed under a weak reference cannot be changed, as by the other changes (qore#7199)
         return toBits(QoreValue());
     } else {
         size_t offset = static_cast<size_t>(offset_val.getAsBigInt());
@@ -23279,9 +23341,8 @@ qore_rt_get_aot_object_member_descriptor(
     }
     resolved->member_class_ctx =
         resolved->info->getClassContext(class_ctx);
-#ifdef HAVE_QORE_HASH_MAP
+    // the key map of a hash is always a hash table that uses the hash given with a key (qore#7194)
     resolved->key_hash = qore_hash_str()(member_name);
-#endif
     const QoreAOTObjectMemberDescriptor* expected = nullptr;
     if (target.object_member_descriptor.compare_exchange_strong(expected,
             resolved.get(), std::memory_order_release,

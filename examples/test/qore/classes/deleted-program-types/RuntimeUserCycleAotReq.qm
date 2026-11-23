@@ -1,0 +1,19 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%requires qore >= 2.0
+%requires RuntimeUserCycleLoaded
+
+module RuntimeUserCycleAotReq {
+    version = "1.0";
+    desc = "an AOT module requiring a user module that another user module loaded at run time (issue #7310)";
+    author = "Qore Technologies";
+    url = "https://qoretechnologies.com";
+}
+
+%modern
+
+#! returns 2; the module is loaded only so that the user module it requires is left to the end of the cleanup
+public int sub runtime_user_cycle_aot_req() {
+    return 2;
+}

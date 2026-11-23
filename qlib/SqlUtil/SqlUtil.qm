@@ -157,8 +157,11 @@ module SqlUtil {
     @ref SqlUtil::sqlutil_register_ds_serializer() "sqlutil_register_ds_serializer()", or by the default serializer,
     which keeps no credentials of the datasource in the serialized data: it keeps the masked configuration of the
     datasource (see @ref datasource_mask_options), which identifies it by its driver, database, character encoding,
-    host, port and option names, with the password removed and the user name and every option value masked as
-    \c "****" (an option of a driver can hold a credential).
+    host, port and option names, with the password removed and the user name masked as \c "****", and every option
+    value masked as \c "****" (an option of a driver can hold a credential) unless all of the conditions of
+    @ref datasource_mask_options hold: the driver is loaded, registers the option with option flags without declaring
+    it sensitive, the option name names no credential, and the value is a plain string, number or boolean that a
+    datasource string can show.
 
     When data is deserialized, the datasource is given by, in this order:
     - the connection that the data names (see below)
@@ -8603,11 +8606,21 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
     #! registers a closure or call reference that gives the full configuration of a serialized datasource
     /** The default serializer keeps no credentials of a datasource in serialized data: it keeps the masked
         configuration of the datasource (see @ref datasource_mask_options), with the password removed and the user
-        name and every option value masked.  When data is deserialized without a registered deserializer (see
+        name and every option value masked, except the values that all of the conditions of
+        @ref datasource_mask_options let be shown (the driver is loaded, registers the option with option flags
+        without declaring it sensitive, the option name names no credential, and the value is a plain string, number
+        or boolean that a datasource string can show).  When data is deserialized without a registered deserializer (see
         sqlutil_register_ds_deserializer()), this callback is called with the type of the datasource
         (\c "Datasource" or \c "DatasourcePool") and the masked @ref datasource_hash "datasource hash", and returns
         the full @ref datasource_hash "datasource hash" (or datasource string) of the datasource, with its credentials
         from the configured source.
+
+        @note the database name in the masked configuration is \c "****" if it can hold credentials: if it has a
+        character that a database name only does not have (see @ref datasource_mask_options), or if the driver of the
+        datasource was loaded when the data was serialized and declares
+        @ref Qore::SQL::DBI_CAP_SENSITIVE_DBNAME "DBI_CAP_SENSITIVE_DBNAME" (as the \c jdbc driver does, whose database
+        name is a JDBC URL), so a resolver cannot identify such a datasource by its database name; data serialized with
+        the datasource of a named connection keeps the name of the connection and is restored by it (qore#7275)
 
         @param new_ds_resolve the callback, with the signature
         <tt>hash<auto>|string sub (string type, hash<auto> masked_config)</tt>, or @ref nothing to remove it
@@ -8705,8 +8718,8 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
         }
         hash<auto> masked = dsh.ds_masked;
         throw "DATASOURCE-DESERIALIZATION-ERROR", sprintf("the serialized data of datasource %s has no credentials "
-            "(its password, user name and option values are not serialized); register a deserializer "
-            "(sqlutil_register_ds_deserializer()) or a credential resolver "
+            "(its password, user name and option values that can hold credentials are not serialized); register a "
+            "deserializer (sqlutil_register_ds_deserializer()) or a credential resolver "
             "(sqlutil_register_ds_credential_resolver()) that gives them", mask_datasource(masked,
             SqlUtilMaskOptions));
     }

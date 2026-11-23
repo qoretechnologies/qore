@@ -29,7 +29,10 @@ print_usage () {
   echo "                           (-b in QORE_TEST_OPTS), is aborted at once.  On Linux, the state, CPU time and"
   echo "                           kernel wait channel of each of its threads are printed when it exceeds it and"
   echo "                           again before it is aborted, with /proc/pressure and the cgroup's cpu.stat and"
-  echo "                           memory.events.  Before any signal, the native call stacks of all threads of"
+  echo "                           memory.events; if the CPU pressure of the last 5 minutes (the \"some\" line,"
+  echo "                           avg300) was 50% or more, it says that the machine was CPU-starved and the"
+  echo "                           timeout is probably not a hang (qore#7353).  Before any signal, the native"
+  echo "                           call stacks of all threads of"
   echo "                           every other process of the test (those that descend from it, and those it"
   echo "                           started that were adopted: with its mark on Linux, in its process group"
   echo "                           elsewhere) are printed, each with its process ID and command line (gdb or"
@@ -3046,6 +3049,19 @@ event $1
                     echo "    pressure $resource: `tr '\n' ' ' < "$proc/pressure/$resource" 2>/dev/null`"
                 fi
             done
+            # a test that exceeds its limit on a machine whose CPUs were contended for most of the last five minutes
+            # (the "some" line of the CPU pressure: a task was waiting for a CPU for half of the time or more) was
+            # probably starved, not hung: its threads sleep in the kernel and its children keep ending (qore#7353)
+            if [ "$1" = "at its time limit" ] && [ -r "$proc/pressure/cpu" ]; then
+                starved=`awk '$1 == "some" { for (i = 2; i <= NF; ++i) if ($i ~ /^avg300=/) {
+                        v = substr($i, 8) + 0; if (v >= 50) { printf "%s", substr($i, 8); exit } } }' \
+                    "$proc/pressure/cpu" 2>/dev/null`
+                if [ -n "$starved" ]; then
+                    echo "    the machine was CPU-starved while the test ran (a task waited for a CPU ${starved}% of the" \
+                        "last 5 minutes): this timeout is probably not a hang; run the test alone, run fewer jobs at" \
+                        "once, or raise TEST_TIMEOUT"
+                fi
+            fi
             # the test's own cgroup (v2: the "0::<path>" line), which is /sys/fs/cgroup itself in a container's cgroup
             # namespace
             cgroup=$QORE_TEST_CGROUP

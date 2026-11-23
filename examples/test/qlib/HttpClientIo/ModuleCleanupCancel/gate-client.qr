@@ -1,0 +1,13 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the destructor of AbGate's data starts a WebSocket server (HTTP/2 or HTTP/1.1: ARGV[0]) whose admission gate takes a
+# notification of the module cleanup's work while the thread in its loop is blocked in a handler: the cleanup waits for
+# that thread before it deletes the data of AbLater (qore#7239)
+
+%requires AbGate
+%requires AbLater
+
+GateHolder::http_version = ARGV[0];
+GateHolder::gate_file = ARGV[0] == "2.0" ? "WebSocketHandler.qm" : "HttpWebSocketPollOperation.qc";
+printf("started\n");
+flush();

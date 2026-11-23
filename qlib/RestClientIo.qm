@@ -222,6 +222,10 @@ resp = rc.restGet("/api/data");
 
     @subsection restclientio_v1_0 Version 1.0
     - initial release
+    - supports sealed OAuth2 credentials (@ref RestClient::SealedOAuth2Credentials "SealedOAuth2Credentials", option
+      \c oauth2_sealed_credentials); with them, @ref RestClientIo::RestClientIo::startOAuth2PollRefreshToken()
+      "startOAuth2PollRefreshToken()" returns the poll operation of the token request instead of the request
+      (<a href="https://github.com/qoretechnologies/qore/issues/7248">issue 7248</a>)
 */
 
 #! Main namespace for the RestClientIo module
@@ -664,6 +668,10 @@ hash<RestResponseInfo> resp = f.get(30s);
           \c "authorization_code", \c "implicit", or \c "none")
         - \c oauth2_client_id: OAuth2 client ID
         - \c oauth2_client_secret: OAuth2 client secret
+        - \c oauth2_sealed_credentials: a @ref RestClient::SealedOAuth2Credentials "SealedOAuth2Credentials" object
+          that trusted code created: the client makes its token requests with it and never gives its secret out; it
+          replaces \c oauth2_client_secret and \c oauth2_token_url, and cannot be replaced once set
+          (qoretechnologies/qore#7248)
         - \c oauth2_client_assertion_type: OAuth2 client assertion type
         - \c oauth2_client_assertion: static OAuth2 client assertion
         - \c oauth2_client_assertion_provider: \c code<string()> returning a fresh OAuth2 client assertion
@@ -725,6 +733,15 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" is thread-safe.
     */
     public class RestClientIo inherits RestClient::AbstractRestClient {
+        private:internal {
+            #! The proof of the code that created the client, given to the manager that it creates (qore#7262)
+            /** Taken when the client is created (see HttpClientIo::HttpClientCreatorProof::forClient()): a client that
+                trusted code, or a connection that trusted code created, creates for restricted code is the creator's,
+                bound to the creator's target, proxy and CA locations
+            */
+            *HttpClientIo::HttpClientCreatorProof creator_proof;
+        }
+
         private {
             #! Connection manager for HTTP/2 and HTTP/3 connections
             HttpClientIo::HttpClientConnectionManager mgr;
@@ -882,6 +899,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             bool oauth2_refreshing = False;
 
             # --- Alt token signer for proxy-based OAuth2 ---
+
+            #! OAuth2 credentials that the client uses for its token requests but never gives out; set once
+            /** transient: never serialized; a deserialized client has none (qoretechnologies/qore#7248)
+            */
+            transient *RestClient::SealedOAuth2Credentials sealed_creds;
 
             #! Callback for signing token requests to an alternate token URL (proxy)
             transient *code alt_token_signer;
@@ -1110,6 +1132,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "encoding_passthru": True,
                 "timeout": True,
                 "proxy": True,
+                "ssl_trust_store": True,
                 "max_connections_per_host": True,
                 "max_streams_per_connection": True,
                 "max_redirects": True,
@@ -1170,6 +1193,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "oauth2_grant_type": True,
                 "oauth2_client_id": True,
                 "oauth2_client_secret": True,
+                "oauth2_sealed_credentials": True,
                 "oauth2_client_assertion_type": True,
                 "oauth2_client_assertion": True,
                 "oauth2_client_assertion_provider": True,
@@ -1241,7 +1265,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             # Capture caller options verbatim for copyWithUrl / getConstructorOptions;
             # validation and normalization below mutate the local 'opts' but saved_opts
             # preserves the caller's original intent for sibling construction
-            saved_opts = opts0;
+            # the sealed credentials are kept in their transient member only (qoretechnologies/qore#7248)
+            saved_opts = opts0 - "oauth2_sealed_credentials";
             # a caller's literal may be narrowed (e.g. hash<string, string>), and normalizing the options below
             # adds values of other types, such as the integer ssl_verify_mode
             hash<auto!> opts = opts0;
@@ -1397,12 +1422,18 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             }
             # the options are validated before they are set, so that an option of the wrong type raises OAUTH2-ERROR
             # as with RestClient (qore#6906)
+            # sealed OAuth2 credentials replace the client secret and token URL (qoretechnologies/qore#7248)
+            if (exists opts.oauth2_sealed_credentials) {
+                setSealedOAuth2Credentials(opts.oauth2_sealed_credentials);
+            }
             bool oauth2_grant_usable = checkOAuth2Options(opts);
             if (opts.oauth2_grant_type) {
                 oauth2_grant_type = opts.oauth2_grant_type;
             }
             if (opts.oauth2_client_id) {
                 oauth2_client_id = opts.oauth2_client_id;
+            } else if (sealed_creds) {
+                oauth2_client_id = sealed_creds.getClientId();
             }
             if (opts.oauth2_client_secret) {
                 oauth2_client_secret = opts.oauth2_client_secret;
@@ -1518,6 +1549,13 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             }
 
             if (shared_mgr) {
+                # a trust store of the client that the shared manager does not use is refused, not ignored: the
+                # connections verify servers with the manager's TLS settings (qoretechnologies/qore#7248)
+                *SSLTrustStore mgr_ts = shared_mgr.getSslTrustStore();
+                if (opts.ssl_trust_store && (!mgr_ts || opts.ssl_trust_store.getId() != mgr_ts.getId())) {
+                    throw "RESTCLIENTIO-OPTION-ERROR", "option \"ssl_trust_store\" cannot be used with a shared "
+                        "connection manager that does not use the same trust store";
+                }
                 # Use shared manager — caller retains ownership
                 mgr = shared_mgr;
                 owns_mgr = False;
@@ -1526,7 +1564,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                     cookie_jar = new HttpClientIo::CookieJar();
                 }
             } else {
-                mgr = buildManager(opts, credentials);
+                # the manager is the creator's, also for restricted code that was lent the client or its connection
+                # (qore#7262)
+                creator_proof = HttpClientIo::HttpClientCreatorProof::forClient(url, {"proxy": opts.proxy});
+                mgr = buildManager(opts, credentials, creator_proof);
                 mgr_owner = new RestClientIoConnectionManagerOwner(mgr);
                 cookie_jar = mgr.getCookieJar();
             }
@@ -1561,6 +1602,25 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         #! Returns the underlying connection manager
         HttpClientIo::HttpClientConnectionManager getConnectionManager() {
             return mgr;
+        }
+
+        #! Sets the code that is called once, when the first request is submitted on a connection of the client
+        /** See @ref HttpClientIo::HttpClientConnectionManager::setFirstConnectionCallback(); the code is set on the
+            connection manager that the client created, and not on a shared connection manager given to it, whose
+            connections are also those of other clients.
+
+            @param cb the code to call, or @ref nothing to remove the code set before
+
+            @return @ref True if the code was set, @ref False if the client uses a shared connection manager
+
+            @since RestClientIo 1.0
+        */
+        bool setFirstConnectionCallback(*code<nothing()> cb) {
+            if (!owns_mgr) {
+                return False;
+            }
+            mgr.setFirstConnectionCallback(cb);
+            return True;
         }
 
         #! Starts a persistent (connection-scoped) session that pins one connection
@@ -1600,7 +1660,38 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             # the caller's options may be narrowed (e.g. hash<string, string> for {"url": "..."}); callers add
             # values of other types to the returned hash, such as a token or flags, to create another client
             hash<auto!> rv = saved_opts;
+            if (sealed_creds) {
+                rv.oauth2_sealed_credentials = sealed_creds;
+            }
             return rv;
+        }
+
+        #! Returns the sealed OAuth2 credentials of the client, if any
+        /** The object gives out no secret; see @ref RestClient::SealedOAuth2Credentials "SealedOAuth2Credentials"
+
+            @since %RestClientIo 1.0 (qoretechnologies/qore#7248)
+        */
+        *RestClient::SealedOAuth2Credentials getSealedOAuth2Credentials() {
+            return sealed_creds;
+        }
+
+        #! Sets the sealed OAuth2 credentials of the client once
+        /** @throw OAUTH2-SEALED-ERROR the value is not a SealedOAuth2Credentials object, or the client has other
+            sealed credentials already: they cannot be replaced
+        */
+        private:internal setSealedOAuth2Credentials(auto creds) {
+            if (!(creds instanceof RestClient::SealedOAuth2Credentials)) {
+                throw "OAUTH2-SEALED-ERROR", sprintf("option \"oauth2_sealed_credentials\" must be a "
+                    "SealedOAuth2Credentials object; got type %y", creds.fullType());
+            }
+            AutoWriteLock al(config_lock);
+            if (sealed_creds) {
+                if (sealed_creds == creds) {
+                    return;
+                }
+                throw "OAUTH2-SEALED-ERROR", "the sealed OAuth2 credentials of a client cannot be replaced";
+            }
+            sealed_creds = creds;
         }
 
         #! Returns a new RestClientIo pointed at a different URL, sharing the connection manager
@@ -1634,6 +1725,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "url": new_url,
                 "skip_login": True,
             };
+            # the copy uses the same sealed credentials (qoretechnologies/qore#7248)
+            if (sealed_creds) {
+                opts.oauth2_sealed_credentials = sealed_creds;
+            }
             # the copy keeps the headers declared sensitive, also those declared after this client was created
             {
                 AutoReadLock al(config_lock);
@@ -2475,6 +2570,54 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             }
             hash<auto> async_info = startAsyncRequestOperation(method, target.path, body, hdr,
                 raw, False, NOTHING, NOTHING, NOTHING, timeout_ms, resolveRequestTarget(target, method));
+            RestClientIoAsyncRequestOperation op = async_info.operation;
+            return new RestFuture(async_info.future, bool sub () {
+                return op.cancel();
+            }, hash<RestClient::RestResponseInfo> sub (hash<auto> response) {
+                return buildAsyncOperationResponse(response, op);
+            });
+        }
+
+        #! Starts an async request with explicit path semantics and signals a notifier when it ends
+        /** Prepares the request in the calling thread (including an OAuth2 token refresh, request signing and body
+            serialization) and submits it as @ref restDoRequestTargetWithTimeout() does, without waiting for the
+            response: \a notifier is signaled when the request ends, whether with a response, an error, a timeout or a
+            cancellation, so that a caller that watches the notifier with the async I/O controller holds no thread
+            while the response is awaited.  The response is then available at once from
+            @ref RestFuture::get() "RestFuture::get()", with the same response handling and errors as
+            @ref restDoRequestTargetWithTimeout().
+
+            @param method HTTP method
+            @param target API-relative endpoint or origin-absolute target
+            @param body request body, serialized by the client
+            @param hdr additional headers
+            @param timeout_ms the positive transport deadline of this request in milliseconds, replacing the client's
+            request timeout
+            @param notifier signaled once when the request has ended
+
+            @return a cancellable future containing the deserialized REST response
+
+            @throw REST-REQUEST-TARGET-ERROR the path or API root is invalid
+            @throw RESTCLIENTIO-OPTION-ERROR the timeout is not positive
+
+            @par Example
+            @code{.py}
+EventNotifier notifier();
+RestFuture future = rest.restDoRequestAsyncTargetWithNotifier("POST",
+    <RestRequestTarget>{"path": "messages"}, body, NOTHING, 30000, notifier);
+# ... the async I/O controller reports the notifier readable ...
+hash<RestResponseInfo> response = future.get();
+            @endcode
+
+            @since RestClientIo 1.0
+        */
+        RestFuture restDoRequestAsyncTargetWithNotifier(string method, hash<RestClient::RestRequestTarget> target,
+                auto body, *hash<auto> hdr, int timeout_ms, EventNotifier notifier) {
+            if (timeout_ms <= 0) {
+                throw "RESTCLIENTIO-OPTION-ERROR", "timeout_ms must be positive";
+            }
+            hash<auto> async_info = startAsyncRequestOperation(method, target.path, body, hdr,
+                False, False, notifier, NOTHING, NOTHING, timeout_ms, resolveRequestTarget(target, method));
             RestClientIoAsyncRequestOperation op = async_info.operation;
             return new RestFuture(async_info.future, bool sub () {
                 return op.cancel();
@@ -3440,7 +3583,10 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             using socket-level polling (no background threads, no blocking I/O on the I/O thread).
             When the poll operation completes, call updateOAuth2Token() with the parsed response.
 
-            @return an AbstractPollOperation for the token refresh HTTP request
+            @return an AbstractPollOperation for the token refresh HTTP request; with sealed OAuth2 credentials
+            (\c oauth2_sealed_credentials), a hash with only the key \c "poll": the poll operation of the token
+            request, which the credentials make themselves, as its request holds the secret; its output has the
+            \c "code", \c "response-body" and \c "info" keys of the response (qoretechnologies/qore#7248)
 
             @throw OAUTH2-ERROR if no OAuth2 token endpoint URL (\c oauth2_token_url or
             \c oauth2_alt_token_url) is configured for the connection
@@ -3459,6 +3605,10 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
                 # (e.g. a non-OAuth connection that reached here) raises a clear OAuth2
                 # configuration error instead of an opaque RUNTIME-TYPE-ERROR.
                 *string token_url = oauth2_alt_token_url ?? oauth2_token_url;
+                # sealed credentials have a token endpoint of their own (qoretechnologies/qore#7248)
+                if (sealed_creds) {
+                    token_url = sealed_creds.getTokenUrl();
+                }
                 if (!token_url.val()) {
                     throw "OAUTH2-ERROR", "cannot perform an OAuth2 token refresh: no token "
                         "endpoint URL is configured (\"oauth2_token_url\" or "
@@ -3472,6 +3622,12 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
                 login = refresh_token.val()
                     ? getOAuth2RefreshInfo()
                     : getOAuth2LoginInfo(oauth2_grant_type);
+            }
+
+            # a request with sealed credentials is made by them: the request, which holds the secret, is not given
+            # out; the caller polls the returned operation instead (qoretechnologies/qore#7248)
+            if (*RestClient::SealedOAuth2Credentials creds = sealed_creds) {
+                return {"poll": creds.startPollRequestToken(login, saved_opts.proxy)};
             }
 
             # Determine base URL and request path (same logic as doOAuth2TokenRequest)
@@ -4181,24 +4337,8 @@ rest.addSensitiveHeaders("Qorus-Token");
                 if (content_type.val() && !RestClientIo::isSseContentType(content_type)) {
                     *data body = drainSseErrorBody(stream, first_data,
                         response_timeout, deadline);
-                    throw "REST-RESPONSE-ERROR",
-                        sprintf("HTTP %d response with Content-Type %y received; expected an event stream "
-                            "(Content-Type \"text/event-stream\")", raw_response.status_code, content_type),
-                        <RestClient::RestResponseInfo>{
-                            "status_code": raw_response.status_code,
-                            "headers": raw_response.headers,
-                            "body": body,
-                            "content_type": content_type,
-                            "response_body_raw": body,
-                            "request_method": method,
-                            "request_path": path,
-                            "request_headers": RestClientIo::redactHeaders(request_headers, extra),
-                            "request_body": request_body,
-                            "protocol": raw_response.protocol,
-                            "status_message": raw_response.status_message,
-                            "effective_url": raw_response.effective_url,
-                            "redirects": raw_response.redirects,
-                        };
+                    throwNotEventStream(raw_response, content_type, body, method, path, request_headers,
+                        request_body, extra);
                 }
             }
 
@@ -4214,6 +4354,40 @@ rest.addSensitiveHeaders("Qorus-Token");
                 initial_data += first_data;
             }
             return initial_data;
+        }
+
+        #! Raises the error of a successful response to an SSE request that is not an event stream
+        /** @param raw_response the response, without its body
+            @param content_type the Content-Type of the response
+            @param body the body of the response, if any
+            @param method the HTTP method of the request
+            @param path the path of the request
+            @param request_headers the headers of the request
+            @param request_body the body of the request
+            @param extra the names of further sensitive headers
+
+            @throw REST-RESPONSE-ERROR always
+        */
+        private static throwNotEventStream(hash<auto> raw_response, string content_type, *data body, string method,
+                string path, *hash<auto> request_headers, *data request_body, *hash<string, bool> extra) {
+            throw "REST-RESPONSE-ERROR",
+                sprintf("HTTP %d response with Content-Type %y received; expected an event stream "
+                    "(Content-Type \"text/event-stream\")", raw_response.status_code, content_type),
+                <RestClient::RestResponseInfo>{
+                    "status_code": raw_response.status_code,
+                    "headers": raw_response.headers,
+                    "body": body,
+                    "content_type": content_type,
+                    "response_body_raw": body,
+                    "request_method": method,
+                    "request_path": path,
+                    "request_headers": RestClientIo::redactHeaders(request_headers, extra),
+                    "request_body": request_body,
+                    "protocol": raw_response.protocol,
+                    "status_message": raw_response.status_message,
+                    "effective_url": raw_response.effective_url,
+                    "redirects": raw_response.redirects,
+                };
         }
 
         #! Returns True if the given Content-Type value names an event stream
@@ -4432,6 +4606,9 @@ rest.addSensitiveHeaders("Qorus-Token");
             @throw OAUTH2-ERROR if the options are invalid
         */
         setOAuth2Options(hash<auto> new_opts) {
+            if (exists new_opts.oauth2_sealed_credentials) {
+                setSealedOAuth2Credentials(new_opts.oauth2_sealed_credentials);
+            }
             bool grant_usable = checkOAuth2Options(new_opts);
             {
                 AutoWriteLock al(config_lock);
@@ -4509,7 +4686,8 @@ rest.addSensitiveHeaders("Qorus-Token");
         */
         hash<auto> getOAuth2Options() {
             AutoReadLock al(config_lock);
-            return {
+            # sealed credentials are given only when set: the object gives out no secret (qoretechnologies/qore#7248)
+            return (sealed_creds ? {"oauth2_sealed_credentials": sealed_creds} : {}) + {
                 "username": username,
                 "password": password,
                 "token": token_val,
@@ -4631,6 +4809,13 @@ rest.addSensitiveHeaders("Qorus-Token");
             hash<auto> effective = getOAuth2Options() + opts;
             # a client assertion replaces the client secret of the client credentials grant
             *hash<string, bool> satisfied;
+            # sealed credentials replace the client secret and the token URL (qoretechnologies/qore#7248)
+            if (sealed_creds) {
+                satisfied = {"oauth2_client_secret": True, "oauth2_token_url": True};
+                if (!effective.oauth2_client_id.val()) {
+                    effective.oauth2_client_id = sealed_creds.getClientId();
+                }
+            }
             if (grant_type == "client_credentials" && hasOAuth2ClientAssertion(effective)) {
                 satisfied.oauth2_client_secret = True;
             }
@@ -4761,6 +4946,11 @@ rest.addSensitiveHeaders("Qorus-Token");
             @throw OAUTH2-ERROR if the token request fails
         */
         private hash<auto> doOAuth2TokenRequest(hash<auto> login) {
+            # a request with sealed credentials is made by them, with a client of their own
+            # (qoretechnologies/qore#7248)
+            if (*RestClient::SealedOAuth2Credentials creds = sealed_creds) {
+                return creds.requestToken(login, saved_opts.proxy);
+            }
             # Read token URL and auth config under config lock
             string token_url;
             bool use_basic_auth;
@@ -5004,7 +5194,10 @@ rest.addSensitiveHeaders("Qorus-Token");
                 login.client_assertion_type = client_assertion_type;
                 return;
             }
-            login.client_secret = client_secret;
+            # sealed credentials add their own secret: the client has none then (qoretechnologies/qore#7248)
+            if (exists client_secret) {
+                login.client_secret = client_secret;
+            }
         }
 
         #! Performs an initial OAuth2 login
@@ -5258,7 +5451,8 @@ rest.addSensitiveHeaders("Qorus-Token");
         }
 
         private:internal static HttpClientIo::HttpClientConnectionManager buildManager(hash<auto> opts,
-                *hash<RestClient::RestConnectionTlsCredentials> credentials) {
+                *hash<RestClient::RestConnectionTlsCredentials> credentials,
+                *HttpClientIo::HttpClientCreatorProof proof) {
             hash<HttpClientIo::HttpClientConnectionManagerOptions> mgr_opts();
             if (opts.connect_timeout) {
                 mgr_opts.connect_timeout = opts.connect_timeout;
@@ -5314,6 +5508,9 @@ rest.addSensitiveHeaders("Qorus-Token");
             if (opts.ssl_ca_path) {
                 mgr_opts.ssl_ca_path = opts.ssl_ca_path;
             }
+            if (opts.ssl_trust_store) {
+                mgr_opts.ssl_trust_store = opts.ssl_trust_store;
+            }
             if (opts.encoding_passthru) {
                 mgr_opts.encoding_passthru = opts.encoding_passthru.toBool();
             }
@@ -5336,7 +5533,9 @@ rest.addSensitiveHeaders("Qorus-Token");
             if (client_pk) {
                 mgr_opts.client_pk = client_pk;
             }
-            return new HttpClientIo::HttpClientConnectionManager(mgr_opts);
+            return proof
+                ? new HttpClientIo::HttpClientConnectionManager(mgr_opts, proof)
+                : new HttpClientIo::HttpClientConnectionManager(mgr_opts);
         }
 
         #! Loads an X.509 client certificate from \c ssl_cert_path or \c ssl_cert_data
@@ -5406,6 +5605,10 @@ rest.addSensitiveHeaders("Qorus-Token");
             @param opts options passed through to SseObservable:
             - \c serialization: "json" or "none" (default: inherits from data serialization)
             - \c timeout: I/O timeout for reading events (default: 30s)
+
+            @note A response that does not start an event stream (an error status, or a successful response whose
+            \c Content-Type is not \c text/event-stream) closes the observable with \c reason \c "startup-error" and the
+            error that @ref restSseReader() raises for the same response in \c error
 
             @return an SseObservable ready for observer registration; call
             \c observersReady() after registering observers to start the stream
@@ -5480,6 +5683,48 @@ obs.observersReady();
             return bool sub () {
                 return op.cancel();
             };
+        }
+
+        #! Returns True if a Content-Type value of a response to an SSE request is not an event stream
+        /** Used by event-driven SSE observable startup, which refuses such a response as @ref restSseReader() does.
+
+            @param content_type the Content-Type header value of the response, if any
+
+            @return True if \a content_type is set and is not \c text/event-stream
+        */
+        bool isNotEventStreamContentType(*string content_type) {
+            return content_type.val() && !RestClientIo::isSseContentType(content_type);
+        }
+
+        #! Raises the error of a successful response to an SSE request that is not an event stream
+        /** Used by event-driven SSE observable startup; the error is the one that @ref restSseReader() raises for the
+            same response.
+
+            @param raw the response, without its body
+            @param content_type the Content-Type of the response
+            @param body the body of the response, if any
+            @param method the HTTP method of the request
+            @param path the path of the request
+            @param request_headers the headers of the request
+            @param request_body the body of the request
+
+            @throw REST-RESPONSE-ERROR always
+        */
+        raiseSseObservableNotEventStream(hash<auto> raw, string content_type, *data body, string method, string path,
+                *hash<auto> request_headers, *data request_body) {
+            hash<string, bool> extra = getSensitiveHeaderSet();
+            # as for the response errors of restSseReader(), any credential of the request echoed in the error is
+            # redacted
+            on_error {
+                hash<auto> safe = RestClient::RestDiagnostics::redact($1, request_headers, extra);
+                rethrow safe.err, safe.desc, safe.arg;
+            }
+            hash<auto> raw_response;
+            raw_response += raw;
+            if (!raw_response.headers) {
+                raw_response.headers = {};
+            }
+            throwNotEventStream(raw_response, content_type, body, method, path, request_headers, request_body, extra);
         }
 
         #! Raises the REST response error used by event-driven SSE observable startup
@@ -6218,14 +6463,15 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
     }
 
     private doSubmitRequest() {
+        # a request cancelled while its connection was acquired, or after an earlier attempt, is not sent
+        checkSettled();
         state = SPS_IO_WAITING;
         if (isRedirected()) {
             # the request was prepared for the original request; it is sent as changed by the redirects
             hash<auto> result = rcio.submitRedirectAttemptWithNotifier(rf.getOrigin(), rf.getMethod(),
                 rf.getPath(), rf.getHeaders(), rf.getBody(), io_notifier);
             connector.submitted();
-            pending_future = result.future;
-            pending_stream = result.stream;
+            setPendingRequest(result.future, result.stream);
             sent = clock_get_monotonic_us();
             return;
         }
@@ -6236,8 +6482,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
             hdr, prepared_attempt, io_notifier);
         connector.submitted();
         delete prepared_attempt;
-        pending_future = result.future;
-        pending_stream = result.stream;
+        setPendingRequest(result.future, result.stream);
         sent = clock_get_monotonic_us();
         request_body = result.request_body;
         request_error_passthru = result.error_passthru;
@@ -6301,6 +6546,39 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
             }
         }
     }
+
+    #! Raises \c HTTPCLIENT-CANCELLED if the operation's Future has already been settled
+    /** @ref cancel() settles the Future from any thread; a request submitted after that would be left running
+        with nothing to end it.
+    */
+    private checkSettled() {
+        AutoLock al(m);
+        if (promise_done) {
+            throw "HTTPCLIENT-CANCELLED", "async request was canceled";
+        }
+    }
+
+    #! Records the response Future and the stream of a submitted request attempt
+    /** @ref cancel() runs in the caller's thread and cancels the stream it finds recorded; the request is
+        submitted in the thread driving the operation and reaches the server before its stream is recorded here.
+        A cancel in between finds no stream, so the stream is recorded under the lock that @ref cancel() takes, and
+        if the Future has been settled in the meantime the stream is cancelled here; its connection is closed
+        either way.
+
+        @throw HTTPCLIENT-CANCELLED the operation was cancelled while the request was submitted
+    */
+    private setPendingRequest(Future future, HttpClientIo::HttpClientStreamHandle stream) {
+        {
+            AutoLock al(m);
+            pending_future = future;
+            pending_stream = stream;
+            if (!promise_done) {
+                return;
+            }
+        }
+        cancelPendingStream();
+        throw "HTTPCLIENT-CANCELLED", "async request was canceled";
+    }
 }
 
 #! Event-driven RestClientIo SSE observable startup with Negotiate retry support
@@ -6347,6 +6625,9 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         *hash<auto> response;
         string error_body = "";
         bool got_error_body = False;
+        #! The Content-Type of a successful response that is not an event stream, whose body is read before the
+        #! response is refused
+        *string not_event_stream_type;
 
         string state = SPS_CONNECTING;
         bool goal_reached = False;
@@ -6385,8 +6666,18 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
                 "has_on_complete": True,
             });
         } catch (hash<ExceptionInfo> ex) {
+            bool cancelled;
+            {
+                AutoLock al(m);
+                cancelled = done;
+            }
             cancelPendingStream();
             fail(ex);
+            # a startup cancelled while it started (its request then fails with HTTPCLIENT-CANCELLED) ends quietly,
+            # as one cancelled later does
+            if (cancelled) {
+                return;
+            }
             rethrow;
         }
     }
@@ -6537,7 +6828,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         HttpClientIo::HttpClientConnectionManager mgr = rcio.getConnectionManager();
         if (isRedirected()) {
             # the request was prepared for the original request; it is sent as changed by the redirects
-            pending_stream = mgr.acquireStream(rf.getOrigin());
+            setPendingStream(mgr.acquireStream(rf.getOrigin()));
             pending_stream.startStreaming(rf.getMethod(), rf.getPath(),
                 rcio.addClientCookies(rf.getOrigin(), rf.getPath(), rf.getHeaders()), False, rf.getBody(),
                 stream_notifier, True);
@@ -6549,7 +6840,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         if (!prepared_attempt) {
             prepareAttempt();
         }
-        pending_stream = mgr.acquireStream(rcio.getUrl());
+        setPendingStream(mgr.acquireStream(rcio.getUrl()));
         # sse_install_eligible=True: this flow always completes with installSseState()
         # after the response start is validated, so the underlying ChannelAction must be
         # retained past end_stream to drain buffered body bytes into the SSE parser.
@@ -6648,7 +6939,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
                     \negotiate_context)) {
             negotiate_retried = True;
             cancelPendingStream();
-            remove pending_stream;
+            clearPendingStream();
             doStartConnecting();
             return;
         }
@@ -6666,7 +6957,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
             # the body of the redirect response is discarded, and the next request goes to the origin of the
             # redirect target
             cancelPendingStream();
-            remove pending_stream;
+            clearPendingStream();
             remove response;
             connector = new RestClientIoAsyncConnector(rcio, rf.getOrigin());
             waiting_for_connection = False;
@@ -6680,12 +6971,23 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
             response.redirects = redirects;
         }
 
-        if (status_code >= 300) {
+        # a successful response that is not an event stream is refused, as restSseReader() refuses it, once its body
+        # has been read
+        if (status_code < 300) {
+            *string content_type = RestClient::getSingleHeaderValue(response_headers."content-type");
+            if (rcio.isNotEventStreamContentType(content_type)) {
+                not_event_stream_type = content_type;
+            }
+        }
+        if (status_code >= 300 || not_event_stream_type) {
             if (captureErrorBody(item)) {
                 raiseResponseError();
             }
             state = SPS_ERROR_DRAIN;
             waiting_for_stream = False;
+            # the error body, and its end, may have arrived with the response headers: the stream's notifier was
+            # signaled for all of them, so they are read now, not after a further signal that never comes
+            processErrorDrainItems();
             return;
         }
 
@@ -6697,7 +6999,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         pending_stream.installSseState(sse_queue, stream_notifier,
             initial_body);
         HttpClientIo::HttpClientStreamHandle started_stream = pending_stream;
-        remove pending_stream;
+        clearPendingStream();
         goal_reached = True;
         state = SPS_COMPLETE;
         observable.activateStartedStream(started_stream, sse_queue,
@@ -6752,6 +7054,10 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         if (!raw.headers) {
             raw.headers = {};
         }
+        if (not_event_stream_type) {
+            rcio.raiseSseObservableNotEventStream(raw, not_event_stream_type, got_error_body ? error_body : NOTHING,
+                method, path, hdr, request_body);
+        }
         if (got_error_body) {
             raw.body = error_body;
         }
@@ -6770,10 +7076,40 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         observable.startupFailed(ex);
     }
 
+    #! Records the stream of the request about to be submitted
+    /** @ref cancel() runs in another thread and cancels the stream it finds recorded, so the stream is recorded under
+        the lock that @ref cancel() takes; a stream acquired after the startup was cancelled is not used.
+
+        @throw HTTPCLIENT-CANCELLED the startup was cancelled; the stream is released
+    */
+    private setPendingStream(HttpClientIo::HttpClientStreamHandle stream) {
+        {
+            AutoLock al(m);
+            if (!done) {
+                pending_stream = stream;
+                return;
+            }
+        }
+        # the stream has no request; cancelling it releases its reservation
+        stream.cancel();
+        throw "HTTPCLIENT-CANCELLED", "SSE observable startup was canceled";
+    }
+
+    #! Forgets the stream of the request, under the lock that @ref cancel() takes
+    private clearPendingStream() {
+        AutoLock al(m);
+        remove pending_stream;
+    }
+
     private cancelPendingStream() {
-        if (pending_stream) {
+        *HttpClientIo::HttpClientStreamHandle stream;
+        {
+            AutoLock al(m);
+            stream = pending_stream;
+        }
+        if (stream) {
             try {
-                pending_stream.cancel();
+                stream.cancel();
             } catch () {
             }
         }
@@ -6800,6 +7136,8 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         const string SPS_OAUTH2_CONNECTING = "oauth2-connecting";
         #! Waiting for the OAuth2 token refresh response via EventNotifier
         const string SPS_OAUTH2_REFRESH = "oauth2-refresh";
+        #! state: waiting for an OAuth2 token request made with sealed credentials (qoretechnologies/qore#7248)
+        const string SPS_OAUTH2_SEALED = "oauth2-sealed";
         #! Waiting for the underlying TCP/TLS connection to become ready
         const string SPS_CONNECTING = "connecting";
         #! Waiting for HTTP ping response via EventNotifier
@@ -6861,6 +7199,9 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
 
         #! Future for OAuth2 token refresh response
         *Future oauth2_future;
+
+        #! The token request made with sealed credentials, if any (qoretechnologies/qore#7248)
+        *AbstractPollOperation oauth2_sealed_poller;
 
         #! OAuth2 refresh operation, kept for cancellation
         *RestClientIoAsyncRequestOperation oauth2_operation;
@@ -7039,6 +7380,15 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
 
     *hash<SocketPollInfo> continuePoll() {
         while (True) {
+            if (state == SPS_OAUTH2_SEALED) {
+                if (*hash<SocketPollInfo> pi = oauth2_sealed_poller.continuePoll()) {
+                    return pi;
+                }
+                processOAuth2SealedResult();
+                # Start connecting (or submit ping immediately if already connected)
+                doStartConnecting();
+            }
+
             if (state == SPS_OAUTH2_CONNECTING) {
                 if (!waiting_for_oauth2_conn) {
                     # First call — return poll info for the connection notifier
@@ -7252,6 +7602,12 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
     */
     private doStartOAuth2Refresh() {
         hash<auto> refresh_info = rcio.startOAuth2PollRefreshToken();
+        # sealed credentials make the request themselves (qoretechnologies/qore#7248)
+        if (refresh_info.poll) {
+            oauth2_sealed_poller = refresh_info.poll;
+            state = SPS_OAUTH2_SEALED;
+            return;
+        }
         oauth2_rcio = refresh_info.rcio;
         oauth2_req = refresh_info{"path", "headers", "body"};
 
@@ -7327,6 +7683,36 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
             throw "REST-PING-ERROR", sprintf("OAuth2 token refresh failed: HTTP %d",
                 status_code), {"status_code": status_code};
         }
+    }
+
+    #! Parses the response of a token request made with sealed credentials and stores the new token
+    private processOAuth2SealedResult() {
+        *hash<auto> out = oauth2_sealed_poller.getOutput();
+        delete oauth2_sealed_poller;
+        int status_code = out."code".toInt();
+        if ((status_code / 100) != 2) {
+            conn.authFailure();
+            throw "REST-PING-ERROR", sprintf("OAuth2 token refresh failed: HTTP %d", status_code),
+                {"status_code": status_code};
+        }
+        string body = RestClient::RestClient::getPollResponseBodyText(out);
+        *string content_type = out.info."response-headers"."content-type";
+        if (content_type) {
+            content_type =~ s/;.*//;
+        }
+        auto parsed_body;
+        switch (content_type) {
+            case MimeTypeJson:
+                parsed_body = parse_json(body);
+                break;
+            case MimeTypeFormUrlEncoded:
+                parsed_body = mime_parse_form_urlencoded_string(body);
+                break;
+            default:
+                throw "REST-PING-ERROR", sprintf("cannot parse OAuth2 token response with Content-Type: %y",
+                    content_type);
+        }
+        rcio.updateOAuth2Token(parsed_body);
     }
 
     #! Checks connection readiness and either submits the ping or enters SPS_CONNECTING
@@ -7540,6 +7926,10 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         }
         if (oauth2_future) {
             delete oauth2_future;
+        }
+        if (oauth2_sealed_poller) {
+            oauth2_sealed_poller.abort();
+            delete oauth2_sealed_poller;
         }
         if (oauth2_notifier) {
             delete oauth2_notifier;

@@ -358,6 +358,9 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       a message only if the client's connection is the one with the given ID, so a message that belongs to one
       connection (a heartbeat) and was held across a reconnect is dropped instead of being sent on the new connection
       (<a href="https://github.com/qoretechnologies/qore/issues/7106">issue 7106</a>)
+    - a successful ping of a @ref WebSocketClient::WebSocketConnectionObject "WebSocketConnectionObject" marks the
+      connection up with the status \c "OK"; the status stayed \c "not checked"
+      (<a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>)
     - a control frame with an RSV bit set (RFC 6455 section 5.2), or a continuation frame with RSV1 set (the
       "Per-Message Compressed" bit of permessage-deflate, RFC 7692 section 6.1), closes the connection with
       @ref WebSocketUtil::WSCC_ProtocolError "WSCC_ProtocolError" (1002)
@@ -1466,6 +1469,25 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         const ReconnectDelay = 2s;
     }
 
+    private:internal {
+        #! the proof that the code that created the client passed the caller check of a connection manager
+        /** The client creates its connection manager when it connects, and again after a detach or a fallback from
+            HTTP/2 or HTTP/3 to HTTP/1.1: the code that created the client decides, so a client that the host creates
+            and lends to restricted code connects for it, only to the target that it had when it was created (the proof
+            is bound to it); nothing if the creator could not create a manager, whose client is then refused when it
+            connects (qore#7262)
+        */
+        *HttpClientIo::HttpClientCreatorProof creator_proof;
+
+        #! HttpClientIo connection manager for fully async H2/H3 connections
+        /** Created lazily when connecting via HTTP/2. Manages the H2 connection
+            lifecycle, protocol negotiation, and async I/O controller registration.  Not visible to subclasses: a
+            manager created for a client that trusted code lent is a capability of the client's target (qore#7262)
+            @since WebSocketClient 2.4
+        */
+        *HttpClientIo::HttpClientConnectionManager hcio_mgr;
+    }
+
     private {
         Mutex m();
         Condition sleep_cond();
@@ -1715,12 +1737,6 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         */
         *Socket async_wake_socket;
 
-        #! HttpClientIo connection manager for fully async H2/H3 connections
-        /** Created lazily when connecting via HTTP/2. Manages the H2 connection
-            lifecycle, protocol negotiation, and async I/O controller registration.
-            @since WebSocketClient 2.4
-        */
-        *HttpClientIo::HttpClientConnectionManager hcio_mgr;
 
         #! HttpClientIo stream handle for the active H2 CONNECT tunnel
         /** Provides async sendData()/readData() for bidirectional WebSocket
@@ -3562,6 +3578,9 @@ ws.setEventQueue();
 
     #! Common constructor code
     private constructorInit(hash<auto> opts) {
+        # the proof of the code that creates the client, or the one that the trusted creator of the connection that
+        # creates it grants, bound to its target (qore#7262)
+        creator_proof = HttpClientIo::HttpClientCreatorProof::forClient(opts.url, {"proxy": opts.proxy});
         if (opts.reconnect) {
             reconnect = True;
         }
@@ -5730,7 +5749,10 @@ ws.setEventQueue();
     */
     private ensureHcioMgr(*string force_protocol) {
         if (!hcio_mgr) {
-            hcio_mgr = new HttpClientIo::HttpClientConnectionManager(buildHcioOpts(force_protocol));
+            # the code that created the client decides (qore#7262)
+            hcio_mgr = creator_proof
+                ? new HttpClientIo::HttpClientConnectionManager(buildHcioOpts(force_protocol), creator_proof)
+                : new HttpClientIo::HttpClientConnectionManager(buildHcioOpts(force_protocol));
         }
     }
 
@@ -6588,7 +6610,8 @@ public class WebSocketPingPollOperation inherits ConnectionProvider::HttpClientI
     */
     constructor(string base_url, *hash<auto> http_opts, *hash<auto> headers, *Logger::LoggerInterface logger)
             : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(
-                WebSocketPingPollOperation::getHttpOptions(http_opts), logger),
+                WebSocketPingPollOperation::getHttpOptions(http_opts), logger,
+                WebSocketPingPollOperation::getHttpUrl(base_url)),
                 WebSocketPingPollOperation::getHttpUrl(base_url), "GET",
                 HttpClientIoPollOperation::getRequestHeaders(WebSocketPingPollOperation::getHttpUrl(base_url),
                     http_opts, headers),
@@ -6910,9 +6933,12 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
         # Use a 30-second connect timeout for ping operations to prevent hanging on unresponsive endpoints
         object o = get(True, {"connect_timeout": 30000});
         on_exit o.disconnect();
+        date delta = now_us() - start;
+        # issue #7236: a successful ping marks the connection up
+        handlePingSuccess(delta);
         return rv += {
             "ok": True,
-            "time": now_us() - start,
+            "time": delta,
             "info": "OK",
         };
     }
@@ -8331,6 +8357,9 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
 */
 public class WebSocketClientHcioPollOp {
     public {
+        #! The frames that one drain of the queue processes at most; another round drains the rest (issue #6156)
+        const DrainRoundEntries = 1000;
+
         #! How long a close waits for the server's answer without a close timeout (see setCloseTimeout())
         const DefaultCloseWaitMs = 15000;
     }
@@ -8559,7 +8588,8 @@ public class WebSocketClientHcioPollOp {
             return;
         }
 
-        bool have_frames = drainMsgQueue();
+        bool more;
+        bool have_frames = drainMsgQueue(\more);
 
         # Only trigger delivery after start() — before that, poll_op isn't
         # assigned in the WebSocketClient so scheduleDelivery() would fail.
@@ -8568,6 +8598,34 @@ public class WebSocketClientHcioPollOp {
         # something (runInitialDrain(), issue #6154).
         if (have_frames && started && on_poll_complete) {
             on_poll_complete();
+        }
+        # a round is bounded: the frames that it left in the queue are drained by the next round, which is scheduled
+        # here, as no notification may come for them (a burst with nothing after it, issue #6156)
+        if (more) {
+            scheduleDrain();
+        }
+    }
+
+    #! Schedules a drain of the queued frames on a worker of the async I/O controller
+    /** The task references the operation, so that it stays valid until the task has run; a connection that was torn
+        down meanwhile is closed, and notifyIo() then only discards its frames.  A controller that is stopping runs no
+        task: the client's initial drain or close delivers the frames then.
+    */
+    private:internal scheduleDrain() {
+        WebSocketClientHcioPollOp op = self;
+        try {
+            Qore::AsyncIoController::submitTask(task: sub () {
+                try {
+                    op.notifyIo();
+                } catch (hash<ExceptionInfo> ex) {
+                    # the operation was deleted explicitly meanwhile: its client tore the connection down
+                    if (ex.err != "OBJECT-ALREADY-DELETED") {
+                        rethrow;
+                    }
+                }
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            # the controller is stopping
         }
     }
 
@@ -8593,23 +8651,9 @@ public class WebSocketClientHcioPollOp {
         started = True;
         rescheduleHeartbeatTimer();
         if (!msg_queue.empty()) {
-            # the task references the operation, so that it stays valid until the task has run; a connection that
-            # was torn down meanwhile is closed, and notifyIo() then only discards its frames
-            WebSocketClientHcioPollOp op = self;
-            try {
-                Qore::AsyncIoController::submitTask(task: sub () {
-                    try {
-                        op.notifyIo();
-                    } catch (hash<ExceptionInfo> ex) {
-                        # the operation was deleted explicitly meanwhile: its client tore the connection down
-                        if (ex.err != "OBJECT-ALREADY-DELETED") {
-                            rethrow;
-                        }
-                    }
-                });
-            } catch (hash<ExceptionInfo> ex) {
-                # the controller is stopping: the client's initial drain delivers the frames
-            }
+            # the controller is stopping when the task cannot be submitted: the client's initial drain delivers the
+            # frames then
+            scheduleDrain();
         }
     }
 
@@ -8622,7 +8666,14 @@ public class WebSocketClientHcioPollOp {
     */
     bool initialDrain() {
         AutoLock al(process_mutex);
-        return drainMsgQueue();
+        bool more;
+        bool rv = drainMsgQueue(\more);
+        # the frames that the bounded round left are drained by the next round (issue #6156); before start(), start()
+        # schedules it
+        if (more && started) {
+            scheduleDrain();
+        }
+        return rv;
     }
 
     #! Closes the connection when its stream ended without a close frame, or failed
@@ -8657,16 +8708,26 @@ public class WebSocketClientHcioPollOp {
             exists stream_error);
     }
 
-    #! Drains all typed frame hashes from msg_queue and dispatches them
-    /** Non-blocking: returns as soon as the queue is empty or a NOTHING
-        sentinel is observed.  NOTHING is the stream-ended signal emitted by
+    #! Drains the typed frame hashes from msg_queue and dispatches them, at most DrainRoundEntries per call
+    /** Non-blocking: returns as soon as the queue is empty, a NOTHING
+        sentinel is observed, or the round's bound is reached.  NOTHING is the stream-ended signal emitted by
         FrameStateAction::complete / executeError.
+
+        @param more set to @ref True if the round's bound was reached and the queue still has entries, which the
+        caller has drained by another round (issue #6156)
+
         @return True if any frames were processed
     */
-    private bool drainMsgQueue() {
+    private bool drainMsgQueue(reference<bool> more) {
         bool processed = False;
-        int max_entries = 1000;
-        while (max_entries-- > 0) {
+        more = False;
+        int max_entries = DrainRoundEntries;
+        while (True) {
+            if (max_entries-- <= 0) {
+                # the round's bound: the entries left are drained by another round
+                more = !msg_queue.empty();
+                break;
+            }
             *hash<auto> wrap = msg_queue.tryGet();
             if (!exists wrap) {
                 break;  # Queue empty

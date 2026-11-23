@@ -1,0 +1,18 @@
+outside untyped: "B::m"
+outside call reference: "B::m"
+Z untyped: "B::m"
+Z typed: "B::m"
+Z call reference: "B::m"
+Z typed call reference: "B::m"
+Z call reference, named argument: "B::m"
+Z call_object_method: "B::m"
+B untyped: "B::m"
+B call reference: "B::m"
+Z2 untyped: METHOD-IS-PRIVATE
+Z2 call reference: ILLEGAL-CALL-REFERENCE
+outside X2 call reference: ILLEGAL-CALL-REFERENCE
+SB typed: "PB::m(string)"
+SB untyped: "PB::m(string)"
+SB call reference: "PB::m(string)"
+SB untyped call reference: "PB::m(string)"
+SB call reference, named argument: "PB::m(string)"

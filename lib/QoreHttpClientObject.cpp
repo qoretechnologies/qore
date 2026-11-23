@@ -1651,6 +1651,7 @@ struct qore_httpclient_priv {
                         || opts.accept_all_certs != msock->socket->priv->ssl_accept_all_certs
                         || opts.ssl_ca_file != msock->socket->priv->ssl_ca_file
                         || opts.ssl_ca_path != msock->socket->priv->ssl_ca_path
+                        || opts.ssl_trust_store != msock->socket->priv->ssl_trust_store
                         || opts.client_cert != httpCertificate()
                         || opts.client_key != httpKey()) {
                     old_mgr = std::move(conn_mgr);
@@ -1676,6 +1677,7 @@ struct qore_httpclient_priv {
                 opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
                 opts.ssl_ca_file = msock->socket->priv->ssl_ca_file;
                 opts.ssl_ca_path = msock->socket->priv->ssl_ca_path;
+                opts.ssl_trust_store = msock->socket->priv->ssl_trust_store;
                 opts.client_cert = httpCertificate();
                 opts.client_key = httpKey();
                 // Proxy URL from the existing connection info
@@ -1943,6 +1945,13 @@ struct qore_httpclient_priv {
         }
         if (!sock.ssl_ca_path.empty()) {
             h->setKeyValueIntern("ssl_ca_path", new QoreStringNode(sock.ssl_ca_path));
+        }
+        // the trust store object, which cannot be serialized: a client that uses one is not serialized without it
+        // (qoretechnologies/qore#7248)
+        if (sock.ssl_trust_store) {
+            sock.ssl_trust_store->ref();
+            h->setKeyValueIntern("ssl_trust_store", new QoreObject(QC_SSLTRUSTSTORE, getProgram(),
+                sock.ssl_trust_store));
         }
         if (timeout != HTTPCLIENT_DEFAULT_TIMEOUT) {
             h->setKeyValueIntern("timeout", timeout);
@@ -4251,6 +4260,33 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         }
     }
 
+    // an in-memory trust store, which takes precedence over the CA locations (qoretechnologies/qore#7248)
+    n = opts->getKeyValue("ssl_trust_store");
+    if (!n.isNothing()) {
+        QoreSSLTrustStore* ts = nullptr;
+        if (n.getType() == NT_OBJECT && n.get<const QoreObject>()->getClass(CID_SSLTRUSTSTORE)) {
+            ts = reinterpret_cast<QoreSSLTrustStore*>(const_cast<QoreObject*>(n.get<const QoreObject>())
+                ->getReferencedPrivateData(CID_SSLTRUSTSTORE, xsink));
+            if (*xsink) {
+                return -1;
+            }
+        }
+        if (!ts) {
+            xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "expecting an SSLTrustStore object for the "
+                "\"ssl_trust_store\" key in the options hash; got type \"%s\" instead", n.getFullTypeName());
+            return -1;
+        }
+        // the socket takes a reference of its own
+        qore_socket_private::get(*priv->socket)->setSslTrustStore(ts);
+        ts->deref();
+        // the trust store verifies the server's certificate: it implies verification unless ssl_verify_cert is given
+        // as False, so that it is not ignored
+        QoreValue vc = opts->getKeyValue("ssl_verify_cert");
+        if (vc.isNothing() || vc.getAsBool()) {
+            priv->socket->setSslVerifyMode(SSL_VERIFY_PEER);
+        }
+    }
+
     n = opts->getKeyValue("error_passthru");
     if (n.getAsBool()) {
         http_priv->error_passthru = true;
@@ -5364,6 +5400,16 @@ QoreStringNode* QoreHttpClientObject::getProxyURL()  {
         return nullptr;
 
     return http_priv->proxy_connection.get_url();
+}
+
+QoreStringNode* QoreHttpClientObject::getProxyURL(int code)  {
+    SafeLocker sl(priv->m);
+
+    if (!http_priv->proxy_connection.has_url()) {
+        return nullptr;
+    }
+
+    return http_priv->proxy_connection.get_url(code);
 }
 
 QoreStringNode* QoreHttpClientObject::getSafeProxyURL()  {
@@ -7488,6 +7534,7 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
     opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
     opts.ssl_ca_file = msock->socket->priv->ssl_ca_file;
     opts.ssl_ca_path = msock->socket->priv->ssl_ca_path;
+    opts.ssl_trust_store = msock->socket->priv->ssl_trust_store;
     opts.client_cert = httpCertificate();
     opts.client_key = httpKey();
     opts.proxy_url = getConnMgrProxyUrl();

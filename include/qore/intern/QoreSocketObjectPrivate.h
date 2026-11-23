@@ -37,6 +37,9 @@
 #include <utility>
 #include "qore/intern/QC_Socket.h"
 
+// an in-memory set of trusted CA certificates (include/qore/intern/QC_SSLTrustStore.h)
+class QoreSSLTrustStore;
+
 //! The library-internal operations of QoreSocketObject (qore#4380)
 /** These functions were non-inline DLLLOCAL members of the public QoreSocketObject class: they are not part of the
     module API (they were never exported), so they live here, in the implementation of the library.  Construct the
@@ -141,6 +144,15 @@ public:
 
     //! Sets the CA locations from the async I/O thread; see setSslCaLocations()
     DLLLOCAL void setSslCaLocationsForAsyncPoll(const char* ca_file, const char* ca_path, ExceptionSink* xsink);
+
+    //! Sets or clears the in-memory trust store that peer certificates are verified against (qoretechnologies/qore#7248)
+    /** On the async I/O thread it is set directly, otherwise with a TLS state poll operation, as
+        QoreSocketObject::setSslCaLocations() sets the CA locations
+    */
+    DLLLOCAL void setSslTrustStore(QoreSSLTrustStore* ts, ExceptionSink* xsink);
+
+    //! Sets the in-memory trust store from the async I/O thread; see setSslTrustStore()
+    DLLLOCAL void setSslTrustStoreForAsyncPoll(QoreSSLTrustStore* ts, ExceptionSink* xsink);
 
     DLLLOCAL QoreStringNode* getAlpnProtocol(ExceptionSink* xsink) const;
 

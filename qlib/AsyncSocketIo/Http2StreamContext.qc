@@ -38,6 +38,9 @@ public class Http2StreamContext inherits AbstractStreamContext {
         #! True once the end of the stream has been sent
         bool ended = False;
 
+        #! True once the stream has been reset by abort()
+        bool reset = False;
+
         Socket sock;
         int stream_id;
         #! Queue for receiving data from the I/O controller
@@ -392,6 +395,28 @@ public class Http2StreamContext inherits AbstractStreamContext {
         ended = True;
         try {
             sock.sendHttp2StreamData(stream_id, binary(), True);
+            if (wake_callback) {
+                wake_callback();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    #! Aborts the stream with \c RST_STREAM (\c CANCEL) and releases its state and the data not yet sent
+    /** Also for a stream that was ended already: an end of the stream that is queued behind data that the peer
+        grants no credit for never reaches it (qore#7325).  The stream is reset once; errors are ignored, as the peer
+        or the session may have ended it already.
+
+        @since AsyncSocketIo 1.0
+    */
+    abort() {
+        if (reset) {
+            return;
+        }
+        reset = True;
+        ended = True;
+        try {
+            sock.resetHttp2Stream(stream_id);
             if (wake_callback) {
                 wake_callback();
             }

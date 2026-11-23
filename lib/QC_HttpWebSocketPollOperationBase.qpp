@@ -62,10 +62,12 @@ BinaryNode* WsEchoFrameHandler::handleBinaryFrame(const BinaryNode* data,
 }
 
 BinaryNode* WsEchoFrameHandler::handleFrameRaw(WsOpcode opcode,
-        const void* data, size_t len, ExceptionSink* xsink) {
+        const void* data, size_t len, uint8_t rsv, ExceptionSink* xsink) {
     // Encode directly from raw bytes — skips the QoreStringNode / BinaryNode
     // wrapper allocation + copy that the default implementation performs.
-    return WebSocketFrameEncoder::encode(opcode, data, len, true, false);
+    // A compressed message keeps its RSV bits: its payload is echoed compressed, as received (qore#6774); without
+    // them the client took the compressed bytes for the message
+    return WebSocketFrameEncoder::encode(opcode, data, len, true, false, rsv);
 }
 
 // ============================================================
@@ -734,7 +736,7 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
             // base-class default wraps the bytes in a QoreStringNode/BinaryNode
             // and calls handleTextFrame/handleBinaryFrame for backward compat.
             BinaryNode* response = io_frame_handler->handleFrameRaw(
-                static_cast<WsOpcode>(msg_opcode), msg_data, msg_len, xsink);
+                static_cast<WsOpcode>(msg_opcode), msg_data, msg_len, msg_rsv, xsink);
             if (response && !*xsink) {
                 if (*pending_send) {
                     pending_send->append(response);
@@ -796,9 +798,14 @@ void HttpWebSocketPollOperationPriv::pushRecvCloseFrame(uint16_t code, const cha
 }
 
 void HttpWebSocketPollOperationPriv::queueSendText(const QoreStringNode* text, ExceptionSink* xsink) {
+    // a text message is UTF-8 (RFC 6455 section 5.6): a string in another encoding is converted (qore#6775)
+    TempEncodingHelper utf8(text, QCS_UTF8, xsink);
+    if (*xsink) {
+        return;
+    }
     SimpleRefHolder<BinaryNode> frame(
         WebSocketFrameEncoder::encode(WSOP_TEXT,
-            text->c_str(), text->size(), true, false)
+            utf8->c_str(), utf8->size(), true, false)
     );
     send_queue->push(xsink, frame.release());
 }
@@ -1325,7 +1332,8 @@ hash<auto> HttpWebSocketPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
 /** The text is encoded as a WebSocket TEXT frame and queued for sending.
     Thread-safe: can be called from any thread.
 
-    @param text the UTF-8 text to send
+    @param text the text to send; a string in another encoding is converted to UTF-8, as a WebSocket text message is
+    UTF-8 (RFC 6455 section 5.6; qore#6775)
     @throw WEBSOCKET-CLOSING-ERROR the close handshake has started (the server's close frame was queued, or the
     connection has closed): no data frame may follow a close frame (RFC 6455 section 5.5.1)
 */
