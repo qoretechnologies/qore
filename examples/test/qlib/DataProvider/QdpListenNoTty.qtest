@@ -177,12 +177,14 @@ public class QdpListenNoTtyTest inherits QUnit::Test {
         @param prompt a string in the output of qdp after which the terminal's settings are saved, if any
     */
     private hash<auto> runQdpInBackground(string args, *string prompt) {
-        # script(1) runs a command on a new terminal: util-linux and BusyBox take it with -c, BSD as arguments
+        string script = dir.path + "/bg.sh";
+        # script(1) runs a command on a new terminal: util-linux and BusyBox take it as a shell command line with -c,
+        # BSD as its arguments
         string script_cmd;
         if (regex(backquote("script --version 2>&1 || true"), "util-linux|BusyBox")) {
-            script_cmd = "script -q -c %s /dev/null";
+            script_cmd = sprintf("script -q -c %s /dev/null", quote("sh " + quote(script)));
         } else if (PlatformOS == "Darwin" || PlatformOS == "FreeBSD") {
-            script_cmd = "script -q /dev/null %s";
+            script_cmd = sprintf("script -q /dev/null sh %s", quote(script));
         } else {
             testSkip("script(1) is not available to run a shell with job control on a new terminal");
         }
@@ -190,13 +192,15 @@ public class QdpListenNoTtyTest inherits QUnit::Test {
         string err_path = dir.path + "/bg-err.txt";
         string stty_path = dir.path + "/bg-stty.txt";
         string rc_path = dir.path + "/bg-rc.txt";
-        string script = dir.path + "/bg.sh";
         map unlink($1), (out_path, err_path, stty_path, rc_path);
         File f();
         f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
-        # "sh -m" runs each background job in a process group of its own and leaves its stdin the terminal; the job
-        # is a subshell that records the exit code of qdp, as the shell reaps a job that ends before it waits for it
-        f.printf("(env -u QORE_DATA_PROVIDERS %s --enable-debug %s -m %s %s %s > %s 2> %s; echo \"$?\" > %s) &\n"
+        # with job control ("set -m"; the -m option of the shell's command line does not enable it for a script in
+        # the sh of macOS, bash 3.2), the shell runs each background job in a process group of its own and leaves its
+        # stdin the terminal; the job is a subshell that records the exit code of qdp, as the shell reaps a job that
+        # ends before it waits for it
+        f.printf("set -m\n"
+            "(env -u QORE_DATA_PROVIDERS %s --enable-debug %s -m %s %s %s > %s 2> %s; echo \"$?\" > %s) &\n"
             "pid=$!\n"
             "i=0\n",
             quote(TestInterpreter::qore_interpreter()), quote(script_dir + "/../../../../bin/qdp"),
@@ -213,10 +217,11 @@ public class QdpListenNoTtyTest inherits QUnit::Test {
             "if kill -0 \"$pid\" 2>/dev/null; then echo 'qdp killed' >> %s; kill -KILL \"-$pid\"; fi\n"
             "wait \"$pid\" 2>/dev/null\n", quote(err_path));
         f.close();
-        system(sprintf(script_cmd, quote("sh -m " + quote(script))) + " < /dev/null > /dev/null 2>&1");
+        system(script_cmd + " < /dev/null > /dev/null 2>&1");
+        # the files are missing if the shell or qdp did not start
         hash<auto> rv = {
-            "out": ReadOnlyFile::readTextFile(out_path),
-            "err": ReadOnlyFile::readTextFile(err_path),
+            "out": is_file(out_path) ? ReadOnlyFile::readTextFile(out_path) : "",
+            "err": is_file(err_path) ? ReadOnlyFile::readTextFile(err_path) : "",
             "rc": is_file(rc_path) ? trim(ReadOnlyFile::readTextFile(rc_path)).toInt() : -1,
         };
         if (is_file(stty_path)) {
