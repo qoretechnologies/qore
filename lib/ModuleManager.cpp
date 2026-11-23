@@ -2609,6 +2609,31 @@ struct QoreModuleLoadFrame {
 //! the innermost module load in progress in this thread
 thread_local QoreModuleLoadFrame* module_load_frame = nullptr;
 
+//! the load of the compiled module whose own load is not library code whose initialization runs in this thread, if any
+/** see qore_module_load_untrusted_aot_init() (qore#7361)
+*/
+thread_local const QoreModuleLoadFrame* untrusted_aot_init_frame = nullptr;
+
+//! Marks the initialization of a compiled module whose own load is not library code while it runs, also when it raises
+class QoreUntrustedAOTInitHelper {
+public:
+    DLLLOCAL QoreUntrustedAOTInitHelper(bool active) : prev(untrusted_aot_init_frame) {
+        if (active) {
+            untrusted_aot_init_frame = module_load_frame;
+        }
+    }
+
+    DLLLOCAL ~QoreUntrustedAOTInitHelper() {
+        untrusted_aot_init_frame = prev;
+    }
+
+    QoreUntrustedAOTInitHelper(const QoreUntrustedAOTInitHelper&) = delete;
+    QoreUntrustedAOTInitHelper& operator=(const QoreUntrustedAOTInitHelper&) = delete;
+
+private:
+    const QoreModuleLoadFrame* prev;
+};
+
 //! Records what was decided when a module is loaded, so that QoreModuleManager::addModule() records it on the module
 class QoreModuleLoadFrameHelper {
 public:
@@ -2646,6 +2671,10 @@ bool qore_module_load_is_library() {
 
 bool qore_module_load_is_trusted() {
     return module_load_frame && module_load_frame->trusted;
+}
+
+bool qore_module_load_untrusted_aot_init() {
+    return untrusted_aot_init_frame && untrusted_aot_init_frame == module_load_frame;
 }
 
 void QoreModuleManager::addModule(QoreAbstractModule* m) {
@@ -7118,20 +7147,25 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         // the builtin classes that the module commits into namespaces during its initialization can still be given
         // members (as module-jni adds the fields of Java classes); they become reachable when it returns (#6422)
         QoreModuleInitClassesHelper init_classes;
-        mod_info.init(ctx, xsink);
+        // a compiled module's own Program is library code only if its own load is, as for a module loaded from source
+        // (see loadUserModuleFromPath()); the innermost load in this thread is the module's own (see addModule())
+        const QoreModuleLoadFrame* f = module_load_frame;
+        const bool own_trusted = f && f->trusted
+            && (!strcmp(name, f->feature) || (feature && !strcmp(feature, f->feature)));
+        {
+            // while the initialization of a compiled module whose own load is not library code runs, no library code
+            // is initialized for it, also when the thread is in the initialization of library code that loads it: its
+            // Program does not take the library mark, which the code that its initialization runs (the replay of its
+            // commands, the loads of its dependencies) would otherwise see (qore#7361)
+            QoreUntrustedAOTInitHelper untrusted_init(mod_info.is_aot && !own_trusted);
+            mod_info.init(ctx, xsink);
+        }
         if (xsink) {
             return nullptr;
         }
-        // a compiled module's own Program is library code only if its own load is, as for a module loaded from source
-        // (see loadUserModuleFromPath()): its initialization marked it by the module initialization that the thread
-        // is in, which is that of library code that loads it also when the module itself is not library code (loaded
-        // by its path from outside the module path, or linked into the program); no code of the module has run yet,
-        // as it is initialized when it is applied to a Program (qore#7361)
+        // nor does it keep a mark that it took otherwise; no code of the module has run yet, as it is initialized when
+        // it is applied to a Program (qore#7361)
         if (mod_info.is_aot && qore_is_aot_user_module(name)) {
-            const QoreModuleLoadFrame* f = module_load_frame;
-            // the innermost load in this thread is the module's own (see addModule())
-            bool own_trusted = f && f->trusted
-                && (!strcmp(name, f->feature) || (feature && !strcmp(feature, f->feature)));
             QoreProgram* aot_pgm = qore_aot_get_module_pgm(name);
             if (aot_pgm && !own_trusted) {
                 qore_program_private::get(*aot_pgm)->library_module = false;
