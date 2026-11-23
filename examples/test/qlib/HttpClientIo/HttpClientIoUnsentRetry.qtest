@@ -11,6 +11,10 @@
 # again, and a POST failed with HTTP1-CONNECTION-CLOSED.  This happened, for example, to a connection that finished
 # connecting after its request's deadline, which was pooled unused and closed by the server after its idle timeout.
 #
+# The same holds on a pooled connection that never carried a request, where the server's 408 before the first
+# request was HTTP1-UNEXPECTED-DATA, which was not sent again even for a GET (qore#7345); on a connection created for
+# the request, the same data is a protocol problem, and the request is not sent again.
+#
 # The server closes the connection at the point of the request with a debug hook (dbg_http1_answer_at()), so that
 # the order of the close and the check is deterministic.
 
@@ -42,9 +46,12 @@ class FakeServer {
         Counter running();
         int conn_count = 0;
         bool stopped;
+        #! True if the first connection is handed to the test as soon as it is accepted, before any request
+        bool hand_over_at_accept;
     }
 
-    constructor() {
+    constructor(bool hand_over_at_accept = False) {
+        self.hand_over_at_accept = hand_over_at_accept;
         listener.bind("127.0.0.1:0");
         listener.listen();
         port = listener.getSocketInfo().port;
@@ -91,6 +98,11 @@ class FakeServer {
         on_exit if (!handed_over) {
             s.close();
         }
+        if (n == 1 && hand_over_at_accept) {
+            handed_over = True;
+            first_conn.push(s);
+            return;
+        }
         while (True) {
             hash<auto> h;
             try {
@@ -128,6 +140,12 @@ class HttpClientIoUnsentRetryTest inherits QUnit::Test {
         }
         addTestCase("POST: the server closes the connection after the request was sent: it is not sent again",
             \testSentNotRetried());
+        foreach string method in (("POST", "GET")) {
+            addTestCase(sprintf("%s: a pooled connection that never carried a request gets a 408 before the request "
+                "is sent", method), \testPooledUnused(), method);
+        }
+        addTestCase("unexpected data before the request on a connection created for it is not a reason to send the "
+            "request again", \testFreshUnexpectedData());
         set_return_value(main());
     }
 
@@ -220,5 +238,75 @@ class HttpClientIoUnsentRetryTest inherits QUnit::Test {
             "the error does not say that the request was not sent");
         assertEq(1, server.getConnectionCount(), "the request was not sent again on a new connection");
         assertEq(0, server.requests.size(), "no further request reached the server");
+    }
+
+    #! a pooled connection that never carried a request, which the server answers with a 408 as it closes it before
+    #! the request is sent: the request is sent again on a new connection whatever its method (qore#7345)
+    testPooledUnused(string method) {
+        FakeServer server(True);
+        on_exit server.stop();
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit delete mgr;
+        string url = sprintf("http://127.0.0.1:%d", server.getPort());
+
+        # a request that fails after its connection was made and before it was written leaves the connection in the
+        # pool, unused
+        assertThrows("HTTP-HEADER-ERROR", \mgr.request(), (url, "GET", "/bad", {"X-Bad": "a\r\nb"}, NOTHING,
+            Timeout), "the first request fails before it is written");
+        Socket peer = server.first_conn.get(Timeout);
+        on_exit peer.close();
+
+        Counter reached(1);
+        call_function("dbg_http1_answer_at", "idle-check", reached, peer,
+            "HTTP/1.1 408 Request Timeout\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        bool armed = True;
+        on_exit if (armed) {
+            call_function("dbg_http1_send_failure_result");
+        }
+
+        *string body = method == "GET" ? NOTHING : "two";
+        *hash<auto> hdrs = method == "GET" ? NOTHING : {"Content-Type": "text/plain"};
+        hash<auto> second;
+        *hash<ExceptionInfo> err;
+        try {
+            second = mgr.request(url, method, "/second", hdrs, body, Timeout);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        armed = False;
+        hash<auto> hook_result = call_function("dbg_http1_send_failure_result");
+        assertEq(0, reached.getCount(), "the server answered at the check before the send");
+        if (err) {
+            fail(sprintf("the request was not sent again: %s: %s (arg: %y; hook: %y)", err.err, err.desc, err.arg,
+                hook_result));
+        }
+        assertEq(200, second.status_code, "the request is answered on a new connection");
+        assertEq("2 /second", server.requests.get(Timeout), "the request reached the new connection");
+        assertEq(0, server.requests.size(), "the request reached the server once");
+        assertEq(2, server.getConnectionCount(), "a new connection was made for the request");
+    }
+
+    #! the same error on a connection created for the request (no stream taken from the pool): the request is not
+    #! sent again, whatever its method, while a closed connection's error with the same inputs is
+    testFreshUnexpectedData() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit delete mgr;
+        string url = "http://127.0.0.1:1";
+        foreach string method in (("GET", "POST")) {
+            hash<HttpClientResendInfo> state();
+            hash<ExceptionInfo> ex = <ExceptionInfo>{
+                "err": "HTTP1-UNEXPECTED-DATA",
+                "desc": "server sent unexpected data on idle keep-alive connection before request",
+                "arg": {"request_sent": False},
+            };
+            assertFalse(mgr.resendRequest(url, method, NOTHING, ex, \state),
+                method + ": unexpected data without a pooled connection is not a reason to send the request again");
+            assertEq(0, state.retries, method + ": no attempt counted");
+
+            # control: a closed connection's error with the same inputs is
+            ex.err = "HTTP1-CONNECTION-CLOSED";
+            assertTrue(mgr.resendRequest(url, method, NOTHING, ex, \state),
+                method + ": a closed connection's error is a reason to send the request again");
+        }
     }
 }

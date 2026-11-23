@@ -1047,7 +1047,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     }
                     rethrow;
                 }
-                if (isConnectionError(ex.err) && retries < max_retries
+                if ((isConnectionError(ex.err) || isUnsentOnPooledConnection(ex, stream)) && retries < max_retries
                         && canRetryRequest(method, stream, ex)) {
                     ++retries;
                     log(LoggerLevel::DEBUG, "streaming connection error %s, retrying (%d/%d)",
@@ -1179,10 +1179,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     }
                     rethrow;
                 }
-                if ((isCapacityError(ex.err) || isConnectionError(ex.err))
+                if ((isCapacityError(ex.err) || isConnectionError(ex.err) || isUnsentOnPooledConnection(ex, stream))
                         && retries < max_retries && canRetryRequest(method, stream, ex)) {
                     ++retries;
-                    if (isConnectionError(ex.err)) {
+                    if (isConnectionError(ex.err) || isUnsentOnPooledConnection(ex, stream)) {
                         log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)",
                             ex.err, retries, max_retries);
                         evictDeadConnections(url);
@@ -4735,7 +4735,8 @@ printf("%d connection(s) migrated\n", migrated);
         connection acquired anew:
         - whatever its method, if the server refused it without processing it (see
           @ref isRefusedRequestErrorStatic()), if it was not submitted, or if it was never written because the
-          server closed the pooled HTTP/1.1 connection just before (see @ref isUnsentRequestErrorStatic())
+          server closed the pooled HTTP/1.1 connection just before (see @ref isUnsentRequestErrorStatic()), also
+          when the server's data came before the first request on a connection taken from the pool
         - once, if its HTTP/3 connection closed or failed to read, and it was not submitted, its method is idempotent,
           or the transport proves that it was not processed
         - if its connection failed or was at capacity, and it was not submitted, or its method is idempotent
@@ -4791,9 +4792,10 @@ printf("%d connection(s) migrated\n", migrated);
             evictDeadConnections(url);
             return True;
         }
-        if ((isCapacityError(ex.err) || isConnectionError(ex.err)) && canRetryRequest(method, stream, ex)) {
+        if ((isCapacityError(ex.err) || isConnectionError(ex.err) || isUnsentOnPooledConnection(ex, stream))
+                && canRetryRequest(method, stream, ex)) {
             ++state.retries;
-            if (isConnectionError(ex.err)) {
+            if (isConnectionError(ex.err) || isUnsentOnPooledConnection(ex, stream)) {
                 log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)", ex.err,
                     state.retries, max_retries);
                 evictDeadConnections(url);
@@ -4886,6 +4888,21 @@ printf("%d connection(s) migrated\n", migrated);
     */
     static bool isUnsentRequestErrorStatic(hash<ExceptionInfo> ex) {
         return ex.arg.typeCode() == NT_HASH && ex.arg.hasKey("request_sent") && ex.arg.request_sent === False;
+    }
+
+    #! Internal: True if a request taken to a pooled connection was never written because of what the server did
+    /** Data that the server sent before the first request on a connection taken from the pool (a connection that
+        finished connecting after its request gave up, for example) is how the server closed the idle connection,
+        such as a 408 (\c HTTP1-UNEXPECTED-DATA with \c request_sent set to @ref False): nothing reached the
+        server, and the request is sent again on a new connection like after any other connection error (qore#7345).
+        On a connection created for the request, the same data is a protocol problem of the server, and the error
+        ends the request.
+
+        @param ex the error of the request
+        @param stream the failed stream handle, if any
+    */
+    private bool isUnsentOnPooledConnection(hash<ExceptionInfo> ex, *HttpClientStreamHandle stream) {
+        return stream && stream.wasConnectionReused() && isUnsentRequestErrorStatic(ex);
     }
 
     #! Internal: True when a pooled connection died before the peer processed the request
