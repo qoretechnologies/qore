@@ -3079,7 +3079,7 @@ hash<auto> ans = rest.del("/orders/1");
             }
         }
         if (connection_tls_credentials || connection_tls_origin || connection_tls_paths) {
-            if (connection_tls_paths && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+            if (connection_tls_paths && SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
                 throw "ILLEGAL-FILESYSTEM-ACCESS",
                     "copying a REST client with TLS credential paths requires filesystem access";
             }
@@ -5935,7 +5935,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     object getPollImpl() {
         # the synchronous client is not given to code restricted from NETWORK (qore#7262; see
         # HttpBasedConnection::checkLentClientTarget())
-        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+        if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             checkLentClientTarget();
         }
         return getPingClient();
@@ -6390,7 +6390,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     }
 
     private:internal static *code<*data(string, string, bool)> bindTlsFile(*string location, string endpoint) {
-        if (!location.val() || SandboxManager::isCallerRestricted(DOM_FILESYSTEM) || SandboxManager::isRestricted()) {
+        if (!location.val() || SandboxManager::isLentToRestricted(DOM_FILESYSTEM) || SandboxManager::isRestricted()) {
             return;
         }
         string path = location;
@@ -6855,7 +6855,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         if ((exists rtopts.ssl_cert_path || exists rtopts.ssl_key_path
                     || (exists opts.ssl_cert_path && !exists opts.ssl_cert_data && !credentials.cert)
                     || (exists opts.ssl_key_path && !exists opts.ssl_key_data && !credentials.key))
-                && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+                && SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
             throw "PERMISSION-DENIED", "caller cannot select TLS credential files";
         }
         credentials.additional_origins = tls_endpoint_origins;

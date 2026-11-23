@@ -15598,7 +15598,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_method_fast_impl_t(const 
     // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
     // after the Program is entered; a refused call does not enter it (qore#7087)
     ProgramThreadCountContextHelper ptcch(xsink,
-        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true,
+        self);
     if (*xsink) {
         return toBits(QoreValue());
     }
@@ -22342,7 +22343,8 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
     // a call that the expression of the background operator makes itself is checked; the call's frame is pushed
     // after the Program is entered; a refused call does not enter it (qore#7087)
     ProgramThreadCountContextHelper ptcch(xsink,
-        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true);
+        qore_check_background_direct_entry(uvb ? uvb->pgm : exec_pgm, false, xsink) ? nullptr : exec_pgm, true,
+        o);
     if (*xsink) {
         result = toBits(QoreValue());
         return true;

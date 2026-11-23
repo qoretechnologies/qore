@@ -1943,7 +1943,7 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
         if (caller_pgm && caller_pgm != pgm_ctx && qore_program_is_module_inline(pgm_ctx)) {
             module_po_override.set(qore_get_module_call_runtime_po_override(pgm_ctx, caller_runtime_po, caller_pgm));
         }
-        set(xsink, pgm_ctx, true);
+        set(xsink, pgm_ctx, true, self);
         if (*xsink) {
             return;
         }
