@@ -204,6 +204,4 @@ printf("Structured output: %s\n", result.content);
 
     @subsection qorellmutils_1_0 QoreLlmUtils Module Version 1.0
     - initial release
-    - asynchronous chat and chat-completions calls that hold no thread while they wait for the provider
-      (@ref qorellmutils_async)
 */

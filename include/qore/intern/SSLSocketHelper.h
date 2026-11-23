@@ -312,6 +312,12 @@ private:
     */
     std::atomic<bool> write_failed{false};
 
+#ifdef DEBUG
+    //! Debug-only: the next drain of the staged ciphertext fails as when the peer reset the connection; set with the
+    //! staging that dbg_force_staged_write_failure() forces
+    bool dbg_fail_next_drain = false;
+#endif
+
     //! The result of the ALPN negotiation, recorded when the handshake completed: 1 for "h2", 0 for another or no
     //! protocol, -1 before the handshake completed (qore#7223)
     std::atomic<int> h2_negotiated{-1};
