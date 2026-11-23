@@ -7122,6 +7122,23 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         if (xsink) {
             return nullptr;
         }
+        // a compiled module's own Program is library code only if its own load is, as for a module loaded from source
+        // (see loadUserModuleFromPath()): its initialization marked it by the module initialization that the thread
+        // is in, which is that of library code that loads it also when the module itself is not library code (loaded
+        // by its path from outside the module path, or linked into the program); no code of the module has run yet,
+        // as it is initialized when it is applied to a Program (qore#7361)
+        if (mod_info.is_aot && qore_is_aot_user_module(name)) {
+            const QoreModuleLoadFrame* f = module_load_frame;
+            // the innermost load in this thread is the module's own (see addModule())
+            bool own_trusted = f && f->trusted
+                && (!strcmp(name, f->feature) || (feature && !strcmp(feature, f->feature)));
+            QoreProgram* aot_pgm = qore_aot_get_module_pgm(name);
+            if (aot_pgm && !own_trusted) {
+                qore_program_private::get(*aot_pgm)->library_module = false;
+                // nor are the closures of its initialization module-init closures
+                qore_module_init_unset_program(aot_pgm);
+            }
+        }
         init_classes.commit();
         plugin_scope.commit(&xsink);
         if (xsink) {

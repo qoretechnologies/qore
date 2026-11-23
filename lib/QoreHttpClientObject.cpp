@@ -5402,6 +5402,16 @@ QoreStringNode* QoreHttpClientObject::getProxyURL()  {
     return http_priv->proxy_connection.get_url();
 }
 
+QoreStringNode* QoreHttpClientObject::getProxyURL(int code)  {
+    SafeLocker sl(priv->m);
+
+    if (!http_priv->proxy_connection.has_url()) {
+        return nullptr;
+    }
+
+    return http_priv->proxy_connection.get_url(code);
+}
+
 QoreStringNode* QoreHttpClientObject::getSafeProxyURL()  {
     SafeLocker sl(priv->m);
 
@@ -7113,7 +7123,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             // at this boundary so the documented error reaches the caller
             q_future_rename_timeout(xsink, "SOCKET-TIMEOUT", "HTTP request timed out");
             if (!raw_resp || *xsink) {
-                // A request on an HTTP/3 connection whose peer sent nothing before the connection was closed
+                // A request on an HTTP/3 connection whose peer sent nothing before the connection was closed, or
+                // that the server reset with a stateless reset (HTTP3-STATELESS-RESET: it has no state for the
+                // connection, qore#6931)
                 // (HTTP3-PEER-UNRESPONSIVE: within the connect timeout of the request; or HTTP3-IDLE-CLOSE: by the
                 // idle timer) went to a server whose connection state is gone (ex: it restarted).  The server may
                 // still have processed it before it went away, so only an idempotent request is repeated, once, on
@@ -7125,6 +7137,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         && !qore_http_manager_ops::isCancelPending()) {
                     QoreStringValueHelper err(xsink->getExceptionErr());
                     if (!strcmp(err->c_str(), "HTTP3-PEER-UNRESPONSIVE")
+                            || !strcmp(err->c_str(), "HTTP3-STATELESS-RESET")
                             || !strcmp(err->c_str(), "HTTP3-IDLE-CLOSE")) {
                         undelivered_h3_retried = true;
                         http3_active = false;

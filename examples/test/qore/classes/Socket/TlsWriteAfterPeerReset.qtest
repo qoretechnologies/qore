@@ -108,6 +108,8 @@ class TlsWriteAfterPeerResetTest inherits QUnit::Test {
             \tlsServerNoCloseNotifyAfterFailedWriteTest());
         addTestCase("TLS: a protocol error on a write closes the socket whatever errno holds",
             \tlsProtocolErrorClosesTest());
+        addTestCase("TLS: a write whose ciphertext was staged fails as a write that was not",
+            \tlsStagedWriteFailureTest());
         set_return_value(main());
     }
 
@@ -243,6 +245,57 @@ class TlsWriteAfterPeerResetTest inherits QUnit::Test {
         assertRegex("decryption failed|bad record mac", ex.desc.lwr(), "the TLS protocol error is reported");
         assertEq(NOTHING, ex.arg, "the stale errno is not reported as a peer close");
         assertFalse(sock.isOpen(), "the socket is closed after a TLS protocol error");
+    }
+
+    #! A TLS write whose ciphertext is staged because the socket buffer is full, and whose staged ciphertext cannot be
+    #! sent because the peer reset the connection, is reported as one that the reset made fail at once: SOCKET-SSL-ERROR
+    #! with the errno, the socket staying open (qore#7383); before, it was SOCKET-SEND-ERROR, as on macOS, whose smaller
+    #! send buffer fills before the reset arrives.  The staging and the failure are forced with a debug hook, so the
+    #! test does not depend on the size of the system's buffers.
+    tlsStagedWriteFailureTest() {
+        requireDebugHooks();
+        Socket listener();
+        listener.setCertificate(new SSLCertificate(CertPem));
+        listener.setPrivateKey(new SSLPrivateKey(KeyPem));
+        listener.bind("localhost:0", True);
+        listener.listen();
+        on_exit listener.close();
+        Queue accepted();
+        background sub () {
+            try {
+                Socket conn = listener.accept(Timeout);
+                conn.upgradeServerToSSL(Timeout);
+                accepted.push(conn);
+            } catch (hash<ExceptionInfo> ex) {
+                accepted.push(ex.err);
+            }
+        }();
+        Socket sock();
+        sock.connectSSL(sprintf("localhost:%d", listener.getPort()), Timeout);
+        on_exit sock.close();
+        auto conn = accepted.get(Timeout);
+        on_exit if (conn.typeCode() == NT_OBJECT) {
+            call_function("dbg_reset_socket", conn);
+        }
+        call_function("dbg_force_staged_write_failure", sock);
+        hash<ExceptionInfo> ex;
+        try {
+            sock.send("x", Timeout);
+            fail("the forced failure of the staged ciphertext must fail the write");
+        } catch (hash<ExceptionInfo> ex1) {
+            ex = ex1;
+        }
+        assertEq("SOCKET-SSL-ERROR", ex.err, sprintf("the TLS write error is reported (%s)", ex.desc));
+        assertEq(Err::EPIPE, ex.arg, "the errno is the exception argument");
+        assertTrue(sock.isOpen(), "the socket stays open after the write failed");
+        # the next write finds the transport failed
+        try {
+            sock.send("y", Timeout);
+            fail("a write after the transport failed must fail");
+        } catch (hash<ExceptionInfo> ex1) {
+            ex = ex1;
+        }
+        assertEq("SOCKET-SSL-ERROR", ex.err, sprintf("the next write reports the failed transport (%s)", ex.desc));
     }
 
     #! Returns a TLS socket whose write failed because the peer answered and reset the connection; the socket is open

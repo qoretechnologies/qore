@@ -181,6 +181,17 @@ void qore_list_private::raiseElementRemovalError(size_t ind, bool for_del, const
     }
 }
 
+void qore_list_private::raiseWeakElementRemovalError(size_t ind, bool for_del, ExceptionSink* xsink) const {
+    if (xsink) {
+        xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot %s element " QLLD " of a list of type '%s' through a weak "
+            "reference: the element would have no value (NOTHING), which the element type of the list does not take, "
+            "and the list, which its owners share, keeps its type; declare the list with an element type that takes "
+            "NOTHING (ex: list<*int>, or list<auto!> for a list whose type would be narrowed from its values, as "
+            "list<auto> l = (1, 2) is a list<int>)", for_del ? "delete" : "remove", (int64)ind,
+            QoreTypeInfo::getName(complexTypeInfo));
+    }
+}
+
 int qore_list_private::raiseAssignmentGapError(size_t ind, ExceptionSink* xsink) const {
     assert(elementTypeRejectsNothing());
     const QoreTypeInfo* vti = getValueTypeInfo();
@@ -514,9 +525,11 @@ QORE_INTERN_ALWAYS_INLINE QoreListNode* qore_list_private::newComplexListFromVal
     ValueHolder holder(init, xsink);
 
     QoreListNode* l;
+    // the type of the list converted, if any
+    const QoreTypeInfo* lti = nullptr;
     if (init.getType() == NT_LIST) {
         l = init.get<QoreListNode>();
-        const QoreTypeInfo* lti = qore_list_private::get(*l)->complexTypeInfo;
+        lti = qore_list_private::get(*l)->complexTypeInfo;
         if (lti && (QoreTypeInfo::equal(typeInfo, lti) || qore_list_keeps_typed_callables(typeInfo, lti))) {
             return holder.release().get<QoreListNode>();
         }
@@ -589,6 +602,13 @@ QORE_INTERN_ALWAYS_INLINE QoreListNode* qore_list_private::newComplexListFromVal
 
     // mark new hash with new type
     assert(l->is_unique());
+    // the list converted to another type is a new list, which can be changed also when the list it was converted
+    // from was freed under a weak reference (qore#7199; see copyFreedState()); a list that keeps its type, also as the
+    // or-nothing type of an or-nothing cast (qore#6174), is the same list
+    if (!l->priv->valid && (!lti || !QoreTypeInfo::equal(get_or_nothing_type_check(lti),
+            get_or_nothing_type_check(typeInfo)))) {
+        l->priv->valid = true;
+    }
     l->priv->complexTypeInfo = typeInfo;
     return holder.release().get<QoreListNode>();
 }
@@ -954,11 +974,16 @@ QoreListNode* QoreListNode::extract(ptrdiff_t offset) {
 
 QoreListNode* QoreListNode::extract(ptrdiff_t offset, ptrdiff_t len) {
     assert(reference_count() == 1);
+    return priv->extract(offset, len);
+}
+
+QoreListNode* qore_list_private::extract(ptrdiff_t offset, ptrdiff_t len) {
     size_t n_offset, n_len;
-    priv->checkOffset(offset, len, n_offset, n_len);
-    if (n_offset == priv->length)
-        return priv->getCopy();
-    return priv->spliceIntern(n_offset, n_len, true);
+    checkOffset(offset, len, n_offset, n_len);
+    if (n_offset == length) {
+        return getCopy();
+    }
+    return spliceIntern(n_offset, n_len, true);
 }
 
 QoreListNode* QoreListNode::extract(ptrdiff_t offset, ptrdiff_t len, const QoreValue l, ExceptionSink* xsink) {

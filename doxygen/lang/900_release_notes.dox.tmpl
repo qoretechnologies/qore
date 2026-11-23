@@ -113,6 +113,12 @@
     one through a deleted object or a freed weak container raises an exception, as an assignment does, in every
     execution mode (<a href="https://github.com/qoretechnologies/qore/issues/7242">issue 7242</a>).
 
+    @par WebSocket Send Timeout and Minimum Transfer Rate
+    The \c send_timeout of @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" bounds the time in which a client
+    takes no data, and a client that stays below the new \c send_min_rate (default: 1 KiB/s; 0 disables it) is
+    disconnected, allowing for the steps in which TCP shows a slow client's progress
+    (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>).
+
     @par Library Code Does Not Use the Terminal for Code That Is Restricted From It
     The builtins that use the terminal refuse a caller restricted with @ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"
     also in library code, and the standard modules (also a host's logger, for the lines that library code writes for
@@ -1341,6 +1347,10 @@
     <a href="https://github.com/qoretechnologies/qore/issues/7179">issue 7179</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+
+    @par Minimum Send Rate Monitor
+    @ref Qore::SendRateMonitor "SendRateMonitor" measures the average rate at which a peer takes data while a sender
+    waits for it, over a sliding window (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>).
     @par Hash Identity Test
     @ref <hash>::isSame() "<hash>::isSame()" tests in a constant time whether two hashes are the same hash value
     (identity, not equality; <a href="https://github.com/qoretechnologies/qore/issues/7240">issue 7240</a>).
@@ -2432,6 +2442,8 @@
       - see @ref wsc_v2_5 for all changes
 
     - @ref websockethandlerintro "WebSocketHandler" module
+      - added the \c send_min_rate and \c send_min_rate_window options, which bound how slowly a client can take data
+         on HTTP/1.1, HTTP/2 and HTTP/3 (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>)
       - permessage-deflate compression
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>) and AsyncAPI 3.0
         message validation
@@ -2782,6 +2794,11 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref Qore::HTTPClient::getURL() "HTTPClient::getURL()", @ref Qore::HTTPClient::getProxyURL() "getProxyURL()"
+      and @ref Qore::HTTPClient::getSafeProxyURL() "getSafeProxyURL()" give an IPv6 host in brackets and the path of a
+      UNIX domain socket with every reserved character encoded; the URL was ambiguous without them, and
+      @ref Qore::HTTPClient::getProxyURL() "getProxyURL()" takes the parts of the URL to give, as \c getURL() does
+      (<a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>)
     - an operation on a container that raises an exception after changing it, such as a hash merge that stores a
       key before it refuses another one, keeps the object counts of the containers above it and is seen by the
       @ref garbage_collection "garbage collector", which collects a cycle that it made (issue #7322)
@@ -2844,6 +2861,14 @@
     - the \c splice and \c extract operators and the merge of a list, a hash or an object's members (\c +=) raise
       \c LIST-ERROR or \c HASH-ERROR for a list or hash freed under a @ref weak_assignment_operator "weak reference", as
       the other changes do (<a href="https://github.com/qoretechnologies/qore/issues/7199">issue 7199</a>)
+    - the @ref remove "remove" and @ref delete "delete" operators remove an element, a key, a slice or a range through
+      a @ref weak_assignment_operator "weak reference" from the list or hash that it designates, instead of removing
+      the weak reference itself or nothing
+      (<a href="https://github.com/qoretechnologies/qore/issues/7306">issue 7306</a>)
+    - the @ref remove "remove" and @ref delete "delete" operators remove a member of an object reached through a
+      @ref weak_assignment_operator "weak reference" in the AST interpreter, as in the other execution modes, and no
+      longer let an object that is still referenced be collected after such a removal in any mode
+      (<a href="https://github.com/qoretechnologies/qore/issues/7346">issue 7346</a>)
     - @ref httpserverintro "HttpServer" answers a handler's informational response (1xx) other than 101 with an error
       instead of sending it as the final response
       (<a href="https://github.com/qoretechnologies/qore/issues/7222">issue 7222</a>)

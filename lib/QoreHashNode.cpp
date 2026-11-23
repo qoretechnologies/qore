@@ -458,7 +458,7 @@ QoreHashNode* qore_hash_private::newComplexHash(const QoreTypeInfo* typeInfo, co
         init = a.takeReferencedNode<QoreHashNode>();
     }
 
-    return newComplexHashFromHash(typeInfo, init, xsink, true);
+    return makeNewValid(newComplexHashFromHash(typeInfo, init, xsink, true));
 }
 
 QoreHashNode* qore_hash_private::newComplexHash(const QoreTypeInfo* typeInfo, const QoreParseListNode* args,
@@ -481,7 +481,7 @@ QoreHashNode* qore_hash_private::newComplexHash(const QoreTypeInfo* typeInfo, co
         init = a.takeReferencedNode<QoreHashNode>();
     }
 
-    return newComplexHashFromHash(typeInfo, init, xsink, true, policy);
+    return makeNewValid(newComplexHashFromHash(typeInfo, init, xsink, true, policy));
 }
 
 QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* typeInfo, QoreHashNode* init_hash,
@@ -507,10 +507,19 @@ QORE_INTERN_ALWAYS_INLINE QoreHashNode* qore_hash_private::newComplexHashFromHas
     // mark new hash with new type
     assert(init->is_unique());
 
-    // a hash that already has the type has values of its value type
-    if (coerce_values && !init->priv->hashdecl && init->priv->complexTypeInfo
-            && QoreTypeInfo::equal(init->priv->complexTypeInfo, typeInfo)) {
-        coerce_values = false;
+    if (coerce_values || !init->priv->valid) {
+        if (!init->priv->hashdecl && init->priv->complexTypeInfo
+                && QoreTypeInfo::equal(init->priv->complexTypeInfo, typeInfo)) {
+            // a hash that already has the type has values of its value type
+            coerce_values = false;
+        } else if (!init->priv->valid && (init->priv->hashdecl || !init->priv->complexTypeInfo
+                || !QoreTypeInfo::equal(get_or_nothing_type_check(init->priv->complexTypeInfo),
+                    get_or_nothing_type_check(typeInfo)))) {
+            // the hash converted to another type is a new hash, which can be changed also when the hash it was
+            // converted from was freed under a weak reference (qore#7199; see copyFreedState()); a hash that keeps its
+            // type, also as the or-nothing type of an or-nothing cast (qore#6174), is the same hash
+            init->priv->valid = true;
+        }
     }
     init->priv->complexTypeInfo = typeInfo;
     // Clear any hashdecl binding - complex hash types use complexTypeInfo, not hashdecl
@@ -872,6 +881,15 @@ void QoreHashNode::deleteKey(const QoreString* key, ExceptionSink* xsink) {
     }
 
     priv->deleteKey(tmp.c_str(), xsink);
+}
+
+QoreValue qore_hash_private::takeRemovedKey(const char* key, ExceptionSink* xsink) {
+    bool exists;
+    QoreValue rv = takeKeyValueIntern(key, exists);
+    if (!exists) {
+        checkRemovalValid(xsink);
+    }
+    return rv;
 }
 
 QoreValue QoreHashNode::takeKeyValue(const char* key) {

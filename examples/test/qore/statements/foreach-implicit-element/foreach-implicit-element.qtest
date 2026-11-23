@@ -1,0 +1,140 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of the implicit index of foreach statements
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ForeachImplicitElementTest
+
+#! issue #7270: a foreach statement sets the thread's implicit index ($#) only if its body reads it
+/** The body of a foreach statement reads the statement's implicit index only with a \c $# in the body itself: in an
+    expression, the source of an operator, a background expression, the expressions of a context statement or a find
+    expression, an on_exit, on_success or on_error block, a switch or a try block.  The code that the body calls, a
+    closure created in it and a fold expression cannot refer to it (qore#5690), and the code that an operator in the
+    body runs for each element reads the operator's own index.
+
+    foreach-implicit-element.q prints the values of loops over lists, hash keys and pairs, ranges, iterators, single
+    values, references and lazy operators whose bodies do and do not read their index, nested loops, and the index of
+    the enclosing loop or operator after a loop that left by break, continue, return, an exception or a rethrow; the
+    AST interpreter's output must be the expected one, and every other execution mode, the IR tier and AOT
+    executables compiled with -O0 and -O3 must give the same.
+*/
+class ForeachImplicitElementTest inherits QUnit::Test {
+    public {
+        #! the output of the script
+        const Expected = (
+            "sum 6",
+            "keys ab",
+            "pairs a=1;b=2;",
+            "range 6",
+            "iter 9",
+            "list iterator 13",
+            "single \"s\"  {a: 1}",
+            "ref [10, 20]",
+            "lazy 10",
+            "direct [\"a\", 0, \"b\", 1, \"c\", 2]",
+            "nested expr [0, \"a:0\", 11, \"b:1\"]",
+            "keys index [\"a\", 0, \"b\", 1]",
+            "range index [5, 0, 6, 1]",
+            "iter index [4, 0, 5, 1]",
+            "ref index [[10, 21, 32], [0, 1, 2]]",
+            "lazy index [4, 0, 7, 1]",
+            "operator source [\"[100, 1]\", \"[10, 12]\", \"{x: 0, y: 1}\", \"3\", \"[100, 2]\", \"[10, 12]\""
+                ", \"{x: 0, y: 1}\", \"4\"]",
+            "operator only [\"[0, 10, 20]\", \"\\\"b\\\"\", \"2\", \"[0, 10, 20]\", \"\\\"b\\\"\", \"2\"]",
+            "background [\"a:0\", \"b:1\", \"c:2\"]",
+            "context [7, \"w\", \"x\", 8, \"x\", \"y\"]",
+            "blocks [\"zero\", \"try0\", \"success0\", \"exit0\", \"one\", \"catch1\", \"success1\""
+                ", \"exit1\", \"many2\", \"try2\", \"success2\", \"exit2\"]",
+            "after call [0, 10, 0, 3, 0, 1, 10, 1, 3, 1]",
+            "nested [\"o0\", \"i0\", \"i1\", \"a0\", \"x\", \"y\", \"b0\", \"j0\", \"j1\", \"m0\", \"j0\""
+                ", \"j1\", \"m1\", \"c0\", \"o1\", \"i0\", \"i1\", \"a1\", \"x\", \"y\", \"b1\", \"j0\", \"j1\""
+                ", \"m0\", \"j0\", \"j1\", \"m1\", \"c1\"]",
+            "inner exits [\"b0\", \"c0\", \"r102:0\", \"t2:0\", \"rt2:0\", \"l2:0\", \"b1\", \"c1\""
+                ", \"r102:1\", \"t2:1\", \"rt2:1\", \"l2:1\", \"b2\", \"c2\", \"r102:2\", \"t2:2\", \"rt2:2\""
+                ", \"l2:2\"]",
+            "inner exits index [\"ib0\", \"b0\", \"ic1\", \"ic2\", \"c0\", \"r101:0\", \"t1:0\", \"rt1:0\""
+                ", \"l1:0\", \"ib0\", \"b1\", \"ic1\", \"ic2\", \"c1\", \"r101:1\", \"t1:1\", \"rt1:1\", \"l1:1\""
+                ", \"ib0\", \"b2\", \"ic1\", \"ic2\", \"c2\", \"r101:2\", \"t1:2\", \"rt1:2\", \"l1:2\"]",
+            "operator after exits [\"[[0, 102, 0, 101, 0], [1, 102, 1, 101, 1]]\", \"[[0, null, 0, null, 0]"
+                ", [1, null, 1, null, 1]]\"]",
+            "own exits [0, 0, 2, 2]",
+            "member [1, 0, 2, 1, 1, 2]",
+            "operators in inner [\"[5, 7]\", \"[11, 12]\", \"{p: 0, q: 1}\", \"{q: 1, s: 2}\", \"[1, 2]\""
+                ", \"[1]\", \"100\", \"\\\"single\\\"\", \"[200, 201]\", \"[\\\"x\\\", \\\"y\\\"]\", \"o0\", \"[5"
+                ", 7]\", \"[11, 12]\", \"{p: 0, q: 1}\", \"{q: 1, s: 2}\", \"[1, 2]\", \"[1]\", \"100\""
+                ", \"\\\"single\\\"\", \"[200, 201]\", \"[\\\"x\\\", \\\"y\\\"]\", \"o1\", \"[5, 7]\", \"[11"
+                ", 12]\", \"{p: 0, q: 1}\", \"{q: 1, s: 2}\", \"[1, 2]\", \"[1]\", \"100\", \"\\\"single\\\"\""
+                ", \"[200, 201]\", \"[\\\"x\\\", \\\"y\\\"]\", \"o2\"]",
+            "in map [[[\"p\", 0, \"q\", 1], 0, 3, 0, [\"o0\", \"i0\", \"a0\", \"x\", \"b0\", \"j0\", \"m0\""
+                ", \"c0\"], 0], [[\"p\", 0, \"q\", 1], 1, 3, 1, [\"o0\", \"i0\", \"a0\", \"x\", \"b0\", \"j0\""
+                ", \"m0\", \"c0\"], 1]]",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("foreach implicit element", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        script = get_script_dir() + "/foreach-implicit-element.q";
+
+        addTestCase("AST interpreter", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executable -O0", \aotTest(), "-O0");
+        addTestCase("AOT executable -O3", \aotTest(), "-O3");
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter, which the other modes must give
+    private astTest() {
+        list<string> lines = select ast().split("\n"), $1;
+        assertEq(Expected, lines);
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = ast();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, script)), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, script)),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("foreach-implicit-element-aot-");
+        string exe = dir.path + "/foreach-implicit-element";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, script));
+        assertTrue(is_file(exe), "qcc " + opt + " compiles the script: " + out);
+        assertEq(ast(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+    }
+
+    #! returns the output of the script with the AST interpreter
+    private string ast() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, script));
+    }
+}

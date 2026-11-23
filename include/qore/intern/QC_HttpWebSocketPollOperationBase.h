@@ -39,6 +39,7 @@
 #include "qore/QoreQueue.h"
 #include "qore/QoreThreadLock.h"
 #include "qore/WebSocketFrameCodec.h"
+#include "qore/intern/SendRateWindow.h"
 
 #include <atomic>
 
@@ -385,6 +386,36 @@ public:
         send_timeout_ms = ms;
     }
 
+    //! Sets the minimum average rate at which the peer must take data while a send waits for it (qore#7280)
+    /** @param min_rate the minimum rate in bytes per second; 0 disables the check
+        @param window_ms the length of the sliding window in milliseconds
+    */
+    DLLLOCAL void setSendMinRate(int64 min_rate, int64 window_ms) {
+        send_rate = SendRateWindow(min_rate, window_ms);
+        // TCP shows a slow reader's progress only in steps of its receive window
+        send_rate.enableProgressSteps();
+        // the poll wakes at least every check interval: a longer time is the server's delay, not the peer's
+        send_rate.setMaxWaitCharge(2 * send_rate.getCheckIntervalMs());
+    }
+
+    //! Sets whether the send timeout is a default that allows for a progress step at the minimum rate (qore#7280)
+    DLLLOCAL void setSendTimeoutScaled(bool scaled) {
+        send_timeout_scaled = scaled;
+    }
+
+    //! Returns the time without progress after which a send fails
+    /** An explicitly set timeout is exact; a scaled one is at least a progress step at the minimum rate
+    */
+    DLLLOCAL int64 getEffectiveSendTimeout() const {
+        int64 grace = send_rate.getStepGraceMs();
+        return send_timeout_scaled && send_timeout_ms > 0 && grace > send_timeout_ms ? grace : send_timeout_ms;
+    }
+
+    //! Checks a send that is waiting for the peer against the send timeout and the minimum rate (qore#7280)
+    /** @return 0 for OK, -1 if the connection failed (exception raised)
+    */
+    DLLLOCAL int checkSendProgress(ExceptionSink* xsink);
+
     //! Returns the send timeout in milliseconds
     DLLLOCAL int64 getSendTimeout() const {
         return send_timeout_ms;
@@ -564,8 +595,35 @@ private:
     //! Send timeout in milliseconds (0 = no timeout)
     int64 send_timeout_ms = 0;
 
-    //! Timestamp when current send operation started (milliseconds, monotonic clock; see monotonicMs())
+    //! Timestamp of the last progress of the current send operation (milliseconds, monotonic clock; see monotonicMs())
+    /** The send timeout bounds the time without progress, not the time of the send (qore#7280, as qore#7252 on HTTP/2
+        and HTTP/3): a peer that is taking a large message is not cut off.  0: no send operation.
+    */
     int64 send_op_start_ms = 0;
+
+    //! The bytes of the send operations that have ended
+    int64 send_bytes_done = 0;
+
+    //! The bytes that the peer has acknowledged, as last seen
+    int64 send_delivered_last = 0;
+
+    //! True if the send timeout is a default that allows for a progress step at the minimum rate
+    bool send_timeout_scaled = false;
+
+    //! The shortest time between samples of the peer's progress from sends that did not wait, in milliseconds
+    static constexpr int64 SendRateSampleMs = 100;
+
+    //! True if the current send has waited for the peer
+    bool send_op_waited = false;
+
+    //! The time of the last sample of the peer's progress
+    int64 send_rate_sample_ms = 0;
+
+    //! True if the wait of the send that just ended used up the peer's credit
+    bool send_rate_below = false;
+
+    //! The minimum rate of the peer while a send waits for it, over a window kept across the sends (qore#7280)
+    SendRateWindow send_rate;
 
     //! Number of frames pushed during the current continuePoll() cycle
     int frames_pushed_in_cycle = 0;

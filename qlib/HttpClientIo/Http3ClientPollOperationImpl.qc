@@ -130,6 +130,7 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
                 if (ex.err == "QUIC-HTTP3-ERROR" || ex.err == "QUIC-READ-ERROR"
                         || ex.err == "QUIC-RECV-ERROR" || ex.err == "HTTP3-IDLE-CLOSE"
                         || ex.err == "HTTP3-PEER-UNRESPONSIVE"
+                        || ex.err == "HTTP3-STATELESS-RESET"
                         || ex.err == "HTTP3-LOCAL-CLOSE" || ex.err == "HTTP3-PEER-CLOSE") {
                     self.setSubmitError(ex.err, ex.desc);
                 }
