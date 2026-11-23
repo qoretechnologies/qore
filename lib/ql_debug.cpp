@@ -10131,6 +10131,8 @@ public:
         remarkCase(c);
         clearStopCase(c);
         otherThreadCase(c);
+        stopWaiterCase(c);
+        forkedScopeCase(c);
     }
 
 private:
@@ -10342,6 +10344,135 @@ private:
             UT_ASSERT(c, ctrl->retired_dispatchers.empty(), "A's cancellation deleted it when it returned");
         }
         UT_ASSERT(c, !xsink, "the cancellations raise no exception");
+    }
+
+    //! the shared state of stopWaiterCase()
+    struct StopWaiterArg {
+        Ctrl* ctrl;
+        QoreProgram* pgm;
+        bool a_stopped = false;
+        bool b_stopped = false;
+        AsyncIoPreservedSubmitTest::Signal a_in_release;
+        AsyncIoPreservedSubmitTest::Signal b_in_release;
+        AsyncIoPreservedSubmitTest::Signal checked;
+        AsyncIoPreservedSubmitTest::Signal done;
+    };
+
+    //! thread A of stopWaiterCase(): it waits in stop() with the dispatcher further up its stack
+    static void stopWaiterThread(ExceptionSink* xsink, void* p) {
+        StopWaiterArg& arg = *static_cast<StopWaiterArg*>(p);
+        // the hook is per thread
+        Disp::dbgSetReleaseHook([&arg]() {
+            if (!arg.a_stopped) {
+                arg.a_stopped = true;
+                arg.a_in_release.post();
+                // B's cancellation is in progress, so this stop() waits for it
+                arg.b_in_release.wait(30000);
+                ExceptionSink stop_xsink;
+                arg.ctrl->stop(&stop_xsink);
+                // stays in its cancellation until the other thread has checked that the dispatcher is kept
+                arg.checked.wait(30000);
+            }
+        });
+        arg.ctrl->cancelByProgram(arg.pgm, xsink);
+        Disp::dbgSetReleaseHook(std::function<void()>());
+        xsink->clear();
+        arg.done.post();
+    }
+
+    //! 4c: a cancellation that retires the dispatcher and returns does not delete it while another thread's
+    //! cancellation waits in stop() with that dispatcher further up its stack (qore#6703)
+    static void stopWaiterCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        UT_ASSERT(c, !xsink, "the controller is created");
+        if (xsink) {
+            return;
+        }
+        Disp* cd = ctrl->call_dispatcher.load();
+        QoreProgram* pgm = getProgram();
+        StopWaiterArg arg;
+        arg.ctrl = ctrl;
+        arg.pgm = pgm;
+        queueItem(cd, Disp::DT_RELEASE, pgm);
+        Disp::dbgSetReleaseHook([&arg]() {
+            if (!arg.b_stopped) {
+                arg.b_stopped = true;
+                arg.b_in_release.post();
+                {
+                    AutoLocker al(arg.ctrl->m);
+                    while (arg.ctrl->program_cancels_in_stop < 1) {
+                        if (arg.ctrl->program_cancels_cond.wait2(arg.ctrl->m, 30000)) {
+                            break;
+                        }
+                    }
+                }
+                ExceptionSink stop_xsink;
+                arg.ctrl->stop(&stop_xsink);
+            }
+        });
+        int tid = q_start_thread(&xsink, stopWaiterThread, &arg);
+        UT_ASSERT(c, tid != -1 && !xsink, "thread A starts");
+        // if it started, thread A uses this frame until it has ended
+        if (tid == -1) {
+            Disp::dbgSetReleaseHook(std::function<void()>());
+            xsink.clear();
+            return;
+        }
+        UT_ASSERT(c, arg.a_in_release.wait(30000), "thread A releases its work item");
+        // the mark takes the item queued here, and the clear of this cancellation releases it
+        queueItem(cd, Disp::DT_RELEASE, pgm);
+        ctrl->cancelByProgram(pgm, &xsink);
+        {
+            AutoLocker al(ctrl->m);
+            UT_ASSERT_EQ(c, 1, (int)ctrl->retired_dispatchers.size(),
+                "the dispatcher is kept while thread A's cancellation can use it");
+        }
+        arg.checked.post();
+        // thread A uses this frame and the controller: this function cannot return while it runs
+        if (!arg.done.wait(120000)) {
+            fputs("stopWaiterCase: thread A's cancellation did not return\n", stderr);
+            abort();
+        }
+        Disp::dbgSetReleaseHook(std::function<void()>());
+        UT_ASSERT(c, arg.b_stopped, "the second cancellation stopped the controller");
+        {
+            AutoLocker al(ctrl->m);
+            UT_ASSERT(c, ctrl->retired_dispatchers.empty(), "the last cancellation to return deleted the dispatcher");
+            UT_ASSERT_EQ(c, 0, ctrl->cancel_by_program_scopes, "no cancellation is counted after they returned");
+        }
+        UT_ASSERT(c, !xsink, "the cancellations raise no exception");
+    }
+
+    //! 4d: a forked child leaves a cancellation's scope without the controller's lock, which a thread that does not
+    //! exist in the child can hold (qore#6703)
+    static void forkedScopeCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        std::unique_ptr<Ctrl::CancelByProgramScope> scope(new Ctrl::CancelByProgramScope(ctrl));
+        pid_t pid;
+        {
+            AutoLocker al(ctrl->m);
+            pid = fork();
+            if (!pid) {
+                // ended by the signal if the scope waits for the lock
+                alarm(10);
+                scope.reset();
+                _exit(0);
+            }
+        }
+        UT_ASSERT(c, pid > 0, "fork() succeeds");
+        if (pid > 0) {
+            int status = 0;
+            pid_t waited;
+            do {
+                waited = waitpid(pid, &status, 0);
+            } while (waited == -1 && errno == EINTR);
+            UT_ASSERT(c, waited == pid && WIFEXITED(status) && !WEXITSTATUS(status),
+                "the child leaves the scope without the lock");
+        }
     }
 
     //! 4: a destructor that the clear runs stops the controller: the dispatcher in use is not deleted

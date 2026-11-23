@@ -2374,19 +2374,6 @@ static thread_local std::function<void()> dbg_release_hook;
 
 #endif
 
-//! the cancelByProgram() calls in progress in the current thread, by controller, outermost first (qore#7226)
-static thread_local std::vector<const AsyncIoControllerPriv*> cancel_by_program_stack;
-
-//! returns true if the current thread is in cancelByProgram() of the given controller
-static bool in_cancel_by_program(const AsyncIoControllerPriv* ctrl) {
-    for (const AsyncIoControllerPriv* c : cancel_by_program_stack) {
-        if (c == ctrl) {
-            return true;
-        }
-    }
-    return false;
-}
-
 AsyncIoSandboxContext capture_async_io_sandbox_context() {
     std::shared_ptr<QoreSandboxContext> ctx = std::make_shared<QoreSandboxContext>();
     // the exceptions of the operation's C++ steps on the async I/O thread are raised for a sandboxed submitter
@@ -6536,6 +6523,29 @@ size_t qore_async_io_cancel_module_cleanup_uncounted(bool deadline, std::vector<
     return rv;
 }
 
+AsyncIoControllerPriv::CancelByProgramScope::CancelByProgramScope(AsyncIoControllerPriv* ctrl) : ctrl(ctrl) {
+    AutoLocker al(ctrl->m);
+    ++ctrl->cancel_by_program_scopes;
+}
+
+AsyncIoControllerPriv::CancelByProgramScope::~CancelByProgramScope() {
+    // the lock can be held by a thread that does not exist in a forked child, which leaves the controller as it is
+    // (see forked())
+    if (ctrl->forked()) {
+        return;
+    }
+    // nothing here allocates, as a destructor must not throw; the dispatchers are stopped already, by the stop() that
+    // retired them, and their destructor takes no lock
+    AutoLocker al(ctrl->m);
+    if (--ctrl->cancel_by_program_scopes) {
+        return;
+    }
+    for (QoreCallDispatcher* cd : ctrl->retired_dispatchers) {
+        delete cd;
+    }
+    ctrl->retired_dispatchers.clear();
+}
+
 void AsyncIoControllerPriv::markProgramNoFail(QoreProgram* pgm, ExceptionSink* xsink) noexcept {
     remarkProgram(pgm, xsink);
 }
@@ -6545,32 +6555,8 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
         // nothing of the Program runs in this controller in this process (see forked())
         return;
     }
-    // the dispatchers that a stop() in this call replaces are deleted when the outermost call of this thread
-    // returns, as this call can still use them (qore#7226)
-    struct CancelByProgramScope {
-        AsyncIoControllerPriv* ctrl;
-        CancelByProgramScope(AsyncIoControllerPriv* ctrl) : ctrl(ctrl) {
-            cancel_by_program_stack.push_back(ctrl);
-        }
-        ~CancelByProgramScope() {
-            cancel_by_program_stack.pop_back();
-            if (in_cancel_by_program(ctrl)) {
-                return;
-            }
-            // only the dispatchers that this thread retired: another thread's cancelByProgram() can still use its own;
-            // nothing here allocates, as a destructor must not throw: they are moved to the end and deleted under the
-            // lock (they are stopped already, by the stop() that retired them, and their destructor takes no lock)
-            AutoLocker al(ctrl->m);
-            int tid = q_gettid();
-            auto& rd = ctrl->retired_dispatchers;
-            auto own = std::partition(rd.begin(), rd.end(),
-                [tid](const std::pair<int, QoreCallDispatcher*>& e) { return e.first != tid; });
-            for (auto i = own; i != rd.end(); ++i) {
-                delete i->second;
-            }
-            rd.erase(own, rd.end());
-        }
-    } cancel_scope(this);
+    // a dispatcher that a stop() replaces during this call is deleted when the last call on any thread returns
+    CancelByProgramScope cancel_scope(this);
 
     // stop() keeps the dispatcher, which holds the Program's mark, until this call has ended (qore#6703)
     struct ProgramCancelGuard {
@@ -7343,13 +7329,18 @@ void AsyncIoControllerPriv::stop(ExceptionSink* xsink) {
         }
         if (cd) {
             cd->stop(xsink);
-            // a stop from a destructor that cancelByProgram() runs in this thread (releasing a work item of the
-            // Program) leaves the dispatcher to that call, which uses it further up the stack: it is deleted when the
-            // outermost call returns (qore#7226)
-            if (in_cancel_by_program(this)) {
+            // while any cancelByProgram() runs, on any thread, one can be using the dispatcher further up its stack (a
+            // stop from a destructor that it runs while it releases a work item of the Program): it is deleted when
+            // the last of them returns (qore#7226, qore#6703)
+            bool retired = false;
+            {
                 AutoLocker al(m);
-                retired_dispatchers.emplace_back(q_gettid(), cd);
-            } else {
+                if (cancel_by_program_scopes) {
+                    retired_dispatchers.push_back(cd);
+                    retired = true;
+                }
+            }
+            if (!retired) {
                 delete cd;
             }
         }
