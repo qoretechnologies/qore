@@ -1258,7 +1258,15 @@ public:
             the code that clears the other data of the task (thread resources, the thread-local data of the Programs)
             can assign them, and the next release takes those values
         */
-        tlv_clearing : 1;
+        tlv_clearing : 1,
+        //! true during the last pass of the release of the thread-local data of the Programs between the tasks of a
+        //! pool worker: save_thread_data() saves nothing then (qore#7398)
+        /** see ThreadProgramData::clearAllProgramThreadData(): a destructor run by the release of one family's data
+            can save data in the data of a family that was cleared before; the release repeats until no data is
+            left, and refuses new data in its last pass, so that it always ends, as that of thread_local variables
+            does (tlv_clearing)
+        */
+        tld_save_refused : 1;
 
     //! the generation of the work that the thread runs: its own, unique in the process (unlike its TID, which is
     //! reused), or that of the work item of other code that it runs (see runtime_get_thread_generation(), qore#7010)
@@ -1273,7 +1281,8 @@ public:
             foreign(n_foreign),
             try_reexport(false),
             finalizing(false),
-            tlv_clearing(false) {
+            tlv_clearing(false),
+            tld_save_refused(false) {
         if (p) {
             // the thread runs the Program's code from its start
             qore_publish_type_epoch(type_epoch);
@@ -3482,6 +3491,11 @@ void inc_active_exceptions(int diff) {
     // its exceptions to another thread without ExceptionSink::markExternallyManaged() would do
     assert(diff == 1 || td->active_exceptions >= static_cast<unsigned>(-diff));
     td->active_exceptions += diff;
+}
+
+bool thread_data_saves_refused() {
+    ThreadData* td = thread_data.get();
+    return td && td->tld_save_refused;
 }
 
 bool thread_local_vars_finalizing() {
@@ -12626,19 +12640,54 @@ QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
 }
 
 void ThreadProgramData::clearAllProgramThreadData(ExceptionSink* xsink) {
-    std::vector<QoreHashNode*> hashes;
-    {
-        AutoLocker al(pslock);
-        hashes.reserve(tld_map.size());
-        for (auto& i : tld_map) {
-            i.second->ref();
-            hashes.push_back(i.second);
+    // a destructor run by the release of one family's data can save data in the data of a family that was cleared
+    // before, which would survive into the thread's next task (qore#7398): the release repeats until a pass finds no
+    // data; a destructor that saves data again at each pass would keep it going for ever, so after
+    // QORE_TLD_CLEAR_PASSES passes a last one refuses the data that destructors save (see ThreadData::tld_save_refused)
+    constexpr unsigned QORE_TLD_CLEAR_PASSES = 16;
+    for (unsigned pass = 0; ; ++pass) {
+        bool last = pass >= QORE_TLD_CLEAR_PASSES;
+        // the thread's save_thread_data() refuses data in the last pass only
+        struct SaveRefusal {
+            ThreadData* td;
+            bool active;
+            SaveRefusal(ThreadData* td, bool active) : td(td), active(active) {
+                if (active) {
+                    assert(!td->tld_save_refused);
+                    td->tld_save_refused = true;
+                }
+            }
+            ~SaveRefusal() {
+                if (active) {
+                    td->tld_save_refused = false;
+                }
+            }
+        } refusal(td, last);
+
+        std::vector<QoreHashNode*> hashes;
+        {
+            AutoLocker al(pslock);
+            hashes.reserve(tld_map.size());
+            for (auto& i : tld_map) {
+                i.second->ref();
+                hashes.push_back(i.second);
+            }
         }
-    }
-    // no lock is held here: clearing a hash can run destructors, which can use thread-local data and enter Programs
-    for (QoreHashNode* h : hashes) {
-        qore_hash_private::get(*h)->clear(xsink, false);
-        h->deref(xsink);
+        bool cleared = false;
+        // no lock is held here: clearing a hash can run destructors, which can use thread-local data and enter
+        // Programs
+        for (QoreHashNode* h : hashes) {
+            if (!h->empty()) {
+                cleared = true;
+                qore_hash_private::get(*h)->clear(xsink, false);
+            }
+            h->deref(xsink);
+        }
+        // nothing was left to clear, so no destructor ran in this pass: the data is gone; or the last pass cleared
+        // everything, and nothing could be saved in it
+        if (!cleared || last) {
+            break;
+        }
     }
 }
 

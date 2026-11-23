@@ -2712,6 +2712,10 @@ DLLLOCAL int qore_cancellable_sleep(int64 usecs, ExceptionSink* xsink, const cha
     the values assigned while the other data is cleared are released afterwards.
 */
 DLLLOCAL void clear_all_program_thread_local_data();
+
+//! Returns true while the thread's thread-local data of the Programs is released for the last time between two tasks
+//! of a pool worker: save_thread_data() saves nothing then (qore#7398)
+DLLLOCAL bool thread_data_saves_refused();
 DLLLOCAL void parse_cond_push(bool mark = false);
 DLLLOCAL bool parse_cond_else();
 DLLLOCAL bool parse_cond_can_else(const QoreProgramLocation* loc);
