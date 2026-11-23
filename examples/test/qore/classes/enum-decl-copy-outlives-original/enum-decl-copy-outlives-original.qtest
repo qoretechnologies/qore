@@ -1,0 +1,92 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - the valgrind case runs a child process that sets its own execution mode
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires reflection
+%requires ../../../TestInterpreter.qm
+
+%exec-class EnumDeclCopyOutlivesOriginalTest
+
+#! Regression test for issue #7347: a copy of an enum declaration in the namespace of a Program reads no declaration
+#! that another Program owns
+/** The namespaces of a Program enumerate their enums in the order of their declaration (#7171).  The order of an enum
+    declaration was read through a pointer to the original declaration, which a copy in the namespace of another Program
+    keeps: when the Program that owns the original is deleted first (at the end of the process, a module that another
+    Program imports from, as DataProvider is imported by a user module), the namespace of the other Program read freed
+    memory.  The order is now stored in the copy.
+
+    The valgrind case runs RestConnectionTls.qtest, which loads the AOT module DataProvider through a user module, in
+    a child process under valgrind, which must report no error: it is the case that fails without the change, and it
+    is skipped without valgrind.  The other case needs no valgrind and checks the result, not the memory: a child
+    Program inherits the public enums of its parent Program, the parent is deleted, and the order of the child's enums
+    must still be that of their declaration.  It passes with the old code too (the freed memory is not reused in that
+    sequence), so it guards the order and not the memory.
+*/
+class EnumDeclCopyOutlivesOriginalTest inherits QUnit::Test {
+    public {
+        #! the enums of the parent's namespace: neither sorted nor the reverse of a sorted order
+        const ParentCode = "
+public namespace Outlives {
+    public enum Ez { A = 1 }
+    public enum Eb { A = 1 }
+    public enum Eq { A = 1 }
+    public enum Ea { A = 1 }
+    public enum Em { A = 1 }
+    public enum Ec { A = 1 }
+    public enum Ek { A = 1 }
+    public enum Ex { A = 1 }
+}
+Program sub makeChild() {
+    return new Program(PO_NEW_STYLE);
+}
+";
+
+        const Names = ("Ez", "Eb", "Eq", "Ea", "Em", "Ec", "Ek", "Ex");
+    }
+
+    constructor() : QUnit::Test("enum declaration copies outlive the original", "1.0", \ARGV) {
+        addTestCase("the child of a deleted Program keeps the order of the enums", \childTest());
+        addTestCase("a user module that imports enums from an AOT module is deleted after it", \valgrindTest());
+        set_return_value(main());
+    }
+
+    childTest() {
+        # repeated, as the memory of a freed declaration can be reused
+        for (int i = 0; i < 5; ++i) {
+            Program parent(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+            parent.parse(ParentCode, "parent");
+            Program child = parent.callFunction("makeChild");
+            Namespace before = Namespace::forName(child, "Outlives");
+            assertEq(Names, map $1.getName(), before.getEnums(), "the copies in the child, with the parent");
+            delete parent;
+            # the parent's declarations, which the child's copies were made from, are freed
+            Namespace after = Namespace::forName(child, "Outlives");
+            assertEq(Names, map $1.getName(), after.getEnums(), "the copies in the child, after the parent");
+        }
+    }
+
+    valgrindTest() {
+        string valgrind = trim(backquote("command -v valgrind 2>/dev/null"));
+        if (!valgrind) {
+            testSkip("valgrind is not available");
+        }
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string script = get_script_dir() + "/../../../qlib/FileLocationHandler/RestConnectionTls.qtest";
+        if (!is_file(script)) {
+            testSkip("RestConnectionTls.qtest is not in this tree");
+        }
+        string cmd = sprintf("QORE_PCRE2_NO_JIT=1 %s -q --error-exitcode=99 %s -b --exec-mode=ir --enable-debug %s 2>&1; "
+            "echo EXIT=$?", valgrind, qore_bin, script);
+        string out = backquote(cmd);
+        assertFalse(out =~ /Invalid read|Invalid write|uninitialised|Conditional jump/,
+            "valgrind reports no memory error: " + out.substr(0, 1500));
+        assertTrue(out =~ /EXIT=0/, "the script and valgrind end without error: " + out.substr(-300));
+        assertTrue(out =~ /succeeded/, "the script ran its test cases");
+    }
+}

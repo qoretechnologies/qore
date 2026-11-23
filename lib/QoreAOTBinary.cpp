@@ -7800,12 +7800,12 @@ static bool collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
         }
     }
 
-    // Collect user functions
-    for (auto fi = ns->func_list.begin(), fe = ns->func_list.end(); fi != fe; ++fi) {
+    // Collect user functions, in the order in which they were declared: the loader creates them in the order of the
+    // binary, and the enumeration of a namespace's functions follows that order (issue #7171)
+    for (FunctionEntry* entry : ns->func_list.getEntriesInDeclarationOrder()) {
         if (cancelled()) {
             return false;
         }
-        FunctionEntry* entry = fi->second;
         QoreFunction* func = entry->getFunction();
         if (func && !entry->hasBuiltin()) {
             // Filter out functions from reexported dependencies
@@ -7851,11 +7851,11 @@ static bool collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
     }
 
     // Recurse into child namespaces (filter out namespaces from reexported dependencies)
-    for (auto ni = ns->nsl.nsmap.begin(), ne = ns->nsl.nsmap.end(); ni != ne; ++ni) {
+    // (in the order in which they were declared, as the loader creates them in the order of the binary: issue #7171)
+    for (QoreNamespace* child_ns : qore_namespaces_in_declaration_order(ns->nsl.nsmap)) {
         if (cancelled()) {
             return false;
         }
-        QoreNamespace* child_ns = ni->second;
         if (child_ns) {
             qore_ns_private* child_priv = qore_ns_private::get(*child_ns);
             // Cross-module namespace shells (e.g. ::OMQ, ::Qore, ::Priv)
