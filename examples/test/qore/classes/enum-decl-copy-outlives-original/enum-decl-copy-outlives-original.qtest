@@ -1,7 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
-# test-exec-mode: children - the valgrind case runs a child process that sets its own execution mode
 
 %modern
 %no-child-restrictions
