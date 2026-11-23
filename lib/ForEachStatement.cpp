@@ -542,10 +542,13 @@ int ForEachStatement::parseInitImpl(QoreParseContext& parse_context) {
         QoreParseContextFlagHelper fh0(parse_context);
         // the body runs for each element with the element's index as $# (qore#5690)
         fh0.setFlags(PF_BREAK_OK | PF_CONTINUE_OK | PF_IMPLICIT_ELEMENT);
+        // a $# in the body reads the index of this statement, not that of the code around it (qore#7270)
+        QoreParseImplicitElementScope element_scope(parse_context);
 
         if (code->parseInitImpl(parse_context) && !err) {
             err = -1;
         }
+        reads_implicit_element = element_scope.readsImplicitElement();
 
         nth.recordBranchAndRestore();
         ash.recordBranchAndRestore();
@@ -555,6 +558,9 @@ int ForEachStatement::parseInitImpl(QoreParseContext& parse_context) {
         ash.mergeAndApply();
         // break and continue leave the body before its end (qore#5937)
         ash.applyChangesSinceSave();
+    } else {
+        // a statement without a body has no code that could read its index
+        reads_implicit_element = false;
     }
 
     qore_type_t typ = list.getType();
