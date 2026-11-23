@@ -1,0 +1,64 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# InitA.qm - test module: closures created by the initialization of a library module (qore#7335)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module InitA {
+    version = "1.0";
+    desc = "test module whose initialization creates a closure";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        # created by the module's initialization
+        InitA::State::init_closure = string sub () { return "init closure ran"; };
+    };
+}
+
+#! The public definitions of the test module
+public namespace InitA {
+#! The module's state
+class State {
+    public {
+        #! the closure that the module's initialization created
+        static *code init_closure;
+        #! a closure created by the initializer of a static variable, which the module's code alone runs
+        static code static_closure = string sub () { return "static closure ran"; };
+    }
+}
+
+#! Returns True if the closure that the module's initialization created qualifies as a module-init closure
+public bool sub initQualifies() {
+    return is_module_init_closure(State::init_closure);
+}
+
+#! Runs the closure that the module's initialization created as deferred module initialization
+public string sub runInit() {
+    return call_module_init_closure(State::init_closure);
+}
+
+#! Returns True if the closure of the static variable's initializer qualifies as a module-init closure
+public bool sub staticQualifies() {
+    return is_module_init_closure(State::static_closure);
+}
+
+#! Returns a closure that the module's code creates now, when it is called
+public code sub make() {
+    return string sub () { return "made"; };
+}
+
+#! Returns True if a closure that the module's code creates after its initialization qualifies
+public bool sub lateQualifies() {
+    return is_module_init_closure(make());
+}
+
+#! Returns the result of running a closure created after the initialization as deferred module initialization
+public string sub runLate() {
+    try {
+        return call_module_init_closure(make());
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+}
