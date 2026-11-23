@@ -924,12 +924,17 @@ protected:
     DLLLOCAL QORE_INTERN_NOINLINE bool releaseOwnWeakLocks(AbstractQoreNode* n);
 
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove);
+    //! doListLValue() for the source of a weak assignment (\a WeakSource) or any other path (qore#7351)
+    template <bool WeakSource>
+    DLLLOCAL int doListLValueImpl(const QoreSquareBracketsOperatorNode* op, bool for_remove);
     //! raises the exception of a negative index of a list or a buffer and returns -1; returns -1 without an exception
     //! for the source of a weak assignment (see weak_source_resolution)
     DLLLOCAL int raiseNegativeIndex(const QoreSquareBracketsOperatorNode* op, int64 ind);
     //! checks the stack and records the lvalue ID of a reference that is resolved; nullptr if the stack is exhausted
     DLLLOCAL const lvalue_ref* startReferenceLValue(const ReferenceNode* ref);
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, RuntimeConfig& rc, bool for_remove);
+    template <bool WeakSource>
+    DLLLOCAL int doListLValueImpl(const QoreSquareBracketsOperatorNode* op, RuntimeConfig& rc, bool for_remove);
     DLLLOCAL int setBufferElementLValue(QoreBufferNode* b, size_t index);
 public:
     //! binds the lvalue to a temporary holding a static variable's value read from external storage
@@ -959,7 +964,13 @@ protected:
     DLLLOCAL int doObjLValue(QoreObject* o, const char* mem, bool for_remove);
     DLLLOCAL int doObjLValue(QoreObject* o, const char* mem, bool for_remove, const qore_class_private* class_ctx);
     DLLLOCAL int doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove);
+    //! doHashObjLValue() for the source of a weak assignment (\a WeakSource) or any other path (qore#7351)
+    template <bool WeakSource>
+    DLLLOCAL int doHashObjLValueImpl(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove);
     DLLLOCAL int doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc, bool for_remove);
+    template <bool WeakSource>
+    DLLLOCAL int doHashObjLValueImpl(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc,
+            bool for_remove);
     //! the root of the lvalue of a background expression, or an error for another value that is not an lvalue
     //! (issue #5723); out of line, so that doLValue() stays as small as before for the lvalues of other expressions
     DLLLOCAL __attribute__((noinline, cold)) int doBackgroundRootLValue(const QoreValue& n);

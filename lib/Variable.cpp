@@ -2091,7 +2091,8 @@ void LValueHelper::clearPathKeys() {
     }
 }
 
-int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove) {
+template <bool WeakSource>
+int LValueHelper::doListLValueImpl(const QoreSquareBracketsOperatorNode* op, bool for_remove) {
     // the key or index is a statement of its own: its temporaries are released before the lvalue is changed, as
     // in the other execution modes; evalPathKeys() evaluated it already, with the others of the path, from the root
     // out (qore#5753)
@@ -2105,7 +2106,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
 
     // a list of indexes is a slice, which is not an lvalue; the source of a weak assignment reads it as the operator
     // reads it (qore#7351)
-    if (!weak_source_resolution && qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
+    if (!WeakSource && qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
         return -1;
     }
 
@@ -2120,11 +2121,11 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
     assignment_only = final_assignment;
     if (parent_rc) {
         // the source of a weak assignment that stopped before reads this step as the operator does (qore#7351)
-        return weak_source_read ? weakSourceReadStep(*rh, false, op->hasStringIndexChar(), negative_offsets) : -1;
+        return WeakSource && weak_source_read ? weakSourceReadStep(*rh, false, op->hasStringIndexChar(), negative_offsets) : -1;
     }
     // the source of a weak assignment reads a slice, and an index of a value that is not a list or a hash, as the
     // operator reads them (qore#7351)
-    if (weak_source_resolution && weakSourceIndexNeedsRead(*rh)) [[unlikely]] {
+    if (WeakSource && weakSourceIndexNeedsRead(*rh)) [[unlikely]] {
         return weakSourceReadStep(*rh, false, op->hasStringIndexChar(), negative_offsets);
     }
     // an element of a write-protected variable is resolved without creating it (see setReadOnlyResolution()), as is
@@ -2258,7 +2259,14 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
     return qore_list_private::get(*l)->getLValue((size_t)ind, *this, for_remove, vl.xsink);
 }
 
-int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, RuntimeConfig& rc, bool for_remove) {
+int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove) {
+    // the steps of the source of a weak assignment are an instantiation of their own, so that the steps of any
+    // other path have no test of it (qore#7351)
+    return weak_source_resolution ? doListLValueImpl<true>(op, for_remove) : doListLValueImpl<false>(op, for_remove);
+}
+
+template <bool WeakSource>
+int LValueHelper::doListLValueImpl(const QoreSquareBracketsOperatorNode* op, RuntimeConfig& rc, bool for_remove) {
     // the key or index is a statement of its own: its temporaries are released before the lvalue is changed, as
     // in the other execution modes; evalPathKeys() evaluated it already, with the others of the path, from the root
     // out (qore#5753)
@@ -2273,7 +2281,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
 
     // a list of indexes is a slice, which is not an lvalue; the source of a weak assignment reads it as the operator
     // reads it (qore#7351)
-    if (!weak_source_resolution && qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
+    if (!WeakSource && qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
         return -1;
     }
 
@@ -2288,11 +2296,11 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
     assignment_only = final_assignment;
     if (parent_rc) {
         // the source of a weak assignment that stopped before reads this step as the operator does (qore#7351)
-        return weak_source_read ? weakSourceReadStep(*rh, false, op->hasStringIndexChar(), negative_offsets) : -1;
+        return WeakSource && weak_source_read ? weakSourceReadStep(*rh, false, op->hasStringIndexChar(), negative_offsets) : -1;
     }
     // the source of a weak assignment reads a slice, and an index of a value that is not a list or a hash, as the
     // operator reads them (qore#7351)
-    if (weak_source_resolution && weakSourceIndexNeedsRead(*rh)) [[unlikely]] {
+    if (WeakSource && weakSourceIndexNeedsRead(*rh)) [[unlikely]] {
         return weakSourceReadStep(*rh, false, op->hasStringIndexChar(), negative_offsets);
     }
     // an element of a write-protected variable is resolved without creating it (see setReadOnlyResolution()), as is
@@ -2420,6 +2428,12 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
     pushPathContainer(l, shared, removal_path_info);
 
     return qore_list_private::get(*l)->getLValue((size_t)ind, *this, for_remove, vl.xsink);
+}
+
+int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, RuntimeConfig& rc, bool for_remove) {
+    // the steps of the source of a weak assignment are an instantiation of their own, so that the steps of any
+    // other path have no test of it (qore#7351)
+    return weak_source_resolution ? doListLValueImpl<true>(op, rc, for_remove) : doListLValueImpl<false>(op, rc, for_remove);
 }
 
 int LValueHelper::setBufferElementLValue(QoreBufferNode* b, size_t index) {
@@ -2628,7 +2642,8 @@ int LValueHelper::doBackgroundRootLValue(const QoreValue& n) {
     return 0;
 }
 
-int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove) {
+template <bool WeakSource>
+int LValueHelper::doHashObjLValueImpl(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove) {
     // the key or index is a statement of its own: its temporaries are released before the lvalue is changed, as
     // in the other execution modes; evalPathKeys() evaluated it already, with the others of the path, from the root
     // out (qore#5753)
@@ -2643,7 +2658,7 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
 
     // a list of keys is a slice, which is not an lvalue, as doListLValue() checks for a list of indexes; the source of
     // a weak assignment reads it as the operator reads it (qore#7351)
-    bool weak_slice = weak_source_resolution && rh->getType() == NT_LIST;
+    bool weak_slice = WeakSource && rh->getType() == NT_LIST;
     if (!weak_slice && qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
         return -1;
     }
@@ -2660,7 +2675,7 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     assignment_only = final_assignment;
     if (parent_rc) {
         // the source of a weak assignment that stopped before reads this step as the operator does (qore#7351)
-        return weak_source_read ? weakSourceReadStep(*rh, true) : -1;
+        return WeakSource && weak_source_read ? weakSourceReadStep(*rh, true) : -1;
     }
     if (weak_slice) [[unlikely]] {
         return weakSourceReadStep(*rh, true);
@@ -2690,14 +2705,21 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
 
     // the source of a weak assignment reads a member that an lvalue does not give as a read does (through memberGate()
     // or an accessor) as the operator reads it (qore#7351)
-    if (weak_source_resolution && (!o || !weakSourceMemberIsLValue(o, mem.c_str()))) [[unlikely]] {
+    if (WeakSource && (!o || !weakSourceMemberIsLValue(o, mem.c_str()))) [[unlikely]] {
         return weakSourceReadStep(*rh, true);
     }
 
     return doObjLValue(o, mem.c_str(), for_remove || read_value_only);
 }
 
-int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc, bool for_remove) {
+int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove) {
+    // the steps of the source of a weak assignment are an instantiation of their own, so that the steps of any
+    // other path have no test of it (qore#7351)
+    return weak_source_resolution ? doHashObjLValueImpl<true>(op, for_remove) : doHashObjLValueImpl<false>(op, for_remove);
+}
+
+template <bool WeakSource>
+int LValueHelper::doHashObjLValueImpl(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc, bool for_remove) {
     // the key or index is a statement of its own: its temporaries are released before the lvalue is changed, as
     // in the other execution modes; evalPathKeys() evaluated it already, with the others of the path, from the root
     // out (qore#5753)
@@ -2712,7 +2734,7 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
 
     // a list of keys is a slice, which is not an lvalue, as doListLValue() checks for a list of indexes; the source of
     // a weak assignment reads it as the operator reads it (qore#7351)
-    bool weak_slice = weak_source_resolution && rh->getType() == NT_LIST;
+    bool weak_slice = WeakSource && rh->getType() == NT_LIST;
     if (!weak_slice && qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
         return -1;
     }
@@ -2729,7 +2751,7 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     assignment_only = final_assignment;
     if (parent_rc) {
         // the source of a weak assignment that stopped before reads this step as the operator does (qore#7351)
-        return weak_source_read ? weakSourceReadStep(*rh, true) : -1;
+        return WeakSource && weak_source_read ? weakSourceReadStep(*rh, true) : -1;
     }
     if (weak_slice) [[unlikely]] {
         return weakSourceReadStep(*rh, true);
@@ -2759,10 +2781,16 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
 
     const qore_class_private* class_ctx = rc.getClass() ? rc.getClass() : runtime_get_class();
     // see doHashObjLValue() above (qore#7351)
-    if (weak_source_resolution && (!o || !weakSourceMemberIsLValue(o, mem.c_str()))) [[unlikely]] {
+    if (WeakSource && (!o || !weakSourceMemberIsLValue(o, mem.c_str()))) [[unlikely]] {
         return weakSourceReadStep(*rh, true);
     }
     return doObjLValue(o, mem.c_str(), for_remove || read_value_only, class_ctx);
+}
+
+int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc, bool for_remove) {
+    // the steps of the source of a weak assignment are an instantiation of their own, so that the steps of any
+    // other path have no test of it (qore#7351)
+    return weak_source_resolution ? doHashObjLValueImpl<true>(op, rc, for_remove) : doHashObjLValueImpl<false>(op, rc, for_remove);
 }
 
 void LValueHelper::setObjectContext(qore_object_private* obj) {
