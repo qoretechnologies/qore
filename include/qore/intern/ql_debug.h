@@ -173,6 +173,11 @@ DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closur
 //! client grants no flow-control credit; set by dbg_quic_hold_stream_data()
 DLLLOCAL bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id);
 
+//! the stateless resets that the QUIC listeners of the process sent and that its QUIC clients received (qore#6931);
+//! see dbg_quic_stateless_reset_counts()
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent;
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_stateless_resets_received;
+
 //! the number of threads waiting in dbg_quic_wait_idle(); a QUIC session wakes them only while it is not 0
 DLLLOCAL extern std::atomic<int> qore_dbg_quic_idle_waiters;
 
