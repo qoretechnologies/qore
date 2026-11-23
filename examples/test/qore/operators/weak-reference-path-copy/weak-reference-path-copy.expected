@@ -1,0 +1,10 @@
+three weak steps: path {marker: 1, m2: 1}, weak path {marker: 1, m2: 1}
+then: {marker: 1, m2: 1, m3: 1, m4: 1}
+two weak steps: "o2", through the weak path: "o2"
+replaced: {k: 1}
+objects destroyed: 3
+list: path {k: 1}, weak path {k: 1}
+list then: {k: 1, k2: 2}
+local root: path {k: 1}, weak path {k: 1}
+shared: path {k: 1}, other {}, weak path {k: 1}
+done

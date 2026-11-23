@@ -840,6 +840,12 @@ protected:
         if (current_value->is_unique()) {
             return;
         }
+        // the references that the helper itself holds to a container that it reached through a weak reference
+        // earlier on its path do not make the container shared: a copy would leave the weak references on the
+        // original, which the helper then releases (qore#7352)
+        if (!weak_locked.empty() && heldOnlyByWeakLocks(current_value)) [[unlikely]] {
+            return;
+        }
         if (qv) {
             // a value stored in a container can be held through an opaque reference: the copy keeps its
             // representation, and the value replaced is released as it is held (see qore_value_copy_on_write())
@@ -852,6 +858,10 @@ protected:
         assignNodeIntern(current_value->realCopy());
         saveTemp(old);
     }
+
+    //! returns true if the only references to \a n other than that of the lvalue holding it are the ones that the
+    //! helper holds as it locked \a n at weak steps of its path (qore#7352)
+    DLLLOCAL QORE_INTERN_NOINLINE bool heldOnlyByWeakLocks(const AbstractQoreNode* n) const;
 
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove);
     //! raises the exception of a negative index of a list or a buffer and returns -1; returns -1 without an exception
@@ -955,6 +965,9 @@ private:
     typedef std::vector<AbstractQoreNode*> nvec_t;
     //! values released when the helper is destroyed, after the locks; getValue() adds the nodes that it creates
     mutable nvec_t tvec;
+    //! the lists and hashes that the helper locked at the weak steps of its path (lockWeakList(), lockWeakHash()), each
+    //! once for each reference of its own that it holds in tvec; no reference is held here (qore#7352)
+    std::vector<const AbstractQoreNode*> weak_locked;
     lvid_set_t* lvid_set = nullptr;
     //! the Programs of the references that the lvalue was reached through, entered until the lvalue has been used
     /** see keepReferenceProgram() and adoptReferenceProgram()
@@ -1495,6 +1508,9 @@ public:
     //! Returns the list of the weak reference that the lvalue holds, with a reference that the helper holds until it
     //! is destroyed, or a new empty list that cannot be changed if the list was freed (qore#7198)
     DLLLOCAL __attribute__((cold)) QoreListNode* lockWeakList();
+
+    //! keeps the reference \a n that lockWeakList() or lockWeakHash() took until the helper releases its temporaries
+    DLLLOCAL void holdWeakLock(AbstractQoreNode* n);
 
     //! Returns the hash of the weak reference that the lvalue holds, as lockWeakList() returns a list
     DLLLOCAL __attribute__((cold)) QoreHashNode* lockWeakHash();

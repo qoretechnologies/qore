@@ -896,7 +896,8 @@ LValueHelper::LValueHelper(QoreObject& self, ExceptionSink* xsink, ObjectScan) :
 LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink), assignment_only(for_assignment) {
 }
 
-LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
+LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)),
+        weak_locked(std::move(o.weak_locked)), lvid_set(o.lvid_set),
         ref_pgms(std::move(o.ref_pgms)), ocvec(std::move(o.ocvec)), before(o.before),
         removal_objects(std::move(o.removal_objects)), removed_objects(std::move(o.removed_objects)), rdt(o.rdt),
         vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
@@ -1619,24 +1620,43 @@ void LValueHelper::keepCreatedNode(QoreValue rv) const {
 
 QoreListNode* LValueHelper::lockWeakList() {
     QoreListNode* l = getValue().get<WeakListReferenceNode>()->lock();
-    try {
-        tvec.push_back(l);
-    } catch (...) {
-        l->deref(nullptr);
-        throw;
-    }
+    holdWeakLock(l);
     return l;
 }
 
 QoreHashNode* LValueHelper::lockWeakHash() {
     QoreHashNode* h = getValue().get<WeakHashReferenceNode>()->lock();
+    holdWeakLock(h);
+    return h;
+}
+
+void LValueHelper::holdWeakLock(AbstractQoreNode* n) {
+    // the reference is released with the helper's other temporaries; weak_locked records it for ensureUniqueNode(),
+    // and holds an entry only for a reference that tvec holds
     try {
-        tvec.push_back(h);
+        tvec.push_back(n);
     } catch (...) {
-        h->deref(nullptr);
+        n->deref(nullptr);
         throw;
     }
-    return h;
+    try {
+        weak_locked.push_back(n);
+    } catch (...) {
+        tvec.pop_back();
+        n->deref(nullptr);
+        throw;
+    }
+}
+
+bool LValueHelper::heldOnlyByWeakLocks(const AbstractQoreNode* n) const {
+    int locks = 0;
+    for (const AbstractQoreNode* i : weak_locked) {
+        if (i == n) {
+            ++locks;
+        }
+    }
+    // the lvalue holding the node holds one reference
+    return locks && n->reference_count() == locks + 1;
 }
 
 void LValueHelper::saveTemp(QoreValue val) {
