@@ -3101,8 +3101,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 return false;
             }
 
-            // Push implicit element ($#) for the current iteration
-            QoreIRValue old_element = builder.createPushImplicitElement(index_val, stmt->loc)->result;
+            // Push implicit element ($#) for the current iteration; an exception that leaves the function from the
+            // body restores it as for a value foreach (qore#7379; see below)
+            QoreIRInstruction* push_element = builder.createPushImplicitElement(index_val, stmt->loc);
+            push_element->restore_on_exception_exit = true;
+            QoreIRValue old_element = push_element->result;
 
             // Push RefForeachRecord entry to cleanup stack (for return path record)
             BlockCleanupEntry record_entry;
@@ -3483,8 +3486,15 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
 
         // Push the implicit element ($#) for the current iteration, after the assignment, as the AST interpreter sets
-        // it, so that an exception that the assignment raises leaves the loop with the enclosing element (qore#6432)
-        QoreIRValue old_element = builder.createPushImplicitElement(index_val, stmt->loc)->result;
+        // it, so that an exception that the assignment raises leaves the loop with the enclosing element (qore#6432).
+        // An exception that leaves the body for a handler of this function restores it in the loop's element exception
+        // block (see beginForeachElementExceptionRestore()); one that leaves the function, with no handler of the
+        // function around the loop, is restored by the frame's exception exit, as the AST interpreter's foreach
+        // statement restores it when the exception unwinds it, so that the caller's code that reads the thread's
+        // implicit element (a find expression, a context statement) sees its own (qore#7379)
+        QoreIRInstruction* push_element = builder.createPushImplicitElement(index_val, stmt->loc);
+        push_element->restore_on_exception_exit = true;
+        QoreIRValue old_element = push_element->result;
 
         // Register a cleanup entry so a non-local exit (return / thread_exit) from
         // inside the body restores $# to the caller's value.  Break and continue
@@ -26661,8 +26671,11 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     }
 
     // the implicit element is set after the assignment, as the AST interpreter sets it, so that an exception that the
-    // assignment raises leaves the loop with the enclosing element (qore#6432)
-    QoreIRValue old_element = builder.createPushImplicitElement(state.foreach_index, loc)->result;
+    // assignment raises leaves the loop with the enclosing element (qore#6432); an exception that leaves the function
+    // from the body restores it at the frame's exception exit, as for the other value foreach loops (qore#7379)
+    QoreIRInstruction* push_element = builder.createPushImplicitElement(state.foreach_index, loc);
+    push_element->restore_on_exception_exit = true;
+    QoreIRValue old_element = push_element->result;
 
     // a return from the body releases the iterator, which holds the source, and the source, then the loop
     // variables, before the cleanups of the enclosing blocks run, as for the other value foreach loops (see
