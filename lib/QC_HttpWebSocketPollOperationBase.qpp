@@ -1223,6 +1223,7 @@ void HttpWebSocketPollOperationPriv::cleanup(ExceptionSink* xsink) {
 qclass HttpWebSocketPollOperationBase [
     internal_members=object recv_queue,object send_queue;
     ns=Qore;
+    dom=NETWORK;
     arg=HttpWebSocketPollOperationPriv* priv;
     vparent=SocketPollOperationBase<hash<auto>>
 ];
