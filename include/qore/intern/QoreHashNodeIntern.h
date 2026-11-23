@@ -583,6 +583,25 @@ public:
 
     DLLLOCAL QoreValue takeKeyValueIntern(const char* key, qore_object_private* obj = nullptr);
 
+    //! Takes the value of a key for delete or remove (qore#7306)
+    /** a hash freed under a weak reference and a copy of one (qore#7163) are empty: the key is not found, and
+        HASH-ERROR is raised then, which costs nothing when the key is removed; the hash can be shared (the hash of a
+        weak reference), so its uniqueness is not asserted
+
+        @return the value of the key, or NOTHING if it does not exist or an exception was raised
+    */
+    DLLLOCAL QoreValue takeRemovedKey(const char* key, ExceptionSink* xsink);
+
+    //! Raises HASH-ERROR for delete or remove that removes nothing from a hash freed under a weak reference or from a
+    //! copy of one (qore#7163), which is empty; the removers call it only when they remove nothing (qore#7306)
+    /** @return -1 if the hash cannot be changed and HASH-ERROR was raised, 0 if not
+    */
+    DLLLOCAL int checkRemovalValid(ExceptionSink* xsink) {
+        // a hash whose last reference was released is empty, and so is a copy of it
+        assert(valid || hm.empty());
+        return checkValid(xsink);
+    }
+
     DLLLOCAL QoreValue takeKeyValueIntern(const char* key, bool& exists) {
         assert(key);
 

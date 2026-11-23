@@ -2782,6 +2782,20 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref Qore::HTTPClient::getURL() "HTTPClient::getURL()", @ref Qore::HTTPClient::getProxyURL() "getProxyURL()"
+      and @ref Qore::HTTPClient::getSafeProxyURL() "getSafeProxyURL()" give an IPv6 host in brackets and the path of a
+      UNIX domain socket with every reserved character encoded; the URL was ambiguous without them, and
+      @ref Qore::HTTPClient::getProxyURL() "getProxyURL()" takes the parts of the URL to give, as \c getURL() does
+      (<a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>)
+    - an operation on a container that raises an exception after changing it, such as a hash merge that stores a
+      key before it refuses another one, keeps the object counts of the containers above it and is seen by the
+      @ref garbage_collection "garbage collector", which collects a cycle that it made (issue #7322)
+    - a change through an lvalue path that reaches a container again through a
+      @ref weak_assignment_operator "weak reference" changes the object count of each container holding the changed
+      one once, where it failed an assertion or counted an object twice (issue #7321)
+    - the @ref garbage_collection "garbage collector" collects a cycle through a hash, list or object holding an
+      object that a member was removed from, which it missed, and a write to a member by its bare name no longer
+      counts the object as holding a value to scan when it holds none (issue #7348)
     - The @ref garbage_collection "garbage collector" now collects object cycles through reversed
       lists and lists whose elements were converted in place (issue #7159).
     - @ref string_formatting "Value formatting" now displays a back-reference when several paths reach the same
@@ -2835,6 +2849,10 @@
     - the \c splice and \c extract operators and the merge of a list, a hash or an object's members (\c +=) raise
       \c LIST-ERROR or \c HASH-ERROR for a list or hash freed under a @ref weak_assignment_operator "weak reference", as
       the other changes do (<a href="https://github.com/qoretechnologies/qore/issues/7199">issue 7199</a>)
+    - the @ref remove "remove" and @ref delete "delete" operators remove an element, a key, a slice or a range through
+      a @ref weak_assignment_operator "weak reference" from the list or hash that it designates, instead of removing
+      the weak reference itself or nothing
+      (<a href="https://github.com/qoretechnologies/qore/issues/7306">issue 7306</a>)
     - @ref httpserverintro "HttpServer" answers a handler's informational response (1xx) other than 101 with an error
       instead of sending it as the final response
       (<a href="https://github.com/qoretechnologies/qore/issues/7222">issue 7222</a>)

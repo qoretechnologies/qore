@@ -663,8 +663,15 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
             # the synchronous client connects outside get() and getAsync(): code restricted from NETWORK may connect
             # only to the target of a connection that was lent to it (qore#7262), checked before connecting
             if (client.hasCallableMethod("getURL")) {
-                checkLentNetworkTarget(client.getURL(), client.hasCallableMethod("getProxyURL")
-                    ? client.getProxyURL() : NOTHING);
+                # the target only (scheme, host and port) of a builtin client: its credentials and path, which the
+                # calling code can set, are not given to the check (qore#7236)
+                if (client instanceof Qore::HTTPClient) {
+                    checkLentNetworkTarget(cast<Qore::HTTPClient>(client).getURL(UC_TARGET),
+                        cast<Qore::HTTPClient>(client).getProxyURL(UC_TARGET));
+                } else {
+                    checkLentNetworkTarget(client.getURL(), client.hasCallableMethod("getProxyURL")
+                        ? client.getProxyURL() : NOTHING);
+                }
             } else if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
                 throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the NETWORK "
                     "functional domain, and the target of the connection's client cannot be checked", name);
@@ -731,10 +738,12 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
                 "functional domain, and the connection's synchronous client is not bound to the target of the code "
                 "that created the connection", name);
         }
-        *string proxy = opts.proxy;
-        checkLentNetworkTarget(real_url ?? url, proxy);
+        # the configured URLs and proxy are checked by their targets only (scheme, host and port, without user
+        # information), as the client parses them (qore#7236)
+        *string proxy = opts.proxy.val() ? getLentTargetUrl(opts.proxy) : NOTHING;
+        checkLentNetworkTarget(getLentTargetUrl(real_url ?? url), proxy);
         if (url.val() && url != real_url) {
-            checkLentNetworkTarget(getRealUrl(url, getConnectionSchemeInfo(), getType()), proxy);
+            checkLentNetworkTarget(getLentTargetUrl(getRealUrl(url, getConnectionSchemeInfo(), getType())), proxy);
         }
     }
 

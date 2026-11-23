@@ -822,6 +822,24 @@ struct qore_list_private {
     DLLLOCAL void raiseElementRemovalError(size_t ind, bool for_del, const QoreTypeInfo* holder_type,
             ExceptionSink* xsink) const;
 
+    //! Raises LIST-ERROR for delete or remove that removes nothing from a list freed under a weak reference or from a
+    //! copy of one (qore#7163), which is empty; the removers call it only when they remove nothing (qore#7306)
+    /** @return -1 if the list cannot be changed and LIST-ERROR was raised, 0 if not
+    */
+    DLLLOCAL int checkRemovalValid(ExceptionSink* xsink) {
+        // a list whose last reference was released is empty, and so is a copy of it
+        assert(valid || !length);
+        return checkValid(xsink);
+    }
+
+    //! QoreListNode::extract(ptrdiff_t, ptrdiff_t) for a list that can be shared: the list of a weak reference,
+    //! which a remove changes in place (qore#7306)
+    DLLLOCAL QoreListNode* extract(ptrdiff_t offset, ptrdiff_t len);
+
+    //! raises RUNTIME-TYPE-ERROR for delete or remove of element \a ind of a list whose element type does not take
+    //! NOTHING reached through a weak reference, which keeps the type that its owners declared (qore#7306)
+    DLLLOCAL void raiseWeakElementRemovalError(size_t ind, bool for_del, ExceptionSink* xsink) const;
+
     //! makes the element type of the list its or-nothing type (list<*int> for a list<int>) if its element type does
     //! not take NOTHING, as for delete or remove of an element of a list held by an lvalue that allows it (qore#6435)
     //! and for the list that remove of a range past the end of a list gives (qore#6434)

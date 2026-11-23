@@ -13,10 +13,10 @@ hash key store: {a: 1, b: 2}
 hash dynamic key store: {a: 1, b: 2, c: 3}
 hash key +=: {a: 11, b: 2, c: 3}
 hash +=: RUNTIME-TYPE-ERROR
-hash remove: {a: 11, b: 2, c: 3}
-hash delete: {a: 11, b: 2, c: 3}
+hash remove: {a: 11, c: 3}
+hash delete: {a: 11}
 hash -=: RUNTIME-TYPE-ERROR
-h: {a: 11, b: 2, c: 3}
+h: {a: 11}
 auto list: [1, 2, 3]
 auto hash: {a: 1, b: 2}
 loop: [0, 1, 2, 3, 4]

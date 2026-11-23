@@ -1,0 +1,8 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# an operation canceled before the module cleanup, whose step's result is held, reaches the cleanup's cancellation: its
+# onComplete() runs there and cannot start new asynchronous work (qore#6703, qore#7027); needs a debug build
+
+%requires CleanupCancelStep
+
+printf("held: %y\n", Holder::startResubmit());

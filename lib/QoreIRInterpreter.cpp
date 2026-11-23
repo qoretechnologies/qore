@@ -20512,22 +20512,32 @@ load_local_done:
                                 // Now remove/delete the final key/element from the container
                                 const LVPathStep& last_step = path_copy.back();
                                 // the type alone: getValue() would box a large int or a special float that the
-                                // parent stores natively in a new node (qore#6094)
+                                // parent stores natively in a new node (qore#6094); a list or a hash that the parent
+                                // holds through a weak reference (NT_WEAKREF_LIST, NT_WEAKREF_HASH) is changed itself
+                                // (qore#7306): the container helpers and qore_lvalue_remove_index() take the type of
+                                // the lvalue
                                 qore_type_t ct = lvh.getType();
                                 bool last_is_hash = (last_step.kind == LVPathStepKind::HashKeyConst
                                         || last_step.kind == LVPathStepKind::HashKey);
                                 bool last_is_hash_list = last_is_hash && last_step.slice_values.size() == 1
                                         && last_step.slice_values[0].getType() == NT_LIST;
                                 if ((last_step.kind == LVPathStepKind::HashKeySlice || last_is_hash_list)
-                                        && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
+                                        && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF
+                                            || ct == NT_WEAKREF_HASH)) {
                                     res = executeLVHashKeySliceRemove(lvh, ct, last_step,
                                             path_inst->unary_op, xsink);
                                 } else if ((last_step.kind == LVPathStepKind::HashKeyConst
-                                        || last_step.kind == LVPathStepKind::HashKey) && ct == NT_HASH) {
-                                    lvh.ensureUnique();
-                                    QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
-                                    res = h->takeKeyValue(last_step.name.c_str());
-                                    lvh.removedValue(res);
+                                        || last_step.kind == LVPathStepKind::HashKey)
+                                        && (ct == NT_HASH || ct == NT_WEAKREF_HASH)) {
+                                    QoreHashNode* h = lvh.getRemovalHash(ct);
+                                    if (h) {
+                                        // the hash of a weak reference is shared with its owners
+                                        // NOTHING if the key does not exist, also with HASH-ERROR for a freed
+                                        // hash
+                                        res = qore_hash_private::get(*h)->takeRemovedKey(
+                                            last_step.name.c_str(), xsink);
+                                        lvh.removedValue(res);
+                                    }
                                     pending_delete_finish = true;
                                 } else if ((last_step.kind == LVPathStepKind::HashKeyConst
                                         || last_step.kind == LVPathStepKind::HashKey)
@@ -20545,7 +20555,8 @@ load_local_done:
                                         || (last_step.kind == LVPathStepKind::ListIndex
                                             && last_step.slice_values.size() == 1
                                             && last_step.slice_values[0].getType() == NT_LIST))
-                                        && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
+                                        && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY
+                                            || ct == NT_WEAKREF_LIST)) {
                                     // a list of indexes, given in the code or by the value of the index expression
                                     res = executeLVListIndexSliceRemove(lvh, ct, last_step,
                                             path_inst->slice_ranges, path_inst->unary_op, xsink);
@@ -20560,7 +20571,8 @@ load_local_done:
                                         path_inst->unary_op == LVUnaryOp::Delete);
                                     pending_delete_finish = true;
                                 } else if (last_step.kind == LVPathStepKind::HashKeySlice
-                                        && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
+                                        && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF
+                                            || ct == NT_WEAKREF_HASH)) {
                                     res = executeLVHashKeySliceRemove(lvh, ct, last_step,
                                             path_inst->unary_op, xsink);
                                 } else if (last_step.kind == LVPathStepKind::ListRangeSlice) {
