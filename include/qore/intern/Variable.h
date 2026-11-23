@@ -1000,6 +1000,9 @@ private:
     bool removal_object_reported = false;
     //! set when a value removed from an object needs a recursive-reference scan; see objectRemoved()
     bool removal_object_scan = false;
+    //! the number of the entries at the start of tvec that hold the helper's own locks of the lists and hashes of
+    //! weak references (holdWeakLock()), which scanWeakContainerRemovals() does not walk; saturates (qore#7373)
+    uint8_t weak_lock_count = 0;
     //! objects other than \a robj that a value needing a scan was removed from; each holds a weak reference
     std::vector<RObject*> removal_objects;
     //! the objects removed by this write, which it still holds while it scans; see removedValue()
@@ -1482,6 +1485,22 @@ public:
 
     //! handles the entries created by navigation when the helper is destroyed; see ~LValueHelper()
     DLLLOCAL void finishVivified();
+
+    //! keeps a value that a list operator (shift, pop, splice, extract) took out of the lvalue's list, when the
+    //! helper reached the list through a weak reference: the helper holds a reference to it, and its objects are
+    //! scanned when the helper is destroyed (scanWeakContainerRemovals(), qore#7373)
+    DLLLOCAL void removedValueThroughWeak(const QoreValue& v) {
+        if (holds_weak_locks) [[unlikely]] {
+            keepRemovedThroughWeak(v);
+        }
+    }
+
+    //! removedValueThroughWeak() for a helper that holds weak locks; raises no exception
+    DLLLOCAL __attribute__((cold)) void keepRemovedThroughWeak(const QoreValue& v) noexcept;
+
+    //! scans the objects of the values removed or replaced in a list or a hash reached through a weak reference,
+    //! whose holders are not known, so that the helper has no object to scan from (qore#7373)
+    DLLLOCAL void scanWeakContainerRemovals();
 
     //! returns true if the hash is a hashdecl hash, whose members have declared types
     DLLLOCAL static bool containerHasDeclaredMembers(const QoreHashNode* h);

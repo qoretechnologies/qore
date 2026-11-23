@@ -63,5 +63,8 @@ QoreValue QorePopOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink)
         (int)(l->size()));
     // the list reference will now be the reference for the return value
     // therefore no need to reference again
-    return l->pop();
+    QoreValue rv = l->pop();
+    // a value taken out of a list reached through a weak reference (qore#7373)
+    val.removedValueThroughWeak(rv);
+    return rv;
 }
