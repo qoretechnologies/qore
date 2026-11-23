@@ -1,0 +1,279 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires logger_bin
+%requires reflection
+
+%exec-class SandboxProcessWideStateReadTest
+
+#! Process-wide state of the builtin API is not readable by sandboxed code (issue #6749)
+/** The objects of builtin constants, which every Program shares, take no member from any code, so that no data
+    passes through them from one tenant to another or from the host to a tenant; the application registry and the
+    module options, which the host sets for the whole process, give no value to the code of a sandboxed Program, also
+    from a background thread and from a Program that sandboxed code created, while trusted code gets them
+*/
+class SandboxProcessWideStateReadTest inherits QUnit::Test {
+    public {
+        #! the shared objects, by the expression that gets one
+        const SharedObjects = (
+            "Qore::Logger::LoggerLevel::getLevelInfo()",
+            "Qore::Logger::LoggerLevel::LevelWarn",
+            "Qore::Logger::LoggerLevel::getLevel(\"ERROR\")",
+            "Qore::Logger::LoggerLevel::getLevel(Qore::Logger::LoggerLevel::DEBUG)",
+            "Qore::stdout",
+            "Qore::stderr_stream",
+            "Reflection::AutoType",
+        );
+
+        #! the member that a tenant tries to give a shared object
+        const Member = "qore_test_6749";
+
+        #! removals of a missing member that precede an assignment, by the member that they use
+        const Removals = {
+            "qore_test_6749_r1": "remove o.qore_test_6749_r1;",
+            "qore_test_6749_r2": "delete o.qore_test_6749_r2;",
+            "qore_test_6749_r3": "o -= \"qore_test_6749_r3\";",
+            "qore_test_6749_r4": "o -= (\"qore_test_6749_r4\",);",
+            "qore_test_6749_r5": "auto v = remove o.qore_test_6749_r5;",
+        };
+
+        #! the application registry key and the module option of the test
+        const Key = "qore-test-6749";
+
+        #! the code that reads the registry and the option
+        const ReadSource = "return {
+        \"registry\": get_app_registry(\"qore-test-6749\"),
+        \"registry-dynamic\": call_function(\"get_app_registry\", \"qore-test-6749\"),
+        \"option\": get_module_option(\"qore-test-6749\", \"opt\"),
+    };";
+    }
+
+    constructor() : Test("process-wide state is not readable by sandboxed code", "1.0", \ARGV) {
+        addTestCase("a shared constant object passes no data from one tenant to another", \sharedObjectTest());
+        addTestCase("the host gives no data to tenants through a shared constant object", \hostWriteTest());
+        addTestCase("a tenant gives no member to a builtin object that it did not create", \foreignObjectTest());
+        addTestCase("a removal of a missing member does not let a tenant add it", \removalTest());
+        addTestCase("a builtin object of the host keeps working for a tenant", \declaredMemberTest());
+        addTestCase("tenants do not get the application registry and the module options", \registryTest());
+        addTestCase("reading the application registry requires the PROCESS domain", \domainTest());
+        set_return_value(main());
+    }
+
+    sharedObjectTest() {
+        # what tenant A's writes raised, and what tenant B and the host read back
+        hash<auto> writes = {};
+        hash<auto> tenant_b_reads = {};
+        hash<auto> host_reads = {};
+        foreach string exp in (SharedObjects) {
+            Program tenant_a = SandboxProcessWideStateReadTest::tenant("tenant-a", "write", sprintf("auto o = %s; "
+                "hash<auto> rv = {};
+    try { o.%s = \"tenant-a\"; rv.assign = \"no exception\"; } catch (hash<ExceptionInfo> ex) { rv.assign = ex.err; }
+    try { o += {\"%s\": \"tenant-a\"}; rv.merge = \"no exception\"; } catch (hash<ExceptionInfo> ex) {
+        rv.merge = ex.err;
+    }
+    try { o.%s.x = \"tenant-a\"; rv.element = \"no exception\"; } catch (hash<ExceptionInfo> ex) {
+        rv.element = ex.err;
+    }
+    return rv;", exp, Member, Member, Member));
+            writes{exp} = tenant_a.callFunction("t_write");
+            Program tenant_b = SandboxProcessWideStateReadTest::tenant("tenant-b", "read", sprintf("auto o = %s; "
+                "return o.%s;", exp, Member));
+            tenant_b_reads{exp} = tenant_b.callFunction("t_read");
+            host_reads{exp} = SandboxProcessWideStateReadTest::readMember(exp);
+        }
+        hash<auto> refused = {"assign": "SYSTEM-OBJECT-ERROR", "merge": "SYSTEM-OBJECT-ERROR",
+            "element": "SYSTEM-OBJECT-ERROR"};
+        hash<auto> expected_writes = map {$1: refused}, SharedObjects;
+        hash<auto> expected_reads = map {$1: NOTHING}, SharedObjects;
+        # tenant B and the host do not read what tenant A wrote
+        assertEq(expected_reads, tenant_b_reads);
+        assertEq(expected_reads, host_reads);
+        assertEq(expected_writes, writes);
+        # the level objects still work
+        assertEq("INFO", Qore::Logger::LoggerLevel::getLevelInfo().getStr());
+        assertTrue(Qore::Logger::LoggerLevel::getLevelInfo() == Qore::Logger::LoggerLevel::LevelInfo);
+    }
+
+    hostWriteTest() {
+        hash<auto> writes = {};
+        hash<auto> tenant_reads = {};
+        foreach string exp in (SharedObjects) {
+            Program trusted(PO_NEW_STYLE);
+            trusted.parse(sprintf("%%requires logger_bin\n%%requires reflection\nauto sub write() { auto o = %s; "
+                "try { o.%s = \"host\"; return \"no exception\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }",
+                exp, Member), "host");
+            writes{exp} = trusted.callFunction("write");
+            Program tenant = SandboxProcessWideStateReadTest::tenant("tenant", "read", sprintf("auto o = %s; "
+                "return o.%s;", exp, Member));
+            tenant_reads{exp} = tenant.callFunction("t_read");
+        }
+        hash<auto> expected_writes = map {$1: "SYSTEM-OBJECT-ERROR"}, SharedObjects;
+        hash<auto> expected_reads = map {$1: NOTHING}, SharedObjects;
+        assertEq(expected_reads, tenant_reads);
+        assertEq(expected_writes, writes);
+    }
+
+    foreignObjectTest() {
+        # objects of builtin classes that the host created, as a module keeps in a static member and gives to every
+        # caller
+        list<object> objects = (new Mutex(), new TimeZone("UTC"), new Qore::Thread::Counter());
+        string src = "hash<auto> rv = {};
+    foreach object o in (l) {
+        try { o.qore_test_6749 = \"tenant-a\"; rv{o.className()} = \"no exception\"; } catch (hash<ExceptionInfo> ex) {
+            rv{o.className()} = ex.err;
+        }
+    }
+    # its own objects
+    foreach object o in ((new Mutex(), new TimeZone(\"UTC\"), new Qore::Thread::Counter())) {
+        o.qore_test_6749 = \"own\";
+        rv{\"own \" + o.className()} = o.qore_test_6749;
+    }
+    return rv;";
+        Program tenant_a = SandboxProcessWideStateReadTest::tenant("tenant-a", "write", src, "list<object> l");
+        hash<auto> results = tenant_a.callFunction("t_write", objects);
+        Program tenant_b = SandboxProcessWideStateReadTest::tenant("tenant-b", "read", "return map {$1.className(): "
+            "$1.qore_test_6749}, l;", "list<object> l");
+        hash<auto> reads = tenant_b.callFunction("t_read", objects);
+        assertEq({"Mutex": NOTHING, "TimeZone": NOTHING, "Counter": NOTHING}, reads);
+        assertEq({"Mutex": "SYSTEM-OBJECT-ERROR", "TimeZone": "SYSTEM-OBJECT-ERROR", "Counter": "SYSTEM-OBJECT-ERROR",
+            "own Mutex": "own", "own TimeZone": "own", "own Counter": "own"}, results);
+        # trusted code is not affected
+        objects[0].qore_test_6749 = "host";
+        assertEq("host", objects[0].qore_test_6749);
+    }
+
+    removalTest() {
+        # the shared constants, and a builtin object of the host that the tenant gets as an argument
+        Mutex host_mutex();
+        hash<auto> writes = {};
+        hash<auto> reads = {};
+        foreach string exp in (SharedObjects + ("h",)) {
+            foreach hash<auto> i in (Removals.pairIterator()) {
+                string key = exp + " " + i.key;
+                Program tenant_a = SandboxProcessWideStateReadTest::tenant("tenant-a", "write", sprintf("auto o = %s; "
+                    "try { %s o.%s = \"tenant-a\"; return \"no exception\"; } catch (hash<ExceptionInfo> ex) { "
+                    "return ex.err; }", exp, i.value, i.key), "object h");
+                writes{key} = tenant_a.callFunction("t_write", host_mutex);
+                Program tenant_b = SandboxProcessWideStateReadTest::tenant("tenant-b", "read", sprintf("auto o = %s; "
+                    "return {\"value\": o.%s, \"key\": inlist(\"%s\", keys o)};", exp, i.key, i.key), "object h");
+                reads{key} = tenant_b.callFunction("t_read", host_mutex);
+            }
+        }
+        hash<auto> expected_writes = {};
+        hash<auto> expected_reads = {};
+        foreach string key in (keys writes) {
+            expected_writes{key} = "SYSTEM-OBJECT-ERROR";
+            expected_reads{key} = {"value": NOTHING, "key": False};
+        }
+        # the other tenant reads nothing, and the removal created no key
+        assertEq(expected_reads, reads);
+        assertEq(expected_writes, writes);
+    }
+
+    declaredMemberTest() {
+        # the C++ code of a builtin class writes the members that the class declares also when a tenant calls it on
+        # an object of the host: a tenant adds its appender to the host's logger, which then logs to it
+        Qore::Logger::Logger logger("host-6749", Qore::Logger::LoggerLevel::INFO);
+        Program tenant = SandboxProcessWideStateReadTest::tenant("tenant", "log", "TenantAppender a(); "
+            "a.open(); l.addAppender(a); l.info(\"tenant message\"); return a.messages;", "Qore::Logger::Logger l",
+            "class TenantAppender inherits Qore::Logger::LoggerAppenderWithLayout {
+    public {
+        list<auto> messages = ();
+    }
+    constructor() : LoggerAppenderWithLayout(\"tenant\", new Qore::Logger::LoggerLayoutPattern(\"%m\")) {
+    }
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            messages += params;
+        }
+    }
+}
+");
+        assertEq(("tenant message",), tenant.callFunction("t_log", logger));
+        assertEq(1, logger.getAppenders().size());
+    }
+
+    registryTest() {
+        *hash<auto> old_registry = get_app_registry(Key);
+        on_exit set_app_registry(Key, old_registry);
+        auto old_option = get_module_option(Key, "opt");
+        on_exit set_module_option(Key, "opt", old_option);
+        set_app_registry(Key, {"secret": "host"});
+        set_module_option(Key, "opt", "host-option");
+
+        hash<auto> results = {};
+        # two tenants with sandboxes of their own
+        foreach string name in ("tenant-a", "tenant-b") {
+            Program tenant = SandboxProcessWideStateReadTest::tenant(name, "read", ReadSource);
+            results{name} = tenant.callFunction("t_read");
+        }
+        # a background thread of a tenant
+        Program tenant_bg = SandboxProcessWideStateReadTest::tenant("tenant-bg", "bg", "code read = hash<auto> sub () { "
+            + ReadSource + " }; Queue q(); background q.push(read()); return q.get();");
+        results."background" = tenant_bg.callFunction("t_bg");
+        # a Program that a tenant creates, called later by trusted code
+        Program tenant_d = SandboxProcessWideStateReadTest::tenant("tenant-d", "child", "Program p(PO_NEW_STYLE); "
+            "p.parse(\"hash<auto> sub read() { \" + s + \" }\", \"child\"); return p;", "string s");
+        Program child = tenant_d.callFunction("t_child", ReadSource);
+        results.child = child.callFunction("read");
+        # trusted code serving a tenant under a policy barrier is trusted code: it gets the values, and is responsible
+        # for what it returns to the tenant
+        code cap = SandboxManager::createSystemPolicyCall(hash<auto> sub () {
+            return SandboxProcessWideStateReadTest::read();
+        });
+        Program tenant_c = SandboxProcessWideStateReadTest::tenant("tenant-c", "run", "return c();", "code c");
+        results.barrier = tenant_c.callFunction("t_run", cap);
+        # trusted code and a trusted Program
+        results.host = SandboxProcessWideStateReadTest::read();
+        Program trusted_pgm(PO_NEW_STYLE);
+        trusted_pgm.parse("hash<auto> sub read() { " + ReadSource + " }", "trusted");
+        results."trusted Program" = trusted_pgm.callFunction("read");
+
+        hash<auto> none = {"registry": NOTHING, "registry-dynamic": NOTHING, "option": NOTHING};
+        hash<auto> values = {"registry": {"secret": "host"}, "registry-dynamic": {"secret": "host"},
+            "option": "host-option"};
+        hash<auto> expected = {};
+        map expected{$1} = none, ("tenant-a", "tenant-b", "background", "child");
+        map expected{$1} = values, ("barrier", "host", "trusted Program");
+        assertEq(expected, results);
+    }
+
+    domainTest() {
+        Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+        assertThrows("PARSE-EXCEPTION", "get_app_registry", \p.parse(), ("auto sub t() { return get_app_registry(\"x\"); }",
+            "restricted"));
+    }
+
+    #! Reads the registry and the option as \c ReadSource does
+    static hash<auto> read() {
+        return {
+            "registry": get_app_registry(Key),
+            "registry-dynamic": call_function("get_app_registry", Key),
+            "option": get_module_option(Key, "opt"),
+        };
+    }
+
+    #! Reads the test member of the shared object that the expression gets, in a trusted Program
+    private static auto readMember(string exp) {
+        Program p(PO_NEW_STYLE);
+        p.parse(sprintf("%%requires logger_bin\n%%requires reflection\nauto sub read() { auto o = %s; return o.%s; }",
+            exp, Member), "host-read");
+        return p.callFunction("read");
+    }
+
+    #! Returns a sandboxed Program with one function
+    private static Program tenant(string name, string func, string body, *string args, *string decls) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse(sprintf("%%requires logger_bin\n%%requires reflection\n%s\nauto sub t_%s(%s) { %s }\n", decls ?? "",
+            func, args ?? "", body), name);
+        p.setSandboxManager(new SandboxManager());
+        return p;
+    }
+}

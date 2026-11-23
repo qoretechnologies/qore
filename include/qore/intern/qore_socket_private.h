@@ -165,6 +165,11 @@ class QoreSocketObject;
     @return 0 if the stream has no data buffered to be sent (or the stream or the session is gone), 1 if the wait timed
     out, -1 if an exception was raised (\c HTTP2-ERROR or \c QUIC-ERROR without a session)
 */
+//! Returns the bytes of an HTTP/2 stream's buffered data that nghttp2 has taken so far (never decreases)
+/** @return the byte count, -1 if the session is closed or the stream is gone, or if an exception was raised
+*/
+DLLLOCAL int64_t qore_socket_object_h2_stream_taken(QoreSocketObject* s, int64_t stream_id, ExceptionSink* xsink);
+
 //! Returns the bytes of a client stream's data that the peer has acknowledged on the socket's first QUIC session
 /** @return the byte count (never decreases), -1 if the session or the stream's data record is gone, or if an
     exception was raised
@@ -778,6 +783,15 @@ public:
     //! Makes the channel use these socket functions; returns an ARES_* status
     DLLLOCAL int install(ares_channel_t* channel);
 
+#ifdef DEBUG
+    //! Makes each UDP socket of the channel one end of a socketpair whose other end is given to @p peer (see
+    //! qore_dbg_cares_set_local_transport()); called before the channel makes a socket
+    DLLLOCAL void setDbgLocalTransport(void (*peer)(int fd, void* arg), void* arg) {
+        dbg_local_peer = peer;
+        dbg_local_peer_arg = arg;
+    }
+#endif
+
     QoreCaresSockets(const QoreCaresSockets&) = delete;
     QoreCaresSockets& operator=(const QoreCaresSockets&) = delete;
 
@@ -785,6 +799,19 @@ private:
     std::mutex lock;
     //! the open sockets of the channel, by descriptor
     std::unordered_map<int, std::shared_ptr<QoreSharedDescriptor>> fds;
+#ifdef DEBUG
+    //! called with the other end of each UDP socketpair (see setDbgLocalTransport())
+    void (*dbg_local_peer)(int fd, void* arg) = nullptr;
+    //! the argument of @ref dbg_local_peer
+    void* dbg_local_peer_arg = nullptr;
+    //! the address that c-ares connected each socketpair socket to, by descriptor (empty before it is connected)
+    std::unordered_map<int, std::pair<struct sockaddr_storage, socklen_t>> dbg_local_addrs;
+
+    //! Returns true and the address that a socketpair socket was connected to, or false if @p sock is not one
+    DLLLOCAL bool getDbgLocalAddr(int sock, struct sockaddr_storage& addr, socklen_t& len);
+    //! Forgets a socketpair socket that is closed before c-ares gets it
+    DLLLOCAL void dbgForgetLocal(int sock);
+#endif
 
     DLLLOCAL static ares_socket_t asocket(int domain, int type, int protocol, void* user_data);
     DLLLOCAL static int aclose(ares_socket_t sock, void* user_data);

@@ -35,6 +35,7 @@
 
 #define _QORE_DS_PRIVATE_H
 
+#include "qore/intern/QoreDsConnectionName.h"
 #include "qore/intern/qore_dbi_private.h"
 #include "qore/intern/QoreSQLStatement.h"
 #include "qore/intern/DatasourceStatementHelper.h"
@@ -453,6 +454,9 @@ struct qore_ds_private : public QoreDbiForkObject {
 
     Datasource* ds;
 
+    //! the name of the connection that the datasource was created for, set once (qore#7016)
+    QoreDsConnectionName connection_name;
+
     // written only by the thread that holds the connection (the transaction lock of a Datasource, or the connection
     // of a DatasourcePool), and read by other threads as a snapshot (Datasource::isInTransaction(), the destruction
     // of a pool), so it is atomic; relaxed ordering is enough, as the holder always reads its own last write
@@ -619,7 +623,7 @@ struct qore_ds_private : public QoreDbiForkObject {
     */
     DLLLOCAL qore_ds_private(const qore_ds_private& old, Datasource* n_ds, DatasourceStatementHelper* dsh,
             qore_ds_copy_snapshot&& snap) :
-            ds(n_ds), autocommit(old.getAutoCommit()), dsl(old.dsl),
+            ds(n_ds), connection_name(old.connection_name), autocommit(old.getAutoCommit()), dsl(old.dsl),
             pending(m, std::move(snap.pending), std::move(snap.creators)),
             opt(snap.opts.releaseOptions()),
             opt_setters(std::move(snap.opts.getSetters())),

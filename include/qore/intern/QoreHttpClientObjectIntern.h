@@ -62,6 +62,16 @@ typedef std::set<std::string, ltstrcase> strcase_set_t;
 // case-insensitive field name"
 typedef strcase_str_map_t header_map_t;
 
+class QoreHttpClientObject;
+class QoreSSLCertificate;
+class QoreSSLPrivateKey;
+
+// Transfers the reference to each credential to the HTTP transport during construction.
+DLLLOCAL void qore_httpclient_set_owned_credentials(QoreHttpClientObject& client, QoreSSLCertificate* cert,
+    QoreSSLPrivateKey* key, const QoreListNode* origins, ExceptionSink* xsink);
+DLLLOCAL void qore_httpclient_set_connection_path(QoreHttpClientObject& client, const char* path, ExceptionSink* xsink);
+DLLLOCAL void qore_httpclient_set_secure(QoreHttpClientObject& client, bool secure, ExceptionSink* xsink);
+
 struct con_info {
     int port;
     std::string host,

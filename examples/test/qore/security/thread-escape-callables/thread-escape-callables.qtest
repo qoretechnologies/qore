@@ -1,0 +1,219 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - every check runs the probe script in a child process that sets its own --exec-mode, or AOT
+# test-platform: macos - threads started by the asynchronous I/O controller and thread pools for restricted callables
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ThreadEscapeCallablesTest
+
+#! a callable created by code restricted from thread control is not scheduled onto another thread (qore#7056)
+/** Code of a Program with @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" had callables that it created run on
+    other threads through user-module APIs, which pass them on to the builtin scheduling functions or run them from a
+    queue of their own; the builtins checked who called them, which there is trusted module code.  The builtins now
+    refuse a callable whose origin is restricted from thread control, whoever passes it, and the module APIs that run
+    callables from a queue check them the same way; a callable that the host creates is scheduled, also for an object
+    that the host lends to the restricted code, and so is a closure that module code creates for the restricted code
+    (the capability of a module that calls back its caller from a thread of its own).  A pool is a thread class: code
+    that may not control threads but may use the thread classes can use a pool, code that may not use them cannot.
+
+    thread-escape-callables.q probes each path in a restricted Program; its output must be the expected one in every
+    execution mode, on the IR tier and as a qcc executable: the background operator checks the callee of a call (a
+    closure, a call reference, or the object of a call of a method) in every mode, also when the new thread computes
+    the arguments of the call (qore#7087).  Restricted code that the expression calls itself but computes in the new
+    thread (an element of a list, a member of a hash, a global variable, the code that call_function() calls, the
+    override that a call of a method of the module's object dispatches to) is refused when it is called: the thread
+    ends with the refusal, which the test counts on stderr.  The helper module is loaded from its source in every
+    case; the code of a module compiled with qcc does not give the callee of such a call yet, and refuses every
+    closure, call reference and object of restricted code that the expression takes when the thread starts
+    (qore#7087).
+*/
+class ThreadEscapeCallablesTest inherits QUnit::Test {
+    public {
+        #! the result of each probe
+        const Expected = "wrapper submitTask: PERMISSION-DENIED\n"
+            "wrapper addTimerDelay: PERMISSION-DENIED\n"
+            "lent controller, restricted task: PERMISSION-DENIED\n"
+            "lent controller, host task: ran\n"
+            "wrapper addTimer, restricted cancel callback: PERMISSION-DENIED\n"
+            "wrapper addTimerDelay, restricted cancel callback: PERMISSION-DENIED\n"
+            "wrapper addTimerDelay, host cancel callback: ran\n"
+            "lent ThreadPool, restricted task: ran\n"
+            "module background: PERMISSION-DENIED\n"
+            "module background, computed argument: PERMISSION-DENIED\n"
+            "module background, module function with a closure argument: ran\n"
+            "module background, call reference with a computed argument: PERMISSION-DENIED\n"
+            "module background, method of an own object: PERMISSION-DENIED\n"
+            "module background, method of an own object with a computed argument: PERMISSION-DENIED\n"
+            "module background, member closure with a computed argument: PERMISSION-DENIED\n"
+            "module background, member closure: PERMISSION-DENIED\n"
+            "module background, member object with a computed argument: PERMISSION-DENIED\n"
+            "module background, implicit argument: PERMISSION-DENIED\n"
+            "module background, thread-local variable: PERMISSION-DENIED\n"
+            "module background in a closure of the module: PERMISSION-DENIED\n"
+            "module background, computed callee: null coalescing: not run\n"
+            "module background, computed callee: conditional: not run\n"
+            "module background, computed callee: index: not run\n"
+            "module background, computed callee: hash member: not run\n"
+            "module background, computed callee: call result: not run\n"
+            "module background, computed callee: global variable: not run\n"
+            "module background, computed callee: static class variable: not run\n"
+            "module background, computed callee: call_function: not run\n"
+            "module background, computed callee: call_function_args: not run\n"
+            "module background, computed object: index: not run\n"
+            "module background, computed object: method reference: not run\n"
+            "module background, computed object: call_object_method: not run\n"
+            "module background, computed object: call_object_method_args: not run\n"
+            "module background, method of the object overridden by a subclass: not run\n"
+            "module background, computed module code: ran\n"
+            "module background, Program::run(): not run\n"
+            "module background, Expression::eval(): not run\n"
+            "module background, thread resource: not run\n"
+            "module background, computed host callable: ran\n"
+            "subclass runOnThreadOfItsOwn: PARSE-EXCEPTION\n"
+            "subclass peer lookup: PARSE-EXCEPTION\n"
+            "submitToHandlerPool: PERMISSION-DENIED\n"
+            "lent WebSocket op, setDoneCallback: PERMISSION-DENIED\n"
+            "lent WebSocket op, setFrameCallback: PERMISSION-DENIED\n"
+            "own WebSocket op, setFrameCallback: PERMISSION-DENIED\n"
+            "DelegatingPollOperation on_complete: PERMISSION-DENIED\n"
+            "lent ThreadPool, restricted cancel callback: submitted\n"
+            "module call_async: PERMISSION-DENIED\n"
+            "module parallel_map: PERMISSION-DENIED\n"
+            "own poll operation submitted: PERMISSION-DENIED\n"
+            "check_thread_callable, restricted code: PERMISSION-DENIED\n"
+            "check_thread_callable, host code: passed\n"
+            "module pool, no thread classes: PERMISSION-DENIED\n"
+            "module closure calling restricted code: ran\n"
+            "DelegatingPollOperation over an own operation: PERMISSION-DENIED\n"
+            "DelegatingPollOperation with an own counter: PERMISSION-DENIED\n"
+            "own poll operation executed: PERMISSION-DENIED\n"
+            "submitToHandlerPool, own target: PERMISSION-DENIED\n"
+            "restricted subclass, module operation: submitted\n";
+
+        #! the refusal of a call that the expression of the background operator makes in the new thread, which ends
+        #! the thread (qore#7087)
+        const InThreadRefusal = "PERMISSION-DENIED: background operator: the code that the expression calls was "
+            "created by code that may not control threads";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("thread escape of restricted callables", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        # the children load this repository's modules, which the restricted Programs require
+        string qlib = realpath(get_script_dir() + "/../../../../../qlib");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s", libqore_dir,
+            libqore_dir, libqore_dir, qlib + (ENV.QORE_MODULE_DIR ? PathSep + ENV.QORE_MODULE_DIR : ""));
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("module code promoted to native code", \promotedTest());
+        addTestCase("qcc executable", \aotTest());
+        addTestCase("helper module compiled with qcc", \aotModuleTest());
+        set_return_value(main());
+    }
+
+    modesTest() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r =
+                ExecModeHarness::run_command(sprintf("%s %s --exec-mode=%s %s", env, qore_bin,
+                mode, scriptPath()));
+            ExecModeHarness::check_native(r);
+            checkRun(r, Expected, mode);
+        }
+        hash<ExecModeHarness::ModeRunResult> tier =
+            ExecModeHarness::run_command(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, scriptPath()), NOTHING,
+                ExecModeHarness::IRTierEnv);
+        ExecModeHarness::check_ir_tier(tier);
+        checkRun(tier, Expected, ExecModeHarness::IRTierName);
+    }
+
+    # the module's code is compiled to native code at its first call, before the probes call it again (qore#7087)
+    promotedTest() {
+        hash<ExecModeHarness::ModeRunResult> r =
+            ExecModeHarness::run_command(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 %s", env, qore_bin,
+                scriptPath()));
+        ExecModeHarness::check_native(r);
+        checkRun(r, Expected, "tiered --jit-ir-threshold=1");
+    }
+
+    # the helper module compiled with qcc: its code does not give the callee of a background expression whose
+    # arguments or callee the new thread computes, and its closures are built from serialized IR, which does not
+    # record it either: every closure, call reference and object of the restricted code that such an expression takes
+    # is refused when the thread starts, also one that is only an argument of a call of the module's own code
+    # (qore#7087)
+    aotModuleTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("thread-escape-helper-");
+        string qmod = dir.path + "/ThreadEscapeHelper.qmod";
+        string out = backquote(sprintf("%s %s -m -o %s %s/ThreadEscapeHelper.qm 2>&1", env, qcc_bin, qmod,
+            get_script_dir()));
+        assertTrue(is_file(qmod), "qcc compiles the helper module: " + out);
+        string expected = replace(Expected, "module background, module function with a closure argument: ran\n",
+            "module background, module function with a closure argument: PERMISSION-DENIED\n");
+        # an expression that takes the closure or the object of the restricted code as a value when the thread starts
+        # is refused then, by the same check: the code that the expression calls is checked when it is called only if
+        # it is not such a value (an element of a list, a member of a hash, a global or static variable, the
+        # override that a call of a method of the module's object dispatches to)
+        foreach string probe in (("computed callee: null coalescing", "computed callee: conditional",
+                "computed callee: call result", "computed callee: call_function", "computed callee: call_function_args",
+                "computed object: method reference", "computed object: call_object_method",
+                "computed object: call_object_method_args", "thread resource")) {
+            expected = replace(expected, "module background, " + probe + ": not run\n",
+                "module background, " + probe + ": PERMISSION-DENIED\n");
+        }
+        foreach string mode in (("ir", "jit")) {
+            hash<ExecModeHarness::ModeRunResult> r =
+                ExecModeHarness::run_command(sprintf("THREAD_ESCAPE_HELPER=%s %s %s --exec-mode=%s %s",
+                qmod, env, qore_bin, mode, scriptPath()));
+            ExecModeHarness::check_native(r);
+            checkRun(r, expected, "AOT helper module, " + mode);
+        }
+    }
+
+    aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("thread-escape-callables-");
+        string exe = dir.path + "/thread-escape-callables";
+        string out = backquote(sprintf("%s %s -O3 -o %s %s 2>&1", env, qcc_bin, exe, scriptPath()));
+        assertTrue(is_file(exe), "qcc compiles the script: " + out);
+        # the restricted Programs parse their code at run time: the executable runs from the script's directory, where
+        # the helper module is
+        hash<ExecModeHarness::ModeRunResult> r =
+            ExecModeHarness::run_command(sprintf("cd %s && %s %s", get_script_dir(), env, exe));
+        checkRun(r, Expected, "qcc");
+    }
+
+    #! checks the result of each probe, and that each probe whose callee the new thread refused ended it with the
+    #! refusal, and no other thread with an exception
+    private checkRun(hash<ExecModeHarness::ModeRunResult> r, string expected, string label) {
+        ExecModeHarness::check_loader_warnings(r);
+        assertEq(expected, r.stdout, label);
+        list<string> lines = r.stderr.split("\n");
+        int not_run = (select expected.split("\n"), $1 =~ /: not run$/).size();
+        assertEq(not_run, (select lines, $1.find(InThreadRefusal) >= 0).size(), label + ": in-thread refusals");
+        assertEq(not_run, (select lines, $1 =~ /^unhandled QORE/).size(), label + ": thread exceptions");
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/thread-escape-callables.q";
+    }
+}

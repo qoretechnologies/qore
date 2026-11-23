@@ -136,11 +136,14 @@ class EchoHandler inherits WebSocketHandler {
     constructor() : WebSocketHandler() {
     }
 
-    #! Records the socket of the connection of the stream; an HTTP/2 stream's start holds its thread until it ends
+    #! Records the key of the connection of the stream; an HTTP/2 stream's start holds its thread until it ends
+    /** The socket that the handler of an HTTP/2 request gets is its own (qore#7214), so the key of the connection is
+        the one that the server gives in the request context (\c cx.sock_key)
+    */
     bool start(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
         {
             AutoLock al(socks_lock);
-            socks += s.uniqueHash();
+            socks += cx.sock_key;
         }
         return WebSocketHandler::start(lid, cx, hdr, s);
     }

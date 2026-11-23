@@ -234,8 +234,8 @@ l50Xb2GWQesIt9k5jF5IOw==
 
     #! reads one complete Connect reply frame (skipping any non-data frames) from the stream
     private hash<auto> readReply(HttpClientIo::HttpClientStreamHandle stream, reference<binary> buf) {
-        date deadline = now_us() + 20s;
-        while (now_us() < deadline) {
+        date deadline = microseconds(clock_get_monotonic_us()) + 20s;
+        while (microseconds(clock_get_monotonic_us()) < deadline) {
             # try to decode a complete frame already buffered
             while (buf.size() >= 5) {
                 int fsz = DataStreamUtil::connect_next_frame_size(buf);
@@ -305,8 +305,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         # half-close the request side; the handler emits the EndStreamResponse frame and completes
         stream.writesDone();
 
-        date deadline = now_us() + 10s;
-        while (now_us() < deadline) {
+        date deadline = microseconds(clock_get_monotonic_us()) + 10s;
+        while (microseconds(clock_get_monotonic_us()) < deadline) {
             auto data = stream.readData(2s);
             if (data.typeCode() == NT_HASH && data.end_stream) {
                 break;

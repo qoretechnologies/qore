@@ -1774,8 +1774,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       sensitive, a value that its type or its allowed values refuse is still given
       (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - the errors of data provider modules that are written to @ref Qore::stderr "stderr" without a logger are left out
-      when the module's code has no terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising
-      an exception (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      when the module's code or the code that calls it has no terminal I/O
+      (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising an exception
+      (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>)
     - the errors of an option whose value or type is a hash, list or object no longer contain its value, which can
       hold credentials, such as headers; a type error names the field of a hash type that refused its value
       (<a href="https://github.com/qoretechnologies/qore/issues/6504">issue 6504</a>)
@@ -1825,6 +1827,9 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - added @ref DataProvider::DataProviderActionCatalog::checkModuleSandboxAccess()
       "DataProviderActionCatalog::checkModuleSandboxAccess()" and
       @ref DataProvider::DataProviderActionCatalog::initLoadedApps() "DataProviderActionCatalog::initLoadedApps()"
+    - fixed @ref DataProvider::HashDataType::addField() "HashDataType::addField()" and the \c QoreDataField
+      constructor for a hashdecl member with a default value, which raised \c RUNTIME-TYPE-ERROR; the field now also
+      has the generated display name (<a href="https://github.com/qoretechnologies/qore/issues/7162">issue 7162</a>)
     - fixed @ref DataProvider::DataProvider::renderExpression() "DataProvider::renderExpression()" for expressions
       rendered with a template listing all of their arguments, such as \c map: an argument with a list value raised
       \c RUNTIME-OVERLOAD-ERROR, and a missing argument was described with the default value of the first argument
@@ -1846,6 +1851,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       @ref nothing "NOTHING" for code that is sandboxed or acts for sandboxed code, which does not get the process-wide
       logger that the host set; the messages that the module produces for such code still go to that logger
       (<a href="https://github.com/qoretechnologies/qore/issues/6746">issue 6746</a>)
+    - @ref DataProvider::DataProviderTypeCache::getLock() "DataProviderTypeCache::getLock()" raises
+      \c DATA-PROVIDER-REGISTRATION-DENIED for the process-wide type cache when the calling code is sandboxed, as its
+      lock serializes every caller of the module
+      (<a href="https://github.com/qoretechnologies/qore/issues/6749">issue 6749</a>)
 
     @section dataprovider_v3_11 DataProvider v3.11
     - added @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions()

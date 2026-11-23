@@ -1014,8 +1014,9 @@ error: UNKNOWN-KEY at tables.customers.sequence_columns: table "customers": unkn
       of an exception for the first one; see @ref schema_data_schema_issues
       (<a href="https://github.com/qoretechnologies/qore/issues/6825">issue 6825</a>)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"); the output of
-      alignments and migrations is left out when the module's code has no terminal I/O
-      (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      alignments and migrations is left out when the module's code or the code that calls it has no terminal I/O
+      (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>)
     - added @ref Schema::AbstractSchema::alignWithInfoInTransaction()
       for alignment with caller-controlled commit or rollback; DataSchema
       rejects migration actions that commit independently in this mode
@@ -1148,10 +1149,11 @@ error: UNKNOWN-KEY at tables.customers.sequence_columns: table "customers": unkn
 
 #! this namespace contains all public definitions in the %Schema module
 public namespace Schema {
-    # writes the module's terminal output; nothing when its code has no terminal I/O, so that code without it can load
-    # the module, as the stdout constant needs terminal I/O only when it is written (qore#6438); not buffered
+    # writes the module's terminal output; nothing when its code or the code that calls it has no terminal I/O, so
+    # that code without it can load the module, as the stdout constant needs terminal I/O only when it is written
+    # (qore#6438, qore#7140); not buffered
     sub schema_terminal_printf(string fmt, ...) {
-        if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+        if (SandboxManager::isTerminalIoAllowed()) {
             stdout.vprintf(fmt, argv);
         }
     }

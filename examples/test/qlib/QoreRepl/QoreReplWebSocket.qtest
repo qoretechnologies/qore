@@ -212,7 +212,7 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
 
         # Wait for error response with longer timeout; ignore non-error messages
         *hash<auto> error_msg;
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         while (!error_msg) {
             *string raw;
             try {
@@ -227,7 +227,7 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
                     break;
                 }
             }
-            if ((now_us() - start) > 20s) {
+            if ((microseconds(clock_get_monotonic_us()) - start) > 20s) {
                 break;
             }
         }

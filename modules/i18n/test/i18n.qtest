@@ -23,6 +23,7 @@ class I18nTest inherits QUnit::Test {
         addTestCase("locale data availability", \localeDataInfoTest());
         addTestCase("locale data fallbacks are recorded", \localeDataFallbackTest());
         addTestCase("locale data fallback record is bounded", \localeDataFallbackBoundTest());
+        addTestCase("sandboxed code cannot read the locale data fallbacks", \localeDataFallbackSandboxTest());
         addTestCase("cardinal plural categories", \cardinalPluralCategoryTest());
         addTestCase("visible fraction digits", \visibleFractionDigitsTest());
         addTestCase("ordinal plural categories", \ordinalPluralCategoryTest());
@@ -100,6 +101,24 @@ class I18nTest inherits QUnit::Test {
         # negative: invalid locales
         assertThrows("I18N-LOCALE-ERROR", \I18n::get_locale_data_info(), "not a valid locale tag!");
         assertThrows("I18N-LOCALE-ERROR", \I18n::locale_data_available(), "not a valid locale tag!");
+    }
+
+    localeDataFallbackSandboxTest() {
+        # the record holds the locales of every caller's operations: a tenant does not see those of other code
+        # (qore#6749)
+        assertTrue(I18n::format_number(1, "qak").val());
+        assertTrue(inlist("qak", I18n::get_locale_data_fallbacks()));
+        hash<auto> results = {};
+        foreach string name in ("tenant-a", "tenant-b") {
+            Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+            p.parse("%requires i18n\nauto sub t() { try { return I18n::get_locale_data_fallbacks(); } "
+                "catch (hash<ExceptionInfo> ex) { return ex.err; } }", name);
+            p.setSandboxManager(new SandboxManager());
+            results{name} = p.callFunction("t");
+        }
+        assertEq({"tenant-a": "SANDBOX-REGISTRATION-ERROR", "tenant-b": "SANDBOX-REGISTRATION-ERROR"}, results);
+        # trusted code still reads it
+        assertTrue(inlist("qak", I18n::get_locale_data_fallbacks()));
     }
 
     localeDataFallbackTest() {

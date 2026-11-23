@@ -33,6 +33,8 @@
 
 #define _QORE_QORELISTNODEEVALOPTIONALREFHOLDER_H
 
+class QoreListEntryEdit;
+
 //! For use on the stack only: manages result of the optional evaluation of a QoreListNode
 class QoreListNodeEvalOptionalRefHolder {
 public:
@@ -118,7 +120,7 @@ public:
     */
     DLLLOCAL void releaseTmpSourceValues(const QoreListNode* keep);
 
-    DLLLOCAL QoreValue& getEntryReference(size_t index);
+    DLLLOCAL QoreListEntryEdit editEntry(size_t index);
 
     DLLLOCAL size_t size() const {
         return val ? val->size() : 0;

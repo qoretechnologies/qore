@@ -1400,7 +1400,16 @@ public class DataProviderActionCatalog {
         };
     }
 
+    private:internal static reportModuleDiagnostic(LoggerLevel level, string fmt, ...) {
+        if (*code sink = module_diagnostic_sink) {
+            sink(level, fmt, argv);
+        }
+    }
+
     private:internal {
+        #! Kept by the library; a subclass cannot obtain the host diagnostic sink.
+        static *code module_diagnostic_sink = ProviderIndexUtil::getModuleDiagnosticSink();
+
         #! Static builder callback that constructs the framework-injected <tt>make-api-call</tt> action info hash
         /** Signature: <tt>hash<DataProviderActionInfo> sub (hash<DataProviderAppInfo> app)</tt>. The builder is
             normally registered once by the @c RestClientDataProvider module's init block via
@@ -3526,7 +3535,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             DataProviderActionCatalog::reportInitializationFailure("action", app.name,
                 AbstractDataProvider::GenericApiCallActionName, ex);
             # log but do not fail the surrounding registration
-            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            if (SandboxManager::isTerminalIoAllowed()) {
                 stderr.printf("DataProviderActionCatalog: failed to auto-register generic API call action for "
                     "app %y: %s: %s\n", app.name, ex.err, ex.desc);
             }
@@ -3558,7 +3567,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             # warn loudly: a REST app will silently lack its make-api-call action otherwise
             DataProviderActionCatalog::reportInitializationFailure("action", app.name,
                 AbstractDataProvider::GenericApiCallActionName, ex);
-            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            if (SandboxManager::isTerminalIoAllowed()) {
                 stderr.printf("DataProviderActionCatalog: REST app %y qualifies for the framework-injected "
                     "%y action, but the builder-provider module %y could not be loaded; the action will be "
                     "missing from this app: %s: %s\n", app.name, AbstractDataProvider::GenericApiCallActionName,
@@ -4840,8 +4849,8 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
                 ProviderIndexUtil::addAppToCache(app);
                 ++count;
             } catch (hash<ExceptionInfo> ex) {
-                ProviderIndexUtil::log(LoggerLevel::LevelError, "Cannot cache data provider app %y: %s: %s",
-                    app.name, ex.err, ex.desc);
+                DataProviderActionCatalog::reportModuleDiagnostic(LoggerLevel::LevelError,
+                    "[app %y] Cannot cache data provider app: %s: %s", app.name, ex.err, ex.desc);
                 continue;
             }
             *list<hash<DataProviderActionInfo>> actions;
@@ -4853,16 +4862,16 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
                 }
                 # the index cache holds no output types, so an action whose output type cannot be built is
                 # cached all the same; the failure is retained by the catalog
-                ProviderIndexUtil::log(LoggerLevel::LevelError, "Data provider app %y: %s: %s", app.name, ex.err,
-                    ex.desc);
+                DataProviderActionCatalog::reportModuleDiagnostic(LoggerLevel::LevelError,
+                    "[app %y] Cannot resolve action output types: %s: %s", app.name, ex.err, ex.desc);
                 actions = DataProviderActionCatalog::getActionsNoInit(app.name);
             }
             foreach hash<DataProviderActionInfo> action in (actions) {
                 try {
                     ProviderIndexUtil::addActionToCache(action);
                 } catch (hash<ExceptionInfo> ex) {
-                    ProviderIndexUtil::log(LoggerLevel::LevelError, "Cannot cache action %y for data provider app "
-                        "%y: %s: %s", action.action, app.name, ex.err, ex.desc);
+                    DataProviderActionCatalog::reportModuleDiagnostic(LoggerLevel::LevelError,
+                        "[app %y] Cannot cache action %y: %s: %s", app.name, action.action, ex.err, ex.desc);
                 }
             }
         }

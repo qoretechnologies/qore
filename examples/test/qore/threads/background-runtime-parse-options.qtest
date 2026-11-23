@@ -210,12 +210,14 @@ printf(\"%s\\n\", q.get(30000));
 
         #! a sandboxed caller of module code that the process loaded before: the module code runs with the restriction
         #! of its caller, which the thread that it starts inherits (the override of a call of module code); without the
-        #! sandbox, the module code runs with its own options
+        #! sandbox, the module code runs with its own options, but the terminal is not used for a caller restricted from
+        #! it, which the thread that module code starts records (qore#7140, qore#6337)
         const SandboxedCaller = "%modern
 %no-child-restrictions
 %requires BgRuntimeOpts
 hash<string, auto> modes = {\"ast\": EM_AST, \"ir\": EM_IR, \"tiered\": EM_TIERED, \"jit\": EM_JIT};
-Program p(PO_NO_TERMINAL_IO);
+# \"nofs\": a caller restricted from the file system only, without a sandbox
+Program p(ARGV[1] == \"nofs\" ? PO_NO_FILESYSTEM : PO_NO_TERMINAL_IO);
 p.setExecMode(modes{ARGV[0]});
 if (ARGV[1] == \"sandboxed\") {
     p.setSandboxManager(new SandboxManager());
@@ -338,13 +340,28 @@ printf(\"%y\\n\", rv);
                 foreach string how in (("bg", "pool")) {
                     out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s %s sandboxed %s 2>&1",
                         env(), dir.value, qore_bin, mode, sandboxed, mode, how));
-                    assertRegex("ILLEGAL-EXPRESSION", out, sprintf("%s module %s, sandboxed caller, mode %s", dir.key,
-                        how, mode));
+                    # the module code and its thread run with the restriction of the sandboxed caller: refused by
+                    # the runtime options, before the caller rule (qore#7140)
+                    assertRegex("ILLEGAL-EXPRESSION: File::print\\(\\) cannot be called with a system constant "
+                        "object when 'no-terminal-io' is set", out, sprintf("%s module %s, sandboxed caller, mode %s",
+                        dir.key, how, mode));
                     assertFalse(out =~ /printed/, sprintf("%s module %s, sandboxed caller, mode %s: %s", dir.key, how,
                         mode, out));
+                    # the caller is restricted from terminal I/O: the module code's thread does not print for it,
+                    # with or without a sandbox (qore#7140)
+                    out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s %s open %s 2>&1", env(),
+                        dir.value, qore_bin, mode, sandboxed, mode, how));
+                    assertRegex("ILLEGAL-EXPRESSION: File::print\\(\\) cannot be called for code that is restricted "
+                        "from terminal I/O", out, sprintf("%s module %s, caller without a sandbox, mode %s", dir.key,
+                        how, mode));
+                    assertFalse(out =~ /printed/, sprintf("%s module %s, caller without a sandbox, mode %s: %s",
+                        dir.key, how, mode, out));
+                    # the caller rule covers terminal I/O only: a caller without a sandbox that is restricted from
+                    # another domain does not stop the module code's thread from printing
                     assertEq("module: printed\n", backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s "
-                        "%s open %s 2>&1", env(), dir.value, qore_bin, mode, sandboxed, mode, how)),
-                        sprintf("%s module %s, caller without a sandbox, mode %s", dir.key, how, mode));
+                        "%s nofs %s 2>&1", env(), dir.value, qore_bin, mode, sandboxed, mode, how)),
+                        sprintf("%s module %s, caller restricted from the file system, mode %s", dir.key, how,
+                        mode));
                 }
             }
         }

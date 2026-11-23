@@ -43,7 +43,12 @@ class CallStackGuardBase inherits StackGuardCaseTest {
             "assignment": ("int y; return " + strmul("y = ", 450) + "x;", "1"),
             "null coalescing": ("*int y; return " + strmul("y ?? ", 450) + "x;", "1"),
             "function call arguments": ("return " + strmul("id(", 450) + "x" + strmul(")", 450) + ";", "1"),
-            "method call arguments": ("return " + strmul("o.id(", 450) + "x" + strmul(")", 450) + ";", "1"),
+            # nested less deeply than the other calls: the native compilation of nested method calls takes much
+            # longer per level (about 10 s of CPU at 450 levels and 2 s at 150), which a child process that gets
+            # little CPU on a loaded host cannot do within its timeout (qore#7143); the AST interpreter, which
+            # evaluates them recursively, exhausts the 128 KB stack of the case that evaluates them once at about 30
+            # levels, so 150 still exhaust it several times over
+            "method call arguments": ("return " + strmul("o.id(", 150) + "x" + strmul(")", 150) + ";", "1"),
             "static method call arguments": ("return " + strmul("C::sid(", 450) + "x" + strmul(")", 450) + ";",
                 "1"),
             "closure call arguments": ("return " + strmul("cid(", 450) + "x" + strmul(")", 450) + ";", "1"),

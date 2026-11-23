@@ -243,9 +243,9 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
 
     #! Helper to drive a poll operation to completion with a deadline
     private auto drivePoll(AbstractPollOperation poller, timeout deadline = 30s) {
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         while (!poller.goalReached()) {
-            timeout elapsed = now_us() - start;
+            timeout elapsed = microseconds(clock_get_monotonic_us() - start);
             if (elapsed >= deadline) {
                 throw "TIMEOUT", sprintf("poll operation exceeded %d ms deadline", deadline);
             }
@@ -497,9 +497,9 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
         # has read the request by then is not part of the case: when the client does not run for the duration of the
         # deadline, the connect or the request does not complete before it (pingTimeoutUnreadTest(), qore#6973)
         on_exit route_handler.release();
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         assertThrows("SOCKET-TIMEOUT", \drivePoll(), poller);
-        assertLt(20s, now_us() - start, "the timeout is raised before the test deadline");
+        assertLt(20s, microseconds(clock_get_monotonic_us() - start), "the timeout is raised before the test deadline");
         assertEq("aborted", poller.getState());
     }
 
@@ -518,9 +518,9 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
             "timeout": 250ms,
         });
         AbstractPollOperation poller = conn.startPollConnect(logger);
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         assertThrows("SOCKET-TIMEOUT", \drivePoll(), poller);
-        assertLt(20s, now_us() - start, "the timeout is raised before the test deadline");
+        assertLt(20s, microseconds(clock_get_monotonic_us() - start), "the timeout is raised before the test deadline");
         assertEq("aborted", poller.getState());
     }
 
@@ -613,11 +613,11 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
         HttpRequestPollOperation poller("http://127.0.0.1:" + port, "GET", "/route/block");
         on_exit route_handler.release();
         # drive the operation until the request is blocked in the server
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         while (!route_handler.entered.size()) {
             *hash<SocketPollInfo> info = poller.continuePoll();
             assertTrue(exists info, "the request is in progress");
-            if (now_us() - start > 20s) {
+            if (microseconds(clock_get_monotonic_us() - start) > 20s) {
                 throw "TIMEOUT", "the request did not reach the server";
             }
             Socket::poll((info,), 250ms);

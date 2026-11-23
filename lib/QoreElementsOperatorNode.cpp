@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/qore_program_private.h"
@@ -60,7 +61,8 @@ QoreValue QoreElementsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* x
             return qore_string_private::characterCount(**str, xsink);
         }
         case NT_HASH: return v->get<const QoreHashNode>()->size();
-        case NT_OBJECT: return v->get<const QoreObject>()->size(xsink);
+        // the members that the calling code can see (#7048)
+        case NT_OBJECT: return qore_object_private::get(*v->get<const QoreObject>())->getRuntimeMemberCount();
         case NT_BINARY: return v->get<const BinaryNode>()->size();
         case NT_BUFFER: return v->get<const QoreBufferNode>()->size();
     }

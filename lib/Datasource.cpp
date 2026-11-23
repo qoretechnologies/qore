@@ -2689,6 +2689,14 @@ int Datasource::getPendingPort() const {
     return priv->getPendingPort();
 }
 
+int q_ds_set_connection_name(Datasource& ds, const QoreString& name, ExceptionSink* xsink) {
+    return qore_ds_private::get(ds)->connection_name.set(name, xsink);
+}
+
+QoreStringNode* q_ds_get_connection_name(const Datasource& ds) {
+    return qore_ds_private::get(const_cast<Datasource&>(ds))->connection_name.getReferencedName();
+}
+
 void q_ds_append_masked_pending(QoreString& str, const Datasource& ds) {
     std::string host;
     int port;

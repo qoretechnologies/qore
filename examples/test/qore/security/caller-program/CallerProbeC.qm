@@ -1,0 +1,25 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a library module of caller-program.qtest that is loaded first in a trusted build (qore#6852): it serves the code that
+# calls it, also after the build
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+module CallerProbeC {
+    version = "1.0";
+    desc = "caller Program probe loaded in a trusted build";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace CallerProbeC {
+#! the caller Program of this module's code
+public *int sub probe() {
+    return SandboxManager::getCallerProgramId();
+}
+}

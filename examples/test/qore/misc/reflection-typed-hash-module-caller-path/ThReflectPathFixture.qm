@@ -1,0 +1,36 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# ThReflectPathFixture.qm - module that is not library code (loaded by its path from outside the module path)
+# and calls library module code
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%require-types
+%strict-args
+%new-style
+
+%requires reflection
+%requires ThReflectFixture
+
+module ThReflectPathFixture {
+    version = "1.0";
+    desc = "test module: module code that is not library code calls library module code";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace ThReflectPathFixture {
+#! has library module code read the default value of the member
+public string sub default_of(Reflection::TypedHashMember mem) {
+    return ThReflectFixture::default_of(mem);
+}
+
+#! reads the default value of the member in this module's own code
+public string sub default_of_direct(Reflection::TypedHashMember mem) {
+    try {
+        return sprintf("ok: %y", mem.getDefaultValue());
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+}

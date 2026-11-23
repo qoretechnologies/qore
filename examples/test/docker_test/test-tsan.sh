@@ -152,6 +152,13 @@ TSAN_REPORT_DIR="${QORE_SRC_DIR}/tsan-reports"
 mkdir -p "${CORE_DIR}" "${TSAN_REPORT_DIR}"
 chown -R qore:qore ${QORE_SRC_DIR}
 
+TEST_LD_LIBRARY_PATH="${BUILD_DIR}"
+# every run of the TSan build's qore uses the TSan build's libqore: this job does not install its build (unlike
+# test-ubuntu.sh and test-alpine.sh), and the image's library path (/opt/lib, which LD_LIBRARY_PATH puts before the
+# binary's own run path) has the image's older libqore, which lacks the symbols that a newer qore needs (a job failed
+# with "undefined symbol: _Z31qore_set_module_cleanup_timeoutx" in the --module-dir call below)
+export LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+
 # the native modules of the image that this qore loads, in a link farm of the run's own (see ci-native-modules.sh and
 # test-ubuntu.sh)
 . "${QORE_SRC_DIR}/test/docker_test/ci-native-modules.sh"
@@ -162,7 +169,6 @@ qore_ci_native_module_farm "${BUILD_DIR}/qore" "${CI_NATIVE_MODULE_DIR}" "${SYST
 export QORE_MODULE_DIR=${QORE_SRC_DIR}/qlib:${CI_NATIVE_MODULE_DIR}
 export QORE_MODULE_DIR_ONLY=1
 
-TEST_LD_LIBRARY_PATH="${BUILD_DIR}"
 # see "Running Tests Under ThreadSanitizer" in CLAUDE.md
 TSAN_OPTIONS="suppressions=${QORE_SRC_DIR}/test/cpp/tsan.supp die_after_fork=0 report_thread_leaks=0 log_path=${TSAN_REPORT_DIR}/tsan"
 

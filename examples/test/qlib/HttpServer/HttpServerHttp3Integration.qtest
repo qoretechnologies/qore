@@ -776,7 +776,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete dummy;
         int port = dummy.getSocketInfo().port;
 
-        date started = now_us();
+        date started = microseconds(clock_get_monotonic_us());
         bool got_error = False;
         *hash<ExceptionInfo> caught;
         try {
@@ -785,7 +785,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             got_error = True;
             caught = ex;
         }
-        int elapsed_ms = (now_us() - started).durationMilliseconds();
+        int elapsed_ms = (microseconds(clock_get_monotonic_us()) - started).durationMilliseconds();
 
         assertTrue(got_error, "request to silent UDP port must fail");
         # Underlying cause must be the new transport-level deadline error; without
@@ -1795,11 +1795,11 @@ l50Xb2GWQesIt9k5jF5IOw==
         }
 
         hash<auto> resp1 = client.send("", "GET", "/test", NOTHING, True);
-        date t2 = now_us();
+        date t2 = microseconds(clock_get_monotonic_us());
         hash<auto> resp2 = client.send("", "GET", "/test", NOTHING, True);
-        date t3 = now_us();
+        date t3 = microseconds(clock_get_monotonic_us());
         hash<auto> resp3 = client.send("", "GET", "/test", NOTHING, True);
-        date t4 = now_us();
+        date t4 = microseconds(clock_get_monotonic_us());
 
         assertEq(200, int(resp1.status_code), "localhost first request");
         assertEq(200, int(resp2.status_code), "localhost second request");

@@ -1,0 +1,120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of the dynamic method calls and call references of a class context
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class PrivateInternalDynamicCallsTest
+
+#! Code of a class calls the methods of its private:internal parent class dynamically as directly (qore#6859)
+/** PrivateInternalDynamicCalls.q calls a method of a class that a class inherits with private:internal from the code
+    of the inheriting class, on an object of that class and of its subclass: directly, through call_object_method(),
+    call_object_method_args() and a call reference from getCallReference() (by the unqualified and the qualified name
+    of the method) and in a background call by the qualified name, also a static method, also for a class inherited
+    with private (private:hierarchy), whose public methods call_object_method() and call_object_method_args() do not
+    reach, as they follow only private:internal edges.  It checks that a call reference selects only the variants of
+    a method that the code that creates it can call, that call_object_method() and call_object_method_args() still
+    refuse a private method, also one of the inheriting class in its own code, and that the code of the subclass, code
+    outside the hierarchy, the code of an unrelated class (also when the code of the inheriting class calls it) and the
+    code of a look-alike of the inheriting class (qore#7036) cannot call these methods in any of these forms.  It also
+    checks that a call reference created with no class context (by getCallReference() and in the parse-time forms, of
+    a normal and a static method) calls only the public variant of its method, also when the code of the class or of
+    its subclass calls it, and that a call reference that the code of a subclass in a child Program created is called
+    with the access of its creator after that Program has been deleted; its
+    output must be the one in PrivateInternalDynamicCalls.expected in every execution mode, on the IR tier and in
+    programs compiled with qcc -O0 and -O3.
+*/
+class PrivateInternalDynamicCallsTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/PrivateInternalDynamicCalls.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/PrivateInternalDynamicCalls.expected");
+    }
+
+    constructor() : QUnit::Test("private:internal dynamic calls", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                check(ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            check(ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    #! compares the output with the expected one, after checking the calls of each case
+    /** The calls from the code of Mid reach the methods of Base, except its private:internal method and variant,
+        and the private method of Mid, except through call_object_method() and call_object_method_args(); the code of
+        MidH (private edge) reaches them directly and through a call reference only; a reference to the private
+        method made in Mid is called from outside; the calls from the other code are refused with an exception
+        (hasCallableMethod() returns False)
+    */
+    private check(string output) {
+        foreach string line in (output.split("\n")) {
+            if (line =~ /^midh on (midh|subh): /) {
+                # the dynamic calls do not follow a private (hierarchy) edge
+                if (line =~ /(private:internal|call_object_method(_args)?( static)?): /) {
+                    assertTrue(line =~ /: [A-Z][-A-Z]+$/, "the call is refused: " + line);
+                } else {
+                    assertTrue(line =~ /: "Base::/, "the code of MidH calls the method: " + line);
+                }
+            } else if (line =~ /^(mid on|outside on base): /) {
+                if (line =~ /(private:internal|call_object_method(_args)?( own)? private): /) {
+                    assertTrue(line =~ /: ([A-Z][-A-Z]+|False)$/, "a private method is refused: " + line);
+                } else {
+                    assertTrue(line =~ /: ("(Base|Mid)::|True$)/, "the code of Mid calls the method: " + line);
+                }
+            } else if (line =~ /^outside: private reference made in the class: /) {
+                assertTrue(line =~ /: "Mid::mp"$/, "a reference made in the class is called outside: " + line);
+            } else if (line =~
+                    /^(sub on sub|outside( on subh)?|(other (from mid )?|look-alike )on (sub|mid)|sub direct): /) {
+                assertTrue(line =~ /: ([A-Z][-A-Z]+|False)$/, "the call is refused: " + line);
+            } else if (line =~ /^context-less reference: /) {
+                # a reference made with no class context: only the public variant, wherever it is called
+                if (line =~ / integer: /) {
+                    assertTrue(line =~ /: "CV::(mv|sv)\(int\)"$/, "the public variant is called: " + line);
+                } else {
+                    assertTrue(line =~ /: [A-Z][-A-Z]+$/, "a private variant is refused: " + line);
+                }
+            } else if (line =~ /^deleted creator: /) {
+                # the reference keeps the class context of its creator after the creator's Program is deleted
+                assertTrue(line =~ /: ("PB::m\((int|string)\)"|"cdef")$/, "the reference is called: " + line);
+            }
+        }
+        assertEq(expected, output);
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/private-internal-dynamic-calls";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        check(backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

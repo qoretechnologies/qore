@@ -258,6 +258,33 @@ DLLEXPORT int qore_get_library_init_options();
 */
 DLLEXPORT int qore_set_library_cleanup_options(int options);
 
+//! defined for qore_set_module_cleanup_timeout(), qore_get_module_cleanup_timeout() and
+//! QORE_DEFAULT_MODULE_CLEANUP_TIMEOUT_MS (#7027)
+#define _QORE_HAS_MODULE_CLEANUP_TIMEOUT 1
+
+//! the default deadline of the module cleanup at the end of the process, in milliseconds
+#define QORE_DEFAULT_MODULE_CLEANUP_TIMEOUT_MS 5000
+
+//! sets the deadline of the module cleanup at the end of the process, in milliseconds from its start
+/** The asynchronous I/O operations that the module cleanup submits are waited for until the deadline; then they are
+    canceled.  Takes precedence over the \c QORE_MODULE_CLEANUP_TIMEOUT environment variable; must be called before the
+    end of the process starts (qore_cleanup())
+
+    @param timeout_ms the deadline in milliseconds; 0 cancels such operations at once
+
+    @return 0 for success, -1 if \a timeout_ms is negative (the deadline is not changed)
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int qore_set_module_cleanup_timeout(int64 timeout_ms);
+
+//! returns the deadline of the module cleanup at the end of the process, in milliseconds
+/** @see qore_set_module_cleanup_timeout()
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int64 qore_get_module_cleanup_timeout();
+
 //! returns true if all the bits set in the argument are also set in the qore library init option variable
 DLLEXPORT bool qore_check_option(int opt);
 

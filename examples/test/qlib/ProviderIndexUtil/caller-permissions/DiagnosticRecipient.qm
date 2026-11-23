@@ -1,0 +1,24 @@
+%modern
+%requires ProviderIndexUtil
+
+module DiagnosticRecipient {
+    version = "1.0";
+    desc = "Restricted-first diagnostic sink test";
+    author = "Qore";
+}
+
+public namespace DiagnosticRecipient {
+    public class DiagnosticRecipient {
+        private:internal {
+            static *code writer = ProviderIndexUtil::getModuleDiagnosticSink();
+        }
+
+        static bool report() {
+            if (*code sink = writer) {
+                sink(LoggerLevel::LevelDebug, "recipient ready", ());
+                return True;
+            }
+            return False;
+        }
+    }
+}

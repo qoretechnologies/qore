@@ -336,6 +336,9 @@ Skips the rest of a loop and jumps right to the evaluation of the iteration expr
     The second variant taking an expression can be used to enrich or override the original exception; the
     \a expression is processed as with @ref throw "throw", except in this case the call stack of the original
     exception is maintained.  Also any exception values not overridden by the \c rethrow statement remain unchanged.
+    If a destructor raises another exception during unwinding, it follows the existing exceptions in the
+    rethrown chain.
+
     Note that it is an error to use the <tt><b>rethrow</b></tt> statement outside of a <tt><b>catch</b></tt> block.
 
     <hr>

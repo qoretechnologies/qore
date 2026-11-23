@@ -84,7 +84,7 @@ class SseHandler inherits AbstractHttpRequestHandler {
 
         # Get wake callback from the async I/O controller
         *code<nothing()> wake;
-        *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
+        *AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
         if (ctrl) {
             wake = sub() { ctrl.wakeSocket(s); };
         }

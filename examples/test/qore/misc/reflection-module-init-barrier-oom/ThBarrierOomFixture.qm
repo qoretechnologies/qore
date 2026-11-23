@@ -1,0 +1,29 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# ThBarrierOomFixture.qm - library module code that reads typed hash member defaults for the Program that calls it
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%require-types
+%strict-args
+%new-style
+
+%requires reflection
+
+module ThBarrierOomFixture {
+    version = "1.0";
+    desc = "test module: library module code that reads typed hash member defaults for its caller";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace ThBarrierOomFixture {
+#! reads the default value of the member in this module's code; returns the value or the exception's code
+public string sub default_of(Reflection::TypedHashMember mem) {
+    try {
+        return sprintf("ok: %y", mem.getDefaultValue());
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+}

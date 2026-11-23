@@ -21,7 +21,7 @@ class SerializationConfigTest inherits QUnit::Test {
         addTestCase("typed datasource configuration survives table serialization", \typedConfig());
         addTestCase("typed pool configuration survives table serialization", \poolConfig());
         addTestCase("legacy connection-string data remains readable", \legacyConfig());
-        addTestCase("custom deserializers still receive strings", \customReader());
+        addTestCase("custom deserializers receive no credentials", \customReader());
         addTestCase("custom serializer and deserializer keep their format", \customFormat());
         set_return_value(main());
     }
@@ -68,10 +68,20 @@ class SerializationConfigTest inherits QUnit::Test {
         restored.getDatasource().rollback();
     }
 
+    # serialized data keeps no credentials (qore#7016): the credential resolver gives the configuration, whose typed
+    # option values the restored datasource keeps
+    private registerResolver(hash<auto> config) {
+        sqlutil_register_ds_credential_resolver(hash<auto> sub (string type, hash<auto> masked) {
+            return config;
+        });
+    }
+
     typedConfig() {
         Datasource ds = datasource();
         on_exit ds.close();
         MysqlTable source = table(ds);
+        registerResolver(ds.getConfigHash());
+        on_exit sqlutil_register_ds_credential_resolver();
         AbstractTable restored = Serializable::deserialize(source.serialize());
         checkTable(restored);
         assertEq(NT_INT, restored.getDatasource().getConfigHash().options{"connect-timeout"}.typeCode());
@@ -83,6 +93,8 @@ class SerializationConfigTest inherits QUnit::Test {
         hash<auto> config = ds.getConfigHash();
         config.options += {"min": 1, "max": 2};
         DatasourcePool pool(config);
+        registerResolver(config);
+        on_exit sqlutil_register_ds_credential_resolver();
         AbstractTable restored = Serializable::deserialize(table(pool).serializeToData());
         checkTable(restored);
         assertEq("DatasourcePool", restored.getDatasource().className());
@@ -109,7 +121,8 @@ class SerializationConfigTest inherits QUnit::Test {
         sqlutil_register_ds_deserializer(AbstractDatasource sub (string type, string config) {
             ++calls;
             assertEq("Datasource", type);
-            assertTrue(config == ds.getConfigString(), "custom reader receives the legacy string configuration");
+            # data with no credentials (qore#7016): the reader gets the empty string, never masked credentials
+            assertEq(SqlUtilNoCredentials, config, "custom reader receives no credentials");
             return ds;
         });
         on_exit sqlutil_register_ds_deserializer(NOTHING);

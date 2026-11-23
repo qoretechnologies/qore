@@ -162,6 +162,28 @@ DLLLOCAL bool qore_module_state_write_restricted(const QoreProgram* writer);
 DLLLOCAL void qore_raise_module_state_read_only(ExceptionSink* xsink, const char* what, const char* path,
         const char* module_name);
 
+//! Assigns a key of the hash or an element of the list that a local holds through a weak reference, as the AST
+//! interpreter assigns it (qore#7299)
+/** A write through a weak reference changes the container that the weak reference designates, which another owner
+    holds and which is never copied for the write; the container is held by the lvalue while it is changed, as for
+    every change through a weak reference (qore#7198).  The container stores of the IR interpreter and of native code,
+    which read the container of a local and copy it if it is shared, call this when the container is shared, so that
+    their own reference to the container of a weak reference, which they read with one (qore#7198), does not make
+    them copy it and replace the weak reference with the copy.
+
+    @param lv a local on the runtime stack (not a closure-bound one)
+    @param container the list or hash read from the local
+    @param key the key assigned, or nullptr to assign the element at \a index of a list
+    @param index the index of the element of a list (negative indexes count from the end with
+    \c PO_NEGATIVE_OFFSETS), if \a key is nullptr
+    @param val the value assigned, borrowed: the assignment takes a reference of its own
+
+    @return true if the local holds a weak reference to \a container, in which case the assignment was made or raised
+    an exception in \a xsink; false if it does not, in which case nothing was done
+*/
+DLLLOCAL bool qore_weak_local_container_store(const LocalVar* lv, const AbstractQoreNode* container, const char* key,
+        int64 index, const QoreValue& val, ExceptionSink* xsink);
+
 // structure for global variables
 class Var : protected QoreReferenceCounter {
 private:
@@ -1447,6 +1469,13 @@ public:
     }
 
     DLLLOCAL void saveTemp(QoreValue n);
+
+    //! Returns the list of the weak reference that the lvalue holds, with a reference that the helper holds until it
+    //! is destroyed, or a new empty list that cannot be changed if the list was freed (qore#7198)
+    DLLLOCAL __attribute__((cold)) QoreListNode* lockWeakList();
+
+    //! Returns the hash of the weak reference that the lvalue holds, as lockWeakList() returns a list
+    DLLLOCAL __attribute__((cold)) QoreHashNode* lockWeakHash();
 
     //! Saves the value that the lvalue holds, which the caller then overwrites, for release after the locks
     /** The value is released as it is held: a value stored in a container can be held through an opaque reference,
