@@ -669,7 +669,7 @@ constexpr uint16_t QORE_AOT_STATIC_METHOD_REF_TARGET_VERSION = 49;
 static_assert(QORE_AOT_STATIC_METHOD_REF_TARGET_VERSION == QORE_AOT_BATCH_AM_VERSION,
     "the format changes of batch AM share one format version (v49)");
 //! Old compiled artifacts must be rebuilt (see v51 above): the reader refuses older images, the program image of a qcc
-//! executable included (qore_aot_run_v3() reads it before anything else); the reader of a v51 image always has the temp
+//! executable included (qore_aot_run_v4() reads it before anything else); the reader of a v51 image always has the temp
 //! scopes of its IR (qore#6742) and the local unwind locations of its IR functions (qore#6672)
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AO_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).

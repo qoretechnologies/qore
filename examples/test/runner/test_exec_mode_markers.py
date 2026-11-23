@@ -362,7 +362,10 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   execution modes and as a qcc executable, as a module is initialized once in a process
         # - reflection-module-init-barrier-oom: its script runs in child processes that set their own execution
         #   modes and as a qcc executable, which arm a debug hook and whose failed module load ends the process
+        # - aot-runtime-identity (#6898): its checks run qcc and the executables it compiles in child processes started
+        #   without an execution mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
+                                 "examples/test/ir/aot-runtime-identity/aot-runtime-identity.qtest",
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
                                  "examples/test/ir/AOTModuleHeaderRequests.qtest",
