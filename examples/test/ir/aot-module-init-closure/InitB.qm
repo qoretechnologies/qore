@@ -1,0 +1,44 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# InitB.qm - test module: a closure that the initialization of a library module gets from another module (qore#7335)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires InitA
+
+module InitB {
+    version = "1.0";
+    desc = "test module whose initialization gets a closure made by the code of another module";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        # made by InitA's code while InitB is initialized
+        InitB::State::from_a = InitA::make();
+        # made by InitB's own code while it is initialized
+        InitB::State::own = string sub () { return "own"; };
+    };
+}
+
+#! The public definitions of the test module
+public namespace InitB {
+#! The module's state
+class State {
+    public {
+        #! the closure made by InitA's code during InitB's initialization
+        static *code from_a;
+        #! the closure made by InitB's code during its initialization
+        static *code own;
+    }
+}
+
+#! Returns True if the closure that InitA's code made during InitB's initialization qualifies
+public bool sub fromAQualifies() {
+    return is_module_init_closure(State::from_a);
+}
+
+#! Returns True if the closure that InitB's initialization made qualifies
+public bool sub ownQualifies() {
+    return is_module_init_closure(State::own);
+}
+}
