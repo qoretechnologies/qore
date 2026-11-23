@@ -152,6 +152,11 @@ struct QuicStreamInfo {
     //! True for client-side streaming responses (SSE, etc.) — enables incremental
     //! body delivery via completed_streams_ (same pattern as CONNECT tunnels)
     bool streaming = false;
+    //! client streaming response: an event with the response headers was taken (QuicSession::takeCompletedStream())
+    /** The headers of a streaming response are delivered when they arrive, also when no body data comes with them
+        (qore#7285); after that, a queued entry of the stream that has no new data and no end is not delivered
+    */
+    bool headers_delivered = false;
     //! client: the stream credit of the response data is granted when the application consumes it (issue #5820)
     bool credit_on_consume = false;
     //! True after the peer asked us to stop sending on this stream (STOP_SENDING)
@@ -237,6 +242,14 @@ struct QuicStreamingBodyData {
     std::vector<uint8_t> pending_pong;
     //! true once a WebSocket close frame was staged past the limit (once per stream; issue #5900)
     bool close_frame_staged = false;
+    //! a response without content (to HEAD, or with status 204 or 304): its data is not sent (qore#7212)
+    bool no_body = false;
+    //! the declared length of the response's content, -1 if not declared (qore#7212)
+    int64_t content_length = -1;
+    //! the bytes of the response's content provided to nghttp3 so far
+    uint64_t provided = 0;
+    //! true once the content is longer or shorter than declared: the stream is reset instead of ended (qore#7212)
+    bool length_error = false;
 };
 
 class qore_socket_private;
@@ -883,6 +896,9 @@ public:
         //! a client connection on which the peer sent nothing for its peer response timeout after a request was
         //! submitted (see setPeerResponseTimeout()): the peer's connection state is gone (ex: it restarted)
         Unresponsive = 4,
+        //! a client connection that the server reset with a stateless reset (RFC 9000 section 10.3): it has no state
+        //! for the connection (ex: it restarted) (qore#6931)
+        StatelessReset = 5,
     };
 
     //! The peer response timeout of a client connection when its client gives no connect timeout
@@ -1711,6 +1727,17 @@ private:
         the stream closed, which needs the peer's acknowledgment of that RESET_STREAM, so a response could be read
         whole while a send still went out unreported.  See @ref recordPeerStopSending().
     */
+    //! Returns the number of packets that the connection took (decrypted and processed); the caller holds the lock
+    /** A packet that ngtcp2_conn_read_pkt() discards without an error (one that cannot be decrypted, or a stateless
+        reset with another token) is not counted: it does not show that the peer's connection state is alive, so it
+        does not end the wait for the peer's response (see setPeerResponseTimeout(); qore#6931)
+    */
+    DLLLOCAL uint64_t processedPacketsLocked() const;
+
+    //! a stateless reset that ends a client connection (qore#6931): its close reason is then StatelessReset
+    DLLLOCAL static int recvStatelessResetCallback(ngtcp2_conn* conn, const ngtcp2_pkt_stateless_reset* sr,
+        void* user_data);
+
     DLLLOCAL static int recvStopSendingCallback(ngtcp2_conn* conn, int64_t stream_id, uint64_t app_error_code,
                                    void* user_data, void* stream_user_data);
 
@@ -1738,6 +1765,7 @@ private:
         @param app_error_code the application error code the peer sent
     */
     DLLLOCAL void recordPeerStreamReset(int64_t stream_id, uint64_t app_error_code);
+
 
     //! Handshake completed
     DLLLOCAL static int handshakeCompletedCallback(ngtcp2_conn* conn, void* user_data);
@@ -1939,6 +1967,8 @@ private:
     ngtcp2_tstamp peer_response_deadline_ = 0;
     //! set when the connection was closed because the peer did not respond (see setPeerResponseTimeout())
     std::atomic<bool> peer_unresponsive_{false};
+    //! set when the server reset the client connection with a stateless reset (qore#6931)
+    std::atomic<bool> stateless_reset_received_{false};
     int64_t max_request_body_size_ = 0;             //!< maximum request body size (0 = unlimited); consistent with Http2Session
     //! Maximum size of a client response body received into memory; <= 0 = no limit
     // atomic: set from the thread that polls the session while it can be read by callbacks
@@ -2099,6 +2129,35 @@ private:
 
     //! Streaming body data for incremental sending (used by data reader callback)
     std::unordered_map<int64_t, QuicStreamingBodyData> streaming_body_data_;
+
+    //! server: the streams whose response has been submitted, with or without a body, until they close
+    /** A second response on a stream would send a second HEADERS frame, a malformed message (RFC 9114 section 4.1),
+        so every response submit refuses a stream in this set (qoretechnologies/qore#7212)
+    */
+    std::unordered_set<int64_t> responded_streams_;
+
+    //! server: the streams whose streamed response broke its declared length, to be reset after the HTTP/3 layer's
+    //! callback that found it (qore#7212)
+    std::vector<int64_t> pending_length_resets_;
+
+    //! Resets the streams of pending_length_resets_; the caller holds the lock and is outside of nghttp3's callbacks
+    DLLLOCAL void applyLengthResetsLocked();
+
+    //! Records that a streamed response broke its declared length (\a len bytes): the stream is reset after the
+    //! callback; the caller holds the lock
+    DLLLOCAL void noteLengthErrorLocked(int64_t stream_id, QuicStreamingBodyData& sbd, uint64_t len);
+
+    //! Returns the request method of a server stream, or an empty string; the caller holds the lock
+    DLLLOCAL std::string streamMethodLocked(int64_t stream_id) const {
+        auto it = streams_.find(stream_id);
+        return it == streams_.end() ? std::string() : it->second->method;
+    }
+
+    //! Returns true if a response has been submitted on the stream; the caller holds the lock
+    DLLLOCAL bool responseSubmittedLocked(int64_t stream_id) const {
+        return responded_streams_.count(stream_id) || body_data_.count(stream_id)
+            || streaming_body_data_.count(stream_id);
+    }
 
     //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
     std::unordered_map<int64_t, size_t> deferred_stream_credit_;

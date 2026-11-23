@@ -1,0 +1,106 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires dbitest
+%exec-class DatasourceSensitiveDbNameTest
+
+#! A DBI driver declares that its database name can hold credentials (qore#7275)
+/** The "dbitestsensitivedb" mock driver declares DBI_CAP_SENSITIVE_DBNAME; the "dbitest" mock driver does not.  The
+    masked forms that show a database name (show_db) always mask the database name of a loaded driver that declares the
+    capability; otherwise the character rule of these forms decides.
+*/
+class DatasourceSensitiveDbNameTest inherits QUnit::Test {
+    public {
+        const Plain = "plaindb7275";
+        const Separated = "srv;password=s3cr3t-7275";
+        const Show = {"show_db": True, "show_options": True};
+    }
+
+    constructor() : Test("DBI sensitive database names", "1.0", \ARGV) {
+        addTestCase("the parse define", \parseDefine());
+        addTestCase("the driver capabilities", \driverCapabilities());
+        addTestCase("the capabilities of a Datasource and a DatasourcePool", \datasourceCapabilities());
+        addTestCase("masked hash forms", \maskedHash());
+        addTestCase("masked string forms", \maskedString());
+        addTestCase("show_db without show_options", \showDbOnly());
+        addTestCase("a driver that is not loaded", \driverNotLoaded());
+        set_return_value(main());
+    }
+
+    parseDefine() {
+%ifdef QORE_HAVE_DBI_SENSITIVE_DBNAME
+        assertTrue(True);
+%else
+        fail("QORE_HAVE_DBI_SENSITIVE_DBNAME is not defined");
+%endif
+    }
+
+    driverCapabilities() {
+        assertTrue(inlist("SensitiveDbName", dbi_get_driver_capability_list("dbitestsensitivedb")));
+        assertFalse(inlist("SensitiveDbName", dbi_get_driver_capability_list("dbitest")));
+%ifdef QORE_HAVE_DBI_SENSITIVE_DBNAME
+        assertEq(DBI_CAP_SENSITIVE_DBNAME,
+            dbi_get_driver_capabilities("dbitestsensitivedb") & DBI_CAP_SENSITIVE_DBNAME);
+        assertEq(0, dbi_get_driver_capabilities("dbitest") & DBI_CAP_SENSITIVE_DBNAME);
+%endif
+    }
+
+    datasourceCapabilities() {
+        Datasource ds({"type": "dbitestsensitivedb", "db": Plain});
+        assertTrue(inlist("SensitiveDbName", ds.getCapabilityList()));
+        DatasourcePool pool({"type": "dbitestsensitivedb", "db": Plain, "options": {"min": 1, "max": 1}});
+        assertTrue(inlist("SensitiveDbName", pool.getCapabilityList()));
+        Datasource ds2({"type": "dbitest", "db": Plain});
+        assertFalse(inlist("SensitiveDbName", ds2.getCapabilityList()));
+    }
+
+    maskedHash() {
+        # a driver that declares the capability: even a plain database name is masked
+        hash<auto> h = {"type": "dbitestsensitivedb", "user": "u", "pass": "p", "db": Plain, "host": "dbhost"};
+        assertEq("****", mask_datasource_hash(h, Show).db);
+        assertEq("dbhost", mask_datasource_hash(h, Show).host);
+        assertEq("dbitestsensitivedb:****/****@****%dbhost", mask_datasource(h, Show));
+        # driver names are matched as the DBI layer matches them, with case: another name is not the loaded driver
+        # (its capability is not known, as for a driver that is not loaded)
+        assertEq(Plain, mask_datasource_hash(h + {"type": "DBITESTSENSITIVEDB"}, Show).db);
+        # a driver that does not declare it: a plain database name is shown
+        h.type = "dbitest";
+        assertEq(Plain, mask_datasource_hash(h, Show).db);
+        assertEq("dbitest:****/****@" + Plain + "%dbhost", mask_datasource(h, Show));
+        # the character rule still applies
+        assertEq("****", mask_datasource_hash(h + {"db": Separated}, Show).db);
+        # without show_db, no database name is shown
+        assertEq("****", mask_datasource_hash(h).db);
+        assertEq("****", mask_datasource_hash(h + {"type": "dbitestsensitivedb"}).db);
+    }
+
+    maskedString() {
+        assertEq("****", mask_datasource_hash("dbitestsensitivedb:u/p@" + Plain + "%dbhost", Show).db);
+        assertEq("dbitestsensitivedb:****/****@****%dbhost",
+            mask_datasource("dbitestsensitivedb:u/p@" + Plain + "%dbhost", Show));
+        assertEq(Plain, mask_datasource_hash("dbitest:u/p@" + Plain + "%dbhost", Show).db);
+        assertEq("dbitest:****/****@****%dbhost", mask_datasource("dbitest:u/p@" + Plain + "%dbhost"));
+    }
+
+    showDbOnly() {
+        # the capability applies to show_db alone as well
+        hash<auto> opts = {"show_db": True};
+        assertEq("****", mask_datasource_hash({"type": "dbitestsensitivedb", "db": Plain}, opts).db);
+        assertEq("****", mask_datasource_hash("dbitestsensitivedb:u/p@" + Plain + "%dbhost", opts).db);
+        assertEq("dbitestsensitivedb:****/****@****%dbhost",
+            mask_datasource("dbitestsensitivedb:u/p@" + Plain + "%dbhost", opts));
+        assertEq(Plain, mask_datasource_hash({"type": "dbitest", "db": Plain}, opts).db);
+        assertEq("dbitest:****/****@" + Plain + "%dbhost", mask_datasource("dbitest:u/p@" + Plain + "%dbhost", opts));
+    }
+
+    driverNotLoaded() {
+        # the capability of a driver that is not loaded is not known and the driver is not loaded to mask it: the
+        # character rule alone decides
+        assertEq(Plain, mask_datasource_hash({"type": "qore7275nodriver", "db": Plain}, Show).db);
+        assertEq("****", mask_datasource_hash({"type": "qore7275nodriver", "db": Separated}, Show).db);
+        assertFalse(inlist("qore7275nodriver", dbi_get_driver_list() ?? ()));
+    }
+}

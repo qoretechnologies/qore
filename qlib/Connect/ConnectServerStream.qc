@@ -67,6 +67,8 @@ public class ConnectServerStream {
         bool m_http3;
         #! HTTP/3 session ID (HTTP/3 only)
         *int m_session_id;
+        #! The time that an HTTP/3 send may make no progress (see ConnectHelper::sendQuicStreamData())
+        timeout m_send_timeout = CONNECT_DEFAULT_SEND_TIMEOUT;
         #! Whether response headers have been sent
         bool m_headers_sent = False;
         #! Pre-parsed messages
@@ -108,12 +110,14 @@ public class ConnectServerStream {
         @param io_wake optional async I/O-thread wake closure; when set, write
         paths invoke it after enqueuing HTTP/2 frames so the I/O thread flushes
         promptly
+        @param send_timeout the maximum time that an HTTP/3 send may wait with the peer acknowledging no data of the
+        stream (see ConnectHelper::sendQuicStreamData()); a value less than or equal to zero waits without a limit
     */
     constructor(Socket socket, AbstractConnectCodec codec, int stream_id,
             bool http3, *int session_id, list<auto> messages = (),
             int max_message_size = CONNECT_DEFAULT_MAX_MESSAGE_SIZE,
             *string send_encoding, *string recv_encoding,
-            *code<nothing()> io_wake) {
+            *code<nothing()> io_wake, timeout send_timeout = CONNECT_DEFAULT_SEND_TIMEOUT) {
         m_socket = socket;
         m_codec = codec;
         m_stream_id = stream_id;
@@ -124,6 +128,21 @@ public class ConnectServerStream {
         m_send_encoding = send_encoding;
         m_recv_encoding = recv_encoding;
         m_io_wake = io_wake;
+        m_send_timeout = send_timeout;
+    }
+
+    #! Returns the HTTP/2 or HTTP/3 stream ID of the request
+    /** @since Connect 1.3
+    */
+    int getStreamId() {
+        return m_stream_id;
+    }
+
+    #! Returns the HTTP/3 session ID of the request, or @ref nothing for HTTP/2
+    /** @since Connect 1.3
+    */
+    *int getSessionId() {
+        return m_session_id;
     }
 
     #! Read the next client message
@@ -207,10 +226,9 @@ public class ConnectServerStream {
     #! Send data on the transport stream
     private sendStreamData(binary data, bool end_stream) {
         if (m_http3) {
-            while (m_socket.submitQuicStreamData(m_session_id, m_stream_id, data,
-                    end_stream) == 1) {
-                m_socket.waitForQuicStreamDrain(m_session_id, m_stream_id, 5s);
-            }
+            # bounded by the time without progress (qoretechnologies/qore#7282)
+            ConnectHelper::sendQuicStreamData(m_socket, m_session_id, m_stream_id, data, end_stream, m_send_timeout,
+                m_io_wake);
         } else {
             # Async send — the I/O thread flushes on the next tick, or
             # immediately if m_io_wake nudges it.

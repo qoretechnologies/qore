@@ -55,6 +55,7 @@
 #include "qore/intern/QC_LoggerInterfaceBase.h"
 #include "qore/intern/QC_AsyncIoController.h"
 #include "qore/intern/QC_SSLCertificate.h"
+#include "qore/intern/QC_SSLTrustStore.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
 #include "qore/intern/QC_ProgramControl.h"
 #include "qore/intern/QC_Program.h"
@@ -74,6 +75,7 @@
 #include "qore/intern/QC_TreeMap.h"
 #include "qore/intern/QC_Serializable.h"
 #include "qore/intern/QC_AbstractPollableIoObjectBase.h"
+#include "qore/intern/QC_SendRateMonitor.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
@@ -1685,12 +1687,14 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     // add system object types
     qns.addSystemClass(initTimeZoneClass(qns));
     qns.addSystemClass(initSSLCertificateClass(qns));
+    qns.addSystemClass(initSSLTrustStoreClass(qns));
     qns.addSystemClass(initSSLPrivateKeyClass(qns));
     // FastCell and HttpFastRoutes must be before Socket, which takes HttpFastRoutes in Socket::setHttpFastRoutes()
     qns.addSystemClass(initFastCellClass(qns));
     qns.addSystemClass(initFastResponseSlotClass(qns));
     qns.addSystemClass(initHttpFastRoutesClass(qns));
     qns.addSystemClass(initSocketClass(qns));
+    qns.addSystemClass(initSendRateMonitorClass(qns));
     qns.addSystemClass(initEventNotifierClass(qns));
     // EventPollInfo/TimerEventInfo must be initialized before initEventLoopClass which uses them
     // EventPollInfo references AbstractPollableIoObject; must be after initSocketClass

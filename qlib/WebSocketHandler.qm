@@ -140,6 +140,11 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
 
 
     @section websockethandler_v2_8 Version 2.8
+    - added the \c send_min_rate and \c send_min_rate_window options
+      (@ref WebSocketHandler::WebSocketHandler::setSendMinRate() "setSendMinRate()"; default: 1 KiB/s over 60 seconds):
+      a client that takes data more slowly while a send waits for it is disconnected, on HTTP/1.1, HTTP/2 and HTTP/3;
+      on HTTP/1.1, \c send_timeout bounds the time in which the client takes no data, as on HTTP/2 and HTTP/3, instead
+      of the total time of a send (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>)
     - reads the fields of a request from the \c "headers" key of its header hash, or from the top level of a hash
       built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with the HttpServer
       option \c http_fields_at_top_level set to @ref False
@@ -211,7 +216,12 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       connection at once, discarding the messages not yet delivered; the handler uses it when its listener or the
       server stops and to drop a slow client, so a subclass that overrides
       @ref WebSocketHandler::WebSocketConnection::stop() "stop()" to observe those closes must override
-      @ref WebSocketHandler::WebSocketConnection::forceStop() "forceStop()" instead
+      @ref WebSocketHandler::WebSocketConnection::forceStop() "forceStop()" instead; on HTTP/2 and HTTP/3, the
+      stream of such a connection is reset, which tells the client at once and releases the stream and its send
+      buffer even when the client grants no flow-control credit (see
+      @ref WebSocketHandler::WebSocketConnection::isForceStopped() "isForceStopped()" and
+      @ref AsyncSocketIo::AbstractStreamContext::abort() "AbstractStreamContext::abort()";
+      <a href="https://github.com/qoretechnologies/qore/issues/7325">issue 7325</a>)
     - an HTTP/1.0 opening handshake is rejected with a 400 response (RFC 6455 section 4.2.1); a server must ignore
       the \c Upgrade header of an HTTP/1.0 request (RFC 9110 section 7.8)
     - added a per-connection outbound queue limit (the \c max_queue_size handler option and
@@ -624,6 +634,10 @@ public class WebSocketConnection {
     */
     setStreamContext(*AsyncSocketIo::AbstractStreamContext ctx) {
         self.stream_ctx = ctx;
+        # the rate is measured for the stream, across its sends (qore#7280)
+        if (ctx) {
+            ctx.setSendMinRate(handler.getSendMinRate(), get_duration_milliseconds(handler.getSendMinRateWindow()));
+        }
     }
 
     #! Returns the stream context for WebSocket over HTTP/2 or HTTP/3
@@ -639,7 +653,7 @@ public class WebSocketConnection {
     /** @deprecated Use @ref setStreamContext() instead
     */
     deprecated setHttp2StreamContext(*AsyncSocketIo::Http2StreamContext ctx) {
-        self.stream_ctx = ctx;
+        setStreamContext(ctx);
     }
 
     #! Returns the HTTP/2 stream context
@@ -655,7 +669,7 @@ public class WebSocketConnection {
     /** @deprecated Use @ref setStreamContext() instead
     */
     deprecated setHttp3StreamContext(*AsyncSocketIo::Http3StreamContext ctx) {
-        self.stream_ctx = ctx;
+        setStreamContext(ctx);
     }
 
     #! Returns the HTTP/3 stream context for WebSocket over QUIC (RFC 9220)
@@ -808,7 +822,8 @@ public class WebSocketConnection {
         is used: if the stream send buffer is full the whole connection is closed (a slow or non-reading client must
         not stall a broadcast or have frames silently dropped — closing is the only stream-safe response).  When no
         limit is set, @ref AsyncSocketIo::AbstractStreamContext::sendDataWithTimeout() "sendDataWithTimeout()" waits
-        for a full stream send buffer to drain for at most the send timeout, after which the connection is closed.
+        for a full stream send buffer to drain, and the connection is closed once the peer has taken none of the
+        stream's data for the send timeout.
 
         @since %WebSocketHandler 2.8
     */
@@ -826,8 +841,8 @@ public class WebSocketConnection {
                 return;
             }
         } else {
-            # a full stream send buffer is waited for, as on HTTP/1.1, for at most the send timeout; a client that
-            # does not read in that time is disconnected, so the peer never sees a gap in the message stream
+            # a full stream send buffer is waited for, as on HTTP/1.1; a client that takes none of the data for the
+            # send timeout is disconnected, so the peer never sees a gap in the message stream
             try {
                 stream_ctx.sendDataWithTimeout(encoded, get_duration_milliseconds(handler.getSendTimeout()));
             } catch (hash<ExceptionInfo> ex) {
@@ -1331,6 +1346,17 @@ stop();
         stopIntern(True);
     }
 
+    #! Returns @ref True if the connection was stopped with @ref forceStop(), which discards what it has not sent yet
+    /** The handler then aborts the connection's HTTP/2 or HTTP/3 stream when the connection ends, instead of ending
+        it after the data already queued (qore#7325)
+
+        @since %WebSocketHandler 2.8
+    */
+    bool isForceStopped() {
+        AutoLock al(io_mutex);
+        return force_stop;
+    }
+
     #! Stops the connection; delivers the messages already sent first unless \a force is @ref True
     private stopIntern(bool force) {
         if (force) {
@@ -1796,6 +1822,14 @@ class WebSocketStreamProcessor {
         */
         bool notify_pending = False;
 
+        #! The handles of work of the module cleanup that left its notification to the thread in the loop
+        /** Protected by @ref notify_lock; released by the thread in the loop once it has read the stream for them,
+            so that the cleanup at the end of the process waits for that thread as it waits for the work itself
+            (see @ref Qore::AsyncIoController::holdModuleCleanupWork() "AsyncIoController::holdModuleCleanupWork()",
+            qore#7239)
+        */
+        list<int> pending_cleanup_work = ();
+
         #! Dedicated fast lock for the closed flag — never held during I/O
         /** This lock is ONLY held to perform the check-and-set on @ref closed and
             signal @ref done. Shutdown must always be able to acquire this lock quickly,
@@ -1864,6 +1898,16 @@ class WebSocketStreamProcessor {
         self.handler = handler;
         self.done = done;
         self.last_recv_ms = clock_get_monotonic_us() / 1000;
+    }
+
+    #! Releases the handles of work of the module cleanup that are still left to the thread in the loop
+    /** Handles are left only if the object is destroyed without the thread taking them (qore#7239): the cleanup at
+        the end of the process does not then wait for them
+    */
+    destructor() {
+        foreach int handle in (pending_cleanup_work) {
+            AsyncIoController::releaseModuleCleanupWork(handle);
+        }
     }
 
     #! Sets the code that ends the stream once it has closed, in place of a thread waiting for @ref done
@@ -2088,6 +2132,13 @@ class WebSocketStreamProcessor {
             AutoLock al(notify_lock);
             if (processing) {
                 notify_pending = True;
+                # work of the module cleanup at the end of the process that leaves its notification to the thread in
+                # the loop hands itself over to it, so that the cleanup waits until that thread has read the stream
+                # (0 outside of such work) (qore#7239)
+                int handle = AsyncIoController::holdModuleCleanupWork();
+                if (handle) {
+                    push pending_cleanup_work, handle;
+                }
                 return;
             }
             processing = True;
@@ -2096,11 +2147,27 @@ class WebSocketStreamProcessor {
         # exception safety: the gate must be released on ANY exit path, or the stream
         # would silently stop processing frames
         on_error {
-            AutoLock al(notify_lock);
-            processing = False;
+            list<int> left;
+            {
+                AutoLock al(notify_lock);
+                processing = False;
+                # the work handed over to this thread that it will not do: the cleanup does not wait for it
+                left = pending_cleanup_work;
+                pending_cleanup_work = ();
+            }
+            map AsyncIoController::releaseModuleCleanupWork($1), left;
         }
 
         while (True) {
+            # the handles of the work of the module cleanup that this pass reads the stream for, released after it
+            list<int> handed;
+            {
+                AutoLock al(notify_lock);
+                handed = pending_cleanup_work;
+                pending_cleanup_work = ();
+            }
+            on_exit map AsyncIoController::releaseModuleCleanupWork($1), handed;
+
             processFrames();
 
             AutoLock al(notify_lock);
@@ -2550,6 +2617,14 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         */
         const DefaultCloseTimeout = 5s;
 
+        #! the default minimum average rate of a peer while a send waits for it, in bytes per second
+        /** @since WebSocketHandler 2.8 */
+        const DefaultSendMinRate = 1024;
+
+        #! the default length of the sliding window of the minimum rate
+        /** @since WebSocketHandler 2.8 */
+        const DefaultSendMinRateWindow = 60s;
+
         #! default heartbeat interval
         const DefaultHeartbeatInterval = 20s;
 
@@ -2594,6 +2669,10 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             "max_queue_size",
             "idle_timeout",
             "close_timeout",
+            "send_timeout",
+            "send_min_rate",
+            "send_min_rate_window",
+            "logger",
         );
     }
 
@@ -2628,11 +2707,17 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         #! Send timeout
         date send_timeout = DefaultSocketSendTimeout;
+        #! True if the send timeout was set explicitly, which is then applied exactly
+        bool send_timeout_set = False;
 
         #! How long a close started by the server waits for the client's close frame
         /** @since WebSocketHandler 2.8
         */
         date close_timeout = DefaultCloseTimeout;
+        #! the minimum average rate of a peer while a send waits for it, in bytes per second; 0: no check
+        int send_min_rate = DefaultSendMinRate;
+        #! the sliding window of the minimum rate
+        date send_min_rate_window = DefaultSendMinRateWindow;
 
         #! Maximum WebSocket message size in bytes (0 = the built-in limits)
         /** Limits the size of a frame (with HTTP/1.1, also of the fragments of a message as they arrive) and of a
@@ -2692,8 +2777,19 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         - \c logger: a @ref Qore::Logger::Logger "Logger" object to use for logging (default: no logging)
         - \c send_timeout: a relative date/time value giving the timeout to use for sending data on the socket
           (default: 30s); if an integer is sent here, it is assumed to represent a value in milliseconds; a client
-          that does not read the messages sent to it within this time is disconnected (on HTTP/2 and HTTP/3, this is
-          the longest time a send waits for a full stream send buffer to drain)
+          that takes none of the data sent to it for this time is disconnected
+        - \c send_min_rate: the minimum average rate, in bytes per second, at which a client must take data while a
+          send waits for it; a slower client is disconnected, so that a client that takes very little data cannot hold
+          a send (default: @ref DefaultSendMinRate); 0 disables the check, and \c send_timeout then applies unscaled
+        - \c send_min_rate_window: a relative date/time value, or an integer in milliseconds, of at least one
+          millisecond (default: @ref DefaultSendMinRateWindow).  On HTTP/2 and HTTP/3 it is the sliding window of the
+          rate.  Over HTTP/1.1 a sender sees a slow client's progress only in steps of its TCP receive window, so a
+          client instead has a credit of the time that the most seen from it in a sample or a second (128 KiB to
+          8 MiB) takes at the minimum rate, for at most 10 minutes and at least this window, which the bytes that it
+          takes renew; the default \c send_timeout allows the same time, and one set explicitly is applied exactly.  A
+          client that stays below the minimum rate runs out of credit and is disconnected, the closer to the rate the
+          later: after a full credit of 10 minutes, at half of the rate in 20 minutes.  A client that shows no
+          progress for 10 minutes is disconnected even if it is reading a very large receive buffer very slowly.
         - \c close_timeout: a relative date/time value giving how long a close started by the server (with
           @ref WebSocketHandler::WebSocketConnection::stop() "WebSocketConnection::stop()", when the server or a
           listener stops, on an idle timeout, or on a protocol error) waits for the client's close frame once the
@@ -2743,22 +2839,22 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     break;
                 }
                 case "send_timeout": {
-                    if (h.value.typeCode() == NT_INT) {
-                        h.value = milliseconds(h.value);
-                    }
-                    if (h.value.typeCode() != NT_DATE) {
+                    # a local value: a hash of integers cannot hold the date
+                    auto value = h.value.typeCode() == NT_INT ? milliseconds(h.value) : h.value;
+                    if (value.typeCode() != NT_DATE) {
                         throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y has type %y; expecting \"date\"",
                             h.key, h.value.fullType());
                     }
-                    if (h.value.absolute()) {
+                    if (value.absolute()) {
                         throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %y is absolute; expecting "
-                            "relative date/time value", h.key, h.value);
+                            "relative date/time value", h.key, value);
                     }
-                    if (h.value < 0s) {
+                    if (value < 0s) {
                         throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %y is negative; expecting "
-                            "non-negative relative date/time value", h.key, h.value);
+                            "non-negative relative date/time value", h.key, value);
                     }
-                    send_timeout = h.value;
+                    send_timeout = value;
+                    send_timeout_set = True;
                     break;
                 }
                 case "extensions": {
@@ -2775,14 +2871,31 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     break;
                 }
                 case "close_timeout": {
-                    if (h.value.typeCode() == NT_INT) {
-                        h.value = milliseconds(h.value);
-                    }
-                    if (h.value.typeCode() != NT_DATE) {
+                    # a local value: a hash of integers cannot hold the date
+                    auto value = h.value.typeCode() == NT_INT ? milliseconds(h.value) : h.value;
+                    if (value.typeCode() != NT_DATE) {
                         throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y has type %y; expecting \"date\"",
                             h.key, h.value.fullType());
                     }
-                    setCloseTimeout(h.value);
+                    setCloseTimeout(value);
+                    break;
+                }
+                case "send_min_rate": {
+                    if (h.value.typeCode() != NT_INT && (h.value.typeCode() != NT_STRING || h.value !~ /^-?[0-9]+$/)) {
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %y cannot be converted to an "
+                            "integer giving the minimum rate in bytes per second", h.key, h.value);
+                    }
+                    setSendMinRate(int(h.value), send_min_rate_window);
+                    break;
+                }
+                case "send_min_rate_window": {
+                    # a local value: a hash of integers cannot hold the date
+                    auto value = h.value.typeCode() == NT_INT ? milliseconds(h.value) : h.value;
+                    if (value.typeCode() != NT_DATE) {
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y has type %y; expecting a relative "
+                            "date/time value or an integer in milliseconds", h.key, h.value.fullType());
+                    }
+                    setSendMinRate(send_min_rate, value);
                     break;
                 }
                 case "max_message_size": {
@@ -2964,6 +3077,39 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 "expecting non-negative relative date/time value", to);
         }
         send_timeout = to;
+        send_timeout_set = True;
+    }
+
+    #! Returns the minimum average rate of a client while a send waits for it, in bytes per second (0: no check)
+    /** @since WebSocketHandler 2.8 */
+    int getSendMinRate() {
+        return send_min_rate;
+    }
+
+    #! Returns the sliding window of the minimum rate
+    /** @since WebSocketHandler 2.8 */
+    date getSendMinRateWindow() {
+        return send_min_rate_window;
+    }
+
+    #! Sets the minimum average rate of a client while a send waits for it, for the connections made after this call
+    /** @param min_rate the minimum rate in bytes per second; 0 disables the check
+        @param window the relative length of the sliding window, which must be positive
+
+        @throw WEBSOCKETHANDLER-OPTION-ERROR invalid arguments
+
+        @since WebSocketHandler 2.8
+    */
+    setSendMinRate(int min_rate, date window = DefaultSendMinRateWindow) {
+        if (min_rate < 0) {
+            throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option \"send_min_rate\" value %d is negative", min_rate);
+        }
+        if (window.absolute() || get_duration_milliseconds(window) <= 0) {
+            throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option \"send_min_rate_window\" value %y is not a positive "
+                "relative date/time value", window);
+        }
+        send_min_rate = min_rate;
+        send_min_rate_window = window;
     }
 
     #! Set the send timeout with a non-negative value in milliseconds
@@ -3312,6 +3458,8 @@ handler.setCloseTimeout(2s);
             ws_poll_op.setHeartbeat(heartbeat * 1000);
             ws_poll_op.setIdleTimeout(idle_timeout * 1000);
             ws_poll_op.setSendTimeout(get_duration_microseconds(send_timeout) / 1000);
+            ws_poll_op.setSendTimeoutScaled(!send_timeout_set);
+            ws_poll_op.setSendMinRate(send_min_rate, get_duration_milliseconds(send_min_rate_window));
             ws_poll_op.setCloseTimeout(close_timeout);
             if (max_message_size > 0) {
                 ws_poll_op.setMaxFrameSize(max_message_size);
@@ -3624,11 +3772,19 @@ handler.setCloseTimeout(2s);
                 logError("exception clearing WebSocket poll op: %s", get_exception_string(ex));
             }
         }
-        # Close the stream context: ends the stream (END_STREAM or FIN) unless the close handshake ended it
+        # Close the stream context: ends the stream (END_STREAM or FIN) unless the close handshake ended it; a
+        # connection dropped with forceStop() (a client that takes no data for the send timeout, backpressure, a
+        # listener or server stop) discards what it has not sent: its stream is reset, which tells the client and
+        # releases the stream and its send buffer at once, whereas an end of the stream queued behind data that the
+        # client grants no credit for would never reach it (qore#7325)
         try {
             *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
             if (ctx) {
-                ctx.close();
+                if (wsc.isForceStopped()) {
+                    ctx.abort();
+                } else {
+                    ctx.close();
+                }
             }
         } catch (hash<ExceptionInfo> ex) {
             logError("exception closing WebSocket stream: %s", get_exception_string(ex));

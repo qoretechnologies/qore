@@ -103,6 +103,27 @@ public enum HttpVersionMode : string {
     H3 = "h3",
 }
 
+#! Releases a handle of work of the module cleanup that was handed over to code that is destroyed without being run
+/** See HttpAsyncSocketIoController::wrapCleanupHandover() (qore#7239); releasing a handle again has no effect, so the
+    release when the code has run (AsyncIoController::runModuleCleanupWork()) and the release here do not conflict
+*/
+class ModuleCleanupHandoverGuard {
+    public {
+        #! the handle
+        int handle;
+    }
+
+    #! Creates the object with the handle that it releases when it is destroyed
+    constructor(int handle) {
+        self.handle = handle;
+    }
+
+    #! Releases the handle if it is still held
+    destructor() {
+        AsyncIoController::releaseModuleCleanupWork(handle);
+    }
+}
+
 #! HTTP-aware async I/O controller for managing HTTP connections
 /** This controller manages HTTP connections through their lifecycle:
 
@@ -2877,9 +2898,34 @@ public class HttpAsyncSocketIoController {
                     wakeSocketIfPresent(cinfo.sock, uh, "HTTP/2 handler error response");
                 }
             } catch (hash<ExceptionInfo> ex) {
+                # the handler submitted the response on its stream itself (ex: with a poll operation): the stream is
+                # left to it (qoretechnologies/qore#7212)
+                if (ex.desc =~ /^response already submitted/) {
+                    log(LoggerLevel::DEBUG, "HTTP/3 session=%d stream=%d on %y: the handler submitted the response",
+                        session_id, stream_id, uh);
+                    wakeSocketIfPresent(cinfo.sock, uh, "HTTP/3 response submitted by the handler");
+                    return;
+                }
                 log(LoggerLevel::ERROR,
                     "Error submitting HTTP/3 response for session=%d stream=%d on %y: %s: %s",
                     session_id, stream_id, uh, ex.err, ex.desc);
+                # the client must not wait for a response that is not sent: a response that is refused before
+                # anything is sent (such as a content-length that does not match its body) is answered with an
+                # error; otherwise the stream is cancelled (qoretechnologies/qore#7212)
+                try {
+                    cinfo.sock.submitQuicResponse(session_id, stream_id, 500, {"Content-Type": "text/plain"},
+                        HttpServer::HttpCodes{500});
+                } catch (hash<ExceptionInfo> ex2) {
+                    # a stream that has a response already, which the handler submitted itself, is left to it: it
+                    # is complete or still being sent
+                    if (ex2.desc !~ /^response already submitted/) {
+                        try {
+                            cinfo.sock.cancelQuicStream(session_id, stream_id);
+                        } catch () {
+                        }
+                    }
+                }
+                wakeSocketIfPresent(cinfo.sock, uh, "HTTP/3 refused response");
             }
             # connections{uh} stays: it's the h3op's socket-level entry, not
             # per-request.  Cleaned up on h3op close/error or result.close.
@@ -4186,15 +4232,19 @@ public class HttpAsyncSocketIoController {
         # the data before the handler can process it.
         # Expect: 100-continue requests fall through to the handler (which sends
         # 100-continue and reads the body synchronously) to avoid a round-trip.
+        # A body larger than DefaultBodyStreamThreshold is not pre-read either: the request is dispatched on its
+        # headers, and the body is read on the handler thread, as a stream in parts by a stream handler that wants
+        # it, whole otherwise, so that the memory that a stream handler needs for a large body is bounded
+        # (qore#7308); a small body is pre-read so that it does not hold a handler thread while it arrives.
         if (!output.info.http2 && !output.info.http3) {
             # the length is parsed as the server does (digits only): a value read differently here would pre-read a
             # body that the handler does not expect, or none that it waits for; an invalid length is left to the
             # handler, which refuses the request
             *int content_length = HttpServer::http_parse_content_length(http_get_field(output.hdr, "content-length"));
             bool has_expect = (http_get_field(output.hdr, "expect") =~ /100-continue/i);
-            bool has_body = (content_length > 0);
+            bool pre_read_body = (content_length > 0 && content_length <= HttpServer::DefaultBodyStreamThreshold);
 
-            if (has_body && !has_expect) {
+            if (pre_read_body && !has_expect) {
                 try {
                     softint cl = content_length;
                     bool conn_close = (http_get_field(output.hdr, "connection") =~ /close/i);
@@ -5134,6 +5184,10 @@ public class HttpAsyncSocketIoController {
     /** For code that must run exactly once, such as the end of a stream.
     */
     private:internal runOnHandlerPool(*HttpAsyncTarget target, code<nothing()> c) {
+        # work of the module cleanup that runs this code on another thread hands itself over to it (qore#7239); code
+        # that cannot run on another thread (qore#7056) is then refused here, in the caller, which passes only code of
+        # this module
+        c = wrapCleanupHandover(c, "HttpAsyncSocketIoController");
         if (target) {
             try {
                 submitToHandlerPool(target, c);
@@ -5150,8 +5204,45 @@ public class HttpAsyncSocketIoController {
         }
     }
 
+    #! Returns code that runs \a c, holding a handle of the work of the module cleanup that the current thread runs
+    /** At the end of the process, the module cleanup waits for the work that it counts before it deletes the modules;
+        code that such work leaves to another thread (a thread of its own, a thread of the handler pool) is waited for
+        too, until it has run (see
+        @ref Qore::AsyncIoController::holdModuleCleanupWork() "AsyncIoController::holdModuleCleanupWork()",
+        qore#7239); outside of such work \a c is returned as it is.  If the returned code is discarded without being
+        run (a pool that drops its queued tasks, a caller that refuses it), the handle is released when the code is
+        destroyed, so that the cleanup does not wait for it
+
+        @param c the code to run on another thread
+        @param what the name of the caller for the error raised if \a c cannot be run on another thread
+
+        @return the code to run on the other thread
+
+        @throw PERMISSION-DENIED \a c cannot be run on another thread (see @ref Qore::check_thread_callable())
+
+        @since HttpServerAsyncIo 1.0
+    */
+    static code<nothing()> wrapCleanupHandover(code<nothing()> c, string what) {
+        int handle = AsyncIoController::holdModuleCleanupWork();
+        if (!handle) {
+            return c;
+        }
+        # releases the handle if the code returned is destroyed without being run
+        ModuleCleanupHandoverGuard guard(handle);
+        # the code runs on another thread: code that cannot start threads cannot have its code run there (qore#7056);
+        # checked here, as the code below runs it in a closure of this module
+        check_thread_callable(c, what);
+        return sub () {
+            AsyncIoController::runModuleCleanupWork(guard.handle, c);
+        };
+    }
+
     #! Runs code on a thread of its own, or in the calling thread if no thread can be started
     private:internal runOnThreadOfItsOwn(code<nothing()> c) {
+        # work of the module cleanup that runs this code on another thread hands itself over to it (qore#7239); code
+        # that cannot run on another thread (qore#7056) is then refused here, in the caller, which passes only code of
+        # this module
+        c = wrapCleanupHandover(c, "HttpAsyncSocketIoController");
         try {
             background c();
         } catch () {
@@ -5755,23 +5846,43 @@ public class HttpAsyncSocketIoController {
         };
 
         # Continue reading on h2op immediately — the CONNECT stream coexists
-        # with other streams on the same connection
-        dispatch_h2op.continueReading();
-        hash<HttpActiveConnectionInfo> new_cinfo;
-        {
-            AutoWriteLock al(m);
-            # Check if connection still exists
-            if (!connections.hasKey(dispatch_uh)) {
-                try { dispatch_sock.close(); } catch () {}
-                return;
+        # with other streams on the same connection.  The handler of another stream can have resumed reading
+        # already, after the request was taken (resumeMultiplexedReading()): continueReading() then raises
+        # HTTP2-STATE-ERROR, as the operation is active again, and the request is dispatched all the same; the I/O
+        # thread is woken to apply the registration of the stream above (qoretechnologies/qore#7354)
+        bool resumed;
+        try {
+            dispatch_h2op.continueReading();
+            resumed = True;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "HTTP2-STATE-ERROR") {
+                rethrow;
             }
-            # Cast to typed hash to update fields and assign back
-            hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{dispatch_uh});
-            conn_info.stream_op = dispatch_h2op;
-            conn_info.state = HttpConnectionState::Http2;
-            new_cinfo = (connections{dispatch_uh} @= (draining ? withDrainToken(dispatch_uh, conn_info) : conn_info));
+            log(LoggerLevel::DEBUG, "HTTP/2 extended CONNECT: %y stream=%d: reading was resumed already: %s",
+                dispatch_uh, dispatch_stream_id, ex.desc);
         }
-        submitConnectionOp(dispatch_uh, new_cinfo);
+        if (resumed) {
+            hash<HttpActiveConnectionInfo> new_cinfo;
+            {
+                AutoWriteLock al(m);
+                # Check if connection still exists
+                if (!connections.hasKey(dispatch_uh)) {
+                    try { dispatch_sock.close(); } catch () {}
+                    return;
+                }
+                # Cast to typed hash to update fields and assign back
+                hash<HttpActiveConnectionInfo> conn_info =
+                    cast<hash<HttpActiveConnectionInfo>>(connections{dispatch_uh});
+                conn_info.stream_op = dispatch_h2op;
+                conn_info.state = HttpConnectionState::Http2;
+                new_cinfo = (connections{dispatch_uh} @= (draining
+                    ? withDrainToken(dispatch_uh, conn_info)
+                    : conn_info));
+            }
+            submitConnectionOp(dispatch_uh, new_cinfo);
+        } else {
+            wakeSocketIfPresent(dispatch_sock, dispatch_uh, "HTTP/2 extended CONNECT after a concurrent resume");
+        }
 
         # Build header hash
         # the fields are given under "headers", and at the top level unless the listener turned it off (the accepted
@@ -6053,15 +6164,39 @@ public class HttpAsyncSocketIoController {
                     connection_gone = !cinfo.sock.isOpen();
                 } catch (hash<ExceptionInfo> ex2) {
                 }
+                # the handler submitted the response on its stream itself (ex: with a poll operation): the stream is
+                # left to it (qoretechnologies/qore#7212)
+                if (ex.desc =~ /^response already submitted/) {
+                    log(LoggerLevel::DEBUG, "HTTP/2 stream=%d on %y: the handler submitted the response", stream_id,
+                        uh);
+                    # as after a response that the controller submits
+                    try {
+                        resumeMultiplexedReading(cinfo.stream_op, uh, HttpConnectionState::Http2);
+                        controller.wakeSocket(cinfo.sock);
+                    } catch () {}
+                    return;
+                }
                 log(connection_gone ? LoggerLevel::DEBUG : LoggerLevel::ERROR,
                     "Error submitting HTTP/2 response for stream=%d on %y: %s: %s",
                     stream_id, uh, ex.err, ex.desc);
                 if (!connection_gone) {
-                    # Send RST_STREAM so the client gets an error instead of waiting forever
+                    # a response that is refused before anything is sent (such as a content-length that does not
+                    # match its body) is answered with an error (qoretechnologies/qore#7212); otherwise RST_STREAM is
+                    # sent, so the client gets an error instead of waiting forever
                     try {
-                        cinfo.sock.resetHttp2Stream(stream_id);
+                        cinfo.sock.submitHttp2Response(stream_id, 500, {"Content-Type": "text/plain"},
+                            HttpServer::HttpCodes{500});
+                        resumeMultiplexedReading(cinfo.stream_op, uh, HttpConnectionState::Http2);
                         controller.wakeSocket(cinfo.sock);
-                    } catch () {}
+                    } catch (hash<ExceptionInfo> ex2) {
+                        # a stream that has a response already, which the handler submitted itself, is left to it
+                        if (ex2.desc !~ /^response already submitted/) {
+                            try {
+                                cinfo.sock.resetHttp2Stream(stream_id);
+                                controller.wakeSocket(cinfo.sock);
+                            } catch () {}
+                        }
+                    }
                 }
             }
             return;

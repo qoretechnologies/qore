@@ -336,6 +336,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_QoreParseOptions.qpp
     lib/QC_SSLCertificate.qpp
     lib/QC_SSLPrivateKey.qpp
+    lib/QC_SSLTrustStore.qpp
     lib/QC_ThreadPool.qpp
     lib/QC_StreamBase.qpp
     lib/QC_InputStream.qpp
@@ -364,6 +365,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_Serializable.qpp
     lib/QC_AbstractPollableIoObject.qpp
     lib/QC_AbstractPollableIoObjectBase.qpp
+    lib/QC_SendRateMonitor.qpp
     lib/QC_AbstractPollOperation.qpp
     lib/QC_SocketPollOperationBase.qpp
     lib/QC_SocketPollOperation.qpp
@@ -2431,6 +2433,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_WaitGroup.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SSLCertificate.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SSLPrivateKey.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SSLTrustStore.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HTTPClient.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AutoLock.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_ThreadCapabilityScope.cpp\"
@@ -2470,6 +2473,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_Serializable.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractPollableIoObject.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractPollableIoObjectBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SendRateMonitor.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractPollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperation.cpp\"
@@ -3543,7 +3547,7 @@ install(FILES ${QCC_FORMAT_STAMP}
 #install(TARGETS qore qpp qr libqore
 #        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
 #        LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
-install(FILES ${CMAKE_BINARY_DIR}/cmake/install/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake cmake/QoreOptionalModuleStamp.cmake cmake/QoreQmodSourceCheck.cmake cmake/QoreWriteContentDigest.cmake cmake/QoreWriteQccRuntimeStamp.cmake cmake/QoreWriteSourceContentDigests.cmake cmake/QoreReconcileCatalogInstall.cmake cmake/QoreRemoveStaleModuleApiFiles.cmake
+install(FILES ${CMAKE_BINARY_DIR}/cmake/install/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake cmake/QoreEnsureDepfile.cmake cmake/QoreOptionalModuleStamp.cmake cmake/QoreQmodSourceCheck.cmake cmake/QoreWriteContentDigest.cmake cmake/QoreWriteQccRuntimeStamp.cmake cmake/QoreWriteSourceContentDigests.cmake cmake/QoreReconcileCatalogInstall.cmake cmake/QoreRemoveStaleModuleApiFiles.cmake
         DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(PROGRAMS tools/qore-qo-incremental tools/qore-qo-source-order

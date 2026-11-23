@@ -1222,6 +1222,12 @@ void Http1ClientPollOperationPriv::resetSendState(ExceptionSink* xsink) {
 
 // --- Request sub-state handlers ---
 
+QoreHashNode* Http1ClientPollOperationPriv::getUnsentRequestErrorInfo(ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("request_sent", false, xsink);
+    return rv.release();
+}
+
 QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
     // Check for pending request under stream_lock
     BinaryNode* req_data = nullptr;
@@ -1286,6 +1292,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
                     pending_request_header_len = header_len;
                     streaming_active = is_streaming;
                 }
+                // the request was not written: it reached nothing, so it can be sent again on a new connection
+                // whatever its method (qore#7278)
+                ReferenceHolder<QoreHashNode> unsent(getUnsentRequestErrorInfo(xsink), xsink);
                 if (idle_xsink) {
                     QoreStringValueHelper err_str(idle_xsink.getExceptionErr());
                     QoreStringValueHelper desc_str(idle_xsink.getExceptionDesc());
@@ -1294,10 +1303,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
                     std::string desc = *desc_str ? desc_str->c_str()
                         : "server closed the keep-alive connection";
                     idle_xsink.clear();
-                    setError(err.c_str(), desc.c_str(), xsink);
+                    setError(err.c_str(), desc.c_str(), *unsent, xsink, QoreValue(*unsent));
                 } else {
                     setError("HTTP1-CONNECTION-CLOSED",
-                        "server closed the keep-alive connection", xsink);
+                        "server closed the keep-alive connection", *unsent, xsink, QoreValue(*unsent));
                 }
                 return nullptr;
             }
@@ -1322,12 +1331,16 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
                     AutoLocker al(stream_lock);
                     reused = next_stream_id > 1;
                 }
+                // the request was not written in either case (qore#7278)
+                ReferenceHolder<QoreHashNode> unsent(getUnsentRequestErrorInfo(xsink), xsink);
                 if (reused) {
                     setError("HTTP1-CONNECTION-CLOSED",
-                        "the server closed the reused keep-alive connection before the request was sent", xsink);
+                        "the server closed the reused keep-alive connection before the request was sent", *unsent,
+                        xsink, QoreValue(*unsent));
                 } else {
                     setError("HTTP1-UNEXPECTED-DATA",
-                        "server sent unexpected data on idle keep-alive connection before request", xsink);
+                        "server sent unexpected data on idle keep-alive connection before request", *unsent, xsink,
+                        QoreValue(*unsent));
                 }
                 return nullptr;
             }
@@ -3260,7 +3273,9 @@ void Http1ClientPollOperationPriv::publishError(const char* err, const char* des
     // without ever reaching the wire, so the caller sees this request's failure
     // reported as the next request's failure.
     closeConnectionPriv(true, xsink);
-    notifyPendingStreams(err, desc, xsink);
+    // the waiting request gets the error's argument, such as the information that the request was not sent
+    // (qore#7278)
+    notifyPendingStreams(err, desc, xsink, arg);
 }
 
 void Http1ClientPollOperationPriv::closeConnectionPriv(bool failed, ExceptionSink* xsink) {
@@ -3333,7 +3348,7 @@ bool Http1ClientPollOperationPriv::getStoredError(std::string& err, std::string&
 }
 
 void Http1ClientPollOperationPriv::notifyPendingStreams(const char* err, const char* desc,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, QoreValue arg) {
     AbstractAsyncAction* action = nullptr;
     // released after stream_lock, as releasing an action can run code that uses this operation again
     ReferenceHolder<ChannelAction> old_completed_channel_action(xsink);
@@ -3358,7 +3373,12 @@ void Http1ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
     old_completed_channel_action = nullptr;
     h1_release_send_data(old_send_body_queue, old_send_trailers, xsink);
     if (action) {
-        action->executeError(err, desc, xsink);
+        if (arg.isNothing()) {
+            action->executeError(err, desc, xsink);
+        } else {
+            // the action takes the reference of the argument
+            action->executeErrorArg(err, desc, arg.refSelf(), xsink);
+        }
         action->deref(xsink);
     }
 }
@@ -3999,7 +4019,9 @@ bool Http1ClientPollOperationBase::hasError() [flags=RET_VALUE_ONLY] {
 
 //! Returns error information if an error occurred
 /** @return error hash or NOTHING: the \c err and \c desc keys; when a proxy refused a \c CONNECT request, also
-    the \c status_code and \c headers (lower-case names) of its response
+    the \c status_code and \c headers (lower-case names) of its response; when the check that precedes the send of
+    a request on a keep-alive connection found that the server had closed it, so that the request was not written,
+    also \c request_sent set to @ref False (the waiting request's exception argument has the same key; qore#7278)
 */
 *hash<auto> Http1ClientPollOperationBase::getError() [flags=RET_VALUE_ONLY] {
     return priv->getErrorInfo();

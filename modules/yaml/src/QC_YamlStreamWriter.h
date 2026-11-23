@@ -108,7 +108,17 @@ public:
     DLLLOCAL bool hasError() const { return has_error; }
     DLLLOCAL const char* getErrorMessage() const { return error_message.c_str(); }
 
+    //! Raises the exception that the stream raised while writing, if any, after the writer's own error: it keeps its
+    //! call stack and origin (a stream of sandboxed code; qore#7232)
+    DLLLOCAL void raiseStreamError(ExceptionSink* xsink) {
+        if (stream_xsink) {
+            xsink->assimilate(stream_xsink);
+        }
+    }
+
 private:
+    //! the exception that the stream's write() raised, kept to be raised with the writer's error
+    ExceptionSink stream_xsink;
     //! the stream of the writer, which the handler does not reference
     QoreObject* output_stream;
     bool has_error;

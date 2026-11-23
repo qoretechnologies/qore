@@ -2,13 +2,14 @@
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# a module whose data the module cleanup deletes first (the cleanup deletes the data of the user modules in the order
-# of their names, so before that of the library modules that it uses): its destructor starts an HTTP/2 server with a
-# WebSocket handler with a heartbeat, connects a client, and makes the client send a frame whose notification the
-# test hook holds until the cleanup's deadline has passed; the server's stream then re-arms its heartbeat timer in
-# work that the cleanup handed over, which is refused after the deadline; and an operation that the cleanup cancels
-# creates an HTTP/2 SSE stream in its onComplete(), whose heartbeat timer is refused too; both are handled quietly
-# (qore#7027); see servers-client.qr
+# a module whose data the module cleanup deletes first (the cleanup deletes the data of the user modules in the order of
+# their names, so before that of the library modules that it uses): its destructor starts an HTTP/2 server with a
+# WebSocket handler with a heartbeat, connects a client, waits until the server's stream has started, and makes the
+# client send a frame whose notification the test hook holds until the cleanup's deadline has passed (no other thread
+# can read the frame before: the stream has no other frame, and its start, which reads a frame that arrived before it,
+# has ended); the server's stream then re-arms its heartbeat timer in work that the cleanup handed over, which is
+# refused after the deadline; and an operation that the cleanup cancels creates an HTTP/2 SSE stream in its
+# onComplete(), whose heartbeat timer is refused too; both are handled quietly (qore#7027); see servers-client.qr
 
 %modern
 
@@ -33,12 +34,11 @@ module AbServers {
 public namespace AbServers {
 #! returns the callback of the client; created outside of a method, as a closure created in one cannot run once its
 #! object is gone
-code sub make_echo_callback(Counter received) {
+code sub make_echo_callback() {
     return sub (*data msg) {
         if (exists msg) {
             printf("echo received: %s\n", msg);
             flush();
-            received.dec();
         }
     };
 }
@@ -62,13 +62,45 @@ class EchoWsConnection inherits WebSocketConnection {
     }
 
     gotMessage(string msg) {
+        printf("server got: %s\n", msg);
+        flush();
         send(msg);
+    }
+
+    #! the end of the connection runs in work that the module cleanup waits for: the cleanup canceled the server's
+    #! connection, whose end the controller notifies on a thread of its own, which the work of the cleanup handed
+    #! itself over to (qore#7239)
+    connectionClosed() {
+        printf("server connection closed: handles held: %d\n", call_function("dbg_module_cleanup_handle_count"));
+        flush();
     }
 }
 
 #! the WebSocket echo handler, with a heartbeat
 class EchoWsHandler inherits WebSocketHandler {
+    private {
+        #! decremented when the server's stream has started, or failed to start
+        Counter started(1);
+        #! True if the server's stream has started
+        bool start_ok;
+    }
+
     constructor() : WebSocketHandler(NOTHING, {"heartbeat": 3600}) {
+    }
+
+    #! sets the connection up, then signals that the server's stream has started: its stream listener is registered,
+    #! a frame that arrived before is read, and its heartbeat timer is armed
+    bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Qore::Socket sock) {
+        # signaled also if the start fails, which the waiter then reports at once
+        on_exit started.dec();
+        bool rv = WebSocketHandler::startImpl(lid, cx, hdr, sock);
+        start_ok = True;
+        return rv;
+    }
+
+    #! returns True when the server's stream has started, False if it failed to start or did not within the timeout
+    bool waitStarted(timeout to) {
+        return !started.waitForZero(to) && start_ok;
     }
 
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
@@ -134,22 +166,22 @@ class Connector {
             "http_version": "2.0",
         }).port;
 
-        Counter received(1);
-        WebSocketClient ws(make_echo_callback(received), {
+        WebSocketClient ws(make_echo_callback(), {
             "url": sprintf("wss://127.0.0.1:%d", port),
             "http_version": "2.0",
             "ssl_verify_cert": False,
             "heartbeat": 1h,
         });
         ws.connect();
-        ws.send("hello");
-        if (received.waitForZero(20s)) {
-            printf("no echo\n");
+        # the server's stream has started (it reads a frame that arrived before its start in its start, in the thread
+        # that starts it); from now on, its frames are read in its notifications
+        if (!ws_handler.waitStarted(20s)) {
+            printf("the server's stream did not start\n");
         }
-        # the frame of the next message is processed by the server when the cleanup releases its notification, after
-        # its deadline
+        # the frame is processed by the server when the cleanup releases its notification, after its deadline: the
+        # stream has no other frame, so no thread reads it before
         call_function("dbg_async_io_hold_module_cleanup_work", True, True);
-        ws.send("again");
+        ws.send("hello");
         # the server's notification of the frame is held before the cleanup reaches its deadline (and cancels the
         # server's connection)
         if (!call_function("dbg_async_io_wait_held_module_cleanup_work", 1, 20s, "Http2PollOperation")) {

@@ -1,0 +1,271 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 server streams over TLS shared by a held request and an extended CONNECT
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# An HTTP/2 extended CONNECT request is dispatched when the handler of another stream on its connection resumes
+# reading on the connection between the moment that the server takes the CONNECT request and the moment that it
+# resumes reading itself (qoretechnologies/qore#7354): before, the server's own resume failed with HTTP2-STATE-ERROR,
+# the request was never dispatched, and the client waited for a response that never came.  The window is forced: the
+# server's debug message for the CONNECT request, which it logs in that window, is held by a logger appender until
+# the other handler's response, which the server sends only after that handler has resumed reading, has reached the
+# client.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerHttp2ConnectResumeRaceTest
+
+#! a hang guard only
+const Timeout = 20s;
+
+#! holds the thread that logs the server's message for an extended CONNECT request, once armed
+class ConnectHoldAppender inherits LoggerAppenderWithLayout {
+    public {
+        #! receives an entry when a thread is held
+        Queue held();
+        #! the held thread goes on when an entry is pushed
+        Queue proceed();
+        #! receives an entry when the server dispatches an extended CONNECT whose reading was resumed already
+        Queue resumed_already();
+    }
+
+    private {
+        Mutex m();
+        bool armed;
+    }
+
+    constructor() : LoggerAppenderWithLayout("connect-hold", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    arm() {
+        AutoLock al(m);
+        armed = True;
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type != EVENT_LOG) {
+            return;
+        }
+        if (params =~ /^HTTP\/2 extended CONNECT: .* reading was resumed already/) {
+            resumed_already.push(True);
+            return;
+        }
+        # the message that the server logs after it has taken the request and before it resumes reading
+        if (params !~ /^HTTP\/2 extended CONNECT \([^,)]*\):/) {
+            return;
+        }
+        {
+            AutoLock al(m);
+            if (!armed) {
+                return;
+            }
+            armed = False;
+        }
+        held.push(True);
+        # bounded, so that a failed test does not leave the server's thread held
+        try {
+            proceed.get(Timeout);
+        } catch () {
+        }
+    }
+}
+
+#! answers /gate when released, every other request at once
+class GateHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! receives an entry when a /gate request has arrived
+        Queue arrived();
+        #! a /gate request is answered when an entry is pushed
+        Queue release();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path =~ /^\/?gate/) {
+            arrived.push(True);
+            # bounded, so that the server ends if a failed test leaves the request unreleased
+            try {
+                release.get(Timeout);
+            } catch () {
+            }
+            return <HttpResponseInfo>{"code": 200, "body": "gate-ok"};
+        }
+        return <HttpResponseInfo>{"code": 200, "body": "ok"};
+    }
+}
+
+#! refuses the tunnel
+class RefuseHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{"code": 403, "body": "refused"};
+    }
+}
+
+class MsgConnection inherits WebSocketConnection {
+    private {
+        Queue q;
+    }
+
+    constructor(WebSocketHandler handler, Queue q) : WebSocketConnection(handler) {
+        self.q = q;
+    }
+
+    gotMessage(string msg) {
+        q.push(msg);
+    }
+}
+
+class MsgHandler inherits WebSocketHandler {
+    public {
+        #! receives the messages of the connections
+        Queue msgs();
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new MsgConnection(self, msgs);
+    }
+}
+
+class HttpServerHttp2ConnectResumeRaceTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        ConnectHoldAppender appender();
+        GateHandler gate();
+        MsgHandler ws();
+        string url;
+    }
+
+    constructor() : Test("HttpServerHttp2ConnectResumeRace", "1.0") {
+        addTestCase("a refused extended CONNECT is answered when another handler resumes reading first",
+            \refusedTest());
+        addTestCase("a WebSocket extended CONNECT works when another handler resumes reading first",
+            \webSocketTest());
+        addTestCase("an extended CONNECT without the race", \noRaceTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        # the debug level makes the server log the message that the appender holds
+        Logger logger("s", LoggerLevel::getLevelDebug());
+        logger.addAppender(appender);
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        server.setHandler("refuse", "/refuse", NOTHING, new RefuseHandler());
+        server.setHandler("ws", "/ws", NOTHING, ws);
+        server.setDefaultHandler("gate", gate);
+        server.waitForAsyncIo();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
+            "cert": new SSLCertificate(CertPem), "key": new SSLPrivateKey(KeyPem)}).port;
+        server.waitForAsyncIo();
+        url = "https://127.0.0.1:" + port;
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    private HttpClientConnectionManager manager() {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "connect_timeout": Timeout,
+            "request_timeout": Timeout,
+        });
+    }
+
+    #! starts an extended CONNECT stream for a WebSocket on the connection of the manager
+    private HttpClientIo::HttpClientStreamHandle startConnect(HttpClientConnectionManager mgr, string path) {
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url + path);
+        stream.startStreaming("CONNECT", path, {
+            ":protocol": "websocket",
+            "Sec-WebSocket-Key": get_random_string(16).toBase64(),
+            "Sec-WebSocket-Version": "13",
+        }, True);
+        return stream;
+    }
+
+    #! returns the response headers of the stream; NOTHING if none arrived in time
+    private *hash<auto> readResponse(HttpClientIo::HttpClientStreamHandle stream) {
+        auto rv = stream.readData(Timeout);
+        return rv.typeCode() == NT_HASH && exists rv.status_code ? rv : NOTHING;
+    }
+
+    #! starts an extended CONNECT stream whose dispatch is held after the server has taken the request, until the
+    #! handler of a /gate request on the same connection has resumed reading
+    private HttpClientIo::HttpClientStreamHandle connectWithRace(HttpClientConnectionManager mgr, string path) {
+        gate.arrived.clear();
+        gate.release.clear();
+        appender.held.clear();
+        appender.proceed.clear();
+        appender.resumed_already.clear();
+        # the held thread and the held request are released whatever happens
+        on_exit {
+            appender.proceed.push(True);
+            gate.release.push(True);
+        }
+
+        assertEq(200, mgr.request(url, "GET", "/").status_code, "the connection is up");
+        auto gate_rsp = mgr.requestAsync(url, "GET", "/gate");
+        gate.arrived.get(Timeout);
+
+        appender.arm();
+        HttpClientIo::HttpClientStreamHandle stream = startConnect(mgr, path);
+        appender.held.get(Timeout);
+
+        # the handler of /gate resumes reading on the connection, then its response is sent
+        gate.release.push(True);
+        hash<auto> r = gate_rsp.get(Timeout);
+        assertEq(200, r.status_code, "the response of the other handler arrives while the CONNECT is held");
+        return stream;
+    }
+
+    refusedTest() {
+        HttpClientConnectionManager mgr = manager();
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle stream = connectWithRace(mgr, "/refuse");
+        on_exit stream.cancel();
+        *hash<auto> rsp = readResponse(stream);
+        assertEq(403, rsp.status_code, "the CONNECT request is dispatched and answered");
+        assertEq(1, appender.resumed_already.size(), "the other handler resumed reading first");
+        assertEq(200, mgr.request(url, "GET", "/").status_code, "the connection goes on");
+    }
+
+    webSocketTest() {
+        ws.msgs.clear();
+        HttpClientConnectionManager mgr = manager();
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle stream = connectWithRace(mgr, "/ws");
+        on_exit stream.cancel();
+        *hash<auto> rsp = readResponse(stream);
+        assertEq(200, rsp.status_code, "the WebSocket CONNECT request is accepted");
+        assertEq(1, appender.resumed_already.size(), "the other handler resumed reading first");
+        # the data of the tunnel reaches the handler's connection
+        stream.sendData(ws_encode_frame(binary("hello"), WSOP_Text, True));
+        assertEq("hello", ws.msgs.get(Timeout), "the tunnel carries a message");
+        assertEq(200, mgr.request(url, "GET", "/").status_code, "the connection goes on");
+    }
+
+    noRaceTest() {
+        appender.resumed_already.clear();
+        HttpClientConnectionManager mgr = manager();
+        on_exit delete mgr;
+        assertEq(200, mgr.request(url, "GET", "/").status_code, "the connection is up");
+        HttpClientIo::HttpClientStreamHandle stream = startConnect(mgr, "/refuse");
+        on_exit stream.cancel();
+        *hash<auto> rsp = readResponse(stream);
+        assertEq(403, rsp.status_code, "the CONNECT request is answered");
+        assertEq(0, appender.resumed_already.size(), "the server resumed reading itself");
+        assertEq(200, mgr.request(url, "GET", "/").status_code, "the connection goes on");
+    }
+}

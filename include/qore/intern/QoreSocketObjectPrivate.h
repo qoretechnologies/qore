@@ -37,6 +37,9 @@
 #include <utility>
 #include "qore/intern/QC_Socket.h"
 
+// an in-memory set of trusted CA certificates (include/qore/intern/QC_SSLTrustStore.h)
+class QoreSSLTrustStore;
+
 //! The library-internal operations of QoreSocketObject (qore#4380)
 /** These functions were non-inline DLLLOCAL members of the public QoreSocketObject class: they are not part of the
     module API (they were never exported), so they live here, in the implementation of the library.  Construct the
@@ -68,6 +71,9 @@ public:
     DLLLOCAL explicit qore_socket_object_private(const QoreSocketObject* n_so)
             : so(const_cast<QoreSocketObject*>(n_so)), priv(const_cast<QoreSocketObject*>(n_so)->priv) {
     }
+
+    //! Returns the bytes of the socket's send buffer that the peer has not acknowledged, or 0 if unknown
+    DLLLOCAL int64 getUnacknowledgedSendBytes() const;
 
     //! Shuts down the sending side of the connection only (a half-close); see Socket::shutdownWrite()
     /** @return 0 for success, -1 for error (exception raised)
@@ -138,6 +144,15 @@ public:
 
     //! Sets the CA locations from the async I/O thread; see setSslCaLocations()
     DLLLOCAL void setSslCaLocationsForAsyncPoll(const char* ca_file, const char* ca_path, ExceptionSink* xsink);
+
+    //! Sets or clears the in-memory trust store that peer certificates are verified against (qoretechnologies/qore#7248)
+    /** On the async I/O thread it is set directly, otherwise with a TLS state poll operation, as
+        QoreSocketObject::setSslCaLocations() sets the CA locations
+    */
+    DLLLOCAL void setSslTrustStore(QoreSSLTrustStore* ts, ExceptionSink* xsink);
+
+    //! Sets the in-memory trust store from the async I/O thread; see setSslTrustStore()
+    DLLLOCAL void setSslTrustStoreForAsyncPoll(QoreSSLTrustStore* ts, ExceptionSink* xsink);
 
     DLLLOCAL QoreStringNode* getAlpnProtocol(ExceptionSink* xsink) const;
 
@@ -566,6 +581,10 @@ public:
 
     //! Debug-only: the next SSL write fails with SSL_ERROR_SSL while errno holds EPIPE
     DLLLOCAL void dbgForceSslErrorSslAtNextWrite();
+
+    //! Debug-only: the next TLS write stages its ciphertext, as with a full socket buffer, and the drain of it fails as
+    //! when the peer reset the connection
+    DLLLOCAL void dbgForceStagedWriteFailure();
 
     //! Debug-only: returns the number of records that a session of the socket keeps for its streams, by kind
     /** Called via the @c dbg_socket_stream_records() debug builtin in @ref lib/ql_debug.cpp, so tests can show that

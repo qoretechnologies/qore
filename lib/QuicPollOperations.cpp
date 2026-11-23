@@ -60,6 +60,7 @@ constexpr int QUIC_MAX_RECV_BATCH = 16;
 // pending (ngtcp2_conn_get_expiry2() == UINT64_MAX), QORE_QUIC_NO_TIMER_POLL_MS.  Per RFC 9002, ACK-only packets are
 // not loss-detected, so the peer's retransmission timer drives recovery then.
 #include "qore/intern/QuicPollTimeout.h"
+#include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreIoClassesOps.h"
@@ -187,6 +188,36 @@ static void logBatchError(ExceptionSink* xsink, QuicSession* target, int batch_c
 }
 #endif
 
+//! Answers a datagram that no connection of the listener takes with a stateless reset, if it is to be answered
+/** RFC 9000 section 10.3 (qore#6931): a short-header packet of a connection that the listener does not know (it
+    restarted, or the connection was removed) is answered with a stateless reset, which ends the client's connection
+    at once instead of when its timers expire; QoreDatagramDispatcher::makeStatelessReset() decides whether, and makes
+    the reset smaller than the packet and rate-limited.  A failure to send it is ignored, as for a lost datagram.
+*/
+static void quic_send_stateless_reset(int fd, QoreDatagramDispatcher& dispatcher, const uint8_t* pkt, size_t pktlen,
+        const struct sockaddr* peer, socklen_t peerlen, const struct sockaddr* local, socklen_t locallen) {
+    if (!dispatcher.hasStatelessResetKey()) {
+        return;
+    }
+    uint8_t reset[QoreDatagramDispatcher::StatelessResetMaxRandLen + NGTCP2_STATELESS_RESET_TOKENLEN];
+    size_t len = dispatcher.makeStatelessReset(pkt, pktlen, reset, sizeof(reset), QuicSession::timestamp());
+    if (!len) {
+        return;
+    }
+    try {
+        QuicPacketBatch batch;
+        batch.addPacket(reset, len);
+        if (sendQuicPacketsBatch(fd, batch, peer, peerlen, local, locallen) > 0) {
+#ifdef DEBUG
+            // counted for dbg_quic_stateless_reset_counts(), which only a debug build has
+            qore_dbg_quic_stateless_resets_sent.fetch_add(1, std::memory_order_relaxed);
+#endif
+        }
+    } catch (const std::bad_alloc&) {
+        // the reset is not sent, as a lost one
+    }
+}
+
 //! Batch-receive and dispatch QUIC packets via recvmmsg (Linux) or recvmsg (other).
 /** Receives all available packets from the socket and dispatches them to their
     target QuicSession via CID-based routing.  On Linux, uses recvmmsg + readPacketBatch
@@ -297,11 +328,19 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
             // session through the owning map — a miss means the session was
             // removed and the packet must be dropped (see function docs)
             int64_t sid = dispatcher.dispatch(bufs[i], pkt_len);
-            if (sid < 0) {
-                continue;
+            std::shared_ptr<QuicSession> target_sp;
+            if (sid >= 0) {
+                target_sp = spriv ? spriv->getQuicSession(sid) : nullptr;
             }
-            std::shared_ptr<QuicSession> target_sp = spriv->getQuicSession(sid);
             if (!target_sp) {
+                // a packet of a connection that the listener does not know is answered with a stateless reset
+                // (qore#6931)
+                struct sockaddr_storage reset_local;
+                memcpy(&reset_local, &local_addr, local_addrlen);
+                extractPktinfoAddr(cmsg_bufs[i], msgs[i].msg_hdr.msg_controllen, local_addr.ss_family, &reset_local);
+                quic_send_stateless_reset(fd, dispatcher, bufs[i], pkt_len,
+                    reinterpret_cast<const struct sockaddr*>(&addrs[i]), msgs[i].msg_hdr.msg_namelen,
+                    reinterpret_cast<const struct sockaddr*>(&reset_local), local_addrlen);
                 continue;
             }
             QuicSession* target = target_sp.get();
@@ -417,11 +456,19 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
         // through the owning map — a miss means the session was removed and the
         // packet must be dropped (see function docs)
         int64_t sid = dispatcher.dispatch(recv_buf, static_cast<size_t>(nread));
-        if (sid < 0) {
-            continue;
+        std::shared_ptr<QuicSession> target_sp;
+        if (sid >= 0 && spriv) {
+            target_sp = spriv->getQuicSession(sid);
         }
-        std::shared_ptr<QuicSession> target_sp = spriv->getQuicSession(sid);
         if (!target_sp) {
+            // a packet of a connection that the listener does not know is answered with a stateless reset
+            // (qore#6931)
+            struct sockaddr_storage reset_local;
+            memcpy(&reset_local, &local_addr, local_addrlen);
+            extractPktinfoAddr(cmsg_buf, cmsg_len, local_addr.ss_family, &reset_local);
+            quic_send_stateless_reset(fd, dispatcher, recv_buf, static_cast<size_t>(nread),
+                reinterpret_cast<const struct sockaddr*>(&src_addr), src_addrlen,
+                reinterpret_cast<const struct sockaddr*>(&reset_local), local_addrlen);
             continue;
         }
         QuicSession* target = target_sp.get();
@@ -2018,10 +2065,23 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
     ngtcp2_pkt_hd new_hdr;
     bool new_session_created = false;
     bool new_session_validated = false;
+    // the static key of the listener's stateless resets is derived before its first connection, whose tokens are
+    // derived from it, and before a packet of a connection that it does not know is answered (qore#6931)
+    if (sock->priv->pk) {
+        dispatcher.ensureStatelessResetKey(sock->priv->pk);
+    }
+    // a packet of a connection that the listener does not know (a removed connection, or one of a server before a
+    // restart) is answered with a stateless reset, which ends the client's connection at once (qore#6931)
+    auto send_reset = [&]() {
+        quic_send_stateless_reset(fd, dispatcher, recv_buf_, static_cast<size_t>(nread),
+            reinterpret_cast<const struct sockaddr*>(&src_addr), src_addrlen,
+            reinterpret_cast<const struct sockaddr*>(&local_addr), local_addrlen);
+    };
     if (target_sid >= 0) {
         auto sit = sessions_.find(target_sid);
         if (sit == sessions_.end()) {
             // Stale CID for a removed session — drop the packet
+            send_reset();
             return 0;
         }
         pinned = sit->second;
@@ -2031,7 +2091,8 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
         ngtcp2_pkt_hd hdr;
         int rv = ngtcp2_accept(&hdr, recv_buf_, static_cast<size_t>(nread));
         if (rv != 0) {
-            // Not a valid Initial packet, ignore
+            // Not a valid Initial packet: a short-header packet of a connection that the listener does not know
+            send_reset();
             return 0;
         }
 

@@ -597,6 +597,11 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
     private Qore::HTTPClient getImpl(bool connect = True, *hash<auto> rtopts) {
         checkRawHttpNegotiateUnsupported();
         HTTPClient sc(getConnectionOptions());
+        # the client connects outside HttpClientIo: code restricted from NETWORK that was lent the connection may
+        # connect only to the connection's own target, also if it changed the connection's members (qore#7262)
+        # the target only (scheme, host and port): the credentials and path, which the calling code can set, are not
+        # given to the check (qore#7236)
+        checkLentNetworkTarget(sc.getURL(UC_TARGET), sc.getProxyURL(UC_TARGET));
         if (connect) {
             sc.connect();
         }
@@ -622,7 +627,7 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
     */
     private HttpClientIo::HttpClientConnectionManager getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         checkRawHttpNegotiateUnsupported();
-        return HttpConnection::getAsyncConnectionManager(opts, logger);
+        return HttpConnection::getAsyncConnectionManager(opts, logger, url);
     }
 
     #! Returns an async HTTP connection manager for the given HTTP connection options
@@ -637,6 +642,11 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
 
         @param opts @ref HttpConnection options
         @param logger an optional logger for the connection manager
+        @param url the URL of the target, if known: a connection object that creates the manager in
+        @ref ConnectionProvider::AbstractConnection::get() "get()" or
+        @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()" grants it the proof of the code that
+        created the connection only for the connection's target (see
+        @ref HttpClientIo::HttpClientCreatorProof::forClient() "HttpClientCreatorProof::forClient()")
 
         @return a new @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager"; connections are
         established on demand
@@ -646,7 +656,7 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         @since ConnectionProvider 3.1
     */
     static HttpClientIo::HttpClientConnectionManager getAsyncConnectionManager(*hash<auto> opts,
-            *Logger::LoggerInterface logger) {
+            *Logger::LoggerInterface logger, *string url) {
         *string protocol = AsyncHttpVersionMap{opts.http_version ?? "auto"};
         if (!protocol) {
             throw "HTTPCLIENT-OPTION-ERROR", sprintf("invalid http_version %y; expecting one of: %y",
@@ -691,7 +701,13 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
             async_opts.client_pk = key;
         }
 
-        return new HttpClientIo::HttpClientConnectionManager(async_opts);
+        # the manager of a connection is the creator's, bound to its target, also when restricted code that was lent
+        # the connection uses it (see AbstractConnection::getAsync(), qore#7262)
+        *HttpClientIo::HttpClientCreatorProof proof = HttpClientIo::HttpClientCreatorProof::forClient(url,
+            {"proxy": opts.proxy});
+        return proof
+            ? new HttpClientIo::HttpClientConnectionManager(async_opts, proof)
+            : new HttpClientIo::HttpClientConnectionManager(async_opts);
     }
 
     #! Loads the configured client certificate for HttpClientIo

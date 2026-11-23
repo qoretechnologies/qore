@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 and HTTP/3 (QUIC) WebSocket streams and the async I/O controller's delivery
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The HTTP/2 and HTTP/3 stream adapter of WebSocketClient drains the frames that the I/O thread queued in rounds of at
+# most 1000 frames; a round that leaves frames in the queue schedules the next round (qore#6156).  Before, the frames
+# left after a round waited for the next notification, which a burst with nothing after it never gets: the end of the
+# burst was not delivered.  A burst of many small messages queues more than 1000 frames for each notification, so the
+# rounds that the notifications make fall behind and the last ones leave frames behind.  The server writes the frames
+# of the burst in one piece, so that each notification is for thousands of frames.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires AsyncSocketIo
+%requires HttpClientIo
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketClientDrainBurstTest
+
+#! the messages of the burst: many times the bound of a round
+const BurstSize = 20000;
+
+#! a hang guard only, never a timing assertion: a burst that is not delivered whole never completes
+const HangGuard = 300s;
+
+#! Sends a burst of small messages when the client asks for it
+class BurstConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        if (msg =~ /^burst /) {
+            int n = int(msg.substr(6));
+            # the frames are written to the stream in one piece, so that the client's decoder queues thousands of
+            # frames for each notification of the data's arrival, however the reads fall
+            binary frames = binary();
+            for (int i = 0; i < n; ++i) {
+                frames += ws_encode_message(string(i));
+            }
+            getStreamContext().sendData(frames);
+        }
+    }
+}
+
+class BurstHandler inherits WebSocketHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new BurstConnection(self);
+    }
+}
+
+class WebSocketClientDrainBurstTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        int port;
+    }
+
+    constructor() : QUnit::Test("WebSocketClientDrainBurst", "1.0") {
+        foreach string ver in (("2.0", "3.0")) {
+            addTestCase(sprintf("HTTP/%s: a burst of %d messages with nothing after it is delivered whole", ver,
+                BurstSize), \testBurst(), ver);
+        }
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("ws", new BurstHandler());
+        port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "http_version": "auto",
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    testBurst(string ver) {
+        Counter pending(BurstSize);
+        # the messages in the order received
+        list<string> received = ();
+        Mutex m();
+        WebSocketClient wsc(sub (*data msg) {
+            if (!exists msg) {
+                return;
+            }
+            m.lock();
+            on_exit m.unlock();
+            received += msg.typeCode() == NT_BINARY ? msg.toString() : msg;
+            pending.dec();
+        }, {
+            "url": sprintf("wss://localhost:%d", port),
+            "http_version": ver,
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+        assertEq(ver == "3.0", wsc.isHttp3(), "the connection uses the HTTP version");
+        wsc.send("burst " + BurstSize);
+
+        # nothing is sent after the burst: its end is delivered only by the rounds that the drain schedules itself
+        int rc = pending.waitForZero(HangGuard);
+        assertEq(0, rc, sprintf("all %d messages were delivered (%d missing)", BurstSize, pending.getCount()));
+        m.lock();
+        on_exit m.unlock();
+        assertEq(BurstSize, received.size(), "the number of messages");
+        assertEq((map string($1), xrange(BurstSize)), received, "each message once, in order");
+    }
+}
