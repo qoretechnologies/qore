@@ -1,0 +1,158 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - qcc .qmod compilation, linking and dylib loading of the compiled modules
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class AOTClassInheritedDomainTest
+
+#! a class of a compiled module is in the functional domains of its parent classes as they are loaded (qore#7400)
+/** A compiled module stored the functional domain of each of its classes, with the domains that it inherits, as they
+    were when the module was compiled, and the loader used the stored value as it was: a module compiled before a
+    builtin parent class was placed in a domain gave its subclass the earlier domain, so that code restricted from the
+    domain could use the subclass, which it cannot when the module is parsed from source.  The loader now adds the
+    domains of each class's parents as they are loaded.
+
+    The module of the test has a class that inherits Socket, in the NETWORK domain.  A module compiled before its
+    parent was placed in the domain is made with the DEBUG-build hook QORE_AOT_TEST_NO_CLASS_DOMAIN, which writes the
+    classes without the domains that they inherit; the case skips in other builds.
+*/
+class AOTClassInheritedDomainTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+
+        #! the module: a class that inherits a builtin class in the NETWORK domain
+        const ModuleSource = "%modern
+module InheritNet {
+    version = \"1.0\";
+    desc = \"a class that inherits a class in the NETWORK domain\";
+    author = \"Qore Technologies, s.r.o.\";
+}
+
+public namespace InheritNet {
+    public class NetSocket inherits Socket {
+    }
+}
+";
+
+        #! the child: loads the module, then reports what a restricted and an unrestricted Program can do with the class
+        const ChildSource = "%modern
+load_module(\"InheritNet\");
+
+string sub try_parse(int po, string code) {
+    Program p(po);
+    try {
+        p.parse(code, \"probe\");
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+    return \"parsed\";
+}
+
+string sub try_create(int po) {
+    Program p(po);
+    p.parse(\"auto sub f() { return create_object(\\\"InheritNet::NetSocket\\\"); }\", \"probe\");
+    try {
+        p.callFunction(\"f\");
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+    return \"created\";
+}
+
+const NewCode = \"%requires InheritNet\\nobject sub f() { return new InheritNet::NetSocket(); }\";
+printf(\"restricted new: %s\\n\", try_parse(PO_MODERN | PO_NO_NETWORK, NewCode));
+printf(\"restricted create_object: %s\\n\", try_create(PO_MODERN | PO_NO_NETWORK));
+printf(\"unrestricted new: %s\\n\", try_parse(PO_MODERN, NewCode));
+printf(\"unrestricted create_object: %s\\n\", try_create(PO_MODERN));
+";
+
+        #! what the child reports, as a module parsed from source gives it
+        const Expected = "restricted new: ILLEGAL-CLASS-INSTANTIATION
+restricted create_object: CREATE-OBJECT-ERROR
+unrestricted new: parsed
+unrestricted create_object: created
+";
+    }
+
+    constructor() : QUnit::Test("AOTClassInheritedDomainTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("a module parsed from source", \sourceTest());
+        addTestCase("a compiled module", \compiledTest());
+        addTestCase("a module compiled before its class's parent was placed in its domain", \staleTest());
+        set_return_value(main());
+    }
+
+    sourceTest() {
+        TmpDir tmp("qore-aot-class-domain-");
+        string src_dir = writeModule(tmp.path);
+        assertEq(Expected, child(tmp.path, src_dir), "source");
+    }
+
+    compiledTest() {
+        TmpDir tmp("qore-aot-class-domain-");
+        string art_dir = compile(tmp.path, False);
+        assertEq(Expected, child(tmp.path, art_dir), "qmod");
+    }
+
+    staleTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("QORE_AOT_TEST_NO_CLASS_DOMAIN is only available in a library-debug build");
+        }
+        TmpDir tmp("qore-aot-class-domain-");
+        string art_dir = compile(tmp.path, True);
+        # the domain of the class comes from its parent as it is loaded, not from the module
+        assertEq(Expected, child(tmp.path, art_dir), "qmod without the stored domain");
+    }
+
+    #! writes the module source to a directory of its own and returns the directory
+    private static string writeModule(string dir) {
+        string src_dir = dir + DirSep + "src";
+        mkdir(src_dir);
+        File f();
+        f.open2(src_dir + DirSep + "InheritNet.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ModuleSource);
+        f.close();
+        return src_dir;
+    }
+
+    #! compiles the module, optionally without the domains its classes inherit, and returns the directory of the qmod
+    private string compile(string dir, bool no_domain) {
+        string src_dir = writeModule(dir);
+        string art_dir = dir + DirSep + "art";
+        mkdir(art_dir);
+        string qmod = art_dir + DirSep + "InheritNet.qmod";
+        string out = backquote(sprintf("%s %s %s -O0 -m -o %s %s 2>&1", env,
+            no_domain ? "QORE_AOT_TEST_NO_CLASS_DOMAIN=1" : "", qcc_bin, qmod, src_dir + DirSep + "InheritNet.qm"));
+        assertTrue(is_file(qmod), "qcc: " + out);
+        return art_dir;
+    }
+
+    #! runs the child with the module directory first in the module path; returns what it printed
+    private string child(string dir, string mod_dir) {
+        string script = dir + DirSep + "child.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ChildSource);
+        f.close();
+        int rc;
+        string out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s %s 2>&1", env, mod_dir, qore_bin, script), \rc);
+        assertEq(0, rc, "child: " + out);
+        return out;
+    }
+}
