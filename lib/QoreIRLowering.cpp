@@ -3415,6 +3415,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         QoreIRBasicBlock* done_block = nullptr;
         QoreIRBasicBlock* element_exception_next = nullptr;
         QoreIRBasicBlock* element_exception_block = nullptr;
+        // the exception stack outside the element exception block (see pushForeachElementCleanup())
+        size_t element_exception_depth = exception_stack.size();
+        QoreIRBasicBlock* element_outer_target = getCurrentExceptionTarget();
         if (body_reads_implicit_element) {
             done_block = createBlock(std::string(block_prefix) + ".done");
             if (!done_block) {
@@ -3549,6 +3552,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // destructor shows when it is released, has these entries; a typed loop over a list of scalars has none.
         // Break and continue do not visit them (ft.cleanup_stack_depth is captured above them): the loop exit
         // releases the iterator and the variables, and the temp scope of the statement the list.
+        // the restoration of the element is the last cleanup of the loop that a return runs
+        pushForeachElementCleanup(old_element, element_exception_depth, element_outer_target, stmt->loc);
         size_t foreach_source_entries = 0;
         // the iterator of keys, a slice or a list of indices keeps a hash or a sequence that can hold an object
         if (!direct_typed_list && iter_val.isValid() && (source || qore_ir_type_may_hold_object(element_type))) {
@@ -3570,12 +3575,6 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             pushBlockCleanup(source_entry);
             ++foreach_source_entries;
         }
-
-        BlockCleanupEntry elem_entry;
-        elem_entry.type = BlockCleanupEntry::ForeachElement;
-        elem_entry.old_implicit_element = old_element;
-        elem_entry.loc = stmt->loc;
-        pushBlockCleanup(elem_entry);
 
         // Lower the loop body with proper break/continue targets
         // break → exit_block (break handler pops $# via old_implicit_element)
@@ -26430,6 +26429,8 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     QoreIRBasicBlock* element_exception_next = nullptr;
     // the restoration after the cleanup of an iteration, which continues to the handler outside of the loop
     QoreIRBasicBlock* iteration_element_exception_block = nullptr;
+    // the exception stack outside the element exception block (see pushForeachElementCleanup())
+    size_t element_exception_depth = exception_stack.size();
     if (!qore_ir_foreach_elides_implicit_element(foreach_stmt)) {
         QoreIRValue first_index = builder.createConstInt(0, loc)->result;
         QoreIRInstruction* push_element = builder.createPushImplicitElement(first_index, loc);
@@ -26437,6 +26438,7 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         // the blocks in the body ran with the loop's element (qore#7379)
         push_element->restore_on_exception_exit = QoreIRExceptionExitRestore::AfterHandlers;
         old_element = push_element->result;
+        element_exception_depth = exception_stack.size();
         element_exception_next = getCurrentExceptionTarget();
         if (element_exception_next) {
             element_exception_block = createBlock("foreach.fused.element.exception");
@@ -26749,7 +26751,9 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
 
     // a return from the body releases the iterator, which holds the source, and the source, then the loop
     // variables, before the cleanups of the enclosing blocks run, as for the other value foreach loops (see
-    // lowerStatement()); only a loop whose source can hold an object has these entries
+    // lowerStatement()); only a loop whose source can hold an object has these entries.  The restoration of the
+    // element is the last cleanup of the loop that a return runs (qore#7379)
+    pushForeachElementCleanup(old_element, element_exception_depth, element_exception_next, loc);
     size_t foreach_source_entries = 0;
     if (foreach_may_hold_object) {
         if (const LVList* loop_lvars = foreach_stmt->getLVList()) {
@@ -26770,14 +26774,6 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         pushBlockCleanup(source_entry);
         ++foreach_source_entries;
     }
-    // a return from the body restores the enclosing element (qore#7379); a break does not visit the entry (it is
-    // below ft.cleanup_stack_depth): the end of the loop restores the element
-    BlockCleanupEntry elem_entry;
-    elem_entry.type = BlockCleanupEntry::ForeachElement;
-    elem_entry.old_implicit_element = old_element;
-    elem_entry.loc = loc;
-    pushBlockCleanup(elem_entry);
-
     FlowTarget ft;
     ft.break_target = exit_block;
     ft.continue_target = latch_block;
@@ -26931,6 +26927,21 @@ void QoreIRLowering::releasePredicateValue(QoreIRValue value, const QoreValue& e
 }
 
 // documented in QoreIRLowering.h
+// documented in QoreIRLowering.h
+void QoreIRLowering::pushForeachElementCleanup(QoreIRValue old_element, size_t exception_depth,
+        QoreIRBasicBlock* outer_target, const QoreProgramLocation* loc) {
+    BlockCleanupEntry elem_entry;
+    elem_entry.type = BlockCleanupEntry::ForeachElement;
+    elem_entry.old_implicit_element = old_element;
+    elem_entry.loc = loc;
+    pushBlockCleanup(elem_entry);
+    // the code that a return lowers after the restoration has the handlers outside the loop's element exception
+    // blocks, which would restore the element again (qore#6643)
+    assert(exception_depth <= exception_stack.size());
+    cleanup_stack.back().exception_depth = exception_depth;
+    cleanup_stack.back().outer_exception_target = outer_target;
+}
+
 QoreIRBasicBlock* QoreIRLowering::beginForeachElementExceptionRestore(QoreIRBasicBlock*& next, std::string& error) {
     next = getCurrentExceptionTarget();
     if (!next) {
