@@ -34,3 +34,7 @@ QoreLogicalGreaterThanOperatorNode::bigIntGreaterThan QoreStatementTempScope::ho
 QoreLogicalLessThanOrEqualsOperatorNode::bigIntLessThanOrEquals QoreStatementTempScope::holdReceiver
 QoreLogicalGreaterThanOrEqualsOperatorNode::bigIntGreaterThanOrEquals QoreStatementTempScope::holdReceiver
 QoreLogicalEqualsOperatorNode::bigIntSoftEqual QoreStatementTempScope::holdReceiver
+# the IR interpreter's calls that give their last-use arguments: GCC inlined giveLastUseCallArgSlots() into its only
+# caller until qore#7271 added the second (a function call with a reference parameter, ir row bench-7235.q:fh +27 Ir)
+irCallDirectGiven giveLastUseCallArgSlots
+irCallStaticDirectGivenLastUse giveLastUseCallArgSlots

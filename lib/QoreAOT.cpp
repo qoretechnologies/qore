@@ -1181,8 +1181,12 @@ static llvm::Type* qore_aot_fast_entry_return_type(BatchCalleeReturnKind kind,
 
 //! Check if an AOT function can have an Approach B fast entry.
 //! Criteria: all params/body locals IR-only, no closures/references/varargs.
+/** @param ref_fast_entry if not null, parameters of a reference type that are not private to the body are accepted,
+    and it is set to true if there is one: the function can then have a reference parameter fast entry, whose callers
+    bind them on the runtime stack (BatchCalleeInfo::ref_fast_entry, issue #7271), but no other fast entry
+*/
 static bool isAOTFastEntryEligible(const QoreIRFunction* ir_func,
-        const UserVariantBase* uvb, bool allow_type_parameters = false) {
+        const UserVariantBase* uvb, bool allow_type_parameters = false, bool* ref_fast_entry = nullptr) {
     if (!uvb
             || !uvb->isStaticallyFastCallEligible(allow_type_parameters)) {
         return false;
@@ -1214,10 +1218,24 @@ static bool isAOTFastEntryEligible(const QoreIRFunction* ir_func,
         }
         const LocalVar* lv = sig->lv[i];
         if (!qore_ir_fast_entry_param_is_private(*ir_func, lv)) {
+            if (ref_fast_entry && !allow_type_parameters && !sig->hasTypeParameters()
+                    && qore_ir_fast_entry_param_is_runtime_reference(lv)) {
+                *ref_fast_entry = true;
+                continue;
+            }
             return false;
         }
     }
     return true;
+}
+
+//! Returns true if a function can have a reference parameter fast entry (issue #7271)
+/** It has no other fast entry (isAOTFastEntryEligible()) only because parameters of a reference type are not private
+    to its body; see BatchCalleeInfo::ref_fast_entry
+*/
+static bool isAOTRefFastEntryEligible(const QoreIRFunction* ir_func, const UserVariantBase* uvb) {
+    bool ref_fast_entry = false;
+    return isAOTFastEntryEligible(ir_func, uvb, false, &ref_fast_entry) && ref_fast_entry;
 }
 
 static bool isAOTFastMethodCallEligible(
@@ -16939,7 +16957,7 @@ static bool refreshAOTBatchFastEntryDeclarations(llvm::LLVMContext& ctx, llvm::M
             assert(old_fn->use_empty());
             old_fn->eraseFromParent();
         }
-        if (!info.approach_b_eligible) {
+        if (!info.approach_b_eligible && !info.ref_fast_entry) {
             continue;
         }
         std::vector<llvm::Type*> params;
@@ -17276,6 +17294,26 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
                 aot_batch_callee_map[variant] = std::move(info);
                 context_candidates.emplace_back(variant, std::unique_ptr<QoreIRFunction>(ir_func));
                 ir_func = nullptr;
+            } else if (!will_outline && isAOTRefFastEntryEligible(ir_func, uvb)) {
+                // a fast entry whose callers bind the reference parameters on the runtime stack (issue #7271): it
+                // takes an argument for every parameter, which it ignores for a reference parameter; only the calls
+                // that bind those parameters call it, and nothing else uses it (approach_b_eligible stays false)
+                // (refreshAOTBatchFastEntryDeclarations() declares the fast entry with its final return ABI)
+                unsigned num_params = sig->numParams();
+                std::vector<BatchCalleeParamKind> param_kinds =
+                    qore_ir_get_fast_entry_param_kinds(*ir_func, sig);
+                std::string fast_entry_name = ir_func->name + "_fast";
+                BatchCalleeInfo info;
+                info.name = ir_func->name;
+                info.call_ref_path = function_name;
+                info.single_variant_function = func->numVariants() == 1;
+                info.ref_fast_entry = true;
+                info.fast_name = fast_entry_name;
+                info.num_params = num_params;
+                info.param_kinds = std::move(param_kinds);
+                info.param_rejects_nothing = qore_ir_get_fast_entry_param_rejects_nothing(sig);
+                qore_ir_clear_runtime_reference_param_nothing_checks(variant, info);
+                aot_batch_callee_map[variant] = std::move(info);
             }
             if (ir_func && sig && sig->needsTypeParameterSubstitution()) {
                 BatchCalleeInfo info;
@@ -17625,6 +17663,15 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
         if (info != aot_batch_callee_map.end()
                 && !info->second.context_independent_fast_entry) {
             info->second.approach_b_eligible = false;
+        }
+    }
+    // a function with a reference parameter fast entry has no other fast entry: a summary of its body marks it as
+    // having one (qore_ir_resolve_batch_function_summaries()), which a call would call without binding its reference
+    // parameters (issue #7271)
+    for (auto& [variant, info] : aot_batch_callee_map) {
+        (void)variant;
+        if (info.ref_fast_entry) {
+            info.approach_b_eligible = false;
         }
     }
     if (!finalizeAOTBatchFastEntrySymbols(module, aot_batch_callee_map)
@@ -22095,11 +22142,15 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 std::vector<BatchCalleeParamKind> fast_entry_param_kinds;
                 std::vector<uint8_t> fast_entry_param_rejects_nothing;
                 bool analyzed_fast_entry_eligible = true;
+                // the analysis found the function eligible for a reference parameter fast entry (issue #7271)
+                bool analyzed_ref_fast_entry = false;
                 const BatchCalleeInfo* analyzed_fast_entry = nullptr;
                 if (aot_batch_callee_map) {
                     auto analyzed = aot_batch_callee_map->find(variant);
                     analyzed_fast_entry_eligible = analyzed != aot_batch_callee_map->end()
                         && analyzed->second.approach_b_eligible;
+                    analyzed_ref_fast_entry = analyzed != aot_batch_callee_map->end()
+                        && analyzed->second.ref_fast_entry;
                     if (analyzed != aot_batch_callee_map->end()) {
                         analyzed_fast_entry = &analyzed->second;
                     }
@@ -22141,7 +22192,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 bool self_rec_eligible = fast_entry_eligible
                     && !generic_specialized_fast_entry
                     && hasAOTSelfRecursiveCall(ir_func);
-                if (fast_entry_eligible) {
+                // a reference parameter fast entry, which only the calls that bind its reference parameters call:
+                // the function's self-recursive calls do not call it directly (issue #7271)
+                bool ref_fast_entry_eligible = !fast_entry_eligible && !metadata_only
+                    && !fn_outliner.active() && analyzed_ref_fast_entry && analyzed_fast_entry
+                    && !generic_specialized_fast_entry
+                    && isAOTRefFastEntryEligible(fast_ir_func, uvb);
+                if (fast_entry_eligible || ref_fast_entry_eligible) {
                     fast_entry_name = analyzed_fast_entry
                         ? analyzed_fast_entry->fast_name
                         : ir_func->name + "_fast";
@@ -22252,7 +22309,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     if (aot_batch_callee_map && !aot_batch_callee_map->empty()) {
                         lowerer.setBatchCallees(aot_batch_callee_map);
                     }
-                    if (!fast_entry_name.empty()) {
+                    if (fast_entry_eligible) {
                         // Pass FE so the self-recursion check in the
                         // lowerer compares pointer identity — base-name
                         // comparison mis-identifies cross-namespace
@@ -22328,8 +22385,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         std_entry_ok = aotMergeOutlinedNativeLocalFlags(*ir_func, fn_outliner.helpers, llvm_error);
                     }
 
-                    // Compile fast entry for AOT Approach B.
-                    if (std_entry_ok && fast_entry_eligible) {
+                    // Compile fast entry for AOT Approach B (or a reference parameter fast entry).
+                    if (std_entry_ok && (fast_entry_eligible || ref_fast_entry_eligible)) {
                         const UserSignature* sig = uvb->getUserSignature();
                         unsigned num_params = sig->numParams();
                         llvm::Function* fast_fn = module.getFunction(fast_entry_name);
@@ -22348,6 +22405,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                                     "fast-entry parameter mapping", "cancelled");
                                 delete ir_func;
                                 return;
+                            }
+                            // the argument of a parameter that the caller of a reference parameter fast entry binds
+                            // on the runtime stack is ignored: the body reads and writes the parameter there
+                            if (ref_fast_entry_eligible
+                                    && qore_ir_fast_entry_param_is_runtime_reference(sig->lv[i])) {
+                                fast_fn->getArg(i)->setName(std::string("ref_arg") + std::to_string(i));
+                                continue;
                             }
                             const void* key = reinterpret_cast<const void*>(sig->lv[i]);
                             param_map[key] = fast_fn->getArg(i);

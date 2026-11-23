@@ -825,6 +825,26 @@ std::vector<BatchCalleeParamKind> qore_ir_get_fast_entry_param_kinds(
     return kinds;
 }
 
+void qore_ir_clear_runtime_reference_param_nothing_checks(const AbstractQoreFunctionVariant* variant,
+        BatchCalleeInfo& info) {
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+    if (!sig) {
+        return;
+    }
+    for (unsigned i = 0; i < sig->numParams() && i < info.param_rejects_nothing.size(); ++i) {
+        if (qore_ir_fast_entry_param_is_runtime_reference(sig->lv[i])) {
+            info.param_rejects_nothing[i] = 0;
+        }
+    }
+}
+
+bool qore_ir_fast_entry_param_is_runtime_reference(const LocalVar* local) {
+    // a closure-bound parameter lives on the closure variable stack, which the binding does not set up; nor does it
+    // instantiate a top-level local
+    return local && !local->closureUse() && !local->isTopLevel() && QoreTypeInfo::isReference(local->getTypeInfo());
+}
+
 bool qore_ir_fast_entry_param_is_private(
         const QoreIRFunction& ir_func, const LocalVar* local) {
     if (!local || local->closureUse()
@@ -2165,6 +2185,10 @@ static std::string qore_jit_fast_entry_abi_key(const BatchCalleeInfo& info) {
     }
     rv += '|';
     rv += static_cast<char>('a' + static_cast<int>(info.return_kind));
+    // a reference parameter fast entry takes no reference of its own to the arguments of its reference parameters
+    if (info.ref_fast_entry) {
+        rv += "|r";
+    }
     return rv;
 }
 
@@ -2288,7 +2312,12 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             info.param_kinds = qore_ir_get_fast_entry_param_kinds(*callee.ir_func, sig);
             info.param_rejects_nothing = qore_ir_get_fast_entry_param_rejects_nothing(sig);
         }
-        if (info.approach_b_eligible) {
+        // a callee eligible for neither has no fast entry
+        info.ref_fast_entry = !info.approach_b_eligible && callee.ref_fast_entry;
+        if (info.ref_fast_entry) {
+            qore_ir_clear_runtime_reference_param_nothing_checks(callee.variant, info);
+        }
+        if (info.approach_b_eligible || info.ref_fast_entry) {
             info.fast_name = callee.ir_func->name + "_fast";
         }
         batch_callee_map[callee.variant] = std::move(info);
@@ -2381,9 +2410,11 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
                 // the fast entry's signature comes from the analysis of the batch that defined it; when this
                 // batch derives a different ABI for the same function, its callers must use the standard entry,
                 // since the symbol cannot be defined a second time
-                if (info_i != batch_callee_map.end() && info_i->second.approach_b_eligible
+                if (info_i != batch_callee_map.end()
+                        && (info_i->second.approach_b_eligible || info_i->second.ref_fast_entry)
                         && fast_abi->second != qore_jit_fast_entry_abi_key(info_i->second)) {
                     info_i->second.approach_b_eligible = false;
+                    info_i->second.ref_fast_entry = false;
                 } else {
                     already_defined_fast.insert(std::move(fast_name));
                 }
@@ -2421,7 +2452,7 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     for (const auto& callee : callees) {
         auto info_it = batch_callee_map.find(callee.variant);
         if (info_it == batch_callee_map.end()
-                || !info_it->second.approach_b_eligible) {
+                || (!info_it->second.approach_b_eligible && !info_it->second.ref_fast_entry)) {
             continue;
         }
         const std::vector<BatchCalleeParamKind>* param_kinds =
@@ -2513,7 +2544,7 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         // is already compiled) unless an earlier batch module already defined it
         auto fast_info = batch_callee_map.find(callee.variant);
         if (fast_info != batch_callee_map.end()
-                && fast_info->second.approach_b_eligible
+                && (fast_info->second.approach_b_eligible || fast_info->second.ref_fast_entry)
                 && !already_defined_fast.count(callee.ir_func->name + "_fast")) {
             std::string fast_name = callee.ir_func->name + "_fast";
             llvm::Function* fast_fn = module->getFunction(fast_name);
@@ -2526,6 +2557,12 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             std::unordered_map<const void*, BatchCalleeParamKind> param_kind_map;
             const auto& callee_info = batch_callee_map.at(callee.variant);
             for (unsigned i = 0; i < callee.num_params; ++i) {
+                // the argument of a parameter that the caller of a reference parameter fast entry binds on the
+                // runtime stack is ignored: the body reads and writes the parameter there
+                if (callee_info.ref_fast_entry && qore_ir_fast_entry_param_is_runtime_reference(sig->lv[i])) {
+                    fast_fn->getArg(i)->setName(std::string("ref_arg") + std::to_string(i));
+                    continue;
+                }
                 const void* key = reinterpret_cast<const void*>(sig->lv[i]);
                 param_map[key] = fast_fn->getArg(i);
                 param_kind_map[key] = i < callee_info.param_kinds.size()

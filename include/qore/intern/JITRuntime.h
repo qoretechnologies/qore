@@ -2342,6 +2342,25 @@ uint64_t qore_rt_call_ref_fast(uint64_t ref_bits, uint64_t* args, int nargs, Exc
 uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn)(ExceptionSink*),
     const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! Binds the reference parameters of a call of a reference parameter fast entry on the runtime stack (issue #7271)
+/** @param ref_args the arguments of the parameters of a reference type, in the order of the parameters
+
+    @return 1 if bound; 0 if an argument does not match its parameter (nothing bound, no exception: the call is made
+    through the generic call path); -1 if an exception was raised (nothing bound)
+*/
+int qore_rt_bind_fast_entry_ref_params(const AbstractQoreFunctionVariant* variant, const uint64_t* ref_args,
+    ExceptionSink* xsink);
+
+//! Releases the reference parameters that qore_rt_bind_fast_entry_ref_params() bound (issue #7271)
+void qore_rt_unbind_fast_entry_ref_params(const AbstractQoreFunctionVariant* variant, ExceptionSink* xsink);
+
+//! qore_rt_bind_fast_entry_ref_params() for AOT code: the callee is the pre-resolved target of the call's slot
+int qore_rt_bind_fast_entry_ref_params_aot(QoreAOTContext* ctx, int32_t slot, const uint64_t* ref_args,
+    ExceptionSink* xsink);
+
+//! qore_rt_unbind_fast_entry_ref_params() for AOT code
+void qore_rt_unbind_fast_entry_ref_params_aot(QoreAOTContext* ctx, int32_t slot, ExceptionSink* xsink);
+
 //! Regex op with pre-evaluated operand: evaluates regex match/extract using the given operand
 //! instead of re-evaluating the AST subject expression.
 //! opcode identifies the regex operation (RegexMatchAny, RegexMatchBool, RegexNMatchBool,

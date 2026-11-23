@@ -1585,6 +1585,9 @@ private:
     // is cached at runtime.  Emit a guarded fast-entry call with a normal AOT
     // helper fallback for linked/source-stripped cases where the fast entry is
     // visible but the callee context is not cached.
+    // With ref_fast_variant (the callee), the fast entry is a reference parameter fast entry (issue #7271): the call
+    // binds the reference parameters on the runtime stack before it calls it, and the fallback makes the call when an
+    // argument does not match its parameter.
     llvm::Value* emitAotBatchFastEntryOrFallback(llvm::Module& module,
             llvm::Function* llvm_func, const QoreIRInstruction* inst,
             int32_t slot, llvm::Function* fast_fn,
@@ -1600,7 +1603,8 @@ private:
             const char* fallback_throwing_name = nullptr,
             const char* fallback_consume_throwing_name = nullptr,
             bool require_exact_object_class = false,
-            const std::vector<uint8_t>* date_kind_guards = nullptr);
+            const std::vector<uint8_t>* date_kind_guards = nullptr,
+            const AbstractQoreFunctionVariant* ref_fast_variant = nullptr);
 
     //! Emits the entry into the Program of another module's function before its native call (qore#6035)
     /** qore_rt_enter_cross_module_call() enters the Program with the state that the runtime call path sets up
@@ -1630,6 +1634,13 @@ private:
     llvm::Value* emitFastEntryDateKindGuards(llvm::Module& module, llvm::Value* can_use_fast_entry,
             const std::vector<uint8_t>& date_kind_guards, const std::vector<llvm::Value*>& raw_args,
             const std::vector<uint32_t>& raw_arg_ids, const std::vector<llvm::Value*>& boxed_args);
+
+    //! Returns the array of the arguments of the parameters of a reference type of a call of a reference parameter
+    //! fast entry, in the order of the parameters, for qore_rt_bind_fast_entry_ref_params() (issue #7271)
+    /** @param boxed_args the NaN-boxed arguments of the call, one for each parameter
+    */
+    llvm::Value* emitRefFastEntryArgs(llvm::Function* llvm_func, const AbstractQoreFunctionVariant* variant,
+            const std::vector<llvm::Value*>& boxed_args);
 
     //! Converts the NaN-boxed result of a generic fallback call to the return ABI of @a callee_info's fast entry
     //! and releases the boxed result if it was converted

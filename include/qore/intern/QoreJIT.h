@@ -618,6 +618,16 @@ struct BatchCalleeInfo {
     std::string call_ref_path;           //!< Canonical Qore function path for exact call-reference dispatch
     bool single_variant_function = false; //!< True when call_ref_path names exactly one function variant
     bool approach_b_eligible = false;    //!< True if fast entry exists
+    //! True if the callee has a reference parameter fast entry (issue #7271)
+    /** A callee that has no fast entry (approach_b_eligible is false) only because parameters of a reference type are
+        not private to its body has a fast entry named fast_name that takes its other parameters as arguments and
+        reads and writes its reference parameters through the runtime stack, as its normal entry does: a call binds
+        them there first (qore_rt_bind_fast_entry_ref_params()) and releases them once the fast entry has returned
+        (qore_rt_unbind_fast_entry_ref_params()).  The fast entry takes an argument for every parameter, which it
+        ignores for a reference parameter.  Only the calls that bind the reference parameters call it: every other
+        use of a fast entry checks approach_b_eligible.
+    */
+    bool ref_fast_entry = false;
     bool generic_specialized_fast_entry = false; //!< Fast entry is valid only for specialization_key
     bool implicit_self_method = false;   //!< Fast entry reuses the caller's self/class context
     bool context_independent_fast_entry = false; //!< True if fast entry does not require its own AOT context
@@ -776,6 +786,16 @@ DLLLOCAL std::vector<BatchCalleeParamKind> qore_ir_get_fast_entry_param_kinds(
 DLLLOCAL bool qore_ir_fast_entry_param_is_private(
         const QoreIRFunction& ir_func, const LocalVar* local);
 
+//! Return true when a parameter is one that the callers of a reference parameter fast entry bind on the runtime stack
+//! (BatchCalleeInfo::ref_fast_entry): a parameter of a reference type that no closure captures, which the body
+//! reads and writes through the runtime stack (issue #7271)
+DLLLOCAL bool qore_ir_fast_entry_param_is_runtime_reference(const LocalVar* local);
+
+//! Clears the NOTHING checks of the arguments of the parameters of a reference parameter fast entry that its callers
+//! bind on the runtime stack: the binding checks them as the fast call paths do (issue #7271)
+DLLLOCAL void qore_ir_clear_runtime_reference_param_nothing_checks(const AbstractQoreFunctionVariant* variant,
+        BatchCalleeInfo& info);
+
 //! Derive a stable typed call ABI from exact declared parameter types.  Unlike
 //! fast-entry kinds, these kinds do not depend on one lowered body and can be
 //! reconstructed independently by an AOT closure caller and its dispatcher.
@@ -862,6 +882,8 @@ public:
         unsigned num_params = 0;             //!< Number of parameters (for fast entry signature)
         bool batch_only = false;              //!< Do not publish or promote this internal callee
         std::vector<const LocalVar*> capture_locals; //!< Explicit read-only closure captures
+        //! True if the callee can have a reference parameter fast entry (see BatchCalleeInfo::ref_fast_entry)
+        bool ref_fast_entry = false;
     };
     bool compileFunctionBatch(const QoreIRFunction& root_func, std::string& error,
             void* root_deopt_counter,

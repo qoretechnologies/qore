@@ -631,6 +631,12 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_push_native_function_context_v1) },
     { "qore_rt_pop_native_function_context_v1", reinterpret_cast<void*>(&qore_rt_pop_native_function_context_v1) },
     { "qore_rt_call_fast_with_target", reinterpret_cast<void*>(&qore_rt_call_fast_with_target) },
+    { "qore_rt_bind_fast_entry_ref_params", reinterpret_cast<void*>(&qore_rt_bind_fast_entry_ref_params) },
+    { "qore_rt_unbind_fast_entry_ref_params", reinterpret_cast<void*>(&qore_rt_unbind_fast_entry_ref_params) },
+    { "qore_rt_bind_fast_entry_ref_params_aot",
+        reinterpret_cast<void*>(&qore_rt_bind_fast_entry_ref_params_aot) },
+    { "qore_rt_unbind_fast_entry_ref_params_aot",
+        reinterpret_cast<void*>(&qore_rt_unbind_fast_entry_ref_params_aot) },
     { "qore_rt_call_with_args", reinterpret_cast<void*>(&qore_rt_call_with_args) },
     { "qore_rt_call_with_args_consume_args", reinterpret_cast<void*>(&qore_rt_call_with_args_consume_args) },
     { "qore_rt_call_function_with_base",
@@ -14424,6 +14430,145 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_consume_args(const QoreFunction*
         return qore_rt_call_fast(func, variant, pgm, args, nargs, xsink);
     }
     return qore_rt_call_fast_consume_impl(func, variant, pgm, args, arg_cleanups, nargs, xsink);
+}
+
+//! Returns true if the parameter \a i of a reference parameter fast entry is bound on the runtime stack by its
+//! caller: one of a reference type (see qore_ir_fast_entry_param_is_runtime_reference(), which selects the parameters
+//! that the fast entry does not take as its own)
+static bool qore_rt_fast_entry_param_is_runtime_reference(const UserSignature* sig, unsigned i) {
+    return QoreTypeInfo::isReference(sig->lv[i]->getTypeInfo());
+}
+
+//! Binds the reference parameters of a call of a reference parameter fast entry on the runtime stack (issue #7271)
+/** A native fast entry whose function has parameters of a reference type (BatchCalleeInfo::ref_fast_entry) takes its
+    other parameters as arguments of its own and reads and writes its reference parameters through the runtime stack,
+    as the normal entry does: the caller binds them here before it calls the fast entry, within a frame boundary, as
+    the fast call paths bind every parameter (instantiateFastCallParams()), and releases them with
+    qore_rt_unbind_fast_entry_ref_params() once the fast entry has returned, whatever it returned.
+
+    @param uvb the callee
+    @param ref_args the arguments of the reference parameters, in the order of the parameters
+    @param xsink for an exception raised while the arguments already bound are released
+
+    @return 1 if the parameters were bound; 0 if an argument does not match its parameter: nothing is bound and no
+    exception is raised, and the caller makes the call through the generic call path, which gives the outcome of the
+    AST interpreter (issue #5686); -1 if an exception was raised, with nothing bound
+*/
+static int qore_rt_bind_fast_entry_ref_params_impl(const UserVariantBase* uvb, const uint64_t* ref_args,
+        ExceptionSink* xsink) {
+    assert(uvb);
+    const UserSignature* sig = uvb->getUserSignature();
+    unsigned num_params = sig->numParams();
+    // releases the parameters bound before parameter \a i, last first, and the frame boundary
+    auto unbind_before = [sig, xsink](unsigned i) {
+        for (int j = static_cast<int>(i) - 1; j >= 0; --j) {
+            if (qore_rt_fast_entry_param_is_runtime_reference(sig, j)) {
+                sig->lv[j]->uninstantiate(xsink);
+            }
+        }
+        thread_pop_frame_boundary();
+    };
+    thread_push_frame_boundary();
+    unsigned arg = 0;
+    for (unsigned i = 0; i < num_params; ++i) {
+        if (!qore_rt_fast_entry_param_is_runtime_reference(sig, i)) {
+            continue;
+        }
+        // a reference parameter is never closure-bound in a reference parameter fast entry
+        assert(!sig->lv[i]->closureUse());
+        const QoreTypeInfo* param_type_info = sig->getParamTypeInfo(i);
+        // the argument is bound as instantiateFastCallParams() binds it
+        QoreValue raw = fromBits(ref_args[arg++]);
+        QoreValue val;
+        if (!raw.needsEval() || qore_rt_preserve_unevaluated_arg(raw)) {
+            val = raw.refSelf();
+        } else {
+            ValueEvalOptimizedRefHolder eval_arg(raw, xsink);
+            if (*xsink) {
+                unbind_before(i);
+                return -1;
+            }
+            val = eval_arg.getReferencedValue();
+        }
+        // a reference type is a type: the argument is always accepted by the parameter, which can convert the
+        // referenced value (reference<softint>)
+        QoreTypeInfo::acceptInputParam(param_type_info, i, sig->getName(i), val, xsink);
+        if (*xsink) {
+            // the type error is set aside while the arguments are released, so that an exception raised by a
+            // destructor then is kept
+            ExceptionSink type_error;
+            type_error.assimilate(*xsink);
+            val.discard(xsink);
+            unbind_before(i);
+            if (*xsink) {
+                type_error.assimilate(*xsink);
+                xsink->assimilate(type_error);
+                return -1;
+            }
+            type_error.clear();
+            return 0;
+        }
+        sig->lv[i]->applyNoNarrowContainerType(val, xsink);
+        if (*xsink) {
+            val.discard(xsink);
+            unbind_before(i);
+            return -1;
+        }
+        sig->lv[i]->instantiate(val, param_type_info);
+    }
+    return 1;
+}
+
+extern "C" DLLEXPORT int qore_rt_bind_fast_entry_ref_params(const AbstractQoreFunctionVariant* variant,
+        const uint64_t* ref_args, ExceptionSink* xsink) {
+    return qore_rt_bind_fast_entry_ref_params_impl(variant->getUserVariantBase(), ref_args, xsink);
+}
+
+//! Releases the reference parameters that qore_rt_bind_fast_entry_ref_params() bound, last first, and the frame
+//! boundary of the call (issue #7271)
+static void qore_rt_unbind_fast_entry_ref_params_impl(const UserVariantBase* uvb, ExceptionSink* xsink) {
+    assert(uvb);
+    const UserSignature* sig = uvb->getUserSignature();
+    for (int i = static_cast<int>(sig->numParams()) - 1; i >= 0; --i) {
+        if (qore_rt_fast_entry_param_is_runtime_reference(sig, i)) {
+            sig->lv[i]->uninstantiate(xsink);
+        }
+    }
+    thread_pop_frame_boundary();
+}
+
+extern "C" DLLEXPORT void qore_rt_unbind_fast_entry_ref_params(const AbstractQoreFunctionVariant* variant,
+        ExceptionSink* xsink) {
+    qore_rt_unbind_fast_entry_ref_params_impl(variant->getUserVariantBase(), xsink);
+}
+
+//! qore_rt_bind_fast_entry_ref_params() for AOT code: the callee is the pre-resolved target of the call's slot
+extern "C" DLLEXPORT int qore_rt_bind_fast_entry_ref_params_aot(QoreAOTContext* ctx, int32_t slot,
+        const uint64_t* ref_args, ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    const UserVariantBase* uvb = target.uvb ? target.uvb
+        : target.variant ? target.variant->getUserVariantBase() : nullptr;
+    // the fast entry is called only for a resolved user variant (see qore_rt_try_get_aot_call_target_context())
+    if (!uvb) {
+        return 0;
+    }
+    return qore_rt_bind_fast_entry_ref_params_impl(uvb, ref_args, xsink);
+}
+
+//! qore_rt_unbind_fast_entry_ref_params() for AOT code
+extern "C" DLLEXPORT void qore_rt_unbind_fast_entry_ref_params_aot(QoreAOTContext* ctx, int32_t slot,
+        ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    const UserVariantBase* uvb = target.uvb ? target.uvb
+        : target.variant ? target.variant->getUserVariantBase() : nullptr;
+    // called only after qore_rt_bind_fast_entry_ref_params_aot() bound the parameters, which it does for a user
+    // variant only
+    assert(uvb);
+    if (uvb) {
+        qore_rt_unbind_fast_entry_ref_params_impl(uvb, xsink);
+    }
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 

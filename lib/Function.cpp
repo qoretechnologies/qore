@@ -8948,8 +8948,12 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
 // Check if a callee is eligible for Approach B (direct LLVM arg passing).
 // Requirements: all params and body locals are IR-only, no varargs,
 // no reference-type params, no closure-captured params, same QoreProgram.
+/** @param ref_fast_entry if not null, set to true when the callee is not eligible only because parameters of a
+    reference type are not private to its body: it can then have a reference parameter fast entry, whose callers bind
+    those parameters on the runtime stack (BatchCalleeInfo::ref_fast_entry, issue #7271)
+*/
 static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction* callee_ir,
-        QoreProgram* root_pgm) {
+        QoreProgram* root_pgm, bool* ref_fast_entry = nullptr) {
     // not "debug", which would hide the debugging level that printd() compares with
     bool batch_debug = QORE_ENV_IS_SET("QORE_BATCH_DEBUG");
 
@@ -9001,6 +9005,7 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
 
     // Check all params
     unsigned num_params = sig->numParams();
+    bool runtime_reference_params = false;
     for (unsigned i = 0; i < num_params; ++i) {
         if (i && !(i % 100)
                 && qore_check_cancel(nullptr,
@@ -9012,6 +9017,12 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
         // Referenced parameters must be IR-only; unused parameters do not
         // require a runtime-stack local and can still use the direct ABI.
         if (!qore_ir_fast_entry_param_is_private(*callee_ir, lv)) {
+            // a parameter of a reference type is bound on the runtime stack by the callers of a reference parameter
+            // fast entry
+            if (ref_fast_entry && qore_ir_fast_entry_param_is_runtime_reference(lv)) {
+                runtime_reference_params = true;
+                continue;
+            }
             if (batch_debug) {
                 printd(5, "  APPROACH_B: '%s' ineligible: param '%s' not private\n",
                     callee_ir->name.c_str(), lv->getName());
@@ -9019,6 +9030,17 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
             return false;
         }
 
+    }
+
+    if (runtime_reference_params) {
+        // the reference parameters of a generic function are bound with its type arguments, which the callers do not
+        // give the binding
+        *ref_fast_entry = !sig->hasTypeParameters();
+        if (batch_debug) {
+            printd(5, "  APPROACH_B: '%s' ineligible: reference parameters; reference parameter fast entry: %s\n",
+                callee_ir->name.c_str(), *ref_fast_entry ? "yes" : "no");
+        }
+        return false;
     }
 
     if (batch_debug) {
@@ -9297,7 +9319,10 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                 // bypassing the qore_rt_call_fast() runtime dispatch overhead.
 
                 // Check Approach B eligibility (direct LLVM arg passing)
-                bool approach_b = isApproachBEligible(uvb, callee_ir, root_pgm);
+                bool ref_fast_entry = false;
+                // a closure with captures given to its fast entry has no reference parameter fast entry
+                bool approach_b = isApproachBEligible(uvb, callee_ir, root_pgm,
+                    capture_locals.empty() ? &ref_fast_entry : nullptr);
                 unsigned num_params = uvb->getUserSignature()->numParams();
 
                 callees.push_back(QoreJIT::BatchCallee{
@@ -9307,7 +9332,8 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                     approach_b,
                     num_params,
                     batch_only,
-                    std::move(capture_locals)
+                    std::move(capture_locals),
+                    ref_fast_entry
                 });
                 if (collect_transitive && worklist.size() <= MAX_TRANSITIVE_BATCH_CALLEES) {
                     worklist.push_back(callee_ir);

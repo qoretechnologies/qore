@@ -1,0 +1,267 @@
+-- iteration 0
+local typed: 11
+local after: 10
+untyped: 1
+untyped after: "b0"
+untyped read: "b0"
+add: 5
+add after: 5
+pass2: 10
+pass2 after: 7
+pass untyped: 7
+pass untyped after: 4
+nothing typed: "nothing"
+nothing arg: "nothing"
+nothing untyped: "null"
+exception: "ERR 42"
+exception after: 42
+closure: 5
+closure after: 6
+two refs same: 34
+two refs same after: 4
+two refs: 23
+two refs after: [3, 4]
+hash: "a,x"
+hash after: [{a: 1, x: 1}, {a: 1}]
+hash cow: "2 null"
+hash cow after: {a: 1, y: 2}
+list: "[1, 9]"
+list after: [[1, 9], [1]]
+string: "sx"
+string after: "sx"
+softint: "12"
+softint after: 12
+loop: 6
+loop after: 6
+hash key: 6
+hash key after: {k: 5}
+nested key: 7
+nested key after: {k: {n: 6}}
+list elem: 8
+list elem after: [1, 7, 3]
+member: 9
+member after: 8
+member hash: "k,x"
+member hash after: {k: 1, x: 1}
+self member: 12
+self member after: 11
+global: 10
+global after: 9
+global hash: "a,x"
+global hash after: {a: 1, x: 1}
+method: 6
+method after: 3
+virtual method: 4
+virtual method after: 104
+static method: 15
+static method after: 5
+private via public: 7
+private via public after: 7
+in ftmp
+released function 0
+function temp: 4
+in stmp
+released static 0
+static temp: 5
+temp after: 5
+weak: "Obj"
+weak set: "Obj"
+weak after delete: True
+type error ex: "RUNTIME-TYPE-ERROR"
+type error after: "str"
+capture: [2, 3]
+capture after: 3
+rethrow: "60"
+rethrow after: 61
+callref: 13
+callref after: 12
+named: 14
+named after: 13
+runtime named: 15
+runtime named after: 14
+method callref: 30
+method callref after: 15
+-- iteration 1
+local typed: 12
+local after: 11
+untyped: 1
+untyped after: "b1"
+untyped read: "b1"
+add: 5
+add after: 5
+pass2: 11
+pass2 after: 8
+pass untyped: 7
+pass untyped after: 4
+nothing typed: "nothing"
+nothing arg: "nothing"
+nothing untyped: "null"
+exception: "ERR 43"
+exception after: 43
+closure: 5
+closure after: 6
+two refs same: 34
+two refs same after: 4
+two refs: 23
+two refs after: [3, 4]
+hash: "a,x"
+hash after: [{a: 1, x: 1}, {a: 1}]
+hash cow: "2 null"
+hash cow after: {a: 1, y: 2}
+list: "[1, 9]"
+list after: [[1, 9], [1]]
+string: "sx"
+string after: "sx"
+softint: "12"
+softint after: 12
+loop: 6
+loop after: 6
+hash key: 7
+hash key after: {k: 6}
+nested key: 7
+nested key after: {k: {n: 6}}
+list elem: 8
+list elem after: [1, 7, 3]
+member: 10
+member after: 9
+member hash: "k,x"
+member hash after: {k: 1, x: 1}
+self member: 12
+self member after: 11
+global: 11
+global after: 10
+global hash: "a,x"
+global hash after: {a: 1, x: 1}
+method: 6
+method after: 3
+virtual method: 4
+virtual method after: 104
+static method: 15
+static method after: 5
+private via public: 7
+private via public after: 7
+in ftmp
+released function 1
+function temp: 4
+in stmp
+released static 1
+static temp: 5
+temp after: 5
+weak: "Obj"
+weak set: "Obj"
+weak after delete: True
+type error ex: "RUNTIME-TYPE-ERROR"
+type error after: "str"
+capture: [2, 3]
+capture after: 3
+rethrow: "61"
+rethrow after: 62
+callref: 13
+callref after: 12
+named: 14
+named after: 13
+runtime named: 15
+runtime named after: 14
+method callref: 30
+method callref after: 15
+-- iteration 2
+local typed: 13
+local after: 12
+untyped: 1
+untyped after: "b2"
+untyped read: "b2"
+add: 5
+add after: 5
+pass2: 12
+pass2 after: 9
+pass untyped: 7
+pass untyped after: 4
+nothing typed: "nothing"
+nothing arg: "nothing"
+nothing untyped: "null"
+exception: "ERR 44"
+exception after: 44
+closure: 5
+closure after: 6
+two refs same: 34
+two refs same after: 4
+two refs: 23
+two refs after: [3, 4]
+hash: "a,x"
+hash after: [{a: 1, x: 1}, {a: 1}]
+hash cow: "2 null"
+hash cow after: {a: 1, y: 2}
+list: "[1, 9]"
+list after: [[1, 9], [1]]
+string: "sx"
+string after: "sx"
+softint: "12"
+softint after: 12
+loop: 6
+loop after: 6
+hash key: 8
+hash key after: {k: 7}
+nested key: 7
+nested key after: {k: {n: 6}}
+list elem: 8
+list elem after: [1, 7, 3]
+member: 11
+member after: 10
+member hash: "k,x"
+member hash after: {k: 1, x: 1}
+self member: 12
+self member after: 11
+global: 12
+global after: 11
+global hash: "a,x"
+global hash after: {a: 1, x: 1}
+method: 6
+method after: 3
+virtual method: 4
+virtual method after: 104
+static method: 15
+static method after: 5
+private via public: 7
+private via public after: 7
+in ftmp
+released function 2
+function temp: 4
+in stmp
+released static 2
+static temp: 5
+temp after: 5
+weak: "Obj"
+weak set: "Obj"
+weak after delete: True
+type error ex: "RUNTIME-TYPE-ERROR"
+type error after: "str"
+capture: [2, 3]
+capture after: 3
+rethrow: "62"
+rethrow after: 63
+callref: 13
+callref after: 12
+named: 14
+named after: 13
+runtime named: 15
+runtime named after: 14
+method callref: 30
+method callref after: 15
+program callFunction: 2120
+program callref: 31
+program callref after: 30
+program callFunction: 2221
+program callref: 32
+program callref after: 31
+program callFunction: 2322
+program callref: 33
+program callref after: 32
+sandbox callFunction: 4240
+sandbox callref: 52
+sandbox callref after: 50
+sandbox callFunction: 4341
+sandbox callref: 53
+sandbox callref after: 51
+sandbox callFunction: 4442
+sandbox callref: 54
+sandbox callref after: 52

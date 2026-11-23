@@ -1049,7 +1049,8 @@ static bool qore_ir_fast_entry_args_need_no_binding_impl(bool call_gives_args,
         const AbstractQoreFunctionVariant* variant,
         const QoreValue& expr, int arg_start, int nargs,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation,
-        const QoreTypeInfo* receiver_type_info, std::vector<uint8_t>* date_kind_guards) {
+        const QoreTypeInfo* receiver_type_info, std::vector<uint8_t>* date_kind_guards,
+        bool runtime_reference_params) {
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     if (!uvb || arg_start < 0 || nargs < 0 || qore_ir_fast_entry_refuses_given_args(call_gives_args, variant)) {
         return false;
@@ -1092,6 +1093,11 @@ static bool qore_ir_fast_entry_args_need_no_binding_impl(bool call_gives_args,
                     && qore_check_cancel(nullptr,
                         "IR fast-entry argument eligibility")) {
                 return false;
+            }
+            // the caller of a reference parameter fast entry binds a parameter of a reference type on the runtime stack
+            // (qore_rt_bind_fast_entry_ref_params()), as the fast call paths bind it
+            if (runtime_reference_params && qore_ir_fast_entry_param_is_runtime_reference(sig->lv[i])) {
+                continue;
             }
             const QoreTypeInfo* param_ti = sig->lv[i]->getTypeInfo();
             if (explicit_type_param_instantiation || receiver_type_info) {
@@ -1139,17 +1145,20 @@ static bool qore_ir_fast_entry_args_need_no_binding_impl(bool call_gives_args,
     needed and is empty otherwise; the caller must emit the checks (emitFastEntryDateKindGuards()) and call the fast
     entry only if they pass, else the generic call, which raises the parameter's error
 */
+/** With \a runtime_reference_params, the arguments of parameters of a reference type are not checked: the caller of a
+    reference parameter fast entry binds them (BatchCalleeInfo::ref_fast_entry)
+*/
 static bool qore_ir_fast_entry_args_need_no_binding(bool call_gives_args,
         const AbstractQoreFunctionVariant* variant,
         const QoreValue& expr, int arg_start, int nargs,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation =
             nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
-        std::vector<uint8_t>* date_kind_guards = nullptr) {
+        std::vector<uint8_t>* date_kind_guards = nullptr, bool runtime_reference_params = false) {
     if (date_kind_guards) {
         date_kind_guards->clear();
     }
     if (qore_ir_fast_entry_args_need_no_binding_impl(call_gives_args, variant, expr, arg_start, nargs,
-            explicit_type_param_instantiation, receiver_type_info, date_kind_guards)) {
+            explicit_type_param_instantiation, receiver_type_info, date_kind_guards, runtime_reference_params)) {
         return true;
     }
     // an ineligible call needs no checks
@@ -13576,9 +13585,13 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         const char* fallback_throwing_name,
         const char* fallback_consume_throwing_name,
         bool require_exact_object_class,
-        const std::vector<uint8_t>* date_kind_guards) {
+        const std::vector<uint8_t>* date_kind_guards,
+        const AbstractQoreFunctionVariant* ref_fast_variant) {
     // a function of another module is called through the fast entry that its module registered (qore#6035)
     const bool cross_module = callee_info.cross_module;
+    // a reference parameter fast entry is called only in its module, with no summary of its body, through the call
+    // of the fast entry itself
+    assert(!ref_fast_variant || (!cross_module && !object_base && callee_info.ref_fast_entry));
     assert(cross_module ? !fast_fn && !object_base && !callee_info.context_independent_fast_entry : fast_fn != nullptr);
     auto ctx_helper = module.getOrInsertFunction(
         "qore_rt_try_get_aot_call_target_context",
@@ -13736,6 +13749,26 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     builder->CreateCondBr(can_use_fast_entry, fast_bb, fallback_bb);
 
     builder->SetInsertPoint(fast_bb);
+    // a reference parameter fast entry: the reference parameters are bound on the runtime stack first; an argument
+    // that does not match its parameter takes the fallback, which binds the arguments and raises the parameter's error,
+    // and a binding that raised an exception makes no call (issue #7271)
+    llvm::BasicBlock* ref_error_bb = nullptr;
+    if (ref_fast_variant) {
+        llvm::Value* ref_args = emitRefFastEntryArgs(llvm_func, ref_fast_variant, boxed_args);
+        auto bind_fn = module.getOrInsertFunction("qore_rt_bind_fast_entry_ref_params_aot",
+            llvm::FunctionType::get(i32_type, {ptr_type, i32_type, ptr_type, ptr_type}, false));
+        llvm::Value* bound = builder->CreateCall(bind_fn,
+            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), ref_args, xsink_arg});
+        llvm::BasicBlock* bound_bb = llvm::BasicBlock::Create(ctx, "aot_ref_bound", llvm_func);
+        llvm::BasicBlock* not_bound_bb = llvm::BasicBlock::Create(ctx, "aot_ref_not_bound", llvm_func);
+        ref_error_bb = llvm::BasicBlock::Create(ctx, "aot_ref_bind_error", llvm_func);
+        builder->CreateCondBr(builder->CreateICmpEQ(bound, llvm::ConstantInt::get(i32_type, 1)), bound_bb,
+            not_bound_bb);
+        builder->SetInsertPoint(not_bound_bb);
+        builder->CreateCondBr(builder->CreateICmpEQ(bound, llvm::ConstantInt::get(i32_type, 0)), fallback_bb,
+            ref_error_bb);
+        builder->SetInsertPoint(bound_bb);
+    }
     std::vector<llvm::Value*> call_args;
     call_args.reserve(callee_info.num_params + 2);
     for (unsigned i = 0; i < callee_info.num_params; ++i) {
@@ -13763,6 +13796,7 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         ? emitPushNativeFunctionContext(module, llvm_func) : nullptr;
     llvm::Value* fast_result = cross_module
         ? emitCrossModuleFastEntryCall(callee_info, cross_module_fn, call_args)
+        : ref_fast_variant ? nullptr
         : emitAOTImportedSummary(callee_info, call_args, callee_ctx, module, fast_fn, &summary_nothrow);
     const bool inline_body = !cross_module && fast_result;
     if (!inline_body) {
@@ -13778,6 +13812,12 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         } else {
             emitPopNativeFunctionContext(module);
         }
+    }
+    if (ref_fast_variant) {
+        // the reference parameters are released whatever the fast entry returned, in the call's frame
+        auto unbind_fn = module.getOrInsertFunction("qore_rt_unbind_fast_entry_ref_params_aot",
+            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+        builder->CreateCall(unbind_fn, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg});
     }
     // the non-cross-module path keeps the arg cleanup folded into endAotInlineCallFrame (develop); the cross-module
     // path (#6035) must release the arguments after leaving the callee's Program, so it is withheld from the frame
@@ -13865,10 +13905,20 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     builder->CreateBr(merge_bb);
     fallback_bb = builder->GetInsertBlock();
 
+    // the binding of a reference parameter raised an exception: the call is not made, and the arguments that it was
+    // given stay with the caller, which releases them
+    if (ref_error_bb) {
+        builder->SetInsertPoint(ref_error_bb);
+        builder->CreateBr(merge_bb);
+    }
+
     builder->SetInsertPoint(merge_bb);
-    llvm::PHINode* result = builder->CreatePHI(fast_result->getType(), 2, "aot_batch_result");
+    llvm::PHINode* result = builder->CreatePHI(fast_result->getType(), ref_error_bb ? 3 : 2, "aot_batch_result");
     result->addIncoming(fast_result, fast_bb);
     result->addIncoming(fallback_result, fallback_bb);
+    if (ref_error_bb) {
+        result->addIncoming(llvm::Constant::getNullValue(fast_result->getType()), ref_error_bb);
+    }
     (void)inst;
     return result;
 }
@@ -13937,6 +13987,28 @@ llvm::Value* QoreIRToLLVM::emitLeaveCrossModuleCall(llvm::Module& module, llvm::
         llvm::FunctionType::get(void_type, {ptr_type}, false));
     builder->CreateCall(leave, {cross_module_call_state_storage});
     return result;
+}
+
+llvm::Value* QoreIRToLLVM::emitRefFastEntryArgs(llvm::Function* llvm_func,
+        const AbstractQoreFunctionVariant* variant, const std::vector<llvm::Value*>& boxed_args) {
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    assert(uvb);
+    const UserSignature* sig = uvb->getUserSignature();
+    std::vector<llvm::Value*> ref_args;
+    for (unsigned i = 0; i < sig->numParams(); ++i) {
+        if (qore_ir_fast_entry_param_is_runtime_reference(sig->lv[i])) {
+            // every argument of a parameter that is not private to the fast entry is boxed
+            assert(i < boxed_args.size() && boxed_args[i]);
+            ref_args.push_back(boxed_args[i]);
+        }
+    }
+    assert(!ref_args.empty());
+    llvm::Value* array = allocCallArray(llvm_func, static_cast<unsigned>(ref_args.size()));
+    for (size_t i = 0; i < ref_args.size(); ++i) {
+        builder->CreateStore(ref_args[i], builder->CreateGEP(i64_type, array,
+            llvm::ConstantInt::get(i32_type, static_cast<int>(i))));
+    }
+    return array;
 }
 
 llvm::Value* QoreIRToLLVM::emitFallbackResultToFastReturnKind(llvm::Module& module,
@@ -26533,6 +26605,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     call_date_kind_guards.clear();
                 }
             }
+            // AOT: a call of a reference parameter fast entry, which binds the reference parameters on the runtime
+            // stack (issue #7271)
+            const BatchCalleeInfo* aot_ref_fast_callee = nullptr;
+            llvm::Function* aot_ref_fast_fn = nullptr;
+            if (aot_mode && batch_callees && direct_inst->variant && !aot_approach_b_callee && !explicit_inst
+                    && !fused_string_consumer && !fused_collection_consumer && !fused_aggregate_projection
+                    && !QORE_ENV_IS_SET("QORE_DISABLE_REF_PARAM_FAST_ENTRY")) {
+                auto it = findBatchCallee(direct_inst->variant);
+                if (it != batch_callees->end() && it->second.ref_fast_entry && !it->second.approach_b_eligible
+                        && !it->second.cross_module && !it->second.generic_specialized_fast_entry
+                        && isFastFunctionCallEligible(direct_inst->variant)
+                        && qore_ir_fast_entry_args_need_no_binding(call_gives_args, direct_inst->variant,
+                            direct_inst->expr, arg_start, nargs, nullptr, nullptr, nullptr, true)) {
+                    aot_ref_fast_fn = module.getFunction(it->second.fast_name);
+                    if (aot_ref_fast_fn) {
+                        aot_ref_fast_callee = &it->second;
+                    }
+                }
+            }
             const BatchCalleeInfo* direct_batch_callee =
                 !aot_mode && !explicit_inst && direct_inst->variant
                     ? getBatchCallee(direct_inst->variant) : nullptr;
@@ -26547,6 +26638,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 is_approach_b = false;
                 jit_date_guarded_approach_b = true;
             }
+            // JIT: a call of a reference parameter fast entry binds the reference parameters on the runtime stack and
+            // calls the fast entry if they are bound, else the batch entry, which binds the arguments and raises the
+            // parameter's error (issue #7271)
+            bool jit_ref_fast_entry = !is_approach_b && !jit_date_guarded_approach_b && direct_batch_callee
+                && direct_batch_callee->ref_fast_entry && !direct_batch_callee->approach_b_eligible
+                && !QORE_ENV_IS_SET("QORE_DISABLE_REF_PARAM_FAST_ENTRY")
+                && qore_ir_fast_entry_args_need_no_binding(call_gives_args, direct_inst->variant, direct_inst->expr,
+                    arg_start, nargs, nullptr, nullptr, nullptr, true);
             const BatchCalleeInfo* aggregate_projection_callee =
                 aot_approach_b_callee;
             if (!aot_mode && fused_aggregate_projection && is_approach_b) {
@@ -26604,6 +26703,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (jit_date_guarded_approach_b
                         && fastEntryNativeArgsNeedNothingGuard(*direct_batch_callee, raw_arg_ids)) {
                     jit_date_guarded_approach_b = false;
+                }
+                if (jit_ref_fast_entry
+                        && fastEntryNativeArgsNeedNothingGuard(*direct_batch_callee, raw_arg_ids)) {
+                    jit_ref_fast_entry = false;
                 }
                 const BatchCalleeInfo* selective_summary_callee =
                     aot_approach_b_callee
@@ -27866,6 +27969,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_return_kind = aot_approach_b_callee->return_kind;
                 call_may_modify_runtime_locals = false;
                 call_effect_info = aot_approach_b_callee;
+            } else if (aot_ref_fast_callee) {
+                // a reference parameter fast entry (issue #7271); the callee writes the caller's variables through
+                // the references, so every local is reloaded after the call, as after the generic call
+                QoreValue expr_val = direct_inst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                call_result = emitAotBatchFastEntryOrFallback(module, llvm_func,
+                        inst, slot, aot_ref_fast_fn, *aot_ref_fast_callee,
+                        raw_args, raw_arg_ids, boxed_args, args_array, arg_cleanups,
+                        nargs, has_arg_cleanups, "qore_rt_call_direct_aot",
+                        "qore_rt_call_direct_aot_consume_args", error, nullptr, UINT32_MAX, nullptr, nullptr,
+                        false, nullptr, direct_inst->variant);
+                if (!call_result) {
+                    return false;
+                }
+                call_return_kind = aot_ref_fast_callee->return_kind;
             } else if (aot_mode && direct_inst->is_self_recursive
                     && isSelfRecursiveVariant(direct_inst->variant)
                     && isFastFunctionCallEligible(direct_inst->variant)
@@ -28000,6 +28120,49 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::BasicBlock* guarded_fast_bb = nullptr;
                     llvm::BasicBlock* guarded_merge_bb = nullptr;
                     llvm::Value* guarded_fast_result = nullptr;
+                    // a call of a reference parameter fast entry (issue #7271): the error block of a binding that
+                    // raised an exception, with the value the call then has
+                    llvm::BasicBlock* ref_error_bb = nullptr;
+                    llvm::Value* ref_error_result = nullptr;
+                    if (jit_ref_fast_entry) {
+                        llvm::Value* ref_variant_ptr = builder->CreateIntToPtr(
+                                llvm::ConstantInt::get(i64_type,
+                                    reinterpret_cast<uint64_t>(direct_inst->variant)), ptr_type);
+                        llvm::Value* ref_args = emitRefFastEntryArgs(llvm_func, direct_inst->variant, boxed_args);
+                        auto bind_fn = module.getOrInsertFunction("qore_rt_bind_fast_entry_ref_params",
+                            llvm::FunctionType::get(i32_type, {ptr_type, ptr_type, ptr_type}, false));
+                        llvm::Value* bound = builder->CreateCall(bind_fn, {ref_variant_ptr, ref_args, xsink_arg});
+                        guarded_fast_bb = llvm::BasicBlock::Create(ctx, "ref_bound_fast", llvm_func);
+                        llvm::BasicBlock* not_bound_bb = llvm::BasicBlock::Create(ctx, "ref_not_bound", llvm_func);
+                        llvm::BasicBlock* fallback_bb = llvm::BasicBlock::Create(ctx, "ref_mismatch_fallback",
+                            llvm_func);
+                        ref_error_bb = llvm::BasicBlock::Create(ctx, "ref_bind_error", llvm_func);
+                        guarded_merge_bb = llvm::BasicBlock::Create(ctx, "ref_fast_merge", llvm_func);
+                        builder->CreateCondBr(builder->CreateICmpEQ(bound, llvm::ConstantInt::get(i32_type, 1)),
+                            guarded_fast_bb, not_bound_bb);
+                        builder->SetInsertPoint(guarded_fast_bb);
+                        guarded_fast_result = emit_approach_b_call();
+                        if (!guarded_fast_result) {
+                            return false;
+                        }
+                        // the parameters are released whatever the fast entry returned
+                        auto unbind_fn = module.getOrInsertFunction("qore_rt_unbind_fast_entry_ref_params",
+                            llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+                        builder->CreateCall(unbind_fn, {ref_variant_ptr, xsink_arg});
+                        builder->CreateBr(guarded_merge_bb);
+                        guarded_fast_bb = builder->GetInsertBlock();
+                        // an argument that does not match its parameter: the batch entry below binds the arguments
+                        // and raises the parameter's error
+                        builder->SetInsertPoint(not_bound_bb);
+                        builder->CreateCondBr(builder->CreateICmpEQ(bound, llvm::ConstantInt::get(i32_type, 0)),
+                            fallback_bb, ref_error_bb);
+                        // the binding raised an exception: the call is not made, and the arguments that it was given
+                        // stay with the caller, which releases them
+                        builder->SetInsertPoint(ref_error_bb);
+                        ref_error_result = llvm::Constant::getNullValue(guarded_fast_result->getType());
+                        builder->CreateBr(guarded_merge_bb);
+                        builder->SetInsertPoint(fallback_bb);
+                    }
                     if (jit_date_guarded_approach_b) {
                         llvm::Value* can_use_fast_entry = emitFastEntryDateKindGuards(module,
                             llvm::ConstantInt::getTrue(ctx), call_date_kind_guards, raw_args, raw_arg_ids,
@@ -28043,15 +28206,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         call_result = builder->CreateCall(helper, {callee_fn, variant_ptr,
                                 args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                     }
-                    if (jit_date_guarded_approach_b) {
+                    if (jit_date_guarded_approach_b || jit_ref_fast_entry) {
                         call_result = emitFallbackResultToFastReturnKind(module, callee_info, call_result);
                         builder->CreateBr(guarded_merge_bb);
                         llvm::BasicBlock* fallback_end_bb = builder->GetInsertBlock();
                         builder->SetInsertPoint(guarded_merge_bb);
-                        llvm::PHINode* phi = builder->CreatePHI(guarded_fast_result->getType(), 2,
-                            "date_guarded_result");
+                        llvm::PHINode* phi = builder->CreatePHI(guarded_fast_result->getType(),
+                            ref_error_bb ? 3 : 2, jit_ref_fast_entry ? "ref_fast_result" : "date_guarded_result");
                         phi->addIncoming(guarded_fast_result, guarded_fast_bb);
                         phi->addIncoming(call_result, fallback_end_bb);
+                        if (ref_error_bb) {
+                            phi->addIncoming(ref_error_result, ref_error_bb);
+                        }
                         call_result = phi;
                         call_return_kind = callee_info.return_kind;
                     }

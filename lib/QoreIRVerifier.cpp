@@ -5181,7 +5181,11 @@ bool qore_ir_collect_take_over_params(const QoreIRFunction& ir_func, const Local
     std::optional<QoreIRUnrecordedWrites> unrecorded;
     for (unsigned i = 0; i < num_params; ++i) {
         const LocalVar* param = params[i];
-        if (!param || !qore_ir_take_over_type_may_hold_object(param->getTypeInfo())) {
+        // a parameter of a reference type holds the reference that the call gives it until it is released when the
+        // call returns: a write to it writes the referenced lvalue and never releases the reference, whose release
+        // runs no destructor either (issue #7271)
+        if (!param || QoreTypeInfo::isReference(param->getTypeInfo())
+                || !qore_ir_take_over_type_may_hold_object(param->getTypeInfo())) {
             continue;
         }
         const void* key = reinterpret_cast<const void*>(param);

@@ -5131,7 +5131,11 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
             : QORE_IR_INLINE_UNCHECKED;
     }
 
-    if (!variant || inst->has_ref_args || !method) {
+    // a callee with reference parameters is inlined as well: its parameters are bound on the runtime stack
+    // (QORE_IR_INLINE_BOXED_PARAMS, as QoreIRFunction::direct_params_eligible excludes them), where its body reads
+    // and writes the referenced lvalues through them as a call does, and the caller reloads its locals after the call
+    // (has_ref_args; issue #7271)
+    if (!variant || !method) {
         return reject();
     }
     if (reject_copy_method && !strcmp(method->getName(), "copy")) {
@@ -5361,7 +5365,9 @@ static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction
     if (!caller_pgm) {
         caller_pgm = getProgram();
     }
-    if (!inst->variant || inst->has_ref_args || !caller_pgm) {
+    // a callee with reference parameters is inlined as well (see ensureInterpreterResolvedInlineIRCallState(); issue
+    // #7271)
+    if (!inst->variant || !caller_pgm) {
         return reject();
     }
     // Resolve from the variant rather than from the instruction's own cache: the payload is
@@ -7802,8 +7808,11 @@ static inline void giveLastUseCallArgSlot(IRValueSlots& values, IRCleanupSlots& 
 
 //! Gives the references of the arguments whose last use is the call to the call (see consumeLastUseCallArgSlots())
 /** The arguments must have been read from their slots before; an argument given twice is given at its last position
+
+    Inlined explicitly into its callers, irCallDirectGiven() and irCallStaticDirectGivenLastUse(), as GCC inlined it into
+    its only caller before the second was added (issue #7271)
 */
-static void giveLastUseCallArgSlots(IRValueSlots& values, IRCleanupSlots& cleanup,
+static QORE_INTERN_ALWAYS_INLINE void giveLastUseCallArgSlots(IRValueSlots& values, IRCleanupSlots& cleanup,
         const std::vector<QoreIRValue>& operands, size_t start_index,
         const std::vector<uint32_t>& value_use_counts,
         const std::unordered_map<uint32_t, int32_t>* borrowed_slots, const std::vector<int32_t>& borrowed_temps,
@@ -10530,6 +10539,34 @@ DLLLOCAL QORE_IR_COLD_NOINLINE bool irCallDirectGiven(const IRConsumedCallArgs& 
     return used_inline_ir;
 }
 
+//! makes a CallDirect call of a function with reference parameters whose arguments' last use is the call by the fast
+//! call path, when the interpreter does not run it inline (issue #7271)
+/** As irCallDirectGiven(), with the arguments read from their slots here.  Out of line, so that
+    QoreIRInterpreter::execute(), which calls it only for such a call, keeps its code.
+
+    @return true: the call was made, with its value in \a res
+*/
+DLLLOCAL QORE_IR_COLD_NOINLINE bool irCallDirectGivenRefParams(const IRConsumedCallArgs& consumed,
+        RuntimeLocationCache rl_cache, const QoreIRFunction& func, QoreIRCallDirectInstruction* direct_inst,
+        QoreProgram* pgm, bool debug_active, QoreValue& res, ExceptionSink* xsink) {
+    int nargs = static_cast<int>(direct_inst->operands.size());
+    constexpr int SMALL_BUF = 8;
+    uint64_t nb_buf[SMALL_BUF];
+    std::unique_ptr<uint64_t[]> nb_heap;
+    uint64_t* nanboxed_args = nb_buf;
+    if (nargs > SMALL_BUF) {
+        nb_heap.reset(new uint64_t[nargs]);
+        nanboxed_args = nb_heap.get();
+    }
+    for (int i = 0; i < nargs; ++i) {
+        nanboxed_args[i] = toBits(getIRValue(consumed.values, direct_inst->operands[i]));
+    }
+    bool inline_may_invalidate_external_caches = true;
+    irCallDirectGiven(consumed, rl_cache, func, direct_inst, pgm, debug_active, nanboxed_args, res,
+        inline_may_invalidate_external_caches, xsink);
+    return true;
+}
+
 DLLLOCAL QORE_IR_COLD_NOINLINE bool irCallStaticDirectGiven(const IRConsumedCallArgs& consumed,
         QoreIRCallStaticDirectInstruction* static_inst, QoreProgram* pgm, RuntimeLocationCache rl_cache,
         const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* explicit_inst,
@@ -10545,6 +10582,53 @@ DLLLOCAL QORE_IR_COLD_NOINLINE bool irCallStaticDirectGiven(const IRConsumedCall
     // a reference given to the call that it did not release is released when it returns
     given.release();
     return used_inline_ir;
+}
+
+//! makes a CallStaticDirect call whose arguments' last use is the call by the fast call path, if the interpreter can
+//! run it inline or the method has reference parameters (issue #7271)
+/** The references of those arguments are given to the call, as irCallDirectGiven() gives them to a function call.  Out
+    of line, so that QoreIRInterpreter::execute(), which calls it only for a call with such arguments, keeps its code.
+
+    @return true if the call was made, with its value in \a res (NOTHING with an exception raised); false if not:
+    nothing was done, and the caller makes the call through the AST
+*/
+DLLLOCAL QORE_IR_COLD_NOINLINE bool irCallStaticDirectGivenLastUse(const IRConsumedCallArgs& consumed,
+        const QoreIRFunction& func, QoreIRCallStaticDirectInstruction* static_inst,
+        const StaticMethodCallNode* static_call_expr, QoreProgram* pgm, RuntimeLocationCache rl_cache,
+        QoreValue& res, ExceptionSink* xsink) {
+    int nargs = static_cast<int>(static_inst->operands.size());
+    // an inline static method call has neither a receiver type nor explicit type arguments
+    if (!pgm || static_inst->receiver_type_info || static_call_expr->getReceiverTypeInfo()
+            || static_inst->explicit_type_param_inst || static_call_expr->getExplicitTypeParamInstantiation()
+            || (ensureInterpreterResolvedInlineIRCallState(static_inst, static_inst->method, static_inst->variant,
+                pgm, nargs, false) <= 0 && !static_inst->has_ref_args)) {
+        return false;
+    }
+    constexpr int SMALL_BUF = 8;
+    uint64_t nb_buf[SMALL_BUF];
+    std::unique_ptr<uint64_t[]> nb_heap;
+    uint64_t* nanboxed_args = nb_buf;
+    if (nargs > SMALL_BUF) {
+        nb_heap.reset(new uint64_t[nargs]);
+        nanboxed_args = nb_heap.get();
+    }
+    for (int i = 0; i < nargs; ++i) {
+        nanboxed_args[i] = toBits(getIRValue(consumed.values, static_inst->operands[i]));
+    }
+    bool used_inline_ir;
+    bool inline_may_invalidate_external_caches = true;
+    IRGivenCallArgs given(nargs, xsink);
+    giveLastUseCallArgSlots(consumed.values, consumed.cleanup, static_inst->operands, 0,
+        func.interpreter_value_use_counts, &consumed.weak_load_temp_slots, consumed.borrowed_temp_remaining, given);
+    irCallStaticDirect(given, static_inst, pgm, rl_cache, nullptr, nullptr, nanboxed_args, nargs, res,
+        used_inline_ir, inline_may_invalidate_external_caches, xsink);
+    // a reference given to the call that it did not release is released when it returns
+    given.release();
+    if (xsink && *xsink) {
+        res.discard(xsink);
+        res = QoreValue();
+    }
+    return true;
 }
 
 DLLLOCAL QORE_IR_COLD_NOINLINE bool irCallMethodDirectGiven(const IRConsumedCallArgs& consumed,
@@ -10662,6 +10746,12 @@ DLLLOCAL bool irCallClosureGiven(const IRConsumedCallArgs& consumed, IRValueSlot
 DLLLOCAL bool irCallDirectGiven(const IRConsumedCallArgs& consumed, RuntimeLocationCache rl_cache,
         const QoreIRFunction& func, QoreIRCallDirectInstruction* direct_inst, QoreProgram* pgm, bool debug_active,
         uint64_t* nanboxed_args, QoreValue& res, bool& inline_may_invalidate_external_caches, ExceptionSink* xsink);
+DLLLOCAL bool irCallStaticDirectGivenLastUse(const IRConsumedCallArgs& consumed, const QoreIRFunction& func,
+        QoreIRCallStaticDirectInstruction* static_inst, const StaticMethodCallNode* static_call_expr, QoreProgram* pgm,
+        RuntimeLocationCache rl_cache, QoreValue& res, ExceptionSink* xsink);
+DLLLOCAL bool irCallDirectGivenRefParams(const IRConsumedCallArgs& consumed, RuntimeLocationCache rl_cache,
+        const QoreIRFunction& func, QoreIRCallDirectInstruction* direct_inst, QoreProgram* pgm, bool debug_active,
+        QoreValue& res, ExceptionSink* xsink);
 DLLLOCAL bool irCallStaticDirectGiven(const IRConsumedCallArgs& consumed,
         QoreIRCallStaticDirectInstruction* static_inst, QoreProgram* pgm, RuntimeLocationCache rl_cache,
         const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* explicit_inst,
@@ -21605,9 +21695,15 @@ load_local_done:
                         && ensureInterpreterInlineIRFunctionState(direct_inst, pgm, nargs, &func) > 0;
                     if (has_last_use_args && !prefer_inline_ir && !type_name_fast_path) {
                         QoreValue res;
+                        // a call of a function with reference parameters that the interpreter does not run inline (its
+                        // callee is native code, in tiered execution) is made by the fast call path, which binds the
+                        // parameters as this path does (issue #7271)
                         // The call's arguments are released before its exception check: a destructor that raises
                         // must discard the result before the next instruction can take it as a return value (#6093).
-                        {
+                        if (!direct_inst->has_ref_args || explicit_inst
+                                || !irCallDirectGivenRefParams(IRConsumedCallArgs{values, cleanup, consumed_call_args,
+                                    weak_load_temp_slots, borrowed_temp_remaining}, rl_cache, func, direct_inst, pgm,
+                                    debug_active, res, xsink)) {
                             ReferenceHolder<QoreListNode> arg_list(
                                 buildArgList(values, direct_inst->operands, 0, xsink), xsink);
                             if (xsink && *xsink) {
@@ -21703,25 +21799,34 @@ load_local_done:
                     int nargs = static_cast<int>(static_inst->operands.size());
                     if (hasLastUseCallArgSlots(values, static_inst->operands, 0,
                             value_use_counts)) {
-                        QoreListNode* arg_list = buildArgList(values,
-                            static_inst->operands, 0, xsink);
-                        if (xsink && *xsink) {
-                            if (arg_list) {
-                                arg_list->deref(xsink);
+                        QoreValue res;
+                        // a call that the interpreter runs inline, or of a static method with reference parameters,
+                        // is given the references of its arguments whose last use it is and made by the fast call
+                        // path, as a function call is (see the CallDirect case; issue #7271); the others are made
+                        // through the AST
+                        if (!irCallStaticDirectGivenLastUse(IRConsumedCallArgs{values, cleanup, consumed_call_args,
+                                weak_load_temp_slots, borrowed_temp_remaining}, func, static_inst, static_call_expr,
+                                pgm, rl_cache, res, xsink)) {
+                            QoreListNode* arg_list = buildArgList(values,
+                                static_inst->operands, 0, xsink);
+                            if (xsink && *xsink) {
+                                if (arg_list) {
+                                    arg_list->deref(xsink);
+                                }
+                                return returnAfterUnhandledException();
                             }
-                            return returnAfterUnhandledException();
-                        }
-                        consumeLastUseCallArgSlots(values, cleanup,
-                            static_inst->operands, 0, value_use_counts, &weak_load_temp_slots,
-                            borrowed_temp_remaining, xsink);
-                        if (xsink && *xsink) {
-                            if (arg_list) {
-                                arg_list->deref(xsink);
+                            consumeLastUseCallArgSlots(values, cleanup,
+                                static_inst->operands, 0, value_use_counts, &weak_load_temp_slots,
+                                borrowed_temp_remaining, xsink);
+                            if (xsink && *xsink) {
+                                if (arg_list) {
+                                    arg_list->deref(xsink);
+                                }
+                                return returnAfterUnhandledException();
                             }
-                            return returnAfterUnhandledException();
+                            StaticMethodCallNode clone(*static_call_expr, arg_list);
+                            res = evalTmpCallAndRef(&clone, xsink);
                         }
-                        StaticMethodCallNode clone(*static_call_expr, arg_list);
-                        QoreValue res = evalTmpCallAndRef(&clone, xsink);
                         if (xsink && *xsink) {
                             return returnAfterUnhandledException();
                         }
