@@ -2278,6 +2278,45 @@ AsyncIoSandboxContext capture_async_io_sandbox_context() {
     return AsyncIoSandboxContext();
 }
 
+//! The contexts that carry only the module cleanup flags of work that the cleanup handed over, for the timer callback of
+//! the host (see QoreSandboxContext::ModuleCleanupFlagsOnly, qore#7010): created when the library is loaded and never
+//! deleted (their shared pointers have no-op deleters), so that the I/O thread allocates nothing to dispatch the
+//! callback, and has no fallback to the context of the code that added the timer
+static QoreSandboxContext aio_cleanup_flags_ctx_live(true, false, QoreSandboxContext::ModuleCleanupFlagsOnly::Flags);
+static QoreSandboxContext aio_cleanup_flags_ctx_canceled(true, true,
+    QoreSandboxContext::ModuleCleanupFlagsOnly::Flags);
+static void aio_cleanup_flags_ctx_keep(const QoreSandboxContext*) {
+}
+static const AsyncIoSandboxContext aio_cleanup_flags_live(&aio_cleanup_flags_ctx_live, aio_cleanup_flags_ctx_keep);
+static const AsyncIoSandboxContext aio_cleanup_flags_canceled(&aio_cleanup_flags_ctx_canceled,
+    aio_cleanup_flags_ctx_keep);
+
+//! Releases the arguments of a work item, in its release context if it has one (see AsyncWorkItem::release_ctx)
+/** The arguments of the timer callback of the host hold the data of a timer of other code, whose destructors are that
+    code's: they are released in its sandbox, with its restrictions and work generation (qore#7010).  The common case
+    (no release context) only tests the pointer.  The helpers are held in place, so that nothing allocates between
+    taking the arguments and releasing them
+*/
+static void aio_release_item_args(QoreListNode*& args, const AsyncIoSandboxContext& release_ctx,
+        ExceptionSink* xsink) {
+    if (!args) {
+        return;
+    }
+    QoreListNode* a = args;
+    args = nullptr;
+    if (!release_ctx) {
+        a->deref(xsink);
+        return;
+    }
+    std::optional<QoreSandboxContextHelper> release_guard;
+    if (release_ctx->manager || release_ctx->policy_manager || release_ctx->isolation) {
+        release_guard.emplace(*release_ctx);
+    }
+    QoreSubmitterRestrictionsHelper release_restrictions(release_ctx->caller_restrictions);
+    QoreWorkGenerationHelper release_gen(release_ctx->work_gen);
+    a->deref(xsink);
+}
+
 void QoreCallDispatcher::dispatchAbortAsync(QoreObject* spop_obj, const std::string& owner,
         AsyncIoSandboxContext sandbox_ctx, AsyncIoNativeTask* after_abort, bool after_abort_on_complete,
         qore_program_id_t app_pgm_id) {
@@ -2431,23 +2470,8 @@ void QoreCallDispatcher::releaseWorkItem(AsyncWorkItem& item, ExceptionSink* xsi
         item.callback->deref(xsink);
         item.callback = nullptr;
     }
-    if (item.args) {
-        // the arguments of the host's timer callback, which hold the timer's data, are released in the context of
-        // the code that added the timer (see AsyncWorkItem::release_ctx, qore#7010)
-        // the common case (no release context: every item but the host's timer callback) only tests the pointer
-        if (!item.release_ctx) {
-            item.args->deref(xsink);
-        } else {
-            std::unique_ptr<QoreSandboxContextHelper> release_guard;
-            if (item.release_ctx->manager || item.release_ctx->policy_manager || item.release_ctx->isolation) {
-                release_guard.reset(new QoreSandboxContextHelper(*item.release_ctx));
-            }
-            QoreSubmitterRestrictionsHelper release_restrictions(item.release_ctx->caller_restrictions);
-            QoreWorkGenerationHelper release_gen(item.release_ctx->work_gen);
-            item.args->deref(xsink);
-        }
-        item.args = nullptr;
-    }
+    // in the context of the code that added the timer for the host's timer callback (qore#7010)
+    aio_release_item_args(item.args, item.release_ctx, xsink);
     if (item.pgm) {
         // must match enqueue()'s depRef() - deref() would decrement the strong
         // refcount but not the dc counter, stranding the program past shutdown
@@ -2737,9 +2761,8 @@ void QoreCallDispatcher::stop(ExceptionSink* xsink) {
         if (item.callback) {
             item.callback->deref(xsink);
         }
-        if (item.args) {
-            item.args->deref(xsink);
-        }
+        // in the context of the code that added the timer for the host's timer callback (qore#7010)
+        aio_release_item_args(item.args, item.release_ctx, xsink);
         if (item.controller) {
             item.controller->deref(xsink);
         }
@@ -3323,11 +3346,11 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         // connection, or try another address) would not be checked against the sandbox (see AsyncIoSandboxContext)
         // (a context kept only for the module cleanup's delegation has no sandbox to apply: the sandbox lookups of the
         // worker then resolve normally)
-        std::unique_ptr<QoreSandboxContextHelper> sandbox_guard;
+        std::optional<QoreSandboxContextHelper> sandbox_guard;
         // the isolation of a trusted build that submitted the operation holds in its steps as well (qore#6536)
         if (async_item.sandbox_ctx && (async_item.sandbox_ctx->manager || async_item.sandbox_ctx->policy_manager
                 || async_item.sandbox_ctx->isolation)) {
-            sandbox_guard.reset(new QoreSandboxContextHelper(*async_item.sandbox_ctx));
+            sandbox_guard.emplace(*async_item.sandbox_ctx);
         }
         // the item runs for code that is sandboxed or acts for sandboxed code also where its context has no sandbox
         // to apply (module code acting for sandboxed code): its exceptions are raised for that code (qore#7286)
@@ -3792,23 +3815,8 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         if (async_item.callback) {
             async_item.callback->deref(xsink);
         }
-        if (async_item.args) {
-            // the arguments of the host's timer callback, which hold the timer's data, are released in the context of
-            // the code that added the timer (see AsyncWorkItem::release_ctx, qore#7010)
-            // the common case (no release context: every item but the host's timer callback) only tests the pointer
-            if (!async_item.release_ctx) {
-                async_item.args->deref(xsink);
-            } else {
-                std::unique_ptr<QoreSandboxContextHelper> release_guard;
-                if (async_item.release_ctx->manager || async_item.release_ctx->policy_manager
-                        || async_item.release_ctx->isolation) {
-                    release_guard.reset(new QoreSandboxContextHelper(*async_item.release_ctx));
-                }
-                QoreSubmitterRestrictionsHelper release_restrictions(async_item.release_ctx->caller_restrictions);
-                QoreWorkGenerationHelper release_gen(async_item.release_ctx->work_gen);
-                async_item.args->deref(xsink);
-            }
-        }
+        // in the context of the code that added the timer for the host's timer callback (qore#7010)
+        aio_release_item_args(async_item.args, async_item.release_ctx, xsink);
 
         // Clear all thread-local data (program tld hash + thread_local vars + thread
         // resources) to prevent data from leaking between unrelated tasks on the same
@@ -9373,15 +9381,11 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 item_ctx = std::move(te.sandbox_ctx);
             } else {
                 if (async_io_module_cleanup_delegate(te.sandbox_ctx)) {
-                    try {
-                        item_ctx = std::make_shared<const QoreSandboxContext>(*te.sandbox_ctx,
-                            QoreSandboxContext::ModuleCleanupFlagsOnly::Flags);
-                    } catch (std::bad_alloc&) {
-                        // the callback is part of the cleanup all the same, in the timer's context: acceptable only as
-                        // the full context of the code that added the timer gives the host's callback weaker rights,
-                        // never more (it runs in that code's sandbox, with its restrictions)
-                        item_ctx = te.sandbox_ctx;
-                    }
+                    // one of the contexts that carry only the cleanup's flags, which exist for the life of the
+                    // library: nothing is allocated, and the callback never gets the timer's context, whose work
+                    // generation would make what it creates the timer's code's
+                    item_ctx = te.sandbox_ctx->module_cleanup_canceled ? aio_cleanup_flags_canceled
+                        : aio_cleanup_flags_live;
                 }
                 release_ctx = std::move(te.sandbox_ctx);
             }
