@@ -1084,7 +1084,8 @@ void AbstractMethod::checkAbstract(const char* cname, const char* mname, vmap_t&
 
 // try to find match non-abstract variants in base classes (allows concrete variants to be inherited from another
 // parent class)
-void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
+bool AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
+    bool changed = false;
     //printd(5, "AbstractMethodMap::parseInit() this: %p cname: %s scl: %p ae: %d\n", this, qc.name.c_str(), scl,
     //    empty());
     for (amap_t::iterator i = begin(), e = end(); i != e;) {
@@ -1108,6 +1109,7 @@ void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
                     scl->parseAddAncestors(m);
                 }
                 qore_method_private::get(*m)->getFunction()->replaceAbstractVariant(v);
+                changed = true;
                 continue;
             }
             ++vi;
@@ -1120,6 +1122,7 @@ void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
             ++i;
         }
     }
+    return changed;
 }
 
 //! returns true if a parent class in \a scl has the abstract variant of the method \a name with the signature \a sig
@@ -4243,12 +4246,14 @@ void BCNode::initializeBuiltin() {
     }
 }
 
-void BCList::parseResolveAbstract() {
+bool BCList::parseResolveAbstract() {
+    bool changed = false;
     for (auto& i : *this) {
-        if (i->sclass) {
-            i->sclass->priv->parseResolveAbstract();
+        if (i->sclass && i->sclass->priv->parseResolveAbstract()) {
+            changed = true;
         }
     }
+    return changed;
 }
 
 void BCList::rescanParents(QoreClass* cls) {
@@ -10296,28 +10301,35 @@ int qore_class_private::parseResolveHierarchy() {
     return 0;
 }
 
-void qore_class_private::parseResolveAbstract() {
+bool qore_class_private::parseResolveAbstract() {
     // nothing is resolved again for a committed user class (see parseInitPartial())
     if (!parse_resolve_abstract && !(committed && !sys)) {
         parse_resolve_abstract = true;
 
         if (!scl) {
-            return;
+            return false;
         }
 
         // recurses to the base classes whose abstract methods are not yet resolved (see initializeHierarchy())
         if (parse_check_stack(loc)) {
-            return;
+            return false;
         }
-        scl->parseResolveAbstract();
+        bool parents_changed = scl->parseResolveAbstract();
 
         // the abstract variants that the parent classes have implemented since they were merged are not pending here
         // (qore#7206)
         ahm.parseDropResolvedInParents(*this, *scl);
 
         // search for new concrete variants of abstract variants last
-        ahm.parseInit(*this, scl);
+        abstract_dispatch_changed = ahm.parseInit(*this, scl) || parents_changed;
+        // A concrete variant installed on a method precedes the inherited variants checked during parseInit().
+        // Recheck the effective order here and in descendants that can inherit the changed method (qore#7425).
+        if (abstract_dispatch_changed && !sys && !qore_program_ops(getProgram()).parseExceptionRaised()) {
+            DeclarationTypeParamScopeHelper type_param_scope;
+            parseCheckReturnTypeHierarchy();
+        }
     }
+    return !committed && abstract_dispatch_changed;
 }
 
 void qore_class_private::recheckBuiltinMethodHierarchy() {
@@ -11315,12 +11327,12 @@ static bool return_type_compatible(const QoreTypeInfo* parent_rt, const QoreType
 
 // returns the return type of a variant of a method as a class sees it: the type arguments of the class's parent
 // class instantiation are substituted for the type parameters of a generic parent class
-static const QoreTypeInfo* class_return_type(const qore_class_private& cls, const MethodFunctionBase* f,
-        const QoreTypeInfo* rt) {
-    if (!qore_type_contains_type_parameter(rt) || qore_class_private::sameDeclaration(f->getClass(), cls.cls)) {
+static const QoreTypeInfo* class_return_type(const qore_class_private& cls, const MethodVariantBase* v) {
+    const QoreTypeInfo* rt = v->getSignature()->getReturnTypeInfo();
+    if (!qore_type_contains_type_parameter(rt) || qore_class_private::sameDeclaration(v->getClass(), cls.cls)) {
         return rt;
     }
-    const QoreTypeInfo* receiver = cls.getConcreteParameterizedBaseTypeInfo(f->getClass(), false);
+    const QoreTypeInfo* receiver = cls.getConcreteParameterizedBaseTypeInfo(v->getClass(), false);
     return receiver ? qore_substitute_type_params_if_needed(rt, receiver) : rt;
 }
 
@@ -11346,7 +11358,7 @@ int MethodFunctionBase::checkReturnTypeResolution(const qore_class_private& cls,
         }
         pv->parseResolveUserSignature();
         const AbstractFunctionSignature* psig = pv->getSignature();
-        const QoreTypeInfo* prt = class_return_type(cls, &parent_func, psig->getReturnTypeInfo());
+        const QoreTypeInfo* prt = class_return_type(cls, pv);
         if (!QoreTypeInfo::hasType(prt)) {
             continue;
         }
@@ -11372,7 +11384,7 @@ int MethodFunctionBase::checkReturnTypeResolution(const qore_class_private& cls,
                 if (!by_position && !named_variant_may_be_selected(gv, pv)) {
                     continue;
                 }
-                const QoreTypeInfo* grt = class_return_type(cls, g, gsig->getReturnTypeInfo());
+                const QoreTypeInfo* grt = class_return_type(cls, gv);
                 if (return_type_compatible(prt, grt)) {
                     continue;
                 }
@@ -11382,20 +11394,20 @@ int MethodFunctionBase::checkReturnTypeResolution(const qore_class_private& cls,
                 const char* pname = same_name ? QoreTypeInfo::getPath(prt) : QoreTypeInfo::getName(prt);
                 QoreString desc;
                 const QoreProgramLocation* loc;
-                if (qore_class_private::sameDeclaration(g->getClass(), cls.cls)) {
+                if (qore_class_private::sameDeclaration(gv->getClass(), cls.cls)) {
                     const UserSignature* usig = dynamic_cast<const UserSignature*>(gsig);
                     loc = usig ? usig->getParseLocation() : &loc_builtin;
                     desc.sprintf("child class method %s::%s(%s) returning %s cannot %s parent class method %s::%s(%s) "
-                        "returning %s", g->getClass()->getName(), getName(), gsig->getSignatureText(), gname,
+                        "returning %s", gv->getClass()->getName(), getName(), gsig->getSignatureText(), gname,
                         gsig == override_sig ? "override" : "overload", parent_func.getClass()->getName(), getName(),
                         psig->getSignatureText(), pname);
                 } else {
                     loc = cls.loc ? cls.loc : &loc_builtin;
                     desc.sprintf("class '%s' cannot inherit method %s::%s(%s) returning %s with parent class method "
                         "%s::%s(%s) returning %s: calls of '%s' in this class are resolved in %s::%s() first",
-                        cls.name.c_str(), g->getClass()->getName(), getName(), gsig->getSignatureText(), gname,
+                        cls.name.c_str(), gv->getClass()->getName(), getName(), gsig->getSignatureText(), gname,
                         parent_func.getClass()->getName(), getName(), psig->getSignatureText(), pname, getName(),
-                        g->getClass()->getName(), getName());
+                        gv->getClass()->getName(), getName());
                 }
                 if (gsig != override_sig) {
                     desc.concat(by_position
