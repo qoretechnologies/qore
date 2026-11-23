@@ -3065,11 +3065,41 @@ static bool quic_test_idle_close_at_submit() {
     quic_test_idle_close_last_token = token;
     return true;
 }
+
+//! the last value of QORE_QUIC_TEST_UNRESPONSIVE_CLOSE_AT_SUBMIT that closed a session (guarded by
+//! quic_test_idle_close_lock)
+static std::string quic_test_unresponsive_close_last_token;
+
+//! Test hook: closes the session of the next client request submitted after
+//! QORE_QUIC_TEST_UNRESPONSIVE_CLOSE_AT_SUBMIT got a new value as unresponsive, as if the peer response timeout of an
+//! earlier request had expired between connect and submit (see setPeerResponseTimeout())
+/** It fires once per value, as quic_test_idle_close_at_submit() does.
+
+    @return true if the session of the request is to be closed
+*/
+static bool quic_test_unresponsive_close_at_submit() {
+    QoreEnvironmentValue token_holder("QORE_QUIC_TEST_UNRESPONSIVE_CLOSE_AT_SUBMIT");
+    const char* token = token_holder.c_str();
+    if (!token || !*token) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(quic_test_idle_close_lock);
+    if (quic_test_unresponsive_close_last_token == token) {
+        return false;
+    }
+    quic_test_unresponsive_close_last_token = token;
+    return true;
+}
 #endif
 
 bool QuicSession::refuseRequestOnClosedLocked(ExceptionSink* xsink) {
 #ifdef DEBUG
     if (!idle_closed_.load(std::memory_order_acquire) && quic_test_idle_close_at_submit()) {
+        closeIdleLocked();
+    }
+    if (!idle_closed_.load(std::memory_order_acquire) && quic_test_unresponsive_close_at_submit()) {
+        // closed as handleExpiryLocked() closes a connection whose peer response timeout expired
+        peer_unresponsive_.store(true, std::memory_order_release);
         closeIdleLocked();
     }
 #endif
