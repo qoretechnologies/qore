@@ -437,6 +437,29 @@ list<auto> sub own_exits(list<int> l) {
     return r;
 }
 
+# operators in the body of an inner loop that reads no index of its own: their own indexes, and the outer loop's
+# (not 0 from the second element on) after each
+list<auto> sub operators_in_inner(list<string> outer) {
+    list<auto> r = ();
+    hash<auto> data = {"a": (0, 1, 2), "b": ("x", "y", "z")};
+    foreach string o in (outer) {
+        foreach int i in ((1,)) {
+            r += fmt(select (5, 6, 7), $# != 1);
+            r += fmt(map $# + 10, (5, 6, 7), $# != 0);
+            r += fmt(map {$1: $#}, ("p", "q"));
+            r += fmt(map {$1: $#}, ("p", "q", "s"), $# > 0);
+            r += fmt((takewhile $# < 2, (1, 2, 3)));
+            r += fmt((takeuntil $# == 1, (1, 2, 3)));
+            r += fmt(map $# + 100, "single");
+            r += fmt(select "single", $# == 0);
+            r += fmt(map $# + 200, new ListIterator((1, 2)));
+            r += fmt(map (find %b in data where (%a == $#)), (1, 2));
+        }
+        r += "o" + $#;
+    }
+    return r;
+}
+
 # the loop variable is a member
 class Holder {
     public {
@@ -489,6 +512,7 @@ out += "inner exits index " + fmt(inner_exits((1, 2, 3), True));
 out += "operator after exits " + fmt(operator_after_exits((1, 2, 3)));
 out += "own exits " + fmt(own_exits((0, 1, 2, 3, 4)));
 out += "member " + fmt(member_target((1, 2)));
+out += "operators in inner " + fmt(operators_in_inner(("A", "B", "C")));
 # the same loops in a map: the operator's index after each
 out += "in map " + fmt(map (direct(("p", "q")), $#, sum_list((1, 2)), $#, nested(("A",), ("x",)), $#), (0, 1));
 foreach string line in (out) {
