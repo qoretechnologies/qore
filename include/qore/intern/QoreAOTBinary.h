@@ -3398,6 +3398,13 @@ struct AOTRegexCaseSlotId {
     bool is_negated = false; //!< true for CaseNodeNegRegex (~! match)
 };
 
+//! Converts a constant hash key of an AOT image to the default encoding of the process (qore#6840)
+/** qcc compiles in UTF-8, while the code of an image runs in the default encoding of its process, in which the keys of
+    the hashes that it makes at run time are stored: a key that is not ASCII is converted; one that is not valid UTF-8,
+    or that the process encoding cannot represent, is kept as it is, and names no key of a hash in that encoding
+*/
+DLLLOCAL void qore_aot_key_to_process_encoding(std::string& key);
+
 //! Identity for a single step in an LValuePath instruction
 struct AOTLVPathStepId {
     uint8_t kind;              //!< LVPathStepKind

@@ -7047,6 +7047,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                 step.slot_id = QoreAOTBinaryReader::readU32(ptr);
                 const char* sname = reader.readStringRef(ptr);
                 step.name = sname ? sname : "";
+                // a constant hash key of an image is in UTF-8; the code uses it in the process encoding (qore#6840)
+                if (step.kind == LVPathStepKind::HashKeyConst) {
+                    qore_aot_key_to_process_encoding(step.name);
+                }
                 step.operand_idx = QoreAOTBinaryReader::readU32(ptr);
                 // Slice steps carry an SSA id vector (HashKeySlice /
                 // ListIndexSlice / ListRangeSlice) — matches writer's wire format.

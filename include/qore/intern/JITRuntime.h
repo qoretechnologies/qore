@@ -225,6 +225,36 @@ uint64_t qore_rt_make_string(const char* str);
 
 //! Create a QoreStringNode from string bytes and return as NaN-boxed QoreValue.
 uint64_t qore_rt_make_string_len(const char* str, uint64_t len);
+
+//! A constant hash key of AOT code that is not ASCII text, which the image converts to the process encoding (qore#6840)
+/** qcc compiles in UTF-8, while a compiled program runs in the default encoding of its process, in which the keys of
+    the hashes that it makes at run time are stored: such a key is converted once, when it is first used, by
+    qore_rt_aot_key().  The layout is that of the LLVM global that QoreIRToLLVM::emitHashKeyOperands() emits:
+    <tt>{ptr, i64, ptr, i64, i32, i32}</tt>
+*/
+struct QoreAotKeySlot {
+    //! the key in UTF-8, with a terminating NUL
+    const char* src;
+    //! the size of src in bytes
+    uint64_t src_len;
+    //! the key in the default encoding of the process, with a terminating NUL, once it has been converted
+    const char* key;
+    //! the 64-bit prehash of key (as qore_ir_precompute_string_hash() computes it)
+    uint64_t hash64;
+    //! the 32-bit prehash of key
+    uint32_t hash32;
+    //! 1 once key and the hashes are set (read with acquire semantics)
+    uint32_t state;
+};
+
+//! Returns the key of the slot in the default encoding of the process, converting it on its first use (qore#6840)
+/** A key that the process encoding cannot represent raises the ENCODING-CONVERSION-ERROR that the interpreted modes
+    raise for the same key, at each use, and the UTF-8 bytes are returned then, which name no key of a hash in the
+    process encoding; the generated code branches to its exception path before it uses them
+
+    @return the key; never nullptr
+*/
+const char* qore_rt_aot_key(QoreAotKeySlot* slot, ExceptionSink* xsink);
 //! As qore_rt_make_string_len() for ASCII text: the string has its ASCII prefix known (qore#6625)
 uint64_t qore_rt_make_ascii_string_len(const char* str, uint64_t len);
 

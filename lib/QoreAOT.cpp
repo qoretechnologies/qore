@@ -204,6 +204,18 @@ static_assert(QORE_AOT_STRING_EXPRESSION_MAX_NODES <= QORE_AOT_WIRE_STRING_EXPRE
 
 // Final-artifact emission settings belong to the compiling thread. Parsing and JIT execution
 // keep their original locations; LLVM backend workers consume already-mapped debug metadata.
+// a constant hash key of compiled code that is ASCII text has the same bytes in every process encoding; another key is
+// converted to the encoding of the process when it is used (qore_rt_aot_key()), so the summaries of the specialized
+// paths, which embed the key's bytes and prehashes as constants, take only ASCII keys (qore#6840)
+static bool qore_aot_key_is_ascii(const std::string& key) {
+    for (unsigned char c : key) {
+        if (c & 0x80) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static thread_local std::vector<std::pair<std::string, std::string>> aot_file_prefix_maps;
 
 void QoreAOT::setFilePrefixMaps(const std::vector<std::pair<std::string, std::string>>& maps) {
@@ -7843,6 +7855,16 @@ static bool qore_aot_get_fixed_hash_remap(const QoreIRFunction& func,
         result.input_keys.push_back(value->second);
     }
     result.output_keys = make_hash->keys;
+    for (const std::string& key : result.input_keys) {
+        if (!qore_aot_key_is_ascii(key)) {
+            return false;
+        }
+    }
+    for (const std::string& key : result.output_keys) {
+        if (!qore_aot_key_is_ascii(key)) {
+            return false;
+        }
+    }
     result.result_type_info = make_hash->typeInfo;
     return true;
 }
@@ -8503,7 +8525,8 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
                 auto base = hash_values.find(inst->operands[0].id);
                 const auto* access =
                     static_cast<const QoreIRHashKeyAccessInstruction*>(inst);
-                if (base == hash_values.end() || access->key_name.empty()) {
+                if (base == hash_values.end() || access->key_name.empty()
+                        || !qore_aot_key_is_ascii(access->key_name)) {
                     return false;
                 }
                 int index = -1;
@@ -8902,7 +8925,7 @@ static bool qore_aot_get_collection_op(const QoreIRFunction& func,
                 return false;
             }
             const auto* access = static_cast<const QoreIRHashKeyAccessInstruction*>(operation);
-            if (access->key_name.empty()) {
+            if (access->key_name.empty() || !qore_aot_key_is_ascii(access->key_name)) {
                 return false;
             }
             result.key = access->key_name;
@@ -8919,7 +8942,7 @@ static bool qore_aot_get_collection_op(const QoreIRFunction& func,
             const auto* access =
                 static_cast<const QoreIRHashKeyAccessInstruction*>(
                     operation);
-            if (access->key_name.empty()) {
+            if (access->key_name.empty() || !qore_aot_key_is_ascii(access->key_name)) {
                 return false;
             }
             result.key = access->key_name;
@@ -11953,7 +11976,7 @@ static bool qore_aot_collect_int_expression_summaries(
     auto append_hash_projection = [&](AOTIntExpressionInfo& expression,
             AOTIntExpressionNodeKind kind, int8_t param,
             const std::string& key) {
-        if (param < 0 || key.empty()) {
+        if (param < 0 || key.empty() || !qore_aot_key_is_ascii(key)) {
             return -1;
         }
         AOTIntExpressionNodeInfo node;
@@ -13261,7 +13284,7 @@ static bool qore_aot_collect_float_expression_summaries(
     };
     auto append_hash_key = [&](AOTFloatExpressionInfo& expression,
             int8_t param, const std::string& key) {
-        if (param < 0 || key.empty()) {
+        if (param < 0 || key.empty() || !qore_aot_key_is_ascii(key)) {
             return -1;
         }
         for (size_t i = 0; i < expression.nodes.size(); ++i) {
@@ -18030,6 +18053,9 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     info.collection_op.index_param = rec.collection_op_index_param;
     info.collection_op.string_index_char = rec.collection_op_string_index_char;
     info.collection_op.key = rec.collection_op_key;
+    if (!qore_aot_key_is_ascii(info.collection_op.key)) {
+        return false;
+    }
     if (!info.collection_op) {
         if (info.collection_op.base_param != -1
                 || info.collection_op.index_param != -1
@@ -18423,6 +18449,9 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             node.param = input.param;
             node.constant = input.constant;
             node.key = input.key;
+            if (!qore_aot_key_is_ascii(node.key)) {
+                return false;
+            }
             bool is_source = node.kind == AOTIntExpressionNodeKind::ListSize
                 || node.kind == AOTIntExpressionNodeKind::StringSize
                 || node.kind == AOTIntExpressionNodeKind::StringLength;
@@ -18560,6 +18589,9 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             node.param = input.param;
             node.constant = input.constant;
             node.key = input.key;
+            if (!qore_aot_key_is_ascii(node.key)) {
+                return false;
+            }
             bool is_bool = false;
             if (node.kind == AOTFloatExpressionNodeKind::Param) {
                 if (node.param < 0 || node.param >= static_cast<int>(info.num_params)
@@ -18654,6 +18686,10 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             node.param = input.param;
             node.int_constant = input.int_constant;
             node.string_constant = input.string_constant;
+            if (node.kind == AOTStringExpressionNodeKind::HashKeyString
+                    && !qore_aot_key_is_ascii(node.string_constant)) {
+                return false;
+            }
             bool is_string = node.kind != AOTStringExpressionNodeKind::IntParam
                 && node.kind != AOTStringExpressionNodeKind::IntConstant;
             if (node.kind == AOTStringExpressionNodeKind::StringParam

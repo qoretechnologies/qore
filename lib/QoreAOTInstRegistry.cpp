@@ -4280,6 +4280,10 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
         step.slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
         const char* name = ctx.reader.readStringRef(ctx.ptr);
         step.name = name ? name : "";
+        // a constant hash key of an image is in UTF-8; the code uses it in the process encoding (qore#6840)
+        if (step.kind == LVPathStepKind::HashKeyConst) {
+            qore_aot_key_to_process_encoding(step.name);
+        }
         step.operand_idx = QoreAOTBinaryReader::readU32(ctx.ptr);
         // Slice steps: read the SSA id vector that writeLValuePath
         // serialized for HashKeySlice / ListIndexSlice / ListRangeSlice.

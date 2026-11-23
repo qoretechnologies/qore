@@ -103,6 +103,63 @@ static QoreIRPrecomputedStringHash qore_ir_precompute_string_hash(const std::str
     };
 }
 
+//! the operands of a constant hash key of compiled code: the key's bytes in the process encoding and their prehashes
+struct QoreIRKeyOperands {
+    llvm::Value* key;
+    llvm::Value* hash64;
+    llvm::Value* hash32;
+};
+
+//! Returns the operands of a constant hash key (qore#6840)
+/** qcc compiles in UTF-8, while its code runs in the default encoding of its process, in which the keys of the hashes
+    that the code makes at run time are stored: an ASCII key has the same bytes in every encoding and is a constant,
+    as before, as is any key of the JIT, which compiles in the process; another key of AOT code has a slot in the
+    module (QoreAotKeySlot), which qore_rt_aot_key() fills with the key converted to the process encoding and its
+    prehashes when the code first uses it; the hashes are read from the slot after the call
+*/
+static QoreIRKeyOperands qore_ir_emit_key(llvm::IRBuilder<>& b, llvm::Module& module, bool aot,
+        const std::string& key, const llvm::Twine& name) {
+    llvm::LLVMContext& ctx = module.getContext();
+    llvm::Type* i64 = llvm::Type::getInt64Ty(ctx);
+    llvm::Type* i32 = llvm::Type::getInt32Ty(ctx);
+    llvm::PointerType* ptr = llvm::PointerType::getUnqual(ctx);
+    bool ascii = true;
+    for (unsigned char c : key) {
+        if (c & 0x80) {
+            ascii = false;
+            break;
+        }
+    }
+    // code that the JIT compiles in the process runs in the encoding that its keys were parsed in: only qcc's code,
+    // parsed in UTF-8, converts them
+    if (ascii || !aot) {
+        QoreIRPrecomputedStringHash hash = qore_ir_precompute_string_hash(key);
+        return {b.CreateGlobalString(key, name), llvm::ConstantInt::get(i64, hash.hash64),
+            llvm::ConstantInt::get(i32, hash.hash32)};
+    }
+    // one slot per key in the module: {src, src_len, key, hash64, hash32, state}
+    llvm::StructType* slot_type = llvm::StructType::get(ctx, {ptr, i64, ptr, i64, i32, i32});
+    char slot_name[64];
+    snprintf(slot_name, sizeof(slot_name), "qore_aot_key.%016llx.%zu",
+        static_cast<unsigned long long>(XXH64(key.data(), key.size(), 0)), key.size());
+    llvm::GlobalVariable* slot = module.getNamedGlobal(slot_name);
+    if (!slot) {
+        llvm::Constant* src_data = llvm::ConstantDataArray::getString(ctx, key, true);
+        auto* src = new llvm::GlobalVariable(module, src_data->getType(), true,
+            llvm::GlobalValue::PrivateLinkage, src_data, std::string(slot_name) + ".src");
+        llvm::Constant* init = llvm::ConstantStruct::get(slot_type, {src,
+            llvm::ConstantInt::get(i64, key.size()), llvm::ConstantPointerNull::get(ptr),
+            llvm::ConstantInt::get(i64, 0), llvm::ConstantInt::get(i32, 0), llvm::ConstantInt::get(i32, 0)});
+        slot = new llvm::GlobalVariable(module, slot_type, false, llvm::GlobalValue::PrivateLinkage, init,
+            slot_name);
+    }
+    auto helper = module.getOrInsertFunction("qore_rt_aot_key", llvm::FunctionType::get(ptr, {ptr, ptr}, false));
+    llvm::Value* converted = b.CreateCall(helper, {slot, llvm::ConstantPointerNull::get(ptr)}, name);
+    llvm::Value* hash64 = b.CreateLoad(i64, b.CreateStructGEP(slot_type, slot, 3), "aot_key_hash64");
+    llvm::Value* hash32 = b.CreateLoad(i32, b.CreateStructGEP(slot_type, slot, 4), "aot_key_hash32");
+    return {converted, hash64, hash32};
+}
+
 std::unordered_map<const AbstractQoreFunctionVariant*,
         BatchCalleeInfo>::const_iterator QoreIRToLLVM::findBatchCallee(
         const AbstractQoreFunctionVariant* variant) const {
@@ -24739,8 +24796,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     return false;
                 }
                 llvm::Value* base_boxed = boxValue(base, inst->operands[0].id);
-                llvm::Constant* key_const = builder->CreateGlobalString(inv->invoke_key_name,
-                        "hash_key");
+                QoreIRKeyOperands invoke_key_ops = qore_ir_emit_key(*builder, module, aot_mode, inv->invoke_key_name, "hash_key");
+                llvm::Value* key_const = invoke_key_ops.key;
                 bool prehashed = qore_ir_use_prehashed_keys();
                 const char* helper_name = dot_eval_only_bases.count(inst->result.id)
                         ? (prehashed ? "qore_rt_hash_key_access_for_call_prehashed"
@@ -24748,14 +24805,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         : (prehashed ? "qore_rt_hash_key_access_prehashed"
                             : "qore_rt_hash_key_access");
                 if (prehashed) {
-                    QoreIRPrecomputedStringHash key_hash =
-                        qore_ir_precompute_string_hash(inv->invoke_key_name);
                     auto helper = module.getOrInsertFunction(helper_name,
                             llvm::FunctionType::get(i64_type,
                                 {i64_type, ptr_type, i64_type, i32_type, ptr_type}, false));
                     result = builder->CreateCall(helper, {base_boxed, key_const,
-                        llvm::ConstantInt::get(i64_type, key_hash.hash64),
-                        llvm::ConstantInt::get(i32_type, key_hash.hash32), xsink_arg});
+                        invoke_key_ops.hash64,
+                        invoke_key_ops.hash32, xsink_arg});
                 } else {
                     auto helper = module.getOrInsertFunction(helper_name,
                             llvm::FunctionType::get(i64_type,
@@ -27510,8 +27565,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     " projection key lowering";
                                 return false;
                             }
-                            llvm::Value* key = builder->CreateGlobalString(
-                                keys[i], "aggregate_projection_key");
+                            llvm::Value* key = qore_ir_emit_key(*builder, module, aot_mode, keys[i],
+                                "aggregate_projection_key").key;
                             llvm::Value* match = builder->CreateCall(
                                 match_helper, {boxed_key, key});
                             llvm::Value* matches = builder->CreateICmpNE(
@@ -34192,8 +34247,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return false;
             }
             llvm::Value* base_boxed = boxValue(base, inst->operands[0].id);
-            llvm::Constant* key_const = builder->CreateGlobalString(hka_inst->key_name,
-                    "hash_key");
+            QoreIRKeyOperands hka_key_ops = qore_ir_emit_key(*builder, module, aot_mode, hka_inst->key_name, "hash_key");
+            llvm::Value* key_const = hka_key_ops.key;
             bool prehashed = qore_ir_use_prehashed_keys();
             bool preserve_weak_result = dot_eval_only_bases.count(inst->result.id);
             bool known_hash = inst->opcode == QoreIROpcode::HashKeyAccessHash;
@@ -34247,12 +34302,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     auto helper = module.getOrInsertFunction(helper_name, ft);
                     auto helper_throwing = module.getOrInsertFunction(
                         helper_throwing_name, ft);
-                    QoreIRPrecomputedStringHash key_hash =
-                        qore_ir_precompute_string_hash(hka_inst->key_name);
                     values[inst->result.id] = emitMaybeInvoke(helper,
                         helper_throwing, {base_boxed, key_const,
-                         llvm::ConstantInt::get(i64_type, key_hash.hash64),
-                         llvm::ConstantInt::get(i32_type, key_hash.hash32), xsink_arg},
+                         hka_key_ops.hash64,
+                         hka_key_ops.hash32, xsink_arg},
                         module, llvm_func, inst);
                 } else {
                     auto ft = llvm::FunctionType::get(i64_type,
@@ -34367,12 +34420,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {i64_type, ptr_type, i64_type, i32_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction(helper_name, hka_ft);
                 auto helper_throwing = module.getOrInsertFunction(helper_throwing_name, hka_ft);
-                QoreIRPrecomputedStringHash key_hash =
-                    qore_ir_precompute_string_hash(hka_inst->key_name);
                 values[inst->result.id] = emitMaybeInvoke(helper, helper_throwing,
                         {base_boxed, key_const,
-                         llvm::ConstantInt::get(i64_type, key_hash.hash64),
-                         llvm::ConstantInt::get(i32_type, key_hash.hash32), xsink_arg},
+                         hka_key_ops.hash64,
+                         hka_key_ops.hash32, xsink_arg},
                         module, llvm_func, inst);
             } else {
                 auto hka_ft = llvm::FunctionType::get(i64_type,
@@ -34394,18 +34445,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return false;
             }
             llvm::Value* base_boxed = boxValue(base, inst->operands[0].id);
-            llvm::Constant* key_const = builder->CreateGlobalString(hka_inst->key_name,
-                    "hash_key_int");
+            QoreIRKeyOperands hka_key_ops = qore_ir_emit_key(*builder, module, aot_mode, hka_inst->key_name, "hash_key_int");
+            llvm::Value* key_const = hka_key_ops.key;
             llvm::Value* result;
             if (qore_ir_use_prehashed_keys()) {
-                QoreIRPrecomputedStringHash key_hash =
-                    qore_ir_precompute_string_hash(hka_inst->key_name);
                 auto helper = module.getOrInsertFunction("qore_rt_hash_key_access_int_prehashed",
                         llvm::FunctionType::get(i64_type,
                             {i64_type, ptr_type, i64_type, i32_type}, false));
                 result = builder->CreateCall(helper, {base_boxed, key_const,
-                    llvm::ConstantInt::get(i64_type, key_hash.hash64),
-                    llvm::ConstantInt::get(i32_type, key_hash.hash32)});
+                    hka_key_ops.hash64,
+                    hka_key_ops.hash32});
             } else {
                 auto helper = module.getOrInsertFunction("qore_rt_hash_key_access_int",
                         llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
@@ -34457,7 +34506,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             llvm::Value* hash_boxed = boxValue(hash_v, inst->operands[0].id);
             llvm::Value* val_boxed  = boxValue(val_v,  inst->operands[1].id);
-            llvm::Constant* key_c = builder->CreateGlobalString(hks_inst->key_name, "hks_key");
+            QoreIRKeyOperands hks_key_ops = qore_ir_emit_key(*builder, module, aot_mode, hks_inst->key_name, "hks_key");
+            llvm::Value* key_c = hks_key_ops.key;
             const void* container_key = hks_inst->container_lv
                     ? reinterpret_cast<const void*>(hks_inst->container_lv)
                     : (hks_inst->container
@@ -36547,8 +36597,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!val0 || !val1) {
                     return false;
                 }
-                llvm::Value* key0 = builder->CreateGlobalString(mhck->keys[0], "hck_" + mhck->keys[0]);
-                llvm::Value* key1 = builder->CreateGlobalString(mhck->keys[1], "hck_" + mhck->keys[1]);
+                llvm::Value* key0 = qore_ir_emit_key(*builder, module, aot_mode, mhck->keys[0], "hck_" + mhck->keys[0]).key;
+                llvm::Value* key1 = qore_ir_emit_key(*builder, module, aot_mode, mhck->keys[1], "hck_" + mhck->keys[1]).key;
                 auto fresh_init = fresh_container_init_types.find(
                     inst->result.id);
                 bool force_auto_type =
@@ -36670,7 +36720,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* vals_arr = allocCallArray(llvm_func, count);
             for (int i = 0; i < count; i++) {
                 // Store constant key pointer
-                llvm::Value* key_str = builder->CreateGlobalString(mhck->keys[i], "hck_" + mhck->keys[i]);
+                llvm::Value* key_str = qore_ir_emit_key(*builder, module, aot_mode, mhck->keys[i], "hck_" + mhck->keys[i]).key;
                 llvm::Value* key_gep = builder->CreateGEP(ptr_type, keys_arr,
                         {llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), i)});
                 builder->CreateStore(key_str, key_gep);
@@ -37305,7 +37355,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* list = getVal(inst->operands[0].id, error);
             if (!list) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
-            llvm::Constant* key_const = builder->CreateGlobalString(mhk->key1, "map_hk_key");
+            QoreIRKeyOperands mhk_key_ops = qore_ir_emit_key(*builder, module, aot_mode, mhk->key1, "map_hk_key");
+            llvm::Value* key_const = mhk_key_ops.key;
             auto helper = module.getOrInsertFunction("qore_rt_map_hash_key_value",
                     llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, key_const, xsink_arg});
@@ -37320,7 +37371,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* list = getVal(inst->operands[0].id, error);
             if (!list) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
-            llvm::Constant* key_const = builder->CreateGlobalString(mhk->key1, "map_hk_key");
+            QoreIRKeyOperands mhk_key_ops = qore_ir_emit_key(*builder, module, aot_mode, mhk->key1, "map_hk_key");
+            llvm::Value* key_const = mhk_key_ops.key;
             auto helper = module.getOrInsertFunction("qore_rt_map_hash_key_int",
                     llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, key_const});
@@ -37336,7 +37388,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!list || !offset) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* offset_int = ensureIntTypeInline(offset, inst->operands[1].id);
-            llvm::Constant* key_const = builder->CreateGlobalString(mhk->key1, "map_hk_key");
+            QoreIRKeyOperands mhk_key_ops = qore_ir_emit_key(*builder, module, aot_mode, mhk->key1, "map_hk_key");
+            llvm::Value* key_const = mhk_key_ops.key;
             auto helper = module.getOrInsertFunction("qore_rt_map_hash_key_offset_int",
                     llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, key_const, offset_int});
@@ -37352,7 +37405,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!list || !scale) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* scale_int = ensureIntTypeInline(scale, inst->operands[1].id);
-            llvm::Constant* key_const = builder->CreateGlobalString(mhk->key1, "map_hk_key");
+            QoreIRKeyOperands mhk_key_ops = qore_ir_emit_key(*builder, module, aot_mode, mhk->key1, "map_hk_key");
+            llvm::Value* key_const = mhk_key_ops.key;
             auto helper = module.getOrInsertFunction("qore_rt_map_hash_key_scale_int",
                     llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, key_const, scale_int});
@@ -37368,16 +37422,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!list || !offset) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* offset_int = ensureIntTypeInline(offset, inst->operands[1].id);
-            llvm::Constant* key_const = builder->CreateGlobalString(mhk->key1,
-                "map_hk_any_key");
-            QoreIRPrecomputedStringHash key_hash = qore_ir_precompute_string_hash(mhk->key1);
+            QoreIRKeyOperands mhk_key_ops = qore_ir_emit_key(*builder, module, aot_mode, mhk->key1, "map_hk_any_key");
+            llvm::Value* key_const = mhk_key_ops.key;
             auto helper = module.getOrInsertFunction(
                 "qore_rt_map_hash_key_offset_any_prehashed",
                 llvm::FunctionType::get(i64_type,
                     {i64_type, ptr_type, i64_type, i32_type, i64_type, ptr_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, key_const,
-                llvm::ConstantInt::get(i64_type, key_hash.hash64),
-                llvm::ConstantInt::get(i32_type, key_hash.hash32), offset_int, xsink_arg});
+                mhk_key_ops.hash64,
+                mhk_key_ops.hash32, offset_int, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -37389,19 +37442,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* list = getVal(inst->operands[0].id, error);
             if (!list) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
-            llvm::Constant* key1_const = builder->CreateGlobalString(mhk->key1, "map_hk_key1");
-            llvm::Constant* key2_const = builder->CreateGlobalString(mhk->key2, "map_hk_key2");
-            QoreIRPrecomputedStringHash key1_hash = qore_ir_precompute_string_hash(mhk->key1);
-            QoreIRPrecomputedStringHash key2_hash = qore_ir_precompute_string_hash(mhk->key2);
+            QoreIRKeyOperands mhk_key1_ops = qore_ir_emit_key(*builder, module, aot_mode, mhk->key1, "map_hk_key1");
+            llvm::Value* key1_const = mhk_key1_ops.key;
+            QoreIRKeyOperands mhk_key2_ops = qore_ir_emit_key(*builder, module, aot_mode, mhk->key2, "map_hk_key2");
+            llvm::Value* key2_const = mhk_key2_ops.key;
             auto helper = module.getOrInsertFunction("qore_rt_hash_map_two_keys_prehashed",
                     llvm::FunctionType::get(i64_type,
                         {i64_type, ptr_type, i64_type, i32_type, ptr_type, i64_type,
                             i32_type, ptr_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, key1_const,
-                llvm::ConstantInt::get(i64_type, key1_hash.hash64),
-                llvm::ConstantInt::get(i32_type, key1_hash.hash32), key2_const,
-                llvm::ConstantInt::get(i64_type, key2_hash.hash64),
-                llvm::ConstantInt::get(i32_type, key2_hash.hash32), xsink_arg});
+                mhk_key1_ops.hash64,
+                mhk_key1_ops.hash32, key2_const,
+                mhk_key2_ops.hash64,
+                mhk_key2_ops.hash32, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -37426,19 +37479,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* list = getVal(inst->operands[0].id, error);
             if (!list) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
-            llvm::Constant* key_const = builder->CreateGlobalString(
-                select_inst->key1, "select_hash_key");
+            QoreIRKeyOperands select_key_ops = qore_ir_emit_key(*builder, module, aot_mode, select_inst->key1,
+                "select_hash_key");
+            llvm::Value* key_const = select_key_ops.key;
             llvm::Value* result;
             if (qore_ir_use_prehashed_keys()) {
-                QoreIRPrecomputedStringHash key_hash =
-                    qore_ir_precompute_string_hash(select_inst->key1);
                 auto helper = module.getOrInsertFunction(
                     "qore_rt_select_hash_key_positive_int_prehashed",
                     llvm::FunctionType::get(i64_type,
                         {i64_type, ptr_type, i64_type, i32_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {list_boxed, key_const,
-                    llvm::ConstantInt::get(i64_type, key_hash.hash64),
-                    llvm::ConstantInt::get(i32_type, key_hash.hash32), xsink_arg});
+                    select_key_ops.hash64,
+                    select_key_ops.hash32, xsink_arg});
             } else {
                 auto helper = module.getOrInsertFunction("qore_rt_select_hash_key_positive_int",
                         llvm::FunctionType::get(i64_type,
@@ -38579,7 +38631,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::ContextRef: {
             const auto* cri = static_cast<const QoreIRContextRefInstruction*>(inst);
-            llvm::Value* key_ptr = qore_ir_create_global_string_ptr(builder, cri->key);
+            llvm::Value* key_ptr = qore_ir_emit_key(*builder, module, aot_mode, cri->key, "context_key").key;
             llvm::Value* stack_offset = llvm::ConstantInt::get(i32_type, cri->stack_offset);
             auto ft = llvm::FunctionType::get(i64_type,
                     {ptr_type, i32_type, ptr_type}, false);
@@ -41037,16 +41089,16 @@ bool QoreIRToLLVM::tryEmitHashKeyAccess(const QoreIRInstruction* inst, llvm::Mod
     llvm::Value* obj_boxed = boxValue(obj_val, inst->operands[0].id);
 
     // Create global constant for the key string
-    llvm::Constant* key_const = builder->CreateGlobalString(key_str, "hash_key");
+    QoreIRKeyOperands key_ops = qore_ir_emit_key(*builder, module, aot_mode, key_str, "hash_key");
+    llvm::Value* key_const = key_ops.key;
 
     if (qore_ir_use_prehashed_keys()) {
-        QoreIRPrecomputedStringHash key_hash = qore_ir_precompute_string_hash(key_str);
         auto helper = module.getOrInsertFunction("qore_rt_hash_key_access_prehashed",
                 llvm::FunctionType::get(i64_type,
                     {i64_type, ptr_type, i64_type, i32_type, ptr_type}, false));
         values[inst->result.id] = builder->CreateCall(helper, {obj_boxed, key_const,
-            llvm::ConstantInt::get(i64_type, key_hash.hash64),
-            llvm::ConstantInt::get(i32_type, key_hash.hash32), xsink_arg});
+            key_ops.hash64,
+            key_ops.hash32, xsink_arg});
     } else {
         auto helper = module.getOrInsertFunction("qore_rt_hash_key_access",
                 llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));

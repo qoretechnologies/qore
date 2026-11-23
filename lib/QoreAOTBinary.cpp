@@ -23362,3 +23362,26 @@ std::string qore_aot_constant_symbol_path(const ClassNs& ptr, const char* name) 
     }
     return getClassConstantPath(ptr.getClass(), name);
 }
+
+void qore_aot_key_to_process_encoding(std::string& key) {
+    if (QCS_DEFAULT == QCS_UTF8) {
+        return;
+    }
+    bool ascii = true;
+    for (unsigned char c : key) {
+        if (c & 0x80) {
+            ascii = false;
+            break;
+        }
+    }
+    if (ascii) {
+        return;
+    }
+    ExceptionSink xsink;
+    QoreString utf8(key.data(), key.size(), QCS_UTF8);
+    TempEncodingHelper converted(utf8, QCS_DEFAULT, &xsink);
+    if (converted) {
+        key.assign(converted->c_str(), converted->size());
+    }
+    xsink.clear();
+}
