@@ -19260,6 +19260,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
         // a string enum lvalue refuses the plain string that the operation leaves, as in the AST interpreter
         // (qore#6195)
         return toBits(QoreValue());
+    } else if (vt == NT_LIST
+            && qore_list_private::get(*lvh.getValue().get<QoreListNode>())->checkValid(xsink)) {
+        // a list freed under a weak reference cannot be changed, as by the other changes (qore#7199)
+        return toBits(QoreValue());
     } else {
         size_t offset = static_cast<size_t>(offset_val.getAsBigInt());
         if (inst->ternary_op == LVTernaryOp::Splice) {

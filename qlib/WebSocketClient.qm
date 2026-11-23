@@ -8357,6 +8357,9 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
 */
 public class WebSocketClientHcioPollOp {
     public {
+        #! The frames that one drain of the queue processes at most; another round drains the rest (issue #6156)
+        const DrainRoundEntries = 1000;
+
         #! How long a close waits for the server's answer without a close timeout (see setCloseTimeout())
         const DefaultCloseWaitMs = 15000;
     }
@@ -8585,7 +8588,8 @@ public class WebSocketClientHcioPollOp {
             return;
         }
 
-        bool have_frames = drainMsgQueue();
+        bool more;
+        bool have_frames = drainMsgQueue(\more);
 
         # Only trigger delivery after start() — before that, poll_op isn't
         # assigned in the WebSocketClient so scheduleDelivery() would fail.
@@ -8594,6 +8598,34 @@ public class WebSocketClientHcioPollOp {
         # something (runInitialDrain(), issue #6154).
         if (have_frames && started && on_poll_complete) {
             on_poll_complete();
+        }
+        # a round is bounded: the frames that it left in the queue are drained by the next round, which is scheduled
+        # here, as no notification may come for them (a burst with nothing after it, issue #6156)
+        if (more) {
+            scheduleDrain();
+        }
+    }
+
+    #! Schedules a drain of the queued frames on a worker of the async I/O controller
+    /** The task references the operation, so that it stays valid until the task has run; a connection that was torn
+        down meanwhile is closed, and notifyIo() then only discards its frames.  A controller that is stopping runs no
+        task: the client's initial drain or close delivers the frames then.
+    */
+    private:internal scheduleDrain() {
+        WebSocketClientHcioPollOp op = self;
+        try {
+            Qore::AsyncIoController::submitTask(task: sub () {
+                try {
+                    op.notifyIo();
+                } catch (hash<ExceptionInfo> ex) {
+                    # the operation was deleted explicitly meanwhile: its client tore the connection down
+                    if (ex.err != "OBJECT-ALREADY-DELETED") {
+                        rethrow;
+                    }
+                }
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            # the controller is stopping
         }
     }
 
@@ -8619,23 +8651,9 @@ public class WebSocketClientHcioPollOp {
         started = True;
         rescheduleHeartbeatTimer();
         if (!msg_queue.empty()) {
-            # the task references the operation, so that it stays valid until the task has run; a connection that
-            # was torn down meanwhile is closed, and notifyIo() then only discards its frames
-            WebSocketClientHcioPollOp op = self;
-            try {
-                Qore::AsyncIoController::submitTask(task: sub () {
-                    try {
-                        op.notifyIo();
-                    } catch (hash<ExceptionInfo> ex) {
-                        # the operation was deleted explicitly meanwhile: its client tore the connection down
-                        if (ex.err != "OBJECT-ALREADY-DELETED") {
-                            rethrow;
-                        }
-                    }
-                });
-            } catch (hash<ExceptionInfo> ex) {
-                # the controller is stopping: the client's initial drain delivers the frames
-            }
+            # the controller is stopping when the task cannot be submitted: the client's initial drain delivers the
+            # frames then
+            scheduleDrain();
         }
     }
 
@@ -8648,7 +8666,14 @@ public class WebSocketClientHcioPollOp {
     */
     bool initialDrain() {
         AutoLock al(process_mutex);
-        return drainMsgQueue();
+        bool more;
+        bool rv = drainMsgQueue(\more);
+        # the frames that the bounded round left are drained by the next round (issue #6156); before start(), start()
+        # schedules it
+        if (more && started) {
+            scheduleDrain();
+        }
+        return rv;
     }
 
     #! Closes the connection when its stream ended without a close frame, or failed
@@ -8683,16 +8708,26 @@ public class WebSocketClientHcioPollOp {
             exists stream_error);
     }
 
-    #! Drains all typed frame hashes from msg_queue and dispatches them
-    /** Non-blocking: returns as soon as the queue is empty or a NOTHING
-        sentinel is observed.  NOTHING is the stream-ended signal emitted by
+    #! Drains the typed frame hashes from msg_queue and dispatches them, at most DrainRoundEntries per call
+    /** Non-blocking: returns as soon as the queue is empty, a NOTHING
+        sentinel is observed, or the round's bound is reached.  NOTHING is the stream-ended signal emitted by
         FrameStateAction::complete / executeError.
+
+        @param more set to @ref True if the round's bound was reached and the queue still has entries, which the
+        caller has drained by another round (issue #6156)
+
         @return True if any frames were processed
     */
-    private bool drainMsgQueue() {
+    private bool drainMsgQueue(reference<bool> more) {
         bool processed = False;
-        int max_entries = 1000;
-        while (max_entries-- > 0) {
+        more = False;
+        int max_entries = DrainRoundEntries;
+        while (True) {
+            if (max_entries-- <= 0) {
+                # the round's bound: the entries left are drained by another round
+                more = !msg_queue.empty();
+                break;
+            }
             *hash<auto> wrap = msg_queue.tryGet();
             if (!exists wrap) {
                 break;  # Queue empty

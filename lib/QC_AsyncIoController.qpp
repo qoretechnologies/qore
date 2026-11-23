@@ -33,6 +33,7 @@
 #include <qore/QoreSocketObject.h>
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/QoreException.h"
 #include "qore/intern/QC_Socket.h"
 
 extern qore_classid_t CID_QUEUE;
@@ -357,6 +358,13 @@ AsyncIoController::copy() {
       It bounds the waits of the cleanup for this work, not a destructor that itself waits for the result of the
       operation that it submits: such a destructor gives its operation a timeout
     - a task that such a destructor or that work submits (@ref submitTask()) is waited for; it is not canceled
+    - work that the cleanup counts and that module code hands over to a thread that is already running (with
+      @ref holdModuleCleanupWork(), as a non-blocking gate that leaves a stream notification to the thread already
+      processing the stream does) is waited for until that thread releases it, at most the grace period after the
+      deadline (\c QORE_MODULE_CLEANUP_HANDOVER_GRACE or the \c --module-cleanup-handover-grace option of \c qore, in
+      milliseconds; by default the deadline, but at least 5 seconds); then a warning that names it is written on the
+      standard error output, the cleanup no longer waits for it, and the modules and their Programs are left as they
+      are, as the threads that hold it can still run in them
     - a timer that such a destructor or that work adds is canceled before the next module is deleted (its cancel
       callback, if it was added with one, runs then); a timer whose
       callback adds it again keeps the cleanup waiting for its callbacks until the deadline, after which the callback
@@ -1324,4 +1332,111 @@ static nothing AsyncIoController::setMaxIoThreads(int max_threads = 0) [dom=NETW
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
     ctrl->setMaxIoThreads((int)max_threads, xsink);
+}
+
+//! Hands work of the module cleanup that the current thread runs over to another thread
+/** At the end of the process, the module cleanup waits for the work that it hands over to the asynchronous I/O
+    controller (the onComplete() of an operation that it canceled, a stream notification, a task) before it deletes the
+    modules and their Programs.  Code that hands such work over to a thread that is already running, which then does
+    it (a non-blocking gate that leaves the work to the thread already processing a stream, for example), takes a
+    handle with this method and gives it to that thread, which releases it with releaseModuleCleanupWork() once it has
+    done the work: the cleanup waits for the handle as it waits for the work itself.
+
+    Outside of work that the module cleanup counts (in particular before the end of the process), this method returns
+    0 and has no effect, so a handle cannot make the cleanup wait for anything it would not wait for anyway.  A handle
+    is waited for at most the grace period after the deadline of the cleanup (\c QORE_MODULE_CLEANUP_HANDOVER_GRACE,
+    \c --module-cleanup-handover-grace; by default the deadline of the cleanup, but at least 5 seconds): then the
+    cleanup writes a warning that names each handle still held (who took it and where), no longer waits for them, and
+    leaves the modules and their Programs as they are, as the threads that hold the handles can still run in them.
+
+    @return a handle to give to releaseModuleCleanupWork(), or 0 if the current thread does not run work that the
+    module cleanup counts
+
+    @par Example:
+    @code{.py}
+# in work of the module cleanup that leaves its job to the thread already running it
+int h = AsyncIoController::holdModuleCleanupWork();
+# ... the thread that does the job, once it has done it:
+on_exit AsyncIoController::releaseModuleCleanupWork(h);
+    @endcode
+
+    @note Module code that hands work over between threads uses this; see @ref Qore::AsyncIoController::releaseModuleCleanupWork() "releaseModuleCleanupWork()"
+
+    @since %Qore 3.0
+*/
+static int AsyncIoController::holdModuleCleanupWork() {
+    // outside of work that the module cleanup counts (in particular before the end of the process): no handle, and
+    // nothing is formatted, as gates call this method at run time for every notification that they leave to another
+    // thread
+    if (!qore_module_cleanup_counted_work_running()) {
+        return 0;
+    }
+    std::string where;
+    try {
+        if (qore_module_cleanup_counted_owner && !qore_module_cleanup_counted_owner->empty()) {
+            where = "owner '";
+            where += *qore_module_cleanup_counted_owner;
+            where += "'";
+        } else {
+            where = "a task or work handed over";
+        }
+        // the location of the code that called this method
+        ReferenceHolder<QoreHashNode> loc(qore_get_parent_caller_location(0), xsink);
+        QoreStringDataHelper file(loc ? loc->getKeyValue("file") : QoreValue());
+        where += " at ";
+        where += file ? file.c_str() : "<unknown>";
+        if (loc) {
+            char buf[32];
+            snprintf(buf, sizeof buf, ":" QLLD, loc->getKeyValue("line").getAsBigInt());
+            where += buf;
+        }
+    } catch (std::bad_alloc&) {
+        // the handle is taken without its description
+    }
+    return qore_module_cleanup_hold_work(where);
+}
+
+//! Releases a handle of holdModuleCleanupWork()
+/** Releasing a handle more than once, releasing 0, or releasing a handle that the module cleanup no longer waits for
+    (once the grace period after its deadline has passed) has no effect.
+
+    @param handle a handle of @ref Qore::AsyncIoController::holdModuleCleanupWork() "holdModuleCleanupWork()"
+
+    @return @ref True if the handle was released by this call, @ref False if it was not held
+
+    @since %Qore 3.0
+*/
+static bool AsyncIoController::releaseModuleCleanupWork(int handle) {
+    return qore_module_cleanup_release_work(handle);
+}
+
+//! Runs code that work of the module cleanup handed over to the current thread, then releases its handle
+/** While the code runs, the current thread runs work that the module cleanup counts (if the handle is held), so that
+    the code can hand work over in turn (see
+    @ref Qore::AsyncIoController::holdModuleCleanupWork() "holdModuleCleanupWork()"); the handle is released when the
+    code returns, also if it raises an exception.  For a handle of 0 (taken outside of such work) or one that is not
+    held, the code runs as usual.
+
+    @param handle a handle of @ref Qore::AsyncIoController::holdModuleCleanupWork() "holdModuleCleanupWork()"
+    @param c the code to run
+
+    @par Example:
+    @code{.py}
+int h = AsyncIoController::holdModuleCleanupWork();
+background AsyncIoController::runModuleCleanupWork(h, sub () { notifyListeners(); });
+    @endcode
+
+    @since %Qore 3.0
+*/
+static nothing AsyncIoController::runModuleCleanupWork(int handle, code<nothing()> c) {
+    // released when the code has run, also if it raises an exception
+    struct ReleaseHelper {
+        int64 handle;
+        DLLLOCAL ~ReleaseHelper() {
+            qore_module_cleanup_release_work(handle);
+        }
+    } release_helper{handle};
+    QoreModuleCleanupCountedWorkScope counted_scope(qore_module_cleanup_handle_held(handle), nullptr);
+    c->execValue(nullptr, xsink).discard(xsink);
+    return QoreValue();
 }

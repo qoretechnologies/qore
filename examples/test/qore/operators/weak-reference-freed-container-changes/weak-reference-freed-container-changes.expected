@@ -1,0 +1,33 @@
+list splice: LIST-ERROR
+list splice with value: LIST-ERROR
+list extract: LIST-ERROR
+list extract with value: LIST-ERROR
+list += list: LIST-ERROR
+list += element: LIST-ERROR
+list push: LIST-ERROR
+list element: LIST-ERROR
+list + element then change: [7, 8]
+splice() then change: [1]
+splice() with a value then change: [7, 8]
+hash += hash: HASH-ERROR
+hash += object: HASH-ERROR
+hash key: HASH-ERROR
+hash - key then change: {x: 1}
+hash - list then change: {x: 1}
+hash + hash then change: {x: 1}
+hash + object then change: {m: 7, x: 1}
+direct splice: LIST-ERROR
+direct extract: LIST-ERROR
+direct unshift: LIST-ERROR
+member splice: LIST-ERROR
+member += hash: HASH-ERROR
+global += list: LIST-ERROR
+global += object: HASH-ERROR
+element splice: LIST-ERROR
+list<int> += list: LIST-ERROR
+hash<string, int> += hash: HASH-ERROR
+hash<HD> += object: HASH-ERROR
+hash<HD> - key then change: {c: 1}
+live list: [9, 2, 3, 4, 5] weak [9, 2, 3, 4, 5]
+live hash: {a: 1, b: 2, c: 3, m: 7} weak {a: 1, b: 2, c: 3, m: 7}
+live hash - key: {b: 2, c: 3, m: 7, y: 2}
