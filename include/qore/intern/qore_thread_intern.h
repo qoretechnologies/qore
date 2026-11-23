@@ -938,6 +938,12 @@ DLLLOCAL bool qore_module_init_library();
 */
 DLLLOCAL void qore_module_init_set_program(const QoreProgram* pgm);
 
+//! forgets \a pgm as the Program of the library module of the innermost barrier, if it was recorded there
+/** For the Program of a compiled module that its initialization recorded although its own load is not library code
+    (see QoreModuleManager::loadBinaryModuleFromDesc(), qore#7361)
+*/
+DLLLOCAL void qore_module_init_unset_program(const QoreProgram* pgm);
+
 //! returns true if a closure of \a pgm created now is created by the initialization of its library module
 /** That is, the innermost module initialization barrier is the one of the library module whose Program is \a pgm;
     such a closure can be run later as deferred module initialization (call_module_init_closure(), qore#6337)
