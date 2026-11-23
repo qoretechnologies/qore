@@ -2278,18 +2278,36 @@ AsyncIoSandboxContext capture_async_io_sandbox_context() {
     return AsyncIoSandboxContext();
 }
 
-//! The contexts that carry only the module cleanup flags of work that the cleanup handed over, for the timer callback of
-//! the host (see QoreSandboxContext::ModuleCleanupFlagsOnly, qore#7010): created when the library is loaded and never
-//! deleted (their shared pointers have no-op deleters), so that the I/O thread allocates nothing to dispatch the
-//! callback, and has no fallback to the context of the code that added the timer
-static QoreSandboxContext aio_cleanup_flags_ctx_live(true, false, QoreSandboxContext::ModuleCleanupFlagsOnly::Flags);
-static QoreSandboxContext aio_cleanup_flags_ctx_canceled(true, true,
-    QoreSandboxContext::ModuleCleanupFlagsOnly::Flags);
-static void aio_cleanup_flags_ctx_keep(const QoreSandboxContext*) {
-}
-static const AsyncIoSandboxContext aio_cleanup_flags_live(&aio_cleanup_flags_ctx_live, aio_cleanup_flags_ctx_keep);
-static const AsyncIoSandboxContext aio_cleanup_flags_canceled(&aio_cleanup_flags_ctx_canceled,
-    aio_cleanup_flags_ctx_keep);
+//! A context that carries only the module cleanup flags of work that the cleanup handed over, for the timer callback of
+//! the host (see QoreSandboxContext::ModuleCleanupFlagsOnly, qore#7010), and its shared pointer, which has a no-op
+//! deleter
+/** Constructed in place when the library is loaded and never destroyed: the holder has no destructor that destroys
+    them, so a copy of the pointer that a work item or a thread still holds at the end of the process (also after the
+    static objects of the library have been destroyed) refers to a live context.  The I/O thread allocates nothing to
+    dispatch the callback, and has no fallback to the context of the code that added the timer
+*/
+class AioImmortalFlagsContext {
+public:
+    DLLLOCAL AioImmortalFlagsContext(bool canceled) {
+        const QoreSandboxContext* c = new (ctx_storage) QoreSandboxContext(true, canceled,
+            QoreSandboxContext::ModuleCleanupFlagsOnly::Flags);
+        ptr = new (ptr_storage) AsyncIoSandboxContext(c, [](const QoreSandboxContext*) {});
+    }
+
+    //! returns the shared pointer of the context
+    DLLLOCAL const AsyncIoSandboxContext& get() const {
+        return *ptr;
+    }
+
+private:
+    alignas(QoreSandboxContext) unsigned char ctx_storage[sizeof(QoreSandboxContext)];
+    alignas(AsyncIoSandboxContext) unsigned char ptr_storage[sizeof(AsyncIoSandboxContext)];
+    const AsyncIoSandboxContext* ptr;
+};
+static_assert(std::is_trivially_destructible<AioImmortalFlagsContext>::value,
+    "the flags-only contexts must not be destroyed");
+static AioImmortalFlagsContext aio_cleanup_flags_live(false);
+static AioImmortalFlagsContext aio_cleanup_flags_canceled(true);
 
 //! Releases the arguments of a work item, in its release context if it has one (see AsyncWorkItem::release_ctx)
 /** The arguments of the timer callback of the host hold the data of a timer of other code, whose destructors are that
@@ -9384,8 +9402,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     // one of the contexts that carry only the cleanup's flags, which exist for the life of the
                     // library: nothing is allocated, and the callback never gets the timer's context, whose work
                     // generation would make what it creates the timer's code's
-                    item_ctx = te.sandbox_ctx->module_cleanup_canceled ? aio_cleanup_flags_canceled
-                        : aio_cleanup_flags_live;
+                    item_ctx = te.sandbox_ctx->module_cleanup_canceled ? aio_cleanup_flags_canceled.get()
+                        : aio_cleanup_flags_live.get();
                 }
                 release_ctx = std::move(te.sandbox_ctx);
             }
