@@ -25,6 +25,8 @@
 %requires RestClient
 %requires RestClientIo
 %requires ServerSentEventClient
+%requires YamlRpcClient
+%requires JsonRpcConnection
 %requires ../../../TestCertificates.qm
 
 %try-module process >= 2.2
@@ -230,6 +232,29 @@ string sub plain_get(object conn, *string url) {
         }
         conn.get(False);
         return \"CLIENT\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub poll_drive(object conn, string url) {
+    try {
+        conn.url = url;
+        conn.real_url = url;
+        object op = conn.startPollConnect();
+        for (int i = 0; i < 1000 && !op.goalReached(); ++i) {
+            op.continuePoll();
+        }
+        return op.goalReached() ? \"GOAL\" : \"NOT-REACHED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub retargeted_ping(object conn, string url) {
+    try {
+        conn.url = url;
+        conn.real_url = url;
+        hash<auto> h = conn.ping(True);
+        return h.ok ? \"UP\" : (\"DOWN: \" + h.info);
     } catch (hash<ExceptionInfo> ex) {
         return why(ex);
     }
@@ -492,6 +517,7 @@ object sub lookalike() {
         addTestCase("a lent HTTP connection's synchronous client, " + m, sub () { testLentSync(m); });
         addTestCase("a lent HTTP connection's synchronous poll, " + m, sub () { testLentSyncPoll(m); });
         addTestCase("a lent REST connection's synchronous client, " + m, sub () { testLentRestSync(m); });
+        addTestCase("the connect paths of a lent connection's pings, " + m, sub () { testConnectPaths(m); });
         addTestCase("restricted code's own clients, " + m, sub () { testOwn(m); });
         addTestCase("a look-alike proof, " + m, sub () { testLookAlike(m); });
         addTestCase("the borrower's sandbox, " + m, sub () { testSandbox(m); });
@@ -779,6 +805,35 @@ object sub lookalike() {
         assertFalse(other.isDataAvailable(0), "the other listener sees no connection, " + mode);
         # trusted code's own client is created
         assertTrue(exists sse.get(False), "trusted code's server-sent event client");
+    }
+
+    #! the ping paths of a lent connection that connect outside get() and getAsync() (a poll operation that restricted
+    #! code drives itself, with and without a ping method, and ping()) reach no target that restricted code set: the
+    #! poll operation's connection manager has no proof of a restricted creator, and the synchronous client is refused
+    #! or checked (qore#7262)
+    testConnectPaths(string mode) {
+        Program p = getProgram(mode);
+        Socket other = listen();
+        on_exit other.close();
+        string url = sprintf("http://127.0.0.1:%d/", other.getSocketInfo().port);
+        # an unbound synchronous client (YAML-RPC): with a ping method, the poll operation's manager is refused; without
+        # one, the synchronous client
+        YamlRpcConnection y1("y", "y", "yamlrpc://127.0.0.1:1/", {"monitor": False},
+            {"ping_method": "GET", "ping_path": "/"});
+        assertRegex("^PERMISSION-DENIED: ", p.callFunction("poll_drive", y1, url),
+            "a poll operation with a ping method that restricted code drives, " + mode);
+        YamlRpcConnection y2("y", "y", "yamlrpc://127.0.0.1:1/", {"monitor": False});
+        assertRegex(UnboundDenied, p.callFunction("poll_drive", y2, url),
+            "a poll operation that restricted code drives, " + mode);
+        YamlRpcConnection y3("y", "y", "yamlrpc://127.0.0.1:1/", {"monitor": False});
+        assertRegex(UnboundDenied, p.callFunction("retargeted_ping", y3, url), "a ping of an unbound connection, " + mode);
+        # a bound synchronous client (JSON-RPC): checked against the creator's target before it connects
+        JsonRpcConnection j("j", "j", "jsonrpc://127.0.0.1:1/", {"monitor": False});
+        assertRegex(LentTargetDenied, p.callFunction("retargeted_ping", j, url), "a ping of a bound connection, " + mode);
+        JsonRpcConnection j2("j", "j", "jsonrpc://127.0.0.1:1/", {"monitor": False});
+        assertRegex(LentTargetDenied, p.callFunction("poll_drive", j2, url),
+            "a poll operation of a bound connection, " + mode);
+        assertFalse(other.isDataAvailable(0), "no connection to the target that restricted code set, " + mode);
     }
 
     #! the synchronous client of a lent HTTP connection's poll operation is checked as get()'s
