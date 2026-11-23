@@ -19,7 +19,8 @@
 /** A container reached on an lvalue path through a weak reference passed the change of its object count to the
     container before it on the path, which does not count a weak reference and can be the container itself: an element
     write through a key holding a weak reference to its own hash failed an assertion in a debug build, and an object
-    added that way was counted twice (qore#7321).  An operation that raised after it changed a container (a merge that
+    added that way was counted twice; a path that went back to an ancestor through a weak reference and down again
+    through the containers below it wrote their changes twice (qore#7321).  An operation that raised after it changed a container (a merge that
     stored a value, then refused the next one) left the counts of the containers above it unchanged and was not
     scanned: a later removal failed an assertion in a debug build, and a cycle that the merge made was not collected
     (qore#7322).  Every mode must print the output of the AST; a debug build checks the counts with its assertions.

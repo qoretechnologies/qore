@@ -434,10 +434,13 @@ stays, so the counts above it and the recursive set of the object holding them m
 
 A weak reference does not count for the container that holds it (`needs_scan()` is false for it), so the change of a
 container reached through a weak reference (`ObjCountRec::shared`) is not written to the entry before it, which can
-even be the container itself (`c.holder.wk.k = 1`, where `wk` is a weak reference to `c.holder`: issue #7321). When
-the container is also on the path through strong references, its strong entry carries the change up the path. The
-containers that hold it strongly but are not on the path do not see a change made through the weak reference
-(issue #7318).
+even be the container itself (`c.holder.wk.k = 1`, where `wk` is a weak reference to `c.holder`: issue #7321). A path
+that crosses a weak reference can come back to containers that are already on it, and then go down again through the
+containers below them (`c.holder.inner.wk.inner.k`, where `wk` is a weak reference to `c.holder`): each edge from a
+holder to a container is written once (`LValueHelper::skipRepeatedPathEdge()`, which runs only on a path with a weak
+step), and the entries of the strong part of the path carry the changes up to the root, as each entry compares the
+count its container had when the path reached it with the count it has now. The containers that hold a container
+reached through a weak reference strongly but are not on the path do not see a change made through it (issue #7318).
 
 ### A write inside a set that a real reference holds
 

@@ -752,6 +752,28 @@ int ObjCountRec::getDifference() {
     return before ? -1 : 0;
 }
 
+bool LValueHelper::skipRepeatedPathEdge(size_t i, const AbstractQoreNode* leaf) const {
+    // a weak reference does not count for the container that holds it, so no change crosses a weak step
+    if (ocvec[i + 1].shared) {
+        return true;
+    }
+    // the change of the value of the lvalue was written to the container holding it, the last entry of the path: a
+    // container on the path that is that value, in the same container, was reached again through a weak reference
+    // (ex: remove c.holder.inner.wk.inner, which removes from inner)
+    if (leaf && ocvec[i + 1].con == leaf && ocvec[i].con == ocvec.back().con) {
+        return true;
+    }
+    // the edge from the same container to the same container was written by an entry deeper on the path: the path
+    // reached the holder again through a weak reference, then came down through containers it had passed before
+    // (ex: c.holder.inner.wk.inner.k, where wk is a weak reference to c.holder)
+    for (size_t j = i + 1, e = ocvec.size() - 1; j < e; ++j) {
+        if (ocvec[j].con == ocvec[i].con && ocvec[j + 1].con == ocvec[i + 1].con && !ocvec[j + 1].shared) {
+            return true;
+        }
+    }
+    return false;
+}
+
 LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
@@ -897,7 +919,8 @@ LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink
 }
 
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
-        ref_pgms(std::move(o.ref_pgms)), ocvec(std::move(o.ocvec)), before(o.before),
+        ref_pgms(std::move(o.ref_pgms)), ocvec(std::move(o.ocvec)), path_has_weak_step(o.path_has_weak_step),
+        before(o.before),
         removal_objects(std::move(o.removal_objects)), removed_objects(std::move(o.removed_objects)), rdt(o.rdt),
         vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
         assignment_only(o.assignment_only), read_access(o.read_access),
@@ -1147,10 +1170,12 @@ LValueHelper::~LValueHelper() {
 
             // write changes to container hierarchy
             if (ocvec.size() > 1) {
+                // the value of the lvalue, whose change was written to the last container of the path above
+                const AbstractQoreNode* leaf = path_has_weak_step && qv ? qv->getInternalNode() : nullptr;
                 for (int i = ocvec.size() - 2; i >= 0; --i) {
-                    // a container reached through a weak reference is not counted by the container that holds the
-                    // weak reference, which can be the container itself (qore#7321)
-                    if (ocvec[i + 1].shared) {
+                    // a path that crosses a weak reference can reach containers that are already on it: each change
+                    // is written once for each container that holds the changed one (qore#7321)
+                    if (path_has_weak_step && skipRepeatedPathEdge(i, leaf)) {
                         continue;
                     }
                     int dt = ocvec[i + 1].getDifference();

@@ -964,6 +964,8 @@ private:
     QoreLValueReferencePrograms ref_pgms;
     // to track object count changes
     ocvec_t ocvec;
+    //! true if a container of ocvec was reached through a weak reference (qore#7321)
+    bool path_has_weak_step = false;
 
     // flag if the changed value was a container before the assignment
     bool before = false;
@@ -1427,10 +1429,18 @@ public:
             "the path containers are lists and hashes");
         ocvec.emplace_back(c);
         ocvec.back().shared = shared;
+        if (shared) {
+            path_has_weak_step = true;
+        }
         if (for_remove) {
             setPathInfo(containerHasDeclaredMembers(c), shared);
         }
     }
+
+    //! returns true if the change of the count of ocvec[i + 1] is not written to ocvec[i]: ocvec[i + 1] was reached
+    //! through a weak reference, or the same edge was written by an entry deeper on the path or by the change of the
+    //! lvalue's value \a leaf in the last container of the path (qore#7321)
+    DLLLOCAL bool skipRepeatedPathEdge(size_t i, const AbstractQoreNode* leaf) const;
 
     //! sets the path information of the container added last to ocvec on a path resolved for delete or remove
     DLLLOCAL void setPathInfo(bool declared_members, bool shared);
@@ -1457,6 +1467,7 @@ public:
     //! called when the path crosses an object: the containers before it are no longer part of the chain
     DLLLOCAL void clearPathContainers() {
         ocvec.clear();
+        path_has_weak_step = false;
         ref_list_type = nullptr;
         ref_decl_type = nullptr;
     }

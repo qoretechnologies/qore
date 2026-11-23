@@ -1,6 +1,12 @@
 same container twice: null
 added through the weak step: "added"
 scans after the object was removed: 0
+replaced through a weak step to an ancestor: 1
+removed through a weak step to an ancestor: False
+scans after the object added through a weak step to an ancestor was removed: 0
+container replaced through a weak step to an ancestor: {}
+same list twice: 1
+same container twice with the key operator: 1
 failed merge: HASHDECL-KEY-ERROR, k: True
 failed merge making a cycle: HASHDECL-KEY-ERROR, cycle: True
 the cycle is collected: 1

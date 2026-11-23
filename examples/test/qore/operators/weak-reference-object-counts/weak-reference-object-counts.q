@@ -19,6 +19,7 @@ class C {
     public {
         string name;
         hash<auto> holder;
+        auto lst;
     }
 
     constructor(string n) {
@@ -81,6 +82,88 @@ sub same_container_twice_add() {
     int start = scan_count ? scan_count() : 0;
     c.holder += {};
     printf("scans after the object was removed: %d\n", scan_count ? scan_count() - start : 0);
+    remove c.holder;
+}
+
+# qore#7321: the path goes back to an ancestor through a weak reference, then down again through a container already
+# on it (c, holder, inner, holder through the weak reference, inner): each change is counted once by each holder
+sub ancestor_twice_assign() {
+    C c("c4");
+    c.holder = {"inner": {}};
+    auto w;
+    w := c.holder.inner;
+    w.wk := c.holder;
+    c.holder.inner.k = new C("x");
+    c.holder.inner.wk.inner.k = 1;
+    printf("replaced through a weak step to an ancestor: %y\n", c.holder.inner.k);
+    remove c.holder;
+}
+
+sub ancestor_twice_remove() {
+    C c("c5");
+    c.holder = {"inner": {}};
+    auto w;
+    w := c.holder.inner;
+    w.wk := c.holder;
+    c.holder.inner.k = new C("x");
+    remove c.holder.inner.wk.inner.k;
+    printf("removed through a weak step to an ancestor: %y\n", exists c.holder.inner.k);
+    remove c.holder;
+}
+
+sub ancestor_twice_add() {
+    C c("c6");
+    c.holder = {"inner": {}};
+    auto w;
+    w := c.holder.inner;
+    w.wk := c.holder;
+    c.holder.inner.wk.inner.k = new C("x");
+    remove c.holder.inner.k;
+    *code scan_count = get_lvalue_scan_count_func();
+    int start = scan_count ? scan_count() : 0;
+    c.holder += {};
+    printf("scans after the object added through a weak step to an ancestor was removed: %d\n",
+        scan_count ? scan_count() - start : 0);
+    remove c.holder;
+}
+
+# qore#7321: the container on the path is itself replaced through a weak step to an ancestor (a removal through a
+# weak step removes nothing yet: qore#7312)
+sub ancestor_twice_container() {
+    C c("c9");
+    c.holder = {"inner": {}};
+    auto w;
+    w := c.holder.inner;
+    w.wk := c.holder;
+    c.holder.inner.k = new C("x");
+    c.holder.inner.wk.inner = {};
+    printf("container replaced through a weak step to an ancestor: %y\n", c.holder.inner);
+    remove c.holder;
+}
+
+# qore#7321 with a list: an element of the list is a weak reference to the list itself
+sub same_list_twice() {
+    C c("c7");
+    c.lst = new list<auto>((c, NOTHING));
+    auto w;
+    w := c.lst;
+    w[1] := c.lst;
+    c.lst[1][0] = 1;
+    printf("same list twice: %y\n", c.lst[0]);
+    remove c.lst;
+}
+
+# qore#7321 with the key operator: c.holder{"wk"}{key}
+sub same_container_twice_keys() {
+    C c("c8");
+    c.holder = {};
+    c.holder.k = c;
+    auto w;
+    w := c.holder;
+    w.wk := c.holder;
+    string key = "k";
+    c.holder{"wk"}{key} = 1;
+    printf("same container twice with the key operator: %y\n", c.holder.k);
     remove c.holder;
 }
 
@@ -150,6 +233,12 @@ sub failed_merge_no_change() {
 const Cases = {
     "same_container_twice": \same_container_twice(),
     "same_container_twice_add": \same_container_twice_add(),
+    "ancestor_twice_assign": \ancestor_twice_assign(),
+    "ancestor_twice_remove": \ancestor_twice_remove(),
+    "ancestor_twice_add": \ancestor_twice_add(),
+    "ancestor_twice_container": \ancestor_twice_container(),
+    "same_list_twice": \same_list_twice(),
+    "same_container_twice_keys": \same_container_twice_keys(),
     "failed_merge": \failed_merge(),
     "failed_merge_cycle": \failed_merge_cycle(),
     "failed_typed_merges": \failed_typed_merges(),
