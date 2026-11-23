@@ -1,0 +1,32 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# StaleA.qm - test module: a library module whose initialization loads a module by its path (qore#7335)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module StaleA {
+    version = "1.0";
+    desc = "test module whose initialization creates a closure and loads a module by its path";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        StaleA::State::init_closure = string sub () { return "A init closure ran"; };
+        # the module that the initialization loads by its path, outside the module path
+        *string path = ENV.STALE_C_PATH;
+        if (path) {
+            load_module(path);
+        }
+    };
+}
+
+#! The public definitions of the test module
+public namespace StaleA {
+#! The module's state
+public class State {
+    public {
+        #! the closure that the module's initialization created
+        static *code init_closure;
+    }
+}
+}

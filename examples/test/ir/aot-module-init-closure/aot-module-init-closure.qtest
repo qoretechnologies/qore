@@ -72,6 +72,8 @@ child: its closure qualifies: False
         lib_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
         module_path = ENV.QORE_MODULE_DIR ?? "";
         addTestCase("closures of the initialization of a module from source or compiled by qcc", \closureTest());
+        addTestCase("the closures of a module that a library module's initialization loads by its path do not "
+            "qualify", \pathLoadTest());
         set_return_value(main());
     }
 
@@ -115,6 +117,51 @@ child: its closure qualifies: False
             if (i.key == "source") {
                 assertEq(Expected, ExecModeHarness::run_ir_tier(sprintf("%s %s -b --enable-debug --exec-mode=tiered "
                     "%s", env, qore_bin, script)), i.key + ", IR tier");
+            }
+        }
+    }
+
+    # StaleA, a library module from source or compiled by qcc, loads StaleC, compiled by qcc, by its path outside the
+    # module path in its initialization: the closure that StaleC's initialization creates does not qualify; the
+    # barrier under which a compiled StaleA is initialized names StaleA's Program, so the load of StaleC under it does
+    # not record StaleC's (qore#7335)
+    pathLoadTest() {
+        TmpDir dir("qore-aot-module-init-closure-path-");
+        string src_dir = join_paths(dir.path, "src");
+        mkdir(src_dir);
+        copy_file(get_script_dir() + "/StaleA.qm", join_paths(src_dir, "StaleA.qm"));
+        # outside the module path
+        string c_dir = join_paths(dir.path, "outside");
+        mkdir(c_dir);
+        copy_file(get_script_dir() + "/StaleC.qm", join_paths(c_dir, "StaleC.qm"));
+        string c_qmod = join_paths(c_dir, "StaleC.qmod");
+        int rc;
+        string output = backquote(sprintf("%s QORE_MODULE_DIR=%s %s -O0 --module -o %s %s 2>&1", lib_env,
+            module_path, qcc_bin, c_qmod, join_paths(c_dir, "StaleC.qm")), \rc);
+        assertEq(0, rc, "qcc StaleC: " + output.substr(-2000));
+        string script = join_paths(dir.path, "stale.q");
+        copy_file(get_script_dir() + "/stale.q", script);
+
+        hash<string, string> dirs = {"source": src_dir};
+        foreach string opt in (OptLevels) {
+            string aot_dir = join_paths(dir.path, "aot" + opt);
+            mkdir(aot_dir);
+            output = backquote(sprintf("%s QORE_MODULE_DIR=%s %s %s --module -o %s %s 2>&1", lib_env,
+                modulePath(src_dir), qcc_bin, opt, join_paths(aot_dir, "StaleA.qmod"),
+                join_paths(src_dir, "StaleA.qm")), \rc);
+            assertEq(0, rc, sprintf("qcc %s StaleA: %s", opt, output.substr(-2000)));
+            dirs{"qmod " + opt} = aot_dir;
+        }
+
+        string expected = "A init closure qualifies: True\nC init closure qualifies: False\n";
+        foreach hash<auto> i in (dirs.pairIterator()) {
+            string env = sprintf("%s STALE_C_PATH=%s QORE_MODULE_DIR=%s", lib_env, c_qmod, modulePath(i.value));
+            foreach string mode in (Modes) {
+                hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s %s -b "
+                    "--enable-debug --exec-mode=%s %s", env, CompileEnv, qore_bin, mode, script));
+                string label = sprintf("StaleA %s, %s", i.key, mode);
+                assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+                assertEq(expected, r.stdout, label);
             }
         }
     }
