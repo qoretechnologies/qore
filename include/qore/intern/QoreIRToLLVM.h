@@ -95,6 +95,10 @@ DLLLOCAL void qore_dbg_force_finalize_cancel(int loop, int64_t index);
 //! (\a call_gives_args), which a parameter of the callee takes over (see QoreIRToLLVM.cpp)
 DLLLOCAL bool qore_ir_fast_entry_refuses_given_args(bool call_gives_args, const AbstractQoreFunctionVariant* variant);
 
+//! The value of QoreIRToLLVM::deferred_element_restore when the exit on an exception restores no implicit element after
+//! the handlers: no element index, which is an int, has this value
+constexpr int64_t QORE_IR_NO_DEFERRED_ELEMENT = INT64_MIN;
+
 class QoreIRToLLVM {
 public:
     explicit QoreIRToLLVM(llvm::LLVMContext& context) : ctx(context) {
@@ -1642,8 +1646,18 @@ private:
             const QoreIRInstruction* inst, llvm::BasicBlock* target);
     //! Emits, at the insertion point, the restoration of the implicit arguments and elements open at \a inst,
     //! innermost first, on a path where an exception leaves the function from \a inst (see
-    //! getImplicitContextRestoreEdge())
+    //! getImplicitContextRestoreEdge()); the element of a foreach statement is restored after the handlers of the
+    //! frame (QoreIRExceptionExitRestore::AfterHandlers): the path stores it in deferred_element_restore instead
     void emitImplicitContextRestore(llvm::Module& module, const QoreIRInstruction* inst);
+    //! The implicit element that an exit on an exception restores after the handlers of the frame have run, which
+    //! run with the element of the loop whose body they are in (qore#7379): the element that the outermost foreach
+    //! statement open at the exit saved (QoreIRExceptionExitRestore::AfterHandlers), which the exit stores
+    //! (emitImplicitContextRestore()), or QORE_IR_NO_DEFERRED_ELEMENT; nullptr in a function with no such push open at
+    //! an exit, created at the function's entry otherwise
+    llvm::AllocaInst* deferred_element_restore = nullptr;
+    //! Emits, at the insertion point of an exit on an exception after the handlers of the frame, the restoration of
+    //! the implicit element that the exit stored in deferred_element_restore, if any
+    void emitDeferredElementRestore(llvm::Module& module);
 
     // Phase 2B — incoming edges feeding function_common_cleanup's phi.
     // Populated by createPerInvokeCleanupLP; consumed by

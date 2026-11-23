@@ -1630,6 +1630,22 @@ enum class QoreIRInstClass : uint8_t {
     those that an append with the same handler follows, and clears the operands of the others.  The IR interpreter
     executes every CheckException alike.
 */
+//! QoreIRInstruction::restore_on_exception_exit: whether and when the frame's exit on an exception restores an
+//! implicit context (or releases an operator's iterator) that the instruction set
+enum class QoreIRExceptionExitRestore : uint8_t {
+    None,           //!< not restored by the frame's exit
+    //! restored (or released) first, before the handlers and the temporaries of the frame: the implicit arguments and
+    //! element of an operator in an expression and its iterator, which the AST interpreter restores and releases when
+    //! the exception unwinds the operator (qore#5670)
+    BeforeHandlers,
+    //! restored after the handlers of the frame have run: the implicit element of a foreach statement, which the AST
+    //! interpreter restores when the exception unwinds the statement, after the blocks of its body, whose handlers run
+    //! with the loop's element (qore#7379).  The push is open at the frame's exit only on an exception that no handler
+    //! of the function around the loop takes (see QoreIRLowering::beginForeachElementExceptionRestore()), so no handler
+    //! of the frame outside of the loop's body runs before the restoration
+    AfterHandlers,
+};
+
 enum class QoreIRReleaseCheck : uint8_t {
     None,       //!< not a release check
     Pending,    //!< a release check that qore_ir_prune_release_checks() has not decided yet (it has its operand)
@@ -1720,8 +1736,10 @@ public:
     // PushImplicitArg / SetImplicitArgv / PushImplicitElement: the lowering restores the context on every path in the
     // function (see QoreIRLowering::lowerWithImplicitContext()), so native code registers it with its frame, whose
     // exception exits restore it; IteratorCreate*: the iterator of a functional operator in an expression, which the IR interpreter's
-    // exception exit releases before the frame's temporaries, as the AST interpreter unwinds the operator (qore#5670)
-    bool restore_on_exception_exit = false;
+    // exception exit releases before the frame's temporaries, as the AST interpreter unwinds the operator (qore#5670);
+    // see QoreIRExceptionExitRestore for when the exit restores a context.  One byte, as a bool: a second member here
+    // would change the layout of the instruction classes, whose members use the tail padding of this class
+    QoreIRExceptionExitRestore restore_on_exception_exit = QoreIRExceptionExitRestore::None;
     // Transient: ReleaseOwnedTemp in the exception cleanup of a functional operator, which only runs once the loop has
     // ended (see qore_ir_is_exception_only_release())
     bool exception_cleanup_release = false;

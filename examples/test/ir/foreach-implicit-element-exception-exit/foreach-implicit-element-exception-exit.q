@@ -4,7 +4,7 @@
 # sees the $# of the caller; see foreach-implicit-element-exception-exit.qtest (qore#7379)
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-list<string> log;
+our list<string> log;
 
 const Data = {"a": (0, 1, 2, 3, 4, 5, 6, 7, 8, 9)};
 const Src = (10, 11, 12, 13, 14, 15, 16, 17);
@@ -189,6 +189,52 @@ sub level1() {
     }
 }
 
+# handlers in the body read the loop's $#, directly and in a find expression, as the exception leaves the function
+sub handlers_in_body() {
+    foreach auto a in (Src) {
+        on_error log += sprintf("handlers on_error %d %d", $#, (find %a in Data where (%a == $#)));
+        on_exit log += sprintf("handlers on_exit %d", $#);
+        if ($# == 5) {
+            thrower();
+        }
+    }
+}
+
+# handlers in the bodies of nested loops
+sub handlers_nested() {
+    foreach auto a in (Src) {
+        on_error log += sprintf("nested outer on_error %d %d", $#, (find %a in Data where (%a == $#)));
+        if ($# == 2) {
+            foreach auto b in (Src) {
+                on_error log += sprintf("nested inner on_error %d %d", $#, (find %a in Data where (%a == $#)));
+                if (id($#) == 6) {
+                    thrower();
+                }
+            }
+        }
+    }
+}
+
+# a handler in the body of a loop whose map raises the exception
+sub handler_map() {
+    foreach auto a in (Src) {
+        on_error log += sprintf("map on_error %d %d", $#, (find %a in Data where (%a == $#)));
+        if ($# == 3) {
+            list<auto> l = map ($# == 5 ? thrower() : $1), Src;
+        }
+    }
+}
+
+# a handler in a block in the body
+sub handler_in_block() {
+    foreach auto a in (Src) {
+        if ($# == 4) {
+            on_error log += sprintf("block on_error %d %d", $#, (find %a in Data where (%a == $#)));
+            thrower();
+        }
+    }
+}
+
 # the caller: the thread's $# after the exception is read by a find expression, a context statement and the catch
 # block, in a loop of the caller
 sub check(string label, code c) {
@@ -227,6 +273,10 @@ check("on_error in body", \on_error_in_body());
 check("three levels", \level1());
 # a closure in the caller's loop that calls the callee
 check("closure", sub () { list_call_reads(); });
+check("handlers in body", \handlers_in_body());
+check("handlers nested", \handlers_nested());
+check("handler map", \handler_map());
+check("handler in block", \handler_in_block());
 
 # the caller's foreach is itself in a callee of a loop: the outer caller's $# after the exception
 sub outer_check() {
@@ -241,5 +291,32 @@ sub outer_check() {
     }
 }
 outer_check();
+
+# a thread_exit from the body of a foreach in a callee: the handlers of the caller's loop that it runs see the caller's
+# $#
+sub exit_thread() {
+    foreach auto a in (Src) {
+        if ($# == 5) {
+            thread_exit;
+        }
+    }
+}
+
+sub thread_exit_caller() {
+    foreach auto o in ((50, 51)) {
+        on_exit log += sprintf("thread_exit on_exit %d %d", $#, (find %a in Data where (%a == $#)));
+        if ($# == 1) {
+            exit_thread();
+        }
+    }
+}
+{
+    Counter c(1);
+    background sub () {
+        on_exit c.dec();
+        thread_exit_caller();
+    }();
+    c.waitForZero();
+}
 
 map printf("%s\n", $1), log;

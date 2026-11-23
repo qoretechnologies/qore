@@ -832,7 +832,7 @@ void qore_ir_find_open_implicit_contexts(const QoreIRFunction& func,
         for (const auto& inst : block->instructions) {
             if ((inst->opcode == QoreIROpcode::PushImplicitArg || inst->opcode == QoreIROpcode::SetImplicitArgv
                     || inst->opcode == QoreIROpcode::PushImplicitElement)
-                    && inst->restore_on_exception_exit) {
+                    && inst->restore_on_exception_exit != QoreIRExceptionExitRestore::None) {
                 any = true;
                 break;
             }
@@ -875,7 +875,7 @@ void qore_ir_find_open_implicit_contexts(const QoreIRFunction& func,
             });
             if ((inst->opcode == QoreIROpcode::PushImplicitArg || inst->opcode == QoreIROpcode::SetImplicitArgv
                     || inst->opcode == QoreIROpcode::PushImplicitElement)
-                    && inst->restore_on_exception_exit) {
+                    && inst->restore_on_exception_exit != QoreIRExceptionExitRestore::None) {
                 state.push_back(inst);
                 continue;
             }

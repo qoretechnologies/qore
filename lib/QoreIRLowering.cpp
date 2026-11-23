@@ -3104,7 +3104,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // Push implicit element ($#) for the current iteration; an exception that leaves the function from the
             // body restores it as for a value foreach (qore#7379; see below)
             QoreIRInstruction* push_element = builder.createPushImplicitElement(index_val, stmt->loc);
-            push_element->restore_on_exception_exit = true;
+            push_element->restore_on_exception_exit = QoreIRExceptionExitRestore::AfterHandlers;
             QoreIRValue old_element = push_element->result;
 
             // Push RefForeachRecord entry to cleanup stack (for return path record)
@@ -3489,11 +3489,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // it, so that an exception that the assignment raises leaves the loop with the enclosing element (qore#6432).
         // An exception that leaves the body for a handler of this function restores it in the loop's element exception
         // block (see beginForeachElementExceptionRestore()); one that leaves the function, with no handler of the
-        // function around the loop, is restored by the frame's exception exit, as the AST interpreter's foreach
-        // statement restores it when the exception unwinds it, so that the caller's code that reads the thread's
-        // implicit element (a find expression, a context statement) sees its own (qore#7379)
+        // function around the loop, is restored by the frame's exception exit after the handlers of the blocks in the
+        // body ran with the loop's element, as the AST interpreter's foreach statement restores it when the exception
+        // unwinds it, so that the caller's code that reads the thread's implicit element (a find expression, a
+        // context statement) sees its own (qore#7379)
         QoreIRInstruction* push_element = builder.createPushImplicitElement(index_val, stmt->loc);
-        push_element->restore_on_exception_exit = true;
+        push_element->restore_on_exception_exit = QoreIRExceptionExitRestore::AfterHandlers;
         QoreIRValue old_element = push_element->result;
 
         // Register a cleanup entry so a non-local exit (return / thread_exit) from
@@ -20476,7 +20477,7 @@ QoreIRValue QoreIRLowering::lowerWithImplicitArgs(QoreIRValue element, QoreIRVal
     QoreIRValue old_element;
     if (index.isValid()) {
         QoreIRInstruction* push_element = builder.createPushImplicitElement(index, loc);
-        push_element->restore_on_exception_exit = true;
+        push_element->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
         old_element = push_element->result;
     }
     QoreIRInstruction* push_argv;
@@ -20486,14 +20487,14 @@ QoreIRValue QoreIRLowering::lowerWithImplicitArgs(QoreIRValue element, QoreIRVal
         builder.createListAppend(argv, element, loc);
         builder.createListAppend(argv, arg1, loc);
         push_argv = builder.createSetImplicitArgv(argv, loc);
-        push_argv->restore_on_exception_exit = true;
+        push_argv->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
         // the implicit arguments own the argument list alone, as the AST interpreter's ArgvContextHelper owns it, so
         // that the PopImplicitArg that restores the old arguments releases it, for each element and on an exception:
         // with the reference of its slot, the list outlived each element (qore#5830)
         builder.createReleaseOwnedTemp(argv, loc);
     } else {
         push_argv = builder.createPushImplicitArg(element, loc);
-        push_argv->restore_on_exception_exit = true;
+        push_argv->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
     }
     QoreIRValue old_argv = push_argv->result;
     // restores the arguments: the old arguments that a fold's SetImplicitArgv keeps in its slot are released with
@@ -21917,7 +21918,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         : withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, map->loc));
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
-    iter_inst->restore_on_exception_exit = true;
+    iter_inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
 
     // an exception that leaves the loop for a handler of this function releases the element, the list built so far,
     // the iterator and the source first (see FunctionalLoopExceptionCleanup)
@@ -22444,7 +22445,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     auto* iter_inst = withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, select->loc));
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
-    iter_inst->restore_on_exception_exit = true;
+    iter_inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
 
     // an exception that leaves the loop for a handler of this function releases the element, the list built so far,
     // the iterator and the source first (see FunctionalLoopExceptionCleanup)
@@ -22829,7 +22830,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     auto* iter_inst = withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, foldl->loc));
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
-    iter_inst->restore_on_exception_exit = true;
+    iter_inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
 
     // an exception that leaves the loop for a handler of this function releases the elements, the iterator and the
     // source first, as the AST interpreter's fold releases its argument list, value and functional iterator (see
@@ -23100,7 +23101,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
     auto* iter_inst = withExceptionTarget(builder.createIteratorCreateReverse(input_list, foldr->loc));
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
-    iter_inst->restore_on_exception_exit = true;
+    iter_inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
 
     // an exception that leaves the loop for a handler of this function releases the elements, the iterator and the
     // source first, as the AST interpreter's fold releases its argument list, value and functional iterator (see
@@ -23572,7 +23573,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         : withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, ms->loc));
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
-    iter_inst->restore_on_exception_exit = true;
+    iter_inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
 
     // an exception that leaves the loop for a handler of this function releases the element, the list built so far,
     // the iterator and the source first (see FunctionalLoopExceptionCleanup)
@@ -24038,7 +24039,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     auto* iter_inst = withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, hm->loc));
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
-    iter_inst->restore_on_exception_exit = true;
+    iter_inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
 
     // an exception that leaves the loop for a handler of this function releases the element, the hash built so far,
     // the iterator and the source first, as for map (see FunctionalLoopExceptionCleanup)
@@ -24429,7 +24430,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     auto* iter_inst = withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, hms->loc));
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
-    iter_inst->restore_on_exception_exit = true;
+    iter_inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
 
     // an exception that leaves the loop for a handler of this function releases the element, the hash built so far,
     // the iterator and the source first, as for map (see FunctionalLoopExceptionCleanup)
@@ -24903,7 +24904,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     }
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
-    iter_inst->restore_on_exception_exit = true;
+    iter_inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
     if (release_plain_source) {
         // The iterator now owns the source. The load's discriminator preserves a reference read until the
         // statement ends, even if the stages subsequently change the variable (qore#6638).
@@ -26672,9 +26673,10 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
 
     // the implicit element is set after the assignment, as the AST interpreter sets it, so that an exception that the
     // assignment raises leaves the loop with the enclosing element (qore#6432); an exception that leaves the function
-    // from the body restores it at the frame's exception exit, as for the other value foreach loops (qore#7379)
+    // from the body restores it at the frame's exception exit, after the frame's handlers, as for the other value
+    // foreach loops (qore#7379)
     QoreIRInstruction* push_element = builder.createPushImplicitElement(state.foreach_index, loc);
-    push_element->restore_on_exception_exit = true;
+    push_element->restore_on_exception_exit = QoreIRExceptionExitRestore::AfterHandlers;
     QoreIRValue old_element = push_element->result;
 
     // a return from the body releases the iterator, which holds the source, and the source, then the loop
@@ -27002,7 +27004,7 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
     auto* iter_inst = withExceptionTarget(builder.createIteratorCreateIterate(source, loc));
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
-    iter_inst->restore_on_exception_exit = true;
+    iter_inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
 
     // an exception that leaves the operator (a take/drop count that raises or is negative, a predicate, the
     // iterator's next()) releases the element, the list built so far, the iterator and the source first, as the AST

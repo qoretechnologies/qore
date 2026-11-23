@@ -1828,19 +1828,29 @@ static __attribute__((noinline, cold)) void releaseOperatorIterators(
     }
 }
 
-//! Restores the implicit arguments and elements open at \a inst, innermost first (see QoreIRInterpreter::execute())
+//! Restores the implicit arguments and elements open at \a inst that the frame's exit restores at the point \a when,
+//! innermost first (see QoreIRInterpreter::execute())
 /** Only an exception that leaves the frame calls it, so it is kept out of the interpreter's loop: inlined into the
-    unwinding code at each of its many call sites, it made the compiler generate worse code for the normal path
+    unwinding code at each of its many call sites, it made the compiler generate worse code for the normal path.
+
+    The contexts of operators are restored before the handlers and the temporaries of the frame
+    (QoreIRExceptionExitRestore::BeforeHandlers), the element of a foreach statement after the handlers, which run
+    with it (QoreIRExceptionExitRestore::AfterHandlers, qore#7379); a foreach statement's push encloses those of the
+    operators in its body, so restoring them in two passes keeps the order innermost first.
 */
 template <typename Values>
 static __attribute__((noinline, cold)) void restoreOpenImplicitContexts(const QoreIRFunction& func,
-        const QoreIRInstruction* inst, Values& values, ExceptionSink* xsink) {
+        const QoreIRInstruction* inst, Values& values, QoreIRExceptionExitRestore when, ExceptionSink* xsink) {
+    assert(when != QoreIRExceptionExitRestore::None);
     auto it = func.interpreter_open_implicit_contexts.find(inst);
     if (it == func.interpreter_open_implicit_contexts.end()) {
         return;
     }
     for (size_t i = it->second.size(); i > 0; --i) {
         const QoreIRInstruction* push = it->second[i - 1];
+        if (push->restore_on_exception_exit != when) {
+            continue;
+        }
         uint32_t id = push->result.id;
         if (id >= values.size()) {
             continue;
@@ -11531,7 +11541,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto addActiveIterator = [&](FunctionalOperatorInterface* iter, const QoreIRInstruction* create_inst) {
         auto it = func.interpreter_iterator_slot_boundary.find(create_inst);
         active_iterators[iter] = IRActiveIterator{it != func.interpreter_iterator_slot_boundary.end()
-            ? it->second : 0, iterator_seq++, !create_inst || !create_inst->restore_on_exception_exit};
+            ? it->second : 0, iterator_seq++,
+            !create_inst || create_inst->restore_on_exception_exit == QoreIRExceptionExitRestore::None};
     };
     auto& on_block_exit_handlers = frame.on_block_exit_handlers;
     // Catch exception stack for rethrow support
@@ -12744,8 +12755,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             qore_ir_hold_pending_returns(func, values, frame.locals_slot_cache);
         }
         dbgReportException();
-        if (!func.interpreter_open_implicit_contexts.empty() && block && ip < block->instructions.size()) {
-            restoreOpenImplicitContexts(func, block->instructions[ip].get(), values, xsink);
+        // the instruction that left the frame, whose open implicit contexts are restored in two steps (see
+        // restoreOpenImplicitContexts()); taken before the handlers run
+        const QoreIRInstruction* exit_inst = !func.interpreter_open_implicit_contexts.empty() && block
+                && ip < block->instructions.size()
+            ? block->instructions[ip].get()
+            : nullptr;
+        if (exit_inst) {
+            restoreOpenImplicitContexts(func, exit_inst, values, QoreIRExceptionExitRestore::BeforeHandlers, xsink);
         }
         if (!frame.active_iterators.empty()) {
             releaseOperatorIterators(frame.active_iterators);
@@ -12771,6 +12788,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         if (!frame.on_block_exit_handlers.empty()) {
             executeOnBlockExitHandlers(frame.on_block_exit_handlers, xsink, &frame,
                 dbgHandlerStatements(), dbgHandlerProgram());
+        }
+        // the elements of the foreach statements that the exception leaves, after the handlers of the blocks in
+        // their bodies ran with them (qore#7379)
+        if (exit_inst) {
+            restoreOpenImplicitContexts(func, exit_inst, values, QoreIRExceptionExitRestore::AfterHandlers, xsink);
         }
         dbgFunctionExit();
         cleanupValues(values, frame.cleanup, xsink, true, cleanup_log, &func.interpreter_exception_release_groups);

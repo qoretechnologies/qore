@@ -18,7 +18,8 @@
 /** An exception that left a function from the body of a foreach statement with no handler of the function around the
     loop did not restore the implicit element that the loop set, so after the call the code of the caller that reads
     the thread's implicit element (find expressions, context statements) saw the callee's index instead of its own in
-    ir, jit, tiered and AOT executables.
+    ir, jit, tiered and AOT executables.  The handlers of the blocks in the loop's body run with the loop's element
+    before the restoration, as in the AST interpreter.
 
     foreach-implicit-element-exception-exit.q prints the values; the AST interpreter's output must be the expected
     one, and every other execution mode, the IR tier and AOT executables compiled with -O0 and -O3 must give the same.
@@ -43,8 +44,47 @@ class ForeachImplicitElementExceptionExitTest inherits QUnit::Test {
             "on_error in body 0:0:0:[0] 1:1:1:[1] 2:2:2:[2]",
             "three levels 0:0:0:[0] 1:1:1:[1] 2:2:2:[2]",
             "closure 0:0:0:[0] 1:1:1:[1] 2:2:2:[2]",
+            "handlers on_exit 0",
+            "handlers on_exit 1",
+            "handlers on_exit 2",
+            "handlers on_exit 3",
+            "handlers on_exit 4",
+            "handlers on_exit 5",
+            "handlers on_error 5 5",
+            "handlers on_exit 0",
+            "handlers on_exit 1",
+            "handlers on_exit 2",
+            "handlers on_exit 3",
+            "handlers on_exit 4",
+            "handlers on_exit 5",
+            "handlers on_error 5 5",
+            "handlers on_exit 0",
+            "handlers on_exit 1",
+            "handlers on_exit 2",
+            "handlers on_exit 3",
+            "handlers on_exit 4",
+            "handlers on_exit 5",
+            "handlers on_error 5 5",
+            "handlers in body 0:0:0:[0] 1:1:1:[1] 2:2:2:[2]",
+            "nested inner on_error 6 6",
+            "nested outer on_error 2 2",
+            "nested inner on_error 6 6",
+            "nested outer on_error 2 2",
+            "nested inner on_error 6 6",
+            "nested outer on_error 2 2",
+            "handlers nested 0:0:0:[0] 1:1:1:[1] 2:2:2:[2]",
+            "map on_error 3 3",
+            "map on_error 3 3",
+            "map on_error 3 3",
+            "handler map 0:0:0:[0] 1:1:1:[1] 2:2:2:[2]",
+            "block on_error 4 4",
+            "block on_error 4 4",
+            "block on_error 4 4",
+            "handler in block 0:0:0:[0] 1:1:1:[1] 2:2:2:[2]",
             "outer 0 0",
             "outer 1 1",
+            "thread_exit on_exit 0 0",
+            "thread_exit on_exit 1 1",
         );
     }
 
