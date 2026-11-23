@@ -4642,14 +4642,18 @@ public:
     DLLLOCAL static int checkModernSourceDefault(const QoreParseOptions& current, const char* filename,
             ExceptionSink* xsink);
 
+    /** @param open_path the file opened, if not \a filename, which is the name of the source and the script path: a
+        module that is library code is read from the path where it was judged to be, and keeps the name it was found
+        by (qore#7319)
+    */
     DLLLOCAL void parseFile(const char* filename, ExceptionSink* xsink, ExceptionSink* wS, int wm,
-            bool first_except_only = false) {
+            bool first_except_only = false, const char* open_path = nullptr) {
         QORE_TRACE("QoreProgram::parseFile()");
 
         printd(5, "QoreProgram::parseFile(%s)\n", filename);
 
         FILE *fp;
-        if (!(fp = fopen(filename, "r"))) {
+        if (!(fp = fopen(open_path ? open_path : filename, "r"))) {
             if ((first_except_only && !exceptions_raised) || !first_except_only)
                 xsink->raiseErrnoException("PARSE-EXCEPTION", errno, "cannot open qore script '%s'", filename);
             exceptions_raised++;

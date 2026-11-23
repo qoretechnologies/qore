@@ -18623,6 +18623,9 @@ QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
         if (reverse) {
             nl = nl->reverse();
         }
+        // the objects removed, as in the AST interpreter (LValueRemoveHelper::doRemove()): the value stays referenced
+        // by the caller until the helper is destroyed (qore#7373)
+        lvh.removedValue(QoreValue(*nl));
         // the caller finishes a "delete" with the lvalue locks released and needs the removed elements
         // to run their destructors
         return nl.release();
@@ -19036,6 +19039,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     QoreListNode* l = lvh.getValue().get<QoreListNode>();
                     if (l && l->size() > 0) {
                         res = l->shift();
+                        // a value taken out of a list reached through a weak reference (qore#7373)
+                        lvh.removedValueThroughWeak(res);
                     }
                 } else if (lvh.getType() != NT_NOTHING && qore_compiled_code_strict_args()) {
                     // matches QoreShiftOperatorNode::evalImpl()
@@ -19049,6 +19054,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     QoreListNode* l = lvh.getValue().get<QoreListNode>();
                     if (l && l->size() > 0) {
                         res = l->pop();
+                        // a value taken out of a list reached through a weak reference (qore#7373)
+                        lvh.removedValueThroughWeak(res);
                     }
                 } else if (lvh.getType() != NT_NOTHING && qore_compiled_code_strict_args()) {
                     // matches QorePopOperatorNode::evalImpl()
@@ -19372,6 +19379,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
                         removed_list = qore_list_private::replace(*vl, offset, length, replacement_val, false, xsink);
                     }
                 }
+                // the elements taken out of a list reached through a weak reference (qore#7373)
+                if (removed_list) {
+                    lvh.removedValueThroughWeak(QoreValue(*removed_list));
+                }
             } else if (vt == NT_STRING) {
                 QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
                 if (length_val.isNothing() && replacement_val.isNothing()) {
@@ -19423,6 +19434,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
                         res = qore_list_private::replace(*vl, offset, length, replacement_val, true, xsink);
                     }
                 }
+                // the elements taken out of a list reached through a weak reference (qore#7373)
+                lvh.removedValueThroughWeak(res);
             } else if (vt == NT_STRING) {
                 // note: safe; lvh.ensureUnique() above materializes any inline short string
                 QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();

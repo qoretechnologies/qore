@@ -940,6 +940,14 @@ public class WebSocketConnection {
         # a backpressure drop in sendDirectLocked() closes the channel; tryRecv() still
         # drains what is left, and the loop ends when the buffer is empty
         while (*binary d = pollDataImmediate()) {
+            # a connection that was force-stopped, also by the send of an earlier frame that timed out, discards the
+            # frames that it has not sent: each of them would wait for the send timeout of its own on a stream that
+            # does not drain, and report it (qore#7395)
+            if (isForceStopped()) {
+                while (pollDataImmediate()) {
+                }
+                return;
+            }
             try {
                 sendDirectLocked(d);
             } catch (hash<ExceptionInfo> ex) {

@@ -944,6 +944,13 @@ DLLLOCAL void qore_module_init_set_program(const QoreProgram* pgm);
 */
 DLLLOCAL void qore_module_init_unset_program(const QoreProgram* pgm);
 
+//! returns true while the initialization of a compiled module whose own load is not library code runs in this thread
+/** Its load is the innermost one (a module that it loads has a load of its own): no library code is initialized
+    then, so its Program does not take the library mark nor is it recorded as the Program of an enclosing library
+    module's initialization (see QoreModuleManager::loadBinaryModuleFromDesc(), qore#7361)
+*/
+DLLLOCAL bool qore_module_load_untrusted_aot_init();
+
 //! returns true if a closure of \a pgm created now is created by the initialization of its library module
 /** That is, the innermost module initialization barrier is the one of the library module whose Program is \a pgm;
     such a closure can be run later as deferred module initialization (call_module_init_closure(), qore#6337)

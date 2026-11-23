@@ -400,6 +400,58 @@ static QoreValue f_dbg_generic_cache_counts(const QoreListNode* params, RuntimeC
     return h.release();
 }
 
+//! Returns whether the module manager judges a module path to be library code, and the path that it then loads
+/** For tests of every path form, also those that the loaders normalize before the check (qore#7319): \a path as the
+    loaders give it, and the directory of the module search path and the name appended to it if the search found the
+    module there; the appended name must be one that the search makes (relative, with no empty, \c "." or \c ".."
+    component)
+*/
+static QoreValue f_dbg_module_path_trust(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    // the string values can be inline short strings (issue #7038)
+    QoreStringDataHelper path(get_param_value(params, 0));
+    QoreValue dir_val = get_param_value(params, 1);
+    QoreValue rel_val = get_param_value(params, 2);
+    if ((dir_val.getType() == NT_STRING) != (rel_val.getType() == NT_STRING)) {
+        xsink->raiseException("DBG-MODULE-PATH-ERROR", "the directory and the appended name are given together");
+        return QoreValue();
+    }
+    std::string load_path;
+    bool trusted;
+    if (dir_val.getType() == NT_STRING) {
+        QoreStringDataHelper rel_str(rel_val);
+        QoreStringDataHelper dir_str(dir_val);
+        std::string rel(rel_str.c_str(), rel_str.size());
+        // only names that the module search makes: the module manager asserts it
+        bool clean = !rel.empty() && rel[0] != '/';
+        for (size_t start = 0; clean;) {
+            size_t end = rel.find('/', start);
+            std::string c = rel.substr(start, end == std::string::npos ? std::string::npos : end - start);
+            if (c.empty() || c == "." || c == "..") {
+                clean = false;
+            }
+            if (end == std::string::npos) {
+                break;
+            }
+            start = end + 1;
+        }
+        if (!clean) {
+            xsink->raiseException("DBG-MODULE-PATH-ERROR", "'%s' is not a name that the module search appends",
+                rel.c_str());
+            return QoreValue();
+        }
+        QoreModuleFoundIn found_in{dir_str.c_str(), rel};
+        trusted = QMM.isTrustedModulePath(path.c_str(), &load_path, &found_in);
+    } else {
+        trusted = QMM.isTrustedModulePath(path.c_str(), &load_path);
+    }
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("trusted", trusted, xsink);
+    if (trusted) {
+        h->setKeyValue("load_path", new QoreStringNode(load_path), xsink);
+    }
+    return h.release();
+}
+
 //! Returns true if the current thread uses the cache of its local data of Programs with module lifetime (qore#7025)
 static QoreValue f_dbg_module_program_cache_enabled(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -16316,16 +16368,19 @@ static void ut_manager_streaming_repeats_on_closed_reused_connection(UnitTestCou
     xsink.clear();
 }
 
-// The repeat is limited as in request(): a request that is not idempotent, or whose closed connection had not
-// served a request, fails with the connection's refusal, and the closed connection is evicted.
-static void ut_manager_streaming_does_not_repeat_unsafe_requests(UnitTestCounters& c) {
+// The repeat is limited as in request(): a request refused at its submit was not sent, so it is repeated whatever its
+// method (RFC 9110 section 9.2.2, qore#7385), but only when its closed connection had served a request; a request on
+// a connection that served none fails with the connection's refusal.  The closed connection is evicted either way.
+static void ut_manager_streaming_repeat_limits(UnitTestCounters& c) {
     struct {
         const char* method;
         bool served;
+        bool repeated;
         const char* label;
     } cases[] = {
-        {"POST", true, "a POST request"},
-        {"GET", false, "a request on a connection that served none"},
+        {"POST", true, true, "a POST request refused at its submit"},
+        {"GET", false, false, "a request on a connection that served none"},
+        {"POST", false, false, "a POST request on a connection that served none"},
     };
     for (auto& tc : cases) {
         ExceptionSink xsink;
@@ -16350,21 +16405,38 @@ static void ut_manager_streaming_does_not_repeat_unsafe_requests(UnitTestCounter
         mgr->addPooledForOrigin(*conn, "127.0.0.1", server.port, false);
 
         QoreChannel* channel_raw = nullptr;
+        bool reused = true;
         int64_t stream_id = mgr->requestStreaming(tc.method, "http", "127.0.0.1", server.port, "/", nullptr,
-            nullptr, 0, channel_raw, &xsink, nullptr, nullptr);
+            nullptr, 0, channel_raw, &xsink, nullptr, &reused);
         ReferenceHolder<QoreChannel> channel(channel_raw, &xsink);
         std::string label = tc.label;
-        UT_ASSERT(c, stream_id < 0 && !channel_raw, (label + " fails").c_str());
-        UT_ASSERT(c, xsink.isException(), (label + ": the refusal reaches the caller").c_str());
-        if (xsink.isException()) {
-            QoreStringValueHelper err(xsink.getExceptionErr());
-            UT_ASSERT(c, !strcmp(err->c_str(), "HTTPCLIENT-STATE-ERROR"),
-                (label + ": the error of the closed connection").c_str());
+        if (tc.repeated) {
+            UT_ASSERT(c, !xsink, (label + ": the request is repeated instead of failing").c_str());
+            UT_ASSERT(c, stream_id >= 0 && channel_raw, (label + ": the repeated request is submitted").c_str());
+            if (channel_raw) {
+                UT_ASSERT_EQ(c, (int64)200, ut_read_streaming_status(channel_raw, &xsink),
+                    (label + ": the repeated request is answered on a new connection").c_str());
+                channel_raw->close();
+            }
+            UT_ASSERT(c, !reused, (label + ": a repeated request is not reported as submitted on a reused "
+                "connection").c_str());
+        } else {
+            UT_ASSERT(c, stream_id < 0 && !channel_raw, (label + " fails").c_str());
+            UT_ASSERT(c, xsink.isException(), (label + ": the refusal reaches the caller").c_str());
+            if (xsink.isException()) {
+                QoreStringValueHelper err(xsink.getExceptionErr());
+                UT_ASSERT(c, !strcmp(err->c_str(), "HTTPCLIENT-STATE-ERROR"),
+                    (label + ": the error of the closed connection").c_str());
+            }
         }
         xsink.clear();
         UT_ASSERT_EQ(c, 1, conn->getSubmitCalls(), (label + ": the closed connection was used once").c_str());
-        UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), (label + ": the closed connection is evicted").c_str());
-        UT_ASSERT_EQ(c, 0, server.accepted.load(), (label + ": the request is not repeated").c_str());
+        // the closed connection is evicted; a repeated request leaves the new connection that served it in the pool
+        UT_ASSERT_EQ(c, tc.repeated ? 1 : 0, mgr->getPoolSize(),
+            (label + ": the closed connection is evicted").c_str());
+        UT_ASSERT_EQ(c, tc.repeated ? 1 : 0, server.accepted.load(),
+            (label + (tc.repeated ? ": the request was repeated on one new connection"
+                : ": the request is not repeated")).c_str());
         server.wakeUnused();
         mgr->closeAll(&xsink);
         xsink.clear();
@@ -25830,7 +25902,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_request_evicts_connection_closed_on_submit(c);
     ut_manager_request_keeps_open_connection_that_refuses(c);
     ut_manager_streaming_repeats_on_closed_reused_connection(c);
-    ut_manager_streaming_does_not_repeat_unsafe_requests(c);
+    ut_manager_streaming_repeat_limits(c);
     ut_manager_streaming_abandon_releases_connection(c);
     ut_manager_new_connection_closed_before_reservation(c);
     ut_manager_closed_new_connection_detached(c);
@@ -28073,6 +28145,45 @@ static QoreValue f_dbg_hold_deref_delete(const QoreListNode* params, RuntimeConf
 static QoreValue f_dbg_hold_deref_last(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return dbg_arm_deref_point_hold(deref_last_hold, qore_dbg_deref_last_hook, dbg_hold_deref_last_hook, params,
         xsink);
+}
+
+//! returns the reads of the size of the list or hash of the weak reference in the first entry of a list, given as
+//! it is held (qore#7375)
+/** The language reads a weak reference that it evaluates through its target; native code can give the weak reference
+    itself to the boolean conversion and to the complex type match, which read the size of its container.
+
+    @param holder a list whose first entry is a weak reference to a list or a hash
+
+    @return a hash: \c bool: the non-strict boolean conversion; \c "list<int>", \c "list<string>",
+    \c "hash<string, int>", \c "hash<string, string>": whether the value matches the type (an empty container with
+    no type matches any complex type of its kind)
+
+    @throw DBG-ARGUMENT-ERROR the first entry is not a weak reference to a list or a hash
+    @throw DEBUG-ERROR the build is not a debug build
+*/
+static QoreValue f_dbg_weak_reference_reads(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    const QoreListNode* holder = get_hard_value_param(params, 0).get<const QoreListNode>();
+    QoreValue v = holder->retrieveEntry(0);
+    if (v.getType() != NT_WEAKREF_LIST && v.getType() != NT_WEAKREF_HASH) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the first entry is a value of type '%s', not a weak reference to "
+            "a list or a hash", v.getFullTypeName());
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("bool", LexicalSemanticPolicy::getAsBoolDefault(v), xsink);
+    auto matches = [&](const char* name, const QoreTypeInfo* ti) {
+        rv->setKeyValue(name, QoreTypeInfo::runtimeAcceptsValue(ti, v) != QTI_NOT_EQUAL, xsink);
+    };
+    matches("list<int>", qore_get_complex_list_type(bigIntTypeInfo));
+    matches("list<string>", qore_get_complex_list_type(stringTypeInfo));
+    matches("hash<string, int>", qore_get_complex_hash_type(bigIntTypeInfo));
+    matches("hash<string, string>", qore_get_complex_hash_type(stringTypeInfo));
+    return rv.release();
+#else
+    xsink->raiseException("DEBUG-ERROR", "dbg_weak_reference_reads() is available in debug builds only");
+    return QoreValue();
+#endif
 }
 
 //! holds the next thread that starts to free a list or hash that has weak holders (qore#7198)
@@ -31757,6 +31868,9 @@ void init_debug_functions(QoreNamespace& qns) {
         hashTypeInfo);
     qns.addBuiltinVariant("dbg_module_program_cache_enabled", f_dbg_module_program_cache_enabled, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_module_path_trust", f_dbg_module_path_trust, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "path", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG,
+        "found_dir", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG, "found_rel");
     qns.addBuiltinVariant("dbg_environment_lookups", f_dbg_environment_lookups, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_retired_type_declarations", f_dbg_retired_type_declarations, QCF_NO_FLAGS,
@@ -32380,6 +32494,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
+    qns.addBuiltinVariant("dbg_weak_reference_reads", f_dbg_weak_reference_reads, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 1, listTypeInfo, QORE_PARAM_NO_ARG, "holder");
     qns.addBuiltinVariant("dbg_hold_container_free", f_dbg_hold_container_free,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "type_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,

@@ -600,11 +600,24 @@ static bool qore_get_as_bool_lexical(const QoreValue& value) {
             const QoreObject* target = value.get<const WeakReferenceNode>()->get();
             return !Strict && target->isValid() && qore_object_ops(target).getAsBoolDefault();
         }
-        // the size of a list or hash, which reads as empty once it is freed (see WeakListReferenceNode::borrow())
-        case NT_WEAKREF_LIST:
-            return !Strict && !value.get<const WeakListReferenceNode>()->borrow()->empty();
-        case NT_WEAKREF_HASH:
-            return !Strict && !value.get<const WeakHashReferenceNode>()->borrow()->empty();
+        // the size of a list or hash, read with a reference of its own, as another thread can free it meanwhile; a
+        // freed container reads as empty (qore#7375; see WeakListReferenceNode::getAsBoolImpl())
+        case NT_WEAKREF_LIST: {
+            if (Strict) {
+                return false;
+            }
+            ExceptionSink xsink;
+            ReferenceHolder<QoreListNode> l(value.get<const WeakListReferenceNode>()->lock(), &xsink);
+            return !l->empty();
+        }
+        case NT_WEAKREF_HASH: {
+            if (Strict) {
+                return false;
+            }
+            ExceptionSink xsink;
+            ReferenceHolder<QoreHashNode> h(value.get<const WeakHashReferenceNode>()->lock(), &xsink);
+            return !h->empty();
+        }
         case NT_FUNCREF:
         case NT_RUNTIME_CLOSURE:
             return !Strict;
