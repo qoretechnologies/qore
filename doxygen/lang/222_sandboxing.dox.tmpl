@@ -792,7 +792,12 @@ authenticate();
     file system, the network and external information, whatever the object itself needs: a method of a network
     client that resolves a location string can read files for code restricted from the file system.  Hand restricted
     code only objects whose every method may act for it, and govern it with a
-    @ref Qore::SandboxManager "SandboxManager", whose policy is the actual boundary of what it can reach.
+    @ref Qore::SandboxManager "SandboxManager", whose policy is the actual boundary of what it can reach.  This also
+    holds for a client object that the host hands over directly (a @ref RestClient::RestClient "RestClient" or any
+    other synchronous client of Qore code): it is lent as any module object is, and is not bound to the target that
+    the host gave it, as the clients of a connection object are (see @ref sandbox_lent_connections): its methods (to
+    copy it for another URL, for example) reach what the restricted code chooses; hand over the connection object
+    instead.
 
     The \c SqlUtil and \c DbDataProvider modules refuse a connection string or datasource configuration this way: the
     variants of @ref SqlUtil::AbstractTable::getTable() "AbstractTable::getTable()",

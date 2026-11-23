@@ -6665,6 +6665,13 @@ void ProgramThreadCountContextHelper::restoreContext() {
     if (!td->capability_frames.empty() && td->capability_frames.back().ctx == this) {
         td->capability_frames.pop_back();
     }
+#ifdef DEBUG
+    // contexts are left in the reverse order of their entry, so no frame of this context is left below the innermost
+    // (a frame left behind would refer to a context that no longer exists)
+    for (const ThreadData::CapabilityFrame& cf : td->capability_frames) {
+        assert(cf.ctx != this);
+    }
+#endif
     // the call budgets started when the Program was entered end with the call
     td->sandbox_budgets.leave(td->tid, this);
     restoreDeferral();
@@ -9133,7 +9140,12 @@ QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm,
     // outside a lent method, nothing that is created under a host grant (a policy barrier, also that of a system-policy
     // capability, whose code runs for the host that created it) is lent: an object that trusted code creates there
     // for restricted code would make the grant outlive itself
-    if (capability) {
+    // the conditions that both cases require come first, so that the stack is looked at only for an object that can
+    // be lent: its class's code is a module's (or spans Programs), and its creator is not restricted from what is lent
+    if (capability && (!code_pgm || !(qore_program_is_module_inline(code_pgm) || spans)
+            || (origin & QoreParseOptions(QORE_GRANT_LENT_DOMAINS)))) {
+        *capability = false;
+    } else if (capability) {
         ThreadData* td = thread_data.get();
         bool in_lent_method;
         const QoreProgram* lent_pgm;
@@ -10422,8 +10434,8 @@ void RuntimeParseOptionsOverrideHelper::set(ThreadData* td, const QoreCallParseO
         ? old.caller_restrictions_gen : ++td->restriction_gen;
     // (a call of a lent object's method sets its override before the capability frame (CodeEvaluationHelper), so the
     // frame's snapshot holds it; the JIT and IR fast method paths, which set the override after the Program was
-    // entered, are not taken by such calls, which enter another Program; were they, the override's new generation
-    // would only make the method refuse what the frame lends, qore#7052)
+    // entered, are not taken by such calls, which enter another Program; if one were, it would fail closed: the
+    // override's new generation would only make the method refuse what the frame lends, qore#7052)
     state->module_pgm = o.module_pgm;
     state->app_pgm_id = o.app_pgm_id;
     state->sandboxed = o.sandboxed;

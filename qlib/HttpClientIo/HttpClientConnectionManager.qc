@@ -2403,7 +2403,7 @@ printf("%d connection(s) migrated\n", migrated);
 
     #! Applies the connection's credential policy to a REST client copy sharing this transport
     nothing checkTlsCredentialCopy(string url) {
-        if (origin_tls_credentials.file_backed && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+        if (origin_tls_credentials.file_backed && SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
             throw "ILLEGAL-FILESYSTEM-ACCESS", "copying a REST client with TLS credential paths requires filesystem access";
         }
         HttpClientConnectionManager::checkTlsCredentialOrigin(url);

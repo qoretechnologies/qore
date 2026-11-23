@@ -54,6 +54,11 @@ public namespace CapProbe {
     }
 
     #! a connection that creates its client when it is used
+    #! the check that Conn::lentToRestrictedUnderBarrier() makes under the barrier
+    public bool sub barrierLentToRestricted() {
+        return SandboxManager::isLentToRestricted(DOM_NETWORK);
+    }
+
     public class Conn {
         #! creates the client
         public string get() {
@@ -67,6 +72,16 @@ public namespace CapProbe {
 
         public bool probe() {
             return SandboxManager::isCallerRestricted(DOM_NETWORK);
+        }
+
+        #! returns True if the code that the connection was lent to is restricted from the network (qore#7262)
+        public bool lentToRestricted() {
+            return SandboxManager::isLentToRestricted(DOM_NETWORK);
+        }
+
+        #! returns isLentToRestricted() under a policy barrier that this module's code establishes in the method
+        public bool lentToRestrictedUnderBarrier() {
+            return SandboxManager::callWithSystemPolicy(\barrierLentToRestricted());
         }
 
         #! calls code of whoever uses the connection

@@ -79,6 +79,12 @@ hash<auto> sub run(CapProbe::Conn lent, code host_ref, hash<string, list<auto>> 
     # a factory of the lent connection that creates an object of the class that the restricted code names: only an
     # object of the lent module's own class is lent, not one of another module's class
     h.factory_other_probe = lent.make(\"CapGadget::Gadget\").probe();
+    # isLentToRestricted() in a method of the lent connection answers for the code that it was lent to (qore#7262),
+    # and follows a policy barrier that the module's code establishes in the method
+    h.lent_to_restricted = lent.lentToRestricted();
+    h.lent_to_restricted_barrier = lent.lentToRestrictedUnderBarrier();
+    # a copy of a lent object is the copying code's, not lent
+    h.copy_probe = lent.copy().probe();
     h.factory_own_get = lent.make(\"CapProbe::Conn\").get();
     # a module loaded for the first time in a lent method: what its initialization creates is not lent
     lent.loadLazy();
@@ -127,6 +133,26 @@ CapRegistry::register(lent);
 code make_in_grant = SandboxManager::createSystemPolicyCall(\CapRegistry::make());
 map printf("%s=%y\n", $1.key, $1.value), p.callFunction("run", lent, \lent.probe(), lent_connections,
     make_in_grant, new CapProbe::DtorProbe()).pairIterator();
+# code restricted from the file system that was lent a REST connection cannot choose the files that its client loads:
+# the file system is not lent for that (qore#7262)
+{
+    Program pf(ARGV[0] == "restricted" ? po | PO_NO_FILESYSTEM : po);
+    pf.parse("%modern
+string sub lent_rest_tls(object conn, string path) {
+    try {
+        hash<auto> rtopts = {};
+        rtopts.ssl_cert_path = path;
+        conn.getAsync(False, rtopts);
+        return \"CLIENT\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+", "fs-restricted");
+    printf("lent_rest_tls_path=%y\n", pf.callFunction("lent_rest_tls", lent_connections.rest[0], "/etc/hosts"));
+}
+# the host's own call of the connection's method: nothing is lent to restricted code (qore#7262)
+printf("host_lent_to_restricted=%y\n", lent.lentToRestricted());
 # a sandboxed Program (its sandbox allows the network) with the same restrictions connects through the lent
 # connection: its sandbox still governs the connection, but its parse options are what the lent object lends
 {

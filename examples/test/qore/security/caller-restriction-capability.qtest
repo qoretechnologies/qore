@@ -119,7 +119,19 @@ class CallerRestrictionCapabilityTest inherits QUnit::Test {
         assertEq("\"client\"", r.factory_own_get, "restricted: a factory: the lent module's own class");
         assertEq("False", u.factory_other_probe, "unrestricted: a factory: another module's class");
         assertEq("\"client\"", u.factory_own_get, "unrestricted: a factory: the lent module's own class");
-        assertEq(93, r.size(), "restricted: every result");
+        # SandboxManager::isLentToRestricted() answers for the code that a lent object was lent to (qore#7262)
+        assertEq("True", r.lent_to_restricted, "restricted: isLentToRestricted() in a lent method");
+        assertEq("False", r.lent_to_restricted_barrier, "restricted: isLentToRestricted() under the module's barrier");
+        assertEq("True", r.copy_probe, "restricted: a copy of a lent object is not lent");
+        assertEq("False", r.host_lent_to_restricted, "restricted: isLentToRestricted() in the host's own call");
+        foreach string k in (("lent_to_restricted", "lent_to_restricted_barrier", "copy_probe",
+                "host_lent_to_restricted")) {
+            assertEq("False", u{k}, "unrestricted: " + k);
+        }
+        assertEq("\"PERMISSION-DENIED\"", r.lent_rest_tls_path,
+            "restricted: a TLS certificate file that the borrower names for a lent connection's client");
+        assertNeq("\"PERMISSION-DENIED\"", u.lent_rest_tls_path, "unrestricted: its own TLS certificate file");
+        assertEq(98, r.size(), "restricted: every result");
         checked = (r, u);
         # nothing is restricted for an unrestricted Program
         foreach string k in (("lent_get", "lent_nested_get", "own_get", "own_subclass_get", "library_shared_get")) {
