@@ -39,6 +39,7 @@
 %requires Logger
 %requires Mime
 %requires DataProvider
+%requires HttpClientIo
 %requires ConnectionProvider
 %requires HttpServerUtil
 %requires HttpServer
@@ -153,16 +154,6 @@ class ResultMonitor inherits PollingConnectionMonitor {
     }
 }
 
-#! a REST connection whose lent-connection gate can be called directly
-class GateProbe inherits RestConnection {
-    constructor(string url) : RestConnection("probe", "test", url, {"monitor": False}) {
-    }
-
-    check(string url, *string proxy_url) {
-        checkLentNetworkTarget(url, proxy_url);
-    }
-}
-
 #! answers every request with 200 OK
 class OkHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -198,14 +189,6 @@ string sub retarget_creds(object conn, string url, string user, string pass) {
 }
 string sub poll_creds(object conn) {
     return do_poll(conn);
-}
-string sub gate(object conn, string url, *string proxy) {
-    try {
-        conn.check(url, proxy);
-        return \"OK\";
-    } catch (hash<ExceptionInfo> ex) {
-        return ex.err;
-    }
 }
 sub set_target(object conn, string url) {
     conn.url = url;
@@ -949,14 +932,22 @@ string sub own_ping(string url) {
             assertUp(conn, start, "a lent connection with credentials: " + with_creds);
         }
 
-        # the gate itself: a URL with user information, and a URL that is not valid UTF-8, are refused
-        GateProbe probe(tcp_own);
-        assertEq("OK", p.callFunction("gate", probe, tcp_own));
-        assertEq("PERMISSION-DENIED", p.callFunction("gate", probe, sprintf("http://u:x@127.0.0.1:%d", rest_port)));
-        assertEq("PERMISSION-DENIED", p.callFunction("gate", probe, tcp_own, "http://u:p@127.0.0.1:3128"));
-        GateProbe socket_probe(socket_own);
-        assertEq("OK", p.callFunction("gate", socket_probe, socket_own));
-        assertEq("PERMISSION-DENIED", p.callFunction("gate", socket_probe, "http://socket=%2Ftmp%2F%FF"));
+        # the check itself (HttpClientCreatorProof::allowsUrl()): a checked URL or proxy URL with user information,
+        # and a URL that is not valid UTF-8, allow nothing; the proof of a URL with credentials allows its target
+        HttpClientIo::HttpClientCreatorProof proof = HttpClientIo::HttpClientCreatorProof::get(tcp_own);
+        assertTrue(proof.allowsUrl(tcp_own));
+        assertFalse(proof.allowsUrl(sprintf("http://u:x@127.0.0.1:%d", rest_port)));
+        assertFalse(proof.allowsUrl(sprintf("http://u:x@127.0.0.1:%d/@socket=%%2Ftmp%%2Fx", rest_port)));
+        HttpClientIo::HttpClientCreatorProof proxied = HttpClientIo::HttpClientCreatorProof::get(tcp_own,
+            {"proxy": "http://u:p@127.0.0.1:3128"});
+        assertTrue(proxied.allowsUrl(tcp_own, "http://127.0.0.1:3128"));
+        assertFalse(proxied.allowsUrl(tcp_own, "http://u:p@127.0.0.1:3128"));
+        HttpClientIo::HttpClientCreatorProof socket_proof = HttpClientIo::HttpClientCreatorProof::get(socket_own);
+        assertTrue(socket_proof.allowsUrl(socket_own));
+        assertFalse(socket_proof.allowsUrl("http://socket=%2Ftmp%2F%FF"));
+        HttpClientIo::HttpClientCreatorProof cred_proof = HttpClientIo::HttpClientCreatorProof::get(
+            sprintf("http://user:pass@127.0.0.1:%d/", rest_port));
+        assertTrue(cred_proof.allowsUrl(tcp_own));
     }
 
     #! every bypass is refused on every path that checks a lent connection's target: an HTTP connection's ping (its

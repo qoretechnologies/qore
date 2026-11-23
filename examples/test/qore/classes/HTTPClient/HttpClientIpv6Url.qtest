@@ -59,14 +59,14 @@ class HttpClientIpv6UrlTest inherits QUnit::Test {
         hc.setProxyURL("http://user:pass@[::1:3128]");
         assertEq("http://user:pass@[::1:3128]", hc.getProxyURL());
         assertEq("http://user:<masked>@[::1:3128]", hc.getSafeProxyURL());
+        hash<UrlInfo> u = parse_url(hc.getProxyURL());
+        assertEq("::1:3128", u.host);
+        assertNothing(u.port);
         # the target of the proxy only, without its credentials
         assertEq("http://[::1:3128]", hc.getProxyURL(UC_TARGET));
         assertEq("http://user:pass@[::1:3128]", hc.getProxyURL(URL_NORMAL));
         hc.setProxyURL("http://u:x%40127.0.0.1%3A3128%2F@proxy.example:8080");
         assertEq("http://proxy.example:8080", hc.getProxyURL(UC_TARGET));
-        hash<UrlInfo> u = parse_url(hc.getProxyURL());
-        assertEq("::1:3128", u.host);
-        assertNothing(u.port);
     }
 
     otherHostTest() {
