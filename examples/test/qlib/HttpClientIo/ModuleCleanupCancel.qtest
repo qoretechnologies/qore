@@ -358,7 +358,8 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             shellQuote(module_dir), shellQuote(qore_bin), mode, shellQuote(get_script_dir() + DirSep
             + "ModuleCleanupCancel" + DirSep + "servers-client.qr")), \status);
         assertEq(0, status, out);
-        assertRegex("(^|\n)echo received: hello\n", out, "the WebSocket server answers: " + out);
+        assertRegex("(^|\n)server got: hello\n", out, "the WebSocket server reads the frame: " + out);
+        assertNRegex("did not start", out, "the server's stream starts: " + out);
         assertRegex("(?s)(^|\n)" + sprintf(DeadlineWarning, 0) + ".*\nserver log: H2/H3 WebSocket heartbeat timer not "
             "re-armed at the end of the process: ASYNC-IO-SHUTDOWN-ERROR", out, "the server stream's refused re-arm, "
             "after the deadline, is logged at the debug level: " + out);
