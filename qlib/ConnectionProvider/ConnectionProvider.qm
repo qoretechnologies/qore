@@ -204,7 +204,9 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       @ref ConnectionProvider::AbstractConnection::post_processing "AbstractConnection::post_processing", which any code
       can read, is deprecated (<a href="https://github.com/qoretechnologies/qore/issues/6749">issue 6749</a>)
     - a connection that was never checked is not up: @ref ConnectionProvider::AbstractConnection::up "up" is
-      @ref False until a successful ping or connection proves it up; such a connection keeps the status
+      @ref False until a successful ping or connection proves it up (also the first connection of an async HTTP or
+      REST client that @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()" created, issue #7274);
+      such a connection keeps the status
       \c "not checked" and no \c last_check value (also when it was serialized as up before this version); a failed
       ping marks a connection down also when its error is thrown, and an automatic ping that disabled automatic pings
       skip leaves its state as it is
