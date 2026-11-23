@@ -21,10 +21,11 @@
 #! Tests the operators that change a local variable assigned with the weak assignment operator (:=)
 /** A read of such a variable gives the target of its weak reference; an operator that changes the list or the hash
     that the variable holds (+=, a hash -=, push, ...) changes the container that the weak reference designates, and
-    the variable keeps the weak reference (qore#7297), while an arithmetic operator (-=, *=, ++, ...) changes the
-    variable; every execution mode must give the AST interpreter's results, also when the weak assignment follows the
-    change in the code.  The checks are in weak-local-change-checks.qi and run in this program,
-    in a worker in each execution mode and from a compiled module.
+    the variable keeps the weak reference (qore#7297), as += changes the object that it designates (qore#7403), while
+    an arithmetic operator (-=, *=, ++, ...) changes the variable; every execution mode must give the AST interpreter's
+    results, also when the weak assignment follows the change in the code.  The checks are in
+    weak-local-change-checks.qi and run in this program, in a worker in each execution mode and from a compiled
+    module.
 */
 class WeakLocalChangesTest inherits QUnit::Test {
     public {
@@ -49,7 +50,8 @@ class WeakLocalChangesTest inherits QUnit::Test {
             "list-shift-left": "0/[1, 2]",
             "list-shift-right": "0/[1, 2]",
             "list-xor": "3/[1, 2]",
-            "object-plus": "null/1",
+            # the object that the weak reference designates is changed (qore#7403)
+            "object-plus": "2/2",
             # an opaque reference is a strong reference: the change sees the list
             "opaque-plus": "[1, 2, 3]/[1, 2]",
             "result-used": "[1, 2, 3] [1, 2, 3]/[1, 2, 3]",

@@ -25104,6 +25104,86 @@ static QoreValue qore_union_int_arith(int64 i, const QoreValue& right, bool minu
     return minus ? l->doMinus(**r) : l->doPlus(**r);
 }
 
+//! += on an lvalue that holds a weak reference to an object: a hash or an object operand is merged into the object, as
+//! through the object itself, and the lvalue keeps the weak reference (qore#7403)
+/** Any other operand leaves the object unchanged, as through a strong reference.  The lvalue's storage is not changed
+    and is not read again (LValueHelper::leaveUnchangedLValue()); the merge repairs the recursive sets of the object
+    itself (qore_object_private::mergeImpl()).
+
+    @return the object, as a read of the weak reference gives it, or NOTHING if the object's release has started or if
+    an exception was raised
+*/
+template <bool Lexical>
+static __attribute__((noinline, cold)) QoreValue plusEqualsWeakObject(LValueHelper& v, const QoreValue& right,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+    QoreObject* o = v.getValue().get<const WeakReferenceNode>()->get();
+    const qore_type_t rtype = right.getType();
+    const bool merge = rtype == NT_HASH || rtype == NT_OBJECT;
+    // the weak reference keeps the object allocated, but not referenced: a reference is taken only while its count is
+    // not zero, as a reference taken once the last one was released would make an object whose release has started
+    // reachable again (see QoreValue::resolveIndirectRef()); a deleted object that is still referenced is merged into
+    // as through a strong reference, which raises OBJECT-ALREADY-DELETED (qore#7055)
+    if (!o->optRef()) {
+        if (merge) {
+            makeAccessDeletedObjectException(xsink, o->getClassName());
+        }
+        return QoreValue();
+    }
+    // the reference taken, which keeps the object while it is changed: the lvalue holds only a weak reference to it,
+    // and it is released before a setter of a member held in external storage runs
+    ReferenceHolder<QoreObject> holder(o, xsink);
+    v.leaveUnchangedLValue();
+    if (merge) {
+        // as for an object that the lvalue holds (doPlusEqualsOnLValueImpl()): the merge is made after the lvalue has
+        // released its lock when it holds that of the object merged into or merged from (qore#7107), and before the
+        // setters of members held in external storage run
+        const QoreVarRWLock* vl_lock = qore_auto_vlock_ops(&v.getAutoVLock()).getRWL();
+        if (qore_class_private::get(*o->getClass())->has_member_accessors
+                || (vl_lock && (vl_lock == &qore_object_private::get(*o)->rml
+                    || (rtype == NT_OBJECT && vl_lock == &qore_object_private::get(*right.get<QoreObject>())->rml)))) {
+            // the lvalue releases its locks and temporaries here; the object is kept by the reference taken above,
+            // which becomes the value of the operator, and is released with no lock held
+            v.finishForCallback();
+            if (*xsink) {
+                return QoreValue();
+            }
+            {
+                LValueHelper object_scan(*o, xsink, LValueHelper::ObjectScan{});
+                LValueMergeDerefHelper sdh(object_scan, xsink);
+                if constexpr (Lexical) {
+                    qore_object_private::get(*o)->plusEquals(right.getInternalNode(), object_scan.vl, sdh, xsink,
+                        policy);
+                } else {
+                    qore_object_private::get(*o)->plusEquals(right.getInternalNode(), object_scan.vl, sdh, xsink);
+                }
+            }
+            if (*xsink) {
+                return QoreValue();
+            }
+            return QoreValue(holder.release());
+        }
+        {
+            LValueMergeDerefHelper sdh(v, xsink);
+            if constexpr (Lexical) {
+                qore_object_private::get(*o)->plusEquals(right.getInternalNode(), v.getAutoVLock(), sdh, xsink,
+                    policy);
+            } else {
+                qore_object_private::get(*o)->plusEquals(right.getInternalNode(), v.getAutoVLock(), sdh, xsink);
+            }
+        }
+        if (*xsink) {
+            // released by the lvalue after its locks
+            v.saveTemp(QoreValue(holder.release()));
+            return QoreValue();
+        }
+    }
+    // the value of the operator: the object, as a read of the weak reference gives it; while the lvalue keeps its
+    // locks, it also keeps one more reference, which it releases after them, so that the object's destructor does not
+    // run under them if the caller releases the value first and it is the last reference
+    v.saveTemp(QoreValue(o).refSelf());
+    return QoreValue(holder.release());
+}
+
 // Inner function: perform += on an already-navigated LValueHelper.
 // Used by both evalPlusEquals (AST path) and LValuePathCompound (path-based).
 // documented in QoreIRInterpreter.h
@@ -25138,6 +25218,10 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
             return QoreValue();
         }
         vtype = NT_HASH;
+    } else if (vtype == NT_WEAKREF) [[unlikely]] {
+        // a weak reference to an object: a hash or an object is merged into the object, which the lvalue keeps the
+        // weak reference to (qore#7403)
+        return plusEqualsWeakObject<Lexical>(v, *right_holder, xsink, policy);
     }
     // the hash that the operation changes: the lvalue's own, made unique, or the one that its weak reference
     // designates
@@ -25453,11 +25537,11 @@ static QORE_INTERN_ALWAYS_INLINE void removeObjectMembers(LValueHelper& v, QoreO
         if (*xsink) {
             return;
         }
-        QoreValue removed = qore_object_private::takeMember(*o, xsink, str.c_str());
-        // The lvalue still contains the same object, even when its last scannable member is removed.
-        // Record the object's changed graph without applying a delta to the lvalue's parent container.
-        bool scan_removed = needs_scan(removed);
-        v.objectRemoved(*qore_object_private::get(*o), scan_removed);
+        // taken as the remove operator takes a member: the object's changed graph is recorded with the lvalue
+        // (objectRemoved()), whose scan runs after it has released its locks, as the scan of the removed value can
+        // take the lock of an object on the lvalue's path, which the lvalue holds (qore#7401); the object's own lock,
+        // a member write gate and an accessor are handled as for remove (qore#7107)
+        QoreValue removed = qore_object_private::takeMember(*o, v, str.c_str());
         v.saveTemp(removed);
     };
 
@@ -25499,8 +25583,70 @@ static __attribute__((noinline)) QoreValue removeExternalObjectMembers(LValueHel
     return result;
 }
 
+//! -= on an lvalue that holds a weak reference to an object: the members are removed from the object, as through the
+//! object itself, and the lvalue keeps the weak reference (qore#7368)
+/** @return the object, as a read of the weak reference gives it, or NOTHING if an exception was raised
+*/
+static __attribute__((noinline, cold)) QoreValue minusEqualsWeakObject(LValueHelper& v, const QoreValue& right,
+        ExceptionSink* xsink) {
+    QoreObject* o = v.getValue().get<const WeakReferenceNode>()->get();
+    // members are removed for a key or a list of keys; any other operand changes nothing
+    const bool remove_keys = !right.isNothing() && right.getType() != NT_HASH && right.getType() != NT_OBJECT;
+    // the weak reference keeps the object allocated, but not referenced: a reference is taken only while its count is
+    // not zero, as a reference taken once the last one was released would make an object whose release has started
+    // reachable again (see QoreValue::resolveIndirectRef())
+    if (!o->optRef()) {
+        if (remove_keys) {
+            makeAccessDeletedObjectException(xsink, o->getClassName());
+        }
+        return QoreValue();
+    }
+    // the reference taken, which keeps the object while its members are removed: the lvalue holds only a weak
+    // reference to it, and it is released before a member gate or an accessor runs; a deleted object is handled as
+    // for an object that the lvalue holds (takeMember() raises OBJECT-ALREADY-DELETED for a key)
+    ReferenceHolder<QoreObject> holder(o, xsink);
+    if (remove_keys) {
+        v.startContainerRemoval();
+        const qore_class_private* cls = qore_class_private::get(*o->getClass());
+        // as for an object that the lvalue holds (doMinusEqualsOnLValue()): the members are removed after the lvalue
+        // has released the object's lock when it holds it (qore#7107), and before a member gate or an accessor runs
+        if (cls->has_member_accessors || cls->member_write_gate
+                || qore_auto_vlock_ops(&v.getAutoVLock()).getRWL() == &qore_object_private::get(*o)->rml) {
+            // the lvalue releases its locks and temporaries here; the object is kept by the reference taken above,
+            // which becomes the value of the operator, and is released with no lock held
+            v.finishForCallback();
+            if (*xsink) {
+                return QoreValue();
+            }
+            {
+                LValueHelper object_scan(*o, xsink, LValueHelper::ObjectScan{});
+                removeObjectMembers(object_scan, o, right, xsink);
+            }
+            if (*xsink) {
+                return QoreValue();
+            }
+            return QoreValue(holder.release());
+        }
+        removeObjectMembers(v, o, right, xsink);
+        if (*xsink) {
+            // released by the lvalue after its locks
+            v.saveTemp(QoreValue(holder.release()));
+            return QoreValue();
+        }
+    }
+    // the value of the operator: the object, as a read of the weak reference gives it; the lvalue keeps a reference
+    // of its own, which it releases after its locks, so that the object's destructor does not run under them if the
+    // caller releases the value first and it is the last reference
+    v.saveTemp(QoreValue(o).refSelf());
+    return QoreValue(holder.release());
+}
+
 QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink) {
     if (right.isNothing()) {
+        // the value of the operator is the object of a weak reference, as a read of it gives it (qore#7368)
+        if (v.getType() == NT_WEAKREF) [[unlikely]] {
+            return minusEqualsWeakObject(v, right, xsink);
+        }
         return v.getReferencedValue();
     }
 
@@ -25661,6 +25807,10 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
             }
             removeObjectMembers(v, o, right, xsink);
         }
+    } else if (vtype == NT_WEAKREF) [[unlikely]] {
+        // the members of the object of a weak reference that the lvalue holds, which keeps the weak reference
+        // (qore#7368)
+        return minusEqualsWeakObject(v, right, xsink);
     } else {
         if (right.getType() == NT_DATE) {
             // if the lvalue is a timeout, convert date/time value as timeout

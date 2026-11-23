@@ -2555,6 +2555,13 @@ if (x || y)
     or \c HASH-ERROR.  The change is made in place, so that every owner of the container sees it, also a copy that
     shares it (as after <tt>b = a</tt>, where \a a is the source of the weak reference), and an element of a list whose
     element type does not take @ref nothing "NOTHING" is not removed (the shared list is not retyped).\n<br>
+    Likewise, the @ref plus_equals_operator "+=" operator with a hash or an object, and the
+    @ref minus_equals_operator "-=" operator with a key or a list of keys, change the object that a weak reference
+    held by the lvalue designates, as through the object itself, and the lvalue keeps the weak reference; their value
+    is the object; for an object whose last strong reference was released, they raise \c OBJECT-ALREADY-DELETED
+    with such an operand, and give @ref nothing "NOTHING" with any other operand.  The other compound assignment
+    operators replace the weak reference with their result, as a plain assignment does (as they replace a list, a
+    hash or an object that the lvalue holds).\n<br>
     A method called through a weak reference keeps its object until the call returns, as any method call does
     (see @ref running_call_receiver "object scope"): if the method releases the last strong reference to its own
     object, the object is destroyed when the method returns, or, for a weak reference read from a hash, a list, a
