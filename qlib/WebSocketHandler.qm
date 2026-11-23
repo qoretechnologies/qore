@@ -2159,7 +2159,14 @@ class WebSocketStreamProcessor {
             }
             on_exit map AsyncIoController::releaseModuleCleanupWork($1), handed;
 
-            processFrames();
+            if (handed) {
+                # the pass reads the stream for work of the module cleanup left to this thread: it runs as that work,
+                # so that a frame's handler can hand work over in turn; the handles are released after the pass
+                # (qore#7339)
+                AsyncIoController::runModuleCleanupWork(handed[0], \processFrames(), False);
+            } else {
+                processFrames();
+            }
 
             AutoLock al(notify_lock);
             if (!notify_pending) {

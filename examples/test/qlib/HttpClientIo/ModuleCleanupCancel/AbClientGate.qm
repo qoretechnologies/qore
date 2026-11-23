@@ -1,0 +1,90 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module whose destructor starts a WebSocket echo server and a WebSocketClient when the module cleanup deletes its
+# data: the client's message callback blocks its delivery task; the cleanup cancels the client's connection at its
+# deadline, and the completion of the canceled operation, work that the cleanup counts, leaves the end of the
+# connection to the running delivery task at its gate and hands itself over to it; the callback waits for that
+# hand-over, and the cleanup waits for the delivery task before it deletes the data of the next module (AbLater); see
+# client-gate-client.qr (qore#7339)
+
+%modern
+
+%requires HttpServerUtil
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires AcKeeper
+
+module AbClientGate {
+    version = "1.0";
+    desc = "a WebSocketClient whose delivery gate takes the completion of an operation that the cleanup canceled";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AbClientGate {
+#! returns the callback of the client; created outside of a method, as a closure created in one cannot run once its
+#! object is gone
+code sub make_blocking_callback(Counter blocked) {
+    return sub (*data msg) {
+        if (msg != "hello") {
+            return;
+        }
+        blocked.dec();
+        # the completion of the client's operation, which the cleanup cancels, finds this delivery task running and
+        # hands itself over to it at its gate
+        bool handed = call_function("dbg_module_cleanup_wait_handles", 1, 20s, "WebSocketClient.qm");
+        printf("client callback: work handed over: %y\n", handed);
+        flush();
+    };
+}
+
+#! sends every message back
+class EchoConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+}
+
+#! the echo handler
+class EchoHandler inherits WebSocketHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoConnection(self);
+    }
+}
+
+#! starts the server and the client when the cleanup deletes it
+class WsGateConnector {
+    destructor() {
+        EchoHandler ws_handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        server.setDefaultHandler("ws", ws_handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        Counter blocked(1);
+        WebSocketClient ws(make_blocking_callback(blocked), {"url": sprintf("ws://127.0.0.1:%d", port)});
+        ws.connect();
+        ws.send("hello");
+        if (blocked.waitForZero(20s)) {
+            printf("the client's callback did not block\n");
+        }
+        # the connections are kept until the cleanup cancels them at its deadline
+        Keeper::keep = (server, ws);
+        printf("client started\n");
+        flush();
+    }
+}
+
+#! the data of this module
+public class WsGateHolder {
+    public {
+        static WsGateConnector connector();
+    }
+}
+}

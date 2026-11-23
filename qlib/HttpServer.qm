@@ -6257,7 +6257,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         refs.target @= asyncTarget;
         return sub (code<nothing()> c) {
             # work of the module cleanup that leaves the end to another thread hands itself over to it (qore#7239)
-            c = HttpAsyncSocketIoController::wrapCleanupHandover(c, "HttpServer handler pool submitter");
+            c = AsyncIoController::wrapModuleCleanupWork(c);
             *HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = refs.ctrl;
             *HttpServerAsyncIo::HttpAsyncTarget target = refs.target;
             if (ctrl && target) {
@@ -11424,11 +11424,25 @@ class ResponseAfterSendNotifier {
         }
         called = True;
         try {
-            background ResponseAfterSendNotifier::call(callback, cx, handler, listener, False);
+            # the release of the last reference in work of the module cleanup (the release of a canceled connection's
+            # references) hands itself over to the thread that calls the callback (qore#7339); the call is created by
+            # a static method, as a closure created here would refer to this object, which is being destroyed, and
+            # wrapped here, in this thread, as background evaluates its expression in the new thread
+            code<nothing()> c = AsyncIoController::wrapModuleCleanupWork(
+                ResponseAfterSendNotifier::getCall(callback, cx, handler, listener));
+            background c();
         } catch (hash<ExceptionInfo> ex) {
             listener.logError("cid %d: %s: cannot call the after_send callback: %s: %s", cx.id, cx.handler_name,
                 ex.err, ex.desc);
         }
+    }
+
+    #! Returns a call that reports that the response was not sent; static, so that it does not refer to an object
+    private:internal static code<nothing()> getCall(code<nothing(hash<auto>, bool)> callback, hash<auto> cx,
+            *HttpServer::AbstractHttpRequestHandler handler, HttpListener listener) {
+        return sub () {
+            ResponseAfterSendNotifier::call(callback, cx, handler, listener, False);
+        };
     }
 
     #! Reports the transmission result of the response; only the first call has any effect
