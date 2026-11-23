@@ -4875,10 +4875,12 @@ public:
     //! Constructor for explicit union types
     /** @param members the member types as declared (without duplicates)
     */
+    /** @param path the name with the paths of the member types (getPathImpl(), qore#7331)
+    */
     DLLLOCAL QoreUnionTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec,
-            const QoreString& name, type_vec_t members, bool or_nothing = false)
+            const QoreString& name, const QoreString& path, type_vec_t members, bool or_nothing = false)
             : QoreTypeInfo(std::move(a_vec), std::move(r_vec), name), orNothing(or_nothing),
-            members(qore_orphanable_vec(members)) {
+            members(qore_orphanable_vec(members)), pname(path) {
         union_type = true;
     }
 
@@ -4923,9 +4925,17 @@ protected:
     //! compared by address only, and orphaned as the members are, so that the address of a freed declaration's type
     //! that a new type reuses is not taken for a member (issue #6419)
     orphanable_type_vec_t exact_members;
+    //! the name with the paths of the member types: the name has the names of the members, which are the same for
+    //! classes of the same name in different namespaces (qore#7331)
+    QoreString pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
         concatName(str);
+    }
+
+    DLLLOCAL const char* getPathImpl() const {
+        assert(!pname.empty());
+        return pname.c_str();
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise

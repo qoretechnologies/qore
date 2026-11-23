@@ -21,6 +21,7 @@ class JLater { abstract string m(ASK::Later x); }
 class JSoftList { abstract string m(softlist<string> x); }
 class JCode { abstract string m(code x); }
 class JTwo { abstract string m(int x, *string y); }
+class JUnion { abstract string m(*union<ASK::Foo, int> x); }
 
 # other signatures
 class DStr { abstract string m(string s); }
@@ -42,6 +43,7 @@ class VLater inherits JLater, ASK::ILater {}
 class VSoftList inherits ASK::ISoftList, JSoftList {}
 class VCode inherits ASK::ICode, JCode {}
 class VTwo inherits ASK::ITwo, JTwo {}
+class VUnion inherits JUnion, ASK::IUnion {}
 # the list<int> declarations under both names
 class VLists inherits ASK::IListInt, ASK::ITypedef, JListInt, JTypedef {}
 
@@ -66,6 +68,7 @@ class WSoftList inherits ASK::ISoftList, JSoftList { string m(softlist<string> v
 class WCode inherits ASK::ICode, JCode { string m(code v) { return "WCode::m(code)"; } }
 class WTwo inherits ASK::ITwo, JTwo { string m(int v, *string w) { return "WTwo::m(int, *string)"; } }
 class WBox inherits ASK::IBox<int>, JInt { string m(int v) { return "WBox::m(int)"; } }
+class WUnion inherits ASK::IUnion, JUnion { string m(*union<ASK::Foo, int> v) { return "WUnion::m"; } }
 
 # the access of a privately inherited implementation is that of the declarations, whose classes are reached publicly
 # or privately (qore#7288)
@@ -93,10 +96,11 @@ hash<string, auto> args = {
     "Code": sub () {},
     "Two": 1,
     "Box": 1,
+    "Union": 1,
 };
 
 foreach string c in (("VInt", "VOptStr", "VListInt", "VTypedef", "VHashSI", "VObjFoo", "VFoo", "VHashDecl", "VLater",
-        "VSoftList", "VCode", "VTwo", "VLists", "XStr", "XReqStr", "XListStr", "XHash", "XTwo")) {
+        "VSoftList", "VCode", "VTwo", "VUnion", "VLists", "XStr", "XReqStr", "XListStr", "XHash", "XTwo")) {
     try {
         create_object(c);
         printf("%s: instantiated\n", c);

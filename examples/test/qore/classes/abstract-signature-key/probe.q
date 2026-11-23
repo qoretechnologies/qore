@@ -34,6 +34,7 @@ class ISoftList { abstract string m(softlist<string> l); }
 class ICode { abstract string m(code c); }
 class ITwo { abstract string m(int i, *string s); }
 class IBox<T> { abstract string m(T t); }
+class IUnion { abstract string m(*union<Foo, int> u); }
 
 class Later {
     string name() {
@@ -64,6 +65,7 @@ class JLater { abstract string m(ASK::Later x); }
 class JSoftList { abstract string m(softlist<string> x); }
 class JCode { abstract string m(code x); }
 class JTwo { abstract string m(int x, *string y); }
+class JUnion { abstract string m(*union<ASK::Foo, int> x); }
 
 # other signatures
 class DStr { abstract string m(string s); }
@@ -85,6 +87,7 @@ class VLater inherits JLater, ASK::ILater {}
 class VSoftList inherits ASK::ISoftList, JSoftList {}
 class VCode inherits ASK::ICode, JCode {}
 class VTwo inherits ASK::ITwo, JTwo {}
+class VUnion inherits JUnion, ASK::IUnion {}
 # the list<int> declarations under both names
 class VLists inherits ASK::IListInt, ASK::ITypedef, JListInt, JTypedef {}
 
@@ -109,6 +112,7 @@ class WSoftList inherits ASK::ISoftList, JSoftList { string m(softlist<string> v
 class WCode inherits ASK::ICode, JCode { string m(code v) { return "WCode::m(code)"; } }
 class WTwo inherits ASK::ITwo, JTwo { string m(int v, *string w) { return "WTwo::m(int, *string)"; } }
 class WBox inherits ASK::IBox<int>, JInt { string m(int v) { return "WBox::m(int)"; } }
+class WUnion inherits ASK::IUnion, JUnion { string m(*union<ASK::Foo, int> v) { return "WUnion::m"; } }
 
 # the access of a privately inherited implementation is that of the declarations, whose classes are reached publicly
 # or privately (qore#7288)
@@ -136,10 +140,11 @@ hash<string, auto> args = {
     "Code": sub () {},
     "Two": 1,
     "Box": 1,
+    "Union": 1,
 };
 
 foreach string c in (("VInt", "VOptStr", "VListInt", "VTypedef", "VHashSI", "VObjFoo", "VFoo", "VHashDecl", "VLater",
-        "VSoftList", "VCode", "VTwo", "VLists", "XStr", "XReqStr", "XListStr", "XHash", "XTwo")) {
+        "VSoftList", "VCode", "VTwo", "VUnion", "VLists", "XStr", "XReqStr", "XListStr", "XHash", "XTwo")) {
     try {
         create_object(c);
         printf("%s: instantiated\n", c);
@@ -203,6 +208,53 @@ foreach string c in (("YAbs", "YPar", "YPar2", "YOwn")) {
 {
     YBoth y();
     printf("YBoth: %s %s\n", y.m(new NA::Foo()), y.m(new NB::Foo()));
+}
+
+# union types with classes of the same name in different namespaces, also nested and or-nothing, are different
+# abstract variants; the same union type written differently is one
+namespace NA {
+    typedef UFoo = union<Foo, int>;
+}
+class UP { abstract string m(union<NA::Foo, int> x); }
+class UQ { abstract string m(union<NB::Foo, int> x); }
+class UPQ inherits UP, UQ {}
+class UD inherits UPQ {
+    string m(union<NA::Foo, int> x) {
+        return "UD::m(union<NA::Foo, int>)";
+    }
+}
+class ULP { abstract string m(list<union<NA::Foo, int>> x); }
+class ULQ { abstract string m(list<union<NB::Foo, int>> x); }
+class ULD inherits ULP, ULQ {
+    string m(list<union<NA::Foo, int>> x) {
+        return "ULD::m(list<union<NA::Foo, int>>)";
+    }
+}
+class UNP { abstract string m(*union<NA::Foo, string> x); }
+class UNQ { abstract string m(*union<NB::Foo, string> x); }
+class UND inherits UNP, UNQ {
+    string m(*union<NA::Foo, string> x) {
+        return "UND::m(*union<NA::Foo, string>)";
+    }
+}
+class UT { abstract string m(NA::UFoo x); }
+class UTV inherits UP, UT {}
+class UTW inherits UT, UP {
+    string m(union<NA::Foo, int> x) {
+        return "UTW::m(union<NA::Foo, int>)";
+    }
+}
+foreach string c in (("UPQ", "UD", "ULD", "UND", "UTV")) {
+    try {
+        create_object(c);
+        printf("%s: instantiated\n", c);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("%s: %s: %s\n", c, ex.err, ex.desc);
+    }
+}
+{
+    UTW u();
+    printf("UTW: %s %s\n", u.m(new NA::Foo()), u.m(1));
 }
 
 # a subclass that a default argument of a parent class's method initializes while the parent class is initialized

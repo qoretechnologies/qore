@@ -22,6 +22,8 @@ VCode: ABSTRACT-CLASS-ERROR: class 'VCode' cannot be instantiated because it has
  * abstract string VCode::m(code c)
 VTwo: ABSTRACT-CLASS-ERROR: class 'VTwo' cannot be instantiated because it has the following unimplemented abstract variants:
  * abstract string VTwo::m(int i, *string s)
+VUnion: ABSTRACT-CLASS-ERROR: class 'VUnion' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string VUnion::m(*union<object<::ASK::Foo>, int> x)
 VLists: ABSTRACT-CLASS-ERROR: class 'VLists' cannot be instantiated because it has the following unimplemented abstract variants:
  * abstract string VLists::m(list<int> l)
 XStr: ABSTRACT-CLASS-ERROR: class 'XStr' cannot be instantiated because it has the following unimplemented abstract variants:
@@ -52,6 +54,7 @@ WSoftList: WSoftList::m
 WCode: WCode::m(code)
 WTwo: WTwo::m(int, *string)
 WBox: WBox::m(int)
+WUnion: WUnion::m
 U1: m(1) from outside: K::m(int)
 U2: m(1) from outside: K::m(int)
 U3: m(1) from outside: M::m(int)

@@ -2789,9 +2789,9 @@
       another overload of the method, so that the class could not be instantiated (see
       @ref abstract_own_implementation;
       <a href="https://github.com/qoretechnologies/qore/issues/7330">issue 7330</a>)
-    - abstract declarations of the same parameter types that name a type differently (a class with and without its
-      namespace path, a typedef and its type) were two abstract variants of a class that inherits both, and
-      declarations of different classes of the same name were one (see @ref abstract_same_signature;
+    - abstract declarations of the same signature in a class of a \c qcc \c -m module and a parsed class, or naming a
+      type differently, were two abstract variants of a class that inherits both, and declarations of different
+      classes of the same name were one (see @ref abstract_same_signature;
       <a href="https://github.com/qoretechnologies/qore/issues/7331">issue 7331</a>)
     - @ref Qore::call_static_method() "call_static_method()" and the related calls call the static method that a static
       method call in the caller's code calls: they refused a later parent class's public method behind a private one,

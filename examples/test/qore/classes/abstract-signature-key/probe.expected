@@ -22,6 +22,8 @@ VCode: ABSTRACT-CLASS-ERROR: class 'VCode' cannot be instantiated because it has
  * abstract string VCode::m(code c)
 VTwo: ABSTRACT-CLASS-ERROR: class 'VTwo' cannot be instantiated because it has the following unimplemented abstract variants:
  * abstract string VTwo::m(int i, *string s)
+VUnion: ABSTRACT-CLASS-ERROR: class 'VUnion' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string VUnion::m(*union<object<::ASK::Foo>, int> x)
 VLists: ABSTRACT-CLASS-ERROR: class 'VLists' cannot be instantiated because it has the following unimplemented abstract variants:
  * abstract string VLists::m(list<int> l)
 XStr: ABSTRACT-CLASS-ERROR: class 'XStr' cannot be instantiated because it has the following unimplemented abstract variants:
@@ -52,6 +54,7 @@ WSoftList: WSoftList::m
 WCode: WCode::m(code)
 WTwo: WTwo::m(int, *string)
 WBox: WBox::m(int)
+WUnion: WUnion::m
 U1: m(1) from outside: K::m(int)
 U2: m(1) from outside: K::m(int)
 U3: m(1) from outside: M::m(int)
@@ -69,6 +72,18 @@ YPar2: ABSTRACT-CLASS-ERROR: class 'YPar2' cannot be instantiated because it has
 YOwn: ABSTRACT-CLASS-ERROR: class 'YOwn' cannot be instantiated because it has the following unimplemented abstract variants:
  * abstract string YOwn::m(object<::NB::Foo> f)
 YBoth: NA::S::m(NA::Foo) YBoth::m(NB::Foo)
+UPQ: ABSTRACT-CLASS-ERROR: class 'UPQ' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string UPQ::m(union<object<::NA::Foo>, int> x)
+ * abstract string UPQ::m(union<object<::NB::Foo>, int> x)
+UD: ABSTRACT-CLASS-ERROR: class 'UD' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string UD::m(union<object<::NB::Foo>, int> x)
+ULD: ABSTRACT-CLASS-ERROR: class 'ULD' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string ULD::m(list<union<object<::NB::Foo>, int>> x)
+UND: ABSTRACT-CLASS-ERROR: class 'UND' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string UND::m(*union<object<::NB::Foo>, string> x)
+UTV: ABSTRACT-CLASS-ERROR: class 'UTV' cannot be instantiated because it has the following unimplemented abstract variants:
+ * abstract string UTV::m(union<object<::NA::Foo>, int> x)
+UTW: UTW::m(union<NA::Foo, int>) UTW::m(union<NA::Foo, int>)
 RB: ABSTRACT-CLASS-ERROR: class 'RB' cannot be instantiated because it has the following unimplemented abstract variants:
  * abstract string RB::m(object<::RK::LongParameterClassName> x)
 RC: RC::m() RC::n()

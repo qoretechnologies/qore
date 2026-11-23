@@ -38,6 +38,7 @@ public class ISoftList { abstract string m(softlist<string> l); }
 public class ICode { abstract string m(code c); }
 public class ITwo { abstract string m(int i, *string s); }
 public class IBox<T> { abstract string m(T t); }
+public class IUnion { abstract string m(*union<Foo, int> u); }
 
 public class Later {
     string name() {
