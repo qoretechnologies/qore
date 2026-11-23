@@ -344,7 +344,7 @@ assert(RestSchemaActionSet::getConstructionCount() > before);
         @param eager @ref True to build output types at construction, @ref False to honor each set's option
 
         @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
-        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it (since RestSchemaActions 1.1)
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it
 
         @par Example:
         @code{.py}

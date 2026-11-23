@@ -196,7 +196,7 @@ public class DataProviderRetryUtil {
         longer than @ref DefaultTransportRetryDelayUnit
 
         @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
-        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it (since DataProvider 3.12)
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it
         @throw TRANSPORT-RETRY-DELAY-ERROR the unit is an absolute date/time value, is negative, or is longer than
         @ref DefaultTransportRetryDelayUnit
 

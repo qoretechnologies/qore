@@ -196,11 +196,22 @@ class FunctionCallContextTest inherits QUnit::Test {
                     continue;
                 }
                 ++checks;
-                # the chain check is in the same condition or, for a check of every frame, before it in the function
+                # the chain check is in the same condition (the two lines after it) or, for a check of every frame,
+                # before it in the same method or function: the search back stops at its declaration
                 bool paired = False;
-                for (int j = max(0, i - 8); j < min(lines.size(), i + 3); ++j) {
+                for (int j = i; j < min(lines.size(), i + 3); ++j) {
                     if (lines[j] =~ /SandboxManager::isCallerRestricted\(DOM_PROCESS_CONTROL\)/) {
                         paired = True;
+                        break;
+                    }
+                }
+                for (int j = i - 1; !paired && j >= 0; --j) {
+                    if (lines[j] =~ /SandboxManager::isCallerRestricted\(DOM_PROCESS_CONTROL\)/) {
+                        paired = True;
+                        break;
+                    }
+                    # the declaration of the method or function
+                    if (lines[j] =~ /^\s*[^#*\/\s].*(sub\s+\w+|static\s+[\w<>,*:\s]*\w+)\s*\(.*\)\s*(\[.*\])?\s*\{\s*$/) {
                         break;
                     }
                 }
