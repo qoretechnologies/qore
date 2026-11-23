@@ -695,6 +695,10 @@ struct QoreModuleFoundIn {
     //! the name that the search appended to it: \c "<name>.qm", \c "<name>[-api-X.Y].qmod",
     //! \c "<name>/<name>[-api-X.Y].qmod" or \c "<name>" (a separated module's directory)
     std::string rel;
+    //! true if \a dir is a directory of the process-wide module path (which only trusted code sets): a module that is
+    //! library code keeps the path that it was found by only then; otherwise it keeps the canonical path judged, so
+    //! that no later change of a link in a path that a Program chose can lead its reads elsewhere (qore#7319)
+    bool process_path = false;
 };
 
 class QoreModuleManager {

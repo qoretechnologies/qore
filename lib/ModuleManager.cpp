@@ -4177,6 +4177,16 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
     for (const std::string& p : ctx_appended) {
         search_paths.push_back(&p);
     }
+    // true for a directory of the process-wide module path, which only trusted code sets (see QoreModuleFoundIn): a
+    // directory that a Program prepends or appends with the same name is the same directory
+    auto is_process_module_dir = [this] (const std::string& dir) -> bool {
+        for (const std::string& p : moduleDirList) {
+            if (p == dir) {
+                return true;
+            }
+        }
+        return false;
+    };
 
     // Installed AOT artifacts and sources can occupy different module directories
     // (for example /usr/lib/<triplet>/qore-modules and /usr/share/qore-modules).
@@ -4209,7 +4219,8 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         found = true;
         // where it was found: whether it is library code does not depend on the form of the directory's path
         // (qore#7319)
-        QoreModuleFoundIn found_in{dir.c_str(), separated ? std::string(name) : std::string(name) + ".qm"};
+        QoreModuleFoundIn found_in{dir.c_str(), separated ? std::string(name) : std::string(name) + ".qm",
+            is_process_module_dir(dir)};
 
         if (!q_absolute_path(source_path.c_str())) {
             q_normalize_path(source_path);
@@ -4352,7 +4363,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 ExceptionSink binary_xsink;
                 // where it was found: whether it is library code does not depend on the form of the directory's
                 // path (qore#7319)
-                QoreModuleFoundIn found_in{dir.c_str(), found_rel};
+                QoreModuleFoundIn found_in{dir.c_str(), found_rel, is_process_module_dir(dir)};
                 mi = loadBinaryModuleFromPath(binary_xsink, str.c_str(), name, reexport, pholder.release(),
                     ctx_pgm, load_opt, mod_desc_func, source_available,
                     &wsink == &xsink ? nullptr : &wsink, warning_mask,
@@ -4433,7 +4444,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 ExceptionSink binary_xsink;
                 // where it was found: whether it is library code does not depend on the form of the directory's
                 // path (qore#7319)
-                QoreModuleFoundIn found_in{dir.c_str(), found_rel};
+                QoreModuleFoundIn found_in{dir.c_str(), found_rel, is_process_module_dir(dir)};
                 mi = loadBinaryModuleFromPath(binary_xsink, str.c_str(), name, reexport, pholder.release(),
                     ctx_pgm, load_opt, mod_desc_func, source_available,
                     &wsink == &xsink ? nullptr : &wsink, warning_mask,
@@ -5070,8 +5081,12 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     std::string trusted_path;
     const bool trusted = !untrusted_container && isTrustedModulePath(path, &trusted_path, found_in);
     // the files that were found to be library code are the files that are read; the module keeps the path that it was
-    // found by (its script path, its file names and its errors are those of that path) (qore#7319)
+    // found by in a directory of the process-wide module path (its script path, its file names and its errors are those
+    // of that path), and otherwise the canonical path judged (qore#7319)
     const char* open_path = trusted ? trusted_path.c_str() : path;
+    if (trusted && !(found_in && found_in->process_path)) {
+        path = open_path;
+    }
     // code that is not trusted cannot replace a library module with a module from elsewhere, nor with one in a
     // container of its own; a private module has a name of its own
     bool tenant_chosen;
@@ -6337,8 +6352,12 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     std::string trusted_path;
     const bool trusted = !untrusted_container && isTrustedModulePath(path, &trusted_path, found_in);
     // the file that was found to be library code is the file that is read; the module keeps the path that it was
-    // found by (its script path, its file name and its errors are those of that path) (qore#7319)
+    // found by in a directory of the process-wide module path (its script path, its file name and its errors are those
+    // of that path), and otherwise the canonical path judged (qore#7319)
     const char* open_path = trusted ? trusted_path.c_str() : nullptr;
+    if (trusted && !(found_in && found_in->process_path)) {
+        path = open_path;
+    }
     // code that is not trusted cannot replace a library module with a module from elsewhere, nor with one in a
     // container of its own; a private module has a name of its own
     bool tenant_chosen;
@@ -6797,8 +6816,13 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     std::string trusted_path;
     const bool trusted = isTrustedModulePath(found_path ? found_path : path, &trusted_path, found_in);
     // the file that was found to be library code is the file that is read and loaded; the module keeps the path that
-    // it was found by (its file name and its errors are those of that path) (qore#7319)
+    // it was found by in a directory of the process-wide module path (its file name and its errors are those of that
+    // path), and otherwise the canonical path judged; this build's module of a link into another build keeps its own
+    // path (qore#7030, qore#7319)
     const char* open_path = (trusted && !found_path) ? trusted_path.c_str() : path;
+    if (trusted && !found_path && !(found_in && found_in->process_path)) {
+        path = open_path;
+    }
     // code that is not trusted cannot replace a library module with a module from elsewhere
     bool tenant_chosen;
     QoreSandboxManager* owner;
