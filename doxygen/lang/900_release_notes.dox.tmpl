@@ -2782,6 +2782,15 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - an operation on a container that raises an exception after changing it, such as a hash merge that stores a
+      key before it refuses another one, keeps the object counts of the containers above it and is seen by the
+      @ref garbage_collection "garbage collector", which collects a cycle that it made (issue #7322)
+    - a change through an lvalue path that reaches a container again through a
+      @ref weak_assignment_operator "weak reference" changes the object count of each container holding the changed
+      one once, where it failed an assertion or counted an object twice (issue #7321)
+    - the @ref garbage_collection "garbage collector" collects a cycle through a hash, list or object holding an
+      object that a member was removed from, which it missed, and a write to a member by its bare name no longer
+      counts the object as holding a value to scan when it holds none (issue #7348)
     - The @ref garbage_collection "garbage collector" now collects object cycles through reversed
       lists and lists whose elements were converted in place (issue #7159).
     - @ref string_formatting "Value formatting" now displays a back-reference when several paths reach the same

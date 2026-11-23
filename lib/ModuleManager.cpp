@@ -2527,6 +2527,16 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
         if (init_barrier.failed()) {
             xsink.outOfMemory();
         } else {
+            // the module's initialization runs under this barrier, not under the one of its load, which recorded
+            // the module's own Program: it is recorded on this one too, so that a closure that the module's code
+            // creates while only that code runs is a module-init closure, as for a module loaded from source; only
+            // for a barrier of library code and a module Program that is library code (qore#7335)
+            if (isTrusted()) {
+                QoreProgram* mpgm = getModuleProgram();
+                if (mpgm && qore_program_is_library_module(mpgm)) {
+                    qore_module_init_set_program(mpgm);
+                }
+            }
             // an AOT module merges its namespace under its own fence and must not hold the write lock
             // across the deferred initialization that follows the merge; see qore_aot_module_ns_init_impl()
             module_ns_init(rns, qns, xsink);
