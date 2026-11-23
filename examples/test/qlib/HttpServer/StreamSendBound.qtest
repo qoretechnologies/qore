@@ -113,6 +113,33 @@ class FullBufferSocket inherits Socket {
     }
 }
 
+#! a socket whose streams share one connection: each of the active streams takes an equal share of its rate
+class SharedConnectionSocket inherits FullBufferSocket {
+    public {
+        #! the rate of the whole connection in bytes per second
+        int connection_rate;
+        #! the number of streams that share it
+        int streams;
+        #! the time on the monotonic clock when the streams started, in microseconds
+        int start_us;
+        #! the time after the start when the connection stops taking data, in microseconds, so that a stream that
+        #! is not ended by the rate is ended by its stall timeout instead of waiting forever
+        int stop_us = 5000000;
+    }
+
+    constructor(int connection_rate, int streams, int start_us) : FullBufferSocket(-1) {
+        self.connection_rate = connection_rate;
+        self.streams = streams;
+        self.start_us = start_us;
+        wait_ms = 20;
+    }
+
+    #! the bytes that this stream has taken: its share of the connection's rate since the start
+    private int readProgress() {
+        return min(clock_get_monotonic_us() - start_us, stop_us) * connection_rate / streams / 1000000;
+    }
+}
+
 #! reports the bound settings that a request's handler is given
 class SettingsHandler inherits AbstractHttpRequestHandler {
     public {
@@ -185,6 +212,10 @@ class StreamSendBoundTest inherits QUnit::Test {
         addTestCase("HTTP/3: a real client below the rate gets a reset, not a hang", \testRealStalled(), True);
         addTestCase("a handler's view of the listener reports the settings", \testHandlerView());
         addTestCase("a rate of 0 disables the check", \testRateDisabled());
+        addTestCase("HTTP/2: many streams on one connection: the rate applies to each stream", \testManyStreams(),
+            False);
+        addTestCase("HTTP/3: many streams on one connection: the rate applies to each stream", \testManyStreams(),
+            True);
         set_return_value(main());
     }
 
@@ -392,6 +423,48 @@ class StreamSendBoundTest inherits QUnit::Test {
         hash<auto> v = h.q.get(30s);
         assertEq(4096, v.rate);
         assertEq(7s, v.window);
+    }
+
+    #! documents the current behaviour (#7280): the minimum rate applies to each stream, not to the connection, so
+    #! streams that share a connection that is faster than the rate are each ended when their share is below it;
+    #! scaled down: 8 streams on a connection at 4x the rate get 0.5x each, while one stream alone is not ended.  The
+    #! connection is modelled as an equal share per stream; a per-connection rate would need a connection-level
+    #! progress count, which this model and StreamSendBound do not have
+    testManyStreams(bool http3) {
+        int rate = 1048576;
+        date window = 500ms;
+        int connection_rate = 4 * rate;
+        # one stream alone on the connection: 4x the rate, not ended within several credits
+        {
+            SharedConnectionSocket s(connection_rate, 1, clock_get_monotonic_us());
+            s.full_sends = 100;
+            send(new StreamSendBound(5s, rate, window), s, http3);
+            assertEq(1, s.sent.size(), "a single stream on the connection is not ended");
+        }
+        # 8 streams on the same connection: each gets 0.5x the rate and is ended once its credit is used up; a stream
+        # that the rate does not end is ended by its stall timeout once the connection stops, so every thread ends
+        int streams = 8;
+        int start = clock_get_monotonic_us();
+        Queue results();
+        Counter running(streams);
+        for (int i = 0; i < streams; ++i) {
+            background sub () {
+                on_exit running.dec();
+                SharedConnectionSocket s(connection_rate, streams, start);
+                try {
+                    send(new StreamSendBound(5s, rate, window), s, http3);
+                    results.push("sent");
+                } catch (hash<ExceptionInfo> ex) {
+                    results.push(ex.err + ": " + ex.desc);
+                }
+            }();
+        }
+        running.waitForZero(60s);
+        int ms = (clock_get_monotonic_us() - start) / 1000;
+        list<string> l = map results.get(), xrange(streams);
+        assertEq(streams, (select l, $1 =~ /^STREAM-SEND-TIMEOUT: .*minimum rate/).size(),
+            "every stream is ended for the rate, although the connection is at 4x the rate: " + l.join(", "));
+        assertLt(5000, ms, "before the connection stops");
     }
 
     testRateDisabled() {
