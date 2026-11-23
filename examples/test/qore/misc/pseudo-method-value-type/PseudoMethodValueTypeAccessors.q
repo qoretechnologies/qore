@@ -24,6 +24,9 @@ string sub result(code c) {
 class AccessorObject {
 }
 
+enum AccessorStringEnum { A = "abc" }
+enum AccessorIntEnum { One = 1 }
+
 AccessorObject obj();
 # a value of the type of each pseudo-class whose code takes the value's node, and a method of the class
 hash<string, list<auto>> classes = {
@@ -40,9 +43,12 @@ hash<string, list<auto>> classes = {
     # no method of <closure> reads its receiver: typeCode() gives the class's type for any value
     "<closure>": (sub () {}, "typeCode"),
 };
-# values of every type
+# values of every type: nodes, inline values (short strings, characters, integers, NaN-boxed floats) and enum members
 hash<string, auto> values = {
     "string": "abc",
+    "long string": "a string that is longer than a short string",
+    "string enum": AccessorStringEnum::A,
+    "int enum": AccessorIntEnum::One,
     "list": (1, 2),
     "hash": {"a": 1},
     "binary": <0102>,
@@ -55,6 +61,8 @@ hash<string, auto> values = {
     "char": c'a',
     "int": 12345,
     "float": 2.5,
+    "large float": 1.0e300,
+    "negative zero": -0.0,
     "bool": True,
     "nothing": NOTHING,
     "null": NULL,

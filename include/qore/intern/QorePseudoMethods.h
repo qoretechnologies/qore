@@ -74,9 +74,20 @@ DLLLOCAL void qore_raise_pseudo_receiver_type_error(const QoreValue& v, const ch
 template <typename T>
 DLLLOCAL inline const T* qore_pseudo_receiver(const QoreValue& v, qore_type_t t, const char* class_name,
         ExceptionSink* xsink) {
-    if (!v.isEnum() && !v.isShortString() && v.getType() == t) [[likely]] {
-        return v.get<const T>();
+    // the node's own type, with no call: an enum member or a short string is no node (QoreValue::getType() gives the
+    // type of an enum member's value)
+    if (v.isPointer()) [[likely]] {
+        const AbstractQoreNode* n = v.getPtr();
+        if (n && n->getType() == t) [[likely]] {
+            // the answer of QoreValue::getType() for a node
+            assert(v.getType() == t);
+            assert(dynamic_cast<const T*>(n));
+            return reinterpret_cast<const T*>(n);
+        }
     }
+    // no value other than a node of the type has the type for getType(), except an enum member of a value of it, and
+    // a short string, which is no node (QoreStringNode)
+    assert(v.getType() != t || v.isEnum() || v.isShortString());
     qore_raise_pseudo_receiver_type_error(v, class_name, xsink);
     return nullptr;
 }
@@ -97,12 +108,17 @@ DLLLOCAL inline unsigned qore_pseudo_char_receiver(const QoreValue& v, Exception
 //! class (\a closure_only true) is called on (see qore_pseudo_receiver())
 DLLLOCAL inline const ResolvedCallReferenceNode* qore_pseudo_callref_receiver(const QoreValue& v, bool closure_only,
         const char* class_name, ExceptionSink* xsink) {
-    if (!v.isEnum()) [[likely]] {
-        qore_type_t t = v.getType();
+    if (v.isPointer()) [[likely]] {
+        const AbstractQoreNode* n = v.getPtr();
+        qore_type_t t = n ? n->getType() : NT_NOTHING;
         if (t == NT_RUNTIME_CLOSURE || (!closure_only && t == NT_FUNCREF)) [[likely]] {
-            return v.get<const ResolvedCallReferenceNode>();
+            assert(v.getType() == t);
+            assert(dynamic_cast<const ResolvedCallReferenceNode*>(n));
+            return reinterpret_cast<const ResolvedCallReferenceNode*>(n);
         }
     }
+    // see qore_pseudo_receiver()
+    assert(v.isEnum() || (v.getType() != NT_RUNTIME_CLOSURE && (closure_only || v.getType() != NT_FUNCREF)));
     qore_raise_pseudo_receiver_type_error(v, class_name, xsink);
     return nullptr;
 }
