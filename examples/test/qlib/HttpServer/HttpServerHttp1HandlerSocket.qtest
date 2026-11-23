@@ -566,6 +566,28 @@ class HttpServerHttp1HandlerSocketTest inherits QUnit::Test {
 %requires RestHandler
 %requires DataStreamUtil
 %requires DataStreamRequestHandler
+%requires reflection
+
+#! the classes of the objects in a value, its hashes and its lists (an object is not entered)
+list<string> sub tenant_classes(auto v) {
+    list<string> rv = ();
+    switch (v.typeCode()) {
+        case NT_HASH:
+            foreach auto e in (v.values()) {
+                rv += tenant_classes(e);
+            }
+            break;
+        case NT_LIST:
+            foreach auto e in (v) {
+                rv += tenant_classes(e);
+            }
+            break;
+        case NT_OBJECT:
+            rv += v.className();
+            break;
+    }
+    return rv;
+}
 
 class TenantEchoHandler inherits AbstractDataStreamRequestHandler {
     private {
@@ -680,6 +702,27 @@ class TenantHttpHandler inherits AbstractHttpRequestHandler {
             }
             case \"class\":
                 return makeResponse(200, \"class=\" + s.className());
+            case \"reach\": {
+                # tries to reach the server's state of the request: the members of its socket, by name and through
+                # reflection, the server's classes by name, and the objects of its context and listener
+                auto a = s;
+                list<string> r = ();
+                foreach string m in ((\"rh\", \"real\", \"gen\")) {
+                    r += sprintf(\"name.%s=%s\", m, try_it(sub () { auto x = a{m}; }));
+                    r += sprintf(\"get.%s=%s\", m, try_it(sub () {
+                        cast<NormalMember>(Class::getClass(s).getMember(m)).getValue(s);
+                    }));
+                    r += sprintf(\"set.%s=%s\", m, try_it(sub () {
+                        cast<NormalMember>(Class::getClass(s).getMember(m)).setValue(s, NOTHING);
+                    }));
+                }
+                foreach string c in ((\"HttpServer::Priv::RequestHelper\", \"HttpServer::Priv::HandlerSocketState\",
+                        \"Priv::RequestHelper\", \"Priv::HandlerSocketState\")) {
+                    r += sprintf(\"class.%s=%s\", c, try_it(sub () { Class::forName(c); }));
+                }
+                r += \"objects=\" + (tenant_classes(cx) + tenant_classes(hdr) + (listener.className(),)).join(\",\");
+                return makeResponse(200, r.join(\"\\n\"));
+            }
             case \"arm\":
                 # a complete response through the socket of the request, then an exception after the handler's code
                 s.sendHTTPResponse(200, \"OK\", \"1.1\", {\"Content-Type\": \"text/plain\"}, \"first\");
@@ -688,13 +731,17 @@ class TenantHttpHandler inherits AbstractHttpRequestHandler {
             case \"upgrade\":
                 return <HttpResponseInfo>{\"code\": 101, \"hdr\": {\"Upgrade\": \"x\", \"Connection\": \"Upgrade\"}};
             case \"blocked\":
+            case \"blocked-long\":
                 # a thread of the handler that outlives its request, blocked in a read of the socket of the request
+                # without a timeout or with a long one
                 background sub () {
+                    string err = \"ok\";
                     try {
-                        s.readHTTPChunkedBody(-1);
-                    } catch () {
+                        s.readHTTPChunkedBody(hdr.path == \"blocked\" ? -1 : 3600000);
+                    } catch (hash<ExceptionInfo> ex) {
+                        err = ex.err;
                     }
-                    ended.push(True);
+                    ended.push(err);
                 }();
                 entered.push(True);
                 return makeResponse(200, \"returned\");
@@ -834,6 +881,7 @@ nothing sub run_code(code c) {
         addTestCase("a read of a thread that outlives its request", \blockedReadTest());
         addTestCase("a response without a body has no framing", \bodilessFramingTest());
         addTestCase("a protocol switch only for a request that asks for one", \upgradeTest());
+        addTestCase("sandboxed code cannot reach the server's state of its request", \sandboxedReachTest());
         addTestCase("an event stream of a sandboxed handler", \sandboxedSseTest());
         addTestCase("the abort of an HTTP/2 request's stream", \streamAbortTest(), "h2");
         addTestCase("the abort of an HTTP/3 request's stream", \streamAbortTest(), "h3");
@@ -1543,35 +1591,53 @@ class NoView inherits AbstractHttpRequestHandler {
     }
 
     #! a read of the socket of a request in a thread of the handler that outlives the request holds the server at most
-    #! for the longest timeout of the socket (30 s, also for a read without a timeout): the connection is closed, and
-    #! the server serves other connections
+    #! for the longest timeout of the socket (the server's handler_socket_max_timeout option), also for a read without
+    #! a timeout or with a longer one: the read times out, the connection is closed, and the server serves other
+    #! connections
     blockedReadTest() {
+        assertThrows("HTTP-SERVER-INIT-ERROR", sub () {
+            HttpServer bad(<HttpServerOptionInfo>{"handler_socket_max_timeout": -1});
+        });
         Program p = getTenantProgram();
         Queue entered();
         Queue release();
-        AbstractHttpRequestHandler h = p.callFunction("get_http_handler", entered, release);
-        server.setHandler("tenant", "^blocked", NOTHING, h);
-        on_exit server.removeHandler("tenant");
-        Socket c = connect();
-        on_exit c.close();
-        # a chunked body that never ends
-        c.send("POST /blocked HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n");
-        entered.get(HangGuard);
-        # the response is sent (the read had not started), or the connection is closed, without waiting for the read
-        string r;
-        try {
-            hash<auto> h = c.readHTTPHeader(HangGuard * 3);
-            r = c.recv(h."content-length".toInt(), HangGuard);
-        } catch (hash<ExceptionInfo> ex) {
-            r = "closed";
+        AbstractHttpRequestHandler handler = p.callFunction("get_http_handler", entered, release);
+        HttpServer srv(<HttpServerOptionInfo>{"handler_socket_max_timeout": 1s});
+        on_exit delete srv;
+        srv.setHandler("tenant", "^(blocked|class)", NOTHING, handler);
+        int srv_port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        srv.waitForAsyncIo();
+
+        foreach string path in (("blocked", "blocked-long")) {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            # a chunked body that never ends
+            c.send("POST /" + path + " HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n"
+                "3\r\nabc\r\n");
+            entered.get(HangGuard);
+            # the response is sent (the read had not started), or the connection is closed, without waiting for the
+            # read
+            string r;
+            try {
+                hash<auto> rh = c.readHTTPHeader(HangGuard);
+                r = c.recv(rh."content-length".toInt(), HangGuard);
+            } catch (hash<ExceptionInfo> ex) {
+                r = "closed";
+            }
+            assertTrue(r == "returned" || r == "closed", path + ": the request ends: " + r);
+            # the thread's read ends at the longest timeout of the socket, or with the end of the request
+            string err = cast<object>(handler).ended.get(HangGuard);
+            assertTrue(err == "SOCKET-TIMEOUT" || err == "HTTP-HANDLER-SOCKET-ERROR" || err =~ /^SOCKET-/,
+                path + ": the read ends: " + err);
+            assertNeq("ok", err, path + ": the read reads no body that the client did not send");
+
+            Socket c2();
+            c2.connect("localhost:" + srv_port, HangGuard);
+            on_exit c2.close();
+            c2.send("GET /class HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            assertEq("class=Http1HandlerSocket", readResponse(c2), path + ": the server serves another connection");
         }
-        assertTrue(r == "returned" || r == "closed", "the request ends: " + r);
-        # the thread's read ends, at the latest at the longest timeout of the socket
-        cast<object>(h).ended.get(HangGuard * 3);
-        Socket c2 = connect();
-        on_exit c2.close();
-        c2.send("GET /after HTTP/1.1\r\nHost: localhost\r\n\r\n");
-        assertEq("served after", readResponse(c2), "the server serves another connection");
     }
 
     #! a response without a body (HEAD, 204, 304) has no Transfer-Encoding, and a 204 or 304 response no
@@ -1606,6 +1672,38 @@ class NoView inherits AbstractHttpRequestHandler {
         hash<auto> h = c.readHTTPHeader(HangGuard);
         assertEq(500, h.status_code, "no protocol switch for a request that does not ask for one");
         assertEq("the request does not ask for a protocol upgrade", c.recv(h."content-length".toInt(), HangGuard));
+    }
+
+    #! a sandboxed handler cannot reach the server's state of its request: not through the members of its socket, by
+    #! name or through reflection, nor through the server's classes by name or the objects that it gets
+    sandboxedReachTest() {
+        Program p = getTenantProgram();
+        Queue entered();
+        Queue release();
+        server.setHandler("tenant", "^reach", NOTHING, p.callFunction("get_http_handler", entered, release));
+        on_exit server.removeHandler("tenant");
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /reach HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        foreach string m in (("rh", "real", "gen")) {
+            assertNeq("ok", r{"name." + m}, "member " + m + " by name");
+            assertEq("REFLECTION-ACCESS-ERROR", r{"get." + m}, "member " + m + " read through reflection");
+            assertEq("REFLECTION-ACCESS-ERROR", r{"set." + m}, "member " + m + " written through reflection");
+        }
+        foreach string cls in (("HttpServer::Priv::RequestHelper", "HttpServer::Priv::HandlerSocketState",
+                "Priv::RequestHelper", "Priv::HandlerSocketState")) {
+            assertNeq("ok", r{"class." + cls}, "class " + cls + " by name");
+        }
+        list<string> objs = r.objects.split(",");
+        assertTrue(objs.size() > 1, "the context, the header and the listener have objects: " + r.objects);
+        foreach string cls in (objs) {
+            assertFalse(cls == "RequestHelper" || cls == "HandlerSocketState" || cls == "HttpListener",
+                "the handler gets no object of the server's state: " + cls);
+        }
+        # the server serves the next request on the connection
+        c.send("GET /victim HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served victim", readResponse(c));
     }
 
     #! the server sends the header of a sandboxed handler's event stream, with Connection: close, before the handler

@@ -219,6 +219,10 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
       @ref HttpServer::Http1BodyReader "Http1BodyReader");
     - has a character encoding and timeouts of its own, which do not change the connection's, and gives the
       connection's information, such as @ref Qore::Socket::getPeerInfo() "getPeerInfo()";
+    - gives each send and read a timeout of at most the server's \c handler_socket_max_timeout option (see
+      @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo", 30 seconds by default): a send or read without a
+      timeout, or with a longer one, has that timeout, so that the server, which waits for the sends and reads in
+      progress before it answers the request or reads the next one, waits a bounded time;
     - raises \c HTTP-HANDLER-SOCKET-ERROR for a read of the next request on the connection
       (@ref Qore::Socket::readHTTPHeader() "readHTTPHeader()"), for shutdown() and close() (a handler closes the
       connection with the \c close key of its response; code that is not sandboxed aborts it at once, as when a
@@ -341,7 +345,8 @@ log("started listener on %s", lh.desc);
       acts on the connection for its own request only, as the handler of an HTTP/2 or HTTP/3 request does, and code
       that is not sandboxed aborts the connection with
       @ref HttpServer::http_abort_connection() "http_abort_connection()" (see @ref httpserver_handler_socket;
-      <a href="https://github.com/qoretechnologies/qore/issues/7305">issue 7305</a>)
+      <a href="https://github.com/qoretechnologies/qore/issues/7305">issue 7305</a>); each send and read of that
+      socket has a timeout of at most the new \c handler_socket_max_timeout option (30 seconds by default)
     - a stream handler that wants an HTTP/1.x request body with a \c Content-Length as a stream
       (@ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()") gets it in binary
       parts of at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize" bytes, each byte once, instead of
@@ -954,6 +959,20 @@ public hashdecl HttpServerOptionInfo {
     */
     int max_header_size = 0;
 
+    #! The longest timeout of a send or a read of the socket that the handler of an HTTP/1.x request gets
+    /** A send or read of the socket of a request (see @ref httpserver_handler_socket) without a timeout, or with a
+        longer one, has this timeout: the server ends the socket of a request before it answers the request, after the
+        sends and reads of the socket in progress (of a thread of the handler that outlives its request), which a
+        shutdown of the connection does not end, so that this bounds how long the server waits for them.  A send or
+        read with a shorter timeout keeps it.
+
+        - a positive value is the longest timeout
+        - \c 0 (the default) uses the default of 30 seconds
+
+        @since HttpServer 1.7
+    */
+    timeout handler_socket_max_timeout = 0;
+
     #! Maximum size in bytes of a decompressed request body
     /** A request body with a \c Content-Encoding is decompressed before it is passed to the handler; a body whose
         decompressed size exceeds this value receives HTTP 413 (Content Too Large) and the connection is closed.
@@ -1163,6 +1182,12 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         */
         const DefaultDrainTimeout = 5s;
 
+        #! The default longest timeout of a send or a read of the socket of an HTTP/1.x request (the
+        #! \c handler_socket_max_timeout option; qore#7305)
+        /** @since HttpServer 1.7
+        */
+        const DefaultHandlerSocketMaxTimeout = 30s;
+
         # logging options
         const LP_LOGPARAMS = HttpServer::LP_LOGPARAMS;
         const LP_LEVELMASK = HttpServer::LP_LEVELMASK;
@@ -1313,6 +1338,8 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         #! The maximum time that stop() waits for the requests in progress (the \c drain_timeout option)
         timeout drain_timeout = DefaultDrainTimeout;
+        #! the longest timeout of a send or a read of the socket of an HTTP/1.x request (qore#7305)
+        timeout handler_socket_max_timeout = DefaultHandlerSocketMaxTimeout;
 
         # permanent handlers; these handlers are never removed
         HttpHandlerList handlers();
@@ -3887,6 +3914,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     #! Common constructor code
     private init(hash<HttpServerOptionInfo> opts) {
         drain_timeout = opts.drain_timeout ?? opts.quic_drain_timeout ?? DefaultDrainTimeout;
+        if ((opts.handler_socket_max_timeout ?? 0) < 0) {
+            throw "HTTP-SERVER-INIT-ERROR", sprintf("handler_socket_max_timeout (%d) must not be negative",
+                opts.handler_socket_max_timeout);
+        }
+        if (opts.handler_socket_max_timeout) {
+            handler_socket_max_timeout = opts.handler_socket_max_timeout;
+        }
         # checked before anything is created
         compression_levels = checkCompressionLevels(opts.compression_levels ?? {});
         int idle_threads = opts.idle_threads;
@@ -5237,7 +5271,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 HandlerSocketState hs_state = request_helper.hs_state
                     ?? (request_helper.hs_state = new HandlerSocketState());
                 request_helper.handler_sock = new Http1HandlerSocket(s, hs_state,
-                    hs_state.h1Reset(s, head, hdr.http_version == "1.0"));
+                    hs_state.h1Reset(s, head, hdr.http_version == "1.0"), handler_socket_max_timeout);
                 request_helper.h1_view = True;
             }
 
@@ -11058,13 +11092,10 @@ enum Http1ResponseSend : int {
     method: its code reaches the server's state of the request only through its own private members.
 */
 class Http1HandlerSocket inherits Qore::Socket {
-    public {
-        #! The longest timeout of a send or a read of the socket, in milliseconds: a longer timeout, or none, is this
-        #! one (the end of the request waits for the sends and reads in progress at most this time; qore#7305)
-        const MaxTimeout = 30000;
-    }
-
     private:internal {
+        #! the longest timeout of a send or a read of the object, in milliseconds: a longer timeout, or none, is this
+        #! one (the server's \c handler_socket_max_timeout option)
+        int max_to;
         #! the connection's socket, which the server keeps
         Socket real;
         #! the state of the request's socket, which the server holds
@@ -11083,11 +11114,14 @@ class Http1HandlerSocket inherits Qore::Socket {
     /** @param real the connection's socket
         @param rh the state of the request's socket, which the server holds
         @param gen the generation of the request's socket in the state (see HandlerSocketState::h1Reset())
+        @param max_to the longest timeout of a send or a read of the object, in milliseconds (the server's
+        \c handler_socket_max_timeout option)
     */
-    constructor(Socket real, HandlerSocketState rh, int gen) {
+    constructor(Socket real, HandlerSocketState rh, int gen, int max_to) {
         self.real = real;
         self.rh = rh;
         self.gen = gen;
+        self.max_to = max_to;
     }
 
     #! Returns the object's own character encoding: the connection's until setEncoding() is called
@@ -11649,6 +11683,10 @@ class Http1HandlerSocket inherits Qore::Socket {
     hash<auto> readHTTPChunkedBody(timeout timeout_ms = -1) {
         enterChunkedRead("readHTTPChunkedBody");
         on_exit rh.h1Leave();
+        # in the connection's encoding, the connection's socket decodes the body
+        if (!ownEncoding()) {
+            return real.readHTTPChunkedBody(recvTimeout(timeout_ms));
+        }
         hash<auto> rv = real.readHTTPChunkedBodyBinary(recvTimeout(timeout_ms));
         # the body in the object's encoding
         if (rv.body instanceof binary) {
@@ -11672,6 +11710,11 @@ class Http1HandlerSocket inherits Qore::Socket {
     nothing readHTTPChunkedBodyWithCallback(code receive_callback, timeout timeout_ms = -1) {
         enterChunkedRead("readHTTPChunkedBodyWithCallback");
         on_exit rh.h1Leave();
+        # in the connection's encoding, the connection's socket decodes the chunks
+        if (!ownEncoding()) {
+            real.readHTTPChunkedBodyWithCallback(receive_callback, recvTimeout(timeout_ms));
+            return;
+        }
         # the chunks in the object's encoding
         string enc = getEncoding();
         real.readHTTPChunkedBodyBinaryWithCallback(sub (hash<auto> v) {
@@ -11688,21 +11731,28 @@ class Http1HandlerSocket inherits Qore::Socket {
         real.readHTTPChunkedBodyBinaryWithCallback(receive_callback, recvTimeout(timeout_ms));
     }
 
+    #! Returns True if the object's encoding is not the connection's
+    private:internal bool ownEncoding() {
+        return enc && enc != real.getEncoding();
+    }
+
     #! Returns the bytes of a string in the object's encoding
     private:internal binary toBytes(string str) {
         return binary(convert_encoding(str, getEncoding()));
     }
 
-    #! Returns the timeout of a send: at most MaxTimeout, so that the end of the request waits for it a bounded time
+    #! Returns the timeout of a send: at most the server's longest one, so that the end of the request waits for it a
+    #! bounded time
     private:internal int sendTimeout(int timeout_ms) {
         int t = timeout_ms < 0 ? send_to : timeout_ms;
-        return (t < 0 || t > MaxTimeout) ? MaxTimeout : t;
+        return (t < 0 || t > max_to) ? max_to : t;
     }
 
-    #! Returns the timeout of a read: at most MaxTimeout, so that the end of the request waits for it a bounded time
+    #! Returns the timeout of a read: at most the server's longest one, so that the end of the request waits for it a
+    #! bounded time
     private:internal int recvTimeout(int timeout_ms) {
         int t = timeout_ms < 0 ? recv_to : timeout_ms;
-        return (t < 0 || t > MaxTimeout) ? MaxTimeout : t;
+        return (t < 0 || t > max_to) ? max_to : t;
     }
 
     #! Admits a raw send of bytes of the response's body, counted against its Content-Length
@@ -11760,11 +11810,14 @@ class Http1HandlerSocket inherits Qore::Socket {
         on_exit rh.h1Leave();
         rh.h1StartResponse("sendHTTPResponseWithCallback", status_code, headers, Http1ResponseSend::FullChunked);
         # the strings that the callback returns are sent in the object's encoding
-        string enc = getEncoding();
-        code cb = auto sub () {
-            auto v = send_callback();
-            return v.typeCode() == NT_STRING ? binary(convert_encoding(v, enc)) : v;
-        };
+        code cb = send_callback;
+        if (ownEncoding()) {
+            string enc = getEncoding();
+            cb = auto sub () {
+                auto v = send_callback();
+                return v.typeCode() == NT_STRING ? binary(convert_encoding(v, enc)) : v;
+            };
+        }
         sendChecked(sub () {
             real.sendHTTPResponseWithCallback(cb, status_code, status_description, http_version, headers, \info,
                 sendTimeout(timeout_ms));
@@ -13200,9 +13253,9 @@ class HandlerSocketState {
     #! Ends the socket of the current HTTP/1.x request (qore#7305)
     /** The server calls it before it sends a response for the request or reads the next request; a later call only
         returns the state.  A send or read of the socket in progress (of a thread of the handler that outlives its
-        request) is waited for, at most for its timeout, which the socket bounds (Http1HandlerSocket::MaxTimeout); the
-        response is then broken, and the connection is shut down and closed by the server.  It is called only by the
-        server's own code
+        request) is waited for, at most for its timeout, which the socket bounds (the \c handler_socket_max_timeout
+        option of the server); the response is then broken, and the connection is shut down and closed by the
+        server.  It is called only by the server's own code
 
         @return the state of the response that the handler sent through the socket (an Http1ResponseState value)
     */
