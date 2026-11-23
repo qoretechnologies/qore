@@ -181,6 +181,17 @@ void qore_list_private::raiseElementRemovalError(size_t ind, bool for_del, const
     }
 }
 
+void qore_list_private::raiseWeakElementRemovalError(size_t ind, bool for_del, ExceptionSink* xsink) const {
+    if (xsink) {
+        xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot %s element " QLLD " of a list of type '%s' through a weak "
+            "reference: the element would have no value (NOTHING), which the element type of the list does not take, "
+            "and the list, which its owners share, keeps its type; declare the list with an element type that takes "
+            "NOTHING (ex: list<*int>, or list<auto!> for a list whose type would be narrowed from its values, as "
+            "list<auto> l = (1, 2) is a list<int>)", for_del ? "delete" : "remove", (int64)ind,
+            QoreTypeInfo::getName(complexTypeInfo));
+    }
+}
+
 int qore_list_private::raiseAssignmentGapError(size_t ind, ExceptionSink* xsink) const {
     assert(elementTypeRejectsNothing());
     const QoreTypeInfo* vti = getValueTypeInfo();
@@ -954,11 +965,16 @@ QoreListNode* QoreListNode::extract(ptrdiff_t offset) {
 
 QoreListNode* QoreListNode::extract(ptrdiff_t offset, ptrdiff_t len) {
     assert(reference_count() == 1);
+    return priv->extract(offset, len);
+}
+
+QoreListNode* qore_list_private::extract(ptrdiff_t offset, ptrdiff_t len) {
     size_t n_offset, n_len;
-    priv->checkOffset(offset, len, n_offset, n_len);
-    if (n_offset == priv->length)
-        return priv->getCopy();
-    return priv->spliceIntern(n_offset, n_len, true);
+    checkOffset(offset, len, n_offset, n_len);
+    if (n_offset == length) {
+        return getCopy();
+    }
+    return spliceIntern(n_offset, n_len, true);
 }
 
 QoreListNode* QoreListNode::extract(ptrdiff_t offset, ptrdiff_t len, const QoreValue l, ExceptionSink* xsink) {

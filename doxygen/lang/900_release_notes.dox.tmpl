@@ -2844,6 +2844,10 @@
     - the \c splice and \c extract operators and the merge of a list, a hash or an object's members (\c +=) raise
       \c LIST-ERROR or \c HASH-ERROR for a list or hash freed under a @ref weak_assignment_operator "weak reference", as
       the other changes do (<a href="https://github.com/qoretechnologies/qore/issues/7199">issue 7199</a>)
+    - the @ref remove "remove" and @ref delete "delete" operators remove an element, a key, a slice or a range through
+      a @ref weak_assignment_operator "weak reference" from the list or hash that it designates, instead of removing
+      the weak reference itself or nothing
+      (<a href="https://github.com/qoretechnologies/qore/issues/7306">issue 7306</a>)
     - @ref httpserverintro "HttpServer" answers a handler's informational response (1xx) other than 101 with an error
       instead of sending it as the final response
       (<a href="https://github.com/qoretechnologies/qore/issues/7222">issue 7222</a>)
