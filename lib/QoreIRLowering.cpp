@@ -2074,6 +2074,37 @@ public:
     }
 };
 
+//! removes the setting of the thread's implicit index ($#) of a foreach statement from the function being lowered
+/** @param fn the function
+    @param old_element the result of the statement's PushImplicitElement: the instruction is removed with every
+    PopImplicitElement that restores it (the latch, a break, a return through the statement's cleanup entry, and the
+    exception restoration of the body)
+*/
+static void qore_ir_elide_foreach_implicit_element(QoreIRFunction* fn, QoreIRValue old_element) {
+    assert(old_element.isValid());
+    for (auto& block : fn->blocks) {
+        auto& instructions = block->instructions;
+        instructions.erase(std::remove_if(
+            instructions.begin(), instructions.end(),
+            [&](const std::unique_ptr<QoreIRInstruction>& inst) {
+                return (inst->opcode == QoreIROpcode::PushImplicitElement
+                        && inst->result.id == old_element.id)
+                    || (inst->opcode == QoreIROpcode::PopImplicitElement
+                        && !inst->operands.empty()
+                        && inst->operands[0].id == old_element.id);
+            }), instructions.end());
+    }
+}
+
+//! returns true if a foreach statement need not set the thread's implicit index ($#) for its elements (qore#7270)
+/** Only a $# in the statement's body reads it (ForEachStatement::readsImplicitElement()): the code that the body
+    calls cannot refer to it (qore#5690), so a body without one needs no PushImplicitElement whatever it calls.
+    QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT keeps it for every foreach statement.
+*/
+static bool qore_ir_foreach_elides_implicit_element(const ForEachStatement* foreach_stmt) {
+    return !foreach_stmt->readsImplicitElement() && !QORE_ENV_IS_SET("QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT");
+}
+
 bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& error) {
     if (!stmt) {
         error = "null statement for IR lowering";
@@ -3247,6 +3278,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                     builder.createUninstantiateLocal(loop_lvars->lv[i], stmt->loc);
                 }
             }
+            // a body without a $# of the statement reads its index nowhere (qore#7270)
+            if (qore_ir_foreach_elides_implicit_element(foreach_stmt)) {
+                qore_ir_elide_foreach_implicit_element(builder.getFunction(), old_element);
+            }
             return true;
         }
 
@@ -3554,6 +3589,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         int saved_ast_count = ast_delegate_count;
         bool analyze_implicit_element =
             !QORE_ENV_IS_SET("QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT");
+        // a body without a $# of the statement reads its index nowhere, whatever it calls (qore#7270); the code
+        // below decides for a body with one whether the index only has virtual reads
+        bool body_reads_implicit_element = !qore_ir_foreach_elides_implicit_element(foreach_stmt);
         auto count_implicit_element_observers = [&]() {
             size_t observers = 0;
             size_t check_count = 0;
@@ -3596,7 +3634,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             }
             return observers;
         };
-        size_t implicit_observers_before = analyze_implicit_element
+        size_t implicit_observers_before = analyze_implicit_element && body_reads_implicit_element
             ? count_implicit_element_observers()
             : std::numeric_limits<size_t>::max();
         if (body) {
@@ -3629,22 +3667,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
 
         bool elide_implicit_element = analyze_implicit_element
-            && implicit_observers_before != std::numeric_limits<size_t>::max()
-            && ast_delegate_count == saved_ast_count
-            && count_implicit_element_observers() == implicit_observers_before;
+            && (!body_reads_implicit_element
+                || (implicit_observers_before != std::numeric_limits<size_t>::max()
+                    && ast_delegate_count == saved_ast_count
+                    && count_implicit_element_observers() == implicit_observers_before));
         if (elide_implicit_element) {
-            for (auto& block : builder.getFunction()->blocks) {
-                auto& instructions = block->instructions;
-                instructions.erase(std::remove_if(
-                    instructions.begin(), instructions.end(),
-                    [&](const std::unique_ptr<QoreIRInstruction>& inst) {
-                        return (inst->opcode == QoreIROpcode::PushImplicitElement
-                                && inst->result.id == old_element.id)
-                            || (inst->opcode == QoreIROpcode::PopImplicitElement
-                                && !inst->operands.empty()
-                                && inst->operands[0].id == old_element.id);
-                    }), instructions.end());
-            }
+            qore_ir_elide_foreach_implicit_element(builder.getFunction(), old_element);
         }
 
         // Normal body exit falls through to latch block
@@ -26713,6 +26741,10 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
             next_inst->result, foreach_stmt->getLVList(), loc);
         emitForeachExceptionCleanup(foreach_pre_element_cleanup_block, foreach_saved_exception_target, iter_val,
             source, QoreIRValue(), foreach_stmt->getLVList(), loc);
+    }
+    // a body without a $# of the statement reads its index nowhere (qore#7270)
+    if (qore_ir_foreach_elides_implicit_element(foreach_stmt)) {
+        qore_ir_elide_foreach_implicit_element(builder.getFunction(), old_element);
     }
     return true;
 }

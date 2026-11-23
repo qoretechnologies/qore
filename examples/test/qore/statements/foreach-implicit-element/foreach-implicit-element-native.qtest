@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of the implicit index of foreach statements
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ForeachImplicitElementNativeTest
+
+#! issue #7270: the native code of a foreach statement whose body reads no implicit index of its own sets none
+/** The functions of foreach-implicit-element-shape.q named \c skip_* have foreach statements whose bodies read no
+    \c $# of their own: one that calls a function, one over a reference, one over lazy operators and one with an
+    operator that reads its own index; their native code (AOT and JIT) must not call
+    \c qore_rt_push_implicit_element().  The functions named \c keep_* read the loop's index at run time (a context
+    statement, a background expression) or in a loop over a reference, and must call it.  With
+    \c QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT, every foreach statement sets its index.  The script must give the
+    output of the AST interpreter in every case.
+*/
+class ForeachImplicitElementNativeTest inherits QUnit::Test {
+    public {
+        #! the output of the script
+        const Output = "[2, 40, 6, 10, 44, 6, 1, 15]\n";
+
+        #! the functions whose foreach statements set no implicit index
+        const SkipFunctions = ("skip_keys", "skip_call", "skip_ref", "skip_lazy", "skip_operator");
+
+        #! the functions whose foreach statements set the implicit index
+        const KeepFunctions = ("keep_context", "keep_background", "keep_ref");
+
+        #! the environment that keeps the implicit index of every foreach statement
+        const KeepAllEnv = "QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT=1";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("foreach implicit element native code", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        script = get_script_dir() + "/foreach-implicit-element-shape.q";
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT native code", \aotTest());
+        addTestCase("JIT native code", \jitTest());
+        set_return_value(main());
+    }
+
+    #! runs the script in every execution mode, with and without the implicit index of every foreach statement
+    private modesTest() {
+        foreach string e in ("", KeepAllEnv) {
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                assertEq(Output, ExecModeHarness::run(sprintf("%s %s %s --exec-mode=%s %s", env, e, qore_bin, mode,
+                    script)), mode + (e ? " " + e : ""));
+            }
+        }
+    }
+
+    #! checks the native code of AOT executables compiled with -O0 and -O3, and their output
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("foreach-implicit-element-native-");
+        foreach string opt in ("-O0", "-O3") {
+            foreach string e in ("", KeepAllEnv) {
+                string exe = sprintf("%s/shape%s%s", dir.path, opt, e ? "-keep" : "");
+                # the optimized LLVM module of the script is written on stderr
+                string out = ExecModeHarness::run_any(sprintf("%s %s QORE_DUMP_IR_AFTER_OPT=1 %s %s -o %s %s", env, e,
+                    qcc_bin, opt, exe, script));
+                assertTrue(is_file(exe), sprintf("qcc %s compiles the script: %s", opt, out));
+                checkPushCalls(getPushCalls(out), !e, sprintf("AOT %s%s", opt, e ? " " + e : ""));
+                assertEq(Output, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT output " + opt);
+            }
+        }
+    }
+
+    #! checks the native code that the JIT compiles for the functions
+    private jitTest() {
+        foreach string e in ("", KeepAllEnv) {
+            # the optimized LLVM module of each function compiled is written on stderr
+            string out = ExecModeHarness::run_any(sprintf("%s %s QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 "
+                "QORE_DUMP_LLVM_IR=1 %s --exec-mode=jit %s", env, e, qore_bin, script));
+            checkPushCalls(getPushCalls(out), !e, "JIT" + (e ? " " + e : ""));
+        }
+    }
+
+    #! checks the calls of qore_rt_push_implicit_element() in the native code of the functions
+    /** @param calls the number of calls by function
+        @param elide true if the foreach statements of SkipFunctions set no implicit index
+        @param what the code checked
+    */
+    private checkPushCalls(hash<string, int> calls, bool elide, string what) {
+        foreach string name in (SkipFunctions) {
+            assertTrue(exists calls{name}, what + " " + name + ": the function is in the module");
+            if (elide) {
+                assertEq(0, calls{name}, what + " " + name + ": no implicit index is set");
+            } else {
+                assertTrue(calls{name} > 0, what + " " + name + ": the implicit index is set");
+            }
+        }
+        foreach string name in (KeepFunctions) {
+            assertTrue(calls{name} > 0, what + " " + name + ": the implicit index is set");
+        }
+    }
+
+    #! returns the number of calls of qore_rt_push_implicit_element() in the functions of the LLVM module \a ir that
+    #! SkipFunctions and KeepFunctions name, by the Qore name of the function
+    /** An AOT function is named <tt><name>_h<hash></tt>, with \c _fast_h<hash> for its fast entry, and a JIT
+        function <tt>"<name>@<id>"</tt>; the calls of all the functions of a name are counted.
+    */
+    private hash<string, int> getPushCalls(string ir) {
+        hash<string, int> rv;
+        *string func;
+        foreach string line in (ir.split("\n")) {
+            *list<*string> def = (line =~ x/^define [^@]*@"?((skip|keep)_[a-z]+)[_@]/);
+            if (def) {
+                func = def[0];
+                rv{func} += 0;
+                continue;
+            }
+            if (line =~ /^define /) {
+                remove func;
+                continue;
+            }
+            if (line == "}") {
+                remove func;
+                continue;
+            }
+            if (func && line =~ /call [^@]*@qore_rt_push_implicit_element\(/) {
+                ++rv{func};
+            }
+        }
+        return rv;
+    }
+}
