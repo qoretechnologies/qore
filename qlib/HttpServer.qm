@@ -2020,6 +2020,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             "max_request_body_size": opts.max_request_body_size,
             "max_decoded_body_size": opts.max_decoded_body_size,
             "sse_max_buffer_size": opts.sse_max_buffer_size,
+            "stream_send_min_rate": opts.stream_send_min_rate,
+            "stream_send_min_rate_window": opts.stream_send_min_rate_window,
             "no_bind": True,
             "ext_info": sock_info{"address", "address_desc", "family", "familystr", "port",
                 "hostname", "hostname_desc"},
@@ -4244,6 +4246,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         "max_decoded_body_size": info.max_decoded_body_size,
                         # and the same bound of the data held for the clients of SSE streams
                         "sse_max_buffer_size": info.sse_max_buffer_size,
+                        # and the same minimum rate of streamed responses (qore#7280)
+                        "stream_send_min_rate": info.stream_send_min_rate,
+                        "stream_send_min_rate_window": info.stream_send_min_rate_window,
                         # and the same client certificate options (qore#7261)
                         "get_remote_certs": info.get_remote_certs,
                         "ssl_verify_flags": info.ssl_verify_flags,
@@ -5030,6 +5035,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         # total themselves with this value
         int max_body = listener.getMaxRequestBodySize();
         cx."header-info".max_request_body_size = max_body;
+        cx."header-info".stream_send_min_rate = listener.getStreamSendMinRate();
+        cx."header-info".stream_send_min_rate_window = listener.getStreamSendMinRateWindow();
 
         # erase the encoding string on exit
         on_exit remove cx.encoding;
@@ -6551,6 +6558,15 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             throw "HTTPSERVER-ADDLISTENER-ERROR", sprintf("listener option \"sse_max_buffer_size\" must be > 0; got "
                 "%d", info.sse_max_buffer_size);
         }
+        if (info.stream_send_min_rate < 0) {
+            throw "HTTPSERVER-ADDLISTENER-ERROR", sprintf("listener option \"stream_send_min_rate\" must not be "
+                "negative; got %d", info.stream_send_min_rate);
+        }
+        if (info.stream_send_min_rate_window.absolute()
+                || get_duration_milliseconds(info.stream_send_min_rate_window) <= 0) {
+            throw "HTTPSERVER-ADDLISTENER-ERROR", sprintf("listener option \"stream_send_min_rate_window\" must be a "
+                "relative value of at least one millisecond; got %y", info.stream_send_min_rate_window);
+        }
     }
 
     #! Applies the listener's bound and warning log to an HTTP/2 or HTTP/3 SSE stream that its handler did not
@@ -7484,6 +7500,23 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     */
     int getSseMaxBufferSize() {
         return opts.sse_max_buffer_size ?? HttpServerAsyncIo::DefaultSseMaxBufferSize;
+    }
+
+    #! Returns the minimum rate of streamed HTTP/2 and HTTP/3 responses in bytes per second; 0 means no check
+    /** @see @ref HttpServer::HttpListenerOptionInfo::stream_send_min_rate
+        "HttpListenerOptionInfo::stream_send_min_rate"
+
+        @since HttpServer 1.7
+    */
+    int getStreamSendMinRate() {
+        return opts.stream_send_min_rate ?? DefaultStreamSendMinRate;
+    }
+
+    #! Returns the sliding window of the minimum rate of streamed HTTP/2 and HTTP/3 responses
+    /** @since HttpServer 1.7
+    */
+    date getStreamSendMinRateWindow() {
+        return opts.stream_send_min_rate_window ?? StreamSendBound::DefaultMinRateWindow;
     }
 
     #! Logs a warning in the listener's log
@@ -8968,7 +9001,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     s.submitQuicResponseStreaming(session_id, stream_id, response.code, hdr);
                     response.input_stream.unassignThread();
                     StreamResponseProducer producer(s, stream_id, session_id,
-                        response.input_stream, io_wake);
+                        response.input_stream, io_wake,
+                        StreamSendBound::forHeaderInfo(StreamStallTimeout, header_info));
                     producer.start();
                 }
                 io_wake();
@@ -8986,7 +9020,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     s.submitHttp2StreamingResponseHeaders(stream_id, response.code, hdr);
                     response.input_stream.unassignThread();
                     StreamResponseProducer producer(s, stream_id, NOTHING,
-                        response.input_stream, io_wake);
+                        response.input_stream, io_wake,
+                        StreamSendBound::forHeaderInfo(StreamStallTimeout, header_info));
                     producer.start();
                 }
                 io_wake();
@@ -9053,95 +9088,47 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             };
         }
 
+        # the bound of the sends on the stream, kept across its chunks
+        StreamSendBound send_bound = StreamSendBound::forHeaderInfo(StreamStallTimeout, header_info);
+        # once the headers have been sent, an error cannot be answered with a response: the stream is reset so that
+        # the client does not wait for the rest of the body
+        bool headers_sent;
+        on_error if (headers_sent) {
+            StreamSendBound::resetStream(s, header_info.http3 ? header_info.session_id : NOTHING, stream_id, io_wake);
+        }
+
         # Send response headers (no body, no end_stream)
         if (header_info.http3) {
             int session_id = header_info.session_id;
             s.submitQuicResponseStreaming(session_id, stream_id, response.code, hdr);
+            headers_sent = True;
             io_wake();
 
             # Drive the producer loop inline
             while (True) {
                 *binary chunk = producer();
                 if (!exists chunk) {
-                    sendQuicDataWithBackpressure(s, session_id, stream_id,
-                        binary(), True, io_wake);
+                    send_bound.send(s, session_id, stream_id, binary(), True, io_wake);
                     break;
                 }
-                sendQuicDataWithBackpressure(s, session_id, stream_id,
-                    chunk, False, io_wake);
+                send_bound.send(s, session_id, stream_id, chunk, False, io_wake);
             }
         } else {
             # HTTP/2
             s.submitHttp2StreamingResponseHeaders(stream_id, response.code, hdr);
+            headers_sent = True;
             io_wake();
 
             while (True) {
                 *binary chunk = producer();
                 if (!exists chunk) {
-                    sendHttp2DataWithBackpressure(s, stream_id, binary(),
-                        True, io_wake);
+                    send_bound.send(s, NOTHING, stream_id, binary(), True, io_wake);
                     break;
                 }
-                sendHttp2DataWithBackpressure(s, stream_id, chunk, False,
-                    io_wake);
+                send_bound.send(s, NOTHING, stream_id, chunk, False, io_wake);
             }
         }
         logResponse(response.cx, response);
-    }
-
-    #! Sends HTTP/2 DATA with backpressure handling
-    private sendHttp2DataWithBackpressure(Socket s, int stream_id, binary data,
-            bool end_stream, code<nothing()> io_wake) {
-        int retries = 0;
-        while (True) {
-            bool backpressure = False;
-            try {
-                s.sendHttp2StreamData(stream_id, data, end_stream);
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "HTTP2-FLOW-CONTROL") {
-                    backpressure = True;
-                } else {
-                    rethrow;
-                }
-            }
-            io_wake();
-            if (!backpressure) {
-                return;
-            }
-            if (++retries > 60) {
-                throw "STREAM-BACKPRESSURE-TIMEOUT",
-                    sprintf("stream %d buffer still full after %d drain attempts",
-                        stream_id, retries);
-            }
-            s.waitForHttp2StreamDrain(stream_id, 30000);
-        }
-    }
-
-    #! Sends HTTP/3 (QUIC) DATA with backpressure handling
-    private sendQuicDataWithBackpressure(Socket s, int session_id, int stream_id,
-            binary data, bool end_stream, code<nothing()> io_wake) {
-        int retries = 0;
-        while (True) {
-            int rv = s.submitQuicStreamData(session_id, stream_id, data,
-                end_stream);
-            if (rv == 1) {
-                io_wake();
-                if (++retries > 60) {
-                    throw "STREAM-BACKPRESSURE-TIMEOUT",
-                        sprintf("stream %d buffer still full after %d drain "
-                            "attempts", stream_id, retries);
-                }
-                s.waitForQuicStreamDrain(session_id, stream_id, 30000);
-                continue;
-            }
-            if (rv != 0) {
-                throw "STREAM-SEND-ERROR",
-                    sprintf("unexpected rv=%d from submitQuicStreamData on "
-                        "stream %d", rv, stream_id);
-            }
-            io_wake();
-            return;
-        }
     }
 
     #! Cleans up a multiplexed request body stream after handler dispatch
@@ -9712,6 +9699,16 @@ class HttpListenerHandlerView inherits HttpServer::HttpListenerInterface {
     private:internal {
         #! the listener, weakly referenced
         *HttpListener listener;
+    }
+
+    #! Returns the minimum rate of streamed HTTP/2 and HTTP/3 responses of the listener; 0 means no check
+    int getStreamSendMinRate() {
+        return listener ? listener.getStreamSendMinRate() : DefaultStreamSendMinRate;
+    }
+
+    #! Returns the sliding window of the minimum rate of streamed HTTP/2 and HTTP/3 responses of the listener
+    date getStreamSendMinRateWindow() {
+        return listener ? listener.getStreamSendMinRateWindow() : StreamSendBound::DefaultMinRateWindow;
     }
 
     #! Creates the object for the given listener
