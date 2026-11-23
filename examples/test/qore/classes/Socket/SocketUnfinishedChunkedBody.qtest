@@ -1,0 +1,327 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 chunked bodies and headers read from local sockets, with read timeouts
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A chunked body whose read stops before the end of the body leaves the rest of the body on the connection, where
+    it cannot be told apart from the next message: no HTTP header is read on such a socket (issue 7417), whichever
+    reader read the body and whatever stopped it; a body read to its end leaves the socket usable.  The readers of a
+    chunked body take the same chunk sizes, and refuse a chunk whose data is not followed by a line end.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+
+%exec-class SocketUnfinishedChunkedBodyTest
+
+#! the chunked body readers
+enum Reader {
+    String = "string",
+    Binary = "binary",
+    OutputStream = "output-stream",
+    Callback = "callback",
+    BinaryCallback = "binary-callback",
+    Chunk = "chunk",
+}
+
+#! an output stream that the chunked body reader cannot write to (it is not I/O thread safe), so the read stops
+#! at the first chunk
+class FailingOutputStream inherits OutputStream {
+    write(binary data) {
+        throw "TEST-STREAM-ERROR", "the stream refuses the data";
+    }
+
+    close() {
+    }
+}
+
+class SocketUnfinishedChunkedBodyTest inherits QUnit::Test {
+    private {
+        #! the chunked body readers
+        const Readers = (
+            Reader::String,
+            Reader::Binary,
+            Reader::OutputStream,
+            Reader::Callback,
+            Reader::BinaryCallback,
+            Reader::Chunk,
+        );
+
+        #! a message that follows a body
+        const NextRequest = "GET /next HTTP/1.1\r\nHost: localhost\r\n\r\n";
+
+        #! a complete chunked body of two chunks
+        const Body = "5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n";
+    }
+
+    constructor() : Test("SocketUnfinishedChunkedBodyTest", "1.0") {
+        addTestCase("a body read to its end leaves the socket usable", \completeTest());
+        addTestCase("a callback that raises an exception", \callbackErrorTest());
+        addTestCase("an output stream that refuses the data", \streamErrorTest());
+        addTestCase("a read that times out", \timeoutTest());
+        addTestCase("a body over the size limit", \sizeLimitTest());
+        addTestCase("a body read in chunks", \chunkTest());
+        addTestCase("chunk size values", \chunkSizeTest());
+        addTestCase("chunk data without a line end", \chunkDataEndTest());
+        addTestCase("closing the socket", \closeTest());
+        set_return_value(main());
+    }
+
+    completeTest() {
+        foreach Reader reader in (Readers) {
+            hash<auto> client = startClient((Body + NextRequest,));
+            on_exit client.done.dec();
+            Socket conn = client.server.accept(5s);
+            on_exit conn.close();
+            *hash<ExceptionInfo> ex = readBody(conn, reader, 5s);
+            assertNothing(ex, reader);
+            if (reader == Reader::Chunk) {
+                # each chunk is read with a call, the last one with its trailer section
+                while (conn.readHTTPChunk(5s).body) {
+                }
+            }
+            assertFalse(conn.unfinishedHttpChunkedBody(), reader);
+            # the next message is read as such
+            hash<auto> hdr = conn.readHTTPHeader(5s);
+            assertEq("GET", hdr.method, reader);
+            assertEq("/next", hdr.path, reader);
+        }
+    }
+
+    callbackErrorTest() {
+        foreach Reader reader in ((Reader::Callback, Reader::BinaryCallback)) {
+            hash<auto> client = startClient((Body + NextRequest,));
+            on_exit client.done.dec();
+            Socket conn = client.server.accept(5s);
+            on_exit conn.close();
+            *hash<ExceptionInfo> ex = readBody(conn, reader, 5s, True);
+            assertEq("TEST-CALLBACK-ERROR", ex.err, reader);
+            checkRefused(conn, reader);
+        }
+    }
+
+    streamErrorTest() {
+        hash<auto> client = startClient((Body + NextRequest,));
+        on_exit client.done.dec();
+        Socket conn = client.server.accept(5s);
+        on_exit conn.close();
+        hash<ExceptionInfo> ex;
+        try {
+            conn.readHTTPChunkedBodyToOutputStream(new FailingOutputStream(), 5s);
+        } catch (hash<ExceptionInfo> ex1) {
+            ex = ex1;
+        }
+        # the stream's error stops the read
+        assertEq("SOCKET-WRITE-ERROR", ex.err);
+        checkRefused(conn, "output stream");
+    }
+
+    timeoutTest() {
+        foreach Reader reader in (Readers) {
+            # the first chunk is sent, and the rest only after the reader has given up: the rest starts with a
+            # message
+            Counter timed_out(1);
+            hash<auto> client = startClient(("5\r\nhello\r\n", NextRequest), timed_out);
+            on_exit client.done.dec();
+            Socket conn = client.server.accept(5s);
+            on_exit conn.close();
+            *hash<ExceptionInfo> ex = readBody(conn, reader, 250ms);
+            if (reader == Reader::Chunk) {
+                # the first chunk is read; the body is not finished
+                assertNothing(ex, reader);
+                ex = readBody(conn, reader, 250ms);
+            }
+            timed_out.dec();
+            assertEq("SOCKET-TIMEOUT", ex.err, reader);
+            # the message sent after the timeout is not read as a header
+            checkRefused(conn, reader);
+        }
+    }
+
+    sizeLimitTest() {
+        foreach Reader reader in (Readers) {
+            if (reader == Reader::Chunk) {
+                continue;
+            }
+            hash<auto> client = startClient((Body + NextRequest,));
+            on_exit client.done.dec();
+            Socket conn = client.server.accept(5s);
+            on_exit conn.close();
+            conn.setMaxChunkedBodySize(8);
+            *hash<ExceptionInfo> ex = readBody(conn, reader, 5s);
+            assertEq("HTTP-BODY-TOO-LARGE", ex.err, reader);
+            checkRefused(conn, reader);
+        }
+    }
+
+    chunkTest() {
+        hash<auto> client = startClient((Body + NextRequest,));
+        on_exit client.done.dec();
+        Socket conn = client.server.accept(5s);
+        on_exit conn.close();
+        assertEq(binary("hello"), conn.readHTTPChunk(5s).body);
+        # the body is not finished until its last chunk and its trailer section have been read
+        assertTrue(conn.unfinishedHttpChunkedBody());
+        assertEq(binary(" world"), conn.readHTTPChunk(5s).body);
+        assertTrue(conn.unfinishedHttpChunkedBody());
+        assertEq(binary(), conn.readHTTPChunk(5s).body);
+        assertFalse(conn.unfinishedHttpChunkedBody());
+        assertEq("/next", conn.readHTTPHeader(5s).path);
+    }
+
+    chunkSizeTest() {
+        # sizes that every reader refuses: anything other than hexadecimal digits, which whitespace and a chunk
+        # extension can follow
+        foreach string size in (("0x5", "+5", "-5", "5x", "5 x", "", ";ext", "g", "5\x01")) {
+            foreach Reader reader in (Readers) {
+                hash<auto> client = startClient((size + "\r\nhello\r\n0\r\n\r\n" + NextRequest,));
+                on_exit client.done.dec();
+                Socket conn = client.server.accept(5s);
+                on_exit conn.close();
+                *hash<ExceptionInfo> ex = readBody(conn, reader, 5s);
+                assertEq("READ-HTTP-CHUNK-ERROR", ex.err, sprintf("%s: %y", reader, size));
+                checkRefused(conn, sprintf("%s: %y", reader, size));
+            }
+        }
+        # sizes that every reader takes as 5
+        foreach string size in (("5", " 5", "5 ", "05", "5;ext=1", "5 ;ext", "\t5\t")) {
+            foreach Reader reader in (Readers) {
+                hash<auto> client = startClient((size + "\r\nhello\r\n0\r\n\r\n" + NextRequest,));
+                on_exit client.done.dec();
+                Socket conn = client.server.accept(5s);
+                on_exit conn.close();
+                if (reader == Reader::Chunk) {
+                    assertEq(binary("hello"), conn.readHTTPChunk(5s).body, sprintf("%s: %y", reader, size));
+                    assertEq(binary(), conn.readHTTPChunk(5s).body, sprintf("%s: %y", reader, size));
+                } else {
+                    *hash<ExceptionInfo> ex = readBody(conn, reader, 5s);
+                    assertNothing(ex, sprintf("%s: %y", reader, size));
+                }
+                assertEq("/next", conn.readHTTPHeader(5s).path, sprintf("%s: %y", reader, size));
+            }
+        }
+    }
+
+    chunkDataEndTest() {
+        # the data of a chunk is followed by two bytes that are not a line end
+        foreach Reader reader in (Readers) {
+            hash<auto> client = startClient(("3\r\nabcde\r\n0\r\n\r\n" + NextRequest,));
+            on_exit client.done.dec();
+            Socket conn = client.server.accept(5s);
+            on_exit conn.close();
+            *hash<ExceptionInfo> ex = readBody(conn, reader, 5s);
+            assertEq("READ-HTTP-CHUNK-ERROR", ex.err, reader);
+            assertRegex("not followed by a line end", ex.desc, reader);
+            checkRefused(conn, reader);
+        }
+    }
+
+    closeTest() {
+        hash<auto> client = startClient((Body + NextRequest,));
+        on_exit client.done.dec();
+        Socket conn = client.server.accept(5s);
+        *hash<ExceptionInfo> ex = readBody(conn, Reader::Callback, 5s, True);
+        assertEq("TEST-CALLBACK-ERROR", ex.err);
+        assertTrue(conn.unfinishedHttpChunkedBody());
+        conn.close();
+        assertFalse(conn.unfinishedHttpChunkedBody());
+    }
+
+    #! checks that no header is read on the socket, without waiting for data
+    private checkRefused(Socket conn, string label) {
+        if (!conn.isOpen()) {
+            # a reader that stopped in the middle of a read operation closed the socket
+            assertFalse(conn.unfinishedHttpChunkedBody(), label);
+            assertThrows("SOCKET-NOT-OPEN", \conn.readHTTPHeader(), (5s,), label);
+            return;
+        }
+        assertTrue(conn.unfinishedHttpChunkedBody(), label);
+        assertFalse(conn.pendingHttpChunkedBody(), label);
+        date start = now_us();
+        assertThrows("SOCKET-HTTP-ERROR", "chunked message body", \conn.readHTTPHeader(), (5s,), label);
+        assertThrows("SOCKET-HTTP-ERROR", "chunked message body", \conn.readHTTPHeaderString(), (5s,), label);
+        assertThrows("SOCKET-HTTP-ERROR", "chunked message body", \conn.startPollReadHttpHeader(), NOTHING,
+            label);
+        # the refusal does not wait for the timeout
+        assertLt(4s, now_us() - start, label);
+    }
+
+    #! reads a chunked body with the given reader; returns the exception raised, if any
+    /** @param raise if True, a callback raises an exception at the first chunk
+    */
+    private *hash<ExceptionInfo> readBody(Socket conn, Reader reader, timeout to, *bool raise) {
+        code recv = sub (hash<auto> v) {
+            if (raise && v.hasKey("data")) {
+                throw "TEST-CALLBACK-ERROR", "the callback refuses the data";
+            }
+        };
+        try {
+            switch (reader) {
+                case Reader::String: conn.readHTTPChunkedBody(to); break;
+                case Reader::Binary: conn.readHTTPChunkedBodyBinary(to); break;
+                case Reader::OutputStream: conn.readHTTPChunkedBodyToOutputStream(new BinaryOutputStream(), to); break;
+                case Reader::Callback: conn.readHTTPChunkedBodyWithCallback(recv, to); break;
+                case Reader::BinaryCallback: conn.readHTTPChunkedBodyBinaryWithCallback(recv, to); break;
+                case Reader::Chunk: conn.readHTTPChunk(to); break;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    #! starts a client that sends the given parts and keeps the connection open until done
+    /** @param parts the parts to send; each part after the first is sent once \a wait is zero
+        @param wait a counter that the parts after the first wait for
+
+        @return a hash with the listening socket in \c server and a Counter in \c done that the caller decrements
+        when it has finished reading
+    */
+    private hash<auto> startClient(list<string> parts, *Counter wait) {
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        hash<auto> info = server.getSocketInfo(False);
+
+        Counter done(1);
+        background sub () {
+            try {
+                Socket client();
+                client.connectINET(info.address, info.port, 10s, info.family);
+                foreach string part in (parts) {
+                    if ($# && wait) {
+                        wait.waitForZero(10s);
+                    }
+                    client.send(part, 5s);
+                }
+                # keep the connection open until the reader has finished
+                done.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                printf("client error: %s\n", get_exception_string(ex));
+            }
+        }();
+        return {"server": server, "done": done};
+    }
+}

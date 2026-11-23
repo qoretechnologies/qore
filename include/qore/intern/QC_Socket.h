@@ -601,8 +601,22 @@ public:
     DLLLOCAL int convertHeaderToHash(QoreHashNode& h, QoreString& hdr, ExceptionSink* xsink,
             QoreHashNode* info = nullptr, bool in_trailers = false) const;
 
-    //! Clears the pending chunked body expectation flag on the underlying socket private implementation
-    DLLLOCAL void clearHttpExpectChunkedBody() const;
+    //! Called when the read of a chunked body starts: clears the pending chunked body expectation flag, and the
+    //! body is unfinished until finishHttpChunkedBodyRead() is called (issue 7417)
+    DLLLOCAL void startHttpChunkedBodyRead() const;
+
+    //! Called when the read of a chunked body has read the end of the body
+    DLLLOCAL void finishHttpChunkedBodyRead() const;
+
+    //! Returns true if the read of a chunked body started on the connection and stopped before the end of the body
+    DLLLOCAL bool unfinishedHttpChunkedBody() const;
+
+    //! Raises an exception and returns -1 if a header cannot be read, because a chunked body read on the
+    //! connection stopped before its end (issue 7417)
+    DLLLOCAL int checkHttpChunkedBodyFinished(ExceptionSink* xsink) const;
+
+    //! Parses the size of a chunk from its chunk size line without the line end (RFC 9112 section 7.1)
+    DLLLOCAL static int parseHttpChunkSize(const char* line, size_t len, int64_t& chunk_size, ExceptionSink* xsink);
 
     //! Sets whether the fields of the HTTP messages read are also given at the top level of their hashes
     DLLLOCAL void setHttpFieldsAtTopLevel(bool top_level) const;

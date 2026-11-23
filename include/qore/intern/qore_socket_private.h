@@ -2148,6 +2148,11 @@ struct qore_socket_private : public QoreReferenceCounter {
     std::atomic<bool> http_fields_at_top_level{true};
     bool del = false,
         http_exp_chunked_body = false,
+        //! True while the read of a chunked body has started and has not reached the end of the body
+        /** The rest of such a body cannot be told apart from the next message, so no header is read on the
+            connection until it is closed (issue 7417)
+        */
+        http_chunked_body_unfinished = false,
         ssl_accept_all_certs = false,
         ssl_capture_remote_cert = false,
         event_data = false,
@@ -2971,6 +2976,9 @@ public:
         }
         if (http_exp_chunked_body) {
             http_exp_chunked_body = false;
+        }
+        if (http_chunked_body_unfinished) {
+            http_chunked_body_unfinished = false;
         }
         if (sse_got_cr) {
             sse_got_cr = false;
@@ -4435,6 +4443,10 @@ public:
     //! processes a header string to a hash and raises socket events
     DLLLOCAL QoreHashNode* processHttpHeaderString(ExceptionSink* xsink, QoreStringNodeHolder& hdr,
             QoreHashNode* info, int source, const char* headers_raw_key = "headers-raw") {
+        // the rest of a chunked body that was not read to its end would be taken for this header (issue 7417)
+        if (checkHttpChunkedBodyFinished(xsink)) {
+            return nullptr;
+        }
         // the header is parsed as a C string, which a NUL character would end: the header lines after it, such as
         // Content-Length or Transfer-Encoding, would be lost silently, and the rest of the message read as the body
         // or as another message, so a header with a NUL character is refused
@@ -5051,6 +5063,101 @@ public:
 
     DLLLOCAL bool pendingHttpChunkedBody() const {
         return http_exp_chunked_body && sock != QORE_INVALID_SOCKET;
+    }
+
+    //! Called when the read of a chunked body starts: the body is no longer pending, and it is unfinished until
+    //! the read reaches its end (finishHttpChunkedBodyRead())
+    DLLLOCAL void startHttpChunkedBodyRead() {
+        if (http_exp_chunked_body) {
+            http_exp_chunked_body = false;
+        }
+        http_chunked_body_unfinished = true;
+    }
+
+    //! Called when the read of a chunked body has read the end of the body (the last chunk and the trailer section)
+    DLLLOCAL void finishHttpChunkedBodyRead() {
+        if (http_chunked_body_unfinished) {
+            http_chunked_body_unfinished = false;
+        }
+    }
+
+    //! Returns true if the read of a chunked body started on the connection and stopped before the end of the body
+    DLLLOCAL bool unfinishedHttpChunkedBody() const {
+        return http_chunked_body_unfinished && sock != QORE_INVALID_SOCKET;
+    }
+
+    //! Raises an exception and returns -1 if a header cannot be read, because a chunked body read on the connection
+    //! stopped before its end: the rest of the body would be taken for the header (issue 7417)
+    DLLLOCAL int checkHttpChunkedBodyFinished(ExceptionSink* xsink) const {
+        if (!http_chunked_body_unfinished) {
+            return 0;
+        }
+        xsink->raiseException("SOCKET-HTTP-ERROR", "cannot read an HTTP header: the read of a chunked message body "
+            "on this connection stopped before the end of the body, whose rest cannot be told apart from the next "
+            "message; the connection must be closed");
+        return -1;
+    }
+
+    //! Parses the size of a chunk from its chunk size line without the line end (RFC 9112 section 7.1)
+    /** The size is one or more hexadecimal digits, which whitespace and a chunk extension can follow; any other
+        value is refused, as a reader that took it otherwise than the sender's other readers would find the end of
+        the chunk elsewhere (issue 7417)
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL static int parseHttpChunkSize(const char* line, size_t len, int64_t& chunk_size, ExceptionSink* xsink) {
+        size_t i = 0;
+        // whitespace around the size is tolerated, as it cannot change the size
+        while (i < len && (line[i] == ' ' || line[i] == '\t')) {
+            ++i;
+        }
+        size_t start = i;
+        uint64_t size = 0;
+        // the largest size whose chunk can be read with its line end
+        const uint64_t max_size = static_cast<uint64_t>(std::numeric_limits<ssize_t>::max() - 2);
+        bool overflow = false;
+        for (; i < len; ++i) {
+            int v;
+            char c = line[i];
+            if (c >= '0' && c <= '9') {
+                v = c - '0';
+            } else if (c >= 'a' && c <= 'f') {
+                v = c - 'a' + 10;
+            } else if (c >= 'A' && c <= 'F') {
+                v = c - 'A' + 10;
+            } else {
+                break;
+            }
+            if (size > (max_size >> 4)) {
+                overflow = true;
+            } else {
+                size = (size << 4) | static_cast<uint64_t>(v);
+            }
+        }
+        size_t digits = i - start;
+        size_t digits_end = i;
+        // bad whitespace before a chunk extension (RFC 9112 section 7.1.1)
+        while (i < len && (line[i] == ' ' || line[i] == '\t')) {
+            ++i;
+        }
+        if (!digits || (i < len && line[i] != ';')) {
+            QoreString val(line, len);
+            if (!len || (!digits && i == len)) {
+                xsink->raiseException("READ-HTTP-CHUNK-ERROR", "empty value given for chunk size");
+            } else {
+                xsink->raiseException("READ-HTTP-CHUNK-ERROR", "invalid value given for chunk size ('%s')",
+                    val.c_str());
+            }
+            return -1;
+        }
+        if (overflow || size > max_size) {
+            QoreString val(line + start, digits_end - start);
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "chunk size 0x%s exceeds the maximum supported size",
+                val.c_str());
+            return -1;
+        }
+        chunk_size = static_cast<int64_t>(size);
+        return 0;
     }
 
     //! Advances the TLS state generation; called after every change of the TLS state (see @ref tls_state_gen)
