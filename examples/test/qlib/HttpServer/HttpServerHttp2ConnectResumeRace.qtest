@@ -55,6 +55,12 @@ class ConnectHoldAppender inherits LoggerAppenderWithLayout {
         armed = True;
     }
 
+    #! the next CONNECT is not held: a case that failed before its CONNECT was held leaves the appender armed
+    disarm() {
+        AutoLock al(m);
+        armed = False;
+    }
+
     processEventImpl(int type, auto params) {
         if (type != EVENT_LOG) {
             return;
@@ -256,11 +262,14 @@ class HttpServerHttp2ConnectResumeRaceTest inherits QUnit::Test {
         assertEq(200, mgr.request(url, "GET", "/").status_code, "the connection goes on");
     }
 
+    #! the extended CONNECT is the first stream of its connection: the handler of a request before it on the
+    #! connection resumes reading after it submitted its response, which can reach the client first, and so in the
+    #! window of a CONNECT sent then, as the other cases force (qore#7393)
     noRaceTest() {
+        appender.disarm();
         appender.resumed_already.clear();
         HttpClientConnectionManager mgr = manager();
         on_exit delete mgr;
-        assertEq(200, mgr.request(url, "GET", "/").status_code, "the connection is up");
         HttpClientIo::HttpClientStreamHandle stream = startConnect(mgr, "/refuse");
         on_exit stream.cancel();
         *hash<auto> rsp = readResponse(stream);
