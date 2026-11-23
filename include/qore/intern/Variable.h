@@ -842,8 +842,10 @@ protected:
         }
         // the references that the helper itself holds to a container that it reached through a weak reference
         // earlier on its path do not make the container shared: a copy would leave the weak references on the
-        // original, which the helper then releases (qore#7352)
-        if (!weak_locked.empty() && heldOnlyByWeakLocks(current_value)) [[unlikely]] {
+        // original, which the helper then releases (qore#7352).  The lvalue holds the container now, so the helper
+        // releases them, and the container is unique
+        if (!weak_locked.empty() && releaseOwnWeakLocks(current_value)) [[unlikely]] {
+            assert(current_value->is_unique());
             return;
         }
         if (qv) {
@@ -859,9 +861,11 @@ protected:
         saveTemp(old);
     }
 
-    //! returns true if the only references to \a n other than that of the lvalue holding it are the ones that the
-    //! helper holds as it locked \a n at weak steps of its path (qore#7352)
-    DLLLOCAL QORE_INTERN_NOINLINE bool heldOnlyByWeakLocks(const AbstractQoreNode* n) const;
+    //! if the only references to \a n other than that of the lvalue holding it are the ones that the helper took as
+    //! it locked \a n at weak steps of its path, releases them and returns true (qore#7352)
+    /** The lvalue holds \a n, under its lock, so \a n is not freed; nothing is allocated and nothing throws
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE bool releaseOwnWeakLocks(AbstractQoreNode* n);
 
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove);
     //! raises the exception of a negative index of a list or a buffer and returns -1; returns -1 without an exception

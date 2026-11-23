@@ -113,12 +113,54 @@ sub shared_container_copied() {
     remove c.holder;
 }
 
+# the operations that remove from or reorder a hash or a list reached again after a weak step, which require it to be
+# unique
+sub hash_removals() {
+    hash<auto> h = {};
+    h.a.b = {};
+    h.a.z = 1;
+    h.a.y = 2;
+    h.a.x = 3;
+    auto w;
+    w := h.a.b;
+    w.wg := h.a;
+    w.wh := h;
+    delete h.a.b.wg.b.wh.a.z;
+    auto y = remove h.a.b.wg.b.wh.a.y;
+    auto slice = remove h.a.b.wg.b.wh.a{"x", "missing"};
+    printf("hash removals: keys %y, weak keys %y, removed %y and %y\n", keys h.a, keys h.a.b.wg, y, slice);
+}
+
+sub list_operations() {
+    hash<auto> h = {};
+    h.l = new list<auto>();
+    h.l += ({}, 1, 2, 3, 4, 5, 6);
+    auto w;
+    w := h.l[0];
+    w.wh := h;
+    auto wl;
+    wl := h.l;
+    w.wl := wl;
+    auto last = pop h.l[0].wl[0].wh.l;
+    push h.l[0].wl[0].wh.l, 9;
+    splice h.l[0].wl[0].wh.l, 1, 1;
+    auto e = extract h.l[0].wl[0].wh.l, 1, 1;
+    delete h.l[0].wl[0].wh.l[2];
+    printf("list operations: popped %y, extracted %y, list %y, through the weak list %y\n", last, e, h.l[1..],
+        wl[1..]);
+    # the first element holds the weak references that the path goes through: it is shifted out last
+    auto first = shift h.l[0].wl[0].wh.l;
+    printf("list shift: %y, size %d, through the weak list %d\n", first.typeCode(), h.l.size(), wl.size());
+}
+
 const Cases = {
     "three_weak_steps": \three_weak_steps(),
     "two_weak_steps_object": \two_weak_steps_object(),
     "list_weak_steps": \list_weak_steps(),
     "local_root": \local_root(),
     "shared_container_copied": \shared_container_copied(),
+    "hash_removals": \hash_removals(),
+    "list_operations": \list_operations(),
 };
 
 # a case named on the command line runs alone

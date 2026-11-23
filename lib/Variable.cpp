@@ -1648,7 +1648,7 @@ void LValueHelper::holdWeakLock(AbstractQoreNode* n) {
     }
 }
 
-bool LValueHelper::heldOnlyByWeakLocks(const AbstractQoreNode* n) const {
+bool LValueHelper::releaseOwnWeakLocks(AbstractQoreNode* n) {
     int locks = 0;
     for (const AbstractQoreNode* i : weak_locked) {
         if (i == n) {
@@ -1656,7 +1656,26 @@ bool LValueHelper::heldOnlyByWeakLocks(const AbstractQoreNode* n) const {
         }
     }
     // the lvalue holding the node holds one reference
-    return locks && n->reference_count() == locks + 1;
+    if (!locks || n->reference_count() != locks + 1) {
+        return false;
+    }
+    // each entry of weak_locked stands for one reference that tvec holds; vector::erase() neither allocates nor
+    // throws
+    for (size_t i = weak_locked.size(); i-- > 0;) {
+        if (weak_locked[i] != n) {
+            continue;
+        }
+        weak_locked.erase(weak_locked.begin() + i);
+        for (size_t j = tvec.size(); j-- > 0;) {
+            if (tvec[j] == n) {
+                tvec.erase(tvec.begin() + j);
+                break;
+            }
+        }
+        // not the last reference: the lvalue holds the node
+        n->deref(nullptr);
+    }
+    return true;
 }
 
 void LValueHelper::saveTemp(QoreValue val) {

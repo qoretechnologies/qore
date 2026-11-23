@@ -7,4 +7,7 @@ list: path {k: 1}, weak path {k: 1}
 list then: {k: 1, k2: 2}
 local root: path {k: 1}, weak path {k: 1}
 shared: path {k: 1}, other {}, weak path {k: 1}
+hash removals: keys ["b"], weak keys ["b"], removed 2 and {x: 3}
+list operations: popped 6, extracted [2], list [3, null, 5, 9], through the weak list [3, null, 5, 9]
+list shift: 9, size 4, through the weak list 4
 done
