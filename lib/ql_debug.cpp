@@ -10152,6 +10152,108 @@ public:
         }
     }
 
+#ifdef __linux__
+    //! A UNIX socket connection makes no system call on its socket's descriptor once the socket was closed (qore#7003)
+    /** The connection checks the socket's descriptor: when the socket was closed and bound again while the connection
+        was in progress, it checked the socket's new descriptor, and a failed check closed it.  The connection is the
+        poll state of QoreSocket::startConnectUNIX(), which a module drives itself.  The connection must fail with
+        SOCKET-CLOSED and the socket must keep its new descriptor.
+
+        The connection stays in progress with a listener whose accept queue is full (Linux).
+    */
+    static void runConnectUnixClosedSocket(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        const char* tmp = getenv("TMPDIR");
+        std::string dir_template = std::string(tmp && *tmp ? tmp : "/tmp") + "/qore-ut-7003-XXXXXX";
+        std::vector<char> dir_buf(dir_template.begin(), dir_template.end());
+        dir_buf.push_back('\0');
+        char* dir = dir_buf.data();
+        bool made = mkdtemp(dir) != nullptr;
+        UT_ASSERT(c, made, "unix connect close: the directory is created");
+        if (!made) {
+            return;
+        }
+        std::string path = std::string(dir) + "/s";
+        std::vector<int> fds;
+        struct Cleanup {
+            std::vector<int>& fds;
+            const char* dir;
+            std::string& path;
+            ~Cleanup() {
+                for (int fd : fds) {
+                    ::close(fd);
+                }
+                ::unlink(path.c_str());
+                ::rmdir(dir);
+            }
+        } cleanup{fds, dir, path};
+
+        struct sockaddr_un sa = {};
+        sa.sun_family = AF_UNIX;
+        strncpy(sa.sun_path, path.c_str(), sizeof(sa.sun_path) - 1);
+        int lfd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+        if (lfd >= 0) {
+            fds.push_back(lfd);
+        }
+        bool ok = lfd >= 0 && !::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa), sizeof(sa)) && !::listen(lfd, 0);
+        UT_ASSERT(c, ok, "unix connect close: the target listens");
+        if (!ok) {
+            return;
+        }
+        // fill the accept queue until a connection is refused for now
+        bool full = false;
+        for (int i = 0; i < 16 && !full; ++i) {
+            int cfd = ::socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0);
+            if (cfd < 0) {
+                break;
+            }
+            fds.push_back(cfd);
+            if (::connect(cfd, reinterpret_cast<struct sockaddr*>(&sa), sizeof(sa))) {
+                full = errno == EAGAIN;
+                break;
+            }
+        }
+        UT_ASSERT(c, full, "unix connect close: the accept queue of the target is full");
+        if (!full) {
+            return;
+        }
+
+        QoreSocket client;
+        std::unique_ptr<AbstractPollState> state(client.startConnectUNIX(&xsink, path.c_str(), SOCK_STREAM, 0));
+        int rc = xsink || !state ? -1 : state->continuePoll(&xsink);
+        bool in_progress = rc > 0 && !xsink;
+        UT_ASSERT(c, in_progress, "unix connect close: the connection is in progress");
+        if (!in_progress) {
+            xsink.clear();
+            return;
+        }
+
+        // the socket is closed and bound again while the connection is in progress
+        client.close();
+        int brc = client.bindINET("127.0.0.1", "0", false, AF_INET, SOCK_STREAM, 0, &xsink);
+        int new_fd = qore_socket_ops(client).getDescriptor();
+        UT_ASSERT(c, !brc && !xsink && new_fd >= 0, "unix connect close: the socket is bound again");
+        if (brc || xsink || new_fd < 0) {
+            xsink.clear();
+            return;
+        }
+
+        rc = state->continuePoll(&xsink);
+        UT_ASSERT(c, rc < 0 && xsink, "unix connect close: the connection fails");
+        QoreStringValueHelper err(xsink ? xsink.getExceptionErr() : QoreValue());
+        UT_ASSERT(c, !strcmp(err->c_str(), "SOCKET-CLOSED"),
+            (std::string("unix connect close: the connection fails with SOCKET-CLOSED, not ") + err->c_str()).c_str());
+        xsink.clear();
+        UT_ASSERT_EQ(c, new_fd, qore_socket_ops(client).getDescriptor(),
+            "unix connect close: the socket keeps its descriptor");
+        UT_ASSERT(c, fcntl(new_fd, F_GETFD) != -1, "unix connect close: the socket's descriptor is open");
+        state.reset();
+        UT_ASSERT(c, fcntl(new_fd, F_GETFD) != -1,
+            "unix connect close: the socket's descriptor is open after the connection is destroyed");
+        client.close();
+    }
+#endif
+
     //! One descriptor registered for two objects in one event loop: each registration gets the descriptor's events,
     //! and removing one keeps the other
     /** A socket and a controller wrapper of it have I/O identities of their own, and Socket::poll() polls a pollable
@@ -27281,6 +27383,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runPollableExtraFdClose(c, AsyncIoDescriptorHoldTest::XFD_DRAIN_FALLBACK);
     AsyncIoDescriptorHoldTest::runReplaceDescriptorGeneration(c);
     AsyncIoDescriptorHoldTest::runConnectClosedSocketAttempt(c);
+#ifdef __linux__
+    AsyncIoDescriptorHoldTest::runConnectUnixClosedSocket(c);
+#endif
     AsyncIoDescriptorHoldTest::runSharedRegistration(c);
     AsyncIoDescriptorHoldTest::runOwnedExtraFd(c);
     AsyncIoDescriptorHoldTest::runRefusedExtraFd(c);
