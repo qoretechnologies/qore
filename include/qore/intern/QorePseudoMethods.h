@@ -41,6 +41,12 @@ DLLLOCAL QoreValue pseudo_classes_eval(const QoreValue n, const char* name, cons
 DLLLOCAL QoreValue pseudo_classes_eval(LexicalSemanticPolicy policy, const QoreValue n, const char* name,
     const QoreListNode* args, ExceptionSink* xsink);
 
+//! Calls the pseudo-method \a name of a value with arguments bound to its parameters by name, in the pseudo-class
+//! that pseudo_classes_eval() calls it in (a weak reference or a reference gives its target)
+DLLLOCAL QoreValue pseudo_classes_eval_named(const QoreValue n, const char* name, const QoreListNode* args,
+    bool tmp_args, const qore_class_private* class_ctx, const name_vec_t& arg_names, LexicalSemanticPolicy policy,
+    RuntimeConfig& rc, ExceptionSink* xsink);
+
 //! Raises the exception that pseudo_classes_eval() raises for a method that does not exist before it evaluates the
 //! arguments (issue #5784)
 /** @return -1 if the exception was raised, 0 if not
@@ -73,6 +79,18 @@ DLLLOCAL inline const T* qore_pseudo_receiver(const QoreValue& v, qore_type_t t,
     }
     qore_raise_pseudo_receiver_type_error(v, class_name, xsink);
     return nullptr;
+}
+
+//! Returns the character that a pseudo-method of the <char> class is called on (qore#7363)
+/** For a value of another type, the exception is raised and the character 0 is returned, whose result the call does
+    not give (the value's bits are never taken for a character)
+*/
+DLLLOCAL inline unsigned qore_pseudo_char_receiver(const QoreValue& v, ExceptionSink* xsink) {
+    if (v.isChar()) [[likely]] {
+        return v.getChar();
+    }
+    qore_raise_pseudo_receiver_type_error(v, "<char>", xsink);
+    return 0;
 }
 
 //! Returns the call reference that a pseudo-method of the <callref> class (\a closure_only false) or of the <closure>

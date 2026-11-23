@@ -1,0 +1,111 @@
+0 local list size: 3
+0 local list first: 1
+0 local list join: "1,2,3"
+0 local hash keys: ["a", "b"]
+0 local hash firstKey: "a"
+0 hash member keys: ["a", "b"]
+0 hash member firstKey: "a"
+0 hash member size: 2
+0 hash list member size: 3
+0 hash list member first: 1
+0 hash list member last: 3
+0 hash list member empty: False
+0 hash list member join: "1,2,3"
+0 hash list member lsize: 3
+0 hash list member join named: "1-2-3"
+0 hash list member join reference: "1,2,3"
+0 param first: 1
+0 param size: 3
+0 param empty: False
+0 param last: 3
+0 weak local first: 1
+0 weak local size: 3
+0 list element size: 3
+0 list element join: "1,2,3"
+0 member list size: 3
+0 member list first: 1
+0 member list last: 3
+0 member list empty: False
+0 member list val: True
+0 member list join: "1,2,3"
+0 member hash keys: ["a", "b"]
+0 member hash firstKey: "a"
+0 member hash size: 2
+0 member hash member keys: ["a", "b"]
+0 member hash member size: 2
+0 member object className: "WeakObjectTarget"
+0 member object typeCode: 10
+1 local list size: 3
+1 local list first: 1
+1 local list join: "1,2,3"
+1 local hash keys: ["a", "b"]
+1 local hash firstKey: "a"
+1 hash member keys: ["a", "b"]
+1 hash member firstKey: "a"
+1 hash member size: 2
+1 hash list member size: 3
+1 hash list member first: 1
+1 hash list member last: 3
+1 hash list member empty: False
+1 hash list member join: "1,2,3"
+1 hash list member lsize: 3
+1 hash list member join named: "1-2-3"
+1 hash list member join reference: "1,2,3"
+1 param first: 1
+1 param size: 3
+1 param empty: False
+1 param last: 3
+1 weak local first: 1
+1 weak local size: 3
+1 list element size: 3
+1 list element join: "1,2,3"
+1 member list size: 3
+1 member list first: 1
+1 member list last: 3
+1 member list empty: False
+1 member list val: True
+1 member list join: "1,2,3"
+1 member hash keys: ["a", "b"]
+1 member hash firstKey: "a"
+1 member hash size: 2
+1 member hash member keys: ["a", "b"]
+1 member hash member size: 2
+1 member object className: "WeakObjectTarget"
+1 member object typeCode: 10
+2 local list size: 3
+2 local list first: 1
+2 local list join: "1,2,3"
+2 local hash keys: ["a", "b"]
+2 local hash firstKey: "a"
+2 hash member keys: ["a", "b"]
+2 hash member firstKey: "a"
+2 hash member size: 2
+2 hash list member size: 3
+2 hash list member first: 1
+2 hash list member last: 3
+2 hash list member empty: False
+2 hash list member join: "1,2,3"
+2 hash list member lsize: 3
+2 hash list member join named: "1-2-3"
+2 hash list member join reference: "1,2,3"
+2 param first: 1
+2 param size: 3
+2 param empty: False
+2 param last: 3
+2 weak local first: 1
+2 weak local size: 3
+2 list element size: 3
+2 list element join: "1,2,3"
+2 member list size: 3
+2 member list first: 1
+2 member list last: 3
+2 member list empty: False
+2 member list val: True
+2 member list join: "1,2,3"
+2 member hash keys: ["a", "b"]
+2 member hash firstKey: "a"
+2 member hash size: 2
+2 member hash member keys: ["a", "b"]
+2 member hash member size: 2
+2 member object className: "WeakObjectTarget"
+2 member object typeCode: 10

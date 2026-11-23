@@ -22599,11 +22599,12 @@ static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_n
 #endif
 
 #if !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT) || defined(QORE_JIT_RUNTIME_TAKE_OVER_UNIT)
-//! calls the pseudo-method of a value found by name in the pseudo-class of its type (qore#6813); out of line, so that
-//! the dispatch of a pseudo-method of the value's class keeps its frame
-static QORE_INTERN_NOINLINE __attribute__((cold)) uint64_t qore_rt_eval_pseudo_method_by_name(const QoreClass* vqc,
-        QoreValue base, const char* name, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
-    return toBits(qore_class_private::evalPseudoMethod(vqc, base, name, args, rc, xsink));
+//! calls the pseudo-method of a value found by name in the pseudo-class of its type (qore#6813), as a call of a
+//! value with no declared type does (a weak reference or a reference gives its target); out of line, so that the
+//! dispatch of a pseudo-method of the value's class keeps its frame
+static QORE_INTERN_NOINLINE __attribute__((cold)) uint64_t qore_rt_eval_pseudo_method_by_name(QoreValue base,
+        const char* name, const QoreListNode* args, ExceptionSink* xsink) {
+    return toBits(pseudo_classes_eval(base, name, args, xsink));
 }
 
 static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, const QoreMethod* method,
@@ -22659,12 +22660,10 @@ static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, c
         // the method that the parse-time resolution found is called only on a value of its class: a value of another
         // type (the value of a builtin whose declared type is wrong) finds the method by name in the pseudo-class of
         // its type, as a value with no declared type does (qore#6813), with the predicate of the check of the receiver
-        // before the arguments (qore_pseudo_class_accepts_type()); the pseudo-class of the value's type is the usual
-        // case, compared first (by the private data, which a Program's copy of a class shares)
-        const QoreClass* vqc = qore_pseudo_get_class(bt);
-        if (qore_class_private::get(*vqc) != qore_class_private::get(*qc)
-                && !qore_pseudo_class_accepts_type(qc, bt)) [[unlikely]] {
-            return qore_rt_eval_pseudo_method_by_name(vqc, base, method->getName(), *arg_list, rc, xsink);
+        // before the arguments (qore_pseudo_class_accepts_type(), which takes a weak reference or a reference for no
+        // class: the call by name gives the method its target, qore#7363)
+        if (!qore_pseudo_class_accepts_type(qc, bt)) [[unlikely]] {
+            return qore_rt_eval_pseudo_method_by_name(base, method->getName(), *arg_list, xsink);
         }
     }
     return toBits(qore_class_private::evalPseudoMethod(qc, method, variant, base, *arg_list, rc, xsink));
@@ -24371,6 +24370,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_list_bool_guarded_aot(QoreAOTContex
 
 static uint64_t qore_rt_list_first_last(uint64_t base_bits, bool last) {
     QoreValue base = fromBits(base_bits);
+    // the value is proven to be a list; any other value is never taken for one (qore#7363)
+    if (base.getType() != NT_LIST) [[unlikely]] {
+        return toBits(QoreValue());
+    }
     const QoreListNode* list = base.get<const QoreListNode>();
     size_t size = list->size();
     if (!size) {
@@ -24384,15 +24387,29 @@ static uint64_t qore_rt_list_first_last(uint64_t base_bits, bool last) {
     return toBits(result);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_size(uint64_t val_bits);
+
+//! the size of a value that the helpers below take for a list or a binary but is not one (out of line)
+static QORE_INTERN_NOINLINE __attribute__((cold)) int64_t qore_rt_pseudo_size_other(uint64_t base_bits) {
+    return fromBits(qore_rt_pseudo_size(base_bits)).getAsBigInt();
+}
+
+// the value is proven to be a list (or a binary); any other value is never taken for one (qore#7363)
 extern "C" DLLEXPORT int64_t qore_rt_pseudo_list_size_native_noguard(
         uint64_t base_bits) {
     QoreValue base = fromBits(base_bits);
+    if (base.getType() != NT_LIST) [[unlikely]] {
+        return qore_rt_pseudo_size_other(base_bits);
+    }
     return static_cast<int64_t>(base.get<const QoreListNode>()->size());
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_pseudo_binary_size_native_noguard(
         uint64_t base_bits) {
     QoreValue base = fromBits(base_bits);
+    if (base.getType() != NT_BINARY) [[unlikely]] {
+        return qore_rt_pseudo_size_other(base_bits);
+    }
     return static_cast<int64_t>(base.get<const BinaryNode>()->size());
 }
 

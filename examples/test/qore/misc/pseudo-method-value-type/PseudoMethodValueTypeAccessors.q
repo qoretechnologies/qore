@@ -36,6 +36,9 @@ hash<string, list<auto>> classes = {
     "<buffer>": (new buffer<int64>((1, 2)), "size"),
     "<object>": (obj, "keys"),
     "<callref>": (\result(), "uniqueHash"),
+    "<char>": (c'a', "ord"),
+    # no method of <closure> reads its receiver: typeCode() gives the class's type for any value
+    "<closure>": (sub () {}, "typeCode"),
 };
 # values of every type
 hash<string, auto> values = {
@@ -49,6 +52,7 @@ hash<string, auto> values = {
     "object": obj,
     "callref": \result(),
     "closure": sub () {},
+    "char": c'a',
     "int": 12345,
     "float": 2.5,
     "bool": True,

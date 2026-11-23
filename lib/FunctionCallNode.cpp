@@ -2208,16 +2208,10 @@ __attribute__((noinline, cold)) QoreValue MethodCallNode::execPseudoNamed(Lexica
     QoreRcCallSiteHelper call_site(rc, loc);
     // the pseudo-method that a call with positional arguments would call (see pseudo_classes_eval()), with its
     // variants bound to the arguments by name
-    const qore_class_private* pseudo_cls = qore_class_private::get(*qore_pseudo_get_class(n.getType()));
-    const QoreMethod* w = pseudo_cls->runtimeFindPseudoMethod(n, c_str, xsink);
-    if (!w) {
-        assert(*xsink);
-        return QoreValue();
-    }
     ReferenceHolder<QoreListNode> args_copy(xsink);
     const QoreListNode* call_args = tmp_args ? getEvalTmpArgs(args_copy) : args;
-    return NMETHF(qore_method_private::get(*w)->func)->evalPseudoMethodNamed(xsink, rc, n, call_args, tmp_args,
-        runtime_get_class(), *runtime_arg_names, policy);
+    return pseudo_classes_eval_named(n, c_str, call_args, tmp_args, runtime_get_class(), *runtime_arg_names, policy, rc,
+        xsink);
 }
 
 QoreValue MethodCallNode::exec(QoreObject* o, ExceptionSink* xsink) const {

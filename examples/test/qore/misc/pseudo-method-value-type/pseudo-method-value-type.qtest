@@ -21,16 +21,32 @@
     - the cases that every execution mode makes through the dispatch of the call give the results in
       PseudoMethodValueType.expected in every execution mode and compiled with qcc;
     - the cases that compiled code can make without the dispatch of the call, for a receiver of their parse type, give
-      the results in PseudoMethodValueTypeFast.expected with the AST interpreter; the other modes must run each of them
-      to its end, with a result or an exception (the results of their fast paths for a receiver of another type are
-      those of qore#6813).
-    PseudoMethodValueTypeAccessors.q gives values of every type to the code of each pseudo-class directly (a debug-only
-    builtin), which must refuse those of another type with an exception; it runs in debug builds only.
+      the results in PseudoMethodValueTypeFast.expected with the AST interpreter; in the other modes each of them gives
+      the same result or the one that its fast path gives for a value of its parse type (the method of the parse type
+      for the value's conversion, or for its empty value: FastPathResults), which qore#6813 makes the result of the
+      method of the value's type there too.
+    PseudoMethodValueTypeWeak.q calls pseudo-methods on weak references to lists, hashes and objects, which give their
+    targets to the methods; PseudoMethodValueTypeReflection.q calls pseudo-methods through the reflection API, which
+    takes values of their class's type and refuses those of another type.  PseudoMethodValueTypeAccessors.q gives
+    values of every type to the code of each pseudo-class directly (a debug-only builtin), which must refuse those of
+    another type with an exception; it runs in debug builds only.  Each output must be the one in its .expected file.
 */
 class PseudoMethodValueTypeTest inherits QUnit::Test {
     public {
         #! the optimization levels of the AOT compiles
         const OptLevels = (0, 3);
+
+        #! the results that the fast paths of compiled code give for a receiver of another type than their parse
+        #! type, besides the result of the method of the value's type (see check())
+        const FastPathResults = {
+            "fk_size": ("0",),
+            "k_size": ("0",),
+            "fk_empty": ("True",),
+            "fk_val": ("False",),
+            "fk_to_string": ("\"\"",),
+            "s_to_string": ("\"\"",),
+            "fk_substr": ("\"\"",),
+        };
 
         #! the fixtures
         const Fixtures = {
@@ -53,6 +69,14 @@ class PseudoMethodValueTypeTest inherits QUnit::Test {
                 "arg": "fast",
                 "expected": "PseudoMethodValueTypeFast",
                 "exact_in_ast_only": True,
+            },
+            "weak references": <PseudoMethodValueTypeFixture>{
+                "script": "PseudoMethodValueTypeWeak",
+                "expected": "PseudoMethodValueTypeWeak",
+            },
+            "reflection": <PseudoMethodValueTypeFixture>{
+                "script": "PseudoMethodValueTypeReflection",
+                "expected": "PseudoMethodValueTypeReflection",
             },
             "accessors": <PseudoMethodValueTypeFixture>{
                 "script": "PseudoMethodValueTypeAccessors",
@@ -109,11 +133,37 @@ class PseudoMethodValueTypeTest inherits QUnit::Test {
             return;
         }
         assertEq(0, r.rc, label + ": exit code");
-        # each line names its case before the result: "<round> <value> <case>: <result>"
-        code cases = list<string> sub (string out) {
-            return map ($1 =~ x/^([^:]+):/)[0] ?? $1, out.split("\n");
-        };
-        assertEq(cases(exp), cases(r.out), label + ": the cases run");
+        # each line is "<round> <value> <case>: <result>"
+        list<string> exp_lines = exp.split("\n");
+        list<string> out_lines = r.out.split("\n");
+        assertEq(exp_lines.size(), out_lines.size(), label + ": the cases run");
+        # the AST results by "<round> <value> <case>"
+        hash<string, string> ast_results;
+        foreach string line in (exp_lines) {
+            *list<*string> m = line =~ x/^([^:]+): (.*)$/;
+            if (m) {
+                ast_results{m[0]} = m[1];
+            }
+        }
+        foreach string line in (out_lines) {
+            *list<*string> m = line =~ x/^(([0-9]+) ([^ ]+) ([^:]+)): (.*)$/;
+            if (!m || !exists ast_results{m[0]}) {
+                assertEq(exp_lines[$#], line, label + ": line " + $#);
+                continue;
+            }
+            string result = m[4];
+            if (result == ast_results{m[0]}) {
+                continue;
+            }
+            # the result of a fast path for a receiver of its parse type: the result of the method of the parse type
+            # for the value's conversion, or for its empty value
+            list<string> allowed = FastPathResults{m[3]} ?? ();
+            if (m[3] == "fk_substr") {
+                allowed += ast_results{sprintf("%s %s fk_to_string", m[1], m[2])};
+            }
+            assertTrue(allowed.contains(result), sprintf("%s: %s: %y is the AST result %y or one of %y", label,
+                m[0], result, ast_results{m[0]}, allowed));
+        }
     }
 
     private hash<ExecModeHarness::ModeRunResult> runMode(string command, *string env) {
