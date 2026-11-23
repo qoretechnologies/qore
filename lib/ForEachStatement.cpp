@@ -39,6 +39,33 @@
 #include "qore/intern/QoreDeferredRelease.h"
 
 namespace {
+//! sets the thread's implicit index (\c $#) for an element of a foreach statement whose body reads it, and restores
+//! the index of the code around the statement when it goes out of scope (qore#7270)
+/** A body that reads no implicit index of its own (ForEachStatement::readsImplicitElement()) runs with the index of
+    the code around the statement, which nothing in it can read.
+*/
+class ForEachElementHelper {
+public:
+    DLLLOCAL ForEachElementHelper(bool set, int n_element) : set(set),
+            element(set ? save_implicit_element(n_element) : 0) {
+    }
+
+    DLLLOCAL ~ForEachElementHelper() {
+        if (set) {
+            save_implicit_element(element);
+        }
+    }
+
+    ForEachElementHelper(const ForEachElementHelper&) = delete;
+    ForEachElementHelper& operator=(const ForEachElementHelper&) = delete;
+
+private:
+    //! true if the helper set the index
+    bool set;
+    //! the index that the helper replaced
+    int element;
+};
+
 class LexicalForEachStatement : public ForEachStatement {
 public:
     using ForEachStatement::ForEachStatement;
@@ -135,8 +162,8 @@ int ForEachStatement::execCommon(QoreValue& return_value, ExceptionSink* xsink) 
                 break;
         }
 
-        // set offset in thread-local data for "$#"
-        ImplicitElementHelper eh(i++);
+        // set offset in thread-local data for "$#" if the body reads it (qore#7270)
+        ForEachElementHelper eh(reads_implicit_element, i++);
 
         // execute "foreach" body
         if (((rc = code->execImpl(return_value, xsink)) == RC_BREAK) || *xsink) {
@@ -208,8 +235,8 @@ int ForEachStatement::execCommon(RuntimeConfig& rc, QoreValue& return_value, Exc
                 break;
         }
 
-        // set offset in thread-local data for "$#"
-        ImplicitElementHelper eh(i++);
+        // set offset in thread-local data for "$#" if the body reads it (qore#7270)
+        ForEachElementHelper eh(reads_implicit_element, i++);
 
         // execute "foreach" body
         if (((rc_state = code->execImpl(rc, return_value, xsink)) == RC_BREAK) || *xsink) {
@@ -280,8 +307,8 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
             }
         }
 
-        // set offset in thread-local data for "$#"
-        ImplicitElementHelper eh(l_tlist ? (int)i : 0);
+        // set offset in thread-local data for "$#" if the body reads it (qore#7270)
+        ForEachElementHelper eh(reads_implicit_element, l_tlist ? (int)i : 0);
 
         // execute "for" body
         rc = code->execImpl(return_value, xsink);
@@ -398,8 +425,8 @@ int ForEachStatement::execRef(RuntimeConfig& rc, QoreValue& return_value, Except
             }
         }
 
-        // set offset in thread-local data for "$#"
-        ImplicitElementHelper eh(l_tlist ? (int)i : 0);
+        // set offset in thread-local data for "$#" if the body reads it (qore#7270)
+        ForEachElementHelper eh(reads_implicit_element, l_tlist ? (int)i : 0);
 
         // execute "for" body
         rc_state = code->execImpl(rc, return_value, xsink);
@@ -542,10 +569,13 @@ int ForEachStatement::parseInitImpl(QoreParseContext& parse_context) {
         QoreParseContextFlagHelper fh0(parse_context);
         // the body runs for each element with the element's index as $# (qore#5690)
         fh0.setFlags(PF_BREAK_OK | PF_CONTINUE_OK | PF_IMPLICIT_ELEMENT);
+        // a $# in the body reads the index of this statement, not that of the code around it (qore#7270)
+        QoreParseImplicitElementScope element_scope(parse_context);
 
         if (code->parseInitImpl(parse_context) && !err) {
             err = -1;
         }
+        reads_implicit_element = element_scope.readsImplicitElement();
 
         nth.recordBranchAndRestore();
         ash.recordBranchAndRestore();
@@ -555,6 +585,9 @@ int ForEachStatement::parseInitImpl(QoreParseContext& parse_context) {
         ash.mergeAndApply();
         // break and continue leave the body before its end (qore#5937)
         ash.applyChangesSinceSave();
+    } else {
+        // a statement without a body has no code that could read its index
+        reads_implicit_element = false;
     }
 
     qore_type_t typ = list.getType();
