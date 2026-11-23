@@ -2521,12 +2521,23 @@ public:
     }
 };
 
-// inheritance noce
+//! returns the copy of a class made when its Program's classes were copied (the class's \c new_copy)
+DLLLOCAL const qore_class_private* qore_class_private_get_new_copy(const qore_class_private* qc);
+
+// inheritance node
 struct INode {
     QoreFunction* func;
     ClassAccess access;
+    //! the class whose private:internal inheritance limits the function to its code, set only if \a access is Internal
+    /** The child class of the private:internal edge of the path from the list's class to the function's class (a
+        path with two such edges gives the function Inaccessible access); only the code of this class can call the
+        function's variants through the list (qore#7410)
+    */
+    const qore_class_private* internal_cls;
 
-    DLLLOCAL INode(QoreFunction* f, ClassAccess a) : func(f), access(a) {
+    DLLLOCAL INode(QoreFunction* f, ClassAccess a, const qore_class_private* ic = nullptr) : func(f), access(a),
+            internal_cls(ic) {
+        assert((a == Internal) == (ic != nullptr));
     }
 };
 
@@ -2539,22 +2550,18 @@ struct IList : public ilist_t {
         @param last_class the class of the function returned last, updated with that of the function returned
         @param aqfi the position to search from, updated with the position of the function returned, or \a aqfe
         @param aqfe the end of the list
-        @param internal_access set if the class of the function returned is the class context; then the ancestors
-        that it inherits with private:internal access are accessible
+        @param internal_access set if the class of the function returned is the class context; then its
+        private:internal variants are accessible
 
         @return the function found, or nullptr if no ancestor after \a aqfi is accessible (\a aqfi is then \a aqfe)
 
         An inaccessible ancestor does not end the search: the ancestors after it are searched (qore#7381).  An ancestor
-        that the list's class inherits with private:internal access is accessible only when no other one comes before
-        it, as when the search ended at the first one: the private:internal access of an ancestor in the list is
-        relative to the list's class, not to the class context, so that a class context reached after another
-        private:internal ancestor does not gain access to those after it
+        reached through private:internal inheritance is accessible only to the code of the class whose
+        private:internal inheritance it is reached through (INode::internal_cls), not to the code of the other
+        classes of the hierarchy (qore#7410)
     */
     DLLLOCAL QoreFunction* getFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
         const_iterator& aqfi, const_iterator aqfe, bool& internal_access) const;
-
-    //! returns true if an ancestor before \a aqfi (after the function itself) has private:internal access
-    DLLLOCAL bool hasInternalBefore(const_iterator aqfi) const;
 };
 
 //! variant filter of QoreFunction::runtimeFindVariant(): only user variants
@@ -2781,30 +2788,70 @@ public:
         return qc->getNamespacePath(true);
     }
 
-    DLLLOCAL void addAncestor(QoreFunction* ancestor, ClassAccess access) {
-        ilist.push_back(INode(ancestor, access));
+    //! adds an ancestor to the inheritance list
+    /** @param internal_cls the class whose private:internal inheritance gives the ancestor Internal access, if it has
+        it (INode::internal_cls)
+    */
+    DLLLOCAL void addAncestor(QoreFunction* ancestor, ClassAccess access,
+            const qore_class_private* internal_cls = nullptr) {
+        ilist.push_back(INode(ancestor, access, internal_cls));
         noteAncestor(*ancestor);
     }
 
-    DLLLOCAL void addNewAncestor(QoreFunction* ancestor, ClassAccess access) {
-        for (ilist_t::iterator i = ilist.begin(), e = ilist.end(); i != e; ++i)
-            if ((*i).func == ancestor)
+    //! adds an ancestor to the inheritance list if it is not in it yet; as addAncestor()
+    DLLLOCAL void addNewAncestor(QoreFunction* ancestor, ClassAccess access,
+            const qore_class_private* internal_cls = nullptr) {
+        for (ilist_t::iterator i = ilist.begin(), e = ilist.end(); i != e; ++i) {
+            if ((*i).func == ancestor) {
                 return;
-        ilist.push_back(INode(ancestor, access));
+            }
+        }
+        ilist.push_back(INode(ancestor, access, internal_cls));
         noteAncestor(*ancestor);
     }
 
     //! gives an ancestor in the inheritance list the access of another path to its class if it is less restrictive
-    /** A class reached through several paths of the hierarchy has the access of the least restrictive one (qore#6498)
+    /** A class reached through several paths of the hierarchy has the access of the least restrictive one (qore#6498);
+        an ancestor reached through the private:internal paths of several classes has an entry for each of them
+        (INode::internal_cls; qore#7410), after its first one
     */
-    DLLLOCAL void lowerAncestorAccess(const QoreFunction* ancestor, ClassAccess access) {
+    DLLLOCAL void lowerAncestorAccess(const QoreFunction* ancestor, ClassAccess access,
+            const qore_class_private* internal_cls = nullptr) {
+        assert((access == Internal) == (internal_cls != nullptr));
+        INode* first = nullptr;
         for (INode& i : ilist) {
-            if (i.func == ancestor) {
-                if (access < i.access) {
-                    i.access = access;
-                }
+            if (i.func != ancestor) {
+                continue;
+            }
+            if (!first) {
+                first = &i;
+            }
+            if (access == Internal && i.access == Internal && i.internal_cls == internal_cls) {
                 return;
             }
+        }
+        assert(first);
+        if (access < first->access) {
+            QoreFunction* f = first->func;
+            first->access = access;
+            first->internal_cls = internal_cls;
+            // the entries of the private:internal paths of other classes are not needed with a less restrictive one
+            if (access < Internal) {
+                for (ilist_t::iterator i = ilist.begin(), e = ilist.end(); i != e;) {
+                    if (i->func == f && &*i != first) {
+                        assert(i->access == Internal);
+                        i = ilist.erase(i);
+                        e = ilist.end();
+                    } else {
+                        ++i;
+                    }
+                }
+            }
+            return;
+        }
+        if (access == Internal && first->access == Internal) {
+            INode n(first->func, Internal, internal_cls);
+            ilist.push_back(n);
         }
     }
 
@@ -3568,6 +3615,10 @@ public:
             //printd(5, "resolving %p %s::%s() base method %p %s::%s() from %p -> %p\n", qc, qc->getName(), getName(), mfb->qc, mfb->qc->getName(), getName(), mfb, mfb->new_copy);
 #endif
             (*i).func = mfb->new_copy;
+            // the class of a private:internal path is in the hierarchy, which is copied with the class (qore#7410)
+            if ((*i).internal_cls) {
+                (*i).internal_cls = qore_class_private_get_new_copy((*i).internal_cls);
+            }
         }
     }
 

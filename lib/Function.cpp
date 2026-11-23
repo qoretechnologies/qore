@@ -1088,28 +1088,21 @@ static const QoreTypeInfo* getParamLocalTypeInfo(const QoreTypeInfo* ti) {
     return ti == referenceOrNothingTypeInfo ? anyTypeInfo : ti;
 }
 
-bool IList::hasInternalBefore(const_iterator aqfi) const {
-    assert(aqfi != begin());
-    for (const_iterator i = begin() + 1; i != aqfi; ++i) {
-        if ((*i).access == Internal) {
-            return true;
-        }
-    }
-    return false;
-}
-
 QoreFunction* IList::getFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
         const_iterator& aqfi, const_iterator aqfe, bool& internal_access) const {
     // an ancestor that the context cannot access is skipped: the search continues with the ancestors after it, as a
     // path that it cannot access does not hide another path from it; the ancestors on the inaccessible path have its
     // access or a more restrictive one, unless another path reaches them (qore#7381)
     for (; aqfi != aqfe; ++aqfi) {
-        if (last_class && (*aqfi).access != Public && !(class_ctx && (*aqfi).access == Private)
-                && ((*aqfi).access != Internal || !internal_access || hasInternalBefore(aqfi))) {
+        const INode& n = *aqfi;
+        // a private:internal ancestor is accessible only to the code of the class whose private:internal inheritance
+        // reaches it, by identity (qore#7036), not to the code of the other classes of the hierarchy (qore#7410)
+        if (last_class && n.access != Public && !(class_ctx && (n.access == Private
+                || (n.access == Internal && n.internal_cls->sameClass(*class_ctx))))) {
             continue;
         }
 
-        QoreFunction* rv = (*aqfi).func;
+        QoreFunction* rv = n.func;
         const QoreClass* fc = rv->getClass();
         if (fc) {
             // get the function's class

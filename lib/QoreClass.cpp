@@ -116,6 +116,104 @@ struct HierarchyWalkFrame {
     ClassAccess access;
 };
 
+//! A level of the walks that build the inheritance lists of methods: as HierarchyWalkFrame, with the classes of
+//! its path that the access of a private:internal ancestor is relative to (qore#7410)
+struct AncestorWalkFrame {
+    const BCList* list;
+    size_t next;
+    //! the most restrictive access of the edges of the path to the list (qore#6498)
+    ClassAccess access;
+    //! the class whose parent classes the list has
+    const qore_class_private* list_cls;
+    //! the child class of the private:internal edge of the path to the list, if it has one
+    const qore_class_private* internal_cls;
+
+    //! returns the access of the path to the class of the node \a n of the list
+    /** The most restrictive access of its edges (qore#6498); Inaccessible if it has two private:internal edges: a
+        private:internal edge is followed only from the code of its child class, so that no class follows both
+        (qore#7410)
+    */
+    ClassAccess pathAccess(const BCNode& n) const {
+        if (n.access == Internal && access >= Internal) {
+            return Inaccessible;
+        }
+        return access < n.access ? n.access : access;
+    }
+
+    //! returns the class whose private:internal inheritance limits the class of the node \a n of the list to its
+    //! code, if the path to it has one private:internal edge: the child class of that edge
+    const qore_class_private* nodeInternalClass(const BCNode& n) const {
+        return n.access == Internal ? list_cls : internal_cls;
+    }
+
+    //! returns the frame of the parent classes of the class of the node \a n of the list
+    /** @param path_access the most restrictive access of the edges of the path to the class of \a n
+    */
+    AncestorWalkFrame enter(const BCNode& n, ClassAccess path_access) const {
+        assert(n.sclass);
+        const qore_class_private* qc = qore_class_private::get(*n.sclass);
+        return {qc->scl, 0, path_access, qc, nodeInternalClass(n)};
+    }
+};
+
+//! The classes visited by a walk that builds the inheritance list of a method, with the least restrictive access of
+//! the paths to them
+/** A class reached again through a less restrictive path, or through the private:internal path of another class, is
+    walked again, so that its parent classes have that access too: the access of an ancestor in the list is that of
+    the least restrictive path to it (qore#6498), and an ancestor reached through the private:internal paths of
+    several classes is accessible to the code of each of them (qore#7410)
+*/
+class AncestorWalkVisited {
+public:
+    //! returns true if the class is walked: it was not visited, the path's access is less restrictive than that of
+    //! the paths to it before, or the path is the private:internal path of a class that the paths before were not
+    /** @param qc the class
+        @param access the access of the path
+        @param internal_cls the class of the path's private:internal edge if \a access is Internal
+        @param again set if the class was visited before
+    */
+    bool visit(const qore_class_private* qc, ClassAccess access, const qore_class_private* internal_cls,
+            bool& again) {
+        assert((access == Internal) == (internal_cls != nullptr));
+        map_t::iterator i = visited.find(qc);
+        again = i != visited.end();
+        if (!again) {
+            State& s = visited[qc];
+            s.access = access;
+            if (internal_cls) {
+                s.internal_classes.push_back(internal_cls);
+            }
+            return true;
+        }
+        State& s = i->second;
+        if (access < s.access) {
+            s.access = access;
+            s.internal_classes.clear();
+            if (internal_cls) {
+                s.internal_classes.push_back(internal_cls);
+            }
+            return true;
+        }
+        if (access == Internal && s.access == Internal
+            && std::find(s.internal_classes.begin(), s.internal_classes.end(), internal_cls)
+                == s.internal_classes.end()) {
+            s.internal_classes.push_back(internal_cls);
+            return true;
+        }
+        return false;
+    }
+
+private:
+    struct State {
+        //! the least restrictive access of the paths to the class
+        ClassAccess access = Inaccessible;
+        //! the classes of the private:internal paths to the class if \a access is Internal
+        std::vector<const qore_class_private*> internal_classes;
+    };
+    typedef std::unordered_map<const qore_class_private*, State> map_t;
+    map_t visited;
+};
+
 //! The classes visited by the walk of a lookup in a class hierarchy (qore#6522)
 /** The first classes are kept in place, so that a walk of the common, small hierarchy does not allocate; a filter of
     one bit for each class recorded answers most checks of a class that was not visited without a search
@@ -5761,6 +5859,14 @@ void BCList::execConstructors(LexicalSemanticPolicy policy, QoreObject* o, BCEAL
     return execConstructorsImpl<true>(policy, o, bceal, rc, xsink);
 }
 
+//! returns the first frame of a walk that builds the inheritance list of the method \a m from \a list, the parent
+//! classes of its class (qore#7410)
+static AncestorWalkFrame ancestor_walk_root(const BCList* list, const QoreMethod& m) {
+    const qore_class_private* qc = qore_class_private::get(*m.getClass());
+    assert(qc->scl == list);
+    return {list, 0, Public, qc, nullptr};
+}
+
 void BCList::addNewAncestors(QoreMethod* m) {
     QoreFunction *f = qore_method_private::get(*m)->getFunction();
     const char* name = m->getName();
@@ -5798,11 +5904,11 @@ void BCList::addNewStaticAncestors(QoreMethod* m) {
 void BCList::addAncestors(QoreMethod* m) {
     const char* name = m->getName();
     auto* mf = qore_method_private::get(*m)->getFunction();
-    HierarchyWalkStack<HierarchyWalkFrame> stack;
-    qcp_set_t visited;
-    stack.push({this, 0});
+    HierarchyWalkStack<AncestorWalkFrame> stack;
+    AncestorWalkVisited visited;
+    stack.push(ancestor_walk_root(this, *m));
     while (!stack.empty()) {
-        HierarchyWalkFrame& f = stack.back();
+        AncestorWalkFrame& f = stack.back();
         if (f.next == f.list->size()) {
             stack.pop();
             continue;
@@ -5813,21 +5919,26 @@ void BCList::addAncestors(QoreMethod* m) {
         QORE_CLASS_HIERARCHY_WALK_STEP();
         // the most restrictive access of the edges of the path to the class: the access of its method in the list
         // (qore#6498)
-        ClassAccess path_access = f.access < n.access ? n.access : f.access;
+        ClassAccess path_access = f.pathAccess(n);
         const QoreMethod* w = qc->priv->findLocalCommittedMethod(name);
-        if (!visited.insert(qc->priv).second) {
-            // a class reached again: its method has the least restrictive access of the paths to it (qore#6498)
-            if (w) {
-                mf->lowerAncestorAccess(qore_method_private::get(*w)->getFunction(), path_access);
-            }
+        // a class reached again through a less restrictive path or another class's private:internal path is walked
+        // again, so that it and its parent classes have the access of each path to them (qore#6498, qore#7410)
+        const qore_class_private* path_internal_cls = path_access == Internal ? f.nodeInternalClass(n) : nullptr;
+        bool again;
+        if (!visited.visit(qc->priv, path_access, path_internal_cls, again)) {
             continue;
         }
-
         if (w) {
-            mf->addNewAncestor(qore_method_private::get(*w)->getFunction(), path_access);
+            if (again) {
+                mf->lowerAncestorAccess(qore_method_private::get(*w)->getFunction(), path_access,
+                    path_internal_cls);
+            } else {
+                mf->addNewAncestor(qore_method_private::get(*w)->getFunction(), path_access,
+                    path_internal_cls);
+            }
         }
         if (qc->priv->scl) {
-            stack.push({qc->priv->scl, 0, path_access});
+            stack.push(f.enter(n, path_access));
         }
     }
 }
@@ -5836,11 +5947,11 @@ void BCList::addStaticAncestors(QoreMethod* m) {
     const char* name = m->getName();
     auto* mf = qore_method_private::get(*m)->getFunction();
     // as for addAncestors()
-    HierarchyWalkStack<HierarchyWalkFrame> stack;
-    qcp_set_t visited;
-    stack.push({this, 0});
+    HierarchyWalkStack<AncestorWalkFrame> stack;
+    AncestorWalkVisited visited;
+    stack.push(ancestor_walk_root(this, *m));
     while (!stack.empty()) {
-        HierarchyWalkFrame& f = stack.back();
+        AncestorWalkFrame& f = stack.back();
         if (f.next == f.list->size()) {
             stack.pop();
             continue;
@@ -5851,21 +5962,26 @@ void BCList::addStaticAncestors(QoreMethod* m) {
         QORE_CLASS_HIERARCHY_WALK_STEP();
         // the most restrictive access of the edges of the path to the class: the access of its method in the list
         // (qore#6498)
-        ClassAccess path_access = f.access < n.access ? n.access : f.access;
+        ClassAccess path_access = f.pathAccess(n);
         const QoreMethod* w = qc->priv->findLocalCommittedStaticMethod(name);
-        if (!visited.insert(qc->priv).second) {
-            // as in addAncestors() (qore#6498)
-            if (w) {
-                mf->lowerAncestorAccess(qore_method_private::get(*w)->getFunction(), path_access);
-            }
+        // a class reached again through a less restrictive path or another class's private:internal path is walked
+        // again, so that it and its parent classes have the access of each path to them (qore#6498, qore#7410)
+        const qore_class_private* path_internal_cls = path_access == Internal ? f.nodeInternalClass(n) : nullptr;
+        bool again;
+        if (!visited.visit(qc->priv, path_access, path_internal_cls, again)) {
             continue;
         }
-
         if (w) {
-            mf->addNewAncestor(qore_method_private::get(*w)->getFunction(), path_access);
+            if (again) {
+                mf->lowerAncestorAccess(qore_method_private::get(*w)->getFunction(), path_access,
+                    path_internal_cls);
+            } else {
+                mf->addNewAncestor(qore_method_private::get(*w)->getFunction(), path_access,
+                    path_internal_cls);
+            }
         }
         if (qc->priv->scl) {
-            stack.push({qc->priv->scl, 0, path_access});
+            stack.push(f.enter(n, path_access));
         }
     }
 }
@@ -5877,11 +5993,11 @@ void BCList::parseAddAncestors(QoreMethod* m) {
 
     // the hierarchy is walked iteratively, depth first in the order of the base classes, as it can be as long as the
     // code declares it (issue #6047)
-    HierarchyWalkStack<HierarchyWalkFrame> stack;
-    qcp_set_t visited;
-    stack.push({this, 0});
+    HierarchyWalkStack<AncestorWalkFrame> stack;
+    AncestorWalkVisited visited;
+    stack.push(ancestor_walk_root(this, *m));
     while (!stack.empty()) {
-        HierarchyWalkFrame& f = stack.back();
+        AncestorWalkFrame& f = stack.back();
         if (f.next == f.list->size()) {
             stack.pop();
             continue;
@@ -5894,30 +6010,34 @@ void BCList::parseAddAncestors(QoreMethod* m) {
             continue;
         }
         QORE_CLASS_HIERARCHY_WALK_STEP();
-        // each ancestor is visited once: a class reached through another path of a diamond hierarchy has been added
+        // each ancestor is added once: a class reached through another path of a diamond hierarchy has been added
         // with its own ancestors already, at its first position (issue #6488)
         // the most restrictive access of the edges of the path to the class: the access of its method in the list
         // (qore#6498)
-        ClassAccess path_access = f.access < n.access ? n.access : f.access;
+        ClassAccess path_access = f.pathAccess(n);
         const QoreMethod* w = qc->priv->parseFindLocalMethod(name);
-        if (!visited.insert(qc->priv).second) {
-            // a class reached again: its method has the least restrictive access of the paths to it (qore#6498)
-            if (w) {
-                qore_method_private::get(*m)->getFunction()->lowerAncestorAccess(
-                    qore_method_private::get(*w)->getFunction(), path_access);
-            }
+        // a class reached again through a less restrictive path or another class's private:internal path is walked
+        // again, so that it and its parent classes have the access of each path to them (qore#6498, qore#7410)
+        const qore_class_private* path_internal_cls = path_access == Internal ? f.nodeInternalClass(n) : nullptr;
+        bool again;
+        if (!visited.visit(qc->priv, path_access, path_internal_cls, again)) {
             continue;
         }
-
         //printd(5, "BCList::parseAddAncestors(%p %s) this: %p qc: %p w: %p\n", m, name, this, qc, w);
 
         if (w) {
-            qore_method_private::get(*m)->getFunction()->addAncestor(qore_method_private::get(*w)->getFunction(),
-                path_access);
+            if (again) {
+                qore_method_private::get(*m)->getFunction()->lowerAncestorAccess(
+                    qore_method_private::get(*w)->getFunction(), path_access,
+                    path_internal_cls);
+            } else {
+                qore_method_private::get(*m)->getFunction()->addAncestor(qore_method_private::get(*w)->getFunction(),
+                    path_access, path_internal_cls);
+            }
         }
 
         if (qc->priv->scl) {
-            stack.push({qc->priv->scl, 0, path_access});
+            stack.push(f.enter(n, path_access));
         }
     }
 }
@@ -5925,11 +6045,11 @@ void BCList::parseAddAncestors(QoreMethod* m) {
 void BCList::parseAddStaticAncestors(QoreMethod* m) {
     const char* name = m->getName();
     // the hierarchy is walked iteratively, as for parseAddAncestors()
-    HierarchyWalkStack<HierarchyWalkFrame> stack;
-    qcp_set_t visited;
-    stack.push({this, 0});
+    HierarchyWalkStack<AncestorWalkFrame> stack;
+    AncestorWalkVisited visited;
+    stack.push(ancestor_walk_root(this, *m));
     while (!stack.empty()) {
-        HierarchyWalkFrame& f = stack.back();
+        AncestorWalkFrame& f = stack.back();
         if (f.next == f.list->size()) {
             stack.pop();
             continue;
@@ -5941,27 +6061,31 @@ void BCList::parseAddStaticAncestors(QoreMethod* m) {
             continue;
         }
         QORE_CLASS_HIERARCHY_WALK_STEP();
-        // each ancestor is visited once, as in parseAddAncestors() (issue #6488)
+        // each ancestor is added once, as in parseAddAncestors() (issue #6488)
         // the most restrictive access of the edges of the path to the class: the access of its method in the list
         // (qore#6498)
-        ClassAccess path_access = f.access < n.access ? n.access : f.access;
+        ClassAccess path_access = f.pathAccess(n);
         const QoreMethod* w = qc->priv->parseFindLocalStaticMethod(name);
-        if (!visited.insert(qc->priv).second) {
-            // as in parseAddAncestors() (qore#6498)
-            if (w) {
-                qore_method_private::get(*m)->getFunction()->lowerAncestorAccess(
-                    qore_method_private::get(*w)->getFunction(), path_access);
-            }
+        // a class reached again through a less restrictive path or another class's private:internal path is walked
+        // again, so that it and its parent classes have the access of each path to them (qore#6498, qore#7410)
+        const qore_class_private* path_internal_cls = path_access == Internal ? f.nodeInternalClass(n) : nullptr;
+        bool again;
+        if (!visited.visit(qc->priv, path_access, path_internal_cls, again)) {
             continue;
         }
-
         if (w) {
-            qore_method_private::get(*m)->getFunction()->addAncestor(qore_method_private::get(*w)->getFunction(),
-                path_access);
+            if (again) {
+                qore_method_private::get(*m)->getFunction()->lowerAncestorAccess(
+                    qore_method_private::get(*w)->getFunction(), path_access,
+                    path_internal_cls);
+            } else {
+                qore_method_private::get(*m)->getFunction()->addAncestor(qore_method_private::get(*w)->getFunction(),
+                    path_access, path_internal_cls);
+            }
         }
 
         if (qc->priv->scl) {
-            stack.push({qc->priv->scl, 0, path_access});
+            stack.push(f.enter(n, path_access));
         }
     }
 }
@@ -10236,7 +10360,8 @@ void collect_hierarchy_functions(const qore_class_private& qc, const std::string
         const QoreMethod* w = is_static ? pcp->parseFindLocalStaticMethod(name.c_str())
             : pcp->parseFindLocalMethod(name.c_str());
         if (w) {
-            out.push_back(INode(qore_method_private::get(*w)->getFunction(), i->access));
+            out.push_back(INode(qore_method_private::get(*w)->getFunction(), i->access,
+                i->access == Internal ? &qc : nullptr));
         }
         collect_hierarchy_functions(*pcp, name, is_static, out, visited);
     }
@@ -10671,6 +10796,11 @@ void qore_class_private::recheckBuiltinMethodHierarchy() {
 
     for (hm_method_t::iterator i = shm.begin(), e = shm.end(); i != e; ++i)
         scl->addNewStaticAncestors(i->second);
+}
+
+const qore_class_private* qore_class_private_get_new_copy(const qore_class_private* qc) {
+    assert(qc->new_copy);
+    return qore_class_private::get(*qc->new_copy);
 }
 
 void qore_class_private::resolveCopy() {

@@ -2801,6 +2801,10 @@
       caller cannot access, such as one inherited privately, came before it, for example a method that a class
       creates to implement an abstract variant with a privately inherited class's variant (see
       @ref multiple_path_inheritance; <a href="https://github.com/qoretechnologies/qore/issues/7381">issue 7381</a>)
+    - the methods of a class inherited with \c private:internal access are called only by the code of the inheriting
+      class, also on the objects of its subclasses, and no longer by the code of other classes in the hierarchy; the
+      methods of a class that a public path also reaches are public (see @ref private_inheritance;
+      <a href="https://github.com/qoretechnologies/qore/issues/7410">issue 7410</a>)
     - @ref Qore::call_static_method() "call_static_method()" and the related calls call the static method that a static
       method call in the caller's code calls: they refused a later parent class's public method behind a private one,
       and called a method of a privately inherited class from outside it
