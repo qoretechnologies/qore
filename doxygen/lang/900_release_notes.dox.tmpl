@@ -2785,6 +2785,10 @@
       abstract method of the class, so that code outside the class hierarchy could call it (see
       @ref abstract_parent_implementation;
       <a href="https://github.com/qoretechnologies/qore/issues/7316">issue 7316</a>)
+    - a class's own method did not implement a parent class's abstract variant when another parent class declared
+      another overload of the method, so that the class could not be instantiated (see
+      @ref abstract_own_implementation;
+      <a href="https://github.com/qoretechnologies/qore/issues/7330">issue 7330</a>)
     - @ref Qore::call_static_method() "call_static_method()" and the related calls call the static method that a static
       method call in the caller's code calls: they refused a later parent class's public method behind a private one,
       and called a method of a privately inherited class from outside it

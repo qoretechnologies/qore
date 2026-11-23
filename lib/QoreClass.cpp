@@ -889,48 +889,11 @@ int AbstractMethod::parseCommit() {
 }
 
 // merge changes from parent class method of the same name during parse initialization
-void AbstractMethod::parseMergeBase(AbstractMethod& m, bool committed) {
-    //printd(5, "AbstractMethod::parseMergeBase(m: %p) this: %p m.pending_save: %d m.vlist: %d\n", &m, this,
-    //    !m.pending_save.empty(), !m.vlist.empty());
-    // move pending committed variants from our vlist that are in parent's pending_save list to our pending_save
-    for (auto& i : m.pending_save) {
-        const char* sig = i.second->getAbstractSignature();
-        vmap_t::iterator vi = vlist.find(sig);
-        if (vi != vlist.end()) {
-            /*
-            i.second->ref();
-            pending_save.insert(vmap_t::value_type(sig, i.second));
-            vi.second->deref();
-            */
-
-            pending_save.insert(vmap_t::value_type(sig, vi->second));
-            vlist.erase(vi);
-        }
-    }
-
-    // add new abstract methods from parent to our list - if they are not already in our vlist or in our pending_save list
-    for (auto& i : m.vlist) {
-        const char* sig = i.second->getAbstractSignature();
-        //printd(5, "AbstractMethod::parseMergeBase(m: %p) this: %p checking parent: '%s'\n", &m, this, sig);
-        if (pending_save.find(sig) != pending_save.end()) {
-            continue;
-        }
-        vmap_t::iterator vi = vlist.find(sig);
-        if (vi != vlist.end()) {
-            if (i.second->isConstMethod() && !vi->second->isConstMethod()) {
-                vi->second->deref();
-                i.second->ref();
-                vi->second = i.second;
-            }
-            continue;
-        }
-        //printd(5, "AbstractMethod::parseMergeBase(m: %p) this: %p adding to vlist from parent: '%s'\n", &m, this, sig);
-        i.second->ref();
-        vlist.insert(vmap_t::value_type(sig, i.second));
-    }
-}
-
-// merge changes from parent class method of the same name during parse initialization
+/** A concrete variant of the class's own method \a f implements the parent class's abstract variant with its
+    signature, whether the class has the abstract method already, from another parent class or its own abstract
+    declarations, or not: a class's own variant implements the abstract variants of every parent class, also when
+    another parent class declares an overload that the class's own method does not implement (qore#7330).
+*/
 void AbstractMethod::parseMergeBase(AbstractMethod& m, MethodFunctionBase* f, bool committed) {
     //printd(5, "AbstractMethod::parseMergeBase(m: %p, f: %p %s::%s) this: %p m.pending_save: %d m.vlist: %d\n", &m,
     //    f, f ? f->getClassName() : "n/a", f ? f->getName() : "n/a", this, !m.pending_save.empty(),
@@ -940,10 +903,25 @@ void AbstractMethod::parseMergeBase(AbstractMethod& m, MethodFunctionBase* f, bo
         const char* sig = i.second->getAbstractSignature();
         vmap_t::iterator vi = vlist.find(sig);
         if (vi != vlist.end()) {
-            pending_save.insert(vmap_t::value_type(sig, vi->second));
+            // the reference of the vlist entry is released if a variant with the signature is already saved
+            if (!pending_save.insert(vmap_t::value_type(sig, vi->second)).second) {
+                vi->second->deref();
+            }
             vlist.erase(vi);
         }
     }
+
+    // issue #5773: the abstract variant's types are those of the specialization that the implementing class inherits
+    const QoreTypeInfo* receiver = f && f->getClass() ? f->getClass()->getTypeInfo() : nullptr;
+    // returns true if a concrete variant of the class's own method implements the abstract variant v; the class's own
+    // abstract declarations are in vlist already (qore_class_private::addUserMethod()) and stay there
+    auto own_implements = [f, receiver, this](MethodVariantBase* v) -> bool {
+        if (!f) {
+            return false;
+        }
+        MethodVariantBase* ov = f->parseHasVariantWithSignature(v, relaxed_match, receiver);
+        return ov && !ov->isAbstract();
+    };
 
     // add new abstract methods from parent to our list - if they are not already in our vlist or in our pending_save
     // list
@@ -953,14 +931,24 @@ void AbstractMethod::parseMergeBase(AbstractMethod& m, MethodFunctionBase* f, bo
         //    "rm: %d) '%s'\n", &m, f, f ? f->getClassName() : "n/a", f ? f->getName() : "n/a", this, sig, f,
         //    f && f->parseHasVariantWithSignature(i.second, relaxed_match), relaxed_match, sig);
 
-        // issue #5773: the abstract variant's types are those of the specialization that the implementing class
-        // inherits
-        bool has_match = f && f->parseHasVariantWithSignature(i.second, relaxed_match,
-            f->getClass() ? f->getClass()->getTypeInfo() : nullptr);
-        if (has_match) {
+        if (own_implements(i.second)) {
+            vmap_t::iterator vi = vlist.find(sig);
+            if (vi != vlist.end()) {
+                // the variant with the signature that another parent class declared stays unimplemented unless the
+                // class's own method implements it as well (of a const and a non-const declaration, the const one is
+                // kept; qore#7317)
+                if (own_implements(vi->second)) {
+                    if (!pending_save.insert(*vi).second) {
+                        vi->second->deref();
+                    }
+                    vlist.erase(vi);
+                }
+                continue;
+            }
             // add to our pending_save
-            i.second->ref();
-            pending_save.insert(vmap_t::value_type(sig, i.second));
+            if (pending_save.insert(vmap_t::value_type(sig, i.second)).second) {
+                i.second->ref();
+            }
             continue;
         }
 
@@ -2753,20 +2741,20 @@ void qore_class_private::mergeAbstract() {
                     //printd(5, "qore_class_private::initializeIntern() this: %p '%s' skipping %s::%s(): vlist empty\n", this, name.c_str(), (*i).sclass->getName(), j.first.c_str());
                     continue;
                 }
+                // see if there are pending normal variants...
+                hm_method_t::iterator mi = hm.find(j.first);
+                MethodFunctionBase* f = mi == hm.end() ? nullptr : qore_method_private::get(*mi->second)->getFunction();
                 amap_t::iterator vi = ahm.find(j.first);
                 if (vi != ahm.end()) {
-                    vi->second->parseMergeBase(*(j.second), true);
+                    // the class's own variants implement the variants of every parent class (qore#7330)
+                    vi->second->parseMergeBase(*(j.second), f, true);
                     continue;
                 }
                 // now we import the abstract method to our class
                 std::unique_ptr<AbstractMethod> m(new AbstractMethod(ahm.relaxed_match));
-                // see if there are pending normal variants...
-                hm_method_t::iterator mi = hm.find(j.first);
 
                 // merge committed parent abstract variants with any pending local variants
-                m->parseMergeBase((*j.second), mi == hm.end()
-                    ? nullptr
-                    : qore_method_private::get(*mi->second)->getFunction(), true);
+                m->parseMergeBase((*j.second), f, true);
                 if (!m->empty()) {
                     ahm.insert(amap_t::value_type(j.first, m.release()));
                     //printd(5, "qore_class_private::initializeIntern() this: %p '%s' insert abstract method variant "
@@ -9692,18 +9680,20 @@ int qore_class_private::parseInitPartialIntern() {
                     amap_t::iterator vi = ahm.find(ai->first);
                     printd(5, "qore_class_private::parseInitPartialIntern() this: %p '%s' checking '%s::%s()' "
                         "found: %d\n", this, name.c_str(), (*i)->sclass->getName(), ai->first.c_str(), vi != ahm.end());
-                    if (vi != ahm.end()) {
-                        vi->second->parseMergeBase(*(ai->second));
-                        continue;
-                    }
-                    std::unique_ptr<AbstractMethod> m(new AbstractMethod(ahm.relaxed_match));
                     // see if there are pending normal variants...
                     hm_method_t::iterator mi = hm.find(ai->first);
                     printd(5, "qore_class_private::parseInitPartialIntern() this: %p '%s' looking for local "
                         "'%s': %d\n", this, name.c_str(), ai->first.c_str(), mi != hm.end());
-                    m->parseMergeBase(*(ai->second), mi == hm.end()
+                    MethodFunctionBase* f = mi == hm.end()
                         ? nullptr
-                        : qore_method_private::get(*mi->second)->getFunction());
+                        : qore_method_private::get(*mi->second)->getFunction();
+                    if (vi != ahm.end()) {
+                        // the class's own variants implement the variants of every parent class (qore#7330)
+                        vi->second->parseMergeBase(*(ai->second), f);
+                        continue;
+                    }
+                    std::unique_ptr<AbstractMethod> m(new AbstractMethod(ahm.relaxed_match));
+                    m->parseMergeBase(*(ai->second), f);
                     if (!m->empty()) {
                         ahm.insert(amap_t::value_type(ai->first, m.release()));
                     }

@@ -1,0 +1,35 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# classes of abstract-own-overload.qtest in a module, loaded from the source and as a qcc -m .qmod
+
+%modern
+
+module AbstractOwnOverload {
+    version = "1.0";
+    desc = "classes whose own variants implement abstract overloads that several parent classes declare";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AOO {
+public class Sint { string m(int i) { return "Sint::m(int)"; } }
+public class Sstr { string m(string s) { return "Sstr::m(string)"; } }
+public class I1 { abstract string m(int i); }
+public class I2 { abstract string m(string s); }
+public class I3 { abstract string m(bool b); }
+public class I1c { abstract string m(int i) const; }
+
+public class C3 inherits Sint, I1, I2 { string m(string s) { return "C3::m(string)"; } }
+public class C4 inherits Sint, I2, I1 { string m(string s) { return "C4::m(string)"; } }
+public class C5 inherits I1, I2, Sstr { string m(int i) { return "C5::m(int)"; } }
+public class C13 inherits I1, I2, I3, Sint, Sstr { string m(bool b) { return "C13::m(bool)"; } }
+public class P1 inherits private Sint, I1, I2 { string m(string s) { return "P1::m(string)"; } }
+public class Q1 inherits Sint, I1, I2 {
+    private string m(string s) { return "Q1::m(string)"; }
+    string via(auto a) { return m(a); }
+}
+# abstract
+public class C12 inherits I1, I2, I3, Sint, Sstr {}
+public class C18 inherits Sint, I1, I2, I3 { string m(string s) { return "C18::m(string)"; } }
+public class K6 inherits Sint, I1c, I2 { string m(string s) { return "K6::m(string)"; } }
+}

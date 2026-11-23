@@ -187,10 +187,10 @@ struct AbstractMethod {
 
     DLLLOCAL ~AbstractMethod();
 
-    // merge changes from parent class method of the same name during parse initialization
-    DLLLOCAL void parseMergeBase(AbstractMethod& m, bool committed = false);
-
-    // merge changes from parent class method of the same name during parse initialization
+    //! merges the abstract variants of the parent class's method \a m of the same name during parse initialization
+    /** A concrete variant of the class's own method \a f (if any) implements the parent class's variant with its
+        signature, whether the class has the abstract method already or not (qore#7330)
+    */
     DLLLOCAL void parseMergeBase(AbstractMethod& m, MethodFunctionBase* f, bool committed = false);
 
     DLLLOCAL void parseAdd(MethodVariantBase* v);

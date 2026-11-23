@@ -21588,11 +21588,11 @@ bool QoreAOTBinaryDeserializer::commitClassesImportAbstract(std::string& error) 
         // the abstract methods of every parent class are merged into the class's abstract method of the same name as
         // source parsing merges them: first by qore_class_private::mergeAbstract(), when the class is initialized,
         // which skips a parent class's abstract method without pending variants, then by
-        // qore_class_private::parseInitPartialIntern(); a method that the class does not have yet is imported with
-        // the variants that the class's own method does not implement (AbstractMethod::parseMergeBase() with the
-        // method), and the variants of the other parent classes are merged into it (parseMergeBase() without it), of
-        // two variants with the same signature the const one (qore#7317).  Only the first parent class that declared
-        // a method was imported, so that the overloads that the other parent classes declare were lost (qore#7313).
+        // qore_class_private::parseInitPartialIntern(); the variants of every parent class that the class's own
+        // method does not implement are merged (AbstractMethod::parseMergeBase() with the method), also into a method
+        // that the class has already (qore#7330), of two variants with the same signature the const one (qore#7317).
+        // Only the first parent class that declared a method was imported, so that the overloads that the other
+        // parent classes declare were lost (qore#7313).
         for (int pass = 0; pass < 2; ++pass) {
             for (auto bi = priv->scl->begin(), be = priv->scl->end(); bi != be; ++bi) {
                 QoreClass* parent = (*bi)->sclass;
@@ -21604,14 +21604,14 @@ bool QoreAOTBinaryDeserializer::commitClassesImportAbstract(std::string& error) 
                     if (!pass && ai->second->vlist.empty()) {
                         continue;
                     }
-                    amap_t::iterator vi = priv->ahm.find(ai->first);
-                    if (vi != priv->ahm.end()) {
-                        vi->second->parseMergeBase(*(ai->second));
-                        continue;
-                    }
                     auto mi = priv->hm.find(ai->first);
                     MethodFunctionBase* f = (mi != priv->hm.end())
                         ? qore_method_private::get(*mi->second)->getFunction() : nullptr;
+                    amap_t::iterator vi = priv->ahm.find(ai->first);
+                    if (vi != priv->ahm.end()) {
+                        vi->second->parseMergeBase(*(ai->second), f);
+                        continue;
+                    }
                     std::unique_ptr<AbstractMethod> m(new AbstractMethod(priv->ahm.relaxed_match));
                     m->parseMergeBase(*(ai->second), f);
                     if (!m->empty()) {
