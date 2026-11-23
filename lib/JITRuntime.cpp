@@ -24489,6 +24489,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_size(uint64_t val_bits) {
         case NT_WEAKREF_HASH:
             size = qore_rt_pseudo_weak_target_size(v);
             break;
+        // <buffer>::size(): the number of elements; the value of a call resolved at parse time for another type can
+        // be a buffer (qore#7363)
+        case NT_BUFFER:
+            size = static_cast<int64_t>(v.get<const QoreBufferNode>()->size());
+            break;
         case NT_STRING:
             {
                 QoreStringValueHelper str(v);
@@ -24534,6 +24539,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_empty(uint64_t val_bits) {
         case NT_WEAKREF_HASH:
             is_empty = !qore_rt_pseudo_weak_target_size(v);
             break;
+        // <buffer>::empty() (see qore_rt_pseudo_size())
+        case NT_BUFFER:
+            is_empty = v.get<const QoreBufferNode>()->empty();
+            break;
         case NT_STRING:
             {
                 QoreStringValueHelper str(v);
@@ -24567,6 +24576,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_val(uint64_t val_bits) {
         case NT_WEAKREF_LIST:
         case NT_WEAKREF_HASH:
             has_value = qore_rt_pseudo_weak_target_size(v) != 0;
+            break;
+        // <buffer>::val() (see qore_rt_pseudo_size())
+        case NT_BUFFER:
+            has_value = !v.get<const QoreBufferNode>()->empty();
             break;
         case NT_LIST:
             has_value = !v.get<const QoreListNode>()->empty();
