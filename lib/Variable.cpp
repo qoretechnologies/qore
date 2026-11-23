@@ -2645,12 +2645,11 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
         clearPathContainers();
         clearPtr();
 
+        // getLValue() sets the object context: the object is on the path once (qore#7348)
         if (qore_object_private::getLValue(*obj, v->str, *this, runtime_get_class(), for_remove, vl.xsink)) {
             // here the object has already been cleared above
             return -1;
         }
-
-        setObjectContext(qore_object_private::get(*obj));
     } else if (ntype == NT_CLASS_VARREF) {
         const AbstractQoreNode* node = n.getInternalNode();
         const StaticClassVarRefNode* static_var = qore_exact_node_cast<StaticClassVarRefNode>(node);
@@ -2783,12 +2782,11 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
         clearPtr();
 
         const qore_class_private* class_ctx = rc.getClass() ? rc.getClass() : runtime_get_class();
+        // getLValue() sets the object context: the object is on the path once (qore#7348)
         if (qore_object_private::getLValue(*obj, v->str, *this, class_ctx, for_remove, vl.xsink)) {
             // here the object has already been cleared above
             return -1;
         }
-
-        setObjectContext(qore_object_private::get(*obj));
     } else if (ntype == NT_CLASS_VARREF) {
         const AbstractQoreNode* node = n.getInternalNode();
         const StaticClassVarRefNode* static_var = qore_exact_node_cast<StaticClassVarRefNode>(node);
@@ -3038,12 +3036,12 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
             }
             clearPathContainers();
             clearPtr();
+            // getLValue() sets the object context: the object is on the path once (qore#7348)
             if (qore_object_private::getLValue(*obj, root.name.c_str(), *this,
                     runtime_get_class(), for_remove, vl.xsink)) {
                 // object already cleared above
                 return -1;
             }
-            setObjectContext(qore_object_private::get(*obj));
             break;
         }
         case LVPathStepKind::StaticVar: {
