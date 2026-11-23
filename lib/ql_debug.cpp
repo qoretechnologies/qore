@@ -9787,6 +9787,7 @@ public:
         runCase(c, true);
         runCase(c, false);
         drainedCancelCase(c);
+        drainedRestrictedOwnerCancelCase(c);
         failedRestartCase(c);
     }
 
@@ -9948,6 +9949,76 @@ private:
         xsink.clear();
         UT_ASSERT_EQ(c, 0, ctrl->getCacheSize(),
             "no operation of the canceled Program is admitted after a cancellation found by the last drain");
+    }
+
+    //! a restricted cancel by owner (of sandboxed code, for its application) queued to the stopping thread before its
+    //! last drain, with the submissions of the owner of two applications: the drain records the owner as canceled for
+    //! that application only, so the restarted thread refuses its submission and admits the other one (qore#7010)
+    static void drainedRestrictedOwnerCancelCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        Ctrl* ctrl = startCtrl(c, xsink);
+        CtrlStop cs{ctrl, xsink};
+        if (xsink) {
+            return;
+        }
+        // two applications that no Program has: the submissions run for them as in the callback of an operation of
+        // each (see AsyncIoControllerPriv::callerAppId())
+        const qore_program_id_t app_a = 2000000001;
+        const qore_program_id_t app_b = 2000000002;
+        ReferenceHolder<QoreObject> sock_a(&xsink);
+        ReferenceHolder<QoreObject> queue_a(&xsink);
+        ReferenceHolder<QoreObject> sock_b(&xsink);
+        ReferenceHolder<QoreObject> queue_b(&xsink);
+        holdStopping(*ctrl, true, true);
+        int idx_a;
+        {
+            AioCallbackAppScope app_scope(app_a);
+            idx_a = submitRunning(*ctrl, sock_a, queue_a, xsink);
+        }
+        int idx_b;
+        {
+            AioCallbackAppScope app_scope(app_b);
+            idx_b = submitRunning(*ctrl, sock_b, queue_b, xsink);
+        }
+        UT_ASSERT(c, idx_a == 0 && idx_b == 0 && !xsink,
+            "the submissions of the owner of two applications are queued to the stopping thread");
+        if (idx_a != 0 || idx_b != 0 || xsink) {
+            return;
+        }
+        AioAppRestriction restrict_a;
+        restrict_a.restricted = true;
+        restrict_a.app_id = app_a;
+        {
+            AutoLocker al(ctrl->m);
+            Ctrl::IoThreadContext& t = *ctrl->io_threads[0];
+            // application a's cancel of the owner, queued after the submissions, as cancelByOwner() queues it
+            Ctrl::Command cmd;
+            cmd.cmd = Ctrl::IoCommand::CancelOwner;
+            cmd.owner = "preserved";
+            cmd.restrict_app = restrict_a;
+            ++ctrl->submit_seq;
+            cmd.seq_at_push = ++t.submit_seq;
+            t.cmdq.push(std::move(cmd));
+            // the last drain runs and finds them all; the thread is held after it
+            t.dbg_hold_before_drain = false;
+            t.dbg_cond.broadcast();
+            waitHeldLocked(*ctrl, t, t.dbg_held);
+            UT_ASSERT(c, t.preserved_submits.size() == 2, "the last drain keeps both submissions");
+            UT_ASSERT(c, !t.cancelled_owners.count("preserved"),
+                "a restricted cancel found by the last drain does not record the owner for every application");
+            UT_ASSERT(c, t.cancelled_owners.count(QoreCallDispatcher::ownerMarkKey("preserved", restrict_a)) == 1,
+                "a restricted cancel found by the last drain records the owner for its application");
+            t.dbg_hold_after_drain = false;
+            t.dbg_cond.broadcast();
+        }
+        ctrl->start(&xsink);
+        bool processed = !xsink && ctrl->waitForProcessing(5000, &xsink);
+        UT_ASSERT(c, processed && !xsink, "the restarted thread processes its commands (restricted cancel)");
+        xsink.clear();
+        UT_ASSERT(c, canceledResult(*queue_a, xsink),
+            "the kept submission of the canceling application is refused");
+        xsink.clear();
+        UT_ASSERT_EQ(c, 1, ctrl->getCacheSize(), "the kept submission of the other application is admitted");
     }
 
     //! the thread cannot be started again: the kept submission stays where a cancellation finds it

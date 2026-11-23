@@ -9580,7 +9580,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         }
                     }
                     if (record) {
-                        auto& ci = t.cancelled_owners[pending_cmd.owner];
+                        // the record of a restricted cancel is its application's: it refuses only the kept
+                        // submissions of that application, as the command's handler records it
+                        auto& ci = t.cancelled_owners[QoreCallDispatcher::ownerMarkKey(pending_cmd.owner,
+                            pending_cmd.restrict_app)];
                         ci.ttl = 2;
                         if (pending_cmd.seq_at_push > ci.seq) {
                             ci.seq = pending_cmd.seq_at_push;
