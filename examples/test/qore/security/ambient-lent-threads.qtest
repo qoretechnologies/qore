@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AwsRestClient
+%requires GcpAuth
+%requires ./ambient-host/AmbientCallers.qm
+
+%exec-class AmbientLentThreadsTest
+
+#! A thread that a method of a lent object starts resolves no host credentials for a borrower that may not receive
+#! them (qore#6844)
+/** The method's own code is checked against the borrower (a lent object lends nothing to the host's credentials); so
+    is the code of a thread or thread-pool task that the method starts for the borrower
+*/
+class AmbientLentThreadsTest inherits QUnit::Test {
+    public {
+        #! the code of the Programs: each function reports what it gets, or the error it gets
+        const Source = "%modern
+%requires AmbientCallers
+auto sub call(object lent, string how, *string cls, string name, *softlist<auto> args) {
+    switch (how) {
+        case \"direct\": return lent.direct(cls, name, args);
+        case \"thread\": return lent.inThread(cls, name, args);
+        case \"pool\": return lent.inPool(cls, name, args);
+    }
+}
+";
+    }
+
+    private {
+        hash<string, Program> pgms;
+        AmbientCallers::FakeMetadataServer mds();
+    }
+
+    constructor() : Test("AmbientLentThreads", "1.0", \ARGV) {
+        addTestCase("AWS environment credentials", \awsTest());
+        addTestCase("GCP metadata server", \gcpTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        pgms = AmbientCallers::make_programs(Source, "lent-threads");
+    }
+
+    awsTest() {
+        AmbientCallers::EnvHelper env({
+            "AWS_ACCESS_KEY_ID": "HOSTKEYID",
+            "AWS_SECRET_ACCESS_KEY": "host-secret",
+        });
+        AmbientCallers::LentWorker lent();
+        foreach string kind in (keys pgms) {
+            foreach string how in (("direct", "thread", "pool")) {
+                auto v = pgms{kind}.callFunction("call", lent, how, "AwsRestClient::AwsRestClientBase",
+                    "applyEnvCredentials", ({},));
+                assertEq(AmbientCallers::may_receive(kind) ? "HOSTKEYID" : NOTHING, v.aws_keyid,
+                    kind + ": " + how);
+            }
+        }
+    }
+
+    gcpTest() {
+        AmbientCallers::LentWorker lent();
+        foreach string kind in (keys pgms) {
+            foreach string how in (("direct", "thread", "pool")) {
+                auto v = pgms{kind}.callFunction("call", lent, how, NOTHING,
+                    "GcpAuth::getAccessTokenFromMetadataServer", (("scope-lent",), {"metadata_endpoint": mds.url}));
+                if (AmbientCallers::may_receive(kind)) {
+                    assertEq("host-gcp-token", v, kind + ": " + how);
+                } else {
+                    assertRegex("^GCP-AUTH-ERROR: .*not available to the calling code", v, kind + ": " + how);
+                }
+            }
+        }
+    }
+}

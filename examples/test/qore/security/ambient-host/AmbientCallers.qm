@@ -106,6 +106,44 @@ public namespace AmbientCallers {
         return Capability(cls, name, args);
     }
 
+    #! an object of this module's class that the host creates and lends: its methods run library code for the
+    #! borrower, directly and in threads that they start
+    public class LentWorker {
+        #! calls invoke() in the method
+        public auto direct(*string cls, string name, *softlist<auto> args) {
+            try {
+                return AmbientCallers::invoke(cls, name, args);
+            } catch (hash<ExceptionInfo> ex) {
+                return ex.err + ": " + ex.desc;
+            }
+        }
+
+        #! calls invoke() in a thread that the method starts, and returns its result
+        public auto inThread(*string cls, string name, *softlist<auto> args) {
+            Queue q();
+            background AmbientCallers::LentWorker::run(q, cls, name, args);
+            return q.get();
+        }
+
+        #! calls invoke() in a task of a thread pool that the method creates, and returns its result
+        public auto inPool(*string cls, string name, *softlist<auto> args) {
+            Queue q();
+            ThreadPool tp(1);
+            on_exit tp.stopWait();
+            tp.submit(sub () { AmbientCallers::LentWorker::run(q, cls, name, args); });
+            return q.get();
+        }
+
+        #! runs invoke() and pushes its result or error on \a q
+        static run(Queue q, *string cls, string name, *softlist<auto> args) {
+            try {
+                q.push(AmbientCallers::invoke(cls, name, args));
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex.err + ": " + ex.desc);
+            }
+        }
+    }
+
     #! sets the given environment variables while the returned object exists, and restores them after
     public class EnvHelper {
         private {

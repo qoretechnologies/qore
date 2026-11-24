@@ -2247,6 +2247,7 @@ bool qore_program_private::setThreadInit(const ResolvedCallReferenceNode* n_thr_
         std::swap(thr_init_po.override, po.override);
         // the init code runs for the code that set it, with its restrictions (qore#6844)
         std::swap(thr_init_po.caller_domain_restrictions, po.caller_domain_restrictions);
+        std::swap(thr_init_po.lent_to_domain_restrictions, po.lent_to_domain_restrictions);
         if (scan_holder) {
             scanValuesChangedIntern(program_code_needs_scan(*old), {thr_init});
         }
@@ -4123,6 +4124,7 @@ void qore_program_private::del(ExceptionSink* xsink) {
         std::swap(old_thr_init_po.po, thr_init_po.po);
         std::swap(old_thr_init_po.override, thr_init_po.override);
         std::swap(old_thr_init_po.caller_domain_restrictions, thr_init_po.caller_domain_restrictions);
+        std::swap(old_thr_init_po.lent_to_domain_restrictions, thr_init_po.lent_to_domain_restrictions);
     }
     if (old_thr_init) {
         old_thr_init->deref(xsink);

@@ -1334,6 +1334,10 @@ public:
         those that the worker thread got from the code that started it while the work runs (qore#6844)
     */
     QoreParseOptions caller_restrictions;
+    //! The restrictions of the code that captured the context as qore_caller_lent_to_restricts_domain() sees them: a
+    //! lent object's method lends nothing to them, so the work continued for a borrower is still the borrower's for
+    //! the checks that do not lend (qore#6844)
+    QoreParseOptions lent_to_restrictions;
     //! True for a continuation that the module cleanup hands over (qore_module_cleanup_delegation() in the capturing
     //! thread): it can enter the Programs of the modules while the cleanup has closed them, applied with
     //! QoreModuleCleanupDelegateHelper (see qore_close_module_programs())
@@ -1919,6 +1923,9 @@ struct QoreThreadRuntimeParseOptions {
     QoreCallParseOptionsOverride override;
     //! the functional-domain restrictions of the calling code (see ThreadData::thread_caller_restrictions)
     QoreParseOptions caller_domain_restrictions;
+    //! the restrictions of the calling code as qore_caller_lent_to_restricts_domain() sees them (a lent object's
+    //! method lends nothing to them); set for the steps of an operation of the async I/O controller (qore#6844)
+    QoreParseOptions lent_to_domain_restrictions;
     //! the generation of the work of the capturing code, which the work that runs with the options continues
     //! (runtime_get_thread_generation()); 0 for options made otherwise, which leave the generation in effect (qore#7010)
     uint64_t work_gen = 0;
@@ -1930,7 +1937,8 @@ struct QoreThreadRuntimeParseOptions {
 
     DLLLOCAL QoreThreadRuntimeParseOptions(const QoreThreadRuntimeParseOptions& old) : po(old.po),
             override(old.override), caller_domain_restrictions(old.caller_domain_restrictions),
-            work_gen(old.work_gen), new_work(old.new_work) {
+            lent_to_domain_restrictions(old.lent_to_domain_restrictions), work_gen(old.work_gen),
+            new_work(old.new_work) {
         refPrograms();
     }
 
@@ -1941,6 +1949,7 @@ struct QoreThreadRuntimeParseOptions {
             std::swap(po, copy.po);
             std::swap(override, copy.override);
             std::swap(caller_domain_restrictions, copy.caller_domain_restrictions);
+            std::swap(lent_to_domain_restrictions, copy.lent_to_domain_restrictions);
             std::swap(work_gen, copy.work_gen);
             std::swap(new_work, copy.new_work);
         }
@@ -2014,6 +2023,8 @@ private:
     QoreParseOptions old_caller_restrictions;
     //! their generation (ThreadData::thread_caller_restrictions_gen)
     uint64_t old_caller_restrictions_gen = 0;
+    //! the lent-to restrictions in effect before (ThreadData::thread_lent_to_restrictions)
+    QoreParseOptions old_lent_to_restrictions;
     //! the generation of the work in effect before (see runtime_get_thread_generation())
     uint64_t old_work_gen = 0;
 
@@ -2335,36 +2346,8 @@ DLLLOCAL void qore_append_line_safe_text(QoreString& out, const char* text, size
 */
 DLLLOCAL bool qore_caller_restricts_terminal_io();
 
-//! Returns true if the code that a method of a lent object was lent to is restricted from any of the given domains
-/** As qore_caller_restricts_domain(), but a method of an object that the host lent (a capability frame, qore#7052)
-    lends nothing: the code below it, which the object was lent to, counts, so library code that binds what it does
-    to the target that the object's creator gave (qore#7262) sees the restrictions of the borrower; the host's policy
-    barriers and system-policy capabilities still lend what they lend.  Without a capability frame it answers as
-    qore_caller_restricts_domain(); it never answers less restricted than that
-*/
-DLLLOCAL bool qore_caller_lent_to_restricts_domain(int64 domain);
-
-//! Returns true if the code that calls into the library could read the host's environment and other ambient
-//! information itself (qore#6844)
-/** False if the calling code is restricted from @ref QDOM_EXTERNAL_INFO, as qore_caller_lent_to_restricts_domain()
-    resolves it: a method of an object that the host lent (a capability frame, qore#7052) lends nothing here, so the
-    code that the object was lent to counts, while the host's policy barriers (SandboxManager::callWithSystemPolicy())
-    and system-policy capabilities (SandboxManager::createSystemPolicyCall()) still lend what they lend.  Library code
-    that resolves ambient host data for its caller (environment variables, instance metadata, application default
-    credentials, the process's default credentials) asks it first; fails closed
-*/
-DLLLOCAL bool qore_caller_may_read_external_info();
-
-//! Returns true if the code that calls into the library may receive secrets of the host (qore#6844)
-/** True only if qore_caller_may_read_external_info() is true and the calling code is not sandboxed: no sandboxed
-    %Program is on the way (also one that sandboxed code created, without a manager of its own), no sandbox governs
-    the code, and no object or callback whose code runs was created by sandboxed code.  Under a host grant (the
-    innermost policy barrier of SandboxManager::callWithSystemPolicy() or of a capability of
-    SandboxManager::createSystemPolicyCall()) only the code that runs inside it counts, as for the restrictions of the
-    calling code; a capability frame of a lent object lends nothing.  Fails closed: false if the governing sandbox
-    cannot be resolved for lack of memory
-*/
-DLLLOCAL bool qore_caller_may_receive_host_secrets();
+// qore_caller_lent_to_restricts_domain(), qore_caller_may_read_external_info() and
+// qore_caller_may_receive_host_secrets() are declared in the public header qore/QoreSandboxManager.h
 
 //! returns true if the calling code may have the process load native code that it chose (a binary module from outside
 //! the module path)

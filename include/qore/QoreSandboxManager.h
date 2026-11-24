@@ -1185,6 +1185,50 @@ DLLEXPORT int64 qore_callable_origin_restrictions(const QoreValue v);
 //! defined if qore_caller_restricts_domain() is available
 #define QORE_HAVE_CALLER_RESTRICTS_DOMAIN 1
 
+//! Returns true if the code that a method of a lent object was lent to is restricted from any of the given domains
+/** As qore_caller_restricts_domain(), but a method of an object that the host lent (a capability frame, qore#7052)
+    lends nothing: the code below it, which the object was lent to, counts, so library code that binds what it does
+    to the target that the object's creator gave (qore#7262) sees the restrictions of the borrower; the host's policy
+    barriers and system-policy capabilities still lend what they lend.  Without a capability frame it answers as
+    qore_caller_restricts_domain(); it never answers less restricted than that
+
+    @since %Qore 3.0
+*/
+DLLEXPORT bool qore_caller_lent_to_restricts_domain(int64 domain);
+
+//! Returns true if the code that calls into the library could read the host's environment and other ambient
+//! information itself (qore#6844)
+/** False if the calling code is restricted from @ref QDOM_EXTERNAL_INFO, as qore_caller_lent_to_restricts_domain()
+    resolves it: a method of an object that the host lent (a capability frame, qore#7052) lends nothing here, so the
+    code that the object was lent to counts, while the host's policy barriers (SandboxManager::callWithSystemPolicy())
+    and system-policy capabilities (SandboxManager::createSystemPolicyCall()) still lend what they lend.  Library code
+    that resolves ambient host data for its caller (environment variables, instance metadata, application default
+    credentials, the process's default credentials) asks it first; fails closed
+
+    @since %Qore 3.0
+*/
+DLLEXPORT bool qore_caller_may_read_external_info();
+
+//! Returns true if the code that calls into the library may receive secrets of the host (qore#6844)
+/** True only if qore_caller_may_read_external_info() is true and the calling code is not sandboxed: no sandboxed
+    %Program is on the way (also one that sandboxed code created, without a manager of its own), no sandbox governs
+    the code, and no object or callback whose code runs was created by sandboxed code.  Under a host grant (the
+    innermost policy barrier of SandboxManager::callWithSystemPolicy() or of a capability of
+    SandboxManager::createSystemPolicyCall()) only the code that runs inside it counts, as for the restrictions of the
+    calling code; a capability frame of a lent object lends nothing.  Fails closed: false if the governing sandbox
+    cannot be resolved for lack of memory
+
+    Library code that resolves a credential of the host for its caller (an ambient credential: from the environment,
+    an instance metadata service, the process's default Kerberos credential or a host credential store) asks it first
+
+    @since %Qore 3.0
+*/
+DLLEXPORT bool qore_caller_may_receive_host_secrets();
+
+//! defined if qore_caller_lent_to_restricts_domain(), qore_caller_may_read_external_info() and
+//! qore_caller_may_receive_host_secrets() are available
+#define QORE_HAVE_CALLER_AMBIENT_PREDICATES 1
+
 //! Refuses a change to a process-wide registry of callbacks, hooks, handlers or listeners by sandboxed code
 /** A registry that a module or the library keeps for the whole process is shared by the code of every Program, and
     what it holds is run or used later for every caller, also for the code of other sandboxes and for trusted code.

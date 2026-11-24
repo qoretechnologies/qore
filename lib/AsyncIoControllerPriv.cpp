@@ -2390,7 +2390,7 @@ AsyncIoSandboxContext capture_async_io_sandbox_context() {
     // also only the isolation of a trusted build that submits the operation (qore#6536), and the restrictions of the
     // capturing code alone, which the step runs with (qore#6844)
     if (ctx->manager || ctx->policy_manager || ctx->module_cleanup_delegate || ctx->isolation
-            || ctx->caller_restrictions || ctx->origin_sandboxed) {
+            || ctx->caller_restrictions || ctx->lent_to_restrictions || ctx->origin_sandboxed) {
         return ctx;
     }
     return AsyncIoSandboxContext();
@@ -3560,10 +3560,12 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         }
         // a step runs for the code that submitted the operation: its caller restrictions replace those of the code
         // that started the worker (empty: workers are started without inheriting them) (qore#6844)
+        // (and as the checks that a lent object's method does not lend see them: the borrower's)
         const bool submitter_restrictions = async_item.sandbox_ctx
-            && async_item.sandbox_ctx->caller_restrictions;
+            && (async_item.sandbox_ctx->caller_restrictions || async_item.sandbox_ctx->lent_to_restrictions);
         if (submitter_restrictions) {
             item_po.caller_domain_restrictions = async_item.sandbox_ctx->caller_restrictions;
+            item_po.lent_to_domain_restrictions = async_item.sandbox_ctx->lent_to_restrictions;
         }
         // the item is work of the code that submitted the operation or added the timer, whose generation its context
         // carries, or else work of its own: a worker does not share one generation between the work of different

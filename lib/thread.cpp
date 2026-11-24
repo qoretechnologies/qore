@@ -1016,7 +1016,12 @@ public:
         uint64_t gen;
         //! the nesting depth of the helper that saved them (capture_depth)
         size_t depth;
+        //! the lent-to restrictions in effect before (thread_lent_to_restrictions)
+        QoreParseOptions lent_to;
     };
+    //! the lent-to restrictions of the code that submitted the work that an active QoreSandboxCaptureHelper runs, with
+    //! the generation of thread_caller_restrictions (see QoreSandboxContext::lent_to_restrictions; qore#6844)
+    QoreParseOptions thread_lent_to_restrictions;
     std::vector<CaptureSavedRestrictions> capture_saved_caller_restrictions;
     //! the number of active QoreSandboxCaptureHelper objects on the thread; a helper whose entry could not be saved
     //! (std::bad_alloc) has none at its depth: it added the capture's restrictions to those in effect instead of
@@ -8367,17 +8372,43 @@ bool qore_caller_restricts_domain(int64 domain) {
     the host's innermost policy barrier (or to the module initialization barrier), which include the borrower's, so the
     result is never less restricted than qore_get_calling_code_restrictions() (qore#7262)
 */
+static const QoreProgram* qore_get_nearest_non_module_program(ThreadData* td,
+        const ThreadData::ModuleInitBarrier* mib);
+
+//! returns the lent-to restrictions of the code that submitted the work that the thread runs for it (qore#6844)
+/** Work continued on another thread (QoreSandboxCaptureHelper) runs with the calling code's restrictions of its
+    submitter, in which a lent object's method lends what it lends; for the checks that do not lend, the submitter's
+    lent-to restrictions count as well, where the submitter's restrictions count: when no code of a Program that is not
+    a module's is on the stack, and not under a host grant established inside the work
+*/
+static QoreParseOptions qore_get_captured_lent_to_restrictions(ThreadData* td,
+        const ThreadData::ModuleInitBarrier* mib) {
+    if (mib || !td->thread_lent_to_restrictions.hasAny(qore_restricting_domain_options())) {
+        return QoreParseOptions();
+    }
+    if (!td->sandbox_policy_barrier_snapshots.empty()
+            && td->sandbox_policy_barrier_snapshots.back().thread_caller_restrictions_gen
+                == td->thread_caller_restrictions_gen) {
+        return QoreParseOptions();
+    }
+    if (qore_get_nearest_non_module_program(td, mib)) {
+        return QoreParseOptions();
+    }
+    return td->thread_lent_to_restrictions & qore_restricting_domain_options();
+}
+
 static QoreParseOptions qore_get_lent_to_restrictions(ThreadData* td) {
     const ThreadData::ModuleInitBarrier* mib = qore_get_caller_module_init_barrier(td);
     assert(td->sandbox_policy_barrier_snapshots.size() == td->sandbox_policy_barrier_ctx.size());
+    const QoreParseOptions captured = qore_get_captured_lent_to_restrictions(td, mib);
     if (td->sandbox_policy_barrier_ctx.empty()) {
-        return qore_get_calling_code_restrictions_intern(td, mib, nullptr, nullptr, true);
+        return qore_get_calling_code_restrictions_intern(td, mib, nullptr, nullptr, true) | captured;
     }
     // the host's policy barrier (also of a system-policy capability) lends what it lends, as for the calling code
     const QoreParseOptions lent = QoreParseOptions(QORE_GRANT_LENT_DOMAINS);
     return (qore_get_calling_code_restrictions_intern(td, mib, &td->sandbox_policy_barrier_snapshots.back(),
             td->sandbox_policy_barrier_ctx.back(), true) & lent)
-        | (qore_get_calling_code_restrictions_intern(td, mib, nullptr, nullptr, true) & ~lent);
+        | (qore_get_calling_code_restrictions_intern(td, mib, nullptr, nullptr, true) & ~lent) | captured;
 }
 
 bool qore_caller_lent_to_restricts_domain(int64 domain) {
@@ -9157,6 +9188,7 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
         in_build = td->sandbox_budgets.inBuild();
         // the work that continues on another thread runs for the capturing code (qore#6844)
         caller_restrictions = qore_get_calling_code_restrictions(td);
+        lent_to_restrictions = qore_get_lent_to_restrictions(td);
         // and continues its work (qore#7010)
         work_gen = td->work_gen;
     }
@@ -9195,6 +9227,7 @@ QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, ModuleClea
         isolation->ref();
     }
     caller_restrictions = src->caller_restrictions;
+    lent_to_restrictions = src->lent_to_restrictions;
     // the steps of the operation are still raised for its submitter (qore#7232)
     origin_sandboxed = src->origin_sandboxed;
     origin_pgm_id = src->origin_pgm_id;
@@ -9601,11 +9634,13 @@ QoreSandboxCaptureHelper::QoreSandboxCaptureHelper(const QoreSandboxCapture& cap
         size_t depth = ++td->capture_depth;
         try {
             td->capture_saved_caller_restrictions.push_back({td->thread_caller_restrictions,
-                td->thread_caller_restrictions_gen, depth});
+                td->thread_caller_restrictions_gen, depth, td->thread_lent_to_restrictions});
             td->thread_caller_restrictions = capture.ctx->caller_restrictions;
+            td->thread_lent_to_restrictions = capture.ctx->lent_to_restrictions;
         } catch (std::bad_alloc&) {
             // not saved: the restrictions of the capture are added to those in effect (fail closed)
             td->thread_caller_restrictions |= capture.ctx->caller_restrictions;
+            td->thread_lent_to_restrictions |= capture.ctx->lent_to_restrictions;
         }
         td->thread_caller_restrictions_gen = ++td->restriction_gen;
         // an unsandboxed submitter's work runs as on a thread it started: governed by the Programs it enters only
@@ -9750,6 +9785,7 @@ QoreSandboxCaptureHelper::~QoreSandboxCaptureHelper() {
                 && td->capture_saved_caller_restrictions.back().depth == td->capture_depth) {
             td->thread_caller_restrictions = td->capture_saved_caller_restrictions.back().restrictions;
             td->thread_caller_restrictions_gen = td->capture_saved_caller_restrictions.back().gen;
+            td->thread_lent_to_restrictions = td->capture_saved_caller_restrictions.back().lent_to;
             td->capture_saved_caller_restrictions.pop_back();
         }
         --td->capture_depth;
@@ -10715,6 +10751,9 @@ QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::capture() {
     // runs for that code (qore#6520); one that trusted code starts in a host grant does not run for the code that
     // established it in the lent domains
     rv.caller_domain_restrictions = qore_get_calling_code_restrictions(td, false);
+    // and as the checks that a lent object's method does not lend see them: a thread that such a method starts runs
+    // for the borrower there (qore#6844)
+    rv.lent_to_domain_restrictions = qore_get_lent_to_restrictions(td);
     // the work that runs with the options continues the work of the capturing code (qore#7010)
     rv.work_gen = td->work_gen;
     rv.refPrograms();
@@ -10738,6 +10777,9 @@ QoreThreadRuntimeParseOptionsHelper::QoreThreadRuntimeParseOptionsHelper(const Q
     old_caller_restrictions_gen = td->thread_caller_restrictions_gen;
     td->thread_caller_restrictions = o->caller_domain_restrictions;
     td->thread_caller_restrictions_gen = ++td->restriction_gen;
+    // and as the checks that a lent object's method does not lend see them (qore#6844)
+    old_lent_to_restrictions = td->thread_lent_to_restrictions;
+    td->thread_lent_to_restrictions = o->lent_to_domain_restrictions;
     // the generation of the work: that of the capturing code, a new one for work of its own (qore#7010)
     old_work_gen = td->work_gen;
     if (o->work_gen) {
@@ -10751,6 +10793,7 @@ void QoreThreadRuntimeParseOptionsHelper::restoreCallerRestrictions() {
     ThreadData* td = thread_data.get();
     td->thread_caller_restrictions = old_caller_restrictions;
     td->thread_caller_restrictions_gen = old_caller_restrictions_gen;
+    td->thread_lent_to_restrictions = old_lent_to_restrictions;
     td->work_gen = old_work_gen;
 }
 
