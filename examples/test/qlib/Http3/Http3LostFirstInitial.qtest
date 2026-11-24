@@ -317,6 +317,10 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     private list<string> checkStallDiagnostic(CaptureAppender capture) {
+        # the request is cancelled once nothing is in flight, which only a DEBUG build can tell
+        if (!existsFunction("dbg_quic_wait_all_idle")) {
+            testSkip("dbg_quic_wait_all_idle() needs a DEBUG build");
+        }
         RestClientIo rc({"url": mUrl, "protocol": "h3", "ssl_verify_cert": False, "data": "json",
             "timeout": HangGuard});
         # the connection is made first: the request is then all that is on it

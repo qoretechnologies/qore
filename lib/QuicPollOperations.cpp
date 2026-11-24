@@ -835,7 +835,10 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     }
 }
 
-SocketQuicClientPollOperation::~SocketQuicClientPollOperation() = default;
+SocketQuicClientPollOperation::~SocketQuicClientPollOperation() {
+    // the argument of a QUIC connection error holds plain values only
+    race_arg_.discard(nullptr);
+}
 
 QoreHashNode* SocketQuicClientPollOperation::getResolverPollInfo(ExceptionSink* xsink) const {
     std::vector<std::pair<int, int>> extra_fds;
@@ -1315,6 +1318,9 @@ void SocketQuicClientPollOperation::recordRaceError(ExceptionSink& ax, int famil
         new_err = err->empty() ? "QUIC-ERROR" : err->c_str();
         new_desc = desc->c_str();
     }
+    // the argument is kept with the error: a refused certificate is told apart from a failed connection by its
+    // ssl_verify_error, so a caller does not retry a connection that would be refused again
+    ValueHolder new_arg(ax.getExceptionArg().refSelf(), nullptr);
     ax.clear();
     // the handshake of a failed attempt never completed: a completed one wins the race
     bool unreached = quic_is_unreached_error(new_err.c_str(), false);
@@ -1323,6 +1329,8 @@ void SocketQuicClientPollOperation::recordRaceError(ExceptionSink& ax, int famil
     if (race_err_.empty() || !unreached || race_err_unreached_) {
         race_err_ = std::move(new_err);
         race_desc_ = std::move(new_desc);
+        race_arg_.discard(nullptr);
+        race_arg_ = new_arg.release();
         race_err_unreached_ = unreached;
         race_err_family_ = family;
     }
@@ -1339,7 +1347,9 @@ void SocketQuicClientPollOperation::failRace(ExceptionSink* xsink) {
             static_cast<unsigned>(port_));
         return;
     }
-    xsink->raiseException(race_err_.c_str(), "%s", race_desc_.c_str());
+    QoreValue arg = race_arg_;
+    race_arg_ = QoreValue();
+    xsink->raiseExceptionArg(race_err_.c_str(), arg, new QoreStringNode(race_desc_));
 }
 
 QoreHashNode* SocketQuicClientPollOperation::getRacePollInfo(ExceptionSink* xsink) const {
