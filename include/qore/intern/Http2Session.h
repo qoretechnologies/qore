@@ -58,6 +58,7 @@ class QoreIoUring;
 #include <vector>
 
 #include "qore/intern/WebSocketCloseRecord.h"
+#include "qore/intern/SendRateWindow.h"
 
 // Forward declarations
 class SocketRecvSomePollState;
@@ -1318,6 +1319,8 @@ private:
     //! the bytes of each stream's buffered data that nghttp2 has taken so far (never decreases; erased with the
     //! stream): the progress that a sender waiting for the buffer to drain measures (issue #6968)
     std::unordered_map<int32_t, uint64_t> stream_taken_total;
+    //! the bytes that the connection has taken on all its streams, which never decreases (qore#7280)
+    uint64_t conn_taken_total = 0;
     //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
     std::unordered_map<int32_t, size_t> deferred_stream_credit;
 
@@ -1454,6 +1457,13 @@ private:
         std::unique_ptr<char[]> pending_iouring_buf;
         //! Length of data in pending_iouring_buf
         size_t pending_iouring_len = 0;
+        //! the stream's taken bytes when its body last made progress, and the time of it on the monotonic clock in ms,
+        //! for the no-progress bound of the body (qore#7280)
+        int64_t bound_taken = -1;
+        int64_t bound_progress_ms = 0;
+        //! true while the InputStream itself has no data ready (a non-blocking read would block): the body then waits
+        //! for its source, not for the client (qore#7280)
+        bool source_waiting = false;
         //! A chunk read on the other paths that the stream's send limit refused, sent before anything more is read
         //! (qore#7460)
         SimpleRefHolder<BinaryNode> retained_chunk;
@@ -1496,6 +1506,19 @@ private:
 
     std::unordered_map<int32_t, StreamInputStreamInfo> stream_input_streams_;
 
+    //! the minimum send rate of the connection's pumped bodies, across its streams (qore#7280)
+    SendRateWindow pump_send_rate;
+    //! the no-progress bound of a pumped body in milliseconds
+    int64_t pump_stall_ms = 30 * 60 * 1000;
+    //! true once the bounds of the pumped bodies have been set
+    bool pump_bound_set = false;
+
+    //! Checks the bounds of the pumped bodies; the bodies of a client below them are ended (qore#7280)
+    DLLLOCAL void checkInputStreamSendBound();
+
+    //! Returns true if a pumped body waits for its client: it has not ended, and its source is not what it waits for
+    DLLLOCAL bool isInputStreamWaiting(const StreamInputStreamInfo& info) const;
+
     //! Atomic flag for lock-free hasActiveStreamInputStreams() checks in the I/O hot path
     std::atomic<bool> has_active_input_streams_{false};
 
@@ -1534,6 +1557,21 @@ public:
     DLLLOCAL bool hasActiveStreamInputStreams() const {
         return has_active_input_streams_.load(std::memory_order_acquire);
     }
+
+    //! Sets the bounds of the response bodies that the I/O thread sends from InputStreams (qore#7280)
+    /** @param min_rate the minimum rate in bytes per second at which the connection's client must take the data of
+        all its streams together while one of them waits for it; 0 disables the check
+        @param window_ms the window of the minimum rate in milliseconds
+        @param stall_ms the time in milliseconds after which a body that the client takes nothing of is ended
+
+        The bounds of a connection are set once, with its first such body; later calls are ignored.
+    */
+    DLLLOCAL void setInputStreamSendBound(int64_t min_rate, int64_t window_ms, int64_t stall_ms);
+
+    //! Returns the time in milliseconds after which the bounds of the pumped bodies must be checked, or -1
+    /** A connection with a body waiting for its client is checked without a socket event (qore#7280)
+    */
+    DLLLOCAL int getInputStreamPollTimeoutMs() const;
 
     //! Returns true if a pass of processStreamInputStreams() can make progress without a socket event (qore#7435)
     /** A stream whose send buffer is full waits for the peer's credit, which arrives as a frame (a read event); one

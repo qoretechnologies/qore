@@ -3144,6 +3144,17 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                     }
                     if (poll_info) {
                         setPollTimeoutFromExpiry(poll_info, min_expiry, xsink);
+                        // a connection with a pumped body waiting for its client is checked in time (qore#7280)
+                        for (auto& entry : sessions_) {
+                            int ms = entry.second->getInputStreamPollTimeoutMs();
+                            if (ms < 0) {
+                                continue;
+                            }
+                            QoreValue ptv = poll_info->getKeyValue("poll_timeout_ms");
+                            if (ptv.isNullOrNothing() || ptv.getAsBigInt() > ms) {
+                                poll_info->setKeyValue("poll_timeout_ms", static_cast<int64_t>(ms), xsink);
+                            }
+                        }
                         // If there are non-pollable active InputStreams (no extra
                         // fds to watch), use a small poll timeout so the I/O thread
                         // reads from them periodically without busy-looping.

@@ -1131,7 +1131,15 @@ public:
         DatagramSupported,
         FirstSessionStreamAcked,
         StreamAcked,
+        SetInputStreamSendBound,
     };
+
+    //! Sets the bounds that the SetInputStreamSendBound action applies (qore#7280)
+    DLLLOCAL void setSendBound(int64_t n_min_rate, int64_t n_window_ms, int64_t n_stall_ms) {
+        min_rate = n_min_rate;
+        window_ms = n_window_ms;
+        stall_ms = n_stall_ms;
+    }
 
     DLLLOCAL QoreSocketObjectQuicQueryPollOperation(QoreSocketObject* sock, Action action,
             int64_t session_id = 0, int64_t stream_id = 0)
@@ -1218,6 +1226,15 @@ public:
             case Action::StreamAcked:
                 setStreamAcked();
                 break;
+
+            case Action::SetInputStreamSendBound: {
+                std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(sock, session_id);
+                if (session) {
+                    session->setInputStreamSendBound(min_rate, window_ms, stall_ms);
+                }
+                output = (bool)session;
+                break;
+            }
         }
 
         if (*xsink) {
@@ -1237,6 +1254,11 @@ public:
     }
 
 private:
+    //! the bounds that SetInputStreamSendBound applies
+    int64_t min_rate = 0;
+    int64_t window_ms = 0;
+    int64_t stall_ms = 0;
+
     DLLLOCAL QoreValue defaultValue() const {
         switch (action) {
             case Action::FirstSessionClosed:
@@ -1247,6 +1269,7 @@ private:
                 return 0;
             case Action::GoawayReceived:
             case Action::DatagramSupported:
+            case Action::SetInputStreamSendBound:
                 return false;
             case Action::GoawayState:
             case Action::PeerCertificate:
@@ -7240,6 +7263,17 @@ int QoreSocketObject::waitForQuicClientStreamDrain(int64_t stream_id, int timeou
         owner_name.c_str(), xsink);
 }
 
+int qore_socket_object_h2_set_input_stream_send_bound(QoreSocketObject* s, int64_t min_rate, int64_t window_ms,
+        int64_t stall_ms, ExceptionSink* xsink) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(s);
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+    h2->setInputStreamSendBound(min_rate, window_ms, stall_ms);
+    return 0;
+}
+
 int64_t qore_socket_object_h2_stream_taken(QoreSocketObject* s, int64_t stream_id, ExceptionSink* xsink) {
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(s);
     if (!h2) {
@@ -7268,6 +7302,22 @@ int64_t qore_socket_object_quic_client_stream_acked(QoreSocketObject* s, int64_t
         return -1;
     }
     return rv->getAsBigInt();
+}
+
+int qore_socket_object_quic_set_input_stream_send_bound(QoreSocketObject* s, int64_t session_id, int64_t min_rate,
+        int64_t window_ms, int64_t stall_ms, ExceptionSink* xsink) {
+    QoreSocketObjectQuicQueryPollOperation* op = new QoreSocketObjectQuicQueryPollOperation(s,
+        QoreSocketObjectQuicQueryPollOperation::Action::SetInputStreamSendBound, session_id, 0);
+    op->setSendBound(min_rate, window_ms, stall_ms);
+    ValueHolder rv(qore_socket_object_exec_quic_query(s, op, "setQuicInputStreamSendBound", xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (!rv->getAsBool()) {
+        xsink->raiseException("QUIC-SESSION-ERROR", "no QUIC session %lld", (long long)session_id);
+        return -1;
+    }
+    return 0;
 }
 
 int64_t qore_socket_object_quic_stream_acked(QoreSocketObject* s, int64_t session_id, int64_t stream_id,

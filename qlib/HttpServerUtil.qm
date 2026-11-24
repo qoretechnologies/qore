@@ -1303,9 +1303,10 @@ public hashdecl HttpListenerOptionInfo {
         client with many concurrent streams on one slow connection shares that connection's rate among them; a listener
         that serves such clients may need a lower value.  The default is
         @ref HttpServer::DefaultStreamSendMinRate "DefaultStreamSendMinRate" (1 KiB/s).  It applies to a response
-        body that the HTTP/1 controller sends. On HTTP/2 and HTTP/3 it applies to a body that a handler thread
-        sends; a body from an @ref Qore::InputStream "InputStream" that the I/O thread
-        pumps directly holds no thread and is not checked.
+        body that the HTTP/1 controller sends.  On HTTP/2 and HTTP/3 it applies to a body that a handler thread
+        sends, for each stream, and to a body that the I/O thread sends from an @ref Qore::InputStream "InputStream",
+        for the connection: the bodies that wait for a client whose streams together take less are ended, and so is
+        one that the client takes nothing of for @ref HttpServer::StreamStallTimeout "StreamStallTimeout".
 
         @since HttpServerUtil 1.6
     */

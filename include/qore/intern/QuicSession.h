@@ -35,6 +35,7 @@
 #include "qore/common.h"
 #include "qore/intern/QuicCommon.h"
 #include "qore/intern/QoreHttpHeaderPairs.h"
+#include "qore/intern/SendRateWindow.h"
 #include <qore/InputStream.h>
 #include <qore/QoreQueue.h>  // includes Queue class (AbstractPrivateData + QoreQueue)
 
@@ -1537,6 +1538,10 @@ public:
         bool is_pollable = false;
         bool need_reassign = true;
         bool eof = false;
+        //! the stream's acknowledged bytes when its body last made progress, and the time of it on the monotonic
+        //! clock in ms, for the no-progress bound of the body (qore#7280)
+        int64_t bound_acked = -1;
+        int64_t bound_progress_ms = 0;
         //! A regular file, which is always ready: it is not waited for (see getExtraFds()), as in Http2Session
         bool is_regular_file = false;
 
@@ -1568,6 +1573,19 @@ public:
         @since %Qore 3.0
     */
     DLLLOCAL void processStreamInputStreams(ExceptionSink* xsink);
+
+    //! Sets the bounds of the response bodies that the I/O thread sends from InputStreams (qore#7280)
+    /** @param min_rate the minimum rate in bytes per second at which the connection's client must take the data of
+        all its streams together while one of them waits for it; 0 disables the check
+        @param window_ms the window of the minimum rate in milliseconds
+        @param stall_ms the time in milliseconds after which a body that the client acknowledges nothing of is ended
+
+        The bounds of a connection are set once, with its first such body; later calls are ignored.
+    */
+    DLLLOCAL void setInputStreamSendBound(int64_t min_rate, int64_t window_ms, int64_t stall_ms);
+
+    //! Returns the time in milliseconds after which the bounds of the pumped bodies must be checked, or -1
+    DLLLOCAL int getInputStreamPollTimeoutMs() const;
 
     //! Reads and sends the next chunk of one stream's InputStream; an error is the stream's alone (qore#7434)
     DLLLOCAL void processStreamInputStream(int64_t stream_id, StreamInputStreamInfo& info, ExceptionSink* xsink);
@@ -2248,6 +2266,20 @@ private:
     /** @since %Qore 3.0
     */
     std::unordered_map<int64_t, StreamInputStreamInfo> stream_input_streams_;
+    //! the bytes that the client has acknowledged on all its streams, which never decreases (qore#7280)
+    uint64_t conn_acked_total_ = 0;
+    //! the minimum send rate of the connection's pumped bodies, across its streams (qore#7280)
+    SendRateWindow pump_send_rate_;
+    //! the no-progress bound of a pumped body in milliseconds
+    int64_t pump_stall_ms_ = 30 * 60 * 1000;
+    //! true once the bounds of the pumped bodies have been set
+    bool pump_bound_set_ = false;
+
+    //! Checks the bounds of the pumped bodies; the bodies of a client below them are ended (qore#7280)
+    DLLLOCAL void checkInputStreamSendBound();
+
+    //! Returns true if a pumped body has data that its client has not acknowledged
+    DLLLOCAL bool isInputStreamWaiting(int64_t stream_id) const;
 
     //! Atomic flag for lock-free hasActiveStreamInputStreams() checks in the I/O hot path
     std::atomic<bool> has_active_input_streams_{false};

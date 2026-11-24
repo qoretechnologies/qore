@@ -29,6 +29,7 @@
     information.
 */
 
+#include <climits>
 #include <qore/Qore.h>
 #include <qore/QoreAbstractLoggerInterface.h>
 #include <qore/QoreSSLCertificate.h>
@@ -7385,6 +7386,7 @@ int QuicSession::h3AckedStreamDataCallback(nghttp3_conn* /* conn */, int64_t str
         auto& sbd = sit->second;
         sbd.front_acked += datalen;
         sbd.acked_total += datalen;
+        session->conn_acked_total_ += datalen;
         bool released = false;
         while (!sbd.sent_bufs.empty() && sbd.front_acked >= sbd.sent_bufs.front().size()) {
             sbd.front_acked -= sbd.sent_bufs.front().size();
@@ -7464,9 +7466,119 @@ bool QuicSession::hasActiveStreamInputStreams() const {
     return has_active_input_streams_.load(std::memory_order_acquire);
 }
 
+void QuicSession::setInputStreamSendBound(int64_t min_rate, int64_t window_ms, int64_t stall_ms) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (pump_bound_set_) {
+        return;
+    }
+    pump_bound_set_ = true;
+    if (min_rate > 0 && window_ms > 0) {
+        pump_send_rate_ = SendRateWindow(min_rate, window_ms);
+        // acknowledgements come in steps of the client's flow-control window; the I/O thread checks at least every
+        // check interval, so a longer time between checks is its own delay
+        pump_send_rate_.enableProgressSteps();
+        pump_send_rate_.setMaxWaitCharge(2 * pump_send_rate_.getCheckIntervalMs());
+    }
+    if (stall_ms > 0) {
+        pump_stall_ms_ = stall_ms;
+    }
+}
+
+bool QuicSession::isInputStreamWaiting(int64_t stream_id) const {
+    auto it = streaming_body_data_.find(stream_id);
+    return it != streaming_body_data_.end() && (!it->second.data.empty() || !it->second.sent_bufs.empty());
+}
+
+int QuicSession::getInputStreamPollTimeoutMs() const {
+    // no lock on the I/O thread's hot path without a pumped body
+    if (!hasActiveStreamInputStreams()) {
+        return -1;
+    }
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (!pump_bound_set_) {
+        return -1;
+    }
+    int64_t now = q_clock_getmicros_monotonic() / 1000;
+    int64_t rv = -1;
+    for (auto& [stream_id, info] : stream_input_streams_) {
+        if (info.eof || !isInputStreamWaiting(stream_id)) {
+            continue;
+        }
+        // a body that waits but was not seen yet is seen at the next check, not a whole stall time later
+        int64_t t = info.bound_progress_ms ? info.bound_progress_ms + pump_stall_ms_ - now : 1;
+        if (pump_send_rate_.enabled() && pump_send_rate_.getCheckIntervalMs() < t) {
+            t = pump_send_rate_.getCheckIntervalMs();
+        }
+        if (rv < 0 || t < rv) {
+            rv = t;
+        }
+    }
+    if (rv < 0) {
+        return -1;
+    }
+    return rv < 1 ? 1 : (rv > INT_MAX ? INT_MAX : static_cast<int>(rv));
+}
+
+void QuicSession::checkInputStreamSendBound() {
+    if (!pump_bound_set_) {
+        return;
+    }
+    int64_t now = q_clock_getmicros_monotonic() / 1000;
+    bool waiting = false;
+    // the streams whose bodies end, which are cancelled after the iteration
+    std::vector<int64_t> ended;
+    for (auto& [stream_id, info] : stream_input_streams_) {
+        if (info.eof) {
+            continue;
+        }
+        if (!isInputStreamWaiting(stream_id)) {
+            info.bound_progress_ms = 0;
+            continue;
+        }
+        waiting = true;
+        auto it = streaming_body_data_.find(stream_id);
+        int64_t acked = it == streaming_body_data_.end() ? 0 : static_cast<int64_t>(it->second.acked_total);
+        if (!info.bound_progress_ms || acked > info.bound_acked) {
+            info.bound_acked = acked;
+            info.bound_progress_ms = now;
+            continue;
+        }
+        if (now - info.bound_progress_ms >= pump_stall_ms_) {
+            qore_async_io_log(QORE_LOG_LEVEL_WARN, "QUIC: session %lld: HTTP/3 response body on stream %lld ended: "
+                "the client acknowledged no data for %lld ms", (long long)session_id_, (long long)stream_id,
+                (long long)(now - info.bound_progress_ms));
+            info.eof = true;
+            ended.push_back(stream_id);
+        }
+    }
+    // the minimum rate of the connection, across its streams, while a body waits for the client
+    if (pump_send_rate_.enabled()
+            && pump_send_rate_.update(static_cast<int64_t>(conn_acked_total_), waiting, now) && waiting) {
+        for (auto& [stream_id, info] : stream_input_streams_) {
+            if (info.eof || !isInputStreamWaiting(stream_id)) {
+                continue;
+            }
+            qore_async_io_log(QORE_LOG_LEVEL_WARN, "QUIC: session %lld: HTTP/3 response body on stream %lld ended: "
+                "the client took less than the minimum rate of %lld bytes/s", (long long)session_id_,
+                (long long)stream_id, (long long)pump_send_rate_.getMinRate());
+            info.eof = true;
+            ended.push_back(stream_id);
+        }
+        // the next waits start a new measurement: they are not charged for the ended bodies
+        pump_send_rate_.restart();
+    }
+    for (int64_t stream_id : ended) {
+        ExceptionSink cancel_xsink;
+        cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED, &cancel_xsink);
+        cancel_xsink.clear();
+    }
+}
+
 // errors are the streams' own: none is raised to the caller (qore#7434)
 void QuicSession::processStreamInputStreams(ExceptionSink* /* xsink */) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
+    // the bounds of the bodies are checked first, so that a body that ends is cleaned up in this pass (qore#7280)
+    checkInputStreamSendBound();
     printd(5, "QuicSession::processStreamInputStreams() stream_count=%d\n",
         (int)stream_input_streams_.size());
     for (auto& [stream_id, info] : stream_input_streams_) {
