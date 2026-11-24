@@ -1,0 +1,224 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 keep-alive connections with chunked request bodies over local sockets
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The server frames a request body by its Transfer-Encoding as RFC 9112 sections 6.1 and 6.3 require: the chunked
+    transfer coding is recognized without regard to case and to the whitespace around it, also when the field is
+    given in more than one line, by the handler's reads and by the server's own; a request with both
+    Transfer-Encoding and Content-Length, or whose Transfer-Encoding does not end with the chunked coding, is answered
+    with 400 (Bad Request), and one with another transfer coding with 501 (Not Implemented); the connection is then
+    closed, so that the body is never served as another request.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpServerTransferEncodingFramingTest
+
+#! a handler that reads the request body as the path says
+class FramingHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the paths of the requests served
+        list<string> served = ();
+    }
+
+    private {
+        Mutex m();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        m.lock();
+        served += hdr.path;
+        m.unlock();
+
+        *data b;
+        switch ((hdr.path =~ x/^([^-]+)/)[0]) {
+            case "read":
+                b = getMessageBody(s, hdr, body);
+                break;
+            case "callback":
+                b = "";
+                s.readHTTPChunkedBodyWithCallback(sub (hash<auto> v) {
+                    if (v.data) {
+                        b += v.data;
+                    }
+                }, 5s);
+                break;
+            # "noread" and the other requests do not read a body
+        }
+        return makeResponse(200, sprintf("served %s %d", hdr.path, b.size()), {"Content-Type": "text/plain"});
+    }
+}
+
+class HttpServerTransferEncodingFramingTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        FramingHandler handler();
+        int port;
+
+        #! the paths of the requests, by how the body is read
+        const Paths = ("read", "callback", "noread");
+
+        #! a request in a body that the server must never serve
+        const Inner = "GET /smuggled HTTP/1.1\r\nHost: localhost\r\n\r\n";
+
+        #! Transfer-Encoding fields that give a chunked body
+        const ChunkedFields = {
+            "lower-case": "Transfer-Encoding: chunked\r\n",
+            "mixed-case": "Transfer-Encoding: Chunked\r\n",
+            "trailing-space": "Transfer-Encoding: chunked \r\n",
+            "tab": "Transfer-Encoding:\tchunked\r\n",
+            "empty-element": "Transfer-Encoding: , chunked\r\n",
+            "two-lines": "Transfer-Encoding: \r\nTransfer-Encoding: chunked\r\n",
+        };
+    }
+
+    constructor() : Test("HttpServerTransferEncodingFramingTest", "1.0") {
+        addTestCase("chunked request bodies", \chunkedTest());
+        addTestCase("requests that are refused", \invalidTest());
+        addTestCase("an HTTP/1.0 request with a chunked body", \http10Test());
+
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelFatal()),
+        });
+        on_exit delete server;
+        server.setDefaultHandler("framing", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"service": 0, "node": "127.0.0.1"}).port;
+        server.waitForAsyncIo();
+        set_return_value(main());
+    }
+
+    chunkedTest() {
+        string body = sprintf("%x\r\n%s\r\n0\r\n\r\n", Inner.size(), Inner);
+        foreach hash<auto> i in (ChunkedFields.pairIterator()) {
+            foreach string path in (Paths) {
+                string label = sprintf("%s %s", path, i.key);
+                string req = sprintf("%s-%s", path, i.key);
+                Socket c = connect();
+                on_exit c.close();
+                c.send(sprintf("POST /%s HTTP/1.1\r\nHost: localhost\r\n%s\r\n", req, i.value) + body
+                    + "GET /after HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                hash<auto> resp = readResponse(c);
+                assertEq(200, resp.status_code, label);
+                if (path != "noread") {
+                    assertEq(sprintf("served %s %d", req, Inner.size()), resp.body, label);
+                }
+                assertNeq("close", resp.connection, label);
+                # the request after the body is served on the same connection
+                resp = readResponse(c);
+                assertEq("served after 0", resp.body, label);
+                assertFalse(inlist("smuggled", handler.served), label);
+            }
+        }
+    }
+
+    invalidTest() {
+        string chunked_body = sprintf("%x\r\n%s\r\n0\r\n\r\n", Inner.size(), Inner);
+        list<hash<auto>> cases = (
+            {"n": "te-cl", "h": "Transfer-Encoding: chunked\r\nContent-Length: 0\r\n", "b": chunked_body,
+                "c": 400},
+            {"n": "cl-te", "h": "Content-Length: 3\r\nTransfer-Encoding: chunked\r\n", "b": chunked_body,
+                "c": 400},
+            {"n": "cl-full-te", "h": sprintf("Content-Length: %d\r\nTransfer-Encoding: chunked\r\n",
+                chunked_body.size()), "b": chunked_body, "c": 400},
+            {"n": "chunked-not-final", "h": "Transfer-Encoding: chunked, gzip\r\n", "b": chunked_body, "c": 400},
+            {"n": "chunked-twice", "h": "Transfer-Encoding: chunked\r\nTransfer-Encoding: chunked\r\n",
+                "b": chunked_body, "c": 400},
+            {"n": "chunked-parameter", "h": "Transfer-Encoding: chunked;q=1\r\n", "b": chunked_body, "c": 400},
+            {"n": "empty", "h": "Transfer-Encoding: \r\n", "b": Inner, "c": 400},
+            {"n": "gzip-chunked", "h": "Transfer-Encoding: gzip, chunked\r\n", "b": chunked_body, "c": 501},
+            {"n": "gzip-chunked-lines", "h": "Transfer-Encoding: gzip\r\nTransfer-Encoding: chunked\r\n",
+                "b": chunked_body, "c": 501},
+            {"n": "identity", "h": "Transfer-Encoding: identity\r\n", "b": Inner, "c": 501},
+            {"n": "xchunked", "h": "Transfer-Encoding: xchunked\r\n", "b": chunked_body, "c": 501},
+            {"n": "gzip", "h": "Transfer-Encoding: gzip\r\n", "b": Inner, "c": 501},
+        );
+        foreach hash<auto> i in (cases) {
+            foreach string path in (Paths) {
+                string label = sprintf("%s %s", path, i.n);
+                string req = sprintf("%s-%s", path, i.n);
+                Socket c = connect();
+                on_exit c.close();
+                c.send(sprintf("POST /%s HTTP/1.1\r\nHost: localhost\r\n%s\r\n", req, i.h) + i.b
+                    + "GET /after-invalid HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                hash<auto> resp = readResponse(c);
+                assertEq(i.c, resp.status_code, label);
+                assertEq("close", resp.connection, label);
+                *hash<auto> next;
+                try {
+                    next = readResponse(c);
+                } catch (hash<ExceptionInfo> ex) {
+                }
+                assertNothing(next, label);
+                assertFalse(inlist(req, handler.served), label);
+                assertFalse(inlist("smuggled", handler.served), label);
+                assertFalse(inlist("after-invalid", handler.served), label);
+            }
+        }
+        # the server serves other connections
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /other HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served other 0", readResponse(c).body);
+    }
+
+    http10Test() {
+        # the request is served, and the connection is closed after it (RFC 9112 section 6.1)
+        Socket c = connect();
+        on_exit c.close();
+        c.send("POST /read-http10 HTTP/1.0\r\nHost: localhost\r\nConnection: keep-alive\r\n"
+            "Transfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n"
+            "GET /after-http10 HTTP/1.0\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n");
+        hash<auto> resp = readResponse(c);
+        assertEq("served read-http10 5", resp.body);
+        assertEq("close", resp.connection);
+        *hash<auto> next;
+        try {
+            next = readResponse(c);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        assertNothing(next);
+    }
+
+    private Socket connect() {
+        Socket c();
+        c.connect("127.0.0.1:" + port, 10s);
+        return c;
+    }
+
+    #! reads a response with a Content-Length body
+    private static hash<auto> readResponse(Socket c) {
+        hash<auto> resp = c.readHTTPHeader(5s);
+        int len = resp."content-length".toInt();
+        resp.body = len ? c.recv(len, 5s) : "";
+        return resp;
+    }
+}

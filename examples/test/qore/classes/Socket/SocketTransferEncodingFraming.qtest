@@ -1,0 +1,294 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 request and response headers and chunked bodies read from local sockets
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The Transfer-Encoding of an HTTP/1.x message frames its body as every recipient frames it (RFC 9112 sections 6.1
+    and 6.3): the chunked transfer coding is recognized without regard to case and to the whitespace around it, also
+    when the field is given in more than one line, and the field is then given with the value "chunked"; a request
+    with both Transfer-Encoding and Content-Length, or with a Transfer-Encoding whose framing cannot be determined, is
+    refused with SOCKET-HTTP-ERROR, and a message with a transfer coding other than chunked with
+    HTTP-UNSUPPORTED-TRANSFER-CODING.  The HTTP client reads a chunked response in the same way, and does not use the
+    connection again after a response that also has a Content-Length.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+
+%exec-class SocketTransferEncodingFramingTest
+
+#! the header readers
+enum Reader {
+    Header = "header",
+    Poll = "poll",
+    Pipeline = "pipeline",
+}
+
+class SocketTransferEncodingFramingTest inherits QUnit::Test {
+    private {
+        const Readers = (Reader::Header, Reader::Poll, Reader::Pipeline);
+
+        #! Transfer-Encoding fields that give a chunked body
+        const ChunkedFields = (
+            "Transfer-Encoding: chunked\r\n",
+            "Transfer-Encoding: Chunked\r\n",
+            "Transfer-Encoding: CHUNKED\r\n",
+            "Transfer-Encoding: chunked \r\n",
+            "Transfer-Encoding:\tchunked\t\r\n",
+            "Transfer-Encoding: , chunked\r\n",
+            "Transfer-Encoding: \r\nTransfer-Encoding: chunked\r\n",
+        );
+
+        #! request fields that are refused, and the error raised
+        const InvalidRequestFields = {
+            "Transfer-Encoding: chunked\r\nContent-Length: 0\r\n": "SOCKET-HTTP-ERROR",
+            "Content-Length: 3\r\nTransfer-Encoding: chunked\r\n": "SOCKET-HTTP-ERROR",
+            "Transfer-Encoding: chunked, gzip\r\n": "SOCKET-HTTP-ERROR",
+            "Transfer-Encoding: chunked, chunked\r\n": "SOCKET-HTTP-ERROR",
+            "Transfer-Encoding: chunked\r\nTransfer-Encoding: chunked\r\n": "SOCKET-HTTP-ERROR",
+            "Transfer-Encoding: chunked;q=1\r\n": "SOCKET-HTTP-ERROR",
+            "Transfer-Encoding: \r\n": "SOCKET-HTTP-ERROR",
+            "Transfer-Encoding: ,\r\n": "SOCKET-HTTP-ERROR",
+            "Transfer-Encoding: gzip, chunked\r\n": "HTTP-UNSUPPORTED-TRANSFER-CODING",
+            "Transfer-Encoding: gzip\r\nTransfer-Encoding: chunked\r\n": "HTTP-UNSUPPORTED-TRANSFER-CODING",
+            "Transfer-Encoding: gzip\r\n": "HTTP-UNSUPPORTED-TRANSFER-CODING",
+            "Transfer-Encoding: identity\r\n": "HTTP-UNSUPPORTED-TRANSFER-CODING",
+            "Transfer-Encoding: xchunked\r\n": "HTTP-UNSUPPORTED-TRANSFER-CODING",
+        };
+
+        #! a chunked body
+        const Body = "5\r\nhello\r\n0\r\n\r\n";
+
+        #! a message that follows a body
+        const NextRequest = "GET /next HTTP/1.1\r\nHost: localhost\r\n\r\n";
+    }
+
+    constructor() : Test("SocketTransferEncodingFramingTest", "1.0") {
+        addTestCase("request headers with a chunked body", \chunkedRequestTest());
+        addTestCase("request headers that are refused", \invalidRequestTest());
+        addTestCase("response headers", \responseTest());
+        addTestCase("HTTP client responses", \clientTest());
+        set_return_value(main());
+    }
+
+    chunkedRequestTest() {
+        foreach string field in (ChunkedFields) {
+            foreach Reader reader in (Readers) {
+                string label = sprintf("%s: %y", reader, field);
+                hash<auto> client = startClient("POST /body HTTP/1.1\r\nHost: localhost\r\n" + field + "\r\n" + Body
+                    + NextRequest);
+                on_exit client.done.dec();
+                Socket conn = client.server.accept(5s);
+                on_exit conn.close();
+                hash<auto> hdr = readHeader(conn, reader);
+                assertEq("chunked", hdr.headers."transfer-encoding", label);
+                assertEq("chunked", hdr."transfer-encoding", label);
+                assertTrue(conn.pendingHttpChunkedBody(), label);
+                assertEq("hello", conn.readHTTPChunkedBody(5s).body, label);
+                assertEq("/next", readHeader(conn, reader).path, label);
+            }
+        }
+        # an HTTP/1.0 request with a Transfer-Encoding closes the connection after it (RFC 9112 section 6.1)
+        foreach Reader reader in ((Reader::Header, Reader::Poll)) {
+            hash<auto> client = startClient("POST /body HTTP/1.0\r\nHost: localhost\r\nConnection: keep-alive\r\n"
+                "Transfer-Encoding: chunked\r\n\r\n" + Body);
+            on_exit client.done.dec();
+            Socket conn = client.server.accept(5s);
+            on_exit conn.close();
+            hash<auto> info;
+            if (reader == Reader::Header) {
+                conn.readHTTPHeader(5s, \info);
+            } else {
+                AbstractPollOperation op = conn.startPollReadHttpHeader();
+                runPoll(op);
+                info = op.getOutput().info;
+            }
+            assertTrue(info.close, reader);
+        }
+    }
+
+    invalidRequestTest() {
+        foreach hash<auto> i in (InvalidRequestFields.pairIterator()) {
+            foreach Reader reader in (Readers) {
+                string label = sprintf("%s: %y", reader, i.key);
+                hash<auto> client = startClient("POST /body HTTP/1.1\r\nHost: localhost\r\n" + i.key + "\r\n"
+                    + Body + NextRequest);
+                on_exit client.done.dec();
+                Socket conn = client.server.accept(5s);
+                on_exit conn.close();
+                assertThrows(i.value, \readHeader(), (conn, reader), label);
+            }
+        }
+    }
+
+    responseTest() {
+        foreach string field in (ChunkedFields + ("Transfer-Encoding: chunked\r\nContent-Length: 3\r\n",)) {
+            foreach Reader reader in (Readers) {
+                string label = sprintf("%s: %y", reader, field);
+                hash<auto> client = startClient("HTTP/1.1 200 OK\r\n" + field + "\r\n" + Body);
+                on_exit client.done.dec();
+                Socket conn = client.server.accept(5s);
+                on_exit conn.close();
+                hash<auto> hdr = readHeader(conn, reader);
+                assertEq("chunked", hdr.headers."transfer-encoding", label);
+                assertEq("hello", conn.readHTTPChunkedBody(5s).body, label);
+            }
+        }
+        foreach string field in (("Transfer-Encoding: gzip\r\n", "Transfer-Encoding: chunked, gzip\r\n")) {
+            foreach Reader reader in (Readers) {
+                string label = sprintf("%s: %y", reader, field);
+                hash<auto> client = startClient("HTTP/1.1 200 OK\r\n" + field + "\r\n" + Body);
+                on_exit client.done.dec();
+                Socket conn = client.server.accept(5s);
+                on_exit conn.close();
+                assertThrows(field =~ /^Transfer-Encoding: gzip/ ? "HTTP-UNSUPPORTED-TRANSFER-CODING"
+                    : "SOCKET-HTTP-ERROR", \readHeader(), (conn, reader), label);
+            }
+        }
+    }
+
+    clientTest() {
+        # a server that answers each request on a connection with the given response, and counts the connections
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int port = server.getSocketInfo(False).port;
+        Counter stop(1);
+        Counter stopped(1);
+        Mutex m();
+        int connections = 0;
+        string response;
+        background sub () {
+            on_exit stopped.dec();
+            list<Socket> conns = ();
+            on_exit map $1.close(), conns;
+            while (stop.getCount()) {
+                *Socket c;
+                try {
+                    c = server.accept(100ms);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "SOCKET-TIMEOUT") {
+                        continue;
+                    }
+                    break;
+                }
+                if (!c) {
+                    continue;
+                }
+                m.lock();
+                ++connections;
+                m.unlock();
+                conns += c;
+                background sub (Socket conn) {
+                    try {
+                        while (True) {
+                            conn.readHTTPHeader(5s);
+                            m.lock();
+                            string r = response;
+                            m.unlock();
+                            conn.send(r);
+                        }
+                    } catch (hash<ExceptionInfo> ex) {
+                    }
+                }(c);
+            }
+        }();
+        on_exit {
+            stop.dec();
+            stopped.waitForZero();
+            server.close();
+        }
+
+        HTTPClient hc({"url": "http://127.0.0.1:" + port, "connect_timeout": 5s, "timeout": 5s});
+        on_exit hc.disconnect();
+
+        # a chunked response in another case: read as chunked, and the connection is used again
+        response = "HTTP/1.1 200 OK\r\nTransfer-Encoding: Chunked\r\n\r\n" + Body;
+        assertEq("hello", hc.get("/a"));
+        assertEq("hello", hc.get("/b"));
+        assertEq(1, connections);
+
+        # a chunked response with a Content-Length: read as chunked, and the connection is not used again
+        response = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Length: 3\r\n\r\n" + Body;
+        assertEq("hello", hc.get("/c"));
+        assertEq("hello", hc.get("/d"));
+        assertEq(2, connections);
+
+        # a response with a transfer coding other than chunked is refused
+        response = "HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip\r\nContent-Length: 5\r\n\r\nhello";
+        assertThrows("HTTP-UNSUPPORTED-TRANSFER-CODING", \hc.get(), "/e");
+    }
+
+    #! reads a header with the given reader
+    private hash<auto> readHeader(Socket conn, Reader reader) {
+        switch (reader) {
+            case Reader::Header:
+                return conn.readHTTPHeader(5s);
+            case Reader::Poll: {
+                AbstractPollOperation op = conn.startPollReadHttpHeader();
+                runPoll(op);
+                return op.getOutput().hdr;
+            }
+            case Reader::Pipeline: {
+                PollPipeline p(conn);
+                p.addReadHttpHeader();
+                runPoll(p);
+                return p.getOutput().hdr ?? p.getOutput();
+            }
+        }
+    }
+
+    #! drives a poll operation to its end
+    private runPoll(AbstractPollOperation op) {
+        while (*hash<SocketPollInfo> pi = op.continuePoll()) {
+            if (!Socket::poll((pi,), 5s)) {
+                throw "SOCKET-TIMEOUT", "the poll operation timed out";
+            }
+        }
+    }
+
+    #! starts a client that sends the data and keeps the connection open until done
+    private hash<auto> startClient(string data) {
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        hash<auto> info = server.getSocketInfo(False);
+
+        Counter done(1);
+        background sub () {
+            try {
+                Socket client();
+                client.connectINET(info.address, info.port, 10s, info.family);
+                client.send(data, 5s);
+                # keep the connection open until the reader has finished
+                done.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                printf("client error: %s\n", get_exception_string(ex));
+            }
+        }();
+        return {"server": server, "done": done};
+    }
+}

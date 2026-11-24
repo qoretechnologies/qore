@@ -4482,6 +4482,160 @@ public:
         return 0;
     }
 
+    //! the framing that the \c Transfer-Encoding field of an HTTP/1.x message gives its body
+    enum class HttpTransferCodingFraming {
+        Chunked,        //!< the chunked transfer coding alone
+        Invalid,        //!< the framing cannot be determined: chunked is not the final coding, is given more than once
+                        //!< or with a parameter, or there is no coding
+        Unsupported,    //!< a transfer coding other than chunked
+    };
+
+    //! returns the framing that the value of the \c Transfer-Encoding field of an HTTP/1.x message gives its body
+    /** The field is a list of transfer codings, which can be given in more than one field line (\a te is then a list
+        of the values of the lines); empty elements are ignored, and the codings are compared without the whitespace
+        around them and without regard to case (RFC 9112 section 6.1, RFC 9110 section 5.6.1).  The chunked coding
+        must be the final coding and must be applied once; it has no parameters (RFC 9112 section 7).  A message body
+        with a coding other than chunked cannot be read, as the library implements no other transfer coding.
+
+        @param te the value of the field: a string, or a list of strings
+        @param desc set to why the framing is not \c Chunked
+
+        @return the framing of the message body
+    */
+    DLLLOCAL static HttpTransferCodingFraming getHttpTransferCodingFraming(QoreValue te, std::string& desc) {
+        // the codings, in order
+        std::vector<std::string> codings;
+        auto add_value = [&codings](QoreValue v) {
+            QoreStringValueHelper str(v);
+            const char* p = str->c_str();
+            const char* end = p + str->size();
+            while (p <= end) {
+                const char* e = static_cast<const char*>(memchr(p, ',', end - p));
+                if (!e) {
+                    e = end;
+                }
+                const char* s = p;
+                const char* t = e;
+                while (s < t && (*s == ' ' || *s == '\t')) {
+                    ++s;
+                }
+                while (t > s && (t[-1] == ' ' || t[-1] == '\t')) {
+                    --t;
+                }
+                if (s < t) {
+                    codings.emplace_back(s, t - s);
+                }
+                p = e + 1;
+            }
+        };
+        if (te.getType() == NT_LIST) {
+            ConstListIterator li(te.get<const QoreListNode>());
+            while (li.next()) {
+                add_value(li.getValue());
+            }
+        } else {
+            add_value(te);
+        }
+
+        if (codings.empty()) {
+            desc = "the Transfer-Encoding field has no transfer coding";
+            return HttpTransferCodingFraming::Invalid;
+        }
+        const char* unsupported = nullptr;
+        for (size_t i = 0, e = codings.size(); i < e; ++i) {
+            const std::string& c = codings[i];
+            // the name of the coding, without any parameters
+            size_t n = c.find(';');
+            std::string name = c.substr(0, n);
+            while (!name.empty() && (name.back() == ' ' || name.back() == '\t')) {
+                name.pop_back();
+            }
+            if (!strcasecmp(name.c_str(), "chunked")) {
+                if (n != std::string::npos) {
+                    desc = "the chunked transfer coding is given with a parameter";
+                    return HttpTransferCodingFraming::Invalid;
+                }
+                if (i != e - 1) {
+                    desc = "the chunked transfer coding is not the final transfer coding, or is given more than once";
+                    return HttpTransferCodingFraming::Invalid;
+                }
+            } else if (!unsupported) {
+                unsupported = c.c_str();
+            }
+        }
+        if (unsupported) {
+            desc = "the transfer coding \"";
+            desc += unsupported;
+            desc += "\" is not supported; only the chunked transfer coding is";
+            return HttpTransferCodingFraming::Unsupported;
+        }
+        return HttpTransferCodingFraming::Chunked;
+    }
+
+    //! checks how the body of an HTTP/1.x message is framed (RFC 9112 section 6), after its header was parsed
+    /** A message whose body cannot be framed as every other recipient would frame it is refused, so that the bytes
+        that follow its header are never taken for another message:
+        - a request with both \c Transfer-Encoding and \c Content-Length (RFC 9112 section 6.3): \c SOCKET-HTTP-ERROR;
+          in a response, the \c Transfer-Encoding overrides the \c Content-Length
+        - a \c Transfer-Encoding whose framing cannot be determined (chunked not the final coding, given more than
+          once or with a parameter, or no coding): \c SOCKET-HTTP-ERROR
+        - a \c Transfer-Encoding with a coding other than chunked: \c HTTP-UNSUPPORTED-TRANSFER-CODING
+
+        A message with a valid \c Transfer-Encoding has a chunked body, and its field is given with the value
+        \c "chunked" (also when it was received in another case, with whitespace or in more than one field line), so
+        that every reader of the message finds the same framing; the \c "headers-raw" key of the information hash
+        has the value received.  A connection that receives an HTTP/1.0 request with a \c Transfer-Encoding is closed
+        after the request (RFC 9112 section 6.1).
+
+        @return 0 if the message can be read, -1 if an exception was raised
+    */
+    DLLLOCAL int checkHttpMessageFraming(ExceptionSink* xsink, QoreHashNode& h, QoreHashNode& fields, int flags,
+            bool& close) {
+        QoreValue te = fields.getKeyValue("transfer-encoding");
+        if (te.isNothing()) {
+            return 0;
+        }
+        bool request = flags & CHF_REQUEST;
+        if (request && !fields.getKeyValue("content-length").isNothing()) {
+            xsink->raiseException("SOCKET-HTTP-ERROR", "invalid HTTP request header received with both "
+                "Transfer-Encoding and Content-Length (RFC 9112 section 6.3)");
+            return -1;
+        }
+        std::string desc;
+        switch (getHttpTransferCodingFraming(te, desc)) {
+            case HttpTransferCodingFraming::Invalid:
+                xsink->raiseException("SOCKET-HTTP-ERROR", "invalid HTTP %s header received: %s (RFC 9112 section "
+                    "6.3)", request ? "request" : "response", desc.c_str());
+                return -1;
+            case HttpTransferCodingFraming::Unsupported:
+                xsink->raiseException("HTTP-UNSUPPORTED-TRANSFER-CODING", "HTTP %s header received with an "
+                    "unsupported Transfer-Encoding: %s (RFC 9112 section 6.1)", request ? "request" : "response",
+                    desc.c_str());
+                return -1;
+            case HttpTransferCodingFraming::Chunked:
+                break;
+        }
+        http_exp_chunked_body = true;
+        // the value is given as "chunked", where it is given
+        bool normalized = false;
+        if (te.getType() == NT_STRING) {
+            // note: the value can be held in inline short string storage, which the value helper reads
+            QoreStringValueHelper str(te);
+            normalized = !strcmp(str->c_str(), "chunked");
+        }
+        if (!normalized) {
+            fields.setKeyValue("transfer-encoding", new QoreStringNode("chunked"), nullptr);
+            if (!h.getKeyValue("transfer-encoding").isNothing()) {
+                h.setKeyValue("transfer-encoding", new QoreStringNode("chunked"), nullptr);
+            }
+        }
+        // a recipient of an HTTP/1.0 message with a Transfer-Encoding closes the connection after it
+        if (request && !(flags & CHF_HTTP11)) {
+            close = true;
+        }
+        return 0;
+    }
+
     //! processes a header string to a hash and raises socket events
     DLLLOCAL QoreHashNode* processHttpHeaderString(ExceptionSink* xsink, QoreStringNodeHolder& hdr,
             QoreHashNode* info, int source, const char* headers_raw_key = "headers-raw") {
@@ -4601,8 +4755,12 @@ public:
         // (qore#6761)
         QoreHashNode* fields = new QoreHashNode(autoTypeInfo);
         h->setKeyValue("headers", fields, nullptr);
-        bool close = convertHeaderToHash(*h, p, flags, info, &http_exp_chunked_body, headers_raw_key, fields,
+        bool close = convertHeaderToHash(*h, p, flags, info, nullptr, headers_raw_key, fields,
             http_fields_at_top_level.load(std::memory_order_relaxed));
+        // the framing of the body is checked once the fields are known (RFC 9112 section 6)
+        if (checkHttpMessageFraming(xsink, **h, *fields, flags, close)) {
+            return nullptr;
+        }
         do_read_http_header(QORE_EVENT_HTTP_MESSAGE_RECEIVED, *h, source);
 
         // process header info

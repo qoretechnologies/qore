@@ -6677,7 +6677,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     {
                         std::optional<std::string> te = get_string_header_value(xsink, **ans,
                             "transfer-encoding");
-                        if (te && strcasestr(te->c_str(), "chunked")) {
+                        // an HTTP/1.x header parser gives a valid Transfer-Encoding as "chunked" and refuses any
+                        // other (RFC 9112 section 6.1)
+                        if (te && !strcasecmp(te->c_str(), "chunked")) {
                             is_chunked_response = true;
                         }
                         if (*xsink) {

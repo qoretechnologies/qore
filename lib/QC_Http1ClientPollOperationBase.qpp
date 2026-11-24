@@ -1820,31 +1820,21 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             response_body = nullptr;
         }
 
-        // Check transfer-encoding - handles both string and list (duplicate headers)
+        // the framing of the body (RFC 9112 section 6.3): the header parser has refused a Transfer-Encoding that is
+        // not the chunked transfer coding alone, and gives a valid one as "chunked"; it overrides any Content-Length
         QoreValue te_val = response_headers->getKeyValue("transfer-encoding");
-        if (te_val.getType() == NT_STRING) {
+        if (!te_val.isNothing()) {
             QoreStringValueHelper te_str(te_val);
-            if (strcasestr(te_str->c_str(), "chunked")) {
-                response_chunked = true;
+            if (te_val.getType() != NT_STRING || strcasecmp(te_str->c_str(), "chunked")) {
+                setError("HTTP1-RECV-ERROR", "the response has a Transfer-Encoding that is not the chunked transfer "
+                    "coding", xsink);
+                return nullptr;
             }
-        } else if (te_val.getType() == NT_LIST) {
-            // Duplicate Transfer-Encoding headers (e.g., CDN adds its own on top of origin's)
-            // are stored as a list; scan each element for "chunked"
-            ConstListIterator li(te_val.get<const QoreListNode>());
-            while (li.next()) {
-                QoreValue item = li.getValue();
-                if (item.getType() == NT_STRING) {
-                    QoreStringValueHelper item_str(item);
-                    if (!strcasestr(item_str->c_str(), "chunked")) {
-                        continue;
-                    }
-                    response_chunked = true;
-                    break;
-                }
-            }
+            response_chunked = true;
         }
 
         // Check content-length
+        bool content_length_ignored = false;
         if (!response_chunked) {
             QoreValue cl_val = response_headers->getKeyValue("content-length");
             if (!cl_val.isNullOrNothing()) {
@@ -1855,6 +1845,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
                     response_content_length = cl_val.getAsBigInt();
                 }
             }
+        } else {
+            // a response with both is not reused: it may have been framed otherwise by an intermediary
+            content_length_ignored = !response_headers->getKeyValue("content-length").isNullOrNothing();
         }
 
         // RFC 9112 section 9.3: HTTP/1.0 is persistent only with keep-alive;
@@ -1910,6 +1903,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             }
         }
         if (response_http_version && !strcmp(response_http_version->c_str(), "1.0") && !keep_alive) {
+            connection_close = true;
+        }
+        if (content_length_ignored) {
             connection_close = true;
         }
 

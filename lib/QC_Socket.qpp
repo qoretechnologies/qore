@@ -5822,7 +5822,7 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     - \c response-uri: (only set when parsing a response header) gives the response URI in an HTTP response
     - \c body-content-type: this is the  \c "Content-Type" header without any charset declaration
     - \c charset: if there is a charset declaration in the \c "Content-Type" header, the value is returned in this key; a quoted-string value is unquoted
-    - \c close: (only set when parsing a request header) set to @ref True "True" if the connection should be closed after responding, @ref False "False" if not; see notes below about how this value is calculated
+    - \c close: (only set when parsing a request header) set to @ref True "True" if the connection should be closed after responding, @ref False "False" if not; see notes below about how this value is calculated; an HTTP/1.0 request with a \c Transfer-Encoding closes the connection (RFC 9112 section 6.1)
     - \c accept-charset: the response encoding chosen from any \c "Accept-Charset" header by the rule of
       @ref Qore::get_http_accept_charset() "get_http_accept_charset()" (RFC 9110; \c "utf8" without one)
     - \c accept-encoding: this key will be set to a list of values from any \c "Accept-Encoding" header
@@ -5833,7 +5833,9 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     @return a hash of the header; a header value, as the \c status_message, that is not valid UTF-8 is given in
     ISO-8859-1 with its bytes unchanged, as RFC 9110 obs-text; the hash has the following keys:
     - \c headers: a hash of every header field, with lower-case names; a field given more than once is a list of its
-      values
+      values; a valid \c Transfer-Encoding field is given as \c "chunked", as which it is recognized without regard
+      to case, to the whitespace around it and to the empty elements of its list, also when it is given in more than
+      one line (the value received is given in the \c headers-raw key of \a info)
     - the header fields with their lower-case names at the top level as well (deprecated; see
       @ref setHttpFieldsAtTopLevel()), except a field named \c body, \c headers, \c trailers, \c status_code,
       \c status_message, \c http_version, \c method or \c path, which is given only under \c headers (so that a field
@@ -5859,6 +5861,11 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     @throw SOCKET-HTTP-ERROR a header with an empty line before its end (a header ends at its first empty line, and is
     read up to the first empty line with CRLF line ends), or a request header with a line that ends with a bare LF;
     a line of a response header can end with LF alone (RFC 9112 section 2.2)
+    @throw SOCKET-HTTP-ERROR a request with both \c Transfer-Encoding and \c Content-Length, or a message whose
+    \c Transfer-Encoding does not give a framing that every recipient finds: the chunked transfer coding is not the
+    final coding, is given more than once or with a parameter, or no coding is given (RFC 9112 section 6.3)
+    @throw HTTP-UNSUPPORTED-TRANSFER-CODING a message with a transfer coding other than chunked (RFC 9112 section 6.1);
+    a server answers such a request with 501 (Not Implemented)
     @throw SOCKET-HTTP-ERROR the read of a chunked message body on the socket stopped before the end of the body (see
     unfinishedHttpChunkedBody()), whose rest cannot be told apart from the next message; the connection must be
     closed
