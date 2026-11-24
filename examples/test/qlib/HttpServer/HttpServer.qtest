@@ -648,6 +648,10 @@ public class HttpServerTest inherits QUnit::Test {
 
         const KeyPem = TestCertificates::KeyPem;
 
+        #! the time a request or wait that must succeed is given: it only bounds a hang, as a correct server that a
+        #! loaded machine makes slow must not fail the check (qore#7472, see qore#6535)
+        const date MustSucceedTimeout = 30s;
+
         const BinImage = <89504e470d0a1a0a0000000d4948445200000010000000100403000000eddde25200000018504c5445ffffff> +
             <6b6b6b8c8c8cc0c0c0ef5a5a846331efd63900000089492ed30000000474524e53ffffff00402aa9f400000001624b47440716> +
             <6188eb0000004b4944415408d7633086020610615a0c65a8ba4319a1e55046581184619e1a0c61288119060c0ce6e94c504631> +
@@ -3665,7 +3669,8 @@ public class HttpServerTest inherits QUnit::Test {
             hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
             listener_info += info;
             # Make a request to ensure the listener is working
-            HTTPClient client({"url": "http://127.0.0.1:" + info.port, "timeout": 2s});
+            HTTPClient client({"url": "http://127.0.0.1:" + info.port, "connect_timeout": MustSucceedTimeout,
+                "timeout": MustSucceedTimeout});
             client.connect();
             assertEq("GET, test, /test", client.get("/test"));
             client.disconnect();
@@ -3678,7 +3683,7 @@ public class HttpServerTest inherits QUnit::Test {
 
         # Add a new listener - this should work if accept replenishment is correct
         int final_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
-        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready after listener churn");
+        assertTrue(server.waitForAsyncIo(MustSucceedTimeout), "async I/O should be ready after listener churn");
 
         # Make multiple concurrent requests to verify accept operations are working
         Counter done(10);
@@ -3687,7 +3692,8 @@ public class HttpServerTest inherits QUnit::Test {
             background sub () {
                 on_exit done.dec();
                 try {
-                    HTTPClient client({"url": "http://127.0.0.1:" + final_port, "timeout": 5s});
+                    HTTPClient client({"url": "http://127.0.0.1:" + final_port,
+                        "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
                     client.connect();
                     string result = client.get("/test");
                     if (result != "GET, test, /test") {
@@ -3702,7 +3708,8 @@ public class HttpServerTest inherits QUnit::Test {
                 }
             }();
         }
-        done.waitForZero(10s);
+        # each request is bounded by its connect and request timeouts
+        done.waitForZero(MustSucceedTimeout * 3);
         assertEq(0, done.getCount(), "all concurrent requests should complete");
         assertTrue(all_success, "all requests should succeed after listener add/remove cycles");
     }
@@ -3733,7 +3740,7 @@ public class HttpServerTest inherits QUnit::Test {
             "key": new SSLPrivateKey(KeyPem),
         });
         int ssl_port = ssl_info.port;
-        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+        assertTrue(server.waitForAsyncIo(MustSucceedTimeout), "async I/O should be ready");
 
         # Test 1: Client connects and immediately closes (before SSL handshake)
         {
@@ -3753,7 +3760,7 @@ public class HttpServerTest inherits QUnit::Test {
 
         # Critical: Verify server is still responsive (I/O thread not blocked)
         HTTPClient verify_client({"url": "https://127.0.0.1:" + ssl_port,
-            "timeout": 2s, "ssl_verify_cert": False});
+            "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout, "ssl_verify_cert": False});
         verify_client.connect();
         assertEq("GET, test, /test", verify_client.get("/test"),
             "server should still be responsive after bad SSL handshakes");
@@ -3769,8 +3776,13 @@ public class HttpServerTest inherits QUnit::Test {
         assertTrue(cache_size < 40, "cache should not leak from bad SSL handshakes");
     }
 
-    /** Test that I/O thread never blocks on getPeerInfo() calls.
-        Verifies the fix: controller-backed c-ares DNS and defensive checks.
+    /** Test that the I/O thread never blocks on a client: it serves other clients while connections that stall at
+        each stage are pending.  Guards the fix of the I/O thread blocking in getPeerInfo() (controller-backed c-ares
+        DNS and defensive checks).
+
+        The stalled connections are held open until the requests have been served, so a server whose I/O thread
+        waits for one of them cannot serve the requests: the check is that they are served while the stalled
+        connections are pending, not how long they take (qore#7472)
     */
     asyncModeIoThreadNonBlockingTest() {
         Logger logger("async-io-nonblock-test", LoggerLevel::getLevelInfo());
@@ -3780,6 +3792,10 @@ public class HttpServerTest inherits QUnit::Test {
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
+            # the server must not close the stalled connections itself before the requests have been served, nor
+            # release an I/O thread blocked on one of them in time for the requests: its time for a connection's I/O
+            # is far beyond the worst case of the requests; the case closes the stalled connections itself
+            "io_operation_timeout": 10m,
         };
         HttpServer server(opts);
         on_exit server.stop();
@@ -3795,54 +3811,79 @@ public class HttpServerTest inherits QUnit::Test {
             "key": new SSLPrivateKey(KeyPem),
         });
         int https_port = ssl_info.port;
-        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+        assertTrue(server.waitForAsyncIo(MustSucceedTimeout), "async I/O should be ready");
 
-        # Create many concurrent connections that close at various stages
+        # connections that stall at each stage; they stay open until the requests below have been served
+        list<Socket> stalled = ();
+        on_exit {
+            foreach Socket sock in (stalled) {
+                sock.close();
+            }
+        }
+        for (int i = 0; i < 5; ++i) {
+            # connected to the HTTPS listener, and no TLS ClientHello is ever sent
+            Socket tls_stalled();
+            tls_stalled.connect("127.0.0.1:" + https_port, MustSucceedTimeout);
+            stalled += tls_stalled;
+            # an HTTP request whose header is never finished
+            Socket http_stalled();
+            http_stalled.connect("127.0.0.1:" + http_port, MustSucceedTimeout);
+            http_stalled.send("GET /stalled HTTP/1.1\r\nHost: 127.0.0.1\r\n");
+            stalled += http_stalled;
+            # connections closed right after the connect, before the TLS handshake or the request
+            Socket tls_closed();
+            tls_closed.connect("127.0.0.1:" + https_port, MustSucceedTimeout);
+            tls_closed.close();
+            Socket http_closed();
+            http_closed.connect("127.0.0.1:" + http_port, MustSucceedTimeout);
+            http_closed.close();
+        }
+
+        # all requests must be served while the stalled connections are pending
         Counter done(20);
-        bool all_completed = True;
-        int start = clock_get_monotonic_us();
-
+        int failed = 0;
+        Mutex failed_lock();
         for (int i = 0; i < 20; ++i) {
-            background sub () {
+            background sub (int n) {
                 on_exit done.dec();
                 try {
-                    if (i % 2 == 0) {
-                        # HTTP connections
-                        HTTPClient client({"url": "http://127.0.0.1:" + http_port, "timeout": 2s});
-                        client.connect();
-                        client.get("/test");
-                        client.disconnect();
-                    } else {
-                        # HTTPS connections
-                        HTTPClient client({"url": "https://127.0.0.1:" + https_port,
-                            "timeout": 2s, "ssl_verify_cert": False});
-                        client.connect();
-                        client.get("/test");
-                        client.disconnect();
+                    HTTPClient client(n % 2
+                        ? {"url": "https://127.0.0.1:" + https_port, "connect_timeout": MustSucceedTimeout,
+                            "timeout": MustSucceedTimeout, "ssl_verify_cert": False}
+                        : {"url": "http://127.0.0.1:" + http_port, "connect_timeout": MustSucceedTimeout,
+                            "timeout": MustSucceedTimeout});
+                    client.connect();
+                    if (client.get("/test") != "GET, test, /test") {
+                        throw "UNEXPECTED-RESPONSE";
                     }
+                    client.disconnect();
                 } catch (hash<ExceptionInfo> ex) {
                     if (m_options.verbose > 1) {
-                        printf("Connection failed (expected for some): %s\n", ex.err);
+                        printf("request %d failed: %s: %s\n", n, ex.err, ex.desc);
                     }
-                    all_completed = False;
+                    failed_lock.lock();
+                    on_exit failed_lock.unlock();
+                    ++failed;
                 }
-            }();
+            }(i);
         }
 
-        # Critical: All requests should complete quickly (not blocked on getPeerInfo)
-        done.waitForZero(10s);
+        # each request is bounded by its connect, TLS negotiation and request timeouts
+        done.waitForZero(MustSucceedTimeout * 4);
         assertEq(0, done.getCount(), "all concurrent requests should complete");
+        assertEq(0, failed, "all requests should be served while the stalled connections are pending");
 
-        date elapsed = microseconds(clock_get_monotonic_us() - start);
-        if (m_options.verbose > 1) {
-            printf("Elapsed time for 20 concurrent connections: %y\n", elapsed);
+        # the stalled connections were pending all along: the server did not close them
+        foreach Socket sock in (stalled) {
+            assertTrue(sock.isOpen() && !sock.isDataAvailable(0), "the stalled connection is still pending");
         }
 
-        # Should complete in under 5 seconds (previously could take 20s+ if blocking)
-        assertTrue(elapsed < 5s, "I/O thread should not block - requests should be fast");
-
-        # Verify server still responsive
-        HTTPClient verify({"url": "http://127.0.0.1:" + http_port, "timeout": 2s});
+        # the server still serves new connections after the stalled connections have been closed
+        foreach Socket sock in (stalled) {
+            sock.close();
+        }
+        HTTPClient verify({"url": "http://127.0.0.1:" + http_port, "connect_timeout": MustSucceedTimeout,
+            "timeout": MustSucceedTimeout});
         verify.connect();
         assertEq("GET, final, /final", verify.get("/final"));
         verify.disconnect();
@@ -3862,7 +3903,12 @@ public class HttpServerTest inherits QUnit::Test {
         #   3. Rapid-fire requests across multiple server close cycles
         #
         # The client must detect EOF and reconnect transparently.  Recovery must
-        # be fast (< 3s per stale detect), not wait the full request timeout.
+        # be fast, not wait the full request timeout: scenarios 1-3 bound the time
+        # of their recovery to 10s.  Their requests must succeed, so their timeouts
+        # only bound a hang (MustSucceedTimeout), and they are longer than that
+        # bound: a client that waited for the full request timeout to recover fails
+        # it.  Scenario 1 stops at the first request that times out, so that such a
+        # client does not wait for the timeout of every request (qore#7472).
 
         bool server_stop = False;
         int max_requests_per_conn = 3;
@@ -3925,11 +3971,12 @@ public class HttpServerTest inherits QUnit::Test {
             RestClientIo rc({
                 "url": "http://127.0.0.1:" + port,
                 "data": "json",
-                "connect_timeout": 2s,
-                "timeout": 2s,
+                "connect_timeout": MustSucceedTimeout,
+                "timeout": MustSucceedTimeout,
             });
             int total = max_requests_per_conn + 2;
             int ok = 0;
+            int start = clock_get_monotonic_us();
             for (int i = 0; i < total; ++i) {
                 try {
                     rc.restGet("/health");
@@ -3940,9 +3987,16 @@ public class HttpServerTest inherits QUnit::Test {
                     }
                     assertNeq("HTTPCLIENT-TIMEOUT", ex.err,
                         sprintf("scenario1 req %d must not timeout", i));
+                    if (ex.err == "HTTPCLIENT-TIMEOUT") {
+                        break;
+                    }
                 }
             }
             assertEq(total, ok, "scenario1: all requests should succeed");
+            # recovery across the server's close is fast, as in scenarios 2 and 3
+            date elapsed = microseconds(clock_get_monotonic_us() - start);
+            assertTrue(elapsed < 10s,
+                sprintf("scenario1: %d requests across the server's close took %y, expected < 10s", total, elapsed));
         }
 
         # --- Scenario 2: idle gap triggers server close, then request ---
@@ -3950,8 +4004,8 @@ public class HttpServerTest inherits QUnit::Test {
             RestClientIo rc({
                 "url": "http://127.0.0.1:" + port,
                 "data": "json",
-                "connect_timeout": 2s,
-                "timeout": 2s,
+                "connect_timeout": MustSucceedTimeout,
+                "timeout": MustSucceedTimeout,
             });
             # First request establishes connection
             rc.restGet("/health");
@@ -3968,12 +4022,14 @@ public class HttpServerTest inherits QUnit::Test {
 
             # This request must detect the closed connection and reconnect
             int start = clock_get_monotonic_us();
+            *hash<ExceptionInfo> err;
             try {
                 rc.restGet("/health");
             } catch (hash<ExceptionInfo> ex) {
-                assertNeq("HTTPCLIENT-TIMEOUT", ex.err,
-                    "scenario2: post-close request must not timeout");
+                err = ex;
             }
+            assertEq(NOTHING, err ? sprintf("%s: %s", err.err, err.desc) : NOTHING,
+                "scenario2: post-close request must succeed");
             # Recovery should be fast — under 10s (stale detect timeout + reconnect)
             date elapsed = microseconds(clock_get_monotonic_us() - start);
             assertTrue(elapsed < 10s,
@@ -4039,8 +4095,8 @@ public class HttpServerTest inherits QUnit::Test {
             RestClientIo rc({
                 "url": "http://127.0.0.1:" + srv3_port,
                 "data": "json",
-                "connect_timeout": 2s,
-                "timeout": 2s,
+                "connect_timeout": MustSucceedTimeout,
+                "timeout": MustSucceedTimeout,
             });
 
             # First request succeeds
@@ -4049,15 +4105,14 @@ public class HttpServerTest inherits QUnit::Test {
             # Second request sent immediately — races with the delayed close.
             # Must succeed (reconnect if needed) within 3s, not the full timeout.
             int start = clock_get_monotonic_us();
+            *hash<ExceptionInfo> err;
             try {
                 rc.restGet("/health");
             } catch (hash<ExceptionInfo> ex) {
-                if (m_options.verbose > 1) {
-                    printf("scenario3: %s: %s\n", ex.err, ex.desc);
-                }
-                assertNeq("HTTPCLIENT-TIMEOUT", ex.err,
-                    "scenario3: request during delayed close must not timeout");
+                err = ex;
             }
+            assertEq(NOTHING, err ? sprintf("%s: %s", err.err, err.desc) : NOTHING,
+                "scenario3: request during delayed close must succeed");
             date elapsed = microseconds(clock_get_monotonic_us() - start);
             assertTrue(elapsed < 10s,
                 sprintf("scenario3: recovery took %y, expected < 10s", elapsed));
