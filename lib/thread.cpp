@@ -3372,6 +3372,12 @@ int check_stack(ExceptionSink* xsink) {
     return check_stack_intern(xsink, td);
 }
 
+int check_stack(void* thread_data_ptr, ExceptionSink* xsink) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
+    return check_stack_intern(xsink, td);
+}
+
 // the stack check of check_stack_intern() for a frame that is not allocated yet (qore#6414); a function of its own, so
 // that the check of every call is not changed
 int check_stack_reserve(ExceptionSink* xsink, size_t reserve) {
@@ -4388,6 +4394,22 @@ bool is_valid_qore_thread() {
    return (bool)thread_data.get();
 }
 
+bool rc_set_current_from_thread(RuntimeConfig& rc) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // as getProgram(), get_thread_local_program_data(), runtime_get_object_and_class(), get_runtime_stack_location()
+    // and getReturnTypeInfo() return them
+    rc.setProgram(td->current_pgm);
+    rc.setThreadLocalProgramData(td->tlpd);
+    rc.setObject(td->current_obj);
+    rc.setClass(td->current_class);
+    rc.setStackLocation(td->current_stack_location.load(std::memory_order_relaxed));
+    rc.setReturnTypeInfo(td->returnTypeInfo);
+    return true;
+}
+
 int q_gettid() noexcept {
     // when destroying objects in the static namespace, this function is called after thread data is destroyed
     // to grab locks; therefore in such cases we return TID 0
@@ -4606,7 +4628,15 @@ QORE_FRAME_PUSH_INLINE const QoreStackLocation* update_get_runtime_stack_locatio
 QORE_FRAME_PUSH_INLINE const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLocation* stack_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm,
         const QoreProgramLocation*& old_runtime_loc, QoreProgram* frame_pgm) {
-    ThreadData* td = thread_data.get();
+    return update_get_runtime_stack_builtin_location(thread_data.get(), stack_loc, current_stmt, current_pgm,
+        old_runtime_loc, frame_pgm);
+}
+
+QORE_FRAME_PUSH_INLINE const QoreStackLocation* update_get_runtime_stack_builtin_location(void* thread_data_ptr,
+        QoreStackLocation* stack_loc, const AbstractStatement*& current_stmt, QoreProgram*& current_pgm,
+        const QoreProgramLocation*& old_runtime_loc, QoreProgram* frame_pgm) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
 
     // only the frame that AOT code pushes for a native cross-module call takes the caller's Program that the call
     // set; no other frame can be pushed while it is set (qore#7101)
@@ -4718,7 +4748,13 @@ void update_runtime_stack_location(const QoreStackLocation* stack_loc) {
 }
 
 void update_runtime_stack_location(const QoreStackLocation* stack_loc, const QoreProgramLocation* runtime_loc) {
-    ThreadData* td = thread_data.get();
+    update_runtime_stack_location(thread_data.get(), stack_loc, runtime_loc);
+}
+
+void update_runtime_stack_location(void* thread_data_ptr, const QoreStackLocation* stack_loc,
+        const QoreProgramLocation* runtime_loc) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
     td->runtime_loc = runtime_loc;
     publish_popped_stack_location(td, stack_loc);
 }
@@ -4732,7 +4768,12 @@ const QoreProgramLocation* get_runtime_location() {
 }
 
 const QoreProgramLocation* take_runtime_call_location() {
-    ThreadData* td = thread_data.get();
+    return take_runtime_call_location(thread_data.get());
+}
+
+const QoreProgramLocation* take_runtime_call_location(void* thread_data_ptr) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
     const QoreProgramLocation* loc = td->call_site_loc;
     if (loc) {
         td->call_site_loc = nullptr;
@@ -4743,7 +4784,13 @@ const QoreProgramLocation* take_runtime_call_location() {
 
 const QoreProgramLocation* hide_runtime_call_site(const QoreProgramLocation**& slot,
         const QoreProgramLocation*& prev) {
-    ThreadData* td = thread_data.get();
+    return hide_runtime_call_site(thread_data.get(), slot, prev);
+}
+
+const QoreProgramLocation* hide_runtime_call_site(void* thread_data_ptr, const QoreProgramLocation**& slot,
+        const QoreProgramLocation*& prev) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
     slot = &td->call_site_loc;
     prev = td->call_site_loc;
     td->call_site_loc = nullptr;
@@ -4943,7 +4990,12 @@ const QoreTypeInfo* getReturnTypeInfo() {
 }
 
 const QoreTypeInfo* saveReturnTypeInfo(const QoreTypeInfo* returnTypeInfo) {
-    ThreadData* td = thread_data.get();
+    return saveReturnTypeInfo(thread_data.get(), returnTypeInfo);
+}
+
+const QoreTypeInfo* saveReturnTypeInfo(void* thread_data_ptr, const QoreTypeInfo* returnTypeInfo) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
     const QoreTypeInfo* rv = td->returnTypeInfo;
     td->returnTypeInfo = returnTypeInfo;
     return rv;
@@ -5780,7 +5832,12 @@ const QoreTypeInfo* runtime_get_receiver_type_info() {
 }
 
 const QoreTypeInfo* runtime_set_receiver_type_info(const QoreTypeInfo* ti) {
-    ThreadData* td = thread_data.get();
+    return runtime_set_receiver_type_info(thread_data.get(), ti);
+}
+
+const QoreTypeInfo* runtime_set_receiver_type_info(void* thread_data_ptr, const QoreTypeInfo* ti) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
     const QoreTypeInfo* old = td->current_receiver_type_info;
     td->current_receiver_type_info = ti;
     return old;
@@ -8694,7 +8751,12 @@ bool qore_sandbox_isolation_refused_slow() {
 }
 
 int qore_sandbox_check_isolation(ExceptionSink* xsink, const char* operation) {
-    ThreadData* td = thread_data.get();
+    return qore_sandbox_check_isolation(thread_data.get(), xsink, operation);
+}
+
+int qore_sandbox_check_isolation(void* thread_data_ptr, ExceptionSink* xsink, const char* operation) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
     if (!td || !td->sandbox_budgets.isIsolationRefused()) {
         return 0;
     }
@@ -10160,7 +10222,12 @@ QoreParseOptions runtime_take_call_caller_parse_options() {
 }
 
 QoreParseOptions runtime_take_call_caller_parse_options(const QoreProgram*& code_pgm) {
-    ThreadData* td = thread_data.get();
+    return runtime_take_call_caller_parse_options(thread_data.get(), code_pgm);
+}
+
+QoreParseOptions runtime_take_call_caller_parse_options(void* thread_data_ptr, const QoreProgram*& code_pgm) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
     if (td->callback_caller_pgm && td->current_pgm == td->callback_from_pgm) {
         const QoreProgram* caller = td->callback_caller_pgm;
         // the call made on behalf of the Program is the first call only; the code it calls, and any code of the

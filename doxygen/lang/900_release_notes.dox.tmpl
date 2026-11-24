@@ -2017,6 +2017,11 @@
     the errors of its copy, initialization and release as %Qore exceptions, which fail the creation of a child
     @ref Qore::Program "Program" or are raised by its deletion (see @ref qore_modules; issue #6786).
 
+    @par Faster Creation and Destruction of Objects
+    Creating and destroying objects costs less in every execution mode, especially for subclasses of builtin classes
+    (about 10-15% fewer instructions for a subclass of @ref Qore::Socket "Socket"; see @ref environment_variables for
+    \c QORE_DISABLE_DIRECT_OBJECT_CALLS; issue #7336).
+
     @subsection qore_3_0_0_deprecated Deprecated Features
     - <b>integer parse option constants</b>: the \c PO_* integer constants are deprecated in favor of
       @ref Qore::ParseOptions, which holds all 128 option bits; the constants of options beyond bit 63 are \c 0
@@ -2876,6 +2881,8 @@
       loaded with code that the same module in a single file is refused for, and its parse-time warnings were errors
       also for @ref Qore::load_module_warn() "load_module_warn()" (see @ref user_modules;
       <a href="https://github.com/qoretechnologies/qore/issues/7324">issue 7324</a>)
+    - @ref Qore::SQL::Datasource::getPort() "Datasource::getPort()" returns the port configured for the next
+      connection, including after a port change on an open datasource.
     - a pseudo-method call runs the method of the pseudo-class of the value's type at run time, also when the parser
       resolved the call from another type, and the code of a pseudo-class refuses a value of another type with an
       exception (see the note on pseudo-classes in @ref qore_classes;
@@ -4694,6 +4701,10 @@
     - an HTTP/1.x header or trailer field line with a control character other than tab is refused with
       \c SOCKET-HTTP-ERROR, and the HTTP client closes the connection (see @ref Qore::Socket::readHTTPHeader()
       "Socket::readHTTPHeader()"; <a href="https://github.com/qoretechnologies/qore/issues/7491">issue 7491</a>)
+    - @ref Qore::Serializable::deserialize() "Serializable::deserialize()" with
+      @ref Qore::QDF_STATIC_CLASS_VARS "QDF_STATIC_CLASS_VARS" replaces hash-valued static class variables instead of
+      merging them, and a hash-valued static class variable no longer holds freed memory after deserialization, which
+      could crash the process (<a href="https://github.com/qoretechnologies/qore/issues/7516">issue 7516</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 
