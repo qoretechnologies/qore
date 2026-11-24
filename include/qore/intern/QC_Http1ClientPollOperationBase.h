@@ -1048,6 +1048,16 @@ private:
     //! exception was raised)
     DLLLOCAL bool dispatchStreamingHeaders(ExceptionSink* xsink);
     DLLLOCAL void dispatchStreamingData(const BinaryNode* data, ExceptionSink* xsink);
+    //! Delivers the end of the stream after the 101 response to a streamed request that asked for an upgrade
+    /** A 101 response has no content (RFC 9110 section 15.2), and what follows it on the connection is the data of
+        the new protocol, which the caller reads from the socket that it takes over: the stream ends with the 101
+        header, so that its reader is not left waiting for a body that never comes (qore#7487).  The stream is not
+        released, unlike in dispatchStreamingEnd(): the connection, in H1State::PROTOCOL_SWITCHED, belongs to the
+        caller of the request, keeps its active stream, and is never given to another request.  I/O thread only.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void dispatchStreamingSwitchEnd(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* dispatchStreamingEnd(ExceptionSink* xsink);
     DLLLOCAL void resetResponseState(ExceptionSink* xsink);
 

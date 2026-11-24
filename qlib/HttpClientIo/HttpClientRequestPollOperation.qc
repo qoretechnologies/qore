@@ -759,6 +759,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
             complete(buildOutput(getResponseInfo()));
             # the response body is not read
             cancelStream(True);
+            endSwitchedConnection();
             return False;
         }
         if (opts.keep_stream) {
@@ -795,8 +796,30 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
                 resp.body = bin;
             }
         }
+        endSwitchedConnection();
         complete(buildOutput(resp));
         return True;
+    }
+
+    #! Ends the connection after a 101 response, unless the stream is handed over with the \c keep_stream option
+    /** A 101 response, to a request that asked for a protocol upgrade, has no content, and the stream ends with it;
+        the connection is no longer HTTP after it, and is kept for the caller of the stream (see
+        @ref HttpClientConnectionManager::acquireAndStartStreaming()), which a request that returns its response
+        is not: the connection is closed, as the cancellation of the request closes it (qore#7487)
+    */
+    private endSwitchedConnection() {
+        if (response.status_code != 101 || opts.keep_stream || !stream) {
+            return;
+        }
+        *int sid = stream.getStreamId();
+        if (!exists sid) {
+            return;
+        }
+        try {
+            stream.getConnection().cancelRequest(sid);
+        } catch (hash<ExceptionInfo> ex) {
+            # the connection is already closed
+        }
     }
 
     #! Makes the output available

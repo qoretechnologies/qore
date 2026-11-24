@@ -2097,22 +2097,26 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
                 if (delivered) {
                     switched_protocol.store(true, std::memory_order_release);
                 }
-            } else {
-                // Non-streaming: dispatch as a normal response with no body
-                return dispatchResponse(xsink);
-            }
-            // Enter PROTOCOL_SWITCHED state - continuePoll() will now
-            // use separate send/recv ops for full-duplex raw I/O.
-            protocol_switched = true;
-            req_state = ReqState::PROTOCOL_SWITCHED;
-            // an operation aborted meanwhile does no more I/O
-            if (!setStateUnlessClosed(H1State::PROTOCOL_SWITCHED, "protocol-switched")) {
+                // Enter PROTOCOL_SWITCHED state - continuePoll() will now
+                // use separate send/recv ops for full-duplex raw I/O.
+                protocol_switched = true;
+                req_state = ReqState::PROTOCOL_SWITCHED;
+                // an operation aborted meanwhile does no more I/O
+                if (!setStateUnlessClosed(H1State::PROTOCOL_SWITCHED, "protocol-switched")) {
+                    releaseCurrentOp(xsink);
+                    return nullptr;
+                }
+                ASYNC_IO_TRACE("H1 handleRecvHeader: 101 -> PROTOCOL_SWITCHED\n");
                 releaseCurrentOp(xsink);
-                return nullptr;
+                // the response ends with its 101 header: the reader of the stream is given the end of the stream
+                // at once instead of waiting for a body that never comes (qore#7487)
+                if (delivered) {
+                    dispatchStreamingSwitchEnd(xsink);
+                }
+                return handleProtocolSwitched(xsink);
             }
-            ASYNC_IO_TRACE("H1 handleRecvHeader: 101 -> PROTOCOL_SWITCHED\n");
-            releaseCurrentOp(xsink);
-            return handleProtocolSwitched(xsink);
+            // Non-streaming: dispatch as a normal response with no body
+            return dispatchResponse(xsink);
         }
 
         // Interim responses: RFC 9110 section 15.2 defines every 1xx response other than 101 (handled above) as
@@ -3073,6 +3077,30 @@ void Http1ClientPollOperationPriv::dispatchStreamingData(const BinaryNode* data,
         action->execute(data_resp.release(), xsink);
         action->deref(xsink);
     }
+}
+
+void Http1ClientPollOperationPriv::dispatchStreamingSwitchEnd(ExceptionSink* xsink) {
+    AbstractAsyncAction* action = nullptr;
+    int stream_id;
+    {
+        AutoLocker al(stream_lock);
+        stream_id = active_sid;
+        action = stream_action;
+        if (action) {
+            action->ref();
+        }
+    }
+    if (!action) {
+        return;
+    }
+    ReferenceHolder<QoreHashNode> end_resp(new QoreHashNode(autoTypeInfo), xsink);
+    end_resp->setKeyValue("end_stream", true, xsink);
+    end_resp->setKeyValue("stream_id", (int64_t)stream_id, xsink);
+    action->execute(end_resp.release(), xsink);
+    // no more is delivered on the stream: an error of the connection that follows, such as when the caller closes
+    // it, is not reported to the reader of the response, which has ended
+    action->complete(xsink);
+    action->deref(xsink);
 }
 
 QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* xsink) {

@@ -1029,6 +1029,19 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @note If the request times out on a pooled connection, the connection is
         evicted and the request is retried once on a fresh connection, handling
         stale connections transparently.
+        @note An HTTP/1.1 request that asks for a protocol upgrade with an \c Upgrade header and is answered with a
+        \c 101 response ends with it: @ref HttpClientStreamHandle::readData() "readData()" returns the \c 101 response
+        header and then the end of the stream at once (since HttpClientIo 1.0, qore#7487), as the response has no
+        content.  The connection, whose data is no longer HTTP, then belongs to the caller: the manager never gives it
+        to another request, and the caller takes its socket over with \c getConnection().getSocket() (see
+        @ref HttpClientStreamHandle::getConnection() and @ref HttpClientConnection::getSocket()) to use the new
+        protocol, as the WebSocketClient module does, and ends it with \c getConnection().close() (see
+        @ref HttpClientConnection::close()), which closes the socket.  A request body streamed with \a body_streaming
+        that is not complete when the \c 101 response arrives must still be completed (RFC 9110 section 7.8), but
+        not with @ref HttpClientStreamHandle::sendData() "sendData()", as the stream has ended: the caller writes
+        the rest of the chunked body, with its last chunk, on the socket that it takes over, before any data of the
+        new protocol.  The requests that return the response instead of the
+        stream (@ref request(), @ref requestAsync(), @ref openStream()) close the connection after a \c 101 response.
         @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     HttpClientStreamHandle acquireAndStartStreaming(string url, string method, string path,
@@ -1534,6 +1547,26 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                 logRedirect(rf, resp.status_code, resp.headers);
                 rf.follow(resp.status_code, resp.status_message, resp.headers);
                 continue;
+            }
+            # a 101 response, to a request that asked for a protocol upgrade, has no content: the end of the stream,
+            # which follows it at once, is read, and the connection, which is no longer HTTP, is closed, as the
+            # response stream gives no way to use it (qore#7487)
+            if (resp.status_code == 101) {
+                while (!ended) {
+                    auto d = sh.readData(wait > 0 ? wait : NOTHING);
+                    if (!exists d) {
+                        throw "HTTPCLIENT-TIMEOUT", sprintf("the end of the 101 response from %y was not received "
+                            "within %d ms", request_url, wait);
+                    }
+                    if (d.typeCode() == NT_HASH && (d.end_stream || d.error)) {
+                        ended = True;
+                    }
+                }
+                try {
+                    sh.getConnection().cancelRequest(sh.getStreamId());
+                } catch (hash<ExceptionInfo> ex) {
+                    # the connection is already closed
+                }
             }
             keep = True;
             return new HttpClientResponseStream(sh, resp, request_url,
