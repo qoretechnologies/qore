@@ -22526,44 +22526,25 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
             argv_context = &argv_helper;
         }
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
-        if (use_direct_params) {
-            // Direct params path: pass args straight to IR slot cache, no TLS
+        const bool use_native = !use_direct_params && uvb->hasCachedFunction() && !use_specialized_ir;
+        // Use one call frame for the three ways to run the body. Separate instantiations of execJITWithDeopt
+        // made GCC reserve more stack in every recursive method call while the return check kept that frame alive.
+        execJITWithDeopt<CONSUME>(frame, uvb, call_name, [&](ExceptionSink* xs, bool& invalidated) -> uint64_t {
+            if (use_native) {
+                return uvb->execCachedFunction(xs, invalidated);
+            }
             IRDirectParams dp{args, nargs, arg_cleanups};
-            execJITWithDeopt<CONSUME>(frame, uvb, call_name,
-                    [ir, uvb, exec_pgm, &dp](ExceptionSink* xs, bool& inv) -> uint64_t {
-                QoreValue ir_return_value;
-                bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
-                    nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
-                    uvb->getDebugEntryStatementBlock(), exec_pgm, false, &dp);
-                if (!ok && !*xs) {
-                    inv = true;
-                    return 0;
-                }
-                return toBits(ir_return_value);
-            }, val, xsink, caller_pgm, receiver_type_info, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
-        } else if (uvb->hasCachedFunction() && !use_specialized_ir) {
-            // JIT/AOT fast path
-            execJITWithDeopt<CONSUME>(frame, uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
-                return uvb->execCachedFunction(xs, inv);
-            }, val, xsink, caller_pgm, receiver_type_info, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
-        } else {
-            // IR fast path (standard TLS): execute IR directly without QoreListNode.
-            execJITWithDeopt<CONSUME>(frame, uvb, call_name,
-                    [ir, uvb, exec_pgm](ExceptionSink* xs, bool& inv) -> uint64_t {
-                QoreValue ir_return_value;
-                bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
-                    nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
-                    uvb->getDebugEntryStatementBlock(), exec_pgm);
-                if (!ok && !*xs) {
-                    inv = true;  // Request deopt to AST
-                    return 0;
-                }
-                return toBits(ir_return_value);
-            }, val, xsink, caller_pgm, receiver_type_info, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
-        }
+            QoreValue ir_return_value;
+            bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
+                nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
+                uvb->getDebugEntryStatementBlock(), exec_pgm, false, use_direct_params ? &dp : nullptr);
+            if (!ok && !*xs) {
+                invalidated = true;
+                return 0;
+            }
+            return toBits(ir_return_value);
+        }, val, xsink, caller_pgm, receiver_type_info, exec_pgm,
+        CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
     }
     if constexpr (!CONSUME) {
         if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
