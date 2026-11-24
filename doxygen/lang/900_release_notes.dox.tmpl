@@ -2991,6 +2991,12 @@
       the attempt's descriptor again when the connect operation was destroyed, closing any descriptor that had been
       given the number meanwhile, such as an HTTP client's event notifier
       (<a href="https://github.com/qoretechnologies/qore/issues/6962">issue 6962</a>)
+    - a connection of a @ref Qore::Socket "Socket" closed by another thread while it was being made could still use
+      the closed socket; it now fails as closed
+      (<a href="https://github.com/qoretechnologies/qore/issues/7003">issue 7003</a>)
+    - a UNIX socket connection of a @ref Qore::Socket "Socket" closed by another thread while it was being made could
+      still use the closed socket; it now fails as closed
+      (<a href="https://github.com/qoretechnologies/qore/issues/7156">issue 7156</a>)
     - the internal state and helpers of the data provider index classes (@ref providerindexutilintro
       "ProviderIndexUtil" and @ref providerindexintro "ProviderIndex") are not visible to subclasses; see
       @ref providerindexutil_v1_2 and @ref providerindex_v1_4 (<a href="https://github.com/qoretechnologies/qore/issues/7044">issue 7044</a>)
@@ -4510,6 +4516,10 @@
     - the \c keys operator, the merge of an object into a hash and the iteration over its members list, for the code of a
       class that a subclass inherits with \c private:internal, the members that it uses on an object of a further
       subclass; they returned nothing (<a href="https://github.com/qoretechnologies/qore/issues/7180">issue 7180</a>)
+    - no HTTP header is read on a @ref Qore::Socket "Socket" after a chunked body read stopped before its end
+      (@ref Qore::Socket::unfinishedHttpChunkedBody() "unfinishedHttpChunkedBody()"), chunk sizes are checked alike,
+      and a body read allocates memory as its data arrives, so that a body can neither be taken for another message
+      nor end the process (<a href="https://github.com/qoretechnologies/qore/issues/7417">issue 7417</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

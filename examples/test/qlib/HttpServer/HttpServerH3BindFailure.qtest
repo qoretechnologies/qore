@@ -21,6 +21,10 @@ class FailingQuicServer inherits HttpServer {
         int fails;
         #! the system error number of the failures
         *int err_no;
+        #! the number of the bind that fails (from 1), if only one does
+        *int fail_at;
+        #! the number of binds of paired QUIC listeners so far
+        int binds;
         #! the ports of the QUIC binds tried
         list<int> ports = ();
     }
@@ -32,12 +36,42 @@ class FailingQuicServer inherits HttpServer {
 
     hash<auto> addQuicListener(hash<HttpListenerOptionInfo> opts, int port = 0) {
         push ports, port;
+        ++binds;
+        if (fail_at) {
+            if (binds == fail_at) {
+                throw "SOCKET-BIND-ERROR", sprintf("forced failure of the bind on UDP port %d", port), err_no;
+            }
+            return HttpServer::addQuicListener(opts, port);
+        }
         if (fails > 0) {
             --fails;
             # the error of a bind, with its system error number as a bind gives it
             throw "SOCKET-BIND-ERROR", sprintf("forced failure of the bind on UDP port %d", port), err_no;
         }
         return HttpServer::addQuicListener(opts, port);
+    }
+
+    #! Adds listeners on the given resolved addresses, as a listener on a host name with several addresses does
+    list<hash<auto>> addResolved(hash<HttpListenerOptionInfo> info, list<auto> addresses) {
+        return addINETListenersInternResolved(info, addresses);
+    }
+}
+
+#! Records the calls of the stop notification of listeners
+class StopRecorder {
+    public {
+        list<string> names = ();
+    }
+
+    private {
+        Mutex lck();
+    }
+
+    code<nothing(string)> getCallback() {
+        return sub (string name) {
+            AutoLock al(lck);
+            push names, name;
+        };
     }
 }
 
@@ -75,6 +109,8 @@ class HttpServerH3BindFailureTest inherits QUnit::Test {
         addTestCase("a failed listener leaves the count of running listeners unchanged", \runningCountTest());
         addTestCase("a random-port bind that fails with another error is not retried", \otherErrorTest());
         addTestCase("an explicit-port listener whose QUIC bind fails is not added", \explicitPortTest());
+        addTestCase("a failed add on several addresses stops the listeners it started", \multiAddressRollbackTest());
+        addTestCase("the stop notification is called only for listeners that started", \stopNotificationTest());
         addTestCase("the failure of a real bind has its system error number", \realBindErrnoTest());
         set_return_value(main());
     }
@@ -258,5 +294,49 @@ class HttpServerH3BindFailureTest inherits QUnit::Test {
         assertEq(1, ex.arg.attempts.size());
         assertRegex(sprintf("\\(errno %d\\)$", EADDRINUSE), ex.arg.attempts[0], "the system error of the bind");
         assertEq({}, srv.getListeners(), "no listener was kept");
+    }
+
+    multiAddressRollbackTest() {
+        hash<auto> s = getServer(0, EAFNOSUPPORT);
+        FailingQuicServer srv = s.srv;
+        on_exit delete srv;
+        # the bind of the second listener's QUIC listener fails, with an error that is not retried
+        srv.fail_at = 2;
+        StopRecorder stops();
+
+        hash<HttpListenerOptionInfo> info = h3Options();
+        info.stopc = stops.getCallback();
+        info.name = "multi";
+        # two addresses of one host name (the same loopback address twice, each on a random port of its own)
+        list<hash<auto>> addresses = (
+            {"address": "127.0.0.1", "address_desc": "ipv4(127.0.0.1)", "port": 0, "family": AF_INET},
+            {"address": "127.0.0.1", "address_desc": "ipv4(127.0.0.1)", "port": 0, "family": AF_INET},
+        );
+        assertThrows("HTTPSERVER-H3-BIND-ERROR", \srv.addResolved(), (info, addresses));
+        assertEq(2, srv.binds, "both addresses were tried");
+        # the listener started for the first address was stopped: no listener is left running
+        assertEq({}, srv.getListeners(), "no listener was kept");
+        assertEq(0, srv.getRunningListenerCount(), "no listener is running");
+        # its stop was notified once, with its name; the listener of the second address never started
+        assertEq(1, stops.names.size(), "one stop notification");
+        assertRegex("^multi-[0-9]+$", stops.names[0], "the stop of the listener of the first address was notified");
+    }
+
+    stopNotificationTest() {
+        hash<auto> s = getServer(9);
+        FailingQuicServer srv = s.srv;
+        on_exit delete srv;
+        StopRecorder stops();
+
+        hash<HttpListenerOptionInfo> info = h3Options();
+        info.stopc = stops.getCallback();
+        # all-interfaces: none; h3Options() listens on "node": "localhost" (the scanner does not follow the helper)
+        srv.addListener(info);
+        assertEq(10, srv.ports.size(), "the tenth attempt was bound");
+        # the nine listeners that were created and stopped again because their QUIC listener could not be bound did
+        # not start: their stop is not notified
+        assertEq((), stops.names, "no stop notification for the failed attempts");
+        srv.stop();
+        assertEq(1, stops.names.size(), "the listener that started notified its stop once");
     }
 }

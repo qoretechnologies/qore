@@ -329,6 +329,16 @@ loop.removeRegistration(fd, op_key, xsink);
         dbg_before_register = std::move(hook);
     }
 
+    //! Debug-only: sets a hook that add() and modify() call with the descriptor after the system's event queue has it
+    /** Lets a test wait for the registration of a descriptor without polling the event queue; see
+        AsyncIoDescriptorHoldTest in the C++ unit tests.
+
+        @param hook the hook, or an empty function to remove it; set before the thread that uses the loop starts
+    */
+    DLLLOCAL void dbgSetAfterRegister(std::function<void(int)> hook) {
+        dbg_after_register = std::move(hook);
+    }
+
     //! Debug-only: sets a hook that remove() calls with a registered descriptor before it removes it
     /** Lets a test check that a descriptor is still open when the loop removes it; see AsyncIoDescriptorHoldTest in
         the C++ unit tests.
@@ -400,6 +410,8 @@ private:
 #ifdef DEBUG
     //! Debug-only: called with the descriptor before add() or modify() registers it; see dbgSetBeforeRegister()
     std::function<void(int)> dbg_before_register;
+    //! Debug-only: called with the descriptor after add() or modify() registered it; see dbgSetAfterRegister()
+    std::function<void(int)> dbg_after_register;
     //! Debug-only: called with a registered descriptor before remove() removes it; see dbgSetBeforeRemove()
     std::function<void(int)> dbg_before_remove;
 #endif
