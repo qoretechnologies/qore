@@ -3177,6 +3177,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             index_phi->operands.push_back(init_index);
             index_phi->operands.push_back(next_index);
 
+            // Break handler: pop $#, record, scope exit, finalize with fill remaining
+            builder.setBlock(break_handler_block);
+            builder.createPopImplicitElement(old_element, stmt->loc);
+            // Reading the last element can raise while the loop scope is still open, as on the latch path.
+            QoreIRValue break_modified = lowerExpression(var_expr, error);
+
             // Pop exception handler
             popExceptionAnchor();
             exception_scope_depth_stack.pop_back();
@@ -3187,10 +3193,6 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             cleanup_stack.pop_back();  // Scope
             cleanup_stack.pop_back();  // RefForeach
 
-            // Break handler: pop $#, record, scope exit, finalize with fill remaining
-            builder.setBlock(break_handler_block);
-            builder.createPopImplicitElement(old_element, stmt->loc);
-            QoreIRValue break_modified = lowerExpression(var_expr, error);
             if (!break_modified.isValid()) {
                 return false;
             }
