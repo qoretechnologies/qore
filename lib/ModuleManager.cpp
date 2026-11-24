@@ -2251,6 +2251,11 @@ int QoreModuleDefContext::init(QoreProgram& pgm, ExceptionSink& xsink) {
         // not with the restrictions of the code that loads the module
         QoreModuleLifecycleBarrierHelper lifecycle_barrier;
         LoadTimeParseOptionsHelper lifecycle_po(pgm.getParseOptions());
+        // the init closure is part of the module's initialization: for a module loaded at run time, the call Program
+        // context is still the loading code's, and the frames of the calls that the closure makes name the module's
+        // Program, as those of the rest of its initialization do (qore#7289)
+        QoreModuleInitFramesHelper init_frames;
+        init_frames.set(&pgm);
 
         ValueHolder cn(init_c.eval(&xsink), &xsink);
         assert(!xsink);
@@ -7398,6 +7403,90 @@ void QoreModuleManager::delOrig(QoreAbstractModule* mi) {
     }
 }
 
+//! a module Program whose data is cleared at the end of the process
+struct QoreModuleProgramInfo {
+    //! the name of the module
+    std::string name;
+    //! the module's Program
+    QoreProgram* pgm;
+};
+
+//! orders the given module Programs so that each comes before those of the modules that it requires (qore#7432)
+/** A module requires the modules that it requires directly or through other modules, user modules (loaded from source
+    or AOT modules) and binary modules alike, also those recorded at run time
+    (QoreModuleManager::getTeardownModuleDependencies()).  The modules that no module left requires are taken in the
+    given order.  The modules of a cycle (which modules loaded at run time can make) require each other: a module is
+    held back only by a module that requires it and that it does not require, so the cycle is broken at the first of
+    its modules that no module outside it requires, and never at a module that it requires.  The data of the modules
+    that require a module is therefore cleared before its own: the objects that they hold, which can be objects of its
+    classes, are released while the static variables of its classes, which their destructors can use, still exist.
+*/
+static void qore_order_module_programs_dependents_first(std::vector<QoreModuleProgramInfo>& mpgms) {
+    const size_t n = mpgms.size();
+    // the modules that each module requires directly, found once for each module reached (also modules that are not
+    // in the list, through which the requirements go)
+    std::map<std::string, strset_t> direct;
+    auto get_direct = [&direct](const std::string& name) -> const strset_t& {
+        auto i = direct.find(name);
+        if (i == direct.end()) {
+            strset_t deps;
+            QMM.getTeardownModuleDependencies(name.c_str(), deps);
+            i = direct.emplace(name, std::move(deps)).first;
+        }
+        return i->second;
+    };
+    // the index of each module of the list
+    std::map<std::string, size_t> index;
+    for (size_t i = 0; i < n; ++i) {
+        index.emplace(mpgms[i].name, i);
+    }
+    // requires[i][j]: module i requires module j, directly or through other modules
+    std::vector<std::vector<bool>> requires_mod(n, std::vector<bool>(n, false));
+    for (size_t i = 0; i < n; ++i) {
+        strset_t reached;
+        std::vector<std::string> todo{mpgms[i].name};
+        while (!todo.empty()) {
+            std::string name = std::move(todo.back());
+            todo.pop_back();
+            for (const std::string& d : get_direct(name)) {
+                if (reached.insert(d).second) {
+                    todo.push_back(d);
+                    auto ii = index.find(d);
+                    if (ii != index.end()) {
+                        requires_mod[i][ii->second] = true;
+                    }
+                }
+            }
+        }
+    }
+    std::vector<QoreModuleProgramInfo> ordered;
+    ordered.reserve(n);
+    std::vector<size_t> left(n);
+    for (size_t i = 0; i < n; ++i) {
+        left[i] = i;
+    }
+    while (!left.empty()) {
+        // a module is held back only by a module left that requires it and that it does not require: a module of the
+        // same cycle does not hold it back; such a module always exists
+        size_t pick = 0;
+        for (size_t li = 0; li < left.size(); ++li) {
+            const size_t i = left[li];
+            bool held = false;
+            for (size_t lj = 0; lj < left.size() && !held; ++lj) {
+                const size_t j = left[lj];
+                held = j != i && requires_mod[j][i] && !requires_mod[i][j];
+            }
+            if (!held) {
+                pick = li;
+                break;
+            }
+        }
+        ordered.push_back(std::move(mpgms[left[pick]]));
+        left.erase(left.begin() + pick);
+    }
+    mpgms = std::move(ordered);
+}
+
 // deletes only user modules
 void QoreModuleManager::delUser() {
     //md_map.show("md_map");
@@ -7456,10 +7545,23 @@ void QoreModuleManager::delUser() {
     // This ensures static variable destructors run while all module programs are still alive, preventing
     // use-after-free when a shared class's static vars are destroyed by the last module to clear them
     // (which may not be the module that owns the class program)
+    // the user modules loaded from source and the AOT user modules (binary modules, deleted in cleanup()) are cleared
+    // together, each before the modules that it requires (qore#7432): a module's objects that its static variables
+    // hold can be objects of the classes of a module that it requires, whose destructors use the static variables of
+    // their own classes (see qore_order_module_programs_dependents_first() for cycles)
+    std::vector<QoreModuleProgramInfo> module_programs;
+    for (auto& i : map) {
+        if (i.second->isUser()) {
+            module_programs.push_back({i.first, static_cast<QoreUserModule*>(i.second)->getProgram()});
+        } else if (QoreProgram* aot_pgm = qore_aot_get_module_pgm(i.first)) {
+            module_programs.push_back({i.first, aot_pgm});
+        }
+    }
+    qore_order_module_programs_dependents_first(module_programs);
     {
         ExceptionSink xsink;
-        for (QoreUserModule* um : user_modules) {
-            QoreProgram* pgm = um->getProgram();
+        for (const QoreModuleProgramInfo& mp : module_programs) {
+            QoreProgram* pgm = mp.pgm;
             pgm->waitForTermination();
             // a foreign thread that runs in the Program keeps its data (see qore_program_private::leaveForeignThreads())
             if (qore_program_private::get(*pgm)->leaveForeignThreads()) {
@@ -7476,6 +7578,7 @@ void QoreModuleManager::delUser() {
                 return;
             }
         }
+        // the AOT user modules that are not in the module map, if any (the data of a Program is cleared once)
         qore_aot_clear_all_module_namespace_data(xsink);
         qore_module_cleanup_drain_work();
         // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
@@ -7489,14 +7592,15 @@ void QoreModuleManager::delUser() {
         // module owns can hold objects of the classes of the modules that depend on it, which are deleted before
         // it in Phase 2 (a type that DataProvider creates and a RestSchemaValidator schema object caches through an
         // opaque reference refers to schema objects, for example); breaking the cycle only when the owning module
-        // is deleted would run the destructors of those objects after the programs of their classes are gone
-        for (QoreUserModule* um : user_modules) {
+        // is deleted would run the destructors of those objects after the programs of their classes are gone; in
+        // the order of the namespace data above
+        for (const QoreModuleProgramInfo& mp : module_programs) {
             // the targets of a Program that a foreign thread runs in are not destroyed under it
-            if (!qore_program_private::get(*um->getProgram())->leaveForeignThreads()) {
-                qore_program_private::get(*um->getProgram())->clearOpaqueTargets(&xsink);
+            if (!qore_program_private::get(*mp.pgm)->leaveForeignThreads()) {
+                qore_program_private::get(*mp.pgm)->clearOpaqueTargets(&xsink);
             }
         }
-        // AOT user modules are binary modules, deleted after all user modules in cleanup()
+        // the AOT user modules that are not in the module map, if any (the targets of the others are cleared)
         qore_aot_clear_all_module_opaque_targets(xsink);
         qore_module_cleanup_drain_work();
         // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
@@ -7687,6 +7791,33 @@ void QoreModuleManager::getModuleDependencies(const char* name, strset_t& deps) 
     std::vector<std::string> binary_deps;
     getBinaryModuleDependencies(i, binary_deps);
     deps.insert(binary_deps.begin(), binary_deps.end());
+}
+
+void QoreModuleManager::getTeardownModuleDependencies(const char* name, strset_t& deps) {
+    getModuleDependencies(name, deps);
+    AutoLocker al(mutex);
+    module_map_t::const_iterator i = map.find(name);
+    if (i == map.end()) {
+        return;
+    }
+    // the binary modules that an AOT module required at run time (those of a user module are added above)
+    if (!i->second->isUser()) {
+        for (md_map_t::const_iterator bi = binary_user_dep_map.begin(), e = binary_user_dep_map.end(); bi != e;
+                ++bi) {
+            if (bi->second.find(name) != bi->second.end()) {
+                deps.insert(bi->first);
+            }
+        }
+    }
+    // the user modules applied to the Program of an AOT module at run time (issue #6501), and the user modules applied
+    // at run time to the Program of a module that they require (qore#7310): user module -> the modules requiring it
+    for (ModMap* m : {&aot_user_dep_map, &runtime_importer_map}) {
+        for (md_map_t::iterator ui = m->begin(), e = m->end(); ui != e; ++ui) {
+            if (ui->second.find(name) != ui->second.end()) {
+                deps.insert(ui->first);
+            }
+        }
+    }
 }
 
 bool QoreModuleManager::deleteUnrequiredNativeModule() {

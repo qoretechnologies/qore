@@ -81,7 +81,7 @@ hash<Container> h4 = new hash<Container>(("i": 2));
     the thread that evaluates the expression (see @ref threading_and_variables), and to global variables, but not to
     the local variables of a function, method or closure, so naming one is a parse error.
 
-    Note that it's illegal to assign a value to an unassigned lvalue declared as a typed hash; in such cases a
+    Assigning a key of an uninitialized typed hash, including an optional typed hash holding @ref nothing, is illegal. A
     \c HASHDECL-IMPLICIT-CONSTRUCTION-ERROR exception is thrown as in the following example:
     @code{.py}
 hash<Container> c;

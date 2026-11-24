@@ -12,7 +12,8 @@
 # connection: its reset has another token, which the client does not take.  The connect timeout of the client is long,
 # so that a request that waited for it would fail the checks of the reset; the counts of the resets that the process
 # sent and received (dbg_quic_stateless_reset_counts()) show which happened, with no clock involved.  The server is
-# stopped as a killed one is with dbg_quic_silent_server_close() (debug builds).
+# stopped as a killed one is with dbg_quic_silent_server_close() (debug builds), once neither the client nor the server
+# has anything in flight (dbg_quic_wait_all_idle()), so that the client sends nothing more until the request.
 
 %modern
 
@@ -148,6 +149,10 @@ class RestClientH3StatelessResetTest inherits QUnit::Test {
             assertEq("GET", rc.get("/").body.method);
         }
         assertTrue(rc.isHttp3Active(), "the client uses HTTP/3");
+        # the server stops only when neither side has anything to send (qore#7452): a packet of the client sent after it
+        # stopped would reach the new server before the request, which would reset the connection before the request
+        # was submitted, and a packet of the old server could arrive after the request
+        assertTrue(call_function("dbg_quic_wait_all_idle", HangGuard), "nothing is in flight");
         call_function("dbg_quic_silent_server_close", True);
         on_exit call_function("dbg_quic_silent_server_close", False);
         first.stop();

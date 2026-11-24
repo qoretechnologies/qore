@@ -1,0 +1,23 @@
+object: 2
+class: 3
+hash: {a: 1, b: 2}
+hash<auto>: {a: 1, b: 2, c: 3}
+hash after the variable changed: {}
+list: [1, 2]
+destroyed object: RUNTIME-TYPE-ERROR
+destroyed object of a class: OBJECT-ALREADY-DELETED
+destroyed object, *object: OBJECT-ALREADY-DELETED
+freed hash: HASH-ERROR
+freed hash: {}
+freed list: LIST-ERROR
+freed list: []
+hashdecl: {a: 5}
+freed hashdecl: HASH-ERROR
+converted hash: RUNTIME-TYPE-ERROR
+converted hash: {a: 1}
+converted to hash<string, int>: RUNTIME-TYPE-ERROR
+converted to hash<string, int>: {a: 1}
+converted to list<int>: RUNTIME-TYPE-ERROR
+converted to list<int>: [1]
+read-only import: 1
+global: 2
