@@ -111,6 +111,9 @@ Logger logger("test", LoggerLevel::getLevelError());
 logger.addAppender(capture);
 HttpServer server(<HttpServerOptionInfo>{
     "logger": logger,
+    # no limit, so that the buffer of a body read grows until no more memory can be allocated for it, and not only
+    # up to the default limit of a body that the server reads into memory
+    "max_request_body_size": 0,
 });
 server.setDefaultHandler("grow", handler);
 int port = server.addListener(<HttpListenerOptionInfo>{"service": 0, "node": "127.0.0.1"}).port;

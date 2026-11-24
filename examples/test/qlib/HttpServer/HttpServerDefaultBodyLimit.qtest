@@ -191,10 +191,12 @@ class HttpServerDefaultBodyLimitTest inherits QUnit::Test {
     /** @param complete if False, only the header is sent for a body with a \c Content-Length, which a server that
         refuses it answers without reading any of it, and the chunks of a chunked body are sent without the last
         chunk, so that the server reads all the data that it is sent before it answers
+        @param size_line_only if True, only the size line of one chunk of the whole size is sent after the header
 
         @return the response header with \c body and \c closed (True if the server closed the connection)
     */
-    private hash<auto> sendHttp1(int port, string path, int size, bool chunked, bool complete = True) {
+    private hash<auto> sendHttp1(int port, string path, int size, bool chunked, bool complete = True,
+            bool size_line_only = False) {
         Socket s();
         s.connect("localhost:" + port, Timeout);
         on_exit s.close();
@@ -210,7 +212,10 @@ class HttpServerDefaultBodyLimitTest inherits QUnit::Test {
         # the header is written as is: Socket::sendHTTPMessage() would set the Content-Length of the empty body
         s.send(sprintf("POST %s HTTP/1.1\r\n%s\r\n", path,
             (foldl $1 + $2, (map sprintf("%s: %s\r\n", $1.key, $1.value), hdr.pairIterator()))));
-        if (complete || chunked) {
+        if (size_line_only) {
+            # the size line of one chunk of the whole size, without its data
+            s.send(sprintf("%x\r\n", size));
+        } else if (complete || chunked) {
             int left = size;
             while (left) {
                 int n = min(left, PieceSize);
@@ -287,6 +292,10 @@ class HttpServerDefaultBodyLimitTest inherits QUnit::Test {
     http1ChunkedOverTest() {
         # the body read with getMessageBody() is refused after the chunk that exceeds the limit
         hash<auto> resp = sendHttp1(default_port, "/buf", OverSize, True, False);
+        assertEq(413, resp.status_code, resp.body);
+        assertTrue(resp.closed);
+        # a chunk whose size exceeds the limit is refused at its size line, before any of its data is read
+        resp = sendHttp1(default_port, "/buf", Limit + 1, True, False, True);
         assertEq(413, resp.status_code, resp.body);
         assertTrue(resp.closed);
     }
