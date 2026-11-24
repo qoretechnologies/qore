@@ -1098,13 +1098,14 @@ public hashdecl HttpListenerOptionInfo {
     */
     int sse_max_buffer_size = 1048576;
 
-    #! The minimum rate in bytes per second at which a client must take a streamed HTTP/2 or HTTP/3 response
+    #! The minimum rate in bytes per second at which a client must take an HTTP/1 controller response or a streamed HTTP/2 or HTTP/3 response
     /** A stream that the client takes less of while the server waits for it is ended, so that the client cannot hold
         a handler thread by taking very little data; 0 disables the check.  The rate applies to each stream, so a
         client with many concurrent streams on one slow connection shares that connection's rate among them; a listener
         that serves such clients may need a lower value.  The default is
         @ref HttpServer::DefaultStreamSendMinRate "DefaultStreamSendMinRate" (1 KiB/s).  It applies to a response
-        body that a handler thread sends; a body from an @ref Qore::InputStream "InputStream" that the I/O thread
+        body that the HTTP/1 controller sends. On HTTP/2 and HTTP/3 it applies to a body that a handler thread
+        sends; a body from an @ref Qore::InputStream "InputStream" that the I/O thread
         pumps directly holds no thread and is not checked.
 
         @since HttpServerUtil 1.6
@@ -3618,7 +3619,7 @@ public class CallbackInputStream inherits InputStream {
 #! The time without progress from the peer after which the send of a streamed HTTP/2 or HTTP/3 response fails
 public const StreamStallTimeout = 30m;
 
-#! The default minimum rate in bytes per second at which a client must take a streamed HTTP/2 or HTTP/3 response
+#! The default minimum rate in bytes per second at which a client must take an HTTP/1 controller response or a streamed HTTP/2 or HTTP/3 response
 /** @since HttpServerUtil 1.6
 */
 public const DefaultStreamSendMinRate = 1024;

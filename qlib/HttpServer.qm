@@ -1092,7 +1092,8 @@ public hashdecl HttpServerOptionInfo {
 
     #! The time allowed for an I/O operation of a connection
     /** This is the time allowed to read a request header once a request has started to arrive, to read the first
-        request of a new connection, and to send a response.  An idle keep-alive connection is waited for the idle
+        request of a new connection, and for an HTTP/1 response send by the controller to make progress.  The send
+        timeout starts again as the peer takes data.  An idle keep-alive connection is waited for the idle
         time (\c ttl) plus this time, which covers reading the header of the next request: a connection that sends
         nothing for longer is closed.  A connection whose requests are answered by fast routes renews its timeout
         with each request.

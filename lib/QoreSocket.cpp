@@ -17131,6 +17131,12 @@ size_t SocketSendPollOperation::getBytesSent() const {
     return static_cast<SocketSendPollState*>(poll_state.get())->getBytesSent();
 }
 
+int64 SocketSendPollOperation::getDeliveredBytes() const {
+    AutoLocker al(sock->priv->m);
+    return std::max<int64>(0, static_cast<int64>(getBytesSent())
+        - qore_socket_private::getUnacknowledgedBytes(qore_socket_private::get(*sock->priv->socket)->sock));
+}
+
 const char* SocketSendPollOperation::getStateImpl() const {
     return sent ? "sent" : "sending";
 }
@@ -21430,6 +21436,16 @@ SocketSendAndReadHeaderPollOperation::SocketSendAndReadHeaderPollOperation(Excep
     }
 }
 
+int64 SocketSendAndReadHeaderPollOperation::getResponseSendProgress(bool& waiting_for_socket) const {
+    AutoLocker al(sock->priv->m);
+    if (phase != Phase::Sending || !poll_state) {
+        return -1;
+    }
+    waiting_for_socket = true;
+    return std::max<int64>(0, static_cast<int64>(static_cast<SocketSendPollState*>(poll_state.get())->getBytesSent())
+        - qore_socket_private::getUnacknowledgedBytes(qore_socket_private::get(*sock->priv->socket)->sock));
+}
+
 const char* SocketSendAndReadHeaderPollOperation::getStateImpl() const {
     switch (phase) {
         case Phase::Sending: return "sending";
@@ -21757,10 +21773,6 @@ int SocketSendAndReadHeaderPollOperation::startFastSend(std::shared_ptr<const st
         return -1;
     }
     phase = Phase::Sending;
-    if (idle_ttl_ms > 0) {
-        // on the monotonic clock, as the deadline given to the constructor (#6150)
-        idle_timeout_ms = q_get_monotonic_us() / 1000 + idle_ttl_ms;
-    }
     int rc = poll_state->continuePoll(xsink);
     if (*xsink) {
         fast_wire.reset();
@@ -21790,6 +21802,10 @@ int SocketSendAndReadHeaderPollOperation::startFastSend(std::shared_ptr<const st
 }
 
 QoreHashNode* SocketSendAndReadHeaderPollOperation::enterIdle(ExceptionSink* xsink) {
+    // The peer gets the full keep-alive interval after the last response byte.
+    if (idle_ttl_ms > 0) {
+        idle_timeout_ms = q_get_monotonic_us() / 1000 + idle_ttl_ms;
+    }
     responded = true;
     phase = Phase::Idle;
     // the response was sent: a draining server closes the connection unless a request has arrived already, which is
@@ -21826,7 +21842,8 @@ SocketSendStreamAndReadHeaderPollOperation::SocketSendStreamAndReadHeaderPollOpe
           content_length(content_length),
           chunked_encoding(chunked),
           fused(fused),
-          idle_timeout_ms(idle_timeout_ms), header_output(nullptr) {
+          idle_timeout_ms(idle_timeout_ms),
+          idle_ttl_ms(std::max<int64>(0, idle_timeout_ms - q_get_monotonic_us() / 1000)), header_output(nullptr) {
 
     if (!is->isIoThreadSafe()) {
         xsink->raiseException("HTTP-STREAM-ERROR", "InputStream is not I/O thread safe");
@@ -21856,6 +21873,20 @@ SocketSendStreamAndReadHeaderPollOperation::SocketSendStreamAndReadHeaderPollOpe
     }
 }
 
+int64 SocketSendStreamAndReadHeaderPollOperation::getResponseSendProgress(bool& waiting_for_socket) const {
+    AutoLocker al(sock->priv->m);
+    if (phase != Phase::SendHeaders && phase != Phase::StreamBody) {
+        return -1;
+    }
+    waiting_for_socket = bool(poll_state);
+    int64 written = phase == Phase::StreamBody ? hdr_size + bytes_sent : 0;
+    if (poll_state) {
+        written += static_cast<SocketSendPollState*>(poll_state.get())->getBytesSent();
+    }
+    return std::max<int64>(0, written
+        - qore_socket_private::getUnacknowledgedBytes(qore_socket_private::get(*sock->priv->socket)->sock));
+}
+
 const char* SocketSendStreamAndReadHeaderPollOperation::getStateImpl() const {
     switch (phase) {
         case Phase::SendHeaders: return "sending-headers";
@@ -21871,6 +21902,10 @@ const char* SocketSendStreamAndReadHeaderPollOperation::getStateImpl() const {
 }
 
 QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::enterIdle(ExceptionSink* xsink) {
+    // The peer gets the full keep-alive interval after the last response byte.
+    if (idle_ttl_ms > 0) {
+        idle_timeout_ms = q_get_monotonic_us() / 1000 + idle_ttl_ms;
+    }
     phase = Phase::Idle;
     // the response was sent: a draining server closes the connection unless a request has arrived already, which is
     // then read and answered with Connection: close; the controller closes the connection when the operation
