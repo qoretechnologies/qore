@@ -341,19 +341,45 @@ static void qore_ftp_raise_file_open_error(ExceptionSink& open_xsink, const char
     xsink->raiseException("FTP-FILE-OPEN-ERROR", "%s", msg.c_str());
 }
 
-static int qore_ftp_write_temp_file_to_local_path(const char* tmp_path, const char* local_path,
-        ExceptionSink* xsink) {
-    int ifd = ::open(tmp_path, O_RDONLY);
+//! copies the temporary file that a download was written to to the local file
+/** The temporary file is in a directory that the caller can change: it is opened again without following a link, and
+    it must be the file that the download was written to (its device and inode), so that a file put in its place
+    meanwhile is never copied (qore#7498)
+
+    @param tmp_dev the device of the temporary file written
+    @param tmp_ino the inode of the temporary file written
+*/
+static int qore_ftp_write_temp_file_to_local_path(const char* tmp_path, dev_t tmp_dev, ino_t tmp_ino,
+        const char* local_path, ExceptionSink* xsink) {
+#ifdef O_NOFOLLOW
+    int ifd = q_open_policy_checked(tmp_path, O_RDONLY | O_NOFOLLOW, 0, xsink);
+#else
+    int ifd = q_open_policy_checked(tmp_path, O_RDONLY, 0, xsink);
+#endif
     if (ifd < 0) {
-        xsink->raiseErrnoException("FTP-FILE-WRITE-ERROR", errno, "cannot open temporary file '%s'", tmp_path);
+        if (!*xsink) {
+            xsink->raiseErrnoException("FTP-FILE-WRITE-ERROR", errno, "cannot open temporary file '%s'", tmp_path);
+        }
         return -1;
     }
+    {
+        struct stat sbuf;
+        if (fstat(ifd, &sbuf) || sbuf.st_dev != tmp_dev || sbuf.st_ino != tmp_ino) {
+            ::close(ifd);
+            xsink->raiseException("FTP-FILE-WRITE-ERROR", "the temporary file '%s' was replaced during the "
+                "download", tmp_path);
+            return -1;
+        }
+    }
 
-    int ofd = ::open(local_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    // the policy checked the name; the file actually opened is checked too, and it is truncated only then (qore#7498)
+    int ofd = q_open_policy_checked(local_path, O_WRONLY | O_CREAT | O_TRUNC, 0644, xsink);
     if (ofd < 0) {
         int en = errno;
         ::close(ifd);
-        xsink->raiseErrnoException("FTP-FILE-OPEN-ERROR", en, "%s", local_path);
+        if (!*xsink) {
+            xsink->raiseErrnoException("FTP-FILE-OPEN-ERROR", en, "%s", local_path);
+        }
         return -1;
     }
 
@@ -2271,13 +2297,20 @@ int QoreFtpClient::get(const char* remotepath, const char* localname, ExceptionS
         }
         return rv;
     }
+    // the identity of the file written, which the copy must read (qore#7498)
+    struct stat tmp_sbuf;
+    if (fstat(os->getFD(), &tmp_sbuf)) {
+        xsink->raiseErrnoException("FTP-FILE-WRITE-ERROR", errno, "cannot get the status of temporary file '%s'",
+            tmp_path.c_str());
+        return -1;
+    }
     os->close(xsink);
     os.discard();
     if (*xsink) {
         return -1;
     }
 
-    return qore_ftp_write_temp_file_to_local_path(tmp_path.c_str(), *ln, xsink);
+    return qore_ftp_write_temp_file_to_local_path(tmp_path.c_str(), tmp_sbuf.st_dev, tmp_sbuf.st_ino, *ln, xsink);
 }
 
 // public locked

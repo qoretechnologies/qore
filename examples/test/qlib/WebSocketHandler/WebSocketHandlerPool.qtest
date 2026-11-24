@@ -90,11 +90,11 @@ class EchoHandler inherits WebSocketHandler {
     }
 
     #! reports the end of the handler's cleanup of a connection, after which the connection is no longer registered
-    private finishConnection(WebSocketConnection wsc, *HttpWebSocketPollOperationBase ws_poll_op, string cid) {
+    private finishConnection(WebSocketConnection wsc, string cid) {
         on_exit if (ws_ended) {
             ws_ended.dec();
         }
-        WebSocketHandler::finishConnection(wsc, ws_poll_op, cid);
+        WebSocketHandler::finishConnection(wsc, cid);
     }
 }
 

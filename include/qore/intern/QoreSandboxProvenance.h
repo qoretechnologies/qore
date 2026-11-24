@@ -90,6 +90,11 @@ DLLLOCAL void qore_capture_call_reference_origin(const ResolvedCallReferenceNode
     that of the code that created the Program count (qore_program_private::getSandboxManagerRef())
 */
 DLLLOCAL bool qore_object_program_is_sandboxed(const QoreObject* obj);
+//! Returns true and the ID of the Program of the class of the object in \a id if a sandbox governs that Program
+/** As qore_object_program_is_sandboxed(), for the code that identifies the tenant whose code declares the class of an
+    object (SandboxManager::getSandboxedProgramId(); qore#7110)
+*/
+DLLLOCAL bool qore_object_sandboxed_program_id(const QoreObject* obj, qore_program_id_t& id);
 //! Returns the Program whose code a closure runs: the Program that defines it (qore#6520)
 DLLLOCAL const QoreProgram* qore_closure_code_program(const ResolvedCallReferenceNode* closure);
 //! Returns the restrictions of a callable value or object as a mask of parse options (see the public

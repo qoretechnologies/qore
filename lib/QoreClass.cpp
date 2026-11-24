@@ -3013,6 +3013,120 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
     return 0;
 }
 
+//! keeps the source Program of the class of QoreImplicitConstructorProgramHelper
+/** A base class listed before ProgramThreadCountContextHelper, so that the Program is released after the thread has
+    left it, as a QoreSourceProgramHolder declared before the helper that enters the Program releases it
+*/
+struct QoreImplicitConstructorSourceProgram {
+    QoreSourceProgramHolder spgm_holder;
+
+    DLLLOCAL QoreImplicitConstructorSourceProgram(ExceptionSink* xsink) : spgm_holder(xsink) {
+    }
+};
+
+//! Enters the Program of a class without a constructor of its own for the constructors of its base classes
+/** A class with a constructor runs it, and the constructors of its base classes, in its Program with the runtime
+    parse options that the Program has now (CodeEvaluationHelper::initImpl()), which the functional-domain check of a
+    builtin base class constructor reads (QoreFunction::runtimeFindVariantImpl()); a class without one enters its
+    Program here in the same way, so that a restriction set on the Program after parsing applies whether or not the
+    class has a constructor (qore#7513): the call Program context, the override of a call of module code (for a
+    sandboxed caller, its restrictions), and the Program's runtime parse options.  Nothing is changed when the class's
+    Program is current and has the runtime parse options in effect already.
+*/
+class QoreImplicitConstructorProgramHelper : private QoreImplicitConstructorSourceProgram,
+        public ProgramThreadCountContextHelper {
+public:
+    DLLLOCAL QoreImplicitConstructorProgramHelper(const QoreClass& cls, RuntimeConfig& rc, ExceptionSink* xsink)
+            : QoreImplicitConstructorSourceProgram(xsink), rc(rc) {
+        QoreProgram* pgm = qore_get_method_pgm_context(cls, spgm_holder);
+        if (!pgm || *xsink) {
+            return;
+        }
+        QoreProgram* old_pgm = qore_get_call_program_context();
+        QoreParseOptions pgm_po = qore_program_private::getParseOptions(*pgm);
+        if (pgm == old_pgm && pgm == ::getProgram() && runtime_get_parse_options() == pgm_po
+                && rc.getParseOptions() == pgm_po) {
+            return;
+        }
+        // as CodeEvaluationHelper::initImpl() enters the Program of a call
+        const QoreProgram* caller_code_pgm;
+        QoreParseOptions caller_runtime_po = runtime_take_call_caller_parse_options(caller_code_pgm);
+        if (old_pgm) {
+            old_call_program_context = get_set_program_call_context(old_pgm);
+            restore_call_program_context = true;
+        }
+        QoreProgram* caller_pgm = (old_pgm && old_pgm != pgm) ? old_pgm : ::getProgram();
+        if (caller_pgm && caller_pgm != pgm && qore_program_is_module_inline(pgm)) {
+            module_po_override.set(qore_get_module_call_runtime_po_override(pgm, caller_runtime_po, caller_pgm));
+        }
+        set(xsink, pgm, true);
+        if (*xsink) {
+            return;
+        }
+        if (pgm != old_pgm || runtime_get_parse_options() != pgm_po) {
+            old_rc_po = rc.getParseOptions();
+            rc.setParseOptions(pgm_po);
+            swap_runtime_parse_options(pgm_po, old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
+            restore_runtime_po = true;
+        }
+    }
+
+    DLLLOCAL ~QoreImplicitConstructorProgramHelper() {
+        if (restore_runtime_po) {
+            rc.setParseOptions(old_rc_po);
+            update_runtime_statement_location(old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
+        }
+        if (restore_call_program_context) {
+            set_program_call_context(old_call_program_context);
+        }
+    }
+
+    //! returns true if the thread runs in the class's Program with its options already, the usual case: the helper
+    //! would change nothing then, and is not created (see enter())
+    DLLLOCAL static bool inProgram(const QoreClass& cls, const RuntimeConfig& rc) {
+        return qore_class_private::get(cls)->isSourceProgram(runtime_get_program_with_current_options(rc));
+    }
+
+    //! enters the class's Program with \a helper unless the thread runs in it with its options already (inProgram())
+    DLLLOCAL static void enter(std::optional<QoreImplicitConstructorProgramHelper>& helper, const QoreClass& cls,
+            RuntimeConfig& rc, ExceptionSink* xsink) {
+        if (!inProgram(cls, rc)) [[unlikely]] {
+            helper.emplace(cls, rc, xsink);
+        }
+    }
+
+    DLLLOCAL QoreImplicitConstructorProgramHelper(const QoreImplicitConstructorProgramHelper&) = delete;
+    DLLLOCAL QoreImplicitConstructorProgramHelper& operator=(const QoreImplicitConstructorProgramHelper&) = delete;
+
+private:
+    RuntimeConfig& rc;
+    //! the override of a call of module code, restored before the Program is left (members are destroyed in reverse)
+    RuntimeParseOptionsOverrideHelper module_po_override;
+    QoreProgram* old_call_program_context = nullptr;
+    const AbstractStatement* old_runtime_stmt = nullptr;
+    const QoreProgramLocation* old_runtime_ctx_loc = nullptr;
+    QoreParseOptions old_runtime_po;
+    QoreParseOptions old_rc_po;
+    bool restore_call_program_context = false;
+    bool restore_runtime_po = false;
+};
+
+//! Runs the constructors of the base classes of a class without a constructor in the class's Program (qore#7513)
+/** The case of execBaseClassConstructorImpl() where the thread does not run in the class's Program with its options
+    (QoreImplicitConstructorProgramHelper::inProgram()); a function of its own, so that the helper is not in the frame
+    of execBaseClassConstructorImpl(), which recurses with the depth of a hierarchy of classes without constructors
+*/
+template <bool Lexical>
+static QORE_INTERN_NOINLINE void exec_base_class_constructors_in_class_program(const QoreClass& cls, const BCList& scl,
+        QoreObject* self, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreImplicitConstructorProgramHelper icph(cls, rc, xsink);
+    if (*xsink) {
+        return;
+    }
+    if constexpr (Lexical) scl.execConstructors({}, self, bceal, rc, xsink);
+    else scl.execConstructors(self, bceal, rc, xsink);
+}
+
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void qore_class_private::execBaseClassConstructorImpl(LexicalSemanticPolicy policy, QoreObject* self, BCEAList* bceal, RuntimeConfig& rc,
         ExceptionSink* xsink) const {
@@ -3020,11 +3134,25 @@ QORE_INTERN_ALWAYS_INLINE void qore_class_private::execBaseClassConstructorImpl(
     // if there is no constructor, execute the superclass constructors directly
     if (!constructor){
         if (scl) { // execute base class constructors if any
+            // a hierarchy of classes without constructors recurses here with its depth, which the parser accepts
+            // whatever the stack of the thread that constructs an object: each level checks the stack, so that a
+            // hierarchy too deep for the thread's stack raises STACK-LIMIT-EXCEEDED instead of overrunning it
+#ifdef QORE_MANAGE_STACK
+            if (check_stack(xsink)) {
+                return;
+            }
+#endif
             // in a hierarchy with a diamond, a class can be reached through more than one path: the base classes of a
             // class without a constructor are walked once for the object, as a class with a constructor is executed
             // once (qore#6513); only a class marked as reached through more than one path is recorded, so that
             // other objects cost nothing more
             if (multi_path.load(std::memory_order_relaxed) && bceal->visitNoConstructorClass(cls->getID())) {
+                return;
+            }
+            // the constructors of the base classes run in the class's Program, as a constructor of the class would
+            // run them (qore#7513)
+            if (!QoreImplicitConstructorProgramHelper::inProgram(*cls, rc)) [[unlikely]] {
+                exec_base_class_constructors_in_class_program<Lexical>(*cls, *scl, self, bceal, rc, xsink);
                 return;
             }
             if constexpr (Lexical) scl->execConstructors({}, self, bceal, rc, xsink);
@@ -3194,12 +3322,18 @@ QORE_INTERN_ALWAYS_INLINE QoreObject* qore_class_private::execConstructorImpl(Le
         // and the matched variant is pending
         if (!constructor && !variant) {
             if (scl) { // execute superconstructors if any
-                CodeContextHelper cch(xsink, CT_BUILTIN, "constructor", self, this);
-                // the class has no constructor, so its call site is the location of no frame: the constructors of
-                // the base classes are located where their calls are given, as in a class with a constructor
-                QoreHideCallSiteHelper hide_call_site(true);
+                // the constructors of the base classes run in the class's Program with its runtime parse options, as
+                // a constructor of the class would run them (qore#7513)
+                std::optional<QoreImplicitConstructorProgramHelper> icph;
+                QoreImplicitConstructorProgramHelper::enter(icph, *cls, rc, xsink);
+                if (!*xsink) {
+                    CodeContextHelper cch(xsink, CT_BUILTIN, "constructor", self, this);
+                    // the class has no constructor, so its call site is the location of no frame: the constructors
+                    // of the base classes are located where their calls are given, as in a class with a constructor
+                    QoreHideCallSiteHelper hide_call_site(true);
 
-                scl->execConstructors(self, *bceal, rc, xsink);
+                    scl->execConstructors(self, *bceal, rc, xsink);
+                }
             }
         } else {
             if (!constructor) {
@@ -11198,6 +11332,27 @@ int MethodFunctionBase::checkFinalResolution(const qore_class_private& cls, cons
                     "that the final method accepts and is selected before it", cls.name.c_str(), stat,
                     final_func.qc->getName(), getName(), fsig->getSignatureText(), stat, g->qc->getName(), getName(),
                     gsig->getSignatureText(), final_func.qc->getName());
+                return -1;
+            }
+        }
+
+        // A subclass cannot declare the name of an inherited final method in either method table (#7111).
+        // Check the declaring class: resolving an abstract method can copy an inherited variant into a local table.
+        for (const hm_method_t* methods : {&cls.hm, &cls.shm}) {
+            auto entry = methods->find(getName());
+            if (entry == methods->end()) {
+                continue;
+            }
+            const MethodFunctionBase* func = qore_method_private::get(*entry->second)->getFunction();
+            for (const auto* variant : func->vlist) {
+                if (METHV_const(variant)->getClassPriv() != &cls) {
+                    continue;
+                }
+                const UserSignature* sig = dynamic_cast<const UserSignature*>(variant->getSignature());
+                parse_error(sig ? *sig->getParseLocation() : *loc, "class '%s' cannot declare %smethod '%s': "
+                    "its name is reserved by parent class method final %s%s::%s(%s)", cls.name.c_str(),
+                    func->isStatic() ? "static " : "", getName(), stat, final_func.qc->getName(), getName(),
+                    fsig->getSignatureText());
                 return -1;
             }
         }

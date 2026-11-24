@@ -1,0 +1,596 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - descriptor aliases (/dev/fd/N) and the path of an open descriptor (F_GETPATH, /proc/self/fd)
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The sandbox filesystem policy applies to the file that is actually reached, not only to the name that reaches it:
+# a name can reach another file than the one it appears to name, such as a descriptor alias (/dev/fd/N reaches the
+# file of descriptor N of the process, which the host holds open) or a symbolic link.  Each entry point that opens,
+# reads, writes or inspects a file by name is run in a sandbox that allows its own directory and /dev (and /proc on
+# Linux) with names that reach a file outside of its directory, which must be denied without its content being read
+# or changed; the same entry points with names that reach files in its directory must still work.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%include ../classes/FtpServer.qc
+
+%exec-class SandboxOpenedFilePolicyTest
+
+class SandboxOpenedFilePolicyTest inherits QUnit::Test {
+    private {
+        #! the test directory
+        string dir;
+        #! the directory that the sandbox allows
+        string allowed;
+        #! the directory that the sandbox does not allow
+        string outside;
+        #! a file in the allowed directory
+        string inside_file;
+        #! a file outside of the allowed directory
+        string secret_file;
+        #! a file outside of the allowed directory that the host holds open for writing
+        string secret_rw_file;
+        #! the host's descriptor of the secret file
+        File secret_fh;
+        #! the host's descriptor of the secret file open for writing
+        File secret_rw_fh;
+        #! the host's descriptor of the file in the allowed directory
+        File inside_fh;
+        #! the host's listening socket, a descriptor without a path
+        Socket sock;
+        #! the descriptor numbers
+        int secret_fd;
+        int secret_rw_fd;
+        int inside_fd;
+        *int sock_fd;
+        #! the sandbox
+        Program sandbox;
+    }
+
+    #! the content of the secret file
+    const Secret = "SECRET-CONTENT\n";
+    #! the content of the file in the allowed directory
+    const Inside = "INSIDE-CONTENT\n";
+
+    #! the read entry points, run in the sandbox
+    const ReadOps = (
+        "File::open2", "File::open", "ReadOnlyFile::constructor", "ReadOnlyFile::open", "ReadOnlyFile::readTextFile",
+        "ReadOnlyFile::readBinaryFile", "ReadOnlyFile::startPollRead", "FileInputStream", "FileLineIterator",
+        "Dir::openFile",
+    );
+
+    #! the write entry points, run in the sandbox
+    const WriteOps = (
+        "File::open2-trunc", "File::open2-append", "FileOutputStream",
+    );
+
+    #! the entry points that read the status of a file, run in the sandbox
+    const InfoOps = (
+        "hstat", "stat", "is_file", "is_readable", "is_writable",
+    );
+
+    #! the code of the sandbox
+    const SandboxCode = '
+auto sub run(string op, string path) {
+    switch (op) {
+        case "File::open2": {
+            File f();
+            f.open2(path);
+            return f.read(-1);
+        }
+        case "File::open": {
+            File f();
+            if (f.open(path)) {
+                throw "OPEN-FAILED", strerror();
+            }
+            return f.read(-1);
+        }
+        case "ReadOnlyFile::constructor": {
+            ReadOnlyFile f(path);
+            return f.read(-1);
+        }
+        case "ReadOnlyFile::open": {
+            ReadOnlyFile f("/dev/null");
+            f.open(path);
+            return f.read(-1);
+        }
+        case "ReadOnlyFile::readTextFile":
+            return ReadOnlyFile::readTextFile(path);
+        case "ReadOnlyFile::readBinaryFile": {
+            *binary b = ReadOnlyFile::readBinaryFile(path);
+            return b ? b.toString() : NOTHING;
+        }
+        case "ReadOnlyFile::startPollRead": {
+            File f();
+            AbstractPollOperation op = f.startPollRead(path, True);
+            while (*hash<SocketPollInfo> info = op.continuePoll()) {
+                Socket::poll((info,), 5s);
+            }
+            return op.getOutput();
+        }
+        case "FileInputStream": {
+            FileInputStream s(path);
+            *binary b = s.read(4096);
+            return b ? b.toString() : NOTHING;
+        }
+        case "FileLineIterator": {
+            FileLineIterator i(path);
+            return i.next() ? i.getValue() + "\n" : NOTHING;
+        }
+        case "Dir::openFile": {
+            Dir d();
+            d.chdir(dirname(path));
+            File f = d.openFile(basename(path), O_RDONLY);
+            return f.read(-1);
+        }
+        case "File::open2-trunc": {
+            File f();
+            f.open2(path, O_WRONLY | O_TRUNC);
+            f.write("PWNED");
+            return "written";
+        }
+        case "File::open2-append": {
+            File f();
+            f.open2(path, O_WRONLY | O_APPEND);
+            f.write("PWNED");
+            return "written";
+        }
+        case "FileOutputStream": {
+            FileOutputStream s(path, True);
+            s.write(binary("PWNED"));
+            s.close();
+            return "written";
+        }
+        case "hstat":
+            return hstat(path).size;
+        case "stat":
+            return stat(path)[7];
+        case "is_file":
+            return is_file(path);
+        case "is_readable":
+            return is_readable(path);
+        case "is_writable":
+            return is_writable(path);
+    }
+    throw "TEST-ERROR", sprintf("unknown operation %y", op);
+}
+';
+
+    constructor() : QUnit::Test("sandbox opened file policy", "1.0", \ARGV) {
+        addTestCase("a descriptor alias of a file outside of the allowed directory is denied", \aliasDeniedTest());
+        addTestCase("a descriptor alias of a file in the allowed directory is allowed", \aliasAllowedTest());
+        addTestCase("a descriptor alias of a descriptor without a path is denied", \aliasNoPathTest());
+        addTestCase("a symbolic link to a file outside of the allowed directory is denied", \symlinkDeniedTest());
+        addTestCase("a symbolic link to a descriptor alias is denied", \symlinkAliasDeniedTest());
+        addTestCase("files in the allowed directory are allowed", \insideAllowedTest());
+        addTestCase("writes through a descriptor alias change no file outside of the allowed directory",
+            \aliasWriteDeniedTest());
+        addTestCase("O_RDONLY | O_TRUNC needs write access", \readOnlyTruncTest());
+        addTestCase("a file that the policy allows is truncated as without a policy", \allowedTruncTest());
+        addTestCase("a link replaced between the check of its name and the open is denied", \swapDeniedTest());
+        addTestCase("the temporary file of FtpClient::get() is not reopened through a link", \ftpTempSwapTest());
+        addTestCase("a procfs link to a removed file is denied", \removedProcLinkTest());
+        addTestCase("a directory replaced while it is listed is not read", \dirListSwapTest());
+        addTestCase("a link can be made only to a target that the policy allows", \symlinkTargetTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dir = make_tmp_dir("qore-opened-file-policy-");
+        allowed = dir + DirSep + "allowed";
+        outside = dir + DirSep + "outside";
+        mkdir(allowed);
+        mkdir(outside);
+        inside_file = allowed + DirSep + "inside.txt";
+        secret_file = outside + DirSep + "secret.txt";
+        secret_rw_file = outside + DirSep + "secret-rw.txt";
+        writeFile(inside_file, Inside);
+        writeFile(secret_file, Secret);
+        writeFile(secret_rw_file, Secret);
+
+        secret_fh = new File();
+        secret_fh.open2(secret_file);
+        secret_rw_fh = new File();
+        secret_rw_fh.open2(secret_rw_file, O_RDWR);
+        inside_fh = new File();
+        inside_fh.open2(inside_file);
+        secret_fd = findFd(secret_file);
+        secret_rw_fd = findFd(secret_rw_file);
+        inside_fd = findFd(inside_file);
+
+        # a descriptor without a path
+        hash<string, bool> sockets_before = findSockets();
+        sock = new Socket();
+        sock.bind("127.0.0.1:0");
+        sock.listen();
+        foreach string fd in (keys findSockets()) {
+            if (!sockets_before{fd}) {
+                sock_fd = fd.toInt();
+                break;
+            }
+        }
+
+        symlink(secret_file, allowed + DirSep + "link-to-secret");
+        symlink(fdPath(secret_fd), allowed + DirSep + "link-to-alias");
+
+        SandboxManager manager();
+        manager.setFilesystemDefaultPolicy(False);
+        manager.addFilesystemAllowedPath(allowed, QSEC_READ | QSEC_WRITE | QSEC_CREATE);
+        manager.addFilesystemAllowedPath("/dev", QSEC_READ | QSEC_WRITE);
+        if (is_dir("/proc")) {
+            manager.addFilesystemAllowedPath("/proc", QSEC_READ | QSEC_WRITE);
+        }
+        sandbox = new Program(PO_MODERN | PO_NO_TERMINAL_IO);
+        sandbox.setSandboxManager(manager);
+        sandbox.parse(SandboxCode, "sandbox");
+    }
+
+    globalTearDown() {
+        if (sock) {
+            sock.close();
+        }
+        foreach *File f in ((secret_fh, secret_rw_fh, inside_fh)) {
+            if (f) {
+                f.close();
+            }
+        }
+        if (dir) {
+            remove_tree(dir);
+        }
+    }
+
+    #! the descriptor aliases of a descriptor of the process
+    private list<string> aliases(int fd) {
+        list<string> rv = (fdPath(fd),);
+        if (is_dir("/proc/self/fd")) {
+            rv += sprintf("/proc/self/fd/%d", fd);
+        }
+        return rv;
+    }
+
+    aliasDeniedTest() {
+        foreach string path in (aliases(secret_fd)) {
+            foreach string op in (ReadOps + InfoOps) {
+                assertDenied(op, path);
+            }
+        }
+        assertEq(Secret, ReadOnlyFile::readTextFile(secret_file), "the secret file is unchanged");
+    }
+
+    aliasAllowedTest() {
+        foreach string path in (aliases(inside_fd)) {
+            foreach string op in (ReadOps) {
+                # an alias that duplicates the descriptor shares its offset
+                inside_fh.setPos(0);
+                auto v = sandbox.callFunction("run", op, path);
+                assertEq(Inside, v, sprintf("%s(%y) reads the file in the allowed directory", op, path));
+            }
+            assertEq(Inside.size(), sandbox.callFunction("run", "hstat", path), sprintf("hstat(%y)", path));
+        }
+    }
+
+    aliasNoPathTest() {
+        if (!sock_fd) {
+            testSkip("the descriptor of the socket was not found");
+        }
+        foreach string path in (aliases(sock_fd)) {
+            foreach string op in (("File::open2", "ReadOnlyFile::constructor", "FileInputStream", "hstat")) {
+                assertDenied(op, path);
+            }
+        }
+    }
+
+    symlinkDeniedTest() {
+        string path = allowed + DirSep + "link-to-secret";
+        foreach string op in (ReadOps + InfoOps) {
+            assertDenied(op, path);
+        }
+    }
+
+    symlinkAliasDeniedTest() {
+        string path = allowed + DirSep + "link-to-alias";
+        foreach string op in (ReadOps + InfoOps) {
+            assertDenied(op, path);
+        }
+    }
+
+    insideAllowedTest() {
+        foreach string op in (ReadOps) {
+            assertEq(Inside, sandbox.callFunction("run", op, inside_file), sprintf("%s(%y)", op, inside_file));
+        }
+        assertEq(Inside.size(), sandbox.callFunction("run", "hstat", inside_file), "hstat");
+        assertTrue(sandbox.callFunction("run", "is_readable", inside_file), "is_readable");
+        assertTrue(sandbox.callFunction("run", "is_writable", inside_file), "is_writable");
+        # a device that the policy allows
+        assertEq("", sandbox.callFunction("run", "ReadOnlyFile::readTextFile", "/dev/null"), "/dev/null");
+
+        string scratch = allowed + DirSep + "scratch.txt";
+        writeFile(scratch, "OLD-CONTENT");
+        assertEq("written", sandbox.callFunction("run", "File::open2-trunc", scratch), "truncating write");
+        assertEq("PWNED", ReadOnlyFile::readTextFile(scratch), "the allowed file was truncated and written");
+        assertEq("written", sandbox.callFunction("run", "FileOutputStream", scratch), "appending write");
+        assertEq("PWNEDPWNED", ReadOnlyFile::readTextFile(scratch), "the allowed file was appended to");
+    }
+
+    aliasWriteDeniedTest() {
+        list<string> paths = aliases(secret_rw_fd) + (allowed + DirSep + "link-to-secret",);
+        foreach string path in (paths) {
+            foreach string op in (WriteOps) {
+                assertDenied(op, path);
+            }
+        }
+        assertEq(Secret, ReadOnlyFile::readTextFile(secret_rw_file), "the secret file open for writing is unchanged");
+        assertEq(Secret, ReadOnlyFile::readTextFile(secret_file), "the secret file is unchanged");
+    }
+
+    readOnlyTruncTest() {
+        SandboxManager manager();
+        manager.setFilesystemDefaultPolicy(False);
+        manager.addFilesystemAllowedPath(allowed, QSEC_READ);
+        Program p(PO_MODERN);
+        p.setSandboxManager(manager);
+        p.parse("auto sub run(string path) { File f(); f.open2(path, O_RDONLY | O_TRUNC); return 1; }", "ro");
+        string target = allowed + DirSep + "ro-trunc.txt";
+        writeFile(target, "KEEP");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () { p.callFunction("run", target); });
+        assertEq("KEEP", ReadOnlyFile::readTextFile(target), "the file was not truncated");
+    }
+
+    #! a link that is replaced between the check of its name and the open reaches a file outside of the allowed
+    #! directory: the file actually opened is denied, and it is neither read nor changed
+    swapDeniedTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the replacement of the link between the check and the open needs dbg_fs_swap_on_open()");
+        }
+        string link = allowed + DirSep + "swapped-link";
+        on_exit {
+            # disarms the hook if an operation did not consume it
+            call_function("dbg_fs_swap_on_open", "", "");
+        }
+        foreach string op in (ReadOps + WriteOps) {
+            # the link names a file in the allowed directory when its name is checked
+            unlink(link);
+            symlink(inside_file, link);
+            call_function("dbg_fs_swap_on_open", link, secret_file);
+            assertDenied(op, link);
+        }
+        assertEq(Secret, ReadOnlyFile::readTextFile(secret_file), "the secret file is unchanged");
+        assertEq(Inside, ReadOnlyFile::readTextFile(inside_file), "the file in the allowed directory is unchanged");
+    }
+
+    #! FtpClient::get() downloads to a temporary file that it then copies to the local file: a temporary file replaced
+    #! by a link to a file outside of the allowed directory meanwhile is not copied (qore#7498)
+    ftpTempSwapTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the replacement of the temporary file needs dbg_fs_swap_on_open()");
+        }
+        FtpServer serv(0, 0, "127.0.0.1");
+        on_exit serv.shutdown();
+        string url = sprintf("ftp://user:pass@127.0.0.1:%d", serv.getPort());
+
+        SandboxManager manager();
+        manager.setFilesystemDefaultPolicy(False);
+        manager.addFilesystemAllowedPath(allowed, QSEC_READ | QSEC_WRITE | QSEC_CREATE | QSEC_DELETE);
+        manager.setNetworkDefaultPolicy(True);
+        Program p(PO_MODERN);
+        p.setSandboxManager(manager);
+        p.parse("auto sub run(string url, string src, string dst) {
+    FtpClient fc(url);
+    fc.connect();
+    on_exit fc.disconnect();
+    fc.put(src, \"remote.txt\");
+    fc.get(\"remote.txt\", dst);
+    return 1;
+}", "ftp");
+        string src = allowed + DirSep + "ftp-src.txt";
+        string dst = allowed + DirSep + "ftp-dst.txt";
+        writeFile(src, Inside);
+        on_exit {
+            unlink(dst);
+            unlink(src);
+            # disarms the hook if the get did not consume it
+            call_function("dbg_fs_swap_on_open", "", "");
+        }
+        # the temporary file is created by its first open, and replaced before the second one, which copies it
+        call_function("dbg_fs_swap_on_open", dst + ".qore-ftp-tmp.*", secret_file, 1);
+        *hash<ExceptionInfo> err;
+        try {
+            p.callFunction("run", url, src, dst);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        assertTrue(exists err, "the get fails");
+        # the copy refuses the link that replaced the temporary file
+        assertEq("FTP-FILE-WRITE-ERROR", err.err, "the temporary file is not reopened through a link: " + err.desc);
+        assertFalse(is_file(dst) && ReadOnlyFile::readTextFile(dst) == Secret,
+            "the local file does not get the content of the file outside of the allowed directory");
+        assertEq(Secret, ReadOnlyFile::readTextFile(secret_file), "the secret file is unchanged");
+    }
+
+    #! a procfs link to a removed file ("/path (deleted)") names no file: it is denied also by the functions that only
+    #! check the name, and not checked as a path that a rule does not cover (qore#7498)
+    removedProcLinkTest() {
+        if (!is_dir("/proc/self/fd")) {
+            testSkip("no procfs");
+        }
+        string removed = outside + DirSep + "removed-secret.txt";
+        writeFile(removed, Secret);
+        File fh();
+        fh.open2(removed);
+        on_exit fh.close();
+        int fd = findFd(removed);
+        unlink(removed);
+        # a policy that allows everything but the file
+        SandboxManager manager();
+        manager.setFilesystemDefaultPolicy(True);
+        manager.addFilesystemDeniedPath(removed);
+        Program p(PO_MODERN);
+        p.setSandboxManager(manager);
+        p.parse("auto sub run(string path) { return hstat(path).size; }", "removed");
+        string path = sprintf("/proc/self/fd/%d", fd);
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () { p.callFunction("run", path); }, NOTHING,
+            "the status of the removed file through its procfs link");
+        # a file at the path that the link shows for the removed file does not make it a file of its own
+        string decoy = removed + " (deleted)";
+        writeFile(decoy, "decoy");
+        on_exit unlink(decoy);
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () { p.callFunction("run", path); }, NOTHING,
+            "the status of the removed file through its procfs link, with a file at the path that the link shows");
+    }
+
+    #! a directory that is replaced by another one while it is listed: the entries of the directory listed are
+    #! classified by the directory opened, not by its name again (qore#7498)
+    dirListSwapTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the replacement of the directory needs dbg_fs_swap_on_open()");
+        }
+        # in the allowed directory, "entry" is a file; outside, "entry" is a directory
+        string listed = allowed + DirSep + "listed";
+        mkdir(listed);
+        writeFile(listed + DirSep + "entry", Inside);
+        string other = outside + DirSep + "other";
+        mkdir(other);
+        mkdir(other + DirSep + "entry");
+        string link = allowed + DirSep + "listed-link";
+        symlink(listed, link);
+        on_exit {
+            unlink(link);
+            unlink(listed + DirSep + "entry");
+            rmdir(listed);
+            rmdir(other + DirSep + "entry");
+            rmdir(other);
+            call_function("dbg_fs_swap_on_open", "", "");
+        }
+        SandboxManager manager();
+        manager.setFilesystemDefaultPolicy(False);
+        manager.addFilesystemAllowedPath(allowed, QSEC_READ);
+        Program p(PO_MODERN);
+        p.setSandboxManager(manager);
+        p.parse("auto sub run(string path) { Dir d(); d.chdir(path); return d.listDirs(); }", "list");
+        call_function("dbg_fs_swap_on_open", link, other);
+        assertEq((), p.callFunction("run", link), "the file of the directory listed is not a directory");
+    }
+
+    #! a link made by sandboxed code must have a target that the policy allows, as the link would reach it
+    symlinkTargetTest() {
+        SandboxManager manager();
+        manager.setFilesystemDefaultPolicy(False);
+        manager.addFilesystemAllowedPath(allowed, QSEC_READ | QSEC_WRITE | QSEC_CREATE | QSEC_DELETE);
+        Program p(PO_MODERN);
+        p.setSandboxManager(manager);
+        p.parse("auto sub run(string target, string link) { symlink(target, link); return 1; }", "symlink");
+        string ldir = allowed + DirSep + "links";
+        mkdir(ldir);
+        list<string> made = ();
+        on_exit {
+            map unlink($1), made;
+            rmdir(ldir);
+        }
+        # targets within the allowed directory, relative, absolute, and not existing yet
+        foreach list<string> t in ((
+                ("../inside.txt", "rel"),
+                (inside_file, "abs"),
+                ("not-yet-created.txt", "dangling"),
+                (allowed + DirSep + "new-dir" + DirSep + "file.txt", "dangling-dir"),
+            )) {
+            string link = ldir + DirSep + t[1];
+            assertEq(1, p.callFunction("run", t[0], link), sprintf("a link to %y", t[0]));
+            made += link;
+        }
+        # targets outside of it, also through a relative target and through a link to outside
+        foreach list<string> t in ((
+                (secret_file, "out-abs"),
+                ("../../outside/secret.txt", "out-rel"),
+                (outside + DirSep + "not-yet.txt", "out-dangling"),
+                ("/nonexistent-qore-dir/x", "out-missing-root"),
+                (allowed + DirSep + "link-to-secret", "via-link"),
+            )) {
+            string link = ldir + DirSep + t[1];
+            assertThrows("FILESYSTEM-ACCESS-DENIED", sub () { p.callFunction("run", t[0], link); }, NOTHING,
+                sprintf("a link to %y", t[0]));
+            assertFalse(is_link(link), sprintf("no link to %y", t[0]));
+        }
+    }
+
+    #! O_TRUNC is applied only after the policy allowed the file opened, with the result of an open without a policy
+    allowedTruncTest() {
+        SandboxManager manager();
+        manager.setFilesystemDefaultPolicy(False);
+        manager.addFilesystemAllowedPath(allowed, QSEC_READ | QSEC_WRITE);
+        Program p(PO_MODERN);
+        p.setSandboxManager(manager);
+        p.parse("auto sub run(string path, int flags) { File f(); f.open2(path, flags); return 1; }", "rw");
+        foreach int flags in ((O_WRONLY | O_TRUNC, O_RDWR | O_TRUNC, O_RDONLY | O_TRUNC)) {
+            # the size that an open with the flags leaves without a policy (O_RDONLY | O_TRUNC truncates on some
+            # systems only)
+            string ref = allowed + DirSep + "trunc-ref.txt";
+            writeFile(ref, "KEEP");
+            {
+                File f();
+                f.open2(ref, flags);
+            }
+            int expected = hstat(ref).size;
+            string target = allowed + DirSep + "trunc.txt";
+            writeFile(target, "KEEP");
+            assertEq(1, p.callFunction("run", target, flags), sprintf("open with flags %d", flags));
+            assertEq(expected, hstat(target).size, sprintf("the size after an open with flags %d", flags));
+        }
+    }
+
+    #! asserts that an operation in the sandbox is denied without reading the file
+    private assertDenied(string op, string path, list<string> errs = ("FILESYSTEM-ACCESS-DENIED",)) {
+        string label = sprintf("%s(%y)", op, path);
+        try {
+            auto v = sandbox.callFunction("run", op, path);
+            assertTrue(False, sprintf("%s is denied; it returned %y", label, v));
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(inlist(ex.err, errs), sprintf("%s is denied: %s: %s", label, ex.err, ex.desc));
+            # the error names the path as given, never the file reached
+            assertFalse(ex.desc =~ /secret(-rw)?\.txt/, sprintf("%s: the error does not name the file reached: %s", label,
+                ex.desc));
+        }
+    }
+
+    #! the descriptor alias of a descriptor in /dev/fd
+    private static string fdPath(int fd) {
+        return sprintf("/dev/fd/%d", fd);
+    }
+
+    #! returns the number of the descriptor of the process that refers to the given file
+    private static int findFd(string path) {
+        hash<StatInfo> target = hstat(path);
+        for (int n = 0; n < 4096; ++n) {
+            *hash<StatInfo> h = hstat(fdPath(n));
+            # on macOS, the status of /dev/fd/N has the inode of the file, but the device of /dev/fd
+            if (h && h.type == "REGULAR" && h.inode == target.inode) {
+                return n;
+            }
+        }
+        throw "TEST-ERROR", sprintf("no descriptor of %y was found", path);
+    }
+
+    #! returns the numbers of the socket descriptors of the process
+    private static hash<string, bool> findSockets() {
+        hash<string, bool> rv = {};
+        for (int n = 0; n < 4096; ++n) {
+            *hash<StatInfo> h = hstat(fdPath(n));
+            if (h && h.type == "SOCKET") {
+                rv{n} = True;
+            }
+        }
+        return rv;
+    }
+
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+    }
+}

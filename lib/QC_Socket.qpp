@@ -1351,8 +1351,11 @@ static QoreStringNode* socket_exec_read_http_header_string(QoreObject* self, Qor
     QoreStringNodeValueHelper raw(*result);
     const size_t len = raw->size();
     SimpleRefHolder<QoreStringNode> hdr;
-    if (len >= 4 && !memcmp(raw->c_str() + len - 4, "\r\n\r\n", 4)) {
-        hdr = new QoreStringNode(raw->c_str(), len - 4, raw->getEncoding());
+    // the header is given without the empty line that ends it, whatever its line ends (qore#7491), and its last
+    // line ends with LF
+    size_t text_size = qore_socket_private::getHttpHeaderTextSize(raw->c_str(), len);
+    if (text_size < len) {
+        hdr = new QoreStringNode(raw->c_str(), text_size, raw->getEncoding());
         hdr->concat('\n');
     } else {
         hdr = raw.getReferencedValue();
@@ -5858,9 +5861,11 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     the name and the colon), a line without a colon or with an empty field name, a whitespace line before the first
     field line, or, in a request, an obsolete line folding (a line that starts with whitespace); in a response, an
     obsolete line folding is replaced with spaces
-    @throw SOCKET-HTTP-ERROR a header with an empty line before its end (a header ends at its first empty line, and is
-    read up to the first empty line with CRLF line ends), or a request header with a line that ends with a bare LF;
-    a line of a response header can end with LF alone (RFC 9112 section 2.2)
+    @throw SOCKET-HTTP-ERROR a header with a field line with a control character other than tab (RFC 9110 section
+    5.5; since %Qore 3.0): the \c arg key of the exception hash has the start of the line, with its non-printable
+    bytes escaped as \c "\xhh"; or a request header with a line that ends with a bare LF; a header is read up to its
+    first empty line, where a line ends with LF, which a CR can precede, and a line of a response header can end with
+    LF alone (RFC 9112 section 2.2; a header that ends with \c "\n\n" is read since %Qore 3.0)
     @throw SOCKET-HTTP-ERROR a request with more than one \c Host field or a list in it (RFC 9112 section 3.2), with
     both \c Transfer-Encoding and \c Content-Length, or whose \c Transfer-Encoding does not give a framing that every
     recipient finds: the chunked transfer coding is not the final coding, is given more than once or with a
@@ -5872,6 +5877,10 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     @throw SOCKET-HTTP-ERROR the read of a chunked message body on the socket stopped before the end of the body (see
     unfinishedHttpChunkedBody()), whose rest cannot be told apart from the next message; the connection must be
     closed
+    @throw SOCKET-HTTP-ERROR a header that starts with \c "HTTP/" (a response) with an invalid status line: the line
+    must be <tt>HTTP/</tt><em>digit</em><tt>.</tt><em>digit</em>, a space, a status code of three digits in the range
+    \c 100 - \c 599, and either the end of the line or a space and a reason phrase, which can be empty, without
+    control characters other than tab (RFC 9112 section 4; since %Qore 3.0)
 
     @note
     - if the header claims a certain character encoding via a \c charset declaration in the \c "Content-Type" header, the Socket's @ref character_encoding "character encoding" is automatically set accordingly
@@ -5890,8 +5899,12 @@ hash<auto> Socket::readHTTPHeader(timeout timeout_ms = -1, *reference<hash<auto>
     return socket_exec_read_http_header(self, s, *ohrh, timeout_ms, xsink);
 }
 
-//! Retuns a string representing the data in the HTTP header read (reads until \c "\r\n\r\n")
+//! Retuns a string representing the data in the HTTP header read (reads until the first empty line)
 /** If any errors occur reading from the socket, an exception is raised. Accepts an optional timeout value in milliseconds.
+
+    The header is read up to its first empty line, where a line ends with LF, which a CR can precede (\c "\r\n\r\n",
+    and since %Qore 3.0 also \c "\n\n", \c "\r\n\n" and \c "\n\r\n"); the string is returned without the empty
+    line and with \c "\n" as the line end of its last line.
 
     @par Example:
     @code{.py}
