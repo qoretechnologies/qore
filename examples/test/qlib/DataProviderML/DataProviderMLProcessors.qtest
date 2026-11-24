@@ -5446,6 +5446,12 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertEq(2, out.document_pages.lsize());
         assertEq(2, out.document_ocr_pages.lsize());
         assertEq(2, out.document_confidence.lsize());
+        assertEq(((), ()), out.document_review_pages);
+        foreach list<auto> page_results in (out.document_page_results) {
+            assertEq(1, page_results.size());
+            assertEq(0, page_results[0].page_index);
+            assertEq("ocr", page_results[0].status);
+        }
         foreach string text in (out.document_text) {
             assertTrue(trim(text) =~ /Qore/i,
                 sprintf("document OCR output should contain 'Qore', got: %y", trim(text)));

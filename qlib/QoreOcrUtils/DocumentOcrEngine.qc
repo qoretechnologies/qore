@@ -34,7 +34,7 @@ public hashdecl DocumentOcrResult {
     int page_count;
     #! Number of pages that required OCR
     int ocr_page_count;
-    #! Average OCR confidence across OCR'd pages (0.0 to 1.0); 1.0 for digital text
+    #! Mean page confidence (digital text 1.0, recognized text uses the OCR score, unreadable PDF pages 0.0)
     float avg_confidence;
     #! Per-page details
     list<hash<PdfPageOcrResult>> pages;
@@ -240,15 +240,8 @@ public class DocumentOcrEngine {
         hash<PdfOcrResult> pdf_result = pdf_engine.processPdf(data);
 
         float total_conf = 0.0;
-        int conf_count = 0;
         foreach hash<PdfPageOcrResult> page in (pdf_result.pages) {
-            if (page.ocr_used) {
-                total_conf += page.confidence;
-                ++conf_count;
-            } else if (page.text.val()) {
-                total_conf += 1.0;
-                ++conf_count;
-            }
+            total_conf += page.confidence;
         }
 
         return <DocumentOcrResult>{
@@ -256,7 +249,7 @@ public class DocumentOcrEngine {
             "detected_format": "PDF",
             "page_count": pdf_result.total_pages,
             "ocr_page_count": pdf_result.ocr_page_count,
-            "avg_confidence": conf_count > 0 ? total_conf / conf_count : 0.0,
+            "avg_confidence": pdf_result.total_pages ? total_conf / pdf_result.total_pages : 0.0,
             "pages": pdf_result.pages,
         };
     }
@@ -293,6 +286,8 @@ public class DocumentOcrEngine {
                     push pages, <PdfPageOcrResult>{
                         "page_index": i,
                         "text": ocr_result.text,
+                        "status": trim(ocr_result.text).val() ? "ocr" : "unreadable",
+                        "error": trim(ocr_result.text).val() ? NOTHING : "OCR-NO-TEXT",
                         "ocr_used": True,
                         "confidence": ocr_result.confidence,
                     };
@@ -350,6 +345,8 @@ public class DocumentOcrEngine {
                 <PdfPageOcrResult>{
                     "page_index": 0,
                     "text": result.text,
+                    "status": trim(result.text).val() ? "ocr" : "unreadable",
+                    "error": trim(result.text).val() ? NOTHING : "OCR-NO-TEXT",
                     "ocr_used": True,
                     "confidence": result.confidence,
                 },
