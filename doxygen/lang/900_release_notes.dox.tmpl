@@ -1354,6 +1354,10 @@
     inherited class called from outside the class, which they called before (see @ref Qore::call_static_method();
     <a href="https://github.com/qoretechnologies/qore/issues/7207">issue 7207</a>).
 
+    @par Object Member Snapshots Use the Calling Class's Scope
+    @ref Qore::hash() "hash(object)" and the @ref Qore::ObjectIterator "object iterator" constructors now include
+    the same members visible to the caller as the @ref keys "keys" operator, including accessible non-public members.
+
     @par Removing an Undeclared Object Member Removes Its Key
     The @ref remove "remove" and @ref delete "delete" operators remove the key of an object member that its class
     does not declare, as for a hash, so that @ref keys "keys", @ref elements "elements" and the object iterators no

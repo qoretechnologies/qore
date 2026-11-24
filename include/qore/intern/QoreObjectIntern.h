@@ -965,9 +965,11 @@ public:
     /** private members are excluded if called outside the class, caller owns the QoreHashNode reference returned
 
         @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param class_ctx class scope of the code requesting the members
         @return member data of the object
     */
-    DLLLOCAL QoreHashNode* getRuntimeMemberHash(ExceptionSink* xsink) const;
+    DLLLOCAL QoreHashNode* getRuntimeMemberHash(ExceptionSink* xsink,
+        const qore_class_private* class_ctx = runtime_get_class()) const;
 
     //! returns the names of the members that the calling code can see, as the keys of getRuntimeMemberHash() (#7048)
     /** raises an exception and returns nullptr if the object has been deleted
