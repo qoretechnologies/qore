@@ -252,8 +252,8 @@ public:
         parameters in \a sig: they are substituted before the types are compared (an abstract method of a generic class
         implemented in a subclass of a specialization; issue #5773)
     */
-    DLLLOCAL bool compare(const AbstractFunctionSignature& sig, bool relaxed_match = false,
-            const QoreTypeInfo* receiver = nullptr) const;
+    DLLLOCAL bool compare(const AbstractFunctionSignature& sig, bool relaxed_match,
+            const QoreTypeInfo* receiver, bool implements_abstract) const;
 
     DLLLOCAL bool hasVarargs() const {
         return varargs;
@@ -742,8 +742,15 @@ public:
                 str.append(QoreTypeInfo::getPath(typeList[i]));
             else
                 str.append(QoreParseTypeInfo::getName(parseTypeList[i]));
+            // Keep both inherited contracts until a concrete implementation has been checked against each.
+            if (hasDefaultArg(i)) {
+                str.append("=");
+            }
             if (i != parseTypeList.size() - 1)
                 str.append(",");
+        }
+        if (varargs) {
+            str.append("...");
         }
     }
 
@@ -1496,10 +1503,10 @@ public:
 
     //! @param receiver see AbstractFunctionSignature::compare()
     DLLLOCAL bool isSignatureIdentical(const AbstractFunctionSignature& sig, bool relaxed_match = false,
-            const QoreTypeInfo* receiver = nullptr) const {
+            const QoreTypeInfo* receiver = nullptr, bool implements_abstract = false) const {
         //printd(5, "AbstractQoreFunctionVariant::isSignatureIdentical() this: %p '%s' == '%s': %d\n", this,
         //  getSignature()->getSignatureText(), sig.getSignatureText(), *(getSignature()) == sig);
-        return getSignature()->compare(sig, relaxed_match, receiver);
+        return getSignature()->compare(sig, relaxed_match, receiver, implements_abstract);
     }
 
     // only returns a non-nullptr value for normal user method variants

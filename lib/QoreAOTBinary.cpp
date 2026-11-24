@@ -21586,20 +21586,16 @@ bool QoreAOTBinaryDeserializer::commitClassesImportAbstract(std::string& error) 
             }
             const AbstractMethodMap& parent_ahm = qore_class_private::get(*parent)->ahm;
             for (auto ai = parent_ahm.begin(), ae = parent_ahm.end(); ai != ae; ++ai) {
-                if (priv->ahm.find(ai->first) != priv->ahm.end()) {
-                    continue;
-                }
-                // Check if we have a local concrete override (now in committed vlist)
                 auto mi = priv->hm.find(ai->first);
-                MethodFunctionBase* f = (mi != priv->hm.end())
-                    ? qore_method_private::get(*mi->second)->getFunction() : nullptr;
-                // issue #5773: the abstract variant's types are those of the specialization that the class inherits
-                if (f && f->parseHasVariantWithSignature(
-                        ai->second->vlist.begin()->second, priv->ahm.relaxed_match, priv->cls->getTypeInfo())) {
-                    // Resolved — concrete override matches abstract signature
+                MethodFunctionBase* f = mi == priv->hm.end() ? nullptr
+                    : qore_method_private::get(*mi->second)->getFunction();
+                // Each parent can add overloads (or a different call shape for the same parameter types).
+                // Check every contract against the local implementations, including those of later parents.
+                auto existing = priv->ahm.find(ai->first);
+                if (existing != priv->ahm.end()) {
+                    existing->second->parseMergeBase(*ai->second, f);
                     continue;
                 }
-                // Unresolved — import abstract method
                 std::unique_ptr<AbstractMethod> m(new AbstractMethod(priv->ahm.relaxed_match));
                 m->parseMergeBase(*(ai->second), f);
                 if (!m->empty()) {

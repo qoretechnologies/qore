@@ -514,7 +514,10 @@ string s = a.create(1);
     @subsection abstract Abstract Methods
     Methods declared with the <tt><b>abstract</b></tt> keyword define methods interfaces that must be defined in child
     classes for the class to be instantiated.  Methods defining the declared interfaces in child classes must define
-    exactly the same parameters in order for the abstract method to match, but the return type of the concrete method
+    matching parameter types and accept every argument list allowed by the abstract declaration. An implementation
+    may add an ellipsis or supply defaults for more parameters. When two parents differ only in these respects, one
+    implementation satisfies both by accepting extra arguments if either declaration accepts them and providing a
+    default at each position where either declaration has one. The return type of the concrete method
     in the child class has to simply be compatible with the return type of the abstract method in the parent
     class.\n\n
     An abstract method can also be defined by another parent class of a class that inherits more than one class; a

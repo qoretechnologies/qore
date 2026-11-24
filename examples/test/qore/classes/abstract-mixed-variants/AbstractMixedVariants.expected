@@ -91,3 +91,10 @@ implemented variant through the object: CImpl::u(string) c
 declaring class's concrete variant resolved at run time: CBase::u(int) 21
 declaring class's concrete variant, self call resolved at run time: CBase::u(int) 22
 implemented variant, self call resolved at run time: CImpl::u(string) d
+SumBoth: 5 12
+SumReversed: 5 12
+WithDefault: 12 7
+WithDefaultReversed: 12 7
+DropsVarargs: ABSTRACT-CLASS-ERROR
+DropsDefault: ABSTRACT-CLASS-ERROR
+WrongDefault: ABSTRACT-CLASS-ERROR

@@ -1112,14 +1112,22 @@ QoreFunction* IList::getFunction(const qore_class_private* class_ctx, const qore
 }
 
 bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bool relaxed_match,
-        const QoreTypeInfo* receiver) const {
-    // check varargs flags first
-    if (varargs != sig.varargs) {
-        //printd(5, "AbstractFunctionSignature::compare() varargs: %d sig.varargs: %d\n", varargs, sig.varargs);
+        const QoreTypeInfo* receiver, bool implements_abstract) const {
+    if (num_param_types != sig.num_param_types) {
         return false;
     }
-
-    if (num_param_types != sig.num_param_types || min_param_types != sig.min_param_types) {
+    if (implements_abstract) {
+        // Every call admitted by the declaration must still be valid, including a named call omitting a
+        // particular parameter. The implementation may accept extra arguments or provide extra defaults.
+        if (sig.varargs && !varargs) {
+            return false;
+        }
+        for (unsigned i = 0; i < sig.numParams(); ++i) {
+            if (sig.hasDefaultArg(i) && !hasDefaultArg(i)) {
+                return false;
+            }
+        }
+    } else if (varargs != sig.varargs || min_param_types != sig.min_param_types) {
         return false;
     }
 
