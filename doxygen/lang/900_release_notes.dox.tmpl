@@ -2830,6 +2830,10 @@
       Program family that had been released before, is released too and no longer reaches the next task of the worker;
       the release repeats until no data is left, and refuses what destructors save in its last pass, so that it always
       ends (<a href="https://github.com/qoretechnologies/qore/issues/7398">issue 7398</a>)
+    - a cycle of references between local variables (\c reference r = \a; a = \r;) is freed when the function that made
+      it returns, and no longer leaks; a cycle that a closure that captured one of its variables can still reach is
+      freed with the closure
+      (<a href="https://github.com/qoretechnologies/qore/issues/7329">issue 7329</a>)
     - @ref Qore::HTTPClient::getURL() "HTTPClient::getURL()", @ref Qore::HTTPClient::getProxyURL() "getProxyURL()"
       and @ref Qore::HTTPClient::getSafeProxyURL() "getSafeProxyURL()" give an IPv6 host in brackets and the path of a
       UNIX domain socket with every reserved character encoded; the URL was ambiguous without them, and
