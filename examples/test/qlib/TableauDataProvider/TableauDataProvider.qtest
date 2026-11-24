@@ -175,6 +175,7 @@ public class TableauDataProviderTest inherits QUnit::Test {
         addTestCase("sanity tests", \sanityTests());
         addTestCase("factory tests", \factoryTests());
         addTestCase("metadata tests", \metadataTests());
+        addTestCase("action state changes", \actionStateTests());
         addTestCase("child provider tests", \childProviderTests());
         addTestCase("data type tests", \dataTypeTests());
         addTestCase("trigger example data tests", \triggerExampleDataTests());
@@ -294,6 +295,30 @@ public class TableauDataProviderTest inherits QUnit::Test {
         assertEq("TableauDataProvider", info.type);
 
         assertTrue(info.constructor_options.hasKey("tableaurestclient"));
+    }
+
+    #! The actions declare whether they change state, as the implementation does
+    actionStateTests() {
+        # the download reads the content of the datasource with a GET and stores nothing: the action declares
+        # that it is read-only (qore#7454)
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(
+            TableauDataProvider::AppName, "download-datasource");
+        assertEq(DPAT_API, action.action_code);
+        assertEq(NT_BOOLEAN, action.mutates_state.typeCode());
+        assertFalse(action.mutates_state);
+        assertFalse(DataProviderActionCatalog::actionMutatesState(action));
+        # the searches and gets are read-only by their action code
+        foreach string action_name in ("search-datasources", "get-datasource", "search-projects", "get-project") {
+            assertFalse(DataProviderActionCatalog::actionMutatesState(
+                DataProviderActionCatalog::getAppActionEx(TableauDataProvider::AppName, action_name)), action_name);
+        }
+        # the actions that create, update or delete a resource or a tag change state
+        foreach string action_name in ("update-datasource", "delete-datasource", "add-tag-to-datasource",
+                "delete-tag-from-datasource", "create-project", "update-project", "delete-project", "create-user",
+                "update-user", "delete-user", "delete-extract-refresh-task") {
+            assertTrue(DataProviderActionCatalog::actionMutatesState(
+                DataProviderActionCatalog::getAppActionEx(TableauDataProvider::AppName, action_name)), action_name);
+        }
     }
 
     #! Child provider tests - verify hierarchy

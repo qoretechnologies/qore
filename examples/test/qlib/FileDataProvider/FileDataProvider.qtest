@@ -17,9 +17,29 @@
 public class FileDataProviderTest inherits QUnit::Test {
     constructor() : Test("FileDataProvider Test", "1.0") {
         addTestCase("test", \fileDataProviderTest());
+        addTestCase("action state changes", \actionStateTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    #! The actions declare whether they change state, as the implementation does
+    actionStateTest() {
+        # reading a file, listing a directory and getting the status of a path only read: the actions declare
+        # that they are read-only (qore#7454)
+        foreach string action_name in ("get", "list", "stat") {
+            hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(
+                FileDataProvider::AppName, action_name);
+            assertEq(DPAT_API, action.action_code, action_name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), action_name);
+            assertFalse(action.mutates_state, action_name);
+            assertFalse(DataProviderActionCatalog::actionMutatesState(action), action_name);
+        }
+        # the actions that write, create, delete, copy or move a path change state
+        foreach string action_name in ("copy", "create", "delete", "mkdir", "move") {
+            assertTrue(DataProviderActionCatalog::actionMutatesState(
+                DataProviderActionCatalog::getAppActionEx(FileDataProvider::AppName, action_name)), action_name);
+        }
     }
 
     fileDataProviderTest() {
