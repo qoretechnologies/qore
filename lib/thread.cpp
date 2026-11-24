@@ -1962,6 +1962,10 @@ bool qore_thread_has_no_type_epoch() {
 //! signals the entries of threads into the builtin waits (see dbg_type_wait_entered())
 static std::mutex qore_type_wait_entry_lock;
 static std::condition_variable qore_type_wait_entry_cond;
+//! a process-wide lock: a thread that enters a quiescent wait at the moment of fork() holds it, and the child's first
+//! quiescent wait waited forever for it (qore#7549; see design/fork-handlers.md)
+static QoreForkStdMutex qore_type_wait_entry_fork_handler{qore_type_wait_entry_lock, QFLR_TYPE_WAIT_ENTRY,
+    "type_wait_entry", QFLM_ACQUIRE, {&qore_type_wait_entry_cond}};
 
 //! returns the waits that a thread entered, or -1 if there is no such thread; qore_type_wait_entry_lock is held
 static int64 qore_type_dbg_wait_entries_locked(int tid) {
@@ -2048,12 +2052,18 @@ struct QoreTypeEpochHoldRegistry {
     std::mutex m;
     std::map<uint64_t, uint64_t> holds;
     uint64_t next_id = 0;
+    //! a leaf lock, taken with the JIT's background queue lock held; a child of fork() gets it free (qore#7549)
+    QoreForkStdMutex fork_handler{m, QFLR_TYPE_EPOCH_HOLDS, "type_epoch_holds"};
 };
 
 QoreTypeEpochHoldRegistry& type_epoch_hold_registry() {
     static QoreTypeEpochHoldRegistry* r = new QoreTypeEpochHoldRegistry;
     return *r;
 }
+
+// created during static initialization, so that its fork handler is not registered while another registered lock is
+// held (see design/fork-handlers.md)
+[[maybe_unused]] QoreTypeEpochHoldRegistry& type_epoch_hold_registry_init = type_epoch_hold_registry();
 }
 
 void QoreTypeEpochHold::arm() {
@@ -2089,6 +2099,16 @@ void QoreTypeEpochHold::release() {
     QoreTypeEpochHoldRegistry& r = type_epoch_hold_registry();
     std::lock_guard<std::mutex> lock(r.m);
     r.holds.erase(id);
+    id = 0;
+}
+
+void QoreTypeEpochHold::abandonAfterFork() noexcept {
+    if (!id) {
+        return;
+    }
+    // only the forking thread exists in the child, and the fork handler of the registry, which has a higher rank, has
+    // released its lock already: the lock is not taken (see QoreForkHandler); erasing an element cannot throw
+    type_epoch_hold_registry().holds.erase(id);
     id = 0;
 }
 

@@ -4017,6 +4017,12 @@ void QoreJIT::forkChild(bool compile_lock_acquired) noexcept {
     // compilation.  The work it had taken from the queue is lost with it: the function stays in the tier it is in.
     bg_thread_running.store(false, std::memory_order_relaxed);
     bg_compile_thread.abandonAfterFork();
+    // the epoch hold of the work that the thread was compiling is released: the work is never finished in the child,
+    // so the hold would keep everything retired since its epoch from being freed there (qore#7549); the work is in the
+    // copy of the thread's stack, and the hold's registry was handled before (its fork handler has a higher rank)
+    if (bg_in_progress) {
+        bg_in_progress->type_epoch_hold.abandonAfterFork();
+    }
     bg_in_progress = nullptr;
     bg_in_progress_pgms.clear();
     bg_in_progress_phase = BgCompilePhase::Lowering;

@@ -452,6 +452,12 @@ public:
     //! Releases the hold
     DLLLOCAL void release();
 
+    //! Releases the hold of work that a child process created with fork() lost with the thread that ran it
+    /** Called by a fork handler in the child (see QoreJIT::forkChild()): nothing else would ever release it there, and
+        it would keep everything retired since its epoch from being freed in the child (qore#7549)
+    */
+    DLLLOCAL void abandonAfterFork() noexcept;
+
 private:
     //! the hold's key in the registry of holds, or 0
     uint64_t id = 0;

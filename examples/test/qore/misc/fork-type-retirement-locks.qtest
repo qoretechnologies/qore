@@ -116,14 +116,16 @@ class ForkTypeRetirementLocksTest inherits QUnit::Test {
     typeOwnerRegistryTest() {
         # every class, hashdecl and enum is registered when it is created
         forkWhileHeld("type_owner_registry", int sub () {
-            return parseDeclarations() ?? retireAndFree();
+            int rc = parseDeclarations();
+            return rc ? rc : retireAndFree();
         });
     }
 
     typeInfoRegistryTest() {
         # every type is registered when it is created
         forkWhileHeld("type_info_registry", int sub () {
-            return parseDeclarations() ?? retireAndFree();
+            int rc = parseDeclarations();
+            return rc ? rc : retireAndFree();
         });
     }
 
@@ -195,7 +197,7 @@ class ForkTypeRetirementLocksTest inherits QUnit::Test {
     #! parses a Program with declarations and types of its own; returns 0 if it was parsed
     static int parseDeclarations() {
         Program p(Opts);
-        p.parse("class ForkTypeRetirementD { list<ForkTypeRetirementD> l; } hashdecl ForkTypeRetirementG { int a; } "
+        p.parse("class ForkTypeRetirementD { public { *list<ForkTypeRetirementD> l; } } hashdecl ForkTypeRetirementG { int a; } "
             "enum ForkTypeRetirementF { A = 1 } "
             "int sub f() { hash<string, ForkTypeRetirementD> h(); return h.size(); }",
             "fork-type-retirement-declarations");
