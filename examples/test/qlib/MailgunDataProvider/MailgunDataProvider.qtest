@@ -737,6 +737,20 @@ public class MailgunDataProviderTest inherits QUnit::Test {
             MailgunDataProvider::AppName, "clicked");
         assertTrue(exists clickedAction, "clicked action should exist");
         assertEq(DPAT_EVENT, clickedAction.action_code);
+
+        # validate-email and get-mailing-list-member only read (GET): they declare that they are read-only,
+        # which the catalogue reports as such; the other API actions change state (qore#7454)
+        list<string> read_only = ("get-mailing-list-member", "validate-email");
+        list<hash<DataProviderActionInfo>> ro_actions = select actions, inlist($1.action, read_only);
+        assertEq(read_only, sort(map $1.action, ro_actions));
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
+        foreach string name in ("send-email", "add-mailing-list-member", "delete-mailing-list-member",
+            "create-route") {
+            assertTrue(DataProviderActionCatalog::actionMutatesState(
+                DataProviderActionCatalog::getAppAction(MailgunDataProvider::AppName, name)), name);
+        }
     }
 
     #! Integration tests - require MAILGUN_API_KEY

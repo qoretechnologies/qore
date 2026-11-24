@@ -953,6 +953,7 @@ module ChargebeeDataProvider {
             "short_desc": "Get a transaction by ID",
             "desc": "Retrieve detailed information about a specific Chargebee transaction.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": ChargebeeGetTransactionDataProvider::ProviderInfo,
             "options": {
                 "id": <ActionOptionInfo>{

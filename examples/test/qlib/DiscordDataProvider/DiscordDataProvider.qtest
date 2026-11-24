@@ -222,6 +222,12 @@ public class Main inherits QUnit::Test {
                     sprintf("action %y has data_dependent_options", action_name));
             }
         }
+        # both actions only make GET requests: they declare that they do not change state (qore#7454)
+        assertEq(2, action_map{expected_actions}.size());
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), action_map{expected_actions}.iterator();
+        map assertFalse($1.mutates_state, $1.action), action_map{expected_actions}.iterator();
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action),
+            action_map{expected_actions}.iterator();
     }
 
     private usageIntern() {

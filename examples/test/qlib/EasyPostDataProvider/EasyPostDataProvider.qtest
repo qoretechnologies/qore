@@ -317,6 +317,22 @@ public class EasyPostDataProviderTest inherits QUnit::Test {
             "list-addresses action must be registered");
         assertTrue(actionNames.contains("watch-tracker-created"),
             "watch-tracker-created action must be registered");
+
+        # the actions that only make a GET request that stores nothing declare that they do not change state
+        # (qore#7454)
+        list<string> read_only = ("get-address", "get-batch", "get-carrier-account", "get-customs-info",
+            "get-customs-item", "get-event", "get-event-payload", "get-insurance", "get-order", "get-parcel",
+            "get-pickup", "get-refund", "get-shipment", "get-shipment-smartrates", "get-tracker", "get-webhook",
+            "list-event-payloads", "verify-address");
+        list<hash<DataProviderActionInfo>> ro_actions = select actions, read_only.contains($1.action);
+        assertEq(read_only, sort(map $1.action, ro_actions));
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
+        # converting a label stores the converted label on the shipment; buying changes state
+        hash<string, hash<DataProviderActionInfo>> by_name = map {$1.action: $1}, actions;
+        assertTrue(DataProviderActionCatalog::actionMutatesState(by_name."get-shipment-label"));
+        assertTrue(DataProviderActionCatalog::actionMutatesState(by_name."buy-shipment"));
     }
 
     #! Verify each watch event provider returns example data with a populated result

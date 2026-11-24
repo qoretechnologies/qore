@@ -122,6 +122,7 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
 
         # Sanity tests (always run, no credentials needed)
         addTestCase("sanity tests", \sanityTests());
+        addTestCase("read-only action tests", \readOnlyActionTests());
         addTestCase("factory tests", \factoryTests());
         addTestCase("metadata tests", \metadataTests());
         addTestCase("child provider tests", \childProviderTests());
@@ -1494,6 +1495,23 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
         if (m_options.verbose) {
             printf("\n--- Event Trigger tests completed ---\n");
         }
+    }
+
+    #! the actions that only read declare it, and the catalogue reports them as read-only (qore#7454)
+    readOnlyActionTests() {
+        list<string> read_only = (
+            "get-transaction",
+        );
+        foreach string name in (read_only) {
+            *hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppAction("Chargebee", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # makes a download URL that expires: reported as changing state
+        assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(
+            DataProvider::DataProviderActionCatalog::getAppAction("Chargebee", "get-invoice-link")));
     }
 }
 

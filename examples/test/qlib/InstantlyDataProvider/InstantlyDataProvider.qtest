@@ -666,6 +666,33 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
         # Verify total count matches expectations
         assertEq(ExpectedActions.size(), actions.size(),
             "total registered action count matches expected");
+
+        # the get and count actions only read (GET, or the analytics query POST of get-warmup-analytics): they
+        # declare that they are read-only, which the catalogue reports as such; the other API actions change state
+        # (qore#7454)
+        list<string> read_only = (
+            "count-unread-emails", "get-account", "get-background-job", "get-campaign", "get-campaign-analytics",
+            "get-campaign-analytics-overview", "get-campaign-daily-analytics", "get-campaign-for-email",
+            "get-campaign-step-analytics", "get-campaign-subsequence", "get-custom-tag",
+            "get-custom-tracking-domain-status", "get-email", "get-email-verification-status",
+            "get-inbox-placement-analytics", "get-inbox-placement-test", "get-ip-analytics-stats-by-date",
+            "get-ip-analytics-stats-by-test", "get-ip-blacklist-report", "get-ip-deliverability-insights",
+            "get-lead", "get-lead-label", "get-lead-list", "get-warmup-analytics", "get-workspace",
+            "get-workspace-admin", "get-workspace-group-member", "get-workspace-member",
+        );
+        list<hash<DataProviderActionInfo>> typed_actions = DataProviderActionCatalog::getActionsEx(
+            InstantlyDataProvider::AppName);
+        list<hash<DataProviderActionInfo>> ro_actions = select typed_actions, inlist($1.action, read_only);
+        assertEq(read_only, sort(map $1.action, ro_actions));
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
+        list<hash<DataProviderActionInfo>> rw_actions = select typed_actions,
+            $1.action_code == DPAT_API && $1.action != AbstractDataProvider::GenericApiCallActionName
+                && !inlist($1.action, read_only);
+        assertTrue(inlist("export-leads", (map $1.action, rw_actions)));
+        assertTrue(inlist("test-account-vitals", (map $1.action, rw_actions)));
+        map assertTrue(DataProviderActionCatalog::actionMutatesState($1), $1.action), rw_actions;
     }
 
     #! Metadata tests - verify provider info for key providers

@@ -442,6 +442,8 @@ module SquareDataProvider {
             "short_desc": "Get multiple orders by ID",
             "desc": "Retrieve multiple orders by their IDs in a single request",
             "action_code": DPAT_API,
+            # a POST to orders/batch-retrieve, which only retrieves orders (qore#7454)
+            "mutates_state": False,
             "options": {
                 "order_ids": <ActionOptionInfo>{
                     "display_name": "Order IDs",
@@ -1285,6 +1287,8 @@ module SquareDataProvider {
             "short_desc": "Get inventory counts for an item",
             "desc": "Get inventory counts for a catalog item variation in Square",
             "action_code": DPAT_API,
+            # a POST to inventory/counts/batch-retrieve, which only retrieves counts (qore#7454)
+            "mutates_state": False,
             "options": {
                 "catalog_object_id": <ActionOptionInfo>{
                     "display_name": "Catalog Object ID",

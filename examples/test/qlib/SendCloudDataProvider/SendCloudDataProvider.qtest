@@ -469,6 +469,19 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
             assertTrue(exists action.action_code,
                 sprintf("action %y missing action_code", action.action));
         }
+
+        # these actions only make GET requests: they declare that they are read-only, which the catalogue reports
+        # as such (qore#7454)
+        list<string> read_only = ("get-parcel", "get-parcel-documents", "get-parcel-label", "get-return",
+            "get-user", "search-service-points");
+        list<hash<DataProviderActionInfo>> ro_actions = select actions, inlist($1.action, read_only);
+        assertEq(read_only, sort(map $1.action, ro_actions));
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
+        # an action that creates a resource still changes state
+        hash<DataProviderActionInfo> create = (select actions, $1.action == "create-parcel")[0];
+        assertTrue(DataProviderActionCatalog::actionMutatesState(create));
     }
 
     ########################################################################
