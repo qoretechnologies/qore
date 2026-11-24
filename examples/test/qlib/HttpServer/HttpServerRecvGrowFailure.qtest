@@ -48,6 +48,11 @@ class HttpServerRecvGrowFailureTest inherits QUnit::Test {
         const MaxSendMb = 2048;
     }
 
+    private:internal {
+        #! the number of requests whose body read failed so far
+        int failed_reads = 0;
+    }
+
     constructor() : Test("HttpServerRecvGrowFailureTest", "1.0") {
         addTestCase("a body read whose buffer cannot grow fails the request", \growFailureTest());
         set_return_value(main());
@@ -138,8 +143,9 @@ class HttpServerRecvGrowFailureTest inherits QUnit::Test {
         assertNothing(readFile(dir + "/rc"), sprintf("%s: the server is running: %s%s", label,
             readFile(dir + "/out") ?? "", readFile(dir + "/err") ?? ""));
 
-        # the server serves another connection, and the read raised an exception
-        assertEq("SOCKET-RECV-ERROR", get(port, "error"), label);
+        # the server serves another connection, and the read raised an exception; the server logs it after it has
+        # shut the connection down, so it may not have logged it yet: it answers once it has
+        assertEq("SOCKET-RECV-ERROR", get(port, "error/" + ++failed_reads, 90s), label);
     }
 
     #! returns the port of the server, which it writes once it is running
@@ -160,12 +166,12 @@ class HttpServerRecvGrowFailureTest inherits QUnit::Test {
     }
 
     #! returns the body of the response to a GET request on a new connection
-    private string get(int port, string path) {
+    private string get(int port, string path, timeout timeout = 30s) {
         Socket c();
         c.connect("127.0.0.1:" + port, 10s);
         on_exit c.close();
         c.send(sprintf("GET /%s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", path));
-        hash<auto> hdr = c.readHTTPHeader(30s);
+        hash<auto> hdr = c.readHTTPHeader(timeout);
         assertEq(200, hdr.status_code, path);
         return c.recv(hdr."content-length".toInt(), 30s);
     }

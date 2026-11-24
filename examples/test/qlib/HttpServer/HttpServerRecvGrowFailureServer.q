@@ -24,8 +24,8 @@
 
     The HTTP server of HttpServerRecvGrowFailure.qtest: it writes the port of its listener and the size of its address
     space to its standard output, returns the error of a read of a request body whose memory could not grow that it
-    logged for "GET /error", and ends when it gets "GET /quit".  Its argument "measure" makes it write the same line
-    and end.
+    logged for "GET /error/<n>" once it has logged n such errors, and ends when it gets "GET /quit".  Its argument
+    "measure" makes it write the same line and end.
 */
 
 %modern
@@ -40,7 +40,10 @@ class BodyErrorCapture inherits LoggerAppenderWithLayout {
     private {
         #! the error of the last read of a request body, or "none"
         string error = "none";
+        #! the number of errors of reads of a request body logged
+        int count = 0;
         Mutex lck();
+        Condition cond();
     }
 
     constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
@@ -54,14 +57,27 @@ class BodyErrorCapture inherits LoggerAppenderWithLayout {
             if (err) {
                 AutoLock al(lck);
                 error = err;
+                ++count;
+                cond.broadcast();
             }
         }
     }
 
-    #! returns the error logged since the last call, or "none"
-    string takeError() {
+    #! returns the error of the last read of a request body once \a n errors have been logged, or "none" if they are
+    #! not logged within a minute
+    /** The server logs the error of a read after it has shut the connection down, so the client can send the next
+        request before it is logged.
+    */
+    string waitError(int n) {
+        date end = now_us() + 1m;
         AutoLock al(lck);
-        on_exit error = "none";
+        while (count < n) {
+            date now = now_us();
+            if (now >= end) {
+                return "none";
+            }
+            cond.wait(lck, end - now);
+        }
         return error;
     }
 }
@@ -83,14 +99,15 @@ class GrowFailureHandler inherits AbstractHttpRequestHandler {
 
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
             *data body) {
+        *string n = (hdr.path =~ x/^error\/([0-9]+)$/)[0];
+        if (n) {
+            return makeResponse(200, capture.waitError(n.toInt()), {"Content-Type": "text/plain"});
+        }
         switch (hdr.path) {
             case "string":
                 # the handler reads the chunked body as a string
                 s.readHTTPChunkedBody(30s);
                 break;
-
-            case "error":
-                return makeResponse(200, capture.takeError(), {"Content-Type": "text/plain"});
 
             case "quit":
                 quit.dec();
