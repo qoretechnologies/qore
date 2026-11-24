@@ -43,12 +43,14 @@ class SocketConnectImmediateTest inherits QUnit::Test {
         return s;
     }
 
-    #! returns a port of the loopback interface that nothing listens on
-    private int closedPort() {
-        Socket s = listener();
-        int port = s.getPort();
-        s.close();
-        return port;
+    #! returns a socket bound to a port of the given loopback address that does not listen
+    /** A connect to the port is refused, and while the socket is open no other socket (of another test running at the
+        same time) can bind the port: a port that is closed again could be taken before the connect (qore#7520)
+    */
+    private Socket refusingPort(string addr = "127.0.0.1", int port = 0) {
+        Socket s();
+        s.bindINET(addr, port);
+        return s;
     }
 
     testLoopback() {
@@ -70,7 +72,9 @@ class SocketConnectImmediateTest inherits QUnit::Test {
 
     testRefused() {
         for (int i = 0; i < 20; ++i) {
-            int port = closedPort();
+            Socket held = refusingPort();
+            on_exit held.close();
+            int port = held.getPort();
             Socket c();
             int start = clock_get_monotonic_us();
             assertThrows("SOCKET-CONNECT-ERROR", \c.connect(), ("127.0.0.1:" + port, ConnectTimeout));
@@ -95,8 +99,26 @@ class SocketConnectImmediateTest inherits QUnit::Test {
         if (!addrs || addrs[0].family != AF_INET6 || !(select addrs, $1.family == AF_INET)) {
             testSkip("\"localhost\" does not have an IPv6 address first and an IPv4 address");
         }
-        Socket l = listener();
-        on_exit l.close();
+        # the IPv6 loopback address is held on the port of the IPv4 listener, so that the first attempt is refused and
+        # no socket of another test can listen there (qore#7520); a port whose IPv6 address is taken is not used
+        Socket l;
+        Socket held;
+        for (int attempt = 0; True; ++attempt) {
+            l = listener();
+            try {
+                held = refusingPort("::1", l.getPort());
+                break;
+            } catch (hash<ExceptionInfo> ex) {
+                l.close();
+                if (attempt == 20) {
+                    rethrow;
+                }
+            }
+        }
+        on_exit {
+            held.close();
+            l.close();
+        }
         int port = l.getPort();
         for (int i = 0; i < 20; ++i) {
             Socket c();
