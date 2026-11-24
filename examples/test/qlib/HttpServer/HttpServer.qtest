@@ -37,6 +37,11 @@
 # Test servers use IPv4 unless a case explicitly selects another family. Keep endpoints on IPv4 loopback because an
 # unrelated IPv6-only listener can independently own the same ephemeral port number.
 
+#! the time a request or wait that must succeed is given: it only bounds a hang, as a correct server that a loaded
+#! machine makes slow must not fail the check (qore#7472, qore#7477, see qore#6535); the test's handlers and raw
+#! servers use it as well
+const MustSucceedTimeout = 30s;
+
 class AltHandler inherits AbstractHttpRequestHandler {
     hash handleRequest(hash cx, hash hdr, *data body) {
         return makeResponse(201, "a1, " + hdr.method + ", " + hdr.path + ", " + cx.raw_path);
@@ -107,7 +112,7 @@ class QuicCipherInfoHandler inherits AbstractHttpRequestHandler {
             report = r;
         }
         if ((header_info.body_streaming ?? False) && !(header_info.headers_end_stream ?? False)) {
-            while (exists sock.readQuicStreamDataBlock(session_id, stream_id, 10s)) {
+            while (exists sock.readQuicStreamDataBlock(session_id, stream_id, MustSucceedTimeout)) {
             }
         }
         return makeResponse(200, "ok");
@@ -131,7 +136,7 @@ class PeerInfoFutureHandler inherits AbstractHttpRequestHandler {
         if (report{"has-peer-info-future"}) {
             report{"peer-info-future-is-future"} = cx{"peer-info-future"} instanceof Future;
             Future f = cx{"peer-info-future"};
-            report{"resolved-peer-info"} = f.get(10s);
+            report{"resolved-peer-info"} = f.get(MustSucceedTimeout);
         }
         q.push(report);
         return makeResponse(200, "ok");
@@ -312,7 +317,7 @@ class HalfOpenH1Server {
     stop() {
         stop_flag = True;
         listener.close();
-        done.waitForZero(30s);
+        done.waitForZero(MustSucceedTimeout);
         if (stalled_client) {
             stalled_client.close();
         }
@@ -333,18 +338,23 @@ class HalfOpenH1Server {
                 }
                 if (n == 1) {
                     # the first connection: the first request is answered, then the connection goes silent
-                    *hash<auto> hdr = client.readHTTPHeader(2s);
+                    *hash<auto> hdr = client.readHTTPHeader(MustSucceedTimeout);
                     if (hdr) {
                         client.send(makeResponse());
                     }
                     stalled_client = client;
                     continue;
                 }
-                # later connections: every request is answered
+                # later connections: every request is answered; the server waits for a request (or the client's
+                # close) as long as it runs, checking for its stop as the accept loop does, and the request then
+                # read must arrive (qore#7477: a 1 s read closed a retried connection on a loaded machine)
                 while (!stop_flag) {
                     *hash<auto> hdr;
                     try {
-                        hdr = client.readHTTPHeader(1s);
+                        if (!client.isDataAvailable(500ms)) {
+                            continue;
+                        }
+                        hdr = client.readHTTPHeader(MustSucceedTimeout);
                     } catch () {
                         break;
                     }
@@ -648,10 +658,6 @@ public class HttpServerTest inherits QUnit::Test {
 
         const KeyPem = TestCertificates::KeyPem;
 
-        #! the time a request or wait that must succeed is given: it only bounds a hang, as a correct server that a
-        #! loaded machine makes slow must not fail the check (qore#7472, see qore#6535)
-        const date MustSucceedTimeout = 30s;
-
         const BinImage = <89504e470d0a1a0a0000000d4948445200000010000000100403000000eddde25200000018504c5445ffffff> +
             <6b6b6b8c8c8cc0c0c0ef5a5a846331efd63900000089492ed30000000474524e53ffffff00402aa9f400000001624b47440716> +
             <6188eb0000004b4944415408d7633086020610615a0c65a8ba4319a1e55046581184619e1a0c61288119060c0ce6e94c504631> +
@@ -752,7 +758,7 @@ public class HttpServerTest inherits QUnit::Test {
         mServer.setDefaultHandler("my-handler", mHandler);
         port = mServer.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         url = "http://127.0.0.1:" + port;
-        mServer.waitForAsyncIo();
+        mServer.waitForAsyncIo(MustSucceedTimeout);
 
         # Set up second server
         Logger asyncLogger("async-test", LoggerLevel::getLevelInfo());
@@ -784,7 +790,7 @@ public class HttpServerTest inherits QUnit::Test {
         mAsyncServer.setHandler("ws-handler", "/ws", NOTHING, mWsHandler);
 
         # Wait for the async I/O to be ready
-        mAsyncServer.waitForAsyncIo();
+        mAsyncServer.waitForAsyncIo(MustSucceedTimeout);
     }
 
     globalTearDown() {
@@ -836,10 +842,11 @@ public class HttpServerTest inherits QUnit::Test {
         }
 
         foreach hash<auto> target in (targets) {
-            HTTPClient client({"url": sprintf("http://%s:%d", target.host, linfo.port), "timeout": 5s});
+            HTTPClient client({"url": sprintf("http://%s:%d", target.host, linfo.port),
+                "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
             on_exit client.disconnect();
             assertEq("ok", client.get("/"), target.host);
-            hash<auto> peer_info = q.get(5s){"peer-info"};
+            hash<auto> peer_info = q.get(MustSucceedTimeout){"peer-info"};
             if (target.address) {
                 assertEq(target.address, peer_info.address, target.host);
                 assertEq(target.family, peer_info.family, target.host);
@@ -895,9 +902,11 @@ public class HttpServerTest inherits QUnit::Test {
     }
 
     setUp() {
-        mClient = new HTTPClient(("url": url, "additional_methods": {"TEST": True}, "timeout": 5s));
+        mClient = new HTTPClient(("url": url, "additional_methods": {"TEST": True},
+            "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout));
         mClient.connect();
-        mAsyncClient = new HTTPClient(("url": asyncUrl, "additional_methods": {"TEST": True}, "timeout": 5s));
+        mAsyncClient = new HTTPClient(("url": asyncUrl, "additional_methods": {"TEST": True},
+            "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout));
         # Don't pre-connect for async client - let tests manage their own connections
     }
 
@@ -1064,8 +1073,12 @@ public class HttpServerTest inherits QUnit::Test {
         # the udp_sock holding the cert/key set at addQuicListener() time, so a
         # client that followed the Alt-Svc h3 hint would stall the QUIC
         # handshake for ~20s and time out.  This test verifies that after a
-        # reload the listener is still usable for both H1/H2 and H3 in <100 ms,
-        # and that repeated reload+connect cycles stay clean.
+        # reload the listener is still usable for both H1/H2 and H3, and that
+        # repeated reload+connect cycles stay clean.  The wedge fails a connect
+        # (HTTPCLIENT-NEGOTIATE-TIMEOUT, or a handshake that never completes
+        # and times out), so the connects must succeed under a bound that only
+        # catches a hang, not complete in a given time: a correct server that a
+        # loaded machine makes slow must not fail the check (qore#7477).
 
         # Set up cert/key on disk so reloadListenerCertificate can re-read them
         string real_fn = tmp_location() + DirSep + get_random_string() + ".pem";
@@ -1106,38 +1119,32 @@ public class HttpServerTest inherits QUnit::Test {
             "key_loc": key_fn,
             "enable_h3": True,
         });
-        qServer.waitForAsyncIo();
+        qServer.waitForAsyncIo(MustSucceedTimeout);
         string sslUrl = "https://127.0.0.1:" + linfo.port;
 
         # Helper: connect with H3 advertised via Alt-Svc — this is the path
         # that wedged on the broken build.  Use AUTO so the client follows the
-        # server's Alt-Svc hint, then assert connect completes well within the
-        # timeout window (<100 ms acceptance criterion).
-        code<int()> do_connect = int sub () {
+        # server's Alt-Svc hint; the connect must succeed: a wedged handshake
+        # fails it with a timeout error
+        code<nothing()> do_connect = sub () {
             HTTPClient hc({
                 "url": sslUrl,
                 "ssl_verify_cert": False,
-                "connect_timeout": 5000,
-                "timeout": 5000,
+                "connect_timeout": MustSucceedTimeout,
+                "timeout": MustSucceedTimeout,
             });
-            int start = clock_get_monotonic_us();
             hc.connect();
-            int elapsed_us = clock_get_monotonic_us() - start;
             hc.disconnect();
-            return elapsed_us;
         };
 
-        # Baseline connect should be fast
-        int baseline_us = do_connect();
-        assertLt(2000000, baseline_us, "baseline H1/H2 connect should be <2 s");
+        # Baseline connect
+        do_connect();
 
         # 5 reload+connect cycles — fewer than 10 to keep test wall-time reasonable,
         # still enough to catch the wedge if it returns
         for (int i = 0; i < 5; ++i) {
             qServer.reloadListenerCertificate(linfo.id);
-            int elapsed_us = do_connect();
-            assertLt(5000000, elapsed_us,
-                sprintf("reload+connect cycle %d must complete in <5 s", i));
+            do_connect();
         }
 
         # Force the SSL_accept WANT_READ path on the server to catch the
@@ -1159,10 +1166,10 @@ public class HttpServerTest inherits QUnit::Test {
         for (int i = 0; i < N; ++i) {
             Socket s();
             try {
-                s.connect("127.0.0.1:" + linfo.port, 5s);
+                s.connect("127.0.0.1:" + linfo.port, MustSucceedTimeout);
                 # Force the WANT_READ path on the server side
                 usleep(50ms);
-                s.upgradeClientToSSL(5000);
+                s.upgradeClientToSSL(MustSucceedTimeout);
                 s.close();
                 ++succeeded;
             } catch (hash<ExceptionInfo> ex) {
@@ -1176,30 +1183,27 @@ public class HttpServerTest inherits QUnit::Test {
         # Now exercise a forced HTTP/3 connect to confirm the QUIC TLS path
         # actually serves the new cert (this is the load-bearing assertion —
         # before the fix this would HTTPCLIENT-NEGOTIATE-TIMEOUT after 20 s).
+        # The connect must succeed; a wedged handshake fails it.
 
         # First confirm the listener accepts H3 at all on this build —
         # otherwise the test is moot regardless of the reload.
-        code<int()> do_h3_connect = int sub () {
+        code<nothing()> do_h3_connect = sub () {
             HTTPClient h3 ({
                 "url": sslUrl,
                 "ssl_verify_cert": False,
                 "http_version": "3.0",
-                "connect_timeout": 5000,
-                "timeout": 5000,
+                "connect_timeout": MustSucceedTimeout,
+                "timeout": MustSucceedTimeout,
             });
-            int start = clock_get_monotonic_us();
             h3.connect();
-            int elapsed_us = clock_get_monotonic_us() - start;
             on_exit h3.disconnect();
             if (!h3.isHttp3Active()) {
                 throw "H3-NOT-ACTIVE", "H3 not active after connect";
             }
-            return elapsed_us;
         };
 
         try {
-            int baseline_h3_us = do_h3_connect();
-            assertLt(5000000, baseline_h3_us, "baseline H3 connect must complete in <5 s");
+            do_h3_connect();
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "HTTP-CLIENT-CONSTRUCTOR-ERROR" && ex.desc =~ /HTTP\/3/) {
                 testSkip("HTTP/3 not compiled in");
@@ -1210,8 +1214,7 @@ public class HttpServerTest inherits QUnit::Test {
 
         # Reload + H3 connect — this is the path that wedged before the fix
         qServer.reloadListenerCertificate(linfo.id);
-        int reload_h3_us = do_h3_connect();
-        assertLt(5000000, reload_h3_us, "H3 connect after reload must complete in <5 s");
+        do_h3_connect();
     }
 
     http3AccessLogIncludesTlsCipherTest() {
@@ -1230,20 +1233,20 @@ public class HttpServerTest inherits QUnit::Test {
         QuicCipherInfoHandler handler();
         server.setHandler("test", "/test", NOTHING, handler);
         server.setDefaultHandler("test", new SimpleStringHandler("ok"));
-        server.waitForAsyncIo();
+        server.waitForAsyncIo(MustSucceedTimeout);
 
         hash<auto> h3info = server.addQuicListener(<HttpListenerOptionInfo>{
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
         });
-        server.waitForAsyncIo();
+        server.waitForAsyncIo(MustSucceedTimeout);
 
         HttpClientIo::HttpClientConnectionManager mgr(
             <HttpClientIo::HttpClientConnectionManagerOptions>{
                 "protocol": "h3",
                 "accept_all_certs": True,
-                "request_timeout": 15s,
-                "connect_timeout": 10s,
+                "request_timeout": MustSucceedTimeout,
+                "connect_timeout": MustSucceedTimeout,
             },
         );
         on_exit mgr.closeAll();
@@ -1380,7 +1383,7 @@ public class HttpServerTest inherits QUnit::Test {
             # a timeout means that the server kept the connection open
             string err;
             try {
-                sock.readHTTPHeader(10s);
+                sock.readHTTPHeader(MustSucceedTimeout);
                 err = "received another response";
             } catch (hash<ExceptionInfo> ex) {
                 err = ex.err;
@@ -1408,7 +1411,7 @@ public class HttpServerTest inherits QUnit::Test {
             # a timeout means that the server kept the connection open
             string err;
             try {
-                sock.readHTTPHeader(10s);
+                sock.readHTTPHeader(MustSucceedTimeout);
                 err = "received another response";
             } catch (hash<ExceptionInfo> ex) {
                 err = ex.err;
@@ -1436,7 +1439,7 @@ public class HttpServerTest inherits QUnit::Test {
             # a timeout means that the server kept the connection open
             string err;
             try {
-                sock.readHTTPHeader(10s);
+                sock.readHTTPHeader(MustSucceedTimeout);
                 err = "received another response";
             } catch (hash<ExceptionInfo> ex) {
                 err = ex.err;
@@ -1572,8 +1575,8 @@ public class HttpServerTest inherits QUnit::Test {
     }
 
     asyncModeBasicTest() {
-        # Create client with short timeout to ensure async operations don't block indefinitely
-        HTTPClient client({"url": asyncUrl, "timeout": 5s});
+        # the client's timeouts ensure that async operations don't block indefinitely
+        HTTPClient client({"url": asyncUrl, "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         client.connect();
         on_exit client.disconnect();
 
@@ -1605,11 +1608,12 @@ public class HttpServerTest inherits QUnit::Test {
 
         Future listener_f = server.addListenerAsync(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
         assertTrue(listener_f instanceof Future);
-        hash<auto> info = listener_f.get(5s);
+        hash<auto> info = listener_f.get(MustSucceedTimeout);
         assertTrue(info.port > 0);
-        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+        assertTrue(server.waitForAsyncIo(MustSucceedTimeout), "async I/O should be ready");
 
-        HTTPClient client({"url": "http://127.0.0.1:" + info.port, "timeout": 5s});
+        HTTPClient client({"url": "http://127.0.0.1:" + info.port,
+            "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         client.connect();
         on_exit client.disconnect();
         assertEq("listener-async-ok", client.get("/ok"));
@@ -1618,7 +1622,7 @@ public class HttpServerTest inherits QUnit::Test {
         Future listeners_f = server.addListenersAsync("127.0.0.1:0", <HttpListenerOptionInfo>{"sync": False},
             \errmap);
         assertTrue(listeners_f instanceof Future);
-        list<hash<auto>> infos = listeners_f.get(5s);
+        list<hash<auto>> infos = listeners_f.get(MustSucceedTimeout);
         assertEq(1, infos.size());
         assertTrue(infos[0].port > 0);
         assertEq(0, errmap.size());
@@ -1629,13 +1633,13 @@ public class HttpServerTest inherits QUnit::Test {
         mAsyncServer.setHandler("peer-info-future", "/peer-info-future", MimeTypeText,
             new PeerInfoFutureHandler(q));
 
-        HTTPClient client({"url": asyncUrl, "timeout": 5s});
+        HTTPClient client({"url": asyncUrl, "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         client.connect();
         on_exit client.disconnect();
 
         assertEq("ok", client.get("/peer-info-future"));
 
-        hash<auto> report = q.get(5s);
+        hash<auto> report = q.get(MustSucceedTimeout);
         hash<auto> peer_info = report{"peer-info"};
         assertTrue(exists peer_info.address);
         assertTrue(exists peer_info.port);
@@ -1658,19 +1662,20 @@ public class HttpServerTest inherits QUnit::Test {
         hs.setHandler("peer-info-future", "/peer-info-future", MimeTypeText, new PeerInfoFutureHandler(q));
         int port = hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
 
-        HTTPClient client({"url": "http://127.0.0.1:" + port, "timeout": 5s});
+        HTTPClient client({"url": "http://127.0.0.1:" + port,
+            "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         client.connect();
         on_exit client.disconnect();
         assertEq("ok", client.get("/peer-info-future"));
-        hash<auto> report = q.get(5s);
+        hash<auto> report = q.get(MustSucceedTimeout);
         assertTrue(exists report{"peer-info"}.address);
         assertFalse(report{"has-peer-info-future"}, "no reverse lookup by default");
     }
 
     asyncModeKeepAliveTest() {
         # Test keep-alive connections work with async mode
-        # Make multiple requests on the same connection with short timeout
-        HTTPClient client({"url": asyncUrl, "timeout": 5s});
+        # Make multiple requests on the same connection
+        HTTPClient client({"url": asyncUrl, "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         client.connect();
         on_exit client.disconnect();
 
@@ -1698,13 +1703,13 @@ public class HttpServerTest inherits QUnit::Test {
         Counter cnt(numConnections);
 
         for (int i = 0; i < numConnections; ++i) {
-            # Use short timeout (5s) to ensure async operations don't block indefinitely
-            background asyncConcurrentWorker(i, cnt, 5s);
+            # the workers' timeouts ensure that async operations don't block indefinitely
+            background asyncConcurrentWorker(i, cnt, MustSucceedTimeout);
         }
 
-        # Wait for all workers to complete (10s overall timeout)
+        # Wait for all workers to complete; each request is bounded by its connect and request timeouts
         # waitForZero returns remaining count (0 on success)
-        assertEq(0, cnt.waitForZero(10s));
+        assertEq(0, cnt.waitForZero(MustSucceedTimeout * 3));
     }
 
     private asyncConcurrentWorker(int workerId, Counter cnt, date testTimeout) {
@@ -1713,7 +1718,7 @@ public class HttpServerTest inherits QUnit::Test {
         try {
             # Each worker creates a new connection for each request
             # This tests concurrent accept and request handling without relying on keep-alive
-            HTTPClient client({"url": asyncUrl, "timeout": testTimeout});
+            HTTPClient client({"url": asyncUrl, "connect_timeout": testTimeout, "timeout": testTimeout});
             client.connect();
             on_exit client.disconnect();
 
@@ -1743,7 +1748,8 @@ public class HttpServerTest inherits QUnit::Test {
         # Test HTTPS connections with async mode
         HTTPClient client({
             "url": asyncSslUrl,
-            "timeout": 5s,
+            "connect_timeout": MustSucceedTimeout,
+            "timeout": MustSucceedTimeout,
             "ssl_verify_cert": False,  # Self-signed cert
         });
         client.connect();
@@ -1768,7 +1774,8 @@ public class HttpServerTest inherits QUnit::Test {
         # may not negotiate ALPN, resulting in a null protocol
         HTTPClient client({
             "url": asyncSslUrl,
-            "timeout": 5s,
+            "connect_timeout": MustSucceedTimeout,
+            "timeout": MustSucceedTimeout,
             "ssl_verify_cert": False,
             "http_version": "1.1",
         });
@@ -1791,7 +1798,8 @@ public class HttpServerTest inherits QUnit::Test {
     asyncModeErrorResponsesTest() {
         # Test error responses (4xx, 5xx) with async mode
         # Use error_passthru to get error responses without exceptions
-        HTTPClient client({"url": asyncUrl, "timeout": 5s, "error_passthru": True});
+        HTTPClient client({"url": asyncUrl,
+            "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout, "error_passthru": True});
         client.connect();
         on_exit client.disconnect();
 
@@ -1825,7 +1833,8 @@ public class HttpServerTest inherits QUnit::Test {
         # but then re-added a default error body for 4xx+ responses. In async mode, the
         # controller would send this body on the wire, corrupting the HTTP/1.1 keep-alive
         # connection because clients don't read bodies for HEAD responses.
-        HTTPClient client({"url": asyncUrl, "timeout": 5s, "error_passthru": True});
+        HTTPClient client({"url": asyncUrl,
+            "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout, "error_passthru": True});
         client.connect();
         on_exit client.disconnect();
 
@@ -1881,7 +1890,7 @@ public class HttpServerTest inherits QUnit::Test {
 
         # Test 2: Verify server still works after abrupt client disconnect
         {
-            HTTPClient client({"url": asyncUrl, "timeout": 5s});
+            HTTPClient client({"url": asyncUrl, "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
             client.connect();
             on_exit client.disconnect();
             assertEq("GET, afterdisconnect, /afterdisconnect", client.get("/afterdisconnect"));
@@ -1897,7 +1906,7 @@ public class HttpServerTest inherits QUnit::Test {
 
         # Verify server still responsive
         {
-            HTTPClient client({"url": asyncUrl, "timeout": 5s});
+            HTTPClient client({"url": asyncUrl, "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
             client.connect();
             on_exit client.disconnect();
             assertEq("GET, stillworks, /stillworks", client.get("/stillworks"));
@@ -1918,7 +1927,8 @@ public class HttpServerTest inherits QUnit::Test {
 
         # Connect WebSocket client to async server
         string wsUrl = "ws://127.0.0.1:" + asyncPort + "/ws";
-        WebSocketClient wsc(callback, {"url": wsUrl, "timeout": 5s});
+        WebSocketClient wsc(callback, {"url": wsUrl,
+            "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         hash<auto> connect_info = wsc.connect();
         on_exit wsc.disconnect();
         assertEq(TestWsProtocolVersion, connect_info{TestWsProtocolHeader.lwr()});
@@ -1926,13 +1936,13 @@ public class HttpServerTest inherits QUnit::Test {
 
         # Send a message and wait for echo
         wsc.send("hello");
-        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq(0, msgReceived.waitForZero(MustSucceedTimeout));
         assertEq("ECHO:hello", receivedMsg);
 
         # Send another message
         msgReceived.inc();
         wsc.send("world");
-        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq(0, msgReceived.waitForZero(MustSucceedTimeout));
         assertEq("ECHO:world", receivedMsg);
     }
 
@@ -1953,7 +1963,8 @@ public class HttpServerTest inherits QUnit::Test {
         string wssUrl = "wss://127.0.0.1:" + asyncSslPort + "/ws";
         WebSocketClient wsc(callback, {
             "url": wssUrl,
-            "timeout": 10s,
+            "connect_timeout": MustSucceedTimeout,
+            "timeout": MustSucceedTimeout,
             "ssl_verify_cert": False,  # Self-signed cert
             "http_version": "2.0",  # Force HTTP/2 for WebSocket over SSL
         });
@@ -1966,13 +1977,13 @@ public class HttpServerTest inherits QUnit::Test {
 
         # Send a message and wait for echo
         wsc.send("hello-ssl");
-        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq(0, msgReceived.waitForZero(MustSucceedTimeout));
         assertEq("ECHO:hello-ssl", receivedMsg);
 
         # Send another message
         msgReceived.inc();
         wsc.send("world-ssl");
-        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq(0, msgReceived.waitForZero(MustSucceedTimeout));
         assertEq("ECHO:world-ssl", receivedMsg);
     }
 
@@ -1982,7 +1993,8 @@ public class HttpServerTest inherits QUnit::Test {
         string wssUrl = "wss://127.0.0.1:" + asyncSslPort + "/ws";
         WebSocketClient wsc(callback, {
             "url": wssUrl,
-            "timeout": 10s,
+            "connect_timeout": MustSucceedTimeout,
+            "timeout": MustSucceedTimeout,
             "ssl_verify_cert": False,
             "http_version": "2.0",
         });
@@ -2010,7 +2022,8 @@ public class HttpServerTest inherits QUnit::Test {
         string wssUrl = "wss://127.0.0.1:" + asyncSslPort + "/ws";
         WebSocketClient wsc(callback, {
             "url": wssUrl,
-            "timeout": 10s,
+            "connect_timeout": MustSucceedTimeout,
+            "timeout": MustSucceedTimeout,
             "ssl_verify_cert": False,  # Self-signed cert
             "http_version": "1.1",  # Force HTTP/1.1 - disables HTTP/2 ALPN negotiation
         });
@@ -2022,13 +2035,13 @@ public class HttpServerTest inherits QUnit::Test {
 
         # Send a message and wait for echo
         wsc.send("hello-ssl-http1");
-        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq(0, msgReceived.waitForZero(MustSucceedTimeout));
         assertEq("ECHO:hello-ssl-http1", receivedMsg);
 
         # Send another message
         msgReceived.inc();
         wsc.send("world-ssl-http1");
-        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq(0, msgReceived.waitForZero(MustSucceedTimeout));
         assertEq("ECHO:world-ssl-http1", receivedMsg);
     }
 
@@ -2072,7 +2085,7 @@ public class HttpServerTest inherits QUnit::Test {
         }
         on_exit unlink(key_fn);
 
-        certServer.waitForAsyncIo(5s);
+        certServer.waitForAsyncIo(MustSucceedTimeout);
 
         # Verify listener info has correct SSL configuration
         hash<auto> linfo = certServer.getListenerInfo("listener-0");
@@ -2084,7 +2097,8 @@ public class HttpServerTest inherits QUnit::Test {
         {
             HTTPClient client({
                 "url": "https://127.0.0.1:" + certPort,
-                "timeout": 5s,
+                "connect_timeout": MustSucceedTimeout,
+                "timeout": MustSucceedTimeout,
                 "ssl_verify_cert": False,
                 "ssl_cert_path": cert_fn,
                 "ssl_key_path": key_fn,
@@ -2096,7 +2110,8 @@ public class HttpServerTest inherits QUnit::Test {
         {
             HTTPClient client({
                 "url": "https://127.0.0.1:" + certPort,
-                "timeout": 5s,
+                "connect_timeout": MustSucceedTimeout,
+                "timeout": MustSucceedTimeout,
                 "ssl_verify_cert": False,
                 "ssl_cert_path": cert_fn,
                 "ssl_key_path": key_fn,
@@ -2136,15 +2151,17 @@ public class HttpServerTest inherits QUnit::Test {
         }).port;
 
         # Wait for async I/O to be ready
-        authServer.waitForAsyncIo();
+        authServer.waitForAsyncIo(MustSucceedTimeout);
 
         # First attempt: Connect WITHOUT valid token - should get 401
         string wssUrlNoToken = "wss://127.0.0.1:" + authSslPort + "/ws";
         bool connectSucceeded = False;
         try {
+            # the rejection must arrive: a timeout is not the expected error
             WebSocketClient wscBad(sub (*data msg) {}, {
                 "url": wssUrlNoToken,
-                "timeout": 10s,
+                "connect_timeout": MustSucceedTimeout,
+                "timeout": MustSucceedTimeout,
                 "ssl_verify_cert": False,
                 "http_version": "2.0",
             });
@@ -2179,7 +2196,8 @@ public class HttpServerTest inherits QUnit::Test {
         string wssUrl = "wss://127.0.0.1:" + authSslPort + "/ws";
         WebSocketClient wscGood(callback, {
             "url": wssUrl,
-            "timeout": 10s,
+            "connect_timeout": MustSucceedTimeout,
+            "timeout": MustSucceedTimeout,
             "ssl_verify_cert": False,
             "http_version": "2.0",
         });
@@ -2194,7 +2212,7 @@ public class HttpServerTest inherits QUnit::Test {
 
         # Send a message and verify echo
         wscGood.send("authenticated-message");
-        assertEq(0, msgReceived.waitForZero(5s), "Should receive echo message");
+        assertEq(0, msgReceived.waitForZero(MustSucceedTimeout), "Should receive echo message");
         assertEq("ECHO:authenticated-message", receivedMsg);
     }
 
@@ -2219,7 +2237,7 @@ public class HttpServerTest inherits QUnit::Test {
         string persistUrl = "http://127.0.0.1:" + persistPort;
 
         # Create client with keep-alive
-        HTTPClient client({"url": persistUrl, "timeout": 10s});
+        HTTPClient client({"url": persistUrl, "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         client.connect();
         on_exit client.disconnect();
 
@@ -2249,7 +2267,7 @@ public class HttpServerTest inherits QUnit::Test {
         hash<auto> resp4 = client.send("end", "POST", "/persistent/end");
         assertEq(200, resp4.status_code);
         assertEq("ended", resp4.body);
-        assertTrue(handler.waitForCloseNotification(1s),
+        assertTrue(handler.waitForCloseNotification(MustSucceedTimeout),
             "persistent close notification runs after final request clears persistence flag");
         assertFalse(handler.waitForCloseNotification(50ms),
             "persistent close notification runs exactly once");
@@ -2280,7 +2298,7 @@ public class HttpServerTest inherits QUnit::Test {
         int epPort = epServer.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         string epUrl = "http://127.0.0.1:" + epPort;
 
-        HTTPClient client({"url": epUrl, "timeout": 10s});
+        HTTPClient client({"url": epUrl, "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         client.connect();
         # Mark the client connection as persistent (disables auto-reconnect)
         # — this is what Qorus StreamConfig does
@@ -2349,7 +2367,7 @@ public class HttpServerTest inherits QUnit::Test {
         int transPort = transServer.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         string transUrl = "http://127.0.0.1:" + transPort;
 
-        HTTPClient client({"url": transUrl, "timeout": 10s});
+        HTTPClient client({"url": transUrl, "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         client.connect();
         on_exit client.disconnect();
 
@@ -2389,7 +2407,7 @@ public class HttpServerTest inherits QUnit::Test {
         string closeUrl = "http://127.0.0.1:" + closePort;
 
         {
-            HTTPClient client({"url": closeUrl, "timeout": 10s});
+            HTTPClient client({"url": closeUrl, "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
             client.connect();
 
             # Start persistent mode
@@ -2403,7 +2421,7 @@ public class HttpServerTest inherits QUnit::Test {
         # Server should handle the abrupt disconnect gracefully
         # Try connecting again to verify server is still working
         {
-            HTTPClient client2({"url": closeUrl, "timeout": 10s});
+            HTTPClient client2({"url": closeUrl, "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
             client2.connect();
             on_exit client2.disconnect();
 
@@ -2431,7 +2449,7 @@ public class HttpServerTest inherits QUnit::Test {
         int errPort = errServer.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         string errUrl = "http://127.0.0.1:" + errPort;
 
-        HTTPClient client({"url": errUrl, "timeout": 10s});
+        HTTPClient client({"url": errUrl, "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         client.connect();
         on_exit client.disconnect();
 
@@ -2451,7 +2469,7 @@ public class HttpServerTest inherits QUnit::Test {
         }
 
         # Verify server is still accepting connections
-        HTTPClient client2({"url": errUrl, "timeout": 10s});
+        HTTPClient client2({"url": errUrl, "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         client2.connect();
         on_exit client2.disconnect();
 
@@ -2483,7 +2501,7 @@ public class HttpServerTest inherits QUnit::Test {
         list<int> threadIds = ();
 
         for (int i = 0; i < 3; i++) {
-            HTTPClient client({"url": concUrl, "timeout": 10s});
+            HTTPClient client({"url": concUrl, "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
             client.connect();
             push clients, client;
 
@@ -2532,7 +2550,7 @@ public class HttpServerTest inherits QUnit::Test {
         int npPort = npServer.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         string npUrl = "http://127.0.0.1:" + npPort;
 
-        HTTPClient client({"url": npUrl, "timeout": 10s});
+        HTTPClient client({"url": npUrl, "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         client.connect();
         on_exit client.disconnect();
 
@@ -2561,7 +2579,8 @@ public class HttpServerTest inherits QUnit::Test {
         # requires the client to actually stay on H2.
         HTTPClient h2client({
             "url": asyncSslUrl,
-            "timeout": 10s,
+            "connect_timeout": MustSucceedTimeout,
+            "timeout": MustSucceedTimeout,
             "ssl_verify_cert": False,  # Self-signed cert
             "http_version": "2.0",     # H2 only — no Alt-Svc auto-upgrade to H3
         });
@@ -2642,7 +2661,8 @@ public class HttpServerTest inherits QUnit::Test {
             # Create a new HTTP/2 client that doesn't auto-decompress
             HTTPClient h2compress({
                 "url": asyncSslUrl,
-                "timeout": 10s,
+                "connect_timeout": MustSucceedTimeout,
+                "timeout": MustSucceedTimeout,
                 "ssl_verify_cert": False,
                 "http_version": "2",
             });
@@ -2693,7 +2713,8 @@ public class HttpServerTest inherits QUnit::Test {
         # Test HTTP/2 disabled mode
         HTTPClient h1client({
             "url": asyncSslUrl,
-            "timeout": 10s,
+            "connect_timeout": MustSucceedTimeout,
+            "timeout": MustSucceedTimeout,
             "ssl_verify_cert": False,
             "http_version": "1.1",    # Force HTTP/1.1
         });
@@ -2737,7 +2758,8 @@ public class HttpServerTest inherits QUnit::Test {
             # because the server won't offer HTTP/2 via ALPN
             HTTPClient h2disabled({
                 "url": disabledUrl,
-                "timeout": 10s,
+                "connect_timeout": MustSucceedTimeout,
+                "timeout": MustSucceedTimeout,
                 "ssl_verify_cert": False,
                 "http_version": "2",    # Client wants HTTP/2
             });
@@ -2763,7 +2785,7 @@ public class HttpServerTest inherits QUnit::Test {
         server.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
         server.setDefaultHandler("my-handler", new ReqHandler());
         server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
-        server.waitForAsyncIo();
+        server.waitForAsyncIo(MustSucceedTimeout);
 
         server.stop();
 
@@ -2791,7 +2813,7 @@ public class HttpServerTest inherits QUnit::Test {
         SimpleStringHandler handler("ok");
         server.setHandler("ok", "/ok", MimeTypeText, handler);
         int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
-        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+        assertTrue(server.waitForAsyncIo(MustSucceedTimeout), "async I/O should be ready");
 
         # Trigger the listener exception by sending a complete HTTP request
         # over a raw socket — getContextTemplate() (which throws once) is
@@ -2804,15 +2826,17 @@ public class HttpServerTest inherits QUnit::Test {
         s1.send("GET /ok HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
         # Read whatever the server returns (likely a 500 or socket close);
         # we don't care about the response — we just need the listener to
-        # have processed the request and consumed throw_next.
+        # have processed the request and consumed throw_next: the answer must
+        # arrive, so the wait only bounds a hang
         try {
-            s1.recv(4096, 2s);
+            s1.recv(4096, MustSucceedTimeout);
         } catch (hash<ExceptionInfo> ex) {
             # SOCKET-CLOSED / SOCKET-RECV-ERROR are expected here
         }
         s1.close();
 
-        HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
+        HTTPClient client({"url": "http://127.0.0.1:" + test_port,
+            "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         client.connect();
         on_exit client.disconnect();
         hash<auto> resp = client.send(NOTHING, "GET", "/ok");
@@ -2832,11 +2856,14 @@ public class HttpServerTest inherits QUnit::Test {
         server.setHandler("slow-handler", "", MimeTypeHtml, handler);
         server.setDefaultHandler("slow-handler", handler);
         int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
-        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+        assertTrue(server.waitForAsyncIo(MustSucceedTimeout), "async I/O should be ready");
 
         background sub () {
             try {
-                HTTPClient client({"url": "http://127.0.0.1:" + port, "timeout": 10s});
+                # the request's timeout is longer than the wait for stop() below, so that a stop() that waits for
+                # the client to give up fails the check
+                HTTPClient client({"url": "http://127.0.0.1:" + port, "connect_timeout": MustSucceedTimeout,
+                    "timeout": MustSucceedTimeout * 2});
                 client.connect();
                 client.get("/slow");
                 client.disconnect();
@@ -2845,14 +2872,15 @@ public class HttpServerTest inherits QUnit::Test {
             }
         }();
 
-        assertTrue(started.get(5s) != NOTHING, "handler should start before shutdown");
+        assertTrue(started.get(MustSucceedTimeout) != NOTHING, "handler should start before shutdown");
 
+        # stop() must not wait for the client; the wait only bounds a hang
         Queue stopped();
         background sub () {
             server.stop();
             stopped.push(True);
         }();
-        assertTrue(stopped.get(5s) != NOTHING, "server.stop should finish without delay");
+        assertTrue(stopped.get(MustSucceedTimeout) != NOTHING, "server.stop should finish without delay");
     }
 
     asyncModeGlobalCtrlRestartTest() {
@@ -2865,9 +2893,10 @@ public class HttpServerTest inherits QUnit::Test {
         server1.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
         server1.setDefaultHandler("my-handler", new ReqHandler());
         int port1 = server1.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
-        assertTrue(server1.waitForAsyncIo(15s), "async I/O should be ready after start");
+        assertTrue(server1.waitForAsyncIo(MustSucceedTimeout), "async I/O should be ready after start");
 
-        HTTPClient client1({"url": "http://127.0.0.1:" + port1, "timeout": 10s});
+        HTTPClient client1({"url": "http://127.0.0.1:" + port1,
+            "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         client1.connect();
         on_exit client1.disconnect();
         assertEq("GET, restart1, /restart1", client1.get("/restart1"));
@@ -2883,9 +2912,10 @@ public class HttpServerTest inherits QUnit::Test {
         server2.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
         server2.setDefaultHandler("my-handler", new ReqHandler());
         int port2 = server2.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
-        assertTrue(server2.waitForAsyncIo(15s), "async I/O should restart after stop");
+        assertTrue(server2.waitForAsyncIo(MustSucceedTimeout), "async I/O should restart after stop");
 
-        HTTPClient client2({"url": "http://127.0.0.1:" + port2, "timeout": 10s});
+        HTTPClient client2({"url": "http://127.0.0.1:" + port2,
+            "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         client2.connect();
         on_exit client2.disconnect();
         assertEq("GET, restart2, /restart2", client2.get("/restart2"));
@@ -2925,16 +2955,20 @@ public class HttpServerTest inherits QUnit::Test {
                 release_slow.dec();
             }
         }
-        BlockingSlowHandler slow_handler(slow_started, release_slow, 30s);
+        # the slow requests hold the pool until they are released; the hold outlasts the inline request's timeout,
+        # so that an inline request that waits for a pool thread times out instead of being served once the hold
+        # ends
+        BlockingSlowHandler slow_handler(slow_started, release_slow, MustSucceedTimeout * 3);
         server.setHandler("slow-handler", "/slow", MimeTypeHtml, slow_handler);
         server.setDefaultHandler("slow-handler", slow_handler);
 
         int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
-        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+        assertTrue(server.waitForAsyncIo(MustSucceedTimeout), "async I/O should be ready");
 
         # Test 1: Basic inline handler response
         {
-            HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
+            HTTPClient client({"url": "http://127.0.0.1:" + test_port,
+                "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
             client.connect();
             on_exit client.disconnect();
             hash<auto> resp = client.send(NOTHING, "GET", "/inline");
@@ -2945,7 +2979,8 @@ public class HttpServerTest inherits QUnit::Test {
 
         # Test 2: Inline handler works on keep-alive connections
         {
-            HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
+            HTTPClient client({"url": "http://127.0.0.1:" + test_port,
+                "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
             client.connect();
             on_exit client.disconnect();
             # First request
@@ -2960,7 +2995,8 @@ public class HttpServerTest inherits QUnit::Test {
 
         # Test 3: Non-inline handler still works alongside inline handler
         {
-            HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
+            HTTPClient client({"url": "http://127.0.0.1:" + test_port,
+                "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
             client.connect();
             on_exit client.disconnect();
             hash<auto> resp = client.send(NOTHING, "GET", "/regular");
@@ -2980,7 +3016,8 @@ public class HttpServerTest inherits QUnit::Test {
                     try {
                         HTTPClient client({
                             "url": "http://127.0.0.1:" + test_port,
-                            "timeout": 15s,
+                            "connect_timeout": MustSucceedTimeout,
+                            "timeout": MustSucceedTimeout,
                         });
                         client.connect();
                         client.get("/slow");
@@ -2993,7 +3030,7 @@ public class HttpServerTest inherits QUnit::Test {
 
             # Wait for all slow handlers to start (proves pool is fully occupied)
             for (int i = 0; i < pool_size; i++) {
-                auto val = slow_started.get(5s);
+                auto val = slow_started.get(MustSucceedTimeout);
                 assertTrue(val != NOTHING, "slow handler " + string(i) + " started");
             }
 
@@ -3001,7 +3038,8 @@ public class HttpServerTest inherits QUnit::Test {
             # because it runs on the I/O thread, not the pool.
             HTTPClient inline_client({
                 "url": "http://127.0.0.1:" + test_port,
-                "timeout": 5s,
+                "connect_timeout": MustSucceedTimeout,
+                "timeout": MustSucceedTimeout,
             });
             inline_client.connect();
             on_exit inline_client.disconnect();
@@ -3013,7 +3051,8 @@ public class HttpServerTest inherits QUnit::Test {
         # Release the background slow requests and wait for them before teardown. Otherwise the
         # test races server.stop() against in-flight handler threads and can wedge CI.
         release_slow.dec();
-        assertEq(0, slow_done.waitForZero(15s), "slow requests should finish before teardown");
+        # each slow request is bounded by its connect and request timeouts
+        assertEq(0, slow_done.waitForZero(MustSucceedTimeout * 3), "slow requests should finish before teardown");
     }
 
     #! Verifies that requests with a body fall back to the thread pool even when
@@ -3034,9 +3073,10 @@ public class HttpServerTest inherits QUnit::Test {
         server.setHandler("inline-handler", "/inline", MimeTypeText, inline_handler);
 
         int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
-        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+        assertTrue(server.waitForAsyncIo(MustSucceedTimeout), "async I/O should be ready");
 
-        HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
+        HTTPClient client({"url": "http://127.0.0.1:" + test_port,
+            "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         client.connect();
         on_exit client.disconnect();
 
@@ -3079,11 +3119,12 @@ public class HttpServerTest inherits QUnit::Test {
             "service": 0,
             "enable_h3": False,
         });
-        assertTrue(server.waitForAsyncIo(5s),
+        assertTrue(server.waitForAsyncIo(MustSucceedTimeout),
             "request-preparation HTTP/1 listener is ready");
         HTTPClient h1({
             "url": "http://127.0.0.1:" + h1_listener.port,
-            "timeout": 5s,
+            "connect_timeout": MustSucceedTimeout,
+            "timeout": MustSucceedTimeout,
             "error_passthru": True,
         });
         h1.connect();
@@ -3120,7 +3161,8 @@ public class HttpServerTest inherits QUnit::Test {
         });
         HTTPClient h2({
             "url": "https://127.0.0.1:" + h2_listener.port,
-            "timeout": 10s,
+            "connect_timeout": MustSucceedTimeout,
+            "timeout": MustSucceedTimeout,
             "ssl_verify_cert": False,
             "http_version": "2.0",
             "error_passthru": True,
@@ -3183,11 +3225,12 @@ public class HttpServerTest inherits QUnit::Test {
             "key": new SSLPrivateKey(KeyPem),
             "enable_h3": False,
         });
-        assertTrue(server.waitForAsyncIo(5s), "async I/O ready");
+        assertTrue(server.waitForAsyncIo(MustSucceedTimeout), "async I/O ready");
 
         HTTPClient h2client({
             "url": "https://127.0.0.1:" + linfo.port,
-            "timeout": 10s,
+            "connect_timeout": MustSucceedTimeout,
+            "timeout": MustSucceedTimeout,
             "ssl_verify_cert": False,
             "http_version": "auto",
         });
@@ -3210,7 +3253,7 @@ public class HttpServerTest inherits QUnit::Test {
     }
 
     #! Helper: read an HTTP response from a raw socket using protocol-aware methods
-    private hash<auto> readRawHttpResponse(Socket sock, timeout to = 5s) {
+    private hash<auto> readRawHttpResponse(Socket sock, timeout to = MustSucceedTimeout) {
         hash<auto> hdr = sock.readHTTPHeader(to);
         string body = "";
         if (hdr."content-length") {
@@ -3239,7 +3282,7 @@ public class HttpServerTest inherits QUnit::Test {
         server.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
         server.setDefaultHandler("my-handler", new ReqHandler());
         int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
-        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+        assertTrue(server.waitForAsyncIo(MustSucceedTimeout), "async I/O should be ready");
 
         # Set a short TTL so the test doesn't take too long
         date orig_ttl = server.getTtl();
@@ -3254,30 +3297,29 @@ public class HttpServerTest inherits QUnit::Test {
         hash<auto> resp = readRawHttpResponse(sock);
         assertEq(200, resp.status_code, "should be 200 OK");
 
-        # Now sit idle past the TTL — the server should close the connection
-        # Wait for TTL + safety margin
+        # Now sit idle past the TTL: the sleep is a lower bound of the idle time, which a loaded machine can only
+        # lengthen
         usleep(500ms);
 
-        # Try to send another request — should fail because server closed the connection
-        bool closed = False;
+        # Send another request: the server closes the connection, which has been idle for longer than the TTL, instead
+        # of serving it.  The read waits for the close and only bounds a hang (qore#7477): a response, or a timeout
+        # (the server kept the connection open), fails the check.  The server checks the TTL of a connection that
+        # waits for its next request only when the request comes (qore#7488); once it closes an idle connection at
+        # its TTL, this case can wait for the close without a request
+        string result;
         try {
             sock.send("GET /idle-test2 HTTP/1.1\r\nHost: localhost\r\n\r\n");
-            readRawHttpResponse(sock, 1s);
-            # If we got a valid response, connection wasn't closed
+            readRawHttpResponse(sock, MustSucceedTimeout);
+            result = "a response on the idle connection";
         } catch (hash<ExceptionInfo> ex) {
-            # Socket errors indicate the server closed the connection
-            if (ex.err == "SOCKET-SEND-ERROR" || ex.err == "SOCKET-CLOSED"
-                    || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
-                    || ex.err == "SOCKET-TIMEOUT" || ex.err == "SOCKET-HTTP-ERROR") {
-                closed = True;
-            } else {
-                rethrow;
-            }
+            result = ex.err;
         }
-        assertTrue(closed, "idle connection should be closed by server after TTL");
+        assertTrue(inlist(result, ("SOCKET-SEND-ERROR", "SOCKET-CLOSED", "SOCKET-NOT-OPEN", "SOCKET-RECV-ERROR",
+            "SOCKET-HTTP-ERROR")), "idle connection should be closed by server after TTL: " + result);
 
         # Verify the server is still operational
-        HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
+        HTTPClient client({"url": "http://127.0.0.1:" + test_port,
+            "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         client.connect();
         on_exit client.disconnect();
         assertEq("GET, afteridle, /afteridle", client.get("/afteridle"));
@@ -3301,7 +3343,7 @@ public class HttpServerTest inherits QUnit::Test {
         server.setHandler("inline-handler", "/inline", MimeTypeText, inline_handler);
         server.setDefaultHandler("inline-handler", inline_handler);
         int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
-        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+        assertTrue(server.waitForAsyncIo(MustSucceedTimeout), "async I/O should be ready");
 
         # Test: HTTP/1.1 with Connection: close — server should close connection after response
         {
@@ -3318,7 +3360,7 @@ public class HttpServerTest inherits QUnit::Test {
             # a timeout means that the server kept the connection open
             string err;
             try {
-                sock.readHTTPHeader(10s);
+                sock.readHTTPHeader(MustSucceedTimeout);
                 err = "received another response";
             } catch (hash<ExceptionInfo> ex) {
                 err = ex.err;
@@ -3343,7 +3385,8 @@ public class HttpServerTest inherits QUnit::Test {
         }
 
         # Verify server is still operational
-        HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
+        HTTPClient client({"url": "http://127.0.0.1:" + test_port,
+            "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         client.connect();
         on_exit client.disconnect();
         hash<auto> resp = client.send(NOTHING, "GET", "/inline");
@@ -3368,7 +3411,7 @@ public class HttpServerTest inherits QUnit::Test {
         server.setHandler("inline-handler", "/inline", MimeTypeText, inline_handler);
         server.setDefaultHandler("inline-handler", inline_handler);
         int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
-        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+        assertTrue(server.waitForAsyncIo(MustSucceedTimeout), "async I/O should be ready");
 
         # Test: HTTP/1.0 request without Connection: Keep-Alive — should close
         {
@@ -3385,7 +3428,7 @@ public class HttpServerTest inherits QUnit::Test {
             # a timeout means that the server kept the connection open
             string err;
             try {
-                sock.readHTTPHeader(10s);
+                sock.readHTTPHeader(MustSucceedTimeout);
                 err = "received another response";
             } catch (hash<ExceptionInfo> ex) {
                 err = ex.err;
@@ -3394,7 +3437,8 @@ public class HttpServerTest inherits QUnit::Test {
         }
 
         # Verify server is still operational
-        HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
+        HTTPClient client({"url": "http://127.0.0.1:" + test_port,
+            "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         client.connect();
         on_exit client.disconnect();
         hash<auto> resp = client.send(NOTHING, "GET", "/inline");
@@ -3417,7 +3461,7 @@ public class HttpServerTest inherits QUnit::Test {
         InlineTestHandler inline_handler();
         server.setDefaultHandler("inline-handler", inline_handler);
         int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
-        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+        assertTrue(server.waitForAsyncIo(MustSucceedTimeout), "async I/O should be ready");
 
         assertFalse(server.acceptsHttpMethod("PRI"));
         assertFalse(server.acceptsHttpMethod("FOO"));
@@ -3426,7 +3470,7 @@ public class HttpServerTest inherits QUnit::Test {
         foreach string req in ("PRI * HTTP/2.0\r\nHost: localhost\r\n\r\n",
                 "FOO /inline HTTP/1.1\r\nHost: localhost\r\n\r\n") {
             Socket sock();
-            sock.connect("127.0.0.1:" + test_port, 5s);
+            sock.connect("127.0.0.1:" + test_port, MustSucceedTimeout);
             on_exit sock.close();
             sock.send(req);
             hash<auto> resp = readRawHttpResponse(sock);
@@ -3439,7 +3483,7 @@ public class HttpServerTest inherits QUnit::Test {
         server.addHttpMethod("FOO");
         assertTrue(server.acceptsHttpMethod("FOO"));
         Socket sock();
-        sock.connect("127.0.0.1:" + test_port, 5s);
+        sock.connect("127.0.0.1:" + test_port, MustSucceedTimeout);
         on_exit sock.close();
         sock.send("FOO /inline HTTP/1.1\r\nHost: localhost\r\n\r\n");
         hash<auto> resp = readRawHttpResponse(sock);
@@ -3466,10 +3510,11 @@ public class HttpServerTest inherits QUnit::Test {
         server.setHandler("ws-handler", "", NOTHING, ws_handler);
         server.setDefaultHandler("ws-handler", ws_handler);
         int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
-        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+        assertTrue(server.waitForAsyncIo(MustSucceedTimeout), "async I/O should be ready");
 
         # Establish a WebSocket connection
-        WebSocketClient ws_client(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + test_port});
+        WebSocketClient ws_client(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + test_port,
+            "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         on_exit { try { ws_client.disconnect(); } catch () {} }
         ws_client.connect();
 
@@ -3477,13 +3522,13 @@ public class HttpServerTest inherits QUnit::Test {
         usleep(250ms);
 
         # Stop the server in a background thread with a timeout guard;
-        # before the fix this would hang indefinitely
+        # before the fix this would hang indefinitely, so the guard only bounds a hang
         Queue stopped();
         background sub () {
             server.stop();
             stopped.push(True);
         }();
-        assertTrue(stopped.get(10s) != NOTHING, "server.stop() should complete deterministically");
+        assertTrue(stopped.get(MustSucceedTimeout) != NOTHING, "server.stop() should complete deterministically");
     }
 
     #! Verifies that a WebSocket destructor exception during async shutdown is logged
@@ -3511,9 +3556,10 @@ public class HttpServerTest inherits QUnit::Test {
         server.setHandler("ws-handler", "", NOTHING, ws_handler);
         server.setDefaultHandler("ws-handler", ws_handler);
         int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
-        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+        assertTrue(server.waitForAsyncIo(MustSucceedTimeout), "async I/O should be ready");
 
-        WebSocketClient ws_client(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + test_port});
+        WebSocketClient ws_client(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + test_port,
+            "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         on_exit {
             try {
                 ws_client.disconnect();
@@ -3533,7 +3579,7 @@ public class HttpServerTest inherits QUnit::Test {
                 stopped.push(ex);
             }
         }();
-        auto stop_result = stopped.get(10s);
+        auto stop_result = stopped.get(MustSucceedTimeout);
         assertTrue(stop_result != NOTHING,
             "server.stop() should complete despite WebSocket destructor exception");
         if (stop_result instanceof hash<ExceptionInfo>) {
@@ -3560,7 +3606,7 @@ public class HttpServerTest inherits QUnit::Test {
         server.setHandler("ws-handler", "", NOTHING, ws_handler);
         server.setDefaultHandler("ws-handler", ws_handler);
         int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
-        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+        assertTrue(server.waitForAsyncIo(MustSucceedTimeout), "async I/O should be ready");
 
         # Establish multiple WebSocket connections
         int num_clients = 5;
@@ -3571,7 +3617,8 @@ public class HttpServerTest inherits QUnit::Test {
             }
         }
         for (int i = 0; i < num_clients; ++i) {
-            WebSocketClient ws(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + test_port});
+            WebSocketClient ws(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + test_port,
+                "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
             ws.connect();
             clients += ws;
         }
@@ -3586,7 +3633,7 @@ public class HttpServerTest inherits QUnit::Test {
             server.stop();
             stopped.push(True);
         }();
-        assertTrue(stopped.get(10s) != NOTHING,
+        assertTrue(stopped.get(MustSucceedTimeout) != NOTHING,
             "server.stop() should complete with multiple WebSocket connections");
     }
 
@@ -3607,10 +3654,11 @@ public class HttpServerTest inherits QUnit::Test {
         server.setHandler("http-handler", "/http", MimeTypeHtml, new ReqHandler());
         server.setDefaultHandler("ws-handler", ws_handler);
         int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
-        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+        assertTrue(server.waitForAsyncIo(MustSucceedTimeout), "async I/O should be ready");
 
         # Start a WebSocket connection (streaming)
-        WebSocketClient ws_client(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + test_port});
+        WebSocketClient ws_client(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + test_port,
+            "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
         on_exit { try { ws_client.disconnect(); } catch () {} }
         ws_client.connect();
 
@@ -3620,14 +3668,16 @@ public class HttpServerTest inherits QUnit::Test {
             background sub () {
                 on_exit http_done.dec();
                 try {
-                    HTTPClient hclient({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
+                    HTTPClient hclient({"url": "http://127.0.0.1:" + test_port,
+                        "connect_timeout": MustSucceedTimeout, "timeout": MustSucceedTimeout});
                     hclient.connect();
                     hclient.get("/http/test");
                     hclient.disconnect();
                 } catch () {}
             }();
         }
-        http_done.waitForZero(5s);
+        # each request is bounded by its connect and request timeouts
+        http_done.waitForZero(MustSucceedTimeout * 3);
 
         # Brief delay to ensure the WebSocket handler loop is running
         usleep(250ms);
@@ -3638,7 +3688,7 @@ public class HttpServerTest inherits QUnit::Test {
             server.stop();
             stopped.push(True);
         }();
-        assertTrue(stopped.get(10s) != NOTHING,
+        assertTrue(stopped.get(MustSucceedTimeout) != NOTHING,
             "server.stop() should complete with mixed streaming and HTTP connections");
     }
 
@@ -3935,7 +3985,8 @@ public class HttpServerTest inherits QUnit::Test {
                         for (int req = 0; req < max_requests_per_conn; ++req) {
                             *hash<auto> hdr;
                             try {
-                                hdr = client.readHTTPHeader(2s);
+                                # the next request on the connection, or its close by the client
+                                hdr = client.readHTTPHeader(MustSucceedTimeout);
                             } catch () {
                                 break;
                             }
@@ -3963,7 +4014,7 @@ public class HttpServerTest inherits QUnit::Test {
         on_exit {
             server_stop = True;
             listener.close();
-            serverDone.waitForZero(3s);
+            serverDone.waitForZero(MustSucceedTimeout);
         }
 
         # --- Scenario 1: immediate requests across server close ---
@@ -4061,7 +4112,7 @@ public class HttpServerTest inherits QUnit::Test {
                         # Serve one request, then delay close by 500ms
                         *hash<auto> hdr;
                         try {
-                            hdr = client.readHTTPHeader(2s);
+                            hdr = client.readHTTPHeader(MustSucceedTimeout);
                         } catch () {
                             client.close();
                             continue;
@@ -4089,7 +4140,7 @@ public class HttpServerTest inherits QUnit::Test {
             on_exit {
                 srv3_stop = True;
                 srv3_listener.close();
-                srv3Done.waitForZero(3s);
+                srv3Done.waitForZero(MustSucceedTimeout);
             }
 
             RestClientIo rc({
@@ -4103,7 +4154,7 @@ public class HttpServerTest inherits QUnit::Test {
             rc.restGet("/health");
 
             # Second request sent immediately — races with the delayed close.
-            # Must succeed (reconnect if needed) within 3s, not the full timeout.
+            # Must succeed (reconnect if needed) within the recovery bound, not the full timeout.
             int start = clock_get_monotonic_us();
             *hash<ExceptionInfo> err;
             try {
@@ -4138,13 +4189,16 @@ public class HttpServerTest inherits QUnit::Test {
             RestClientIo rc({
                 "url": srv.getUrl(),
                 "data": "json",
-                "connect_timeout": 5s,
-                "timeout": 3s,
+                "connect_timeout": MustSucceedTimeout,
+                "timeout": MustSucceedTimeout,
                 "logger": logger,
             });
 
-            # First request succeeds
+            # First request succeeds; it must succeed, so its timeout only bounds a hang
             rc.restGet("/health");
+
+            # the deadline that the case verifies applies to the request on the half-open connection only
+            rc.setTimeout(3s);
 
             int start = clock_get_monotonic_us();
             *hash<ExceptionInfo> err;
@@ -4165,7 +4219,7 @@ public class HttpServerTest inherits QUnit::Test {
         }
 
         # --- Scenario 4c: the same half-open server, recovered through io_timeout ---
-        # io_timeout (1s) is shorter than the request's timeout: the stale attempt fails
+        # io_timeout (10s) is shorter than the request's timeout: the stale attempt fails
         # on its inactivity timeout, and the request is sent again once on a fresh
         # connection within its remaining time, which the server answers.
         {
@@ -4178,9 +4232,12 @@ public class HttpServerTest inherits QUnit::Test {
             RestClientIo rc({
                 "url": srv.getUrl(),
                 "data": "json",
-                "connect_timeout": 5s,
-                "timeout": 30s,
-                "io_timeout": 1s,
+                "connect_timeout": MustSucceedTimeout,
+                # the stale attempt fails on io_timeout, and the request is sent again within its remaining time; the
+                # io_timeout is long enough for a loaded machine's server to answer the requests that must not time out
+                # (the first one and the retry), as a slow answer would make another retry (qore#7477)
+                "timeout": MustSucceedTimeout * 2,
+                "io_timeout": 10s,
                 "logger": logger,
             });
 
@@ -4232,7 +4289,7 @@ public class HttpServerTest inherits QUnit::Test {
                             # second request and close (send FIN) without
                             # responding.
                             try {
-                                *hash<auto> hdr = client.readHTTPHeader(2s);
+                                *hash<auto> hdr = client.readHTTPHeader(MustSucceedTimeout);
                                 if (hdr) {
                                     string body = "{\"ok\": true}";
                                     string resp = sprintf(
@@ -4246,15 +4303,20 @@ public class HttpServerTest inherits QUnit::Test {
                                 }
                                 # Wait for the second request to arrive,
                                 # drain it, then close (FIN).
-                                hdr = client.readHTTPHeader(2s);
+                                hdr = client.readHTTPHeader(MustSucceedTimeout);
                             } catch () {}
                             client.close();
                         } else {
-                            # Fresh connection: respond normally
+                            # Fresh connection: respond normally; wait for a request (or the client's close)
+                            # as long as the server runs, as the accept loop does, and the request then read
+                            # must arrive (qore#7477)
                             while (!srv4b_stop) {
                                 *hash<auto> hdr;
                                 try {
-                                    hdr = client.readHTTPHeader(1s);
+                                    if (!client.isDataAvailable(500ms)) {
+                                        continue;
+                                    }
+                                    hdr = client.readHTTPHeader(MustSucceedTimeout);
                                 } catch () {
                                     break;
                                 }
@@ -4280,14 +4342,14 @@ public class HttpServerTest inherits QUnit::Test {
             on_exit {
                 srv4b_stop = True;
                 srv4b_listener.close();
-                srv4bDone.waitForZero(5s);
+                srv4bDone.waitForZero(MustSucceedTimeout);
             }
 
             RestClientIo rc({
                 "url": "http://127.0.0.1:" + srv4b_port,
                 "data": "json",
-                "connect_timeout": 5s,
-                "timeout": 15s,
+                "connect_timeout": MustSucceedTimeout,
+                "timeout": MustSucceedTimeout,
             });
 
             # Prime the pool with conn 1 + one successful exchange
@@ -4308,12 +4370,14 @@ public class HttpServerTest inherits QUnit::Test {
             date elapsed = microseconds(clock_get_monotonic_us() - start);
             assertTrue(recovered,
                 "scenario4b: retry on fresh connection must succeed");
-            # FIN-driven recovery should be near-instant; bound generously
-            # at 2s to absorb CI scheduling jitter.  If this exceeds the
-            # bound, the FIN is being missed and recovery is falling back
-            # to request_timeout (which scenario4 already covers).
-            assertTrue(elapsed < 2s,
-                sprintf("scenario4b: took %y, expected < 2s", elapsed));
+            # FIN-driven recovery should be near-instant.  If the FIN is
+            # missed, recovery falls back to the request's timeout
+            # (MustSucceedTimeout), which also fails the request (scenario4);
+            # the bound is the recovery bound of scenarios 1-3, far below
+            # that timeout and far above a near-instant recovery, so that a
+            # loaded machine does not fail it (qore#7477)
+            assertTrue(elapsed < 10s,
+                sprintf("scenario4b: took %y, expected < 10s", elapsed));
         }
     }
 
