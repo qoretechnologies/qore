@@ -83,6 +83,7 @@ module VoyageDataProvider {
                 "Supports batch processing (up to 1,000 texts per request) and configurable output "
                 "dimensions for balancing accuracy vs. storage cost",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Embeddings",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 VoyageEmbeddingsRequestDataType::Fields{"model", "input"}, {
@@ -119,6 +120,7 @@ module VoyageDataProvider {
                 "number of results returned, and `return_documents` to include the document text "
                 "in each result",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Reranking",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 VoyageRerankRequestDataType::Fields{"model", "query", "documents"}, {

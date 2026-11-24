@@ -360,7 +360,7 @@ public class HttpClientDataProviderTest inherits QUnit::Test {
     }
 
     httpClientDataProviderTest() {
-        HttpClientDataProvider parent({"url": "localhost", "headers": {"Test": "x"}});
+        HttpClientDataProvider parent({"url": "127.0.0.1", "headers": {"Test": "x"}});
 
         AbstractDataProvider prov = parent.getChildProviderEx("call");
         hash<DataProviderSummaryInfo> sinfo = prov.getSummaryInfo();
@@ -411,7 +411,7 @@ public class HttpClientDataProviderTest inherits QUnit::Test {
         assertEq("patch", prov.getName());
 
         parent = new HttpClientDataProvider({
-            "url": "localhost",
+            "url": "127.0.0.1",
             "pre_encoded_urls": True,
         });
         prov = parent.getChildProviderEx("call");

@@ -103,8 +103,8 @@ public:
 
         @param xsink exception sink; set on SSL error
         @param buffered_is_data if true, bytes that the socket has already read from the descriptor count as data
-        (a server whose client sent its next request before the response to the previous one, pipelining); a client
-        does not set it, as for it such bytes are not a new message
+        (a server whose client sent its next request before the response to the previous one, pipelining, or an HTTP
+        client that has bytes after the end of a response, which keep the connection from being reused)
 
         @return > 0  application-layer data is available
         @return   0  no application data; any TLS post-handshake record was drained
@@ -270,6 +270,9 @@ public:
     //! Internal async-poll helper: True if the peer ended an HTTP/2 stream with END_STREAM
     DLLLOCAL bool isHttp2StreamEndStreamReceivedForAsyncPoll(int32_t stream_id) const;
 
+    //! True if this endpoint has not ended its side of an HTTP/2 stream (see Http2Session::isStreamLocalOpen())
+    DLLLOCAL bool isHttp2StreamLocalOpen(int32_t stream_id) const;
+
     //! Returns true if the HTTP/2 stream is known and was reset (issue #5859)
     DLLLOCAL bool isHttp2StreamResetForAsyncPoll(int32_t stream_id) const;
 
@@ -326,6 +329,9 @@ public:
         holds the lock of the socket.
     */
     DLLLOCAL void releaseQuicStream(int64_t session_id, int64_t stream_id);
+
+    //! True if the QUIC session still has the bidirectional stream open (see QuicSession::isBidiStreamOpen())
+    DLLLOCAL bool isQuicBidiStreamOpen(int64_t session_id, int64_t stream_id) const;
 
     //! Watches the response on an HTTP/2 server stream so that the result of its transmission is reported
     /** Must be called before the response is submitted; see Http2Session::watchResponseSend().  The result is

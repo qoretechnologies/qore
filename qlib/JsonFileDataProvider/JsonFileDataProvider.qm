@@ -229,6 +229,8 @@ namespace Priv {
                 "- `pretty_print`: format JSON output with indentation (default: `True`)\n"
                 "- `encoding`: character encoding (default: `UTF-8`)\n",
             "action_code": DPAT_CREATE,
+            # the data is generated in memory and returned; the path and stream options are not offered (qore#7454)
+            "mutates_state": False,
             "cls": "JsonFileDataProvider::JsonFileWriteDataProvider",
             "output_data_type": DPAD_CREATE_OUTPUT,
             "output_type": GeneratedDataOutputDataType,

@@ -169,6 +169,13 @@ public class GmailDataProviderTest inherits QUnit::Test {
         );
         assertTrue(watch_att.options.delete_messages.desc.find("consumer") >= 0,
             "the attachment watch deletion option describes the same");
+        # delete_messages deletes the reported messages, so the watch events declare a change (qore#7454)
+        foreach hash<DataProviderActionInfo> action in ((watch, watch_att)) {
+            assertEq(DPAT_EVENT, action.action_code, action.action);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), action.action);
+            assertTrue(action.mutates_state, action.action);
+            assertTrue(DataProviderActionCatalog::actionMutatesState(action), action.action);
+        }
     }
 
     #! Returns the registered action, failing if it is unknown

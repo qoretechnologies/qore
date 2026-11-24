@@ -165,7 +165,8 @@ public:
     //! Cancel a stream: removes and derefs the action
     /** @param stream_id the QUIC stream ID
         @param xsink for exception handling
-        @return true if the stream was found and cancelled
+        @return true if the stream was found and cancelled, or if its response had completed while the stream is still
+        open (it must then still be reset; qore#7443)
     */
     DLLLOCAL bool cancelStream(int64_t stream_id, ExceptionSink* xsink);
 

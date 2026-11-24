@@ -158,7 +158,7 @@ class StalledH2 inherits StalledClient {
         string p = "/" + path;
         # :method GET (static index 2), :scheme http (static index 6), :path and :authority as literals with
         # indexed names (static indexes 4 and 1), and accept as a literal with a literal name; no Huffman coding
-        binary block = <8286> + <04> + b1(p.size()) + binary(p) + <01> + b1(9) + binary("localhost")
+        binary block = <8286> + <04> + b1(p.size()) + binary(p) + <01> + b1(9) + binary("127.0.0.1")
             + <00> + b1(6) + binary("accept") + b1(17) + binary("text/event-stream");
         # HEADERS with END_STREAM | END_HEADERS on stream 1
         s.send(binary("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") + settings + h2_frame(1, 0x5, 1, block));

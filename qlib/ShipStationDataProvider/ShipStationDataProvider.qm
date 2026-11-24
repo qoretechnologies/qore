@@ -122,6 +122,7 @@ module ShipStationDataProvider {
             "short_desc": "Get a single order by ID",
             "desc": "Retrieve detailed information about a specific ShipStation order.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": ShipStationGetOrderDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () { return ShipStationGetOrderDataProvider::ResponseType; },
             "options": DataProviderActionCatalog::getActionOptionFromFields(ShipStationGetOrderRequestDataType::Fields),
@@ -318,6 +319,7 @@ module ShipStationDataProvider {
             "short_desc": "Get carrier details",
             "desc": "Retrieve detailed information about a specific carrier by its code.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": ShipStationGetCarrierDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () { return ShipStationGetCarrierDataProvider::ResponseType; },
             "options": DataProviderActionCatalog::getActionOptionFromFields(ShipStationGetCarrierRequestDataType::Fields) + {
@@ -343,6 +345,7 @@ module ShipStationDataProvider {
             "short_desc": "List carrier services",
             "desc": "Retrieve a list of services offered by a specific carrier (e.g., Ground, 2-Day, Overnight).",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": ShipStationListServicesDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () { return ShipStationListServicesDataProvider::ResponseType; },
             "options": DataProviderActionCatalog::getActionOptionFromFields(ShipStationListServicesRequestDataType::Fields) + {
@@ -368,6 +371,7 @@ module ShipStationDataProvider {
             "short_desc": "List carrier package types",
             "desc": "Retrieve a list of package types offered by a specific carrier.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": ShipStationListPackagesDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () { return ShipStationListPackagesDataProvider::ResponseType; },
             "options": DataProviderActionCatalog::getActionOptionFromFields(ShipStationListPackagesRequestDataType::Fields) + {
@@ -436,6 +440,7 @@ module ShipStationDataProvider {
             "short_desc": "Get a customer by ID",
             "desc": "Retrieve detailed information about a specific customer.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": ShipStationGetCustomerDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () { return ShipStationGetCustomerDataProvider::ResponseType; },
             "options": DataProviderActionCatalog::getActionOptionFromFields(ShipStationGetCustomerRequestDataType::Fields),
@@ -469,6 +474,7 @@ module ShipStationDataProvider {
             "short_desc": "Get a product by ID",
             "desc": "Retrieve detailed information about a specific product.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": ShipStationGetProductDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () { return ShipStationGetProductDataProvider::ResponseType; },
             "options": DataProviderActionCatalog::getActionOptionFromFields(ShipStationGetProductRequestDataType::Fields),
@@ -578,6 +584,7 @@ module ShipStationDataProvider {
             "short_desc": "Get store details",
             "desc": "Retrieve detailed information about a specific store.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": ShipStationGetStoreDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () { return ShipStationGetStoreDataProvider::ResponseType; },
             "options": DataProviderActionCatalog::getActionOptionFromFields(ShipStationGetStoreRequestDataType::Fields) + {
@@ -737,6 +744,7 @@ module ShipStationDataProvider {
             "short_desc": "Get warehouse details",
             "desc": "Retrieve detailed information about a specific warehouse.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": ShipStationGetWarehouseDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () { return ShipStationGetWarehouseDataProvider::ResponseType; },
             "options": DataProviderActionCatalog::getActionOptionFromFields(ShipStationGetWarehouseRequestDataType::Fields) + {

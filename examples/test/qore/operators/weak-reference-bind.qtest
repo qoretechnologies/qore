@@ -26,7 +26,8 @@
     \c *object accept it), and a target that the type would convert to another value is refused.  Every mode must print
     the output of the AST.
 
-    The program is in \c weak-reference-bind/.
+    A reference to such a variable is bound with the plain or-nothing types too, also where it is folded into a typed
+    list (qore#7482).  The programs are in \c weak-reference-bind/.
 */
 class WeakReferenceBindTest inherits QUnit::Test {
     private {
@@ -34,7 +35,7 @@ class WeakReferenceBindTest inherits QUnit::Test {
         string dir = get_script_dir() + "/weak-reference-bind";
 
         const Modes = ("ast", "ir", "jit", "tiered");
-        const Programs = ("weak-reference-bind",);
+        const Programs = ("weak-reference-bind", "weak-reference-bind-7482");
     }
 
     constructor() : QUnit::Test("WeakReferenceBindTest", "1.0", \ARGV) {

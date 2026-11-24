@@ -432,8 +432,12 @@ DataProviderActionCatalog::getActions("Stripe");
             "short_desc": info.short_desc,
             "desc": info.desc,
             "action_code": DPAT_API,
-            "mutates_state": !RestSchemaReadOnlyHttpMethods{op.getMethod()},
+            # the manifest's own value when it gives one, otherwise the method's (qore#7454)
+            "mutates_state": info.mutates_state ?? !RestSchemaReadOnlyHttpMethods{op.getMethod()},
         };
+        if (info.read_only_options) {
+            rv.read_only_options = info.read_only_options;
+        }
         if (info.groups) {
             rv.groups = info.groups;
         }

@@ -28,20 +28,6 @@ public namespace BedrockDataProvider {
     module initialization, including repeated and deferred registration.
 */
 public class BedrockActions {
-    public {
-        #! POST actions that query or infer without mutating service state
-        const ReadOnlyPostActions = {
-            "apply-guardrail": True,
-            "converse": True,
-            "count-tokens": True,
-            "get-async-invoke": True,
-            "invoke-guardrail-checks": True,
-            "invoke-model": True,
-            "list-async-invokes": True,
-            "list-tags-for-resource": True,
-        };
-    }
-
     #! Returns all explicit action definitions for an application name
     /** @param app application name
         @return the 116 schema actions followed by the curated embedding action
@@ -49,12 +35,8 @@ public class BedrockActions {
     static list<hash<DataProviderActionInfo>> getActionInfoList(string app) {
         list<hash<DataProviderActionInfo>> result = ();
         foreach RestSchemaActionSet actions in (BedrockSchema::getActionSets()) {
-            foreach hash<DataProviderActionInfo> action in (actions.getActionInfoList(app)) {
-                if (ReadOnlyPostActions{action.action}) {
-                    action.mutates_state = False;
-                }
-                result += action;
-            }
+            # the POST operations that only query or infer are marked read-only in the manifests (qore#7454)
+            result += actions.getActionInfoList(app);
         }
         result += getEmbedActionInfo(app);
         return result;

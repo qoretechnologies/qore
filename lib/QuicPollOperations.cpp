@@ -2861,6 +2861,9 @@ void SocketQuicServerPollOperation::cleanupClosedSessions() {
             if (it->second->reportCloseIfNew()) {
                 lifecycle_closed_sessions_.push_back(it->first);
             }
+            // why the session ended, for diagnostics (qore#7443); formatted only for a session that closes
+            qore_async_io_log(QORE_LOG_LEVEL_DEBUG, "QUIC: server session %lld closed: %s", (long long)it->first,
+                QuicSession::getCloseReasonName(it->second->getCloseReason()));
             // Unregister the session's CIDs at reap time: destruction runs on
             // whatever thread drops the last shared_ptr (a foreign thread's
             // transient ref — e.g. cancelQuicStreamRead() during a service

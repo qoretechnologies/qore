@@ -343,14 +343,31 @@ public class HttpClientStreamHandle {
         if (ready_wait_deadline_bound) {
             request_deadline_expired = True;
         }
+        hash<auto> h = getConnectWaitTimeout(waited_ms);
+        throw "HTTPCLIENT-TIMEOUT", h.desc, h.arg;
+    }
+
+    #! Returns the description and the argument of a timeout that ended the wait for the stream's connection
+    /** The description names the target of the connection and the time waited, and the argument has \c host, \c port
+        and \c timeout_ms; the connection manager gives the same timeout for an attempt whose connection error the
+        time of the request ended (qore#7475)
+
+        @param waited_ms the time waited for the connection, in milliseconds
+
+        @return a hash with \c desc (the description) and \c arg (the argument)
+    */
+    hash<auto> getConnectWaitTimeout(int waited_ms) {
         hash<HttpClientConnectionInfo> info = conn.getConnectionInfo();
         # a UNIX domain socket has no port
         string target = info.port ? sprintf("%s:%d", info.host, info.port) : info.host;
-        throw "HTTPCLIENT-TIMEOUT", sprintf("connection establishment timed out: the connection to %s was not "
-            "established before the time of the request ran out (after a wait of %d ms)", target, waited_ms), {
-            "host": info.host,
-            "port": info.port,
-            "timeout_ms": waited_ms,
+        return {
+            "desc": sprintf("connection establishment timed out: the connection to %s was not established before the "
+                "time of the request ran out (after a wait of %d ms)", target, waited_ms),
+            "arg": {
+                "host": info.host,
+                "port": info.port,
+                "timeout_ms": waited_ms,
+            },
         };
     }
 
@@ -1307,15 +1324,25 @@ public class HttpClientStreamHandle {
         bool left_to_submitter;
         {
             AutoLock al(lock);
-            if (state == HttpClientStreamState::Complete
-                    || state == HttpClientStreamState::Cancelled
-                    || state == HttpClientStreamState::Error) {
+            if (state == HttpClientStreamState::Cancelled || state == HttpClientStreamState::Error) {
                 return;
             }
-            # a stream whose request is being submitted, and has no stream ID yet, is left to the submitting thread
-            left_to_submitter = submitting && !exists stream_id;
-            state = HttpClientStreamState::Cancelled;
-            sid = stream_id;
+            if (state == HttpClientStreamState::Complete) {
+                # a complete response whose request write side is still open (an extended CONNECT tunnel or a
+                # streamed request that the server answered whole) leaves the stream half-open: it is reset, as it
+                # would otherwise take one of the server's concurrent streams for the life of the connection
+                # (qore#7443); the response stays readable
+                if (!exists stream_id || !isRequestSideOpenLocked()) {
+                    return;
+                }
+                sid = stream_id;
+            } else {
+                # a stream whose request is being submitted, and has no stream ID yet, is left to the submitting
+                # thread
+                left_to_submitter = submitting && !exists stream_id;
+                state = HttpClientStreamState::Cancelled;
+                sid = stream_id;
+            }
         }
 
         if (left_to_submitter) {
@@ -1618,6 +1645,13 @@ data text = HttpClientStreamHandle::decodeResponseText(resp).body;
     auto readData(*timeout timeout_ms) {
         throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
             "streaming is not supported by " + conn.getProtocol();
+    }
+
+    #! True while the request write side of a streamed request is open (see cancel()); False by default
+    /** @note the caller must hold @ref lock
+    */
+    private bool isRequestSideOpenLocked() {
+        return False;
     }
 
     #! Sends data on a streaming connection

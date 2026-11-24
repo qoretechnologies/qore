@@ -47,6 +47,7 @@
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/qore_socket_private.h"
 
 #include <cstdio>
 
@@ -594,11 +595,64 @@ void Http3ClientConnection::pushSendData(const void* data, size_t len, Exception
     bool end_stream = (!data || !len);
     if (end_stream) {
         // End-of-body: send empty DATA with end_stream flag
-        sock_priv->sendQuicClientStreamData(streaming_send_stream_id, nullptr, 0, true, xsink);
+        sendStreamDataWaitingForDrain(streaming_send_stream_id, nullptr, 0, true, xsink);
         streaming_send_stream_id = -1;
         finishStreamingSend();
     } else {
-        sock_priv->sendQuicClientStreamData(streaming_send_stream_id, data, len, false, xsink);
+        sendStreamDataWaitingForDrain(streaming_send_stream_id, data, len, false, xsink);
+    }
+}
+
+void Http3ClientConnection::sendStreamDataWaitingForDrain(int64_t stream_id, const void* data, size_t len,
+        bool end_stream, ExceptionSink* xsink) {
+    // the wait is bounded by the request timeout of stalled time, not of total time: a large body that a slow peer
+    // takes makes progress all the while (as HttpClientIo's Http3ClientConnection::sendStreamData(), issue #6968)
+    int stall_timeout_ms = -1;
+    {
+        AutoLocker al(onclose_lock);
+        if (manager_ && manager_->getOptions().request_timeout_ms > 0) {
+            stall_timeout_ms = manager_->getOptions().request_timeout_ms;
+        }
+    }
+    while (true) {
+        // 1: the stream's send buffer is full and took nothing of the data
+        int rv = sock_priv->sendQuicClientStreamData(stream_id, data, len, end_stream, xsink);
+        if (*xsink || rv != 1) {
+            return;
+        }
+        // the send waits for the buffer to drain and is made again (qore#7465); a send on the I/O thread cannot wait
+        if (qore_on_async_io_thread()) {
+            xsink->raiseException("HTTP3-FLOW-CONTROL", "stream %lld: the send buffer is full; the data was not sent",
+                (long long)stream_id);
+            return;
+        }
+        // the staged data is sent by the I/O thread
+        wakeController();
+        int64_t acked_before = qore_socket_object_quic_client_stream_acked(sock_priv, stream_id, xsink);
+        // 0: drained, 1: timed out, -1: the stream has no data staged any more (sent, or the stream or the
+        // connection ended: a reset or the close of the connection ends the wait at once); the send is made again in
+        // each case, and reports a stream or a connection that ended
+#ifdef DEBUG
+        qore_dbg_http_hold(QoreDbgHttpHoldPoint::SendDrainWait, this);
+#endif
+        int rc = *xsink ? -1 : sock_priv->waitForQuicClientStreamDrain(stream_id, stall_timeout_ms, xsink);
+        if (*xsink) {
+            // the wait failed: the thread was cancelled (THREAD-CANCELLED), its Program was interrupted, or the
+            // session is gone; the data was not sent
+            return;
+        }
+        if (rc == 1) {
+            // no drain within the timeout: a stall only if the peer acknowledged nothing of the stream's data
+            int64_t acked_after = qore_socket_object_quic_client_stream_acked(sock_priv, stream_id, xsink);
+            if (*xsink) {
+                return;
+            }
+            if (acked_after <= acked_before) {
+                xsink->raiseException("HTTP3-FLOW-CONTROL", "stream %lld: the peer acknowledged none of the "
+                    "stream's data for %d ms; the data was not sent", (long long)stream_id, stall_timeout_ms);
+                return;
+            }
+        }
     }
 }
 

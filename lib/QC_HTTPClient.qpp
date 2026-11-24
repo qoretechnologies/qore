@@ -150,8 +150,25 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     Whether the connection is kept after a response follows RFC 9112 section 9.3: an HTTP/1.1 response keeps it
     unless a \c Connection header has the \c close option, while an HTTP/1.0 response keeps it only if a
     \c Connection header has the \c keep-alive option and none has \c close.  Options are case-insensitive whole
-    tokens and are read from comma-separated lists and from every \c Connection header of the response.  The next
-    request after a response that does not keep the connection, including a redirect, opens a new connection.
+    tokens and are read from comma-separated lists and from every \c Connection header of the response.  An HTTP/1.x
+    connection is also not kept when more data follows the response on it, whether the response has no body (a
+    response to \c HEAD, or one with the status 204 or 304) or one that was read whole: data that the client has
+    already received after the end of the response, or that it can read at once, closes the connection, as does a
+    \c 101 response to a request that does not take the connection over, which ends HTTP on it.  The next
+    request after a response that does not keep the connection, including a redirect, opens a new connection.  The
+    HTTP/1.x connections of the @ref httpclientiointro "HttpClientIo" module are kept or closed alike.
+
+    @anchor httpclient_interim_responses
+    An HTTP/1.x interim response, which is any response with a \c 1xx status other than \c 101 (such as
+    <tt>100 Continue</tt>, <tt>102 Processing</tt> or <tt>103 Early Hints</tt>, and the \c 1xx codes not defined yet;
+    RFC 9110 section 15.2), is never returned as the response to a request: it is skipped, and the final response
+    that follows it on the connection is read and returned, and decides whether the connection is kept.  The header
+    of each interim response is reported to an event queue (see HTTPClient::setEventQueue()) as a
+    @ref EVENT_HTTP_MESSAGE_RECEIVED event, as that of any response is.  A request fails with an
+    \c HTTP1-RECV-ERROR exception, and the connection is closed, when the server sends more than 16 interim responses
+    before the final one, and when it sends a \c 101 response to a request that did not ask for a protocol upgrade with
+    an \c Upgrade header (RFC 9110 section 7.8), as such a request, streamed or not, has no use for the connection
+    after it.
 
     HTTP redirect responses are supported and can be limited with the \c max_redirects constructor hash key or by
     using the HTTPClient::setMaxRedirects() method. The default maximum number of redirects allowed is 5; see
@@ -2339,6 +2356,11 @@ hash<auto> msg = httpclient.sendWithSendCallback(callback, "POST", "/path", {"Co
     @note
     - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no \c "Transfer-Encoding" header is already present
     - For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
+    - Over HTTP/2 and HTTP/3, the data returned by the callback waits for the server's flow control to let it go out:
+      the callback is called for more data only when the stream's send buffer has room for it, so no data is dropped
+      however slowly the server reads; the wait ends with the stream (ex: the server answers without reading the body)
+      or when the thread is cancelled, and raises \c HTTP2-FLOW-CONTROL or \c HTTP3-FLOW-CONTROL only if the server
+      took none of the stream's data for the request timeout
 
     @see @ref httpclient_get_with_body
 

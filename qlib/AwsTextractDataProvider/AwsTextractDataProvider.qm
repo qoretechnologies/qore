@@ -97,6 +97,7 @@ module AwsTextractDataProvider {
                     "- `document_path` — local file path (read and uploaded as bytes)\n"
                     "- `s3_bucket` + `s3_name` — S3 object reference (also limited to 10 MB)",
                 "action_code": DPAT_API,
+                "mutates_state": False,
                 "groups": ("Document Extraction",),
                 "options": DataProviderActionCatalog::getActionOptionFromFields(
                     AwsTextractDetectDocumentTextRequestDataType::Fields{
@@ -123,6 +124,7 @@ module AwsTextractDataProvider {
                     "When `QUERIES` is included, also pass a `queries` list — each "
                     "query has a `Text` field with the question to ask.",
                 "action_code": DPAT_API,
+                "mutates_state": False,
                 "groups": ("Document Extraction",),
                 "options": DataProviderActionCatalog::getActionOptionFromFields(
                     AwsTextractSchema::getLegacyRequestType("analyze-document").getFields()),

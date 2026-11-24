@@ -22554,25 +22554,8 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
         CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
     }
     if constexpr (!CONSUME) {
-        if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
-            if (sig->argvid) {
-                sig->argvid->uninstantiate(xsink);
-            }
-            if (!use_direct_params) {
-                for (int i = static_cast<int>(num_params) - 1; i >= 0; --i) {
-                    sig->lv[i]->uninstantiate(xsink);
-                }
-            }
-            if (selfid_instantiated) {
-                selfid->uninstantiateSelf();
-            }
-            // the release of a consumed argument raised an exception after the call gave its value, which is
-            // released then, as the AST interpreter releases it (#6051)
-            val.discard(xsink);
-            result = toBits(QoreValue());
-            return true;
-        }
-
+        // The dispatcher selects this instantiation only when the caller gave no argument cleanups.
+        assert(!arg_cleanups);
         if (sig->argvid) {
             sig->argvid->uninstantiate(xsink);
         }

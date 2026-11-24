@@ -4123,6 +4123,12 @@ int BCNode::initializeHierarchy(QoreClass* cls, qcp_set_t& qcp_set) {
                 if (sclass->priv->scl) {
                     sclass->priv->scl->valid = false;
                 }
+                // the edge that closes the cycle is removed, as for a class that inherits itself
+                // (tryResolveClass()): the code of the classes is still parsed, and the lookups that do not check the
+                // validity of a hierarchy (the run-time ones, which a parse-time check such as the private access of a
+                // pseudo-method lookup uses) would otherwise follow the cycle forever (qore#7464); the parent class is
+                // not resolved again, as its name was released when it was resolved
+                sclass = nullptr;
                 return -1;
             }
             return 0;
