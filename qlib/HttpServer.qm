@@ -4315,23 +4315,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 # Tear down everything bound so far: a retry starts clean, and a listener whose paired QUIC listener
                 # could not be bound is not kept: the caller asked for HTTP/3 and has no way to observe that it did
                 # not take, and its clients would get no answer to their QUIC datagrams (qore#7420)
-                remove listeners{id};
-                remove smap{effective_sock};
-                remove nmap{info.name};
-                try { l.stop(); } catch () {}
-                # once the listener has stopped, l.stop() has called listenerStopped(), which decremented the count
-                # of running listeners for it; only a stop that failed before that leaves it to be done here
-                # (qore#7420: it was done in both cases, so each failed attempt decremented the count of another
-                # running listener, and stop() no longer waited for it)
-                if (!l.isStopped()) {
-                    try {
-                        c.done();
-                    } catch (hash<ExceptionInfo> ex) {
-                        if (ex.err != "WAITGROUP-ERROR") {
-                            rethrow;
-                        }
-                    }
-                }
+                removeFailedListener(l, id, effective_sock, info.name);
                 if (random_port && attempt < max_attempts && h3_errno == EADDRINUSE) {
                     # a random port: retry on a fresh port (the kernel-assigned TCP port can be taken on UDP by
                     # something else, such as the ephemeral UDP socket of a QUIC client)
@@ -4371,9 +4355,17 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # Add the TCP listener to the async I/O controller — start accepting.
             # Done AFTER QUIC + Alt-Svc setup so the first TCP response already
             # carries the Alt-Svc header (see comment above).
-            asyncIo.addListener(l, asyncTarget, l.isSsl(), l.getSslCertificateObject(),
-                l.getSslPrivateKeyObject(), l.getHttpVersion(), l.getSslVerifyFlags(),
-                l.getSslAcceptAllCerts(), l.getGetRemoteCerts(), l.getMaxRequestBodySize(), l);
+            try {
+                asyncIo.addListener(l, asyncTarget, l.isSsl(), l.getSslCertificateObject(),
+                    l.getSslPrivateKeyObject(), l.getHttpVersion(), l.getSslVerifyFlags(),
+                    l.getSslAcceptAllCerts(), l.getGetRemoteCerts(), l.getMaxRequestBodySize(), l);
+            } catch (hash<ExceptionInfo> ex) {
+                # the listener could not be started: it is not kept registered and counted, and its paired QUIC
+                # listener and Alt-Svc entry are removed with it (qore#7436)
+                log("ERROR: listener %d could not be started: %s: %s", id, ex.err, ex.desc);
+                removeFailedListener(l, id, effective_sock, info.name);
+                rethrow;
+            }
 
             # Notify that the listener is now accepting connections.  With the
             # event-driven async I/O model there are no per-listener threads, so
@@ -4400,6 +4392,40 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
         throw "HTTPSERVER-ADDLISTENER-ERROR",
             sprintf("internal error: retry loop exhausted without a decision");
+    }
+
+    #! Removes and stops a listener that addListenerIntern() created but could not set up or start; lm must be held
+    /** The listener's stop (listenerStopped()) removes its paired QUIC listener and its Alt-Svc entry and decrements
+        the count of running listeners for it; only a stop that failed before that leaves the count to be decremented
+        here (qore#7420: it was decremented in both cases, so each failure took one from the count of another running
+        listener; qore#7436: a listener whose start failed was not removed at all).  A stop that raises before the
+        listener stopped (an unexpected error of its removal from the controller) does not reach listenerStopped(): its
+        paired QUIC listener and Alt-Svc entry, if any, are then left as they are, and the error is logged
+
+        @param l the listener
+        @param id the listener's ID
+        @param sock the key of the listener in smap
+        @param name the listener's name
+    */
+    private:internal removeFailedListener(HttpListener l, int id, string sock, string name) {
+        remove listeners{id};
+        remove smap{sock};
+        remove nmap{name};
+        try {
+            l.stop();
+        } catch (hash<ExceptionInfo> ex) {
+            logError("could not stop listener %d after its setup failed: %s: %s: %s", id, get_ex_pos(ex), ex.err,
+                ex.desc);
+        }
+        if (!l.isStopped()) {
+            try {
+                c.done();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "WAITGROUP-ERROR") {
+                    rethrow;
+                }
+            }
+        }
     }
 
     private Future addListenerInternAsync(hash<HttpListenerOptionInfo> info) {
