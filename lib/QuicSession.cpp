@@ -5774,6 +5774,15 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
         session->body_data_.erase(stream_id);
         session->streaming_body_data_.erase(stream_id);
         session->responded_streams_.erase(stream_id);
+        // a body that the I/O thread sends from an InputStream ends with its stream, so that it is released and
+        // nothing more is sent to the closed stream (qore#7434; HTTP/2 does the same in onStreamCloseCallback())
+        {
+            std::lock_guard<std::recursive_mutex> lock(session->mtx_);
+            auto iit = session->stream_input_streams_.find(stream_id);
+            if (iit != session->stream_input_streams_.end()) {
+                iit->second.eof = true;
+            }
+        }
 
         // Clean up extended CONNECT tunnel data, Queue, and notify callback
         {
@@ -7418,7 +7427,8 @@ bool QuicSession::hasActiveStreamInputStreams() const {
     return has_active_input_streams_.load(std::memory_order_acquire);
 }
 
-void QuicSession::processStreamInputStreams(ExceptionSink* xsink) {
+// errors are the streams' own: none is raised to the caller (qore#7434)
+void QuicSession::processStreamInputStreams(ExceptionSink* /* xsink */) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     printd(5, "QuicSession::processStreamInputStreams() stream_count=%d\n",
         (int)stream_input_streams_.size());
@@ -7426,69 +7436,31 @@ void QuicSession::processStreamInputStreams(ExceptionSink* xsink) {
         if (info.eof) {
             continue;
         }
-
-        // Backpressure: skip if staging buffer full
-        auto it = streaming_body_data_.find(stream_id);
-        if (it != streaming_body_data_.end()) {
-            if (it->second.data.size() > QUIC_MAX_STREAM_BODY) {
-                continue;
-            }
-        }
-
-        // Thread reassignment (first call only)
-        if (info.need_reassign) {
-            info.input_stream->reassignThread(xsink);
-            if (*xsink) {
-                return;
-            }
-            info.need_reassign = false;
-        }
-
-        // Read one chunk
-        if (info.is_pollable) {
-            SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
-            chunk->preallocate(65536);
-            int64 count = info.input_stream->readNonBlock(
-                const_cast<void*>(chunk->getPtr()), 65536, xsink);
-            if (*xsink) {
-                info.eof = true;
-                continue;
-            }
-            if (count < 0) {
-                // EAGAIN — not ready yet, event loop will wake us
-                continue;
-            }
-            if (count == 0) {
-                // EOF
-                info.eof = true;
-                sendStreamData(stream_id, nullptr, 0, true, xsink);
+        // an error of one stream (its InputStream, or a send to a stream that the peer reset) ends that stream
+        // only: raised to the caller, it would end the listener's operation, and so every connection of the
+        // listener (qore#7434)
+        ExceptionSink stream_xsink;
+        processStreamInputStream(stream_id, info, &stream_xsink);
+        if (stream_xsink) {
+            QoreStringValueHelper err(stream_xsink.getExceptionErr());
+            // a stream that the client reset or that has closed is expected; any other error is the body's own
+            bool peer_end = !strcmp(err->c_str(), "QUIC-STREAM-RESET")
+                || !strcmp(err->c_str(), "QUIC-STREAM-CLOSED");
+            if (peer_end) {
+                printd(5, "QuicSession::processStreamInputStreams() session %lld: stream %lld ended by the peer: "
+                    "%s\n", (long long)session_id_, (long long)stream_id, err->c_str());
             } else {
-                chunk->setSize(count);
-                sendStreamData(stream_id, chunk->getPtr(), count, false, xsink);
+                qore_async_io_log(QORE_LOG_LEVEL_WARN, "QUIC: session %lld: ending the response body of stream "
+                    "%lld after an error: %s", (long long)session_id_, (long long)stream_id, err->c_str());
             }
-        } else {
-            // Non-pollable (memory streams) — readHelper never blocks
-            SimpleRefHolder<BinaryNode> chunk(info.input_stream->readHelper(65536, xsink));
-            if (*xsink) {
-                printd(1, "QuicSession::processStreamInputStreams() stream_id=" QLLD " readHelper exception\n",
-                    (int64)stream_id);
-                info.eof = true;
-                continue;
-            }
-            if (!chunk || !chunk->size()) {
-                printd(5, "QuicSession::processStreamInputStreams() stream_id=" QLLD " EOF\n",
-                    (int64)stream_id);
-                info.eof = true;
-                sendStreamData(stream_id, nullptr, 0, true, xsink);
-            } else {
-                printd(5, "QuicSession::processStreamInputStreams() stream_id=" QLLD
-                    " read %d bytes, calling sendStreamData\n",
-                    (int64)stream_id, (int)chunk->size());
-                sendStreamData(stream_id, chunk->getPtr(), chunk->size(), false, xsink);
-            }
-        }
-        if (*xsink) {
-            return;
+            stream_xsink.clear();
+            info.eof = true;
+            // the client is told that the response ends early, so that a short body is not taken for a complete
+            // one; the request's entry in streams_ is usually gone by now, which cancelStream() does not need, and
+            // a stream that ngtcp2 or nghttp3 no longer knows is ignored there
+            ExceptionSink cancel_xsink;
+            cancelStream(stream_id, NGHTTP3_H3_INTERNAL_ERROR, &cancel_xsink);
+            cancel_xsink.clear();
         }
     }
 
@@ -7511,6 +7483,64 @@ void QuicSession::processStreamInputStreams(ExceptionSink* xsink) {
     }
     if (erased) {
         updateKeepAliveAfterStreamStateChangeLocked();
+    }
+}
+
+void QuicSession::processStreamInputStream(int64_t stream_id, StreamInputStreamInfo& info, ExceptionSink* xsink) {
+    // Backpressure: skip if staging buffer full
+    auto it = streaming_body_data_.find(stream_id);
+    if (it != streaming_body_data_.end()) {
+        if (it->second.data.size() > QUIC_MAX_STREAM_BODY) {
+            return;
+        }
+    }
+
+    // Thread reassignment (first call only)
+    if (info.need_reassign) {
+        info.input_stream->reassignThread(xsink);
+        if (*xsink) {
+            return;
+        }
+        info.need_reassign = false;
+    }
+
+    // Read one chunk
+    if (info.is_pollable) {
+        SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
+        chunk->preallocate(65536);
+        int64 count = info.input_stream->readNonBlock(const_cast<void*>(chunk->getPtr()), 65536, xsink);
+        if (*xsink) {
+            return;
+        }
+        if (count < 0) {
+            // EAGAIN — not ready yet, event loop will wake us
+            return;
+        }
+        if (count == 0) {
+            // EOF
+            info.eof = true;
+            sendStreamData(stream_id, nullptr, 0, true, xsink);
+        } else {
+            chunk->setSize(count);
+            sendStreamData(stream_id, chunk->getPtr(), count, false, xsink);
+        }
+        return;
+    }
+    // Non-pollable (memory streams) — readHelper never blocks
+    SimpleRefHolder<BinaryNode> chunk(info.input_stream->readHelper(65536, xsink));
+    if (*xsink) {
+        printd(1, "QuicSession::processStreamInputStream() stream_id=" QLLD " readHelper exception\n",
+            (int64)stream_id);
+        return;
+    }
+    if (!chunk || !chunk->size()) {
+        printd(5, "QuicSession::processStreamInputStream() stream_id=" QLLD " EOF\n", (int64)stream_id);
+        info.eof = true;
+        sendStreamData(stream_id, nullptr, 0, true, xsink);
+    } else {
+        printd(5, "QuicSession::processStreamInputStream() stream_id=" QLLD " read %d bytes, calling "
+            "sendStreamData\n", (int64)stream_id, (int)chunk->size());
+        sendStreamData(stream_id, chunk->getPtr(), chunk->size(), false, xsink);
     }
 }
 
