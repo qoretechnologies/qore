@@ -155,12 +155,14 @@ class CdsEntityEventsTest inherits QUnit::Test {
     #! Registering an action that no child provides would leave it unusable
     eventsReachableTest() {
         CdsEventsDataProvider events();
+        assertEq(False, events.getInfo().supports_refusal_redelivery, "an event container uses the default");
         list<string> children = events.getChildProviderNames();
 
         foreach string id in (TypeScriptEventIds) {
             assertTrue(children.contains(id), sprintf("event %y is reachable", id));
-            assertTrue(events.getChildProvider(id).getInfo().supports_observable,
-                sprintf("event %y supports observers", id));
+            hash<DataProviderInfo> info = events.getChildProvider(id).getInfo();
+            assertTrue(info.supports_observable, sprintf("event %y supports observers", id));
+            assertTrue(info.supports_refusal_redelivery, sprintf("watch %y retries refused events", id));
         }
 
         assertNothing(events.getChildProvider("no-such-event"));

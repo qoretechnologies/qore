@@ -1808,6 +1808,7 @@ public class FtpPollerDataProvider inherits FtpPollerDataProviderBase, DataProvi
         const ProviderInfo = <DataProviderInfo>{
             "type": "FtpPollerDataProvider",
             "supports_observable": True,
+            "supports_refusal_redelivery": True,
             "constructor_options": ConstructorOptions,
         };
     }
@@ -1833,6 +1834,7 @@ public class FtpDelayedPollerDataProvider inherits FtpPollerDataProviderBase, Da
         const ProviderInfo = <DataProviderInfo>{
             "type": "FtpDelayedPollerDataProvider",
             "supports_observable": True,
+            "supports_refusal_redelivery": True,
             "constructor_options": ConstructorOptions,
         };
     }

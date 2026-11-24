@@ -304,6 +304,8 @@ printf(\"stopped\\n\");
             # the default sort is by name, ascending, so the first file is handled first
             "poll_interval": 1,
         });
+        assertTrue(FilePollerDataProvider::ProviderInfo.supports_refusal_redelivery);
+        assertTrue(fp.getInfo().supports_refusal_redelivery);
         fp.setLogger(logger);
         fp.registerObserver(observer);
         on_exit fp.stopEvents();
