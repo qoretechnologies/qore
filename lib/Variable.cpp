@@ -3127,6 +3127,49 @@ bool qore_weak_local_container_store(const LocalVar* lv, const AbstractQoreNode*
     return true;
 }
 
+bool qore_try_read_unique_weak_path(const LVPathStep* steps, size_t size, QoreValue& result) {
+    if (size != 2 || steps[0].kind != LVPathStepKind::LocalVar || !steps[0].ref_ptr) {
+        return false;
+    }
+    const auto* local = static_cast<const LocalVar*>(steps[0].ref_ptr);
+    if (local->closureUse() || local->isReadOnly()) {
+        return false;
+    }
+    LocalVarValue* slot = thread_try_find_lvar(local);
+    if (!slot || slot->finalized || !slot->val.assigned || slot->val.static_assignment
+            || slot->val.type != QV_Node) {
+        return false;
+    }
+    // This root belongs to this thread. A reference, captured local, opaque value or shared
+    // container needs the ordinary navigation and its locking or copy-on-write.
+    QoreValue root = slot->val.getValue();
+    if (!root.isPlainPointer()) {
+        return false;
+    }
+    const LVPathStep& key = steps[1];
+    QoreValue value;
+    if (key.kind == LVPathStepKind::HashKeyConst) {
+        if (root.getType() == NT_OBJECT) {
+            return qore_object_private::get(*root.get<QoreObject>())->tryReadUniqueWeakMember(key.name, result);
+        }
+        if (root.getType() != NT_HASH || !root.get<const QoreHashNode>()->is_unique()) {
+            return false;
+        }
+        value = root.get<const QoreHashNode>()->getKeyValue(key.name.c_str());
+    } else if (key.kind == LVPathStepKind::ListIndex && root.getType() == NT_LIST
+            && (key.slice_values.empty() || key.slice_values.front().getType() == NT_INT)
+            && key.index >= 0 && root.get<const QoreListNode>()->is_unique()) {
+        const auto* list = root.get<const QoreListNode>();
+        if (static_cast<uint64_t>(key.index) >= list->size()) {
+            return false;
+        }
+        value = list->retrieveEntry(key.index);
+    } else {
+        return false;
+    }
+    return qore_try_ref_unique_container(value, result);
+}
+
 int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool for_remove, bool remove_root) {
     assert(num_steps > 0);
     // a path resolved without creating its entries (for delete or remove, or only to read it) sets up the reference
