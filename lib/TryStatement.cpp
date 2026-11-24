@@ -68,6 +68,7 @@ static void qore_try_release_interrupted_return(ValueHolder& trv, ExceptionSink*
 */
 static void qore_try_give_return(int rc, ValueHolder& trv, QoreValue& return_value, ExceptionSink* xsink) {
     if (rc == RC_RETURN && !*xsink) {
+        qore_replacing_return(return_value);
         ValueHolder replaced(return_value, xsink);
         return_value = trv.release();
         return;

@@ -6131,9 +6131,9 @@ void QoreIRLowering::releaseReplacedReturn(const QoreProgramLocation* loc) {
         builder.createReleaseHandedOverReturn(loc);
     }
     if (replacesPendingReturn()) {
-        builder.createReleaseOwnedTemp(pending_return, loc);
+        builder.createReleaseReplacedReturn(pending_return, loc);
         if (pending_return_base.isValid() && pending_return_base.id != pending_return.id) {
-            builder.createReleaseOwnedTemp(pending_return_base, loc);
+            builder.createReleaseReplacedReturn(pending_return_base, loc);
         }
     }
 }
@@ -6521,9 +6521,9 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 // it would have replaced is kept
                 // the handler of an exception raised when the try statement ends (qore#6658)
                 builder.createCheckException(entry.loc)->exception_target = entry.try_end_target;
-                builder.createReleaseOwnedTemp(try_replaced_return, entry.loc);
+                builder.createReleaseReplacedReturn(try_replaced_return, entry.loc);
                 if (try_replaced_return_base.isValid() && try_replaced_return_base.id != try_replaced_return.id) {
-                    builder.createReleaseOwnedTemp(try_replaced_return_base, entry.loc);
+                    builder.createReleaseReplacedReturn(try_replaced_return_base, entry.loc);
                 }
                 // an exception that the release raises (a destructor) is raised once the try statement has ended, as
                 // by the AST interpreter's try statement, which replaces the value after it has left its try and catch

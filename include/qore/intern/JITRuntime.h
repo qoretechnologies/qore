@@ -198,6 +198,8 @@ void qore_rt_decref(uint64_t val, ExceptionSink* xsink);
 //! Releases the reference that a read through a reference took, kept in the slot of its read site, if the slot holds
 //! the value (a call that took the value as an argument returns); the slot holds another value if the local held no
 //! reference at the read, whose value is the cached value of the local
+//! Clears a replaced return's cleanup slot if it still owns the expected value and its release is observable.
+void qore_rt_release_replaced_return(uint64_t* slot, uint64_t expected, uint64_t empty, ExceptionSink* xsink);
 void qore_rt_release_reference_read(uint64_t* slot, uint64_t val, ExceptionSink* xsink);
 
 //! Decrement reference count; never throws (for landing pad cleanup)

@@ -116,7 +116,7 @@ QORE_INTERN_ALWAYS_INLINE int ForStatement::execCommon(QoreValue& return_value, 
 
         // otherwise, execute "for" body
         if (code) {
-            rc = code->execImpl(return_value, xsink);
+            rc = code->execLoopBody(return_value, xsink);
             if (*xsink || rc == RC_BREAK) {
                 rc = 0;
                 break;
@@ -183,7 +183,7 @@ QORE_INTERN_ALWAYS_INLINE int ForStatement::execCommon(RuntimeConfig& rc, QoreVa
 
         // otherwise, execute "for" body
         if (code) {
-            rc_state = code->execImpl(rc, return_value, xsink);
+            rc_state = code->execLoopBody(rc, return_value, xsink);
             if (*xsink || rc_state == RC_BREAK) {
                 rc_state = 0;
                 break;

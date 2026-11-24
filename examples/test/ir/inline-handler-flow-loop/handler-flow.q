@@ -1,5 +1,6 @@
 %modern
 %allow-debugger
+%allow-opaque-references
 # a handler declared in the root block of a handler that runs inline at an exit of a loop (qore#6905): with no
 # debugger attached, ARGV[0] is a function to call; with a request, the debugger requests a flow at the hit-th step
 # event of the statement on a line in that function (the lines of the statements tagged "### <tag>"), and optionally
@@ -1039,6 +1040,124 @@ auto sub mixedInHandler(int n) {
     return n;
 }
 
+# A second debugger return sees the pending value of its own iteration (#7022).
+auto sub abandonedReturn(int n) {
+    int i = 0;
+    while (i++ < 2) {
+        on_exit {
+            push log, "h";                          ### abandoned_step
+        }
+        if (i == 1) {
+            return n;
+        }
+    }
+    return -1;
+}
+
+class ReturnMarker {
+    destructor() {
+        push log, "released";
+    }
+}
+
+auto sub abandonedObject(int n) {
+    for (int j = 0; j < 2; ++j) {
+        on_exit {
+            {
+                on_exit {
+                    push log, "inner";              ### abandoned_object
+                }
+                return new ReturnMarker();
+            }
+        }
+    }
+    push log, "after";
+    return n;
+}
+
+# Construct values at run time so the debug IR has to preserve the slot of the outer return.
+auto sub pendingData(string kind, int n) {
+    switch (kind) {
+        case "string": return sprintf("outer value %d", n);
+        case "list": return (n, n + 1);
+        case "hash": return {"outer": n};
+        case "number": return number(n) + 0.25n;
+        case "date": return date(1700000000 + n);
+        case "binary": return sprintf("outer value %d", n).toBinary();
+        case "object": return new ReturnMarker();
+        case "object-list": return (new ReturnMarker(), n);
+        case "object-opaque": {
+            hash<auto> holder;
+            ReturnMarker marker();
+            holder.marker @= marker;
+            return (holder, n);
+        }
+    }
+    throw "TEST-ERROR", "unknown pending data kind: " + kind;
+}
+
+auto sub outerPendingReturn(int n) {
+    on_exit {
+        push log, "last";
+    }
+    on_exit {
+        {
+            on_exit {
+                push log, "inner";                  ### outer_pending
+            }
+            return -5;
+        }
+    }
+    list<string> parts = ARGV[0].split("/");
+    if (parts.size() == 2) {
+        return pendingData(parts[1], n);
+    }
+    return -7;
+}
+
+# No debugger request: an inner source return releases the former value before its exit handler (#5992).
+auto sub eagerOuter(int n) {
+    on_exit {
+        push log, "last";
+    }
+    on_exit {
+        while (True) {
+            on_exit { push log, "cleanup"; }
+            return n;
+        }
+    }
+    return (new ReturnMarker(), n);
+}
+
+# A loop inside a handler consumes a request and resumes the handler's pending return.
+auto sub innerLoopPending(int n) {
+    on_exit {
+        for (int i = 0; i < 1; ++i) {
+            on_exit {
+                push log, "inner";                  ### inner_loop_pending
+            }
+            return -5;
+        }
+        push log, "after";
+    }
+    return -7;
+}
+
+auto sub keepMarker() {
+    on_exit {
+        while (True) {
+            push log, "body";                       ### keep_marker
+            break;
+        }
+    }
+    return new ReturnMarker();
+}
+
+auto sub unchangedObject(int n) {
+    auto v = keepMarker();
+    return v instanceof ReturnMarker ? n : -1;
+}
+
 const Flows = {"return": DebugFlowReturn, "break": DebugFlowBreak, "continue": DebugFlowContinue};
 string result;
 *FlowDebugger dbg;
@@ -1061,7 +1180,13 @@ background sub () {
         dbg.removeProgram(pc);
     }
     try {
-        result = sprintf("%y", call_function(ARGV[0], 3));
+        list<string> parts = ARGV[0].split("/");
+        auto v = call_function(parts[0], 3);
+        if (parts.size() == 2 && parts[1] !~ /^object/) {
+            result = v === pendingData(parts[1], 3) ? "restored" : sprintf("%y", v);
+        } else {
+            result = sprintf("%y", v);
+        }
     } catch (hash<ExceptionInfo> ex) {
         result = sprintf("%s: %s", ex.err, ex.desc);
     }

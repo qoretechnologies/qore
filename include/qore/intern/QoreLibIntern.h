@@ -564,6 +564,8 @@ DLLLOCAL q_method_t qore_get_lexical_program_method(q_method_t method);
 // returns true if the node needs to be scanned for recursive references or not
 DLLLOCAL bool needs_scan(const AbstractQoreNode* n);
 DLLLOCAL bool needs_scan(const QoreValue& v);
+//! Whether retaining a replaced return could postpone an object destructor (#5992, #7022).
+DLLLOCAL bool qore_return_release_observable(const QoreValue& value);
 
 //! returns the node that a call reference value holds and that is scanned for recursive references, or nullptr
 /** the callback of a sandbox-bound callback, or the value of a reference to a pseudo-method (issue #995)

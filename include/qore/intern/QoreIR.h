@@ -888,6 +888,8 @@ enum class QoreIROpcode : uint16_t {
     //! the end of the frame.  The instruction releases the reference only when the function holds it as a temporary
     //! that it owns, and only on the path that it is on: the slot of the temporary is cleared, so the release at the
     //! end of the frame finds nothing to release.  See design/temporary-lifetime.md.
+    //! With element_type == objectTypeInfo, release a replaced pending return if releasing it can run an object
+    //! destructor. Other data stays in the slot until the frame cleanup or a debugger path resumes that return.
     ReleaseOwnedTemp = 411,
 
     //! Fire the debugger's step event for the statement that follows (QoreIRDebugStatementInstruction).

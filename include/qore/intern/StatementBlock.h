@@ -54,6 +54,8 @@ class QoreIRFunction;
 struct QoreAOTContext;
 class BCList;
 
+//! Notifies the active debugger return snapshots when a source return replaces the value of this slot.
+DLLLOCAL void qore_replacing_return(QoreValue& slot);
 class LVList {
 public:
     typedef std::vector<LocalVar*> lv_vec_t;
@@ -146,6 +148,10 @@ public:
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
+    //! A loop or switch consumes a break (and optionally a continue), abandoning the value of that exit.
+    DLLLOCAL int execLoopBody(QoreValue& return_value, ExceptionSink* xsink, bool takes_continue = true);
+    DLLLOCAL int execLoopBody(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink,
+            bool takes_continue = true);
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);
 
     DLLLOCAL void del();
@@ -246,6 +252,7 @@ protected:
     //! return type that does not accept NOTHING (issue #5940)
     DLLLOCAL int parseCheckReturn(const UserVariantBase* uvb);
 
+    DLLLOCAL int execExitHandlers(RuntimeConfig& rc, int stmt_rc, QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL int execIntern(QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL int execIntern(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
 
