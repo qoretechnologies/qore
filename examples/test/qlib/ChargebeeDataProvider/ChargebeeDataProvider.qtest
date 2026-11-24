@@ -80,6 +80,25 @@ class FakeChargebeeHandler inherits AbstractHttpRequestHandler {
                 "body": make_json({"message": "customer not found", "api_error_code": "resource_not_found"}),
             };
         }
+        # the invoice PDF link is only served to POST, as Chargebee documents it
+        if (hdr.path =~ /invoices\/[^\/]+\/pdf$/) {
+            if (hdr.method != "POST") {
+                return <HttpResponseInfo>{
+                    "code": 405,
+                    "hdr": {"Content-Type": MimeTypeJson},
+                    "body": make_json({"message": "method not allowed", "api_error_code": "invalid_request"}),
+                };
+            }
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"download": {
+                    "download_url": "https://example.chargebee.com/invoices/inv1.pdf",
+                    "valid_till": 1767225600,
+                    "mime_type": "application/pdf",
+                }}),
+            };
+        }
         if (hdr.method == "POST") {
             return <HttpResponseInfo>{
                 "code": 200,
@@ -649,6 +668,14 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
         assertEq("api/v2/customers", handler.requests[0].path);
         assertRegex("^" + MimeTypeFormUrlEncoded, handler.requests[0]."content-type");
         assertEq({"first_name": "Jane", "email": "jane@example.com"}, handler.requests[0].body);
+
+        # the invoice PDF link is requested with POST /invoices/{id}/pdf, as Chargebee documents it (qore#7505)
+        handler.requests = ();
+        result = provider.getChildProviderPath("get-invoice-link").doRequest({"id": "inv1"});
+        assertEq("https://example.chargebee.com/invoices/inv1.pdf", result.download_url);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("api/v2/invoices/inv1/pdf", handler.requests[0].path);
 
         # a rate-limited request is retried after the time given by the server
         handler.requests = ();
