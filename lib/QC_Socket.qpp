@@ -5856,6 +5856,9 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     the name and the colon), a line without a colon or with an empty field name, a whitespace line before the first
     field line, or, in a request, an obsolete line folding (a line that starts with whitespace); in a response, an
     obsolete line folding is replaced with spaces
+    @throw SOCKET-HTTP-ERROR a header with an empty line before its end (a header ends at its first empty line, and is
+    read up to the first empty line with CRLF line ends), or a request header with a line that ends with a bare LF;
+    a line of a response header can end with LF alone (RFC 9112 section 2.2)
     @throw SOCKET-HTTP-ERROR the read of a chunked message body on the socket stopped before the end of the body (see
     unfinishedHttpChunkedBody()), whose rest cannot be told apart from the next message; the connection must be
     closed

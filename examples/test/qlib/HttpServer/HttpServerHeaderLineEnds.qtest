@@ -1,0 +1,146 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 keep-alive connections with pipelined requests over local sockets
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A request header with a line that ends with a bare LF is answered with 400 (Bad Request) and the connection is
+    closed, so that the text after the line, which can be another request, is never served or lost; a request header
+    with CRLF line ends is served, and the requests pipelined after it too.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpServerHeaderLineEndsTest
+
+#! a handler that records the requests served
+class LineEndsHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the paths of the requests served
+        list<string> served = ();
+    }
+
+    private {
+        Mutex m();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        m.lock();
+        served += hdr.path;
+        m.unlock();
+        return makeResponse(200, sprintf("served %s %y", hdr.path, http_get_field(hdr, "x")),
+            {"Content-Type": "text/plain"});
+    }
+}
+
+class HttpServerHeaderLineEndsTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        LineEndsHandler handler();
+        int port;
+
+        #! the ends of a request header after its Host field that are refused
+        const InvalidEnds = {
+            "bare-lf-field-line": "X: a\n\r\n",
+            "two-bare-lf": "X: a\n\n",
+            "bare-lf-after-crlf": "X: a\r\n\n",
+            "bare-lf-empty-line": "\n",
+        };
+    }
+
+    constructor() : Test("HttpServerHeaderLineEndsTest", "1.0") {
+        addTestCase("pipelined requests with CRLF line ends", \validTest());
+        addTestCase("request headers with a bare LF", \invalidTest());
+
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelFatal()),
+        });
+        on_exit delete server;
+        server.setDefaultHandler("line-ends", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"service": 0, "node": "127.0.0.1"}).port;
+        server.waitForAsyncIo();
+        set_return_value(main());
+    }
+
+    validTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /first HTTP/1.1\r\nHost: localhost\r\nX: a\r\n\r\n"
+            + "GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> resp = readResponse(c);
+        assertEq(200, resp.status_code);
+        assertEq("served first \"a\"", resp.body);
+        resp = readResponse(c);
+        assertEq(200, resp.status_code);
+        assertEq("served second null", resp.body);
+    }
+
+    invalidTest() {
+        foreach hash<auto> i in (InvalidEnds.pairIterator()) {
+            Socket c = connect();
+            on_exit c.close();
+            c.send(sprintf("GET /first-%s HTTP/1.1\r\nHost: localhost\r\n", i.key) + i.value
+                + "GET /smuggled HTTP/1.1\r\nHost: localhost\r\n\r\n"
+                + "GET /after HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            hash<auto> resp = readResponse(c);
+            assertEq(400, resp.status_code, i.key);
+            assertEq("close", resp.connection, i.key);
+            # the connection is closed: no other request is answered on it
+            *hash<auto> next;
+            try {
+                next = readResponse(c);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            assertNothing(next, i.key);
+            assertFalse(inlist("smuggled", handler.served), i.key);
+            assertFalse(inlist("after", handler.served), i.key);
+            assertFalse(inlist("first-" + i.key, handler.served), i.key);
+        }
+        # the server serves other connections
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /other HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served other null", readResponse(c).body);
+    }
+
+    private Socket connect() {
+        Socket c();
+        c.connect("127.0.0.1:" + port, 10s);
+        return c;
+    }
+
+    #! reads a response with a Content-Length body
+    private static hash<auto> readResponse(Socket c) {
+        hash<auto> resp = c.readHTTPHeader(5s);
+        int len = resp."content-length".toInt();
+        resp.body = len ? c.recv(len, 5s) : "";
+        return resp;
+    }
+}

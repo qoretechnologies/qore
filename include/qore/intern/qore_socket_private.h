@@ -4496,9 +4496,14 @@ public:
             return nullptr;
         }
         // the field lines are checked as RFC 9112 requires; an obsolete line folding is refused in a request and
-        // replaced with spaces in a response, which a user agent must do (RFC 9112 section 5.2)
-        if (checkHttpFieldLines(xsink, const_cast<char*>(hdr->c_str()), true, strncmp(hdr->c_str(), "HTTP/", 5) != 0,
-                "SOCKET-HTTP-ERROR", "header")) {
+        // replaced with spaces in a response, which a user agent must do (RFC 9112 section 5.2); the readers end a
+        // header at its first empty line with CRLF line ends, so a line of a request that ends with a bare LF is
+        // refused, as is text after the first empty line of any header: a parser that took a bare LF as a line end
+        // would end the header there, and the text after it, which can be another message, would be lost; a line of
+        // a response can end with LF, which a recipient may accept (RFC 9112 section 2.2)
+        bool is_request = strncmp(hdr->c_str(), "HTTP/", 5) != 0;
+        if (checkHttpFieldLines(xsink, const_cast<char*>(hdr->c_str()), true, is_request, "SOCKET-HTTP-ERROR",
+                "header", is_request, true)) {
             return nullptr;
         }
         const char* buf = hdr->c_str();
