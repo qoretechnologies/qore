@@ -233,6 +233,16 @@ public:
     */
     DLLEXPORT bool checkAccess(const char* path, int mode, ExceptionSink* xsink);
 
+    //! Checks the access to a canonical path without resolving it again (qore#7518)
+    /** For a path that was resolved and then pinned (opened without following a link along it): the rules apply to
+        the path as given, which is not resolved again, so that the decision applies to the object pinned; errors name
+        \a path
+
+        @param canon the canonical path, absolute and without a link
+        @param path the path as the caller gave it, for errors
+    */
+    DLLLOCAL bool checkCanonicalAccess(const char* canon, const char* path, int mode, ExceptionSink* xsink);
+
     //! Returns the current configuration as a hash
     /** @return A hash containing:
         - \c "sandbox_root": The sandbox root path or NOTHING
@@ -823,6 +833,11 @@ public:
         @return true if access is allowed, false if denied (exception raised)
     */
     DLLEXPORT bool checkFilesystemAccess(const char* path, int mode, ExceptionSink* xsink);
+
+    //! Checks the file system access to a canonical path without resolving it again (qore#7518)
+    /** see QoreFilesystemSecurityManager::checkCanonicalAccess()
+    */
+    DLLLOCAL bool checkCanonicalFilesystemAccess(const char* canon, const char* path, int mode, ExceptionSink* xsink);
 
     //! Checks if network access is allowed
     /** @param addr The address to check

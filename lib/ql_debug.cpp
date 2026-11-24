@@ -33809,8 +33809,11 @@ void qore_dbg_fs_swap_on_open(const char* fn) {
         if (!dbg_fs_swap_armed.load(std::memory_order_relaxed)) {
             return;
         }
-        // a link ending in '*' matches every name that starts with what comes before it
+        // a link ending in "/*" matches every name in the directory before it, which is the one replaced (a
+        // component of the name); one ending in '*' otherwise matches every name that starts with what comes before
+        // it, which is replaced
         const std::string& pat = dbg_fs_swap_link;
+        bool component = pat.size() > 2 && pat.compare(pat.size() - 2, 2, "/*") == 0;
         bool match = (!pat.empty() && pat.back() == '*')
             ? !strncmp(fn, pat.c_str(), pat.size() - 1)
             : pat == fn;
@@ -33822,7 +33825,7 @@ void qore_dbg_fs_swap_on_open(const char* fn) {
             return;
         }
         dbg_fs_swap_armed.store(false, std::memory_order_relaxed);
-        link = fn;
+        link = component ? pat.substr(0, pat.size() - 2) : std::string(fn);
         target = std::move(dbg_fs_swap_target);
     }
 #ifndef _Q_WINDOWS
