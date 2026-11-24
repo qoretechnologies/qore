@@ -2976,6 +2976,9 @@ public:
     */
     DLLLOCAL bool hasInheritedVariants() const;
 
+    //! Returns the single own variant if an inherited overload cannot be selected for this positional call.
+    DLLLOCAL const AbstractQoreFunctionVariant* getSinglePositionalMethodVariant(unsigned nargs) const;
+
     //! Returns true if the inheritance list of the method has a method of a generic class
     /** The method of a class without type parameters that declares a method of the same name as one of a generic
         parent class has the variants of the generic class's method too (qore#6448)

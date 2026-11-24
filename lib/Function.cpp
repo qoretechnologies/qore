@@ -5177,6 +5177,56 @@ bool QoreFunction::hasInheritedVariants() const {
     return false;
 }
 
+const AbstractQoreFunctionVariant* QoreFunction::getSinglePositionalMethodVariant(unsigned nargs) const {
+    if (numVariants() != 1) {
+        return nullptr;
+    }
+    const AbstractQoreFunctionVariant* own = first();
+    if (!hasInheritedVariants()) {
+        return own;
+    }
+
+    const MethodVariantBase* method = own->getMethodVariantBase();
+    const UserVariantBase* user = own->getUserVariantBase();
+    if (!user || !method || method->getAccess() != Public || method->isAbstract()
+            || (own->getFlags() & QCF_RUNTIME_NOOP) || hasGenericClassAncestor()) {
+        return nullptr;
+    }
+    const UserSignature* sig = user->getUserSignature();
+    if (sig->numParams() != nargs || sig->declaresTypeParameters() || sig->needsTypeParameterSubstitution()) {
+        return nullptr;
+    }
+    // runtimeFindVariant() stops at the first class with a match. A zero-parameter method always matches a
+    // zero-argument call. For typed calls, an ancestor with the same positional acceptance cannot win instead.
+    if (!nargs) {
+        return own;
+    }
+    for (size_t i = 1; i < ilist.size(); ++i) {
+        const QoreFunction* parent = ilist[i].func;
+        if (static_cast<const MethodFunctionBase*>(parent)->isAbstract()) {
+            continue;
+        }
+        for (const auto* variant : parent->vlist) {
+            if (variant->getMethodVariantBase()->isAbstract()) {
+                continue;
+            }
+            const UserVariantBase* inherited = variant->getUserVariantBase();
+            const UserSignature* other = inherited ? inherited->getUserSignature() : nullptr;
+            if (!other || other->numParams() != nargs || other->declaresTypeParameters()
+                    || other->needsTypeParameterSubstitution()) {
+                return nullptr;
+            }
+            for (unsigned n = 0; n < nargs; ++n) {
+                if (other->getParamTypeInfo(n) != sig->getParamTypeInfo(n) || other->hasDefaultArg(n)
+                        || other->getParameterPolicy(n).needsFilter() || sig->getParameterPolicy(n).needsFilter()) {
+                    return nullptr;
+                }
+            }
+        }
+    }
+    return own;
+}
+
 QORE_INTERN_NOINLINE void QoreFunction::noteAncestor(const QoreFunction& ancestor) {
     const QoreClass* qc = ancestor.getClass();
     if (qc && qc->hasTypeParameters()) {

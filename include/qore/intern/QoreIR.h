@@ -3968,6 +3968,8 @@ public:
     mutable std::atomic<int8_t> inline_ir_state{0};  //!< a QORE_IR_INLINE_* state
     //! true if the call site is recorded for qore_ir_suspend_inline_states() (see qore_ir_publish_inline_state())
     mutable std::atomic<bool> inline_ir_recorded{false};
+    //! Method lookup or overload selection depends on the caller's class context.
+    mutable bool cached_needs_class_ctx = false;
     mutable const QoreIRFunction* cached_callee_ir = nullptr;
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
@@ -4033,6 +4035,8 @@ public:
     mutable std::atomic<int8_t> inline_ir_state{0};  //!< a QORE_IR_INLINE_* state
     //! true if the call site is recorded for qore_ir_suspend_inline_states() (see qore_ir_publish_inline_state())
     mutable std::atomic<bool> inline_ir_recorded{false};
+    //! Method lookup or overload selection depends on the caller's class context.
+    mutable bool cached_needs_class_ctx = false;
     mutable const QoreIRFunction* cached_callee_ir = nullptr;
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;

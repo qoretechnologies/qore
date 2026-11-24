@@ -7163,8 +7163,6 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     return true;
 }
 
-static const AbstractQoreFunctionVariant* getSingleInterpreterMethodVariant(const QoreMethod* method);
-
 template <bool GIVEN = false, typename DirectMethodInst>
 static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const QoreMethod* method,
         QoreObject* self, const QoreTypeInfo* receiver_type_info, int8_t inline_state,
@@ -7224,8 +7222,9 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     // derived class, but the variant's body resolves private:internal members
     // against the class where the variant is defined.  This mirrors
     // UserMethodVariant::evalMethod(), which uses the variant's getClassPriv().
+    // A runtime-resolved target reaches this path only after the cache proved the single own variant is selected.
     const AbstractQoreFunctionVariant* eval_variant = inst->variant
-        ? inst->variant : getSingleInterpreterMethodVariant(method);
+        ? inst->variant : qore_method_private::get(*method)->getFunction()->first();
     const qore_class_private* method_ctx = eval_variant
         ? METHV_const(eval_variant)->getClassPriv() : qore_class_private::get(*method->getClass());
     // the call Program context of the method's frame is set as a call of the method sets it (qore#7079)
@@ -7324,16 +7323,6 @@ static QORE_INTERN_ALWAYS_INLINE bool tryExecuteInterpreterInlineIRMethod(Direct
         inline_state, args, nargs, result, xsink, may_invalidate_external_caches, arg_cleanups);
 }
 
-static const AbstractQoreFunctionVariant* getSingleInterpreterMethodVariant(const QoreMethod* method) {
-    if (!method) {
-        return nullptr;
-    }
-    const qore_method_private* priv = qore_method_private::get(*method);
-    const QoreFunction* func = priv ? priv->getFunction() : nullptr;
-    // a single own variant is the one a call resolves to only if no inherited variant can match instead
-    return func && func->numVariants() == 1 && !func->hasInheritedVariants() ? func->first() : nullptr;
-}
-
 template <bool GIVEN = false, typename DotEvalInst>
 static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreValue base,
         const char* method_name, const QoreTypeParamInstantiation* explicit_inst, QoreProgram* caller_pgm,
@@ -7380,7 +7369,7 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
                 || inst->cached_object_class_serial != qore_class_private::get(*object_class)->getInstanceSerial()) {
             return false;
         }
-        if (!inst->cached_method->isPrivate()) {
+        if (!inst->cached_needs_class_ctx) {
             return executeInterpreterInlineIRMethodTarget<GIVEN>(inst, inst->cached_method, self, nullptr,
                 state, args, nargs, result, xsink, may_invalidate_external_caches, arg_cleanups);
         }
@@ -7416,11 +7405,12 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     }
 
     const QoreMethod* method = inst->method;
+    const bool inherited_receiver = method && inst->qc && object_class != inst->qc
+        && object_class != method->getClass();
     const AbstractQoreFunctionVariant* variant = inst->variant;
-    // Reject a receiver this statically resolved method does not apply to before claiming:
-    // a polymorphic call site takes this branch on every call and must not pay for a CAS
-    // pair it can never make progress with.
-    if (method && (inst->qc && object_class != inst->qc) && object_class != method->getClass()) {
+    // A static method and a Program copy of the class use the statically bound dispatch rules.
+    if (inherited_receiver && (method->isStatic() || object_class->getID() == inst->qc->getID()
+            || object_class->getID() == method->getClass()->getID())) {
         return false;
     }
 
@@ -7435,21 +7425,35 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
         return false;
     }
 
-    if (!method) {
+    bool needs_class_ctx = inherited_receiver;
+    if (!method || inherited_receiver) {
         if (!strcmp(method_name, "copy")) {
             inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
             return false;
         }
         const qore_class_private* priv = qore_class_private::get(*object_class);
-        method = priv->getMethodForEval(method_name, self->getProgram(), class_ctx, xsink);
+        const QoreMethod* selected = priv->getMethodForEval(method_name, self->getProgram(), class_ctx, xsink);
         if (xsink && *xsink) {
             result = QoreValue();
             return true;
         }
-        if (!method) {
+        if (method && selected != method) {
+            // This receiver needs ordinary dispatch. Avoid resolving the same call twice on every execution.
+            inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
             return false;
         }
-        variant = getSingleInterpreterMethodVariant(method);
+        if (!selected) {
+            return false;
+        }
+        method = selected;
+        const auto* function = qore_method_private::get(*method)->getFunction();
+        const auto* selected_variant = function->getSinglePositionalMethodVariant(nargs);
+        needs_class_ctx |= function->hasInheritedVariants();
+        if (variant && selected_variant != variant) {
+            inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
+            return false;
+        }
+        variant = selected_variant;
         if (!variant) {
             inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
             return false;
@@ -7469,6 +7473,7 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
 
     inst->cached_object_class = object_class;
     inst->cached_object_class_serial = qore_class_private::get(*object_class)->getInstanceSerial();
+    inst->cached_needs_class_ctx = needs_class_ctx || method->isPrivate();
     inst->cached_class_ctx = class_ctx;
     inst->cached_class_ctx_serial = class_ctx ? class_ctx->getInstanceSerial() : 0;
     inst->cached_method = method;
