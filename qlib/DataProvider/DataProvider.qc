@@ -1796,6 +1796,29 @@ if (errors) {
     }
 
     #! Tries to load a data provider from the environment from the connection name
+    /** Each module of the \c QORE_DATA_PROVIDERS environment variable is loaded, and the name is looked up as a
+        connection (with \c get_connection()) and then, if that raises \c CONNECTION-ERROR, as a datasource connection
+        (with \c get_ds_string()), on every call in which a module is loaded or one was loaded before: after each
+        module, and after each provider module of its \c get_data_provider_map() that is loaded; a module whose
+        registration has completed (all of the provider modules of its map are loaded, or it has no map) is not loaded
+        again
+
+        @param name the name of the connection
+        @param subtype the subtype of the data provider of the connection, if any
+        @param logger the logger to set on the connection, if any
+
+        @return the data provider of the connection, or @ref nothing if getting the connection or its data provider
+        raises \c CONNECTION-ERROR (ex: no connection of the name exists) and creating the data provider of a
+        datasource connection of the name raises \c NO-FUNCTION, \c DATASOURCE-ERROR (ex: no datasource connection of
+        the name exists) or \c DATASOURCE-PARSE-ERROR, or if \c QORE_DATA_PROVIDERS is not set or none of its modules
+        can be loaded (the name is then not looked up)
+
+        @throw any exception raised by getting the connection or its data provider (ex: an exception of the data
+        provider of the connection) other than \c CONNECTION-ERROR, or by creating the data provider of a datasource
+        connection other than \c NO-FUNCTION, \c DATASOURCE-ERROR and \c DATASOURCE-PARSE-ERROR, also from the lookup
+        made after a \c QORE_DATA_PROVIDERS module is loaded (it was reported as an invalid module before %Qore 3.0;
+        qore#7484)
+    */
     static *AbstractDataProvider tryLoadProviderForConnectionFromEnv(string name, *string subtype,
             *LoggerInterface logger) {
         load_module("ConnectionProvider");
@@ -2216,6 +2239,8 @@ if (action.data_provider_info) {
         *string prov = getenv("QORE_DATA_PROVIDERS");
         if (prov) {
             list<string> pl = prov.split(PathSep);
+            # true once the symbol has been looked up for the modules whose registration is complete
+            bool registered_checked;
             foreach string mod in (pl) {
                 bool registration_module_loaded;
                 {
@@ -2224,14 +2249,21 @@ if (action.data_provider_info) {
                         = env_registration_module_map{mod} ?? False;
                 }
                 if (registration_module_loaded) {
+                    # the module and its provider modules are loaded and registered already, so they are not loaded
+                    # again, but the symbol is still looked up: a lookup that resolved nothing recorded the module, and
+                    # every later lookup through it returned nothing (qore#7484); the lookup is not made for a
+                    # module, so it is made once for all of the recorded modules
+                    if (info && !registered_checked) {
+                        registered_checked = True;
+                        if (*object rv = DataProvider::checkSymbol(info, logger)) {
+                            return rv;
+                        }
+                    }
                     continue;
                 }
                 Program p(PO_NO_USER_API);
                 try {
                     p.loadModule(mod);
-                    if (info && (*object rv = DataProvider::checkSymbol(info, logger))) {
-                        return rv;
-                    }
                 } catch (hash<ExceptionInfo> ex) {
                     if (failure_callback) {
                         failure_callback(<DataProviderEnvironmentLoadFailureInfo>{
@@ -2246,6 +2278,12 @@ if (action.data_provider_info) {
                             get_ex_pos(ex), ex.err, ex.desc);
                     }
                     continue;
+                }
+                # the symbol is looked up outside of the load of the module: an exception of the lookup (ex: raised
+                # by the data provider of a connection) reaches the caller, as it does for a recorded module and for a
+                # provider module, and does not make the module invalid (qore#7484)
+                if (info && (*object rv = DataProvider::checkSymbol(info, logger))) {
+                    return rv;
                 }
                 hash<string, string> dmap;
                 try {

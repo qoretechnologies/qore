@@ -4520,6 +4520,10 @@
       (@ref Qore::Socket::unfinishedHttpChunkedBody() "unfinishedHttpChunkedBody()"), chunk sizes are checked alike,
       and a body read allocates memory as its data arrives, so that a body can neither be taken for another message
       nor end the process (<a href="https://github.com/qoretechnologies/qore/issues/7417">issue 7417</a>)
+    - @ref DataProvider::DataProvider::tryLoadProviderForConnectionFromEnv() "DataProvider::tryLoadProviderForConnectionFromEnv()"
+      looks up every connection name through the \c QORE_DATA_PROVIDERS modules also after a lookup through them,
+      which made every later lookup return nothing, and passes on an exception of a lookup instead of reporting the
+      module as invalid (<a href="https://github.com/qoretechnologies/qore/issues/7484">issue 7484</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 
