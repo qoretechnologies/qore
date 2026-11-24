@@ -661,36 +661,36 @@ public:
         return m && !m->val.isNothing();
     }
 
-    DLLLOCAL HashMember* findCreateMember(const char* key) {
-        // the key is hashed once, for the search and for the new member (qore#7265)
-        qore_hash_lookup_key k(key);
-        HashMember* om = findMember(k);
-        return om ? om : createMemberKnownAbsent(k);
-    }
+    //! returns the member of \a key, which is created if the hash does not have it
+    /** The key is hashed once, for the search and for a new member; not inline, so that the key and its hash are
+        not on the stack frames of its inline callers, such as the IR interpreter's (qore#7265)
+    */
+#if defined(__GNUC__) || defined(__clang__)
+    __attribute__((noinline))
+#endif
+    DLLLOCAL HashMember* findCreateMember(const char* key);
 
     // as above; "created" is set to true if the member did not exist and was created here
-    DLLLOCAL HashMember* findCreateMember(const char* key, bool& created) {
-        qore_hash_lookup_key k(key);
-        HashMember* om = findMember(k);
-        if (om) {
-            created = false;
-            return om;
-        }
+#if defined(__GNUC__) || defined(__clang__)
+    __attribute__((noinline))
+#endif
+    DLLLOCAL HashMember* findCreateMember(const char* key, bool& created);
 
-        created = true;
-        return createMemberKnownAbsent(k);
-    }
-
-    DLLLOCAL HashMember* findCreateMemberPrehashed(const char* key, size_t hash) {
-        qore_hash_lookup_key k(key, strlen(key), hash);
-        HashMember* om = findMember(k);
-        return om ? om : createMemberKnownAbsent(k);
-    }
+    //! returns the member of \a key, whose hash is \a hash, which is created if the hash does not have it
+#if defined(__GNUC__) || defined(__clang__)
+    __attribute__((noinline))
+#endif
+    DLLLOCAL HashMember* findCreateMemberPrehashed(const char* key, size_t hash);
 
     //! creates the member of the key \a key, which the hash does not have
     /** The functions that create members are not inline, so that their code is not copied into the inline code of
         their callers (qore#7265)
     */
+    // not inline: the key and its hash would otherwise be on the stack frames of its inline callers, such as the IR
+    // interpreter's (via setKeyValueKnownAbsent())
+#if defined(__GNUC__) || defined(__clang__)
+    __attribute__((noinline))
+#endif
     DLLLOCAL HashMember* createMemberKnownAbsent(const char* key);
 
     //! creates the member of the key \a key, which the hash does not have

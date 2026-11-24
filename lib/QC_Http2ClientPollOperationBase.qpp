@@ -2009,7 +2009,12 @@ bool Http2ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink
         if (old_completed_action) {
             old_completed_action->deref(xsink);
         }
-        return false;  // already completed
+        // the response completed, but this side of the stream may still be open: the request of an extended
+        // CONNECT tunnel or a streamed request whose response ended before its body did; the stream is then reset
+        // by the caller (RST_STREAM), as otherwise it stays half-closed and takes one of the peer's concurrent
+        // streams for the life of the connection, until no new stream can be opened on it (qore#7443)
+        return sock_obj && stream_id <= INT32_MAX
+            && qore_socket_object_private(sock_obj).isHttp2StreamLocalOpen(static_cast<int32_t>(stream_id));
     }
 
     // Notify the action of cancellation, then release
@@ -2784,7 +2789,10 @@ int Http2ClientPollOperationBase::submitRequestSse(string method, string path,
 
 //! Cancel a stream
 /** @param stream_id the stream to cancel
-    @return True if the stream was found and cancelled
+    @return True if the stream was found and cancelled, or if its response had completed while this side of the
+    stream is still open (an extended CONNECT tunnel, or a streamed request answered before its body ended): the caller
+    resets the stream then (see @ref Qore::Socket::cancelHttp2Stream()), so that it does not take one of the peer's
+    concurrent streams for the life of the connection
 */
 bool Http2ClientPollOperationBase::cancelStream(int stream_id) [flags=NAMED_ARGS] {
     return priv->cancelStream(stream_id, xsink);

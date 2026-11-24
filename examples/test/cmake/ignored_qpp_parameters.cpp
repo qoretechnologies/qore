@@ -6,9 +6,18 @@
 #include <stdexcept>
 #include <string>
 
+#include "qore/intern/QorePseudoMethods.h"
+
 class AbstractDatasource;  // The generated rejecting wrappers never dereference this pointer.
 
-// These are the actual QPP-generated wrappers and the unchanged string helper.
+// The receiver accessors of the generated pseudo-class wrappers raise this exception for a value of another type than
+// their class's; libqore does not export it, so the fixture defines it as lib/QorePseudoMethods.cpp does.
+void qore_raise_pseudo_receiver_type_error(const QoreValue& v, const char* class_name, ExceptionSink* xsink) {
+    xsink->raiseException("RUNTIME-TYPE-ERROR", "a pseudo-method of class %s cannot be called on a value of type "
+        "'%s'", class_name, v.getFullTypeName());
+}
+
+// These are the actual QPP-generated wrappers.
 #include "ignored-bindings.inc"
 
 namespace {

@@ -32,6 +32,7 @@ public class AzureOpenAiAudioManifest {
             <RestSchemaActionInfo>{
                 "action": "create-transcription",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/deployments/{deployment-id}/audio/transcriptions",
                 "operation_id": "Transcriptions_Create",
                 "display_name": "Create Transcription",
@@ -51,6 +52,7 @@ public class AzureOpenAiAudioManifest {
             <RestSchemaActionInfo>{
                 "action": "create-translation",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/deployments/{deployment-id}/audio/translations",
                 "operation_id": "Translations_Create",
                 "display_name": "Create Translation",

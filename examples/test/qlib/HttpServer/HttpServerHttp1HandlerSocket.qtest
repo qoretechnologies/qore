@@ -1,0 +1,2530 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 connections and their sockets, HTTP/2 over TLS and HTTP/3 (QUIC) streams, and sandboxed HTTP handlers
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpClientIo
+%requires RestHandler
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ServerSentEventHandler
+%requires DataStreamUtil
+%requires DataStreamRequestHandler
+%requires DataStreamClient
+%requires Mime
+%requires Logger
+%requires RestSchemaValidator
+%requires yaml
+%requires reflection
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerHttp1HandlerSocketTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 20s;
+
+#! Returns "ok" or the error of the call
+string sub try_it(code c) {
+    try {
+        c();
+        return "ok";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! Returns the classes of the sockets in a value, its hashes and its lists; an object is not entered
+list<string> sub find_sockets(auto v) {
+    list<string> rv = ();
+    switch (v.typeCode()) {
+        case NT_HASH:
+            foreach auto e in (v.values()) {
+                rv += find_sockets(e);
+            }
+            break;
+        case NT_LIST:
+            foreach auto e in (v) {
+                rv += find_sockets(e);
+            }
+            break;
+        case NT_OBJECT:
+            if (v instanceof Socket) {
+                rv += v.className();
+            }
+            break;
+    }
+    return rv;
+}
+
+#! Tries the socket of its request in the way that its path names; answers with the results, one "key=value" a line
+class ProbeHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the socket of a request that the "keep" path keeps
+        Queue kept();
+        #! the results of the paths whose response has no body
+        Queue results();
+    }
+
+    #! a trusted handler that asks for the socket of its request, as a base class of handlers whose subclasses pass
+    #! it to code that is not trusted does
+    constructor() {
+        setHandlerSocketView();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        hash<string, string> r;
+        switch (hdr.path) {
+            case "header": {
+                # the next request on the connection
+                r.header = try_it(sub () { s.readHTTPHeader(1s); });
+                r.header_string = try_it(sub () { s.readHTTPHeaderString(1s); });
+                break;
+            }
+            case "recv": {
+                # the server read the request's body: no data, also with a request after it on the connection
+                r.recv = sprintf("%y", s.recv(0, 1s));
+                r.recv_size = sprintf("%y", s.recv(16, 1s));
+                r.recv_binary = string(s.recvBinary(16, 1s).size());
+                r.recvi4 = try_it(sub () { s.recvi4(1s); });
+                r.body = sprintf("%y", body);
+                break;
+            }
+            case "close": {
+                r.shutdown = try_it(sub () { s.shutdown(); });
+                r.close = try_it(sub () { s.close(); });
+                r.shutdown_write = try_it(sub () { s.shutdownWrite(); });
+                r.open = sprintf("%y", s.isOpen());
+                break;
+            }
+            case "chunked": {
+                # a chunked body is read by its chunks only, once
+                r.pending = sprintf("%y", s.pendingHttpChunkedBody());
+                r.recv = try_it(sub () { s.recv(1, 1s); });
+                hash<auto> chunked = s.readHTTPChunkedBody(HangGuard);
+                r.body = sprintf("%y", chunked.body);
+                r.again = try_it(sub () { s.readHTTPChunkedBody(1s); });
+                r.after = sprintf("%y", s.recv(0, 1s));
+                r.pending_after = sprintf("%y", s.pendingHttpChunkedBody());
+                break;
+            }
+            case "chunked-enc":
+            case "chunked-enc-body": {
+                # a chunked body in the socket's own encoding: the connection's does not change
+                s.setEncoding("ISO-8859-2");
+                string read_body;
+                if (hdr.path == "chunked-enc") {
+                    list<string> chunks;
+                    s.readHTTPChunkedBodyWithCallback(sub (hash<auto> v) {
+                        if (v.data) {
+                            # the encoding of each chunk
+                            r.encoding = v.data.encoding();
+                            chunks += v.data;
+                        }
+                    }, HangGuard);
+                    read_body = chunks.join("");
+                } else {
+                    read_body = s.readHTTPChunkedBody(HangGuard).body;
+                    r.encoding = read_body.encoding();
+                }
+                r.match = sprintf("%y", read_body == "x\u010dy");
+                break;
+            }
+            case "chunked-callback": {
+                list<string> chunks;
+                s.readHTTPChunkedBodyWithCallback(sub (hash<auto> v) {
+                    if (v.data) {
+                        chunks += v.data;
+                    }
+                }, HangGuard);
+                r.body = chunks.join("");
+                r.again = try_it(sub () { s.readHTTPChunkedBodyBinaryWithCallback(sub (hash<auto> v) {}, 1s); });
+                break;
+            }
+            case "other": {
+                r.connect = try_it(sub () { s.connect("localhost:1", 1s); });
+                # all-interfaces: none; the handler's socket refuses bind() (otherTest() checks HTTP-HANDLER-SOCKET-ERROR)
+                r.bind = try_it(sub () { s.bind(0); });
+                r.listen = try_it(sub () { s.listen(); });
+                r.accept = try_it(sub () { s.accept(1s); });
+                r.upgrade = try_it(sub () { s.upgradeServerToSSL(1s); });
+                r.fd = try_it(sub () { s.getPollableDescriptor(); });
+                r.timeout = try_it(sub () { s.setRecvTimeout(1s); });
+                r.timeout_value = string(s.getRecvTimeout());
+                r.copy = try_it(sub () { s.copy(); });
+                r.peer = s.getPeerInfo(False).address;
+                # another socket than the handler's own is not aborted
+                r.abort_other = try_it(sub () { http_abort_connection(new Socket()); });
+                r.socket = s.getSocketInfo(False).address;
+                r.encoding = s.getEncoding();
+                r.http2 = sprintf("%y", s.isHttp2());
+                break;
+            }
+            case "keep": {
+                kept.push(s);
+                r.kept = "yes";
+                break;
+            }
+            case "stale": {
+                # the socket of an earlier request on the connection
+                Socket old = kept.get(HangGuard);
+                r.send = try_it(sub () { old.send("HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nFORGED"); });
+                r.recv = try_it(sub () { old.recv(0, 1s); });
+                r.abort = try_it(sub () { http_abort_connection(old); });
+                r.open = sprintf("%y", old.isOpen());
+                break;
+            }
+            case "framing": {
+                # the framing of a response header that the socket refuses; nothing is sent
+                list<hash<auto>> bad = (
+                    {"Content-Length": 2, "content-length": 2},
+                    {"Content-Length": (2, 2)},
+                    {"Content-Length": "2x"},
+                    {"Content-Length": -1},
+                    {"Content-Length": 2, "Transfer-Encoding": "chunked"},
+                    {"Transfer-Encoding": "gzip"},
+                    {"Content-Type": "text/plain"},
+                );
+                int i = 0;
+                foreach hash<auto> h in (bad) {
+                    r{"bad" + i++} = try_it(sub () { s.sendHTTPResponseHeader(200, "OK", "1.1", h); });
+                }
+                r.full_te = try_it(sub () {
+                    s.sendHTTPResponse(200, "OK", "1.1", {"Transfer-Encoding": "chunked"}, "x");
+                });
+                r.raw_first = try_it(sub () { s.send("HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nFORGED"); });
+                r.upgrade = try_it(sub () { s.sendHTTPResponseHeader(101, "Switching Protocols", "1.1", {}); });
+                r.from_stream = try_it(sub () { s.sendFromInputStream(new BinaryInputStream(binary("x")), 1); });
+                break;
+            }
+            case "length": {
+                # a response with a Content-Length that the handler sends in parts; no more than its length
+                s.sendHTTPResponseHeader(200, "OK", "1.1", {"Content-Length": 10, "Content-Type": "text/plain"});
+                s.send("01234");
+                string over = try_it(sub () { s.send("56789XHTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nFORGED"); });
+                s.send("56789");
+                string after = try_it(sub () { s.send("HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nFORGED"); });
+                string again = try_it(sub () { s.sendHTTPResponse(200, "OK", "1.1", {}, "FORGED"); });
+                if (over == "ok" || after == "ok" || again == "ok") {
+                    throw "TEST-ERROR", sprintf("a send past the response: %y %y %y", over, after, again);
+                }
+                return <HttpResponseInfo>{"code": 200, "reply_sent": True};
+            }
+            case "chunked-response": {
+                # a chunked response that the handler sends after its header; raw bytes are refused
+                s.sendHTTPResponseHeader(200, "OK", "1.1", {"Transfer-Encoding": "chunked"});
+                string raw = try_it(sub () { s.send("5\r\nFORGE\r\n"); });
+                s.sendHTTPChunkedBodyFromInputStream(new BinaryInputStream(binary("chunked " + raw)));
+                string after = try_it(sub () { s.sendHTTPChunkedBodyTrailer(); });
+                if (after == "ok") {
+                    throw "TEST-ERROR", "a second end of the chunked body";
+                }
+                return <HttpResponseInfo>{"code": 200, "reply_sent": True};
+            }
+            case "unmarked": {
+                # the handler sends its response and returns another one without reply_sent: the server sends no
+                # second response
+                s.sendHTTPResponse(200, "OK", "1.1", {"Content-Type": "text/plain"}, "the handler's");
+                return makeResponse(200, "SECOND");
+            }
+            case "incomplete": {
+                # the handler sends a part of its response: the server closes the connection after it
+                s.sendHTTPResponseHeader(200, "OK", "1.1", {"Content-Length": 10});
+                s.send("012");
+                return <HttpResponseInfo>{"code": 200, "reply_sent": True};
+            }
+            case "interim": {
+                # interim responses before the final response, which the server sends
+                s.sendHTTPResponseHeader(103, "Early Hints", "1.1", {"Link": "</a.css>; rel=preload"});
+                s.sendHTTPResponse(100, "Continue", "1.1", {}, "");
+                return makeResponse(200, "final");
+            }
+            case "interim-own": {
+                # interim responses before the final response, which the handler sends
+                s.sendHTTPResponse(103, "Early Hints", "1.1", {"Link": "</a.css>; rel=preload"}, "");
+                s.sendHTTPResponse(200, "OK", "1.1", {"Content-Type": "text/plain"}, "final");
+                return <HttpResponseInfo>{"code": 200, "reply_sent": True};
+            }
+            case "head": {
+                # the response to a HEAD request has no body; its header is the complete response
+                r.full = try_it(sub () { s.sendHTTPResponse(200, "OK", "1.1", {}, "FORGED"); });
+                s.sendHTTPResponseHeader(200, "OK", "1.1", {"Content-Length": 7});
+                string after = try_it(sub () { s.send("FORGED!"); });
+                if (r.full == "ok" || after == "ok") {
+                    throw "TEST-ERROR", sprintf("a body in the response to a HEAD request: %y %y", r.full, after);
+                }
+                return <HttpResponseInfo>{"code": 200, "reply_sent": True};
+            }
+            case "bodiless": {
+                r.te_204 = try_it(sub () {
+                    s.sendHTTPResponseHeader(204, "No Content", "1.1", {"Transfer-Encoding": "chunked"});
+                });
+                r.cl_304 = try_it(sub () { s.sendHTTPResponseHeader(304, "Not Modified", "1.1", {"Content-Length": 5}); });
+                r.cl0_204 = try_it(sub () {
+                    s.sendHTTPResponseHeader(204, "No Content", "1.1", {"Content-Length": 0});
+                });
+                results.push(r);
+                return <HttpResponseInfo>{"code": 204, "reply_sent": True};
+            }
+            case "bodiless-head": {
+                r.te_head = try_it(sub () {
+                    s.sendHTTPResponseHeader(200, "OK", "1.1", {"Transfer-Encoding": "chunked"});
+                });
+                s.sendHTTPResponseHeader(200, "OK", "1.1", {"Content-Length": 3});
+                results.push(r);
+                return <HttpResponseInfo>{"code": 200, "reply_sent": True};
+            }
+            case "http10": {
+                # an HTTP/1.0 request gets no chunked response and no interim response
+                r.chunked = try_it(sub () {
+                    s.sendHTTPResponseHeader(200, "OK", "1.1", {"Transfer-Encoding": "chunked"});
+                });
+                r.callback = try_it(sub () {
+                    s.sendHTTPResponseWithCallback(sub () {}, 200, "OK", "1.1", {});
+                });
+                r.interim = try_it(sub () { s.sendHTTPResponseHeader(100, "Continue", "1.1", {}); });
+                break;
+            }
+            case "encoding": {
+                # the socket's encoding is its own: the connection's does not change
+                r.before = s.getEncoding();
+                s.setEncoding("ISO-8859-2");
+                r.after = s.getEncoding();
+                break;
+            }
+            case "statics": {
+                # no method of the socket changes the server's state of the request
+                r.set_body = try_it(sub () { call_object_method(s, "setBodyLength", s, 100000); });
+                r.end = try_it(sub () { call_object_method(s, "endRequest", s); });
+                r.start = try_it(sub () { call_object_method(s, "h1Start", False, False); });
+                r.take = try_it(sub () { call_object_method(s, "takeBody", 100000); });
+                r.recv = sprintf("%y", s.recv(0, 1s));
+                break;
+            }
+            case "proto": {
+                return makeResponse(200, sprintf("http2=%y", cx."header-info".http2 ?? False));
+            }
+            case "stream-statics": {
+                # no method of the socket of an HTTP/2 or HTTP/3 request changes the server's state of the request
+                return makeResponse(200, sprintf("mark=%s has=%s",
+                    try_it(sub () { call_object_method(s, "markResponseStarted", s); }),
+                    try_it(sub () { call_object_method(s, "hasResponseStarted", s); })));
+            }
+            case "abort-stream": {
+                # the socket of an HTTP/2 request ends the request's own stream
+                http_abort_connection(s);
+                return makeResponse(200, "not sent");
+            }
+            case "context": {
+                # the socket of the request is the only one that its handler gets
+                r.sockets = find_sockets({"cx": cx, "hdr": hdr}).join(",");
+                r.own = s.className();
+                break;
+            }
+            case "self": {
+                # the handler sends its own response, once
+                s.sendHTTPResponse(200, "OK", "1.1", {"Content-Type": "text/plain"}, "sent by the handler");
+                string again = try_it(sub () { s.sendHTTPResponse(200, "OK", "1.1", {}, "FORGED"); });
+                string raw = try_it(sub () { s.send("FORGED"); });
+                if (again == "ok" || raw == "ok") {
+                    throw "TEST-ERROR", sprintf("a second response was sent: %y %y", again, raw);
+                }
+                return <HttpResponseInfo>{"code": 200, "reply_sent": True};
+            }
+            default: {
+                return makeResponse(200, sprintf("served %s", hdr.path));
+            }
+        }
+        return makeResponse(200, (map $1.key + "=" + $1.value, r.pairIterator()).join("\n"));
+    }
+}
+
+#! A trusted handler that does not ask for the socket of its request: it gets the connection's socket
+class PlainHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return makeResponse(200, "class=" + s.className());
+    }
+}
+
+#! Holds its request until the test releases it
+class HoldHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue entered();
+        Queue release();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        entered.push(True);
+        release.get(HangGuard);
+        return makeResponse(200, "held");
+    }
+}
+
+#! Reports how the body of its request arrived and what its socket gives
+class StreamBodyRequest inherits AbstractStreamRequest {
+    private {
+        int ctor_size;
+        int parts;
+        int bytes;
+        *Queue grabbed;
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, auto body, *Queue grabbed) : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+        ctor_size = body.size();
+        self.grabbed = grabbed;
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+        if (v.data) {
+            if (grabbed && !parts) {
+                # the handler reads far more than the rest of the body through the socket of its request
+                grabbed.push(s.recvBinary(100 * 1024 * 1024, HangGuard).size());
+            }
+            ++parts;
+            bytes += v.data.size();
+        }
+    }
+
+    private auto sendImpl() {
+    }
+
+    private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+        # after the body, the socket of the request gives no data, also with a request after it on the connection
+        int recv_size = s.recvBinary(16, 1s).size();
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": sprintf("ctor=%d\nparts=%d\nbytes=%d\nrecv=%d", ctor_size, parts, bytes, recv_size),
+        };
+    }
+}
+
+#! A stream handler that wants a body with a Content-Length as a stream (qore#7308)
+class StreamBodyHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the size that a request of the "stream-grab" path read through its socket
+        Queue grabbed();
+    }
+
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+        setHandlerSocketView();
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new StreamBodyRequest(listener, self, s, cx, hdr, body, hdr.path == "stream-grab" ? grabbed : NOTHING);
+    }
+}
+
+#! hands each registered event stream to the test
+class RegisteringSseHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    public {
+        Queue registered();
+    }
+
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({"heartbeat": 0}) {
+    }
+
+    connectionRegisteredImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
+        registered.push(conn);
+    }
+}
+
+#! Reports the sockets that the application code of a WebSocket connection gets
+class ScanWebSocketHandler inherits WebSocketHandler {
+    public {
+        Queue scans();
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        scans.push({"sockets": find_sockets({"cx": cx, "hdr": hdr}), "version": hdr.http_version});
+        return WebSocketHandler::getConnectionImpl(cx, hdr, cid);
+    }
+}
+
+#! Forwards to the server's target; keeps the information of each request as the server gives it to its target
+class RecordingTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
+    public {
+        Queue requests();
+    }
+
+    private {
+        HttpServerAsyncIo::HttpAsyncTarget target;
+    }
+
+    constructor(HttpServerAsyncIo::HttpAsyncTarget target) {
+        self.target = target;
+    }
+
+    hash<HttpServerAsyncIo::HttpRequestResultInfo> onHttpRequest(hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
+        requests.push(info);
+        return target.onHttpRequest(info);
+    }
+
+    onIdleTimeout(Socket sock, *HttpListenerInterface listener, hash<auto> cx) {
+        target.onIdleTimeout(sock, listener, cx);
+    }
+
+    onError(Socket sock, hash<ExceptionInfo> ex, *HttpListenerInterface listener, *hash<auto> cx) {
+        target.onError(sock, ex, listener, cx);
+    }
+
+    onSseDisconnect(Socket sock, *HttpListenerInterface listener, hash<auto> cx) {
+        target.onSseDisconnect(sock, listener, cx);
+    }
+
+    onWebSocketFrame(Socket sock, hash<HttpServerAsyncIo::WebSocketFrameInfo> frame,
+            *HttpListenerInterface listener, hash<auto> cx) {
+        target.onWebSocketFrame(sock, frame, listener, cx);
+    }
+
+    onWebSocketClose(Socket sock, int code, string reason, *HttpListenerInterface listener, hash<auto> cx) {
+        target.onWebSocketClose(sock, code, reason, listener, cx);
+    }
+
+    onPersistentRequestEnd(hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
+        target.onPersistentRequestEnd(info);
+    }
+
+    *hash<HttpServerAsyncIo::HttpRequestResultInfo> tryInlineRequest(
+            hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
+        return target.tryInlineRequest(info);
+    }
+
+    *hash<HttpServerAsyncIo::HttpRequestResultInfo> prepareHttpRequest(
+            hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
+        return target.prepareHttpRequest(info);
+    }
+
+    cancelPreparedHttpRequest(hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
+        target.cancelPreparedHttpRequest(info);
+    }
+
+    auto saveDispatchContext() {
+        return target.saveDispatchContext();
+    }
+
+    restoreDispatchContext(auto save_data) {
+        target.restoreDispatchContext(save_data);
+    }
+}
+
+#! A server whose target keeps the information of each request, as a framework's target does to abort a request
+class RecordingServer inherits HttpServer {
+    public {
+        RecordingTarget recording;
+    }
+
+    constructor() : HttpServer(<HttpServerOptionInfo>{}) {
+        recording = new RecordingTarget(asyncTarget);
+        asyncTarget = recording;
+    }
+}
+
+#! Echoes the DataStream records of its request, with a timeout of its stream (qore#7305 review)
+class TimeoutEchoHandler inherits EchoHandler {
+    constructor(hash<auto> cx, *hash<auto> ah) : EchoHandler(cx, ah) {
+        setTimeout(20s);
+    }
+}
+
+#! answers with 401 before its handler gets the request; keeps the request's body reader
+class EarlyAnswerHandler inherits StreamBodyHandler {
+    public {
+        Queue readers();
+    }
+
+    *hash<HttpResponseInfo> authenticateRequest(HttpListenerInterface listener, hash<auto> hdr, reference<hash> cx) {
+        readers.push(cx."header-info".body_reader);
+        return <HttpResponseInfo>{"code": 401, "body": "refused"};
+    }
+}
+
+#! A trusted REST class that holds the REST classes given to it
+class ContainerRestClass inherits AbstractRestClass {
+    string name() {
+        return "c";
+    }
+}
+
+#! A trusted REST class whose subClassImpl() returns the objects that a closure makes
+class DynamicRestClass inherits AbstractRestClass {
+    private {
+        code make;
+    }
+
+    constructor(code make) {
+        self.make = make;
+    }
+
+    string name() {
+        return "d";
+    }
+
+    *AbstractRestClass subClassImpl(string name, hash<auto> cx, *hash<auto> args) {
+        return name == "sockclass" ? make() : NOTHING;
+    }
+}
+
+#! A trusted authenticator that holds a request between the server's decision of its socket and its dispatch
+class GateAuthenticator inherits AbstractAuthenticator {
+    public {
+        Queue at();
+        Queue go();
+        bool armed;
+    }
+
+    *hash<HttpResponseInfo> authenticateRequest(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx) {
+        if (armed) {
+            armed = False;
+            at.push(True);
+            go.get();
+        }
+    }
+}
+
+#! The REST class of the DataStream records of the test, with its stream handler
+class EchoRestClass inherits AbstractRestClass {
+    private {
+        code get_handler;
+    }
+
+    constructor(code get_handler) {
+        self.get_handler = get_handler;
+    }
+
+    string name() {
+        return "echo";
+    }
+
+    AbstractRestStreamRequestHandler streamPost(hash<auto> cx, *hash<auto> ah) {
+        return get_handler(cx, ah);
+    }
+}
+
+#! The handlers of HTTP/1.1 requests get a socket that acts on the connection for their own request only (qore#7305)
+/** The server keeps the connection's socket: the handler's socket cannot read the next request on the connection,
+    nor read past the request's own body, nor shut the connection down or close it; it sends the request's own
+    response, once, and ends when the handler's code returns.  A DataStream handler streams through it, also one of
+    a sandboxed Program
+*/
+class HttpServerHttp1HandlerSocketTest inherits QUnit::Test {
+    public {
+        #! a sandboxed tenant's DataStream handler
+        const TenantSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires ServerSentEventHandler
+%requires RestHandler
+%requires DataStreamUtil
+%requires DataStreamRequestHandler
+%requires reflection
+
+#! the classes of the objects in a value, its hashes and its lists (an object is not entered)
+list<string> sub tenant_classes(auto v) {
+    list<string> rv = ();
+    switch (v.typeCode()) {
+        case NT_HASH:
+            foreach auto e in (v.values()) {
+                rv += tenant_classes(e);
+            }
+            break;
+        case NT_LIST:
+            foreach auto e in (v) {
+                rv += tenant_classes(e);
+            }
+            break;
+        case NT_OBJECT:
+            rv += v.className();
+            break;
+    }
+    return rv;
+}
+
+class TenantEchoHandler inherits AbstractDataStreamRequestHandler {
+    private {
+        list<auto> records = ();
+        int sent = 0;
+        string probe;
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah) : AbstractDataStreamRequestHandler(cx, ah) {
+        probe = probe_socket(cx);
+    }
+
+    private nothing recvDataImpl(auto data) {
+        records += data;
+    }
+
+    private auto sendDataImpl() {
+        if (sent < records.size()) {
+            return records[sent++];
+        }
+        if (sent++ == records.size()) {
+            return {\"probe\": probe, \"version\": cx.hdr.http_version};
+        }
+    }
+}
+
+string sub probe_socket(hash<auto> cx) {
+    try {
+        cx.socketobject.readHTTPHeader(1s);
+        return \"read\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+AbstractRestStreamRequestHandler sub get_handler(hash<auto> cx, *hash<auto> ah) {
+    return new TenantEchoHandler(cx, ah);
+}
+
+#! the tenant's REST class of the DataStream records of the test
+class TenantEchoRestClass inherits AbstractRestClass {
+    string name() {
+        return \"echo\";
+    }
+
+    AbstractRestStreamRequestHandler streamPost(hash<auto> cx, *hash<auto> ah) {
+        return new TenantEchoHandler(cx, ah);
+    }
+}
+
+#! the tenant's REST class that reports the class of the socket of its request
+class TenantClassRest inherits AbstractRestClass {
+    string name() {
+        return \"sockclass\";
+    }
+
+    hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
+        return RestHandler::makeResponse(200, cx.socketobject.className());
+    }
+}
+
+#! a RestHandler (a class of a module) made by the tenant's code, with the tenant's REST class
+RestHandler sub get_class_rest_handler() {
+    RestHandler rest();
+    rest.addClass(new TenantClassRest());
+    return rest;
+}
+
+#! the tenant's REST class that reports the class of the socket of its request
+AbstractRestClass sub get_class_rest() {
+    return new TenantClassRest();
+}
+
+#! adds the tenant's REST class to a RestHandler that the tenant holds
+nothing sub add_class_rest(RestHandler rest) {
+    rest.class_hash.sockclass = new TenantClassRest();
+}
+
+#! a RestHandler declared by the tenant, which does not ask for the socket of its requests
+RestHandler sub get_rest_handler() {
+    RestHandler rest();
+    rest.addClass(new TenantEchoRestClass());
+    return rest;
+}
+
+string sub try_it(code c) {
+    try {
+        c();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! tries to abort the connection of its request, or holds its request until the test releases it
+class TenantHttpHandler inherits AbstractHttpRequestHandler {
+    private {
+        Queue entered;
+        Queue release;
+        bool armed;
+    }
+
+    public {
+        Queue ended();
+        #! the socket of the last request of the paths that read in the socket's own encoding
+        *Socket last;
+    }
+
+    bool isPersistent() {
+        if (armed) {
+            armed = False;
+            throw \"TENANT-ERROR\", \"after the response\";
+        }
+        return False;
+    }
+
+    constructor(Queue entered, Queue release) {
+        self.entered = entered;
+        self.release = release;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        switch (hdr.path) {
+            case \"abort\":
+                return makeResponse(200, sprintf(\"function=%s\\nmethod=%s\",
+                    try_it(sub () { http_abort_connection(s); }),
+                    try_it(sub () { call_object_method(s, \"abortConnection\"); })));
+            case \"statics\": {
+                # no method of the socket changes the server's state of the request, also through an auto variable
+                auto a = s;
+                return makeResponse(200, sprintf(\"call=%s\\nauto=%s\\nend=%s\\nrecv=%y\",
+                    try_it(sub () { call_object_method(s, \"setBodyLength\", s, 100000); }),
+                    try_it(sub () { a.setBodyLength(a, 100000); }),
+                    try_it(sub () { a.endRequest(a); }),
+                    s.recv(0, 1s)));
+            }
+            case \"steal\": {
+                # sends a complete response with raw bytes, then tries to read and answer the next request
+                string raw = try_it(sub () {
+                    s.send(\"HTTP/1.1 200 OK\\r\\nContent-Length: 2\\r\\n\\r\\nok\");
+                });
+                string next = sprintf(\"%y\", s.recv(0, 1s));
+                return makeResponse(200, sprintf(\"raw=%s\\nnext=%s\", raw, next));
+            }
+            case \"forge\": {
+                # sends its own response, then a forged response for the next request
+                s.sendHTTPResponseHeader(200, \"OK\", \"1.1\", {\"Content-Length\": 2});
+                string over = try_it(sub () {
+                    s.send(\"okHTTP/1.1 200 OK\\r\\nContent-Length: 6\\r\\n\\r\\nFORGED\");
+                });
+                s.send(\"ok\");
+                string after = try_it(sub () {
+                    s.send(\"HTTP/1.1 200 OK\\r\\nContent-Length: 6\\r\\n\\r\\nFORGED\");
+                });
+                if (over == \"ok\" || after == \"ok\") {
+                    throw \"TEST-ERROR\", \"a forged response was sent\";
+                }
+                return <HttpResponseInfo>{\"code\": 200, \"reply_sent\": True};
+            }
+            case \"class\":
+                return makeResponse(200, \"class=\" + s.className());
+            case \"reach\": {
+                # tries to reach the server's state of the request: the members of its socket, by name and through
+                # reflection, the server's classes by name, and the objects of its context and listener
+                auto a = s;
+                list<string> r = ();
+                foreach string m in ((\"rh\", \"real\", \"gen\")) {
+                    r += sprintf(\"name.%s=%s\", m, try_it(sub () { auto x = a{m}; }));
+                    r += sprintf(\"get.%s=%s\", m, try_it(sub () {
+                        cast<NormalMember>(Class::getClass(s).getMember(m)).getValue(s);
+                    }));
+                    r += sprintf(\"set.%s=%s\", m, try_it(sub () {
+                        cast<NormalMember>(Class::getClass(s).getMember(m)).setValue(s, NOTHING);
+                    }));
+                }
+                foreach string c in ((\"HttpServer::Priv::RequestHelper\", \"HttpServer::Priv::HandlerSocketState\",
+                        \"Priv::RequestHelper\", \"Priv::HandlerSocketState\")) {
+                    r += sprintf(\"class.%s=%s\", c, try_it(sub () { Class::forName(c); }));
+                }
+                r += \"objects=\" + (tenant_classes(cx) + tenant_classes(hdr) + (listener.className(),)).join(\",\");
+                return makeResponse(200, r.join(\"\\n\"));
+            }
+            case \"arm\":
+                # a complete response through the socket of the request, then an exception after the handler's code
+                s.sendHTTPResponse(200, \"OK\", \"1.1\", {\"Content-Type\": \"text/plain\"}, \"first\");
+                armed = True;
+                return <HttpResponseInfo>{\"code\": 200};
+            case \"upgrade\":
+                return <HttpResponseInfo>{\"code\": 101, \"hdr\": {\"Upgrade\": \"x\", \"Connection\": \"Upgrade\"}};
+            case \"enc-throw\":
+            case \"enc-timeout\": {
+                # a chunked read in the socket's own encoding whose callback throws, or that times out
+                last = s;
+                s.setEncoding(\"ISO-8859-2\");
+                string err = try_it(sub () {
+                    s.readHTTPChunkedBodyWithCallback(sub (hash<auto> v) {
+                        if (hdr.path == \"enc-throw\" && v.data) {
+                            throw \"TENANT-ERROR\", \"in the middle of the body\";
+                        }
+                    }, -1);
+                });
+                ended.push(err);
+                return makeResponse(200, \"err=\" + err);
+            }
+            case \"fake-sent\":
+                # claims a response that it did not send
+                return <HttpResponseInfo>{\"code\": 200, \"reply_sent\": True};
+            case \"blocked-cb\":
+                # a thread of the handler that outlives its request, in a send whose callback blocks
+                background sub () {
+                    string err = \"ok\";
+                    try {
+                        bool first = True;
+                        s.sendHTTPResponseWithCallback(auto sub () {
+                            if (first) {
+                                first = False;
+                                entered.push(True);
+                                release.get();
+                            }
+                        }, 200, \"OK\", \"1.1\", {}, 3600000);
+                    } catch (hash<ExceptionInfo> ex) {
+                        err = ex.err;
+                    }
+                    ended.push(err);
+                }();
+                entered.get();
+                return makeResponse(200, \"returned\");
+            case \"enc-report\":
+                # the encoding of the socket of the request: the connection's
+                return makeResponse(200, \"encoding=\" + s.getEncoding());
+            case \"blocked\":
+            case \"blocked-long\":
+                # a thread of the handler that outlives its request, blocked in a read of the socket of the request
+                # without a timeout or with a long one
+                background sub () {
+                    string err = \"ok\";
+                    try {
+                        s.readHTTPChunkedBody(hdr.path == \"blocked\" ? -1 : 3600000);
+                    } catch (hash<ExceptionInfo> ex) {
+                        err = ex.err;
+                    }
+                    ended.push(err);
+                }();
+                entered.push(True);
+                return makeResponse(200, \"returned\");
+            case \"hold\":
+                entered.push(True);
+                release.get(20s);
+                return makeResponse(200, \"held\");
+        }
+        return makeResponse(200, \"served \" + hdr.path);
+    }
+}
+
+AbstractHttpRequestHandler sub get_http_handler(Queue entered, Queue release) {
+    return new TenantHttpHandler(entered, release);
+}
+
+#! a handler of a socket that switches the protocol of any request
+class TenantSocketHandler inherits AbstractHttpSocketHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{\"code\": 101, \"hdr\": {\"Upgrade\": \"x\", \"Connection\": \"Upgrade\"}};
+    }
+
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
+        s.send(\"TAKEN OVER\");
+        return False;
+    }
+}
+
+AbstractHttpRequestHandler sub get_socket_handler() {
+    return new TenantSocketHandler();
+}
+
+#! an event stream handler that answers its request with a response of its own, then reads the next request
+class TenantSseHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    public {
+        Queue results();
+    }
+
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({\"heartbeat\": 0}) {
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
+        hash<HttpResponseInfo> rv = ServerSentEventHandler::ServerSentEventHandler::handleRequest(cx, hdr, b);
+        if (hdr.path == \"events-framed\") {
+            # framing fields and a connection option in other cases than the server's
+            rv.hdr += {\"Content-Length\": \"5\", \"transfer-ENCODING\": \"chunked\", \"CONNECTION\": \"keep-alive\"};
+        }
+        return rv;
+    }
+
+    #! the socket that the connection is made with is the only socket that the handler gets for the stream
+    ServerSentEventConnection getConnectionImpl(Socket sock, hash<auto> cx, hash<auto> hdr, string cid) {
+        try {
+            sock.send(\"HTTP/1.1 200 OK\\r\\nContent-Length: 2\\r\\n\\r\\nOK\");
+            results.push(sprintf(\"%y\", sock.recv(-1, 1s)));
+        } catch (hash<ExceptionInfo> ex) {
+            results.push(ex.err);
+        }
+        return ServerSentEventHandler::ServerSentEventHandler::getConnectionImpl(sock, cx, hdr, cid);
+    }
+}
+
+AbstractHttpRequestHandler sub get_sse_handler() {
+    return new TenantSseHandler();
+}
+
+#! an event stream handler that looks for the connection's socket in what its connection and its event source get
+#! (qore#7376)
+class TenantSseSocketHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    public {
+        Queue results();
+        Queue conns();
+    }
+
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({\"heartbeat\": 0}) {
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
+        hash<HttpResponseInfo> rv = ServerSentEventHandler::ServerSentEventHandler::handleRequest(cx, hdr, b);
+        if (hdr.path == \"events-source\") {
+            rv.sse_source = new TenantSseSource(results);
+        }
+        return rv;
+    }
+
+    HttpServerAsyncIo::HttpSseStreamPollOperation setupAsyncSseConnection(Socket sock, hash<auto> cx,
+            hash<auto> hdr, string cid) {
+        results.push(\"setup=\" + sock.className());
+        return ServerSentEventHandler::ServerSentEventHandler::setupAsyncSseConnection(sock, cx, hdr, cid);
+    }
+
+    ServerSentEventConnection getConnectionImpl(Socket sock, hash<auto> cx, hash<auto> hdr, string cid) {
+        results.push(\"conn=\" + sock.className());
+        return ServerSentEventHandler::ServerSentEventHandler::getConnectionImpl(sock, cx, hdr, cid);
+    }
+
+    connectionRegisteredImpl(ServerSentEventConnection conn) {
+        results.push(\"registered \" + get_poll_ops(conn.getAsyncPollOp(), conn.getAsyncSseConnection()));
+        if (conn.hdr.path == \"events-throw\") {
+            throw \"TENANT-ERROR\", \"the hook fails after the connection was registered\";
+        }
+        conns.push(conn);
+    }
+
+    deregisterConnectionImpl(ServerSentEventConnection conn) {
+        if (conn.hdr.path == \"events-throw\") {
+            results.push(\"deregistered\");
+        }
+    }
+}
+
+#! a handler that is not a socket handler and answers with an event source (qore#7376)
+class TenantSourceHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue results();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{
+            \"code\": 200,
+            \"hdr\": {\"Content-Type\": \"text/event-stream\"},
+            \"sse_source\": new TenantSseSource(results),
+        };
+    }
+}
+
+AbstractHttpRequestHandler sub get_source_handler() {
+    return new TenantSourceHandler();
+}
+
+#! an event source that looks for the connection's socket in the stream it gets (qore#7376)
+class TenantSseSource inherits HttpServerAsyncIo::AbstractSseEventSource {
+    private {
+        Queue results;
+    }
+
+    constructor(Queue results) {
+        self.results = results;
+    }
+
+    start(HttpServerAsyncIo::AbstractSseConnection conn) {
+        results.push(\"source \" + get_poll_ops(NOTHING, conn));
+        conn.queueEvent(\"source\", \"from the source\");
+    }
+
+    stop() {
+    }
+}
+
+#! describes the poll operations and sockets that the objects of an event stream give
+string sub get_poll_ops(*object op, *HttpServerAsyncIo::AbstractSseConnection sse_conn) {
+    *object op2;
+    if (sse_conn instanceof HttpServerAsyncIo::Http1SseConnection) {
+        op2 = cast<HttpServerAsyncIo::Http1SseConnection>(sse_conn).getPollOperation();
+    }
+    *object s = op ? cast<HttpServerAsyncIo::HttpSseStreamPollOperation>(op).getSocket() : NOTHING;
+    *object s2 = op2 ? cast<HttpServerAsyncIo::HttpSseStreamPollOperation>(op2).getSocket() : NOTHING;
+    return sprintf(\"op=%s op2=%s sock=%s sock2=%s\", op ? op.className() : \"none\", op2 ? op2.className() : \"none\",
+        s ? s.className() : \"none\", s2 ? s2.className() : \"none\");
+}
+
+AbstractHttpRequestHandler sub get_sse_socket_handler() {
+    return new TenantSseSocketHandler();
+}
+
+#! a socket handler of its own that answers with an event stream and sets it up with the socket it is given
+#! (qore#7376)
+class TenantRawSseHandler inherits AbstractHttpSocketHandler {
+    public {
+        Queue results();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{\"code\": 200, \"hdr\": {\"Content-Type\": \"text/event-stream\"}};
+    }
+
+    HttpServerAsyncIo::HttpSseStreamPollOperation setupAsyncSseConnection(Socket sock, hash<auto> cx,
+            hash<auto> hdr, string cid) {
+        results.push(\"setup=\" + sock.className());
+        return new HttpServerAsyncIo::HttpSseStreamPollOperation(sock);
+    }
+
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
+        return False;
+    }
+}
+
+AbstractHttpRequestHandler sub get_raw_sse_handler() {
+    return new TenantRawSseHandler();
+}
+
+#! a handler made when the Program is parsed, before or after the Program is sandboxed
+class EarlyHandler inherits AbstractHttpRequestHandler {
+    public {
+        static EarlyHandler early = new EarlyHandler();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return makeResponse(200, \"class=\" + s.className());
+    }
+}
+
+AbstractHttpRequestHandler sub get_early_handler() {
+    return EarlyHandler::early;
+}
+
+#! runs code for the tenant, as a framework does on a thread that serves the tenant's request
+nothing sub run_code(code c) {
+    c();
+}
+";
+    }
+
+    private {
+        HttpServer server;
+        ProbeHandler probe();
+        StreamBodyHandler stream_handler();
+        int port;
+    }
+
+    constructor() : QUnit::Test("HTTP/1.1 handler socket", "1.0", \ARGV) {
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        server.setHandler("probe", "", NOTHING, probe);
+        server.setHandler("stream", "^stream", NOTHING, stream_handler);
+        server.setDefaultHandler("probe", probe);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        server.waitForAsyncIo();
+
+        addTestCase("the next request is not read", \nextRequestTest());
+        addTestCase("no data past the body", \recvTest());
+        addTestCase("a body split across reads", \splitBodyTest());
+        addTestCase("the connection is not closed", \closeTest());
+        addTestCase("a chunked body", \chunkedTest());
+        addTestCase("a chunked body read with a callback", \chunkedCallbackTest());
+        addTestCase("a chunked body in the socket's own encoding", \chunkedEncodingTest());
+        addTestCase("sandboxed code's own encoding ends with each read", \sandboxedEncodingRestoreTest());
+        addTestCase("a RestHandler with a REST class of a sandboxed Program", \restTenantClassTest());
+        addTestCase("a send whose callback does not return", \blockedCallbackTest());
+        addTestCase("a REST class of a sandboxed Program on the dispatch path", \restDispatchTest());
+        addTestCase("reply_sent without a response", \fakeSentTest());
+        addTestCase("other methods", \otherTest());
+        addTestCase("the socket ends with its request", \staleTest());
+        addTestCase("the handler's own response", \selfResponseTest());
+        addTestCase("DataStream", \dataStreamTest());
+        addTestCase("DataStream of a sandboxed handler", \sandboxedDataStreamTest());
+        addTestCase("the request context", \contextTest());
+        addTestCase("a Content-Length body to a stream handler", \streamBodyTest(), DefaultBodyStreamThreshold * 2);
+        addTestCase("a Content-Length body read before the dispatch to a stream handler", \streamBodyTest(),
+            DefaultBodyStreamThreshold / 2);
+        addTestCase("a stream handler reads no more than its body", \streamGrabTest());
+        addTestCase("sandboxed code cannot abort the connection", \sandboxedAbortTest());
+        addTestCase("the server's target aborts a request", \targetAbortTest());
+        addTestCase("WebSocket", \webSocketTest());
+        addTestCase("the framing of a response that the handler sends", \framingTest());
+        addTestCase("a response with a Content-Length in parts", \lengthResponseTest());
+        addTestCase("a chunked response", \chunkedResponseTest());
+        addTestCase("a response that the handler sent is not sent again", \unmarkedResponseTest());
+        addTestCase("an incomplete response closes the connection", \incompleteResponseTest());
+        addTestCase("interim responses", \interimTest());
+        addTestCase("the response to a HEAD request", \headTest());
+        addTestCase("an HTTP/1.0 request", \http10Test());
+        addTestCase("the socket's encoding is its own", \encodingTest());
+        addTestCase("no method changes the server's state", \staticsTest());
+        addTestCase("sandboxed code changes no server state", \sandboxedStaticsTest());
+        addTestCase("sandboxed code cannot read or answer the next request", \sandboxedStealTest());
+        addTestCase("sandboxed code cannot forge a response", \sandboxedForgeTest());
+        addTestCase("a REST stream with a timeout", \restTimeoutTest());
+        addTestCase("the socket ends when the request is answered early", \earlyAnswerTest());
+        addTestCase("an HTTP/1.1 event stream ends with its connection", \sseTest());
+        addTestCase("the handlers that get the socket of their request", \whichHandlersTest());
+        addTestCase("a trusted RestHandler asks for the socket of its requests only when told", \baseClassesTest());
+        addTestCase("a kept socket does not keep the server", \keptSocketTest());
+        addTestCase("an exception after the handler's response sends no other response", \sentThenThrowTest());
+        addTestCase("a handler made before its Program was sandboxed", \earlyHandlerTest());
+        addTestCase("a read of a thread that outlives its request", \blockedReadTest());
+        addTestCase("a response without a body has no framing", \bodilessFramingTest());
+        addTestCase("a protocol switch only for a request that asks for one", \upgradeTest());
+        addTestCase("sandboxed code cannot reach the server's state of its request", \sandboxedReachTest());
+        addTestCase("an event stream of a sandboxed handler", \sandboxedSseTest());
+        addTestCase("an event stream of a sandboxed handler gets no connection socket", \sandboxedSseNoSocketTest());
+        addTestCase("the abort of an HTTP/2 request's stream", \streamAbortTest(), "h2");
+        addTestCase("the abort of an HTTP/3 request's stream", \streamAbortTest(), "h3");
+        set_return_value(main());
+        delete server;
+    }
+
+    #! the next request is unreachable through the handler's socket, and is then served
+    nextRequestTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /header HTTP/1.1\r\nHost: localhost\r\n\r\n"
+            "GET /second HTTP/1.1\r\nHost: localhost\r\nX-Token: next-request\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.header);
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.header_string);
+        assertEq("served second", readResponse(c), "the next request is served");
+    }
+
+    #! reads past the request's body give no data
+    recvTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("POST /recv HTTP/1.1\r\nHost: localhost\r\nContent-Type: text/plain\r\nContent-Length: 4\r\n\r\nbody"
+            "GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        assertEq("\"\"", r.recv);
+        assertEq("\"\"", r.recv_size);
+        assertEq("0", r.recv_binary);
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.recvi4);
+        assertEq("\"body\"", r.body, "the handler gets the request's body");
+        assertEq("served second", readResponse(c), "the next request is served");
+    }
+
+    #! a body sent in two parts is read by the server; the handler's socket gives no data
+    splitBodyTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("POST /recv HTTP/1.1\r\nHost: localhost\r\nContent-Type: text/plain\r\nContent-Length: 8\r\n\r\nfirs");
+        c.send("t ok");
+        hash<auto> r = parse(readResponse(c));
+        assertEq("\"first ok\"", r.body);
+        assertEq("\"\"", r.recv);
+        assertEq("\"\"", r.recv_size);
+    }
+
+    #! the handler's socket cannot shut the connection down or close it
+    closeTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /close HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.shutdown);
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.close);
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.shutdown_write);
+        assertEq("True", r.open);
+        c.send("GET /after HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served after", readResponse(c), "the connection serves the next request");
+    }
+
+    #! a chunked body is read by its chunks, once, up to its end
+    chunkedTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("POST /chunked HTTP/1.1\r\nHost: localhost\r\nContent-Type: text/plain\r\n"
+            "Transfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n"
+            "GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        assertEq("True", r.pending);
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.recv, "a chunked body is not read by its bytes");
+        assertEq("\"hello world\"", r.body);
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.again, "the chunked body is read once");
+        assertEq("\"\"", r.after);
+        assertEq("False", r.pending_after);
+        assertEq("served second", readResponse(c), "the next request is served");
+    }
+
+    #! a chunked body read with a callback
+    chunkedCallbackTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("POST /chunked-callback HTTP/1.1\r\nHost: localhost\r\nContent-Type: text/plain\r\n"
+            "Transfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n3\r\ndef\r\n0\r\n\r\n"
+            "GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        assertEq("abcdef", r.body);
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.again);
+        assertEq("served second", readResponse(c), "the next request is served");
+    }
+
+    #! a chunked body is read in the socket's own encoding, by its chunks and whole, and the next request's socket has
+    #! the connection's encoding
+    chunkedEncodingTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /encoding HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        string conn_enc = parse(readResponse(c)).before;
+        assertNeq("ISO-8859-2", conn_enc);
+        foreach string path in (("chunked-enc", "chunked-enc-body")) {
+            # "x", c with caron in ISO-8859-2 (0xe8), "y"
+            c.send(binary("POST /" + path + " HTTP/1.1\r\nHost: localhost\r\nContent-Type: text/plain\r\n"
+                "Transfer-Encoding: chunked\r\n\r\n2\r\nx") + <e8> + binary("\r\n1\r\ny\r\n0\r\n\r\n"));
+            hash<auto> r = parse(readResponse(c));
+            assertEq("ISO-8859-2", r.encoding, path + ": the body's encoding");
+            assertEq("True", r.match, path + ": the body is decoded in the socket's encoding");
+            c.send("GET /encoding HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            assertEq(conn_enc, parse(readResponse(c)).before, path + ": the connection keeps its encoding");
+        }
+    }
+
+    #! the methods that would act on the connection otherwise are refused; its information is given
+    otherTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /other HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        foreach string k in (("connect", "bind", "listen", "accept", "upgrade", "fd", "copy", "abort_other")) {
+            assertEq("HTTP-HANDLER-SOCKET-ERROR", r{k}, k);
+        }
+        assertEq(c.getSocketInfo(False).address, r.peer, "the peer's address");
+        assertEq(c.getPeerInfo(False).address, r.socket, "the connection's address");
+        assertEq("False", r.http2);
+        assertEq("ok", r.timeout, "the socket's own timeout is set");
+        assertEq("1000", r.timeout_value, "the socket's own timeout");
+        assertTrue(r.encoding.val());
+        c.send("GET /after HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served after", readResponse(c), "the connection serves the next request");
+    }
+
+    #! the socket of a request ends when the handler returns: it cannot send into a later response
+    staleTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /keep HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq({"kept": "yes"}, parse(readResponse(c)));
+        c.send("GET /stale HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.send);
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.recv);
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.abort, "the ended socket does not abort the connection");
+        assertEq("False", r.open);
+        c.send("GET /after HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served after", readResponse(c), "the connection serves the next request");
+    }
+
+    #! the handler sends one response of its own
+    selfResponseTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /self HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("sent by the handler", readResponse(c));
+        c.send("GET /after HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served after", readResponse(c), "the connection serves the next request");
+    }
+
+    #! a DataStream handler of a trusted RestHandler that asked for the socket of its requests streams through the
+    #! socket of its HTTP/1.1 request
+    dataStreamTest() {
+        list<auto> rv = dataStreamIntern(getRestHandler(auto sub (hash<auto> cx, *hash<auto> ah) {
+            return new EchoHandler(cx, ah);
+        }), "echo");
+        assertEq({"probe": "HTTP-HANDLER-SOCKET-ERROR", "version": "1.1"}, rv.last(), "the handler's socket");
+    }
+
+    #! a RestHandler declared by a sandboxed Program, which does not ask for it, gets the socket of its HTTP/1.1
+    #! request, which refuses to read the next request, and its DataStream handler streams through it
+    sandboxedDataStreamTest() {
+        Program p = getTenantProgram();
+        RestHandler rest = p.callFunction("get_rest_handler");
+        assertTrue(rest.needsHandlerSocketView(), "a RestHandler of a sandboxed Program");
+        list<auto> rv = dataStreamIntern(rest, "tenant");
+        assertEq({"probe": "HTTP-HANDLER-SOCKET-ERROR", "version": "1.1"}, rv.last(),
+            "the sandboxed handler's socket");
+    }
+
+    #! Returns a trusted RestHandler that asked for the socket of its requests, with the REST class of the test
+    private RestHandler getRestHandler(code get_handler) {
+        RestHandler rest();
+        rest.setHandlerSocketView();
+        rest.addClass(new EchoRestClass(get_handler));
+        return rest;
+    }
+
+    private list<auto> dataStreamIntern(RestHandler rest, string name) {
+        server.setHandler(name, "^echo", NOTHING, rest);
+        on_exit server.removeHandler(name);
+
+        list<auto> records = ({"a": 1}, {"b": "two"}, {"c": (3, 4)});
+        int i = 0;
+        list<auto> received = ();
+        DataStreamClient client({"url": "http://localhost:" + port, "http_version": "1.1", "timeout": HangGuard,
+            "protocol": "datastream"});
+        hash<auto> info;
+        client.sendRecvDataStream(auto sub () { return i < records.size() ? records[i++] : NOTHING; },
+            sub (auto v) { received += v; }, sub (*string err) { if (err) { throw "TEST-ERROR", err; } },
+            "POST", "/echo", HangGuard, \info);
+        assertEq(records, received[0..2], "the records are echoed");
+        assertEq(4, received.size(), "the records and the handler's probe");
+        return received;
+    }
+
+    #! the request context and header of an HTTP/1.1 request have no socket; the handler's socket is the request's
+    contextTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /context HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        assertEq("", r.sockets, "no socket in the request context or header");
+        assertEq("Http1HandlerSocket", r.own, "the handler's socket is its request's");
+    }
+
+    #! a stream handler that wants a body with a Content-Length as a stream gets it in parts, each byte once, read
+    #! through the socket of its request for the part that the server did not read before the dispatch (qore#7308);
+    #! the socket gives no data after the body
+    streamBodyTest(int size) {
+        Socket c = connect();
+        on_exit c.close();
+        c.send(sprintf("POST /stream HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/octet-stream\r\n"
+            "Content-Length: %d\r\n\r\n", size));
+        c.send(strmul("x", size).toBinary());
+        c.send("GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        assertEq("0", r.ctor, "no body in the constructor");
+        assertEq(string((size + BodyStreamPartSize - 1) / BodyStreamPartSize), r.parts, "the body in parts");
+        assertEq(string(size), r.bytes, "each byte once");
+        assertEq("0", r.recv, "the socket of the request gives no data after the body");
+        assertEq("served second", readResponse(c), "the next request is served");
+    }
+
+    #! a read through the socket of the request gives no more than the rest of its body, never the next request
+    streamGrabTest() {
+        int size = DefaultBodyStreamThreshold * 2;
+        Socket c = connect();
+        on_exit c.close();
+        c.send(sprintf("POST /stream-grab HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/octet-stream\r\n"
+            "Content-Length: %d\r\n\r\n", size));
+        c.send(strmul("x", size).toBinary());
+        c.send("GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        # the first part was given by the server's reader; the handler read the rest of the body
+        assertEq(size - BodyStreamPartSize, stream_handler.grabbed.get(HangGuard), "the rest of the body only");
+    }
+
+    #! a sandboxed handler cannot abort the connection of its request, which then serves the next request
+    sandboxedAbortTest() {
+        Program p = getTenantProgram();
+        Queue entered();
+        Queue release();
+        server.setHandler("tenant", "^abort", NOTHING, p.callFunction("get_http_handler", entered, release));
+        on_exit server.removeHandler("tenant");
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /abort HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.function);
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.method);
+        c.send("GET /after HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served after", readResponse(c), "the connection serves the next request");
+    }
+
+    #! the server's target gets the connection's own socket with the information of a request, and aborts a
+    #! request of a sandboxed handler with it, also when the abort runs for the tenant
+    targetAbortTest() {
+        Program p = getTenantProgram();
+        Queue entered();
+        Queue release();
+        RecordingServer srv();
+        on_exit delete srv;
+        srv.setHandler("tenant", "", NOTHING, p.callFunction("get_http_handler", entered, release));
+        srv.setDefaultHandler("tenant", p.callFunction("get_http_handler", entered, release));
+        int srv_port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        srv.waitForAsyncIo();
+
+        Socket c();
+        c.connect("localhost:" + srv_port, HangGuard);
+        on_exit c.close();
+        c.send("GET /hold HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        entered.get(HangGuard);
+        hash<HttpServerAsyncIo::HttpConnectionInfo> info = srv.recording.requests.get(HangGuard);
+        assertEq("Socket", info.sock.className(), "the target gets the connection's own socket");
+        assertThrows("HTTP-HANDLER-SOCKET-ERROR", \http_abort_connection(), info.sock,
+            "the connection's own socket is not a handler's");
+        assertThrows("HTTP-HANDLER-SOCKET-ERROR", \http_abort_connection(), c, "a client socket is not a handler's");
+        assertEq(c.getSocketInfo(False).port, info.sock.getPeerInfo(False).port, "the request's connection");
+        # the abort of a framework's drain (HTTP/1.1: the connection is closed), run on behalf of the tenant
+        Socket sock = info.sock;
+        p.callFunction("run_code", sub () { sock.close(); });
+        assertThrows("SOCKET-CLOSED", \c.readHTTPHeader(), HangGuard, "the client sees the connection closed");
+        release.push(True);
+
+        # the server serves another connection
+        Socket c2();
+        c2.connect("localhost:" + srv_port, HangGuard);
+        on_exit c2.close();
+        c2.send("GET /next HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served next", readResponse(c2));
+    }
+
+    #! the application code of an HTTP/1.1 WebSocket connection gets no socket
+    webSocketTest() {
+        HttpServer srv(<HttpServerOptionInfo>{});
+        on_exit delete srv;
+        ScanWebSocketHandler ws();
+        srv.setHandler("ws", "^ws", NOTHING, ws);
+        int srv_port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        srv.waitForAsyncIo();
+        WebSocketClient wsc(sub (*data msg) {}, {"url": "ws://localhost:" + srv_port + "/ws"});
+        wsc.connect();
+        on_exit wsc.disconnect();
+        hash<auto> scan = ws.scans.get(HangGuard);
+        assertEq((), scan.sockets, "no socket in the request context or header of the connection");
+        assertEq("1.1", scan.version);
+    }
+
+    #! http_abort_connection() ends the stream of an HTTP/2 or HTTP/3 request; another request of the same connection
+    #! in progress completes
+    streamAbortTest(string protocol) {
+        HttpServer srv(<HttpServerOptionInfo>{});
+        on_exit delete srv;
+        HoldHandler hold();
+        # a held request ends before the server is deleted, also when the test fails
+        on_exit hold.release.push(True);
+        srv.setHandler("hold", "^hold", NOTHING, hold);
+        srv.setHandler("probe", "", NOTHING, probe);
+        srv.setDefaultHandler("probe", probe);
+        int tls_port = srv.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        }).port;
+        srv.waitForAsyncIo();
+
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": protocol,
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+        on_exit delete mgr;
+        string url = sprintf("https://localhost:%d/", tls_port);
+        # another request of the same connection, in progress while the handler aborts its own stream
+        Queue other_result();
+        background sub () {
+            try {
+                other_result.push(mgr.request(url, "GET", "/hold").body);
+            } catch (hash<ExceptionInfo> ex) {
+                other_result.push(ex.err);
+            }
+        }();
+        hold.entered.get(HangGuard);
+        assertEq("http2=" + (protocol == "h2" ? "True" : "False"), mgr.request(url, "GET", "/proto").body,
+            "the probe's request");
+        assertEq("mark=METHOD-DOES-NOT-EXIST has=METHOD-DOES-NOT-EXIST",
+            mgr.request(url, "GET", "/stream-statics").body, "no method changes the server's state of the request");
+        *hash<ExceptionInfo> err;
+        try {
+            mgr.request(url, "GET", "/abort-stream");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        assertEq(Type::Hash, err.type(), "the request's stream is ended without its response");
+        hold.release.push(True);
+        assertEq("held", other_result.get(HangGuard), "the other request of the connection completes");
+        assertEq(protocol == "h2" ? "http2=True" : "http2=False", mgr.request(url, "GET", "/proto").body,
+            "the next request is served");
+    }
+
+    #! the socket refuses a response header without valid framing, a framing field in a complete response, raw bytes
+    #! before a header, a protocol switch, and a send whose length is not known
+    framingTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /framing HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        foreach string k in (("bad0", "bad1", "bad2", "bad3", "bad4", "bad5", "bad6", "full_te", "raw_first",
+                "upgrade", "from_stream")) {
+            assertEq("HTTP-HANDLER-SOCKET-ERROR", r{k}, k);
+        }
+        c.send("GET /after HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served after", readResponse(c), "the connection serves the next request");
+    }
+
+    #! the bytes of a response with a Content-Length are counted: a send past it is refused
+    lengthResponseTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /length HTTP/1.1\r\nHost: localhost\r\n\r\nGET /after HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("0123456789", readResponse(c));
+        assertEq("served after", readResponse(c), "the next request is served");
+    }
+
+    #! a chunked response is sent with the socket's chunked framing only
+    chunkedResponseTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /chunked-response HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> h = c.readHTTPHeader(HangGuard);
+        assertEq("chunked", h."transfer-encoding");
+        assertEq("chunked HTTP-HANDLER-SOCKET-ERROR", c.readHTTPChunkedBody(HangGuard).body);
+        c.send("GET /after HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served after", readResponse(c), "the connection serves the next request");
+    }
+
+    #! a response that the handler sent is not followed by the one that it returns
+    unmarkedResponseTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /unmarked HTTP/1.1\r\nHost: localhost\r\n\r\nGET /after HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("the handler's", readResponse(c));
+        assertEq("served after", readResponse(c), "the next response is the next request's");
+    }
+
+    #! a response that the handler did not complete closes the connection
+    incompleteResponseTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /incomplete HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> h = c.readHTTPHeader(HangGuard);
+        assertEq("10", h."content-length");
+        assertEq("012", c.recv(3, HangGuard));
+        assertThrows("SOCKET-CLOSED", \c.recv(), (1, HangGuard), "the connection is closed");
+    }
+
+    #! interim responses come before the final response, which the server sends
+    interimTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /interim HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> h = c.readHTTPHeader(HangGuard);
+        assertEq(103, h.status_code);
+        h = c.readHTTPHeader(HangGuard);
+        assertEq(100, h.status_code);
+        h = c.readHTTPHeader(HangGuard);
+        assertEq(200, h.status_code);
+        assertEq("final", c.recv(h."content-length".toInt(), HangGuard));
+
+        # the handler sends the final response after an interim one
+        c.send("GET /interim-own HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        h = c.readHTTPHeader(HangGuard);
+        assertEq(103, h.status_code);
+        assertEq(NOTHING, h."content-length", "no Content-Length in an interim response");
+        h = c.readHTTPHeader(HangGuard);
+        assertEq(200, h.status_code);
+        assertEq("final", c.recv(h."content-length".toInt(), HangGuard));
+    }
+
+    #! the response to a HEAD request is its header
+    headTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("HEAD /head HTTP/1.1\r\nHost: localhost\r\n\r\nGET /after HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> h = c.readHTTPHeader(HangGuard);
+        assertEq(200, h.status_code);
+        assertEq("7", h."content-length");
+        assertEq("served after", readResponse(c), "the next response is the next request's");
+    }
+
+    #! an HTTP/1.0 request gets no chunked or interim response
+    http10Test() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /http10 HTTP/1.0\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.chunked);
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.callback);
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.interim);
+    }
+
+    #! the encoding that a handler sets on its socket does not change the connection's
+    encodingTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /encoding HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r1 = parse(readResponse(c));
+        assertEq("ISO-8859-2", r1.after);
+        c.send("GET /encoding HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r2 = parse(readResponse(c));
+        assertEq(r1.before, r2.before, "the next request's socket has the connection's encoding");
+    }
+
+    #! the socket has no method that changes the server's state of the request
+    staticsTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /statics HTTP/1.1\r\nHost: localhost\r\n\r\nGET /victim HTTP/1.1\r\nHost: localhost\r\n"
+            "Authorization: Basic dmljdGltOnB3\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        foreach string k in (("set_body", "end", "start", "take")) {
+            assertNeq("ok", r{k}, k);
+        }
+        assertEq("\"\"", r.recv, "no data past the body");
+        assertEq("served victim", readResponse(c), "the next request is served");
+    }
+
+    #! a sandboxed handler changes no server state through its socket, by name or through an auto variable
+    sandboxedStaticsTest() {
+        hash<auto> r = tenantRequest("GET /statics HTTP/1.1\r\nHost: localhost\r\n\r\nGET /victim HTTP/1.1\r\n"
+            "Host: localhost\r\nAuthorization: Basic dmljdGltOnB3\r\n\r\n", True);
+        assertNeq("ok", r.call);
+        assertNeq("ok", r.auto);
+        assertNeq("ok", r.end);
+        assertEq("\"\"", r.recv, "no data past the body");
+        assertEq("served victim", r.next, "the next request is served");
+    }
+
+    #! a sandboxed handler cannot send a raw response and then read or answer the next request (keep-alive)
+    sandboxedStealTest() {
+        hash<auto> r = tenantRequest("GET /steal HTTP/1.1\r\nHost: localhost\r\n\r\n", False,
+            "GET /victim HTTP/1.1\r\nHost: localhost\r\nAuthorization: Basic dmljdGltOnB3\r\n\r\n");
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.raw, "a raw response is refused");
+        assertEq("\"\"", r.next, "no data past the body");
+        assertEq("served victim", r.next_response, "the next request is the server's");
+    }
+
+    #! a sandboxed handler cannot forge a response for the next request, pipelined or not
+    sandboxedForgeTest() {
+        foreach bool pipelined in ((True, False)) {
+            Program p = getTenantProgram();
+            Queue entered();
+            Queue release();
+            server.setHandler("tenant", "^forge", NOTHING, p.callFunction("get_http_handler", entered, release));
+            on_exit server.removeHandler("tenant");
+            Socket c = connect();
+            on_exit c.close();
+            string next = "GET /victim HTTP/1.1\r\nHost: localhost\r\n\r\n";
+            c.send("GET /forge HTTP/1.1\r\nHost: localhost\r\n\r\n" + (pipelined ? next : ""));
+            assertEq("ok", readResponse(c), "the handler's own response");
+            if (!pipelined) {
+                c.send(next);
+            }
+            assertEq("served victim", readResponse(c), "the next response is the next request's");
+        }
+    }
+
+    #! a REST stream handler with a timeout streams over HTTP/1.1
+    restTimeoutTest() {
+        list<auto> rv = dataStreamIntern(getRestHandler(auto sub (hash<auto> cx, *hash<auto> ah) {
+            return new TimeoutEchoHandler(cx, ah);
+        }), "echo-timeout");
+        assertEq({"probe": "HTTP-HANDLER-SOCKET-ERROR", "version": "1.1"}, rv.last(), "the handler's socket");
+    }
+
+    #! the socket ends when the request is answered before its handler gets it
+    earlyAnswerTest() {
+        EarlyAnswerHandler early();
+        server.setHandler("early", "^early", NOTHING, early);
+        on_exit server.removeHandler("early");
+        int size = DefaultBodyStreamThreshold * 2;
+        Socket c = connect();
+        on_exit c.close();
+        c.send(sprintf("POST /early HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/octet-stream\r\n"
+            "Content-Length: %d\r\n\r\n", size));
+        c.send(strmul("x", size).toBinary());
+        hash<auto> h = c.readHTTPHeader(HangGuard);
+        assertEq(401, h.status_code);
+        Http1BodyReader reader = early.readers.get(HangGuard);
+        # the request was answered: its reader's socket is ended
+        assertThrows("HTTP-HANDLER-SOCKET-ERROR", \reader.read(), 1s, "the reader of an answered request");
+    }
+
+    #! an HTTP/1.1 event stream, which its handler gets the connection's socket for, ends with its connection: the
+    #! connection serves no other request, as a WebSocket connection
+    sseTest() {
+        HttpServer srv(<HttpServerOptionInfo>{});
+        on_exit delete srv;
+        RegisteringSseHandler sse();
+        srv.setHandler("sse", "^events", NOTHING, sse);
+        srv.setHandler("probe", "^after", NOTHING, probe);
+        int srv_port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        srv.waitForAsyncIo();
+
+        Socket c();
+        c.connect("localhost:" + srv_port, HangGuard);
+        on_exit c.close();
+        # a request after the event stream's request on the connection
+        c.send("GET /events HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n"
+            "GET /after HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> hdr = c.readHTTPHeader(HangGuard);
+        assertEq(200, hdr.status_code);
+        assertEq("close", hdr.connection, "the response ends with the connection");
+        ServerSentEventConnection conn = sse.registered.get(HangGuard);
+        conn.send(<SseMessageInfo>{"event": "end", "data": "done"});
+        string stream = "";
+        while (stream.find("event: end") < 0) {
+            stream += c.recv(-1, HangGuard);
+        }
+        conn.stop();
+        # the stream ends when the server closes the connection; the next request is not answered
+        while (True) {
+            try {
+                string d = c.recv(-1, HangGuard);
+                if (!d.size()) {
+                    break;
+                }
+                stream += d;
+            } catch (hash<ExceptionInfo> ex) {
+                break;
+            }
+        }
+        assertTrue(stream.find("event: end") >= 0, "the event: " + stream);
+        assertEq(-1, stream.find("served after"), "no response to the next request: " + stream);
+    }
+
+    #! a handler declared by sandboxed code gets the socket of its request without asking for it, a trusted handler
+    #! that asked for it gets it, another trusted handler gets the connection's socket; the decision cannot be
+    #! changed by a subclass
+    whichHandlersTest() {
+        Program p = getTenantProgram();
+        Queue entered();
+        Queue release();
+        server.setHandler("tenant", "^class", NOTHING, p.callFunction("get_http_handler", entered, release));
+        on_exit server.removeHandler("tenant");
+        server.setHandler("plain", "^plain", NOTHING, new PlainHandler());
+        on_exit server.removeHandler("plain");
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /class HTTP/1.1\r\nHost: localhost\r\n\r\nGET /plain HTTP/1.1\r\nHost: localhost\r\n\r\n"
+            "GET /elsewhere HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq({"class": "Http1HandlerSocket"}, parse(readResponse(c)), "a sandboxed handler, without asking");
+        assertEq({"class": "Socket"}, parse(readResponse(c)), "a trusted handler that did not ask");
+        c.send("GET /context HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served elsewhere", readResponse(c));
+        assertEq("Http1HandlerSocket", parse(readResponse(c)).own, "a trusted handler that asked");
+
+        # a subclass cannot change the decision
+        Program q(PO_NO_CHILD_PO_RESTRICTIONS);
+        assertThrows("PARSE-EXCEPTION", sub () {
+            q.parse("%modern
+%requires HttpServer
+%requires HttpServerUtil
+class NoView inherits AbstractHttpRequestHandler {
+    bool needsHandlerSocketView() {
+        return False;
+    }
+}
+", "override");
+        }, NOTHING, "the decision is final");
+    }
+
+    #! a trusted RestHandler does not ask for the socket of its requests (it gets the connection's socket, at no cost),
+    #! from any of its constructors, until it asks with setHandlerSocketView(); one declared by sandboxed code gets it
+    #! (see sandboxedDataStreamTest())
+    baseClassesTest() {
+        Logger logger("rest");
+        foreach RestHandler rest in ((new RestHandler(), new RestHandler(NOTHING, new NullRestSchemaValidator()),
+                new RestHandler(logger, NOTHING), new RestHandler(logger, NOTHING, new NullRestSchemaValidator()))) {
+            assertFalse(rest.needsHandlerSocketView(), "a trusted RestHandler");
+            rest.setHandlerSocketView();
+            assertTrue(rest.needsHandlerSocketView(), "a trusted RestHandler that asked");
+        }
+        assertFalse(new PlainHandler().needsHandlerSocketView(), "a trusted handler that does not ask");
+    }
+
+    #! a socket that a handler keeps after its request does not keep the server's objects of the request, whose end
+    #! the server waits for when it is destroyed
+    keptSocketTest() {
+        ProbeHandler keeper();
+        HttpServer srv(<HttpServerOptionInfo>{});
+        srv.setHandler("probe", "", NOTHING, keeper);
+        srv.setDefaultHandler("probe", keeper);
+        int srv_port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        srv.waitForAsyncIo();
+        {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("GET /keep HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            assertEq({"kept": "yes"}, parse(readResponse(c)));
+        }
+        Socket kept = keeper.kept.get(HangGuard);
+        # the server is destroyed while the handler still has the socket of its request
+        Counter destroyed(1);
+        background sub () {
+            on_exit destroyed.dec();
+            delete srv;
+        }();
+        assertEq(0, destroyed.waitForZero(HangGuard), "the server is destroyed");
+        assertFalse(kept.isOpen(), "the kept socket is ended");
+    }
+
+    #! a sandboxed handler's response is not followed by another response when the handler's code raises an exception
+    #! after it: the next request is served
+    sentThenThrowTest() {
+        Program p = getTenantProgram();
+        Queue entered();
+        Queue release();
+        server.setHandler("tenant", "^arm", NOTHING, p.callFunction("get_http_handler", entered, release));
+        on_exit server.removeHandler("tenant");
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /arm HTTP/1.1\r\nHost: localhost\r\n\r\nGET /victim HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("first", readResponse(c), "the handler's response");
+        # the connection is closed after the exception: no other response is sent for the first request, and the
+        # next request is not answered with one
+        string next;
+        try {
+            next = readResponse(c);
+        } catch (hash<ExceptionInfo> ex) {
+            next = ex.err;
+        }
+        assertEq("SOCKET-CLOSED", next, "the connection is closed");
+    }
+
+    #! a handler that a sandboxed Program made when it was parsed, or before it was sandboxed, gets the socket of its
+    #! request
+    earlyHandlerTest() {
+        # made by a static initializer when the Program is parsed, before it is sandboxed
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource, "early");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        AbstractHttpRequestHandler early = p.callFunction("get_early_handler");
+        assertTrue(early.needsHandlerSocketView(), "made at parse time");
+
+        # made before the Program was sandboxed, which happens after the handler was registered
+        Program q(PO_NO_CHILD_PO_RESTRICTIONS);
+        q.parse(TenantSource, "late");
+        Queue entered();
+        Queue release();
+        AbstractHttpRequestHandler before = q.callFunction("get_http_handler", entered, release);
+        server.setHandler("early", "^early", NOTHING, early);
+        on_exit server.removeHandler("early");
+        server.setHandler("before", "^class", NOTHING, before);
+        on_exit server.removeHandler("before");
+        q.setSandboxManager(sm);
+        assertTrue(before.needsHandlerSocketView(), "made before the Program was sandboxed");
+
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /early HTTP/1.1\r\nHost: localhost\r\n\r\nGET /class HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("class=Http1HandlerSocket", readResponse(c), "the handler made at parse time");
+        assertEq("class=Http1HandlerSocket", readResponse(c), "the handler registered before its Program was sandboxed");
+    }
+
+    #! a read of the socket of a request in a thread of the handler that outlives the request holds the server at most
+    #! for the longest timeout of the socket (the server's handler_socket_max_timeout option), also for a read without
+    #! a timeout or with a longer one: the read times out, the connection is closed, and the server serves other
+    #! connections
+    blockedReadTest() {
+        assertThrows("HTTP-SERVER-INIT-ERROR", sub () {
+            HttpServer bad(<HttpServerOptionInfo>{"handler_socket_max_timeout": -1});
+        });
+        Program p = getTenantProgram();
+        Queue entered();
+        Queue release();
+        AbstractHttpRequestHandler handler = p.callFunction("get_http_handler", entered, release);
+        HttpServer srv(<HttpServerOptionInfo>{"handler_socket_max_timeout": 1s});
+        on_exit delete srv;
+        srv.setHandler("tenant", "^(blocked|class)", NOTHING, handler);
+        int srv_port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        srv.waitForAsyncIo();
+
+        foreach string path in (("blocked", "blocked-long")) {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            # a chunked body that never ends
+            c.send("POST /" + path + " HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n"
+                "3\r\nabc\r\n");
+            entered.get(HangGuard);
+            # the response is sent (the read had not started), or the connection is closed, without waiting for the
+            # read
+            string r;
+            try {
+                hash<auto> rh = c.readHTTPHeader(HangGuard);
+                r = c.recv(rh."content-length".toInt(), HangGuard);
+            } catch (hash<ExceptionInfo> ex) {
+                r = "closed";
+            }
+            assertTrue(r == "returned" || r == "closed", path + ": the request ends: " + r);
+            # the thread's read ends at the longest timeout of the socket (SOCKET-TIMEOUT), or when the end of the
+            # request, which waits for it as long, closes the connection's socket (READ-HTTP-CHUNK-ERROR, or another
+            # SOCKET-* error): both take the same time from the start of the read and the end of the request, so that
+            # either can come first
+            string err = cast<object>(handler).ended.get(HangGuard);
+            assertTrue(err =~ /^SOCKET-/ || err == "READ-HTTP-CHUNK-ERROR" || err == "HTTP-HANDLER-SOCKET-ERROR",
+                path + ": the read ends: " + err);
+            assertNeq("ok", err, path + ": the read reads no body that the client did not send");
+
+            Socket c2();
+            c2.connect("localhost:" + srv_port, HangGuard);
+            on_exit c2.close();
+            c2.send("GET /class HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            assertEq("class=Http1HandlerSocket", readResponse(c2), path + ": the server serves another connection");
+        }
+    }
+
+    #! a chunked read of a sandboxed handler in the socket's own encoding gives the connection's socket that encoding
+    #! for the read only: also when the read's callback throws in the middle of the body and when the read times out
+    #! (at the server's handler_socket_max_timeout), the next request's socket has the connection's encoding
+    sandboxedEncodingRestoreTest() {
+        Program p = getTenantProgram();
+        Queue entered();
+        Queue release();
+        AbstractHttpRequestHandler handler = p.callFunction("get_http_handler", entered, release);
+        HttpServer srv(<HttpServerOptionInfo>{"handler_socket_max_timeout": 1s});
+        on_exit delete srv;
+        srv.setHandler("tenant", "^enc-", NOTHING, handler);
+        int srv_port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        srv.waitForAsyncIo();
+
+        string conn_enc;
+        {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("GET /enc-report HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            conn_enc = parse(readResponse(c)).encoding;
+        }
+        assertNeq("ISO-8859-2", conn_enc);
+
+        # the callback throws in the middle of the body; the read times out in the middle of the body (the client
+        # sends the rest of the body after it)
+        foreach string path in (("enc-throw", "enc-timeout")) {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("POST /" + path + " HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n"
+                "1\r\na\r\n" + (path == "enc-throw" ? "1\r\nb\r\n0\r\n\r\n" : ""));
+            string err = cast<object>(handler).ended.get(HangGuard);
+            assertEq(path == "enc-throw" ? "TENANT-ERROR" : "SOCKET-TIMEOUT", err, path + ": the read's error");
+            # the connection's own socket has its encoding again
+            Socket view = cast<object>(handler).last;
+            Socket real = cast<NormalMember>(Class::getClass(view).getMember("real")).getValue(view);
+            assertEq(conn_enc, real.getEncoding(), path + ": the connection's socket has its encoding again");
+            if (path == "enc-timeout") {
+                c.send("1\r\nb\r\n0\r\n\r\n");
+            }
+            # the rest of the body is not read as the next request: the connection closes after the response
+            hash<auto> h = c.readHTTPHeader(HangGuard);
+            assertEq("err=" + err, c.recv(h."content-length".toInt(), HangGuard), path);
+            assertEq("close", h.connection.lwr(), path + ": the connection closes");
+            c.send("GET /enc-report HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            string rest = "";
+            try {
+                rest = c.recv(-1, HangGuard).toString();
+            } catch (hash<ExceptionInfo> ex) {
+                rest = ex.err;
+            }
+            assertFalse(rest =~ /HTTP\/1.1 [0-9]/, path + ": no response to a request after the body: " + rest);
+        }
+    }
+
+    #! a RestHandler (a class of a module) that the tenant's code made before its Program was sandboxed, with the
+    #! tenant's REST class, gets the socket of its request: the Program of the REST class is sandboxed; as does a
+    #! trusted RestHandler to which a REST class of a sandboxed Program is added after it was registered
+    restTenantClassTest() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource, "tenant");
+        RestHandler early = p.callFunction("get_class_rest_handler");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        assertFalse(SandboxManager::isFromSandboxedProgram(early), "the RestHandler's class is the module's");
+        assertTrue(early.needsHandlerSocketView(), "the RestHandler runs code of a sandboxed Program");
+
+        RestHandler trusted();
+        assertFalse(trusted.needsHandlerSocketView(), "a trusted RestHandler without classes of sandboxed code");
+
+        foreach hash<auto> i in (({"name": "early", "rest": early}, {"name": "late", "rest": trusted})) {
+            server.setHandler("rest-" + i.name, "^sockclass", NOTHING, i.rest);
+            on_exit server.removeHandler("rest-" + i.name);
+            if (i.name == "late") {
+                # added after the handler was registered
+                trusted.addClass(p.callFunction("get_class_rest"));
+            }
+            Socket c = connect();
+            on_exit c.close();
+            c.send("GET /sockclass HTTP/1.1\r\nHost: localhost\r\n\r\nGET /victim HTTP/1.1\r\nHost: localhost\r\n"
+                "Authorization: Basic dmljdGltOnB3\r\n\r\n");
+            assertEq("\"Http1HandlerSocket\"", readResponse(c), i.name + ": the REST class's socket");
+            assertEq("served victim", readResponse(c), i.name + ": the next request is the server's");
+        }
+    }
+
+    #! a trusted RestHandler that has the connection's socket does not hand the request to a REST class of a sandboxed
+    #! Program anywhere on its dispatch path: below a trusted container class, returned by a trusted class's
+    #! subClassImpl(), or added by the tenant after the server decided the socket of the request; the request is
+    #! refused and the connection closed
+    restDispatchTest() {
+        Program p = getTenantProgram();
+
+        # below a trusted container class
+        RestHandler nested();
+        ContainerRestClass cont();
+        cont.addClass(p.callFunction("get_class_rest"));
+        nested.addClass(cont);
+        assertFalse(nested.needsHandlerSocketView(), "only the container is hosted at the top level");
+        restRefused(nested, "/c/sockclass", "below a trusted container class");
+
+        # returned by a trusted class's subClassImpl()
+        RestHandler dynamic();
+        dynamic.addClass(new DynamicRestClass(auto sub () { return p.callFunction("get_class_rest"); }));
+        restRefused(dynamic, "/d/sockclass", "returned by subClassImpl()");
+
+        # added by the tenant between the server's decision and the dispatch
+        GateAuthenticator gate();
+        RestHandler late(gate);
+        restRefused(late, "/sockclass", "added after the server's decision", sub () {
+            p.callFunction("add_class_rest", late);
+        }, gate);
+    }
+
+    private restRefused(RestHandler rest, string path, string what, *code mid, *GateAuthenticator gate) {
+        server.setHandler("rest-dispatch", "^(c|d|sockclass)", NOTHING, rest);
+        on_exit server.removeHandler("rest-dispatch");
+        Socket c = connect();
+        on_exit c.close();
+        if (gate) {
+            gate.armed = True;
+        }
+        c.send("GET " + path + " HTTP/1.1\r\nHost: localhost\r\n\r\nGET /victim HTTP/1.1\r\nHost: localhost\r\n"
+            "Authorization: Basic dmljdGltOnB3\r\n\r\n");
+        if (gate) {
+            gate.at.get(HangGuard);
+            mid();
+            gate.go.push(True);
+        }
+        hash<auto> h = c.readHTTPHeader(HangGuard);
+        string body = c.recv(h."content-length".toInt(), HangGuard);
+        assertEq(500, h.status_code, what + ": refused: " + body);
+        assertRegex("refused", body, what);
+        assertEq("close", h.connection.lwr(), what + ": the connection closes");
+        string rest_data = "";
+        while (True) {
+            try {
+                binary b = c.recvBinary(-1, HangGuard);
+                if (!b) {
+                    break;
+                }
+                rest_data += b.toString();
+            } catch (hash<ExceptionInfo> ex) {
+                break;
+            }
+        }
+        assertTrue(rest_data !~ /HTTP\/1.1 [0-9]/, what + ": the next request is not answered: " + rest_data);
+    }
+
+    #! a send of a thread of the handler that outlives its request, whose callback does not return, holds the server
+    #! at most for the longest timeout of the socket: the connection is shut down and closed, and the send fails
+    blockedCallbackTest() {
+        Program p = getTenantProgram();
+        Queue entered();
+        Queue release();
+        AbstractHttpRequestHandler handler = p.callFunction("get_http_handler", entered, release);
+        HttpServer srv(<HttpServerOptionInfo>{"handler_socket_max_timeout": 1s});
+        on_exit delete srv;
+        srv.setHandler("tenant", "^(blocked-cb|class)", NOTHING, handler);
+        int srv_port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        srv.waitForAsyncIo();
+        Socket c();
+        c.connect("localhost:" + srv_port, HangGuard);
+        on_exit c.close();
+        c.send("GET /blocked-cb HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        # the connection ends without waiting for the callback (the test releases it only afterwards)
+        string rest = "";
+        string end;
+        while (True) {
+            try {
+                binary b = c.recvBinary(-1, HangGuard);
+                if (!b) {
+                    end = "closed";
+                    break;
+                }
+                rest += b.toString();
+            } catch (hash<ExceptionInfo> ex) {
+                end = ex.err;
+                break;
+            }
+        }
+        assertNeq("SOCKET-TIMEOUT", end, "the connection ends: " + rest);
+        assertTrue(rest !~ /returned/, "no response after the incomplete one: " + rest);
+        release.push(True);
+        assertNeq("ok", cast<object>(handler).ended.get(HangGuard), "the send fails");
+        Socket c2();
+        c2.connect("localhost:" + srv_port, HangGuard);
+        on_exit c2.close();
+        c2.send("GET /class HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("class=Http1HandlerSocket", readResponse(c2), "the server serves another connection");
+    }
+
+    #! a handler that returns reply_sent without sending a response through the socket of its request gets the
+    #! server's error response, and the connection closes
+    fakeSentTest() {
+        Program p = getTenantProgram();
+        Queue entered();
+        Queue release();
+        server.setHandler("tenant", "^fake-sent", NOTHING, p.callFunction("get_http_handler", entered, release));
+        on_exit server.removeHandler("tenant");
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /fake-sent HTTP/1.1\r\nHost: localhost\r\n\r\nGET /victim HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> h = c.readHTTPHeader(HangGuard);
+        assertEq(500, h.status_code, "no response was sent");
+        assertEq("close", h.connection.lwr());
+        assertEq("the handler sent no response", c.recv(h."content-length".toInt(), HangGuard));
+        string rest;
+        try {
+            rest = c.recv(-1, HangGuard).toString();
+        } catch (hash<ExceptionInfo> ex) {
+            rest = ex.err;
+        }
+        assertTrue(rest !~ /HTTP\/1.1 [0-9]/, "the next request is not answered as the first: " + rest);
+    }
+
+    #! a response without a body (HEAD, 204, 304) has no Transfer-Encoding, and a 204 or 304 response no
+    #! Content-Length but 0
+    bodilessFramingTest() {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /bodiless HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> h = c.readHTTPHeader(HangGuard);
+        assertEq(204, h.status_code);
+        c.send("HEAD /bodiless-head HTTP/1.1\r\nHost: localhost\r\n\r\nGET /after HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        h = c.readHTTPHeader(HangGuard);
+        assertEq(200, h.status_code);
+        assertEq(NOTHING, h."transfer-encoding");
+        assertEq("served after", readResponse(c));
+        hash<auto> r = probe.results.get(HangGuard);
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.te_204, "a 204 response with chunked framing");
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.cl_304, "a 304 response with a Content-Length");
+        assertEq("ok", r.cl0_204, "a 204 response with a Content-Length of 0");
+        r = probe.results.get(HangGuard);
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", r.te_head, "the response to a HEAD request with chunked framing");
+    }
+
+    #! a socket handler cannot switch the protocol of a request that does not ask for it
+    upgradeTest() {
+        Program p = getTenantProgram();
+        server.setHandler("tenant", "^switch", NOTHING, p.callFunction("get_socket_handler"));
+        on_exit server.removeHandler("tenant");
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /switch HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> h = c.readHTTPHeader(HangGuard);
+        assertEq(500, h.status_code, "no protocol switch for a request that does not ask for one");
+        assertEq("the request does not ask for a protocol upgrade", c.recv(h."content-length".toInt(), HangGuard));
+    }
+
+    #! a sandboxed handler cannot reach the server's state of its request: not through the members of its socket, by
+    #! name or through reflection, nor through the server's classes by name or the objects that it gets
+    sandboxedReachTest() {
+        Program p = getTenantProgram();
+        Queue entered();
+        Queue release();
+        server.setHandler("tenant", "^reach", NOTHING, p.callFunction("get_http_handler", entered, release));
+        on_exit server.removeHandler("tenant");
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /reach HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> r = parse(readResponse(c));
+        foreach string m in (("rh", "real", "gen")) {
+            assertNeq("ok", r{"name." + m}, "member " + m + " by name");
+            assertEq("REFLECTION-ACCESS-ERROR", r{"get." + m}, "member " + m + " read through reflection");
+            assertEq("REFLECTION-ACCESS-ERROR", r{"set." + m}, "member " + m + " written through reflection");
+        }
+        foreach string cls in (("HttpServer::Priv::RequestHelper", "HttpServer::Priv::HandlerSocketState",
+                "Priv::RequestHelper", "Priv::HandlerSocketState")) {
+            assertNeq("ok", r{"class." + cls}, "class " + cls + " by name");
+        }
+        list<string> objs = r.objects.split(",");
+        assertTrue(objs.size() > 1, "the context, the header and the listener have objects: " + r.objects);
+        foreach string cls in (objs) {
+            assertFalse(cls == "RequestHelper" || cls == "HandlerSocketState" || cls == "HttpListener",
+                "the handler gets no object of the server's state: " + cls);
+        }
+        # the server serves the next request on the connection
+        c.send("GET /victim HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served victim", readResponse(c));
+    }
+
+    #! the server sends the header of a sandboxed handler's event stream, with Connection: close, before the handler
+    #! gets the connection's socket, and only for a request that accepts an event stream
+    sandboxedSseTest() {
+        Program p = getTenantProgram();
+        AbstractHttpRequestHandler sse = p.callFunction("get_sse_handler");
+        HttpServer srv(<HttpServerOptionInfo>{});
+        on_exit delete srv;
+        srv.setHandler("sse", "^events", NOTHING, sse);
+        int srv_port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        srv.waitForAsyncIo();
+
+        # a request that does not accept an event stream
+        {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("GET /events HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            hash<auto> h = c.readHTTPHeader(HangGuard);
+            assertEq(406, h.status_code, "an event stream for a request that does not accept one");
+        }
+
+        # the handler's own response comes after the server's header, and the client sends no next request
+        Socket c();
+        c.connect("localhost:" + srv_port, HangGuard);
+        on_exit c.close();
+        c.send("GET /events HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n");
+        hash<auto> h = c.readHTTPHeader(HangGuard);
+        assertEq(200, h.status_code);
+        assertEq("text/event-stream", h."content-type", "the server's header comes first");
+        assertEq("close", h.connection, "the stream ends with the connection");
+        # the handler's attempt to read a next request finds none: the client sends none on the stream's connection
+        string read = cast<object>(sse).results.get(HangGuard);
+        # nothing is read: the socket of the request, which ended, raises an error, or no data comes (qore#7376)
+        assertTrue(read == "\"\"" || read !~ /^"/, "no next request to read: " + read);
+
+        # the handler's framing fields and connection option, in any case, are not in the server's header
+        Socket c3();
+        c3.connect("localhost:" + srv_port, HangGuard);
+        on_exit c3.close();
+        c3.send("GET /events-framed HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n");
+        h = c3.readHTTPHeader(HangGuard);
+        assertEq(200, h.status_code);
+        assertEq(NOTHING, h."content-length", "no Content-Length");
+        assertEq(NOTHING, h."transfer-encoding", "no Transfer-Encoding");
+        assertEq("close", h.connection, "only the server's Connection field");
+        cast<object>(sse).results.get(HangGuard);
+    }
+
+    #! the server sets up the HTTP/1.1 event stream of a handler that gets the socket of its request without giving
+    #! it, its connection or its event source the connection's socket or the stream's poll operation; the events
+    #! still reach the client (qore#7376)
+    sandboxedSseNoSocketTest() {
+        Program p = getTenantProgram();
+        object sse = p.callFunction("get_sse_socket_handler");
+        HttpServer srv(<HttpServerOptionInfo>{});
+        on_exit delete srv;
+        srv.setHandler("sse", "^events", NOTHING, cast<AbstractHttpRequestHandler>(sse));
+        int srv_port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        srv.waitForAsyncIo();
+
+        # the handler's connection
+        {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("GET /events HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n");
+            hash<auto> h = c.readHTTPHeader(HangGuard);
+            assertEq(200, h.status_code);
+            assertEq("close", h.connection, "the stream ends with the connection");
+            assertEq("conn=Http1HandlerSocket", sse.results.get(HangGuard),
+                "the connection is made with the socket of the request, and the handler's setup is not called");
+            assertEq("registered op=none op2=none sock=none sock2=none", sse.results.get(HangGuard),
+                "no poll operation and no socket from the connection");
+            ServerSentEventConnection conn = sse.conns.get(HangGuard);
+            conn.send(<SseMessageInfo>{"event": "end", "data": "done"});
+            string stream = "";
+            while (stream.find("event: end") < 0) {
+                stream += c.recv(-1, HangGuard);
+            }
+            # the handler serializes the data as JSON
+            assertTrue(stream.find("data: \"done\"") >= 0, "the event reaches the client: " + stream);
+            conn.stop();
+        }
+
+        # the handler's event source
+        {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("GET /events-source HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n");
+            hash<auto> h = c.readHTTPHeader(HangGuard);
+            assertEq(200, h.status_code);
+            list<string> got = (sse.results.get(HangGuard), sse.results.get(HangGuard), sse.results.get(HangGuard));
+            assertEq(("conn=Http1HandlerSocket", "registered op=none op2=none sock=none sock2=none",
+                "source op=none op2=none sock=none sock2=none"), got,
+                "no poll operation and no socket from the connection or the event source's stream");
+            string stream = "";
+            while (stream.find("from the source") < 0) {
+                stream += c.recv(-1, HangGuard);
+            }
+            assertTrue(stream.find("event: source") >= 0, "the source's event reaches the client: " + stream);
+            sse.conns.get(HangGuard).stop();
+        }
+        assertEq(0, sse.results.size(), "nothing else was recorded");
+
+        # a socket handler that cannot set up a stream without the connection's socket gets no stream: the
+        # connection is closed after the server's header, and the handler's own setup is not called
+        object raw = p.callFunction("get_raw_sse_handler");
+        srv.setHandler("raw", "^raw", NOTHING, cast<AbstractHttpRequestHandler>(raw));
+        {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("GET /raw HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n");
+            hash<auto> h = c.readHTTPHeader(HangGuard);
+            assertEq(200, h.status_code, "the server's header of the stream");
+            assertEq("", readToClose(c), "the connection is closed with no stream and no other response");
+            assertEq(0, raw.results.size(), "the handler's own setup with a socket is not called");
+        }
+
+        # a hook of the handler that fails after the connection was registered: the connection is deregistered and
+        # closed, and no other response follows the server's header
+        {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("GET /events-throw HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n");
+            hash<auto> h = c.readHTTPHeader(HangGuard);
+            assertEq(200, h.status_code, "the server's header of the stream");
+            assertEq("", readToClose(c), "the connection is closed with no stream and no other response");
+            list<string> got = (sse.results.get(HangGuard), sse.results.get(HangGuard), sse.results.get(HangGuard));
+            assertEq(("conn=Http1HandlerSocket", "registered op=none op2=none sock=none sock2=none", "deregistered"),
+                got, "the connection that the handler registered is deregistered");
+        }
+
+        # a handler that is not a socket handler: its event source gets a stream that gives no poll operation
+        object source = p.callFunction("get_source_handler");
+        srv.setHandler("source", "^source", NOTHING, cast<AbstractHttpRequestHandler>(source));
+        {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("GET /source HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n");
+            hash<auto> h = c.readHTTPHeader(HangGuard);
+            assertEq(200, h.status_code);
+            assertEq("source op=none op2=none sock=none sock2=none", source.results.get(HangGuard),
+                "no poll operation and no socket from the event source's stream");
+            string stream = "";
+            while (stream.find("from the source") < 0) {
+                stream += c.recv(-1, HangGuard);
+            }
+            assertTrue(stream.find("event: source") >= 0, "the source's event reaches the client: " + stream);
+        }
+
+        # code of a subclass cannot take the poll operation from a stream that gives none
+        Program q(PO_NO_CHILD_PO_RESTRICTIONS);
+        *hash<ExceptionInfo> err;
+        try {
+            q.parse("%modern
+%requires HttpServerAsyncIo
+class Peek inherits HttpServerAsyncIo::Http1SseConnection {
+    static *object peek(HttpServerAsyncIo::Http1SseConnection c) {
+        return c.poll_op;
+    }
+}
+", "peek");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        assertEq("PARSE-EXCEPTION", err.err, "a subclass cannot access the poll operation");
+        assertRegex("poll_op", err.desc ?? "", "the error is the access to the poll operation");
+    }
+
+    #! Reads a connection until the peer closes it and returns what was read; a read timeout is a failure
+    private string readToClose(Socket c) {
+        string rv = "";
+        while (True) {
+            string d;
+            try {
+                d = c.recv(-1, HangGuard);
+            } catch (hash<ExceptionInfo> ex) {
+                assertFalse(ex.err == "SOCKET-TIMEOUT", "the connection is closed: " + ex.err);
+                break;
+            }
+            if (!d.size()) {
+                break;
+            }
+            rv += d;
+        }
+        return rv;
+    }
+
+    #! Sends requests to the tenant's HTTP handler and returns its first response's results, with the next response
+    private hash<auto> tenantRequest(string req, bool pipelined, *string next) {
+        Program p = getTenantProgram();
+        Queue entered();
+        Queue release();
+        server.setHandler("tenant", "^(statics|steal)", NOTHING, p.callFunction("get_http_handler", entered, release));
+        on_exit server.removeHandler("tenant");
+        Socket c = connect();
+        on_exit c.close();
+        c.send(req);
+        hash<auto> r = parse(readResponse(c));
+        if (next) {
+            c.send(next);
+            r.next_response = readResponse(c);
+        } else if (pipelined) {
+            r.next = readResponse(c);
+        }
+        return r;
+    }
+
+    #! Returns a sandboxed Program with the tenant's handlers
+    private Program getTenantProgram() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    private Socket connect() {
+        Socket c();
+        c.connect("localhost:" + port, HangGuard);
+        return c;
+    }
+
+    #! reads a response with a Content-Length and returns its body
+    private static string readResponse(Socket c) {
+        hash<auto> h = c.readHTTPHeader(HangGuard);
+        int len = h."content-length".toInt();
+        return len ? c.recv(len, HangGuard) : "";
+    }
+
+    #! parses the "key=value" lines of a probe's response
+    private static hash<auto> parse(string body) {
+        hash<auto> r;
+        foreach string line in (body.split("\n")) {
+            (*string k, *string v) = (line =~ x/^([^=]+)=(.*)$/s);
+            if (exists k) {
+                r{k} = v ?? "";
+            }
+        }
+        return r;
+    }
+}
+
+#! Echoes the DataStream records of its request
+class EchoHandler inherits AbstractDataStreamRequestHandler {
+    private {
+        list<auto> records = ();
+        int sent = 0;
+        string probe;
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah) : AbstractDataStreamRequestHandler(cx, ah) {
+        probe = try_it(sub () { cx.socketobject.readHTTPHeader(1s); });
+    }
+
+    private nothing recvDataImpl(auto data) {
+        records += data;
+    }
+
+    private auto sendDataImpl() {
+        if (sent < records.size()) {
+            return records[sent++];
+        }
+        if (sent++ == records.size()) {
+            return {"probe": probe, "version": cx.hdr.http_version};
+        }
+    }
+}

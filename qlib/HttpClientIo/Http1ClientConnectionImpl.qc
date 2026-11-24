@@ -306,6 +306,8 @@ public class Http1ClientConnection inherits HttpClientConnection {
 
     #! Closes the connection (protocol-specific)
     closeImpl(*timeout close_timeout) {
+        # a close whose caller gave no reason (qore#7443)
+        setCloseReason("closed");
         self.setClosed();
         *AsyncSocketIoController ctl;
         {

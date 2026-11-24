@@ -108,6 +108,7 @@ module AwsS3DataProvider {
             "short_desc": "List the buckets owned by the account",
             "desc": "Lists every bucket owned by the authenticated account, with the date each was created.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Buckets",),
             "output_type": AwsS3ListBucketsResponseDataType,
         });
@@ -149,6 +150,7 @@ module AwsS3DataProvider {
                 "A listing is capped at `1000` keys; when the response is `truncated`, pass its "
                 "`next_continuation_token` back in `continuation_token` to retrieve the following page.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Objects",),
             "output_type": AwsS3ListObjectsResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -171,6 +173,7 @@ module AwsS3DataProvider {
                 "Clear `include_content` to check an object's size, type, or modification time without "
                 "transferring it, which is much cheaper for large objects.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Objects",),
             "output_type": AwsS3GetObjectResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -192,6 +195,7 @@ module AwsS3DataProvider {
             "desc": "Downloads an object's content along with its metadata.\n\n"
                 "Use `get-object` with `include_content` cleared instead when only the metadata is needed.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Objects",),
             "output_type": AwsS3GetObjectResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -385,6 +389,7 @@ module AwsS3DataProvider {
                 "Object tags drive lifecycle rules, access policies, and cost allocation, so they are how a "
                 "bucket is organized without changing any key.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Objects",),
             "output_type": AwsS3ObjectTaggingResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -434,6 +439,7 @@ module AwsS3DataProvider {
                 "A listing is paginated; when `truncated` is set, pass `next_key_marker` and "
                 "`next_version_id_marker` back to retrieve the following page.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Objects",),
             "output_type": AwsS3ListObjectVersionsResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(

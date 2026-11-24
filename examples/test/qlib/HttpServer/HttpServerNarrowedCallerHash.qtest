@@ -66,10 +66,10 @@ class HttpServerNarrowedCallerHashTest inherits QUnit::Test {
         on_exit server.stop();
         server.setHandler("h", "", NOTHING, new NarrowedHeaderHandler());
         server.setDefaultHandler("h", new NarrowedHeaderHandler());
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
 
         foreach string http_version in ("1.1", "1.0") {
-            HTTPClient hc({"url": "http://localhost:" + port, "http_version": http_version});
+            HTTPClient hc({"url": "http://127.0.0.1:" + port, "http_version": http_version});
             foreach string path in ("int", "none", "stream") {
                 hash<auto> resp = hc.send(NOTHING, "GET", "/" + path);
                 string msg = sprintf("HTTP/%s %s", http_version, path);
@@ -97,7 +97,7 @@ class HttpServerNarrowedCallerHashTest inherits QUnit::Test {
             "debug": True,
         });
         on_exit server.stop();
-        hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
+        hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
         HttpListener listener = server.getListener(linfo.id);
 
         # a connected socket pair

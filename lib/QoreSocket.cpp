@@ -886,6 +886,55 @@ static int qore_socket_check_sse_event_size(const QoreString& event_data, int64 
     return 0;
 }
 
+//! Raises the exception of a read whose data could not be made a string, as the memory could not be allocated
+/** The size of the data read can come from the peer, so the read fails without ending the process (issue 7417)
+*/
+static void qore_socket_raise_recv_string_memory_error(ExceptionSink* xsink, size_t len) {
+    xsink->raiseException("SOCKET-RECV-ERROR", "the memory for a string of the " QLLD " bytes received could not "
+        "be allocated", (int64)len);
+}
+
+//! reallocates the buffer of the text of a header received for its NUL terminator, as q_realloc() does: the buffer
+//! is freed if the memory cannot be allocated
+/** @param site where the header is read, for the dbg_fail_http_header_text_alloc() test hook
+*/
+static void* qore_socket_header_text_realloc(void* buf, size_t size, const char* site) {
+#ifdef DEBUG
+    // test hook: the allocation fails
+    if (qore_dbg_http_header_text_alloc_must_fail(site)) {
+        free(buf);
+        return nullptr;
+    }
+#endif
+    return q_realloc(buf, size);
+}
+
+int qore_socket_append_http_body(ExceptionSink* xsink, BinaryNode* body_bin, QoreString* body_str,
+        const void* data, size_t size) {
+    if (!size) {
+        return 0;
+    }
+    if (body_bin) {
+        size_t old_size = body_bin->size();
+        // the body is unchanged if the memory cannot be allocated
+        body_bin->append(data, size);
+        if (body_bin->size() == old_size + size) {
+            return 0;
+        }
+    } else {
+        // the memory for the data and the terminator is allocated first, so that the concatenation does not grow the
+        // string
+        if (size <= SIZE_MAX - body_str->size() - 1
+            && !qore_string_private::get(*body_str)->tryGrow(body_str->size() + size + 1)) {
+            body_str->concat(static_cast<const char*>(data), size);
+            return 0;
+        }
+    }
+    xsink->raiseException("SOCKET-RECV-ERROR", "the memory for an HTTP message body of " QLLD " bytes could not be "
+        "allocated", (int64)((body_bin ? body_bin->size() : body_str->size()) + size));
+    return -1;
+}
+
 static int qore_socket_close_private_from_controller(qore_socket_private* priv) {
     priv->prepareForClose();
     return priv->close();
@@ -945,6 +994,10 @@ public:
         priv->deref();
     }
 
+    DLLLOCAL qore_socket_private* getPollSocket() const override {
+        return priv;
+    }
+
     DLLLOCAL virtual int getPollableDescriptor() const override {
         return priv->sock;
     }
@@ -994,8 +1047,9 @@ public:
     }
 
 private:
+    //! Closes the socket; a socket with no descriptor gets none from a connection being made (qore#7003)
     DLLLOCAL void closeIoLocked() {
-        if (priv->isOpen()) {
+        if (!priv->endConnectIfNoDescriptor()) {
             priv->shutdown_direct();
             priv->close();
         }
@@ -2024,7 +2078,8 @@ public:
                 char* buf = reinterpret_cast<char*>(bin->giveBuffer());
                 char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
                 if (!nbuf) {
-                    xsink->outOfMemory();
+                    // the size read can come from the peer (issue 7417)
+                    qore_socket_raise_recv_string_memory_error(xsink, len);
                 } else {
                     nbuf[len] = '\0';
                     data = new QoreStringNode(nbuf, len, len + 1, enc);
@@ -4978,6 +5033,11 @@ public:
         }
 
         if (!poll_state) {
+            // the rest of a chunked body that was not read to its end would be taken for the header (issue 7417)
+            if (qore_socket_private::get(*sock)->checkHttpChunkedBodyFinished(xsink)) {
+                done = true;
+                return nullptr;
+            }
             poll_state.reset(sock->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
             if (!*xsink && poll_state) {
                 qore_socket_private::limitHttpRead(xsink, poll_state.get(), sock->getMaxHeaderSize(), 0, "header");
@@ -5018,9 +5078,10 @@ public:
         }
 
         char* buf = reinterpret_cast<char*>(bin->giveBuffer());
-        char* nbuf = reinterpret_cast<char*>(q_realloc(buf, raw_size + 1));
+        char* nbuf = reinterpret_cast<char*>(qore_socket_header_text_realloc(buf, raw_size + 1, "read-header"));
         if (!nbuf) {
-            xsink->outOfMemory();
+            // the buffer has been freed
+            qore_socket_raise_recv_string_memory_error(xsink, raw_size);
             done = true;
             return nullptr;
         }
@@ -5131,6 +5192,10 @@ static QoreHashNode* qore_socket_exec_read_http_header(QoreSocket* s, QoreHashNo
 
 static QoreStringNode* qore_socket_exec_read_http_header_string(QoreSocket* s, int timeout_ms, int source,
         ExceptionSink* xsink) {
+    // the rest of a chunked body that was not read to its end would be taken for the header (issue 7417)
+    if (qore_socket_private::get(*s)->checkHttpChunkedBodyFinished(xsink)) {
+        return nullptr;
+    }
     SimpleRefHolder<QoreStringNode> raw(qore_socket_exec_recv_until_string(s, "\r\n\r\n", 4, timeout_ms,
         "readHTTPHeaderString", xsink, "header"));
     if (*xsink) {
@@ -5151,11 +5216,8 @@ static QoreStringNode* qore_socket_exec_read_http_header_string(QoreSocket* s, i
 }
 
 static size_t qore_socket_exec_http_line_payload_size(const QoreStringNode& line) {
-    size_t len = line.size();
-    while (len && (line.c_str()[len - 1] == '\r' || line.c_str()[len - 1] == '\n')) {
-        --len;
-    }
-    return len;
+    // the line is taken as every reader of a chunked body takes it (issue 7417)
+    return qore_socket_private::httpLinePayloadSize(line.c_str(), line.size());
 }
 
 static bool qore_socket_exec_http_blank_line(const QoreStringNode& line) {
@@ -5164,32 +5226,7 @@ static bool qore_socket_exec_http_blank_line(const QoreStringNode& line) {
 
 static int qore_socket_exec_parse_http_chunk_size(const char* line_str, size_t line_len, int64_t& chunk_size,
         ExceptionSink* xsink) {
-    const char* semi = static_cast<const char*>(memchr(line_str, ';', line_len));
-    size_t hex_len = semi ? static_cast<size_t>(semi - line_str) : line_len;
-    if (!hex_len) {
-        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "empty value given for chunk size");
-        return -1;
-    }
-
-    std::string hex(line_str, hex_len);
-    errno = 0;
-    char* end = nullptr;
-    unsigned long long parsed = strtoull(hex.c_str(), &end, 16);
-    if (errno == ERANGE || end == hex.c_str() || *end) {
-        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "invalid value given for chunk size ('%s')", hex.c_str());
-        return -1;
-    }
-
-    unsigned long long max_read_size = static_cast<unsigned long long>(
-        std::numeric_limits<ssize_t>::max() - 2);
-    if (parsed > max_read_size) {
-        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "chunk size %llu exceeds the maximum supported size",
-            parsed);
-        return -1;
-    }
-
-    chunk_size = static_cast<int64_t>(parsed);
-    return 0;
+    return qore_socket_private::parseHttpChunkSize(line_str, line_len, chunk_size, xsink);
 }
 
 class QoreSocketControllerReadHttpChunkedBodyPollOperation : public SocketPollOperationBase {
@@ -5232,9 +5269,8 @@ public:
 
         qore_socket_private* priv = qore_socket_private::get(*sock);
         if (!http_expect_cleared) {
-            if (priv->http_exp_chunked_body) {
-                priv->http_exp_chunked_body = false;
-            }
+            // the body is unfinished until the read reaches its end (issue 7417)
+            priv->startHttpChunkedBodyRead();
             http_expect_cleared = true;
         }
 
@@ -5400,6 +5436,16 @@ private:
             return 0;
         }
 
+        // the limit is applied before the chunk is read, so that no memory is allocated for data over it (issue
+        // 7417)
+        int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
+        int64 max_chunked_body_size = priv.max_chunked_body_size.load(std::memory_order_relaxed);
+        if (max_chunked_body_size > 0 && chunk_size > max_chunked_body_size - body_size) {
+            xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
+                body_size + static_cast<int64>(chunk_size), max_chunked_body_size);
+            return -1;
+        }
+
         current_chunk_size = chunk_size;
         state = State::RecvChunkData;
         return 0;
@@ -5425,14 +5471,19 @@ private:
                 (int64)(bin->size()), (int64)chunk_size);
             return -1;
         }
+        // the chunk data ends with a line end (RFC 9112 section 7.1)
+        if (memcmp(static_cast<const char*>(bin->getPtr()) + chunk_size, "\r\n", 2)) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "the data of a chunk of " QLLD " bytes is not followed by "
+                "a line end", (int64)chunk_size);
+            return -1;
+        }
 
         priv.do_data_event(QORE_EVENT_HTTP_CHUNKED_DATA_READ, source, bin->getPtr(), chunk_size);
-        if (binary_body) {
-            body_bin->append(bin->getPtr(), chunk_size);
-        } else {
-            body_str->concat(static_cast<const char*>(bin->getPtr()), chunk_size);
-        }
         bytes_consumed = true;
+        if (qore_socket_append_http_body(xsink, binary_body ? *body_bin : nullptr,
+                binary_body ? nullptr : *body_str, bin->getPtr(), chunk_size)) {
+            return -1;
+        }
 
         int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
         int64 max_chunked_body_size = priv.max_chunked_body_size.load(std::memory_order_relaxed);
@@ -5482,9 +5533,10 @@ private:
                     return -1;
                 }
                 // the trailer fields are field lines, checked as RFC 9112 requires; an obsolete line folding is
-                // replaced with spaces
+                // replaced with spaces; the lines of a trailer section are read up to CRLF, so a bare LF line end or
+                // an empty line in it is refused: the text after it would be lost
                 if (qore_socket_private::checkHttpFieldLines(xsink, const_cast<char*>(trailers.c_str()), false,
-                        false, "READ-HTTP-CHUNK-ERROR", "chunked body trailer")) {
+                        false, "READ-HTTP-CHUNK-ERROR", "chunked body trailer", true, true)) {
                     return -1;
                 }
                 // the trailer fields are given under "trailers", and at the top level as the socket's field
@@ -5498,6 +5550,8 @@ private:
                 }
                 priv.do_read_http_header(QORE_EVENT_HTTP_FOOTERS_RECEIVED, *out, source);
             }
+            // the whole body has been read
+            priv.finishHttpChunkedBodyRead();
             state = State::Done;
             done = true;
             return 0;
@@ -5920,7 +5974,67 @@ std::shared_ptr<qore_socket_private::DescriptorHold> qore_socket_private::Descri
     if (!priv.shared_fd || priv.shared_fd->fd != priv.sock) {
         priv.shared_fd = std::make_shared<SharedDescriptor>(priv.sock);
     }
-    return std::make_shared<DescriptorHold>(priv, priv.shared_fd);
+    // made with its own deleter, which identifies it (see qore_descriptor_hold_set_close_wake())
+    return std::shared_ptr<DescriptorHold>(new DescriptorHold(priv, priv.shared_fd), Deleter());
+}
+
+std::shared_ptr<void> qore_socket_private::holdGenerationWake(std::function<void()> wake) {
+    struct Registration {
+        qore_socket_private& sock;
+        std::shared_ptr<std::function<void()>> wake;
+
+        Registration(qore_socket_private& sock, std::function<void()> fn)
+                : sock(sock), wake(std::make_shared<std::function<void()>>(std::move(fn))) {
+            sock.ref();
+        }
+        ~Registration() {
+            {
+                CloseLockHelper cl(sock);
+                auto& wakes = sock.generation_wakes;
+                wakes.erase(std::remove(wakes.begin(), wakes.end(), wake), wakes.end());
+            }
+            sock.deref();
+        }
+    };
+
+    auto hold = std::make_shared<Registration>(*this, std::move(wake));
+    CloseLockHelper cl(*this);
+    if (sock != QORE_INVALID_SOCKET) {
+        return nullptr;
+    }
+    generation_wakes.push_back(hold->wake);
+    return hold;
+}
+
+void qore_socket_private::DescriptorHold::setCloseWake(std::function<void()> wake) {
+    bool given_up;
+    {
+        CloseLockHelper cl(*priv);
+        if (close_wake) {
+            auto& v = fd->close_wakes;
+            v.erase(std::remove(v.begin(), v.end(), close_wake), v.end());
+        }
+        close_wake = std::make_shared<std::function<void()>>(std::move(wake));
+        fd->close_wakes.push_back(close_wake);
+        // the socket gave the descriptor up since the hold was taken: the close ran no wake of this hold
+        given_up = fd->close_on_release;
+    }
+    if (given_up) {
+        (*close_wake)();
+    }
+}
+
+bool qore_descriptor_hold_set_close_wake(const std::shared_ptr<void>& hold, std::function<void()> wake) {
+    if (!hold || !std::get_deleter<qore_socket_private::DescriptorHold::Deleter>(hold)) {
+        return false;
+    }
+    try {
+        static_cast<qore_socket_private::DescriptorHold*>(hold.get())->setCloseWake(std::move(wake));
+    } catch (...) {
+        // no memory: the registration has no wake
+        return false;
+    }
+    return true;
 }
 
 qore_socket_private::DescriptorHold::DescriptorHold(qore_socket_private& priv, std::shared_ptr<SharedDescriptor> fd)
@@ -5933,6 +6047,10 @@ qore_socket_private::DescriptorHold::~DescriptorHold() {
         // the last use of a descriptor that the socket gave up closes it; every release of a descriptor is made with
         // close_m held
         CloseLockHelper cl(*priv);
+        if (close_wake) {
+            auto& v = fd->close_wakes;
+            v.erase(std::remove(v.begin(), v.end(), close_wake), v.end());
+        }
         fd.reset();
     }
     priv->deref();
@@ -6658,9 +6776,10 @@ int my_socket_priv::convertHeaderToHash(QoreHashNode& h, QoreString& hdr, Except
         return -1;
     }
     // the trailer fields are field lines, checked as RFC 9112 requires; an obsolete line folding is replaced with
-    // spaces
+    // spaces; the lines of a trailer section are read up to CRLF, so a bare LF line end or an empty line in it is
+    // refused: the text after it would be lost
     if (qore_socket_private::checkHttpFieldLines(xsink, const_cast<char*>(hdr.c_str()), false, false,
-            "READ-HTTP-CHUNK-ERROR", "chunked body trailer")) {
+            "READ-HTTP-CHUNK-ERROR", "chunked body trailer", true, true)) {
         return -1;
     }
     QoreHashNode* fields = nullptr;
@@ -6681,10 +6800,32 @@ bool my_socket_priv::getHttpFieldsAtTopLevel() const {
     return socket->priv->http_fields_at_top_level.load(std::memory_order_relaxed);
 }
 
-void my_socket_priv::clearHttpExpectChunkedBody() const {
-    if (socket->priv->http_exp_chunked_body) {
-        socket->priv->http_exp_chunked_body = false;
-    }
+void my_socket_priv::startHttpChunkedBodyRead() const {
+    socket->priv->startHttpChunkedBodyRead();
+}
+
+void my_socket_priv::finishHttpChunkedBodyRead() const {
+    socket->priv->finishHttpChunkedBodyRead();
+}
+
+bool my_socket_priv::unfinishedHttpChunkedBody() const {
+    return socket->priv->unfinishedHttpChunkedBody();
+}
+
+int my_socket_priv::checkHttpChunkedBodyFinished(ExceptionSink* xsink) const {
+    return socket->priv->checkHttpChunkedBodyFinished(xsink);
+}
+
+size_t my_socket_priv::httpLinePayloadSize(const char* str, size_t len) {
+    return qore_socket_private::httpLinePayloadSize(str, len);
+}
+
+bool my_socket_priv::isHttpResponseBodyChunked(QoreValue te) {
+    return qore_socket_private::isHttpResponseBodyChunked(te);
+}
+
+int my_socket_priv::parseHttpChunkSize(const char* line, size_t len, int64_t& chunk_size, ExceptionSink* xsink) {
+    return qore_socket_private::parseHttpChunkSize(line, len, chunk_size, xsink);
 }
 
 int64 my_socket_priv::getMaxChunkedBodySize() const {
@@ -7657,6 +7798,12 @@ const char* QoreCaresSockets::aif_indextoname(unsigned int ifindex, char* ifname
     @param channel the channel of an unfinished lookup, after its events were processed
 */
 static bool qore_cares_channel_lost_query(ares_channel_t* channel) {
+    struct timeval tv;
+    return !ares_timeout(channel, nullptr, &tv) && ares_queue_active_queries(channel) > 0;
+}
+
+//! Claims a simulated loss while the lookup is still pending, before c-ares can complete it (#7449).
+static inline bool qore_cares_inject_query_loss() {
 #ifdef DEBUG
     // a lookup made to lose its query by dbg_cares_lose_query()
     for (int n = qore_dbg_cares_lost_query_count.load(); n > 0;) {
@@ -7665,8 +7812,30 @@ static bool qore_cares_channel_lost_query(ares_channel_t* channel) {
         }
     }
 #endif
-    struct timeval tv;
-    return !ares_timeout(channel, nullptr, &tv) && ares_queue_active_queries(channel) > 0;
+    return false;
+}
+
+//! Processes one poll and restarts an unfinished lookup whose query was lost.
+/** A debug loss takes precedence over a ready answer or an expired timer. A real loss is detected
+    after events are processed. Each restart replaces the channel and can also complete the lookup.
+*/
+template <typename Process, typename Restart>
+static int qore_cares_poll_query(ares_channel_t* const& channel, const bool& done, ExceptionSink* xsink,
+        Process process, Restart restart) {
+    bool lost = qore_cares_inject_query_loss();
+    if (!lost) {
+        process();
+        if (*xsink) {
+            return -1;
+        }
+    }
+    while (!done && (lost || qore_cares_channel_lost_query(channel))) {
+        if (restart()) {
+            return -1;
+        }
+        lost = !done && qore_cares_inject_query_loss();
+    }
+    return done ? 0 : 1;
 }
 
 QoreCaresAddrInfoResolver::QoreCaresAddrInfoResolver(std::string host, std::string service, int family, int type,
@@ -7723,18 +7892,8 @@ int QoreCaresAddrInfoResolver::continuePoll(ExceptionSink* xsink) {
         return status == ARES_SUCCESS ? 0 : -1;
     }
 
-    process(xsink);
-    if (*xsink) {
-        return -1;
-    }
-    // a new channel always has a timeout for the query it sent; the check is repeated so that a restart that
-    // cannot help is ended by the restart limit
-    while (!done && qore_cares_channel_lost_query(channel)) {
-        if (restart(xsink)) {
-            return -1;
-        }
-    }
-    return done ? (status == ARES_SUCCESS ? 0 : -1) : 1;
+    int rc = qore_cares_poll_query(channel, done, xsink, [&] { process(xsink); }, [&] { return restart(xsink); });
+    return rc == 0 && status != ARES_SUCCESS ? -1 : rc;
 }
 
 int QoreCaresAddrInfoResolver::restart(ExceptionSink* xsink) {
@@ -8730,15 +8889,7 @@ public:
             return 0;
         }
 
-        process();
-        // a new channel always has a timeout for the query it sent; the check is repeated so that a restart that
-        // cannot help is ended by the restart limit
-        while (!done && qore_cares_channel_lost_query(channel)) {
-            if (restart(xsink)) {
-                return -1;
-            }
-        }
-        return done ? 0 : 1;
+        return qore_cares_poll_query(channel, done, xsink, [&] { process(); }, [&] { return restart(xsink); });
     }
 
     DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& fds) const {
@@ -9299,15 +9450,7 @@ int QoreCaresNameInfoResolver::continuePoll(ExceptionSink* xsink) {
         return 0;
     }
 
-    process();
-    // a new channel always has a timeout for the query it sent; the check is repeated so that a restart that
-    // cannot help is ended by the restart limit
-    while (!done && qore_cares_channel_lost_query(channel)) {
-        if (restart(xsink)) {
-            return -1;
-        }
-    }
-    return done ? 0 : 1;
+    return qore_cares_poll_query(channel, done, xsink, [&] { process(); }, [&] { return restart(xsink); });
 }
 
 int QoreCaresNameInfoResolver::restart(ExceptionSink* xsink) {
@@ -9463,6 +9606,8 @@ SocketConnectInetHappyEyeballsPollState::SocketConnectInetHappyEyeballsPollState
 
     // close socket if already open
     qore_socket_close_private_from_controller(sock);
+    // a close of the socket or a descriptor given to it by another caller from now on ends the operation (qore#7003)
+    sock_gen = sock->startConnectGeneration();
 
     destinations = std::make_shared<QoreConnectionDestinations>();
 
@@ -9483,8 +9628,22 @@ SocketConnectInetHappyEyeballsPollState::~SocketConnectInetHappyEyeballsPollStat
     closeAllFds();
 }
 
+#ifdef DEBUG
+static void qore_socket_dbg_before_adopt(int where);
+#endif
+
 int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) {
     if (he_state == HEBS_RESOLVING) {
+#ifdef DEBUG
+        // a test closes the socket here, while the connection has no descriptor, as another thread can
+        if (void (*hook)() = qore_dbg_connect_in_resolve.load(std::memory_order_acquire)) {
+            hook();
+        }
+#endif
+        if (socketChanged()) {
+            qore_socket_raise_canceled("connect", xsink);
+            return -1;
+        }
         int rc = continueResolve(xsink);
         if (*xsink || rc) {
             return *xsink ? -1 : SOCK_POLLIN;
@@ -9492,7 +9651,7 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
 
         rc = startNextConnect(xsink);
         if (rc < 0 && !*xsink) {
-            raiseConnectError(xsink);
+            raiseConnectErrorOrClosed(xsink);
         }
         if (rc <= 0) {
             if (rc == 0) {
@@ -9533,12 +9692,50 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
         return 0;
     }
 
+#ifdef DEBUG
+    // a test closes the socket here, as another thread can while the step runs
+    if (void (*hook)() = qore_dbg_connect_before_check_attempts.load(std::memory_order_acquire)) {
+        hook();
+    }
+#endif
+
+    // the socket was closed, or given another descriptor, since the operation last gave it one (by another thread,
+    // while the step runs): the connection is not continued (qore#6962, qore#7003)
+    if (socketChanged()) {
+        closeAllFds();
+        qore_socket_raise_canceled("connect", xsink);
+        return -1;
+    }
+
+#ifdef DEBUG
+    // a test closes the socket here, after the step's check of the socket, as another thread can
+    if (void (*hook)() = qore_dbg_connect_after_socket_check.load(std::memory_order_acquire)) {
+        hook();
+    }
+#endif
+
     // Check all active attempts for completion
     for (size_t i = 0; i < active_attempts.size(); ++i) {
         if (active_attempts[i].fd == QORE_INVALID_SOCKET) {
             continue;
         }
-        int rc = checkAttempt(i);
+        int rc;
+#ifdef DEBUG
+        // a test makes the attempt that the socket took over fail once another attempt is in progress
+        bool other_active = false;
+        for (size_t j = 0; j < active_attempts.size(); ++j) {
+            if (j != i && active_attempts[j].fd != QORE_INVALID_SOCKET) {
+                other_active = true;
+                break;
+            }
+        }
+        if (active_attempts[i].sock_hold && other_active
+                && qore_dbg_connect_fail_held_attempt.exchange(false, std::memory_order_acq_rel)) {
+            qore_socket_set_raw_error(ECONNREFUSED);
+            rc = -1;
+        } else
+#endif
+        rc = checkAttempt(i);
         if (rc < 0) {
             // the error is taken before the attempt is given up, which makes system calls of its own
             last_error = sock_get_raw_error();
@@ -9555,12 +9752,11 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
             int fd = active_attempts[i].fd;
             active_attempts[i].fd = QORE_INVALID_SOCKET;
             fd_set_changed = true;
-            if (active_attempts[i].socket_owned) {
-                // the socket took the descriptor over (qore#6962): it is given up through the socket, which has
-                // closed it already if it was closed meanwhile
-                active_attempts[i].socket_owned = false;
-                // Assign another active fd as primary so isOpen() remains true; the failed one can be registered in
-                // an async I/O thread's event loop, which holds it open until it has removed it
+            if (active_attempts[i].sock_hold) {
+                // the socket took the descriptor over (qore#6962): it is given up through the socket, and then by
+                // the release of the attempt's hold, which closes it if the socket has closed it meanwhile.  Another
+                // active fd becomes the socket's descriptor so isOpen() remains true; the failed one can be
+                // registered in an async I/O thread's event loop, which holds it open until it has removed it
                 ConnAttempt* next = nullptr;
                 for (auto& a : active_attempts) {
                     if (a.fd != QORE_INVALID_SOCKET) {
@@ -9568,13 +9764,20 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
                         break;
                     }
                 }
-                releasePrimaryFd(fd, next);
-            } else if (active_attempts[i].owned) {
+                bool released = releasePrimaryFd(fd, next);
+                sock->releaseAttemptHold(active_attempts[i].sock_hold);
+                if (!released) {
+                    // the socket was closed since the step checked it (by another thread, whose close can be what
+                    // made the attempt fail, as its shutdown does): the connection fails as closed
+                    closeAllFds();
+                    qore_socket_raise_canceled("connect", xsink);
+                    return -1;
+                }
+            } else {
                 // an extra fd of the operation: an async I/O thread that has it registered closes it when it has
                 // removed it
+                assert(active_attempts[i].owned);
                 qore_owned_descriptor_release(active_attempts[i].owned);
-            } else {
-                qore_socket_private::closeDescriptor(fd);
             }
 #if defined(DEBUG) && !defined(_Q_WINDOWS)
             qore_socket_dbg_errno_after_connect_close();
@@ -9602,16 +9805,19 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
             // the attempt that is the socket's descriptor is released like the others; closeAllFds() leaves it to
             // the socket
             for (auto& a : active_attempts) {
-                if (a.fd != QORE_INVALID_SOCKET && a.socket_owned) {
+                if (a.fd != QORE_INVALID_SOCKET && a.sock_hold) {
                     int fd = a.fd;
                     a.fd = QORE_INVALID_SOCKET;
-                    a.socket_owned = false;
+                    // the result does not matter here: the step fails with the exception that it has already, and a
+                    // refusal means that the socket was closed meanwhile, whose close then releases the descriptor;
+                    // the attempt's hold is released in either case, which closes the descriptor only if the socket
+                    // gave it up
                     releasePrimaryFd(fd, nullptr);
+                    sock->releaseAttemptHold(a.sock_hold);
                     break;
                 }
             }
             closeAllFds();
-            sock->sock = QORE_INVALID_SOCKET;
             return -1;
         }
         if (rc == 0) {
@@ -9632,8 +9838,9 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
     }
 
     if (!any_active) {
-        sock->sock = QORE_INVALID_SOCKET;
-        raiseConnectError(xsink);
+        // every attempt failed: the attempt that was the socket's descriptor gave it up through releasePrimaryFd(),
+        // unless the socket was closed meanwhile, which is then the error
+        raiseConnectErrorOrClosed(xsink);
         return -1;
     }
 
@@ -9652,7 +9859,7 @@ void SocketConnectInetHappyEyeballsPollState::getExtraFds(std::vector<std::pair<
     // Return all active fds that the socket has not taken over: its own descriptor is polled as the socket's, and the
     // number of one that the socket has closed can belong to another descriptor (qore#6962)
     for (auto& a : active_attempts) {
-        if (a.fd != QORE_INVALID_SOCKET && !a.socket_owned) {
+        if (a.fd != QORE_INVALID_SOCKET && !a.sock_hold) {
             fds.push_back({a.fd, SOCK_POLLOUT});
         }
     }
@@ -9857,8 +10064,16 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
         // Assign first racing fd to sock->sock so isOpen() returns true; the socket takes the attempt's descriptor
         // over
         if (sock->sock == QORE_INVALID_SOCKET) {
-            sock->setDescriptor(fd, active_attempts.back().owned, true);
-            active_attempts.back().socket_owned = true;
+#ifdef DEBUG
+            qore_socket_dbg_before_adopt(4);
+#endif
+            if (!sock->setDescriptorIfGeneration(sock_gen, fd, active_attempts.back().owned, true,
+                    &active_attempts.back().sock_hold, &sock_gen)) {
+                // the socket was closed since the operation started: it takes no descriptor (qore#7003)
+                closeAllFds();
+                qore_socket_raise_canceled("connect", xsink);
+                return -1;
+            }
             sock->resetCloseInterrupt();
         }
 
@@ -9888,54 +10103,104 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
 
     SocketResolvedAddrInfo& wp = addrs[sorted_addrs[winner.addr_idx]];
 
+#ifdef DEBUG
+    // a test closes the socket here, as another thread can after the step has checked it
+    if (void (*hook)() = qore_dbg_connect_before_assign_winner.load(std::memory_order_acquire)) {
+        hook();
+    }
+#endif
+
+    // the socket was closed, or given another descriptor, since the operation last gave it one: it takes no
+    // descriptor, whether the winner is the attempt that it took over (which has the descriptor only by its hold) or
+    // another one, and the connection fails as closed (qore#6962, qore#7003)
+    if (socketChanged()) {
+        closeAllFds();
+        qore_socket_raise_canceled("connect", xsink);
+        return;
+    }
+
     // Assign winning fd to socket (may already be sock->sock if first attempt won); the socket takes the winner's
-    // descriptor over
+    // descriptor over, only if it has not been closed meanwhile (the checks with the socket's generation are made
+    // with its close lock held, where a close changes it)
     if (sock->sock != winner.fd) {
         int old_primary = sock->sock;
         if (old_primary == QORE_INVALID_SOCKET) {
-            sock->setDescriptor(winner.fd, winner.owned, true);
+#ifdef DEBUG
+            qore_socket_dbg_before_adopt(1);
+#endif
+            if (!sock->setDescriptorIfGeneration(sock_gen, winner.fd, winner.owned, true, nullptr, &sock_gen)) {
+                closeAllFds();
+                qore_socket_raise_canceled("connect", xsink);
+                return;
+            }
         } else {
             // the previous primary attempt is given up through the socket: an async I/O thread can have it
-            // registered, and holds it open until it has removed it
+            // registered, and holds it open until it has removed it; the attempt's hold is released after the
+            // socket has given the descriptor up, which leaves its close to the hold
+            ConnAttempt* old = nullptr;
             for (auto& a : active_attempts) {
-                if (a.socket_owned) {
+                if (a.sock_hold) {
+                    old = &a;
                     a.fd = QORE_INVALID_SOCKET;
-                    a.socket_owned = false;
                     break;
                 }
             }
             bool close_old = false;
-            if (sock->replaceDescriptor(old_primary, winner.fd, close_old, &winner.owned)) {
-                if (close_old) {
-                    qore_socket_private::closeDescriptor(old_primary);
-                }
-            } else {
-                // a concurrent close released the previous descriptor
-                sock->setDescriptor(winner.fd, winner.owned, true);
+#ifdef DEBUG
+            qore_socket_dbg_before_adopt(2);
+#endif
+            bool replaced = sock->replaceDescriptor(old_primary, winner.fd, close_old, &winner.owned, nullptr,
+                &sock_gen, &sock_gen);
+            if (replaced && close_old) {
+                qore_socket_private::closeDescriptor(old_primary);
+            }
+            if (old) {
+                sock->releaseAttemptHold(old->sock_hold);
+            }
+            if (!replaced) {
+                // a concurrent close released the previous descriptor: the socket takes no descriptor
+                closeAllFds();
+                qore_socket_raise_canceled("connect", xsink);
+                return;
             }
         }
     }
     winner.fd = QORE_INVALID_SOCKET;
     winner.owned.reset();
-    winner.socket_owned = false;
-    sock->resetCloseInterrupt();
-    sock->sfamily = wp.family;
-    sock->stype = wp.socktype;
-    sock->sprot = wp.protocol;
-    sock->port = prt;
-
-    // Close all other fds
-    closeAllFds();
-
+    // the socket has the winner's descriptor: the attempt has no use for it any more
+    sock->releaseAttemptHold(winner.sock_hold);
+#ifdef DEBUG
+    // a test closes the socket here, as another thread can after the socket took the descriptor
+    if (void (*hook)() = qore_dbg_connect_before_connected.load(std::memory_order_acquire)) {
+        hook();
+    }
+#endif
     // the connection leads to the address connected to, and, for a proxy, to the destination the proxy connects to
     assert(destinations);
     if (destinations) {
         destinations->add(host.c_str(), reinterpret_cast<const struct sockaddr*>(&wp.addr), wp.addrlen,
             qore_socket_sandbox_proto(wp.family, wp.socktype));
-        sock->setConnectedDestinations(std::move(destinations));
     }
+    // the connection's state, host name, destinations and connected event are set with the socket's close lock held,
+    // only if the socket was not closed since it took the descriptor; otherwise the connection fails as closed
+    // (qore#7003)
+    if (!sock->setConnectedIfGeneration(sock_gen, wp.family, wp.socktype, wp.protocol, prt, host.c_str(),
+            std::move(destinations))) {
+        closeAllFds();
+        qore_socket_raise_canceled("connect", xsink);
+        return;
+    }
+#ifdef DEBUG
+    // a test closes the socket here, as another thread can after the connection was made
+    if (void (*hook)() = qore_dbg_connect_after_connected.load(std::memory_order_acquire)) {
+        hook();
+    }
+#endif
 
-    sock->confirmConnected(host.c_str());
+    // Close all other fds
+    closeAllFds();
+
+    sock->applyTcpUserTimeout(wp.family, wp.socktype);
 
     printd(5, "SocketConnectInetHappyEyeballsPollState::assignWinner() host: %s family: %s\n",
         host.c_str(), q_af_to_str(wp.family));
@@ -9944,23 +10209,69 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
 #ifdef DEBUG
 std::atomic<bool> qore_dbg_connect_no_immediate_check{false};
 std::atomic<bool> qore_dbg_connect_complete_before_immediate_check{false};
+std::atomic<void (*)()> qore_dbg_connect_before_check_attempts{nullptr};
+std::atomic<void (*)()> qore_dbg_connect_after_socket_check{nullptr};
+std::atomic<void (*)()> qore_dbg_connect_before_assign_winner{nullptr};
+std::atomic<void (*)(int)> qore_dbg_connect_before_adopt{nullptr};
+std::atomic<void (*)()> qore_dbg_connect_in_resolve{nullptr};
+std::atomic<bool> qore_dbg_connect_fail_held_attempt{false};
+std::atomic<void (*)()> qore_dbg_connect_before_connected{nullptr};
+std::atomic<void (*)()> qore_dbg_connect_after_connected{nullptr};
+std::atomic<void (*)()> qore_dbg_before_close_wakes{nullptr};
+std::atomic<void (*)()> qore_dbg_unix_connect_before_adopt{nullptr};
+std::atomic<void (*)(int)> qore_dbg_unix_connect_before_check{nullptr};
+std::atomic<void (*)()> qore_dbg_unix_connect_before_connected{nullptr};
+std::atomic<void (*)()> qore_dbg_unix_connect_after_connected{nullptr};
+
+//! Calls the hook that a test sets to run right before a connection gives the socket a descriptor
+static void qore_socket_dbg_before_adopt(int where) {
+    if (void (*hook)(int) = qore_dbg_connect_before_adopt.load(std::memory_order_acquire)) {
+        hook(where);
+    }
+}
+std::atomic<bool> qore_dbg_inert_socket_fails{false};
+std::atomic<bool> qore_dbg_inert_dup_fails{false};
+std::atomic<unsigned> qore_dbg_inert_socket_fallbacks{0};
+std::atomic<void (*)(qore_socket_private*)> qore_dbg_after_pre_close_shutdown{nullptr};
 
 QoreObject* qore_socket_dbg_new_controller_pollable(QoreSocket* s) {
     return new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), new QoreSocketControllerPollable(s));
 }
 #endif
 
-void SocketConnectInetHappyEyeballsPollState::releasePrimaryFd(int fd, ConnAttempt* next) {
+bool SocketConnectInetHappyEyeballsPollState::releasePrimaryFd(int fd, ConnAttempt* next) {
     bool close_old = false;
-    if (sock->replaceDescriptor(fd, next ? next->fd : QORE_INVALID_SOCKET, close_old, next ? &next->owned : nullptr)) {
-        if (close_old) {
-            qore_socket_private::closeDescriptor(fd);
-        }
-        if (next) {
-            next->socket_owned = true;
-            sock->resetCloseInterrupt();
-        }
+#ifdef DEBUG
+    qore_socket_dbg_before_adopt(3);
+#endif
+    if (!sock->replaceDescriptor(fd, next ? next->fd : QORE_INVALID_SOCKET, close_old, next ? &next->owned : nullptr,
+            next ? &next->sock_hold : nullptr, &sock_gen, &sock_gen)) {
+        // the socket was closed, or given another descriptor, since this operation gave it this one
+        return false;
     }
+    // the attempt that gives the descriptor up has a hold of it, so the socket leaves its close to the hold
+    if (close_old) {
+        qore_socket_private::closeDescriptor(fd);
+    }
+    if (next) {
+        sock->resetCloseInterrupt();
+    }
+    return true;
+}
+
+void SocketConnectInetHappyEyeballsPollState::raiseConnectErrorOrClosed(ExceptionSink* xsink) {
+    if (socketChanged()) {
+        closeAllFds();
+        qore_socket_raise_canceled("connect", xsink);
+        return;
+    }
+    raiseConnectError(xsink);
+}
+
+bool SocketConnectInetHappyEyeballsPollState::socketChanged() const {
+    uint32_t gen;
+    sock->getDescriptorGeneration(gen);
+    return gen != sock_gen;
 }
 
 void SocketConnectInetHappyEyeballsPollState::closeAllFds() {
@@ -9969,16 +10280,14 @@ void SocketConnectInetHappyEyeballsPollState::closeAllFds() {
             // Don't close the fd if the socket took it over (the socket closes it, also when it has closed it
             // already and the number can belong to another descriptor: qore#6962); the others are extra fds of the
             // operation, which an async I/O thread that has them registered closes when it has removed them
-            if (!a.socket_owned) {
-                if (a.owned) {
-                    qore_owned_descriptor_release(a.owned);
-                } else {
-                    qore_socket_private::closeDescriptor(a.fd);
-                }
+            if (!a.sock_hold) {
+                assert(a.owned);
+                qore_owned_descriptor_release(a.owned);
             }
             a.fd = QORE_INVALID_SOCKET;
             a.owned.reset();
-            a.socket_owned = false;
+            // closes the descriptor if the socket has closed it
+            sock->releaseAttemptHold(a.sock_hold);
         }
     }
 }
@@ -9991,7 +10300,8 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
 
     // close socket if already open
     qore_socket_close_private_from_controller(sock);
-    assert(sock->sock == QORE_INVALID_SOCKET);
+    // a close of the socket from now on ends the connection (qore#7156)
+    sock_gen = sock->startConnectGeneration();
 
     addr.sun_family = AF_UNIX;
     // a path that does not fit the socket address is refused before it is checked or copied (issue #6910)
@@ -10007,11 +10317,25 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
         return;
     }
 
-    if ((sock->sock = create_nonblocking_socket(AF_UNIX, sock_type, protocol)) == QORE_SOCKET_ERROR) {
+    int fd = create_nonblocking_socket(AF_UNIX, sock_type, protocol);
+    if (fd == QORE_SOCKET_ERROR) {
         xsink->raiseErrnoException("SOCKET-CONNECT-ERROR", errno, "error connecting to UNIX socket: '%s'", name);
         return;
     }
-    sock->fd_nonblocking.store(true, std::memory_order_relaxed);
+#ifdef DEBUG
+    // a test closes the socket here, as another thread can
+    if (void (*hook)() = qore_dbg_unix_connect_before_adopt.load(std::memory_order_acquire)) {
+        hook();
+    }
+#endif
+    // the socket takes the descriptor with its close lock held, and only if it was not closed since the connection
+    // started (qore#7156)
+    std::shared_ptr<QoreSharedDescriptor> no_owner;
+    if (!sock->setDescriptorIfGeneration(sock_gen, fd, no_owner, true, nullptr, &sock_gen)) {
+        qore_socket_private::closeDescriptor(fd);
+        qore_socket_raise_canceled("connect", xsink);
+        return;
+    }
     sock->resetCloseInterrupt();
 
     sock->do_connect_event(AF_UNIX, (sockaddr*)&addr, name);
@@ -10024,6 +10348,19 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
     - < 1 = error (exception raised)
 */
 int SocketConnectUnixPollState::continuePoll(ExceptionSink* xsink) {
+    // a failed connection closes only the descriptor that it gave the socket, not one that another caller gave the
+    // socket after a close (qore#7156)
+    // the socket was closed since the connection gave it its descriptor (by another thread): the connection is not
+    // continued (qore#7156)
+    {
+        uint32_t gen;
+        sock->getDescriptorGeneration(gen);
+        if (gen != sock_gen) {
+            qore_socket_raise_canceled("connect", xsink);
+            return -1;
+        }
+    }
+
     // set non-blocking
     OptionalNonBlockingHelper nbh(*sock, true, xsink);
     if (*xsink) {
@@ -10036,13 +10373,13 @@ int SocketConnectUnixPollState::continuePoll(ExceptionSink* xsink) {
             //printd(5, "SocketConnectUnixPollState::continuePoll() doConnect() returned %d (ex: %d)\n", rc,
             //    (int)*xsink);
             if (*xsink) {
-                sock->close_and_reset();
+                sock->closeIfGeneration(sock_gen);
                 return -1;
             }
             if (rc) {
                 // the error is taken before the close, which makes system calls of its own
                 int err = sock_get_raw_error();
-                sock->close_and_reset();
+                sock->closeIfGeneration(sock_gen);
                 qore_socket_error_intern(err, xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr,
                     name.c_str());
                 return -1;
@@ -10057,7 +10394,7 @@ int SocketConnectUnixPollState::continuePoll(ExceptionSink* xsink) {
             //printd(5, "SocketConnectUnixPollState::continuePoll() checkConnection() returned %d (ex: %d)\n", rc,
             //    (int)*xsink);
             if (*xsink) {
-                sock->close_and_reset();
+                sock->closeIfGeneration(sock_gen);
                 return -1;
             }
 
@@ -10068,7 +10405,7 @@ int SocketConnectUnixPollState::continuePoll(ExceptionSink* xsink) {
             if (rc < 0) {
                 // the error is taken before the close, which makes system calls of its own
                 int err = sock_get_raw_error();
-                sock->close_and_reset();
+                sock->closeIfGeneration(sock_gen);
                 qore_socket_error_intern(err, xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr,
                     name.c_str());
                 return -1;
@@ -10080,10 +10417,27 @@ int SocketConnectUnixPollState::continuePoll(ExceptionSink* xsink) {
     return 0;
 }
 
+bool SocketConnectUnixPollState::closedSinceStart(int fd, ExceptionSink* xsink) {
+    uint32_t gen;
+    if (fd == QORE_INVALID_SOCKET || sock->getDescriptorGeneration(gen) != fd || gen != sock_gen) {
+        qore_socket_raise_canceled("connect", xsink);
+        return true;
+    }
+    return false;
+}
+
 int SocketConnectUnixPollState::doConnect(ExceptionSink* xsink) {
+    // the descriptor is used through a hold: a close of the socket by another thread keeps its number reserved until
+    // the hold is released, and the connection then fails as closed (qore#7156)
+    qore_socket_private::IoUseHelper io_use(*sock);
+    int fd = io_use.getDescriptor();
+    if (closedSinceStart(fd, xsink)) {
+        return -1;
+    }
+    int rc = 0;
     while (true) {
-        if (!::connect(sock->sock, (const sockaddr*)&addr, sizeof(struct sockaddr_un))) {
-            return 0;
+        if (!::connect(fd, (const sockaddr*)&addr, sizeof(struct sockaddr_un))) {
+            break;
         }
 
         // try again if we were interrupted by a signal
@@ -10092,12 +10446,16 @@ int SocketConnectUnixPollState::doConnect(ExceptionSink* xsink) {
         }
 
         if (errno != EINPROGRESS && errno != EAGAIN) {
-            return -1;
+            rc = -1;
         }
 
         break;
     }
-    return 0;
+    // a close during connect() fails the connection as closed, not with the error that the close caused
+    if (closedSinceStart(fd, xsink)) {
+        return -1;
+    }
+    return rc;
 }
 
 // returns 0 = connected, 1 = try again, -1 = error
@@ -10109,20 +10467,51 @@ int SocketConnectUnixPollState::checkConnection(ExceptionSink* xsink) {
     // When continuePoll() reaches this immediately after EINPROGRESS, the
     // SO_ERROR / zero-byte send checks still report "try again" without
     // running a second raw poll/select wait inside the poll operation.
-    int rc = qore_socket_check_connect_ready(sock->sock);
-    if (rc) {
-        return rc;
+    // the descriptor is used through a hold: a close of the socket by another thread keeps its number reserved until
+    // the hold is released, and the connection then fails as closed (qore#7156)
+    {
+        qore_socket_private::IoUseHelper io_use(*sock);
+        int fd = io_use.getDescriptor();
+        if (closedSinceStart(fd, xsink)) {
+            return -1;
+        }
+#ifdef DEBUG
+        // a test closes the socket here, as another thread can
+        if (void (*hook)(int) = qore_dbg_unix_connect_before_check.load(std::memory_order_acquire)) {
+            hook(fd);
+        }
+#endif
+        int rc = qore_socket_check_connect_ready(fd);
+        // a close during the check fails the connection as closed, not with the error that the close caused
+        if (closedSinceStart(fd, xsink)) {
+            return -1;
+        }
+        if (rc) {
+            return rc;
+        }
     }
 
-    // connected successfully within the timeout period
-    sock->socketname = addr.sun_path;
-    sock->sfamily = AF_UNIX;
-    {
-        std::shared_ptr<QoreConnectionDestinations> d = std::make_shared<QoreConnectionDestinations>();
-        d->add(name.c_str(), reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr), QSEC_NET_UNIX);
-        sock->setConnectedDestinations(std::move(d));
+#ifdef DEBUG
+    // a test closes the socket here, as another thread can
+    if (void (*hook)() = qore_dbg_unix_connect_before_connected.load(std::memory_order_acquire)) {
+        hook();
     }
-    sock->confirmConnected(nullptr);
+#endif
+    // connected: the connection's state, destinations and connected event are set with the socket's close lock
+    // held, only if the socket was not closed since the connection gave it its descriptor; otherwise the connection
+    // fails as closed (qore#7156)
+    std::shared_ptr<QoreConnectionDestinations> d = std::make_shared<QoreConnectionDestinations>();
+    d->add(name.c_str(), reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr), QSEC_NET_UNIX);
+    if (!sock->setUnixConnectedIfGeneration(sock_gen, addr.sun_path, std::move(d))) {
+        qore_socket_raise_canceled("connect", xsink);
+        return -1;
+    }
+#ifdef DEBUG
+    // a test closes the socket here, as another thread can after the connection was made
+    if (void (*hook)() = qore_dbg_unix_connect_after_connected.load(std::memory_order_acquire)) {
+        hook();
+    }
+#endif
     return 0;
 }
 #endif
@@ -10597,7 +10986,13 @@ int SocketRecvPacketPollState::continuePollIntern(ExceptionSink* xsink) {
 
 SocketRecvPollState::SocketRecvPollState(ExceptionSink* xsink, qore_socket_private* sock, size_t size) : sock(sock),
         bin(new BinaryNode), size(size) {
-    if (bin->preallocate(size)) {
+    // the buffer grows as the data arrives; the size to receive can come from the peer (issue 7417)
+    allocated = QORE_MIN(size, MaxPrealloc);
+    // the data in the socket buffer is taken first
+    if (sock->buflen > allocated) {
+        allocated = QORE_MIN(size, sock->buflen);
+    }
+    if (bin->preallocate(allocated)) {
         xsink->outOfMemory();
         return;
     }
@@ -10636,7 +11031,33 @@ int SocketRecvPollState::continuePoll(ExceptionSink* xsink) {
     return rc;
 }
 
+int SocketRecvPollState::grow(ExceptionSink* xsink, int fd) {
+    // the buffer is doubled up to the size to receive, so that the memory follows the data received
+    size_t new_size = allocated > size / 2 ? size : QORE_MAX(allocated * 2, static_cast<size_t>(4096));
+    if (new_size > size) {
+        new_size = size;
+    }
+    if (bin->preallocate(new_size)) {
+        // the size to receive can come from the peer, so the read fails without ending the process; the data
+        // received is lost, and the rest of it cannot be told apart from what follows it, so the connection is shut
+        // down: no more data is read from it (issue 7417)
+        failed = true;
+        ::shutdown(fd, SHUTDOWN_ARG);
+        xsink->raiseException("SOCKET-RECV-ERROR", "the memory for the data to receive could not be allocated "
+            "after " QLLD " of " QLLD " bytes were received; the connection has been shut down", (int64)received,
+            (int64)size);
+        return -1;
+    }
+    allocated = new_size;
+    return 0;
+}
+
 int SocketRecvPollState::continuePollIntern(ExceptionSink* xsink) {
+    if (failed) {
+        xsink->raiseException("SOCKET-RECV-ERROR", "the read failed, as the memory for its data could not be "
+            "allocated");
+        return -1;
+    }
     if (received == size) {
         return 0;
     }
@@ -10652,12 +11073,15 @@ int SocketRecvPollState::continuePollIntern(ExceptionSink* xsink) {
     unsigned loop = 0;
 
     while (true) {
+        if (received == allocated && grow(xsink, io_use.getDescriptor())) {
+            return -1;
+        }
         ssize_t rc;
         if (SSLSocketHelper* ssl = io_use.getSsl()) {
             size_t real_io = 0;
             rc = ssl->doNonBlockingIo(xsink, "read",
                 reinterpret_cast<void*>(const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()) + received)),
-                size - received, SslAction::READ, real_io);
+                allocated - received, SslAction::READ, real_io);
             if (rc > 0) {
                 retry_tls_read = ssl->mustRetryRead();
             }
@@ -10703,7 +11127,7 @@ int SocketRecvPollState::continuePollIntern(ExceptionSink* xsink) {
 #else
                 reinterpret_cast<void*>(const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()) + received)),
 #endif
-                size - received, 0);
+                allocated - received, 0);
             //printd(5, "SocketRecvPollState::continuePoll() left: %ld rc: %d errno: %d)\n", size - received, rc,
             //    errno);
             if (*xsink) {
@@ -15469,9 +15893,10 @@ static void qore_socket_bind_reserve_port(qore_socket_private* priv, const std::
             continue;
         }
         // the new socket replaces the socket's descriptor, which keeps its port allocated until this returns
-        int old_fd = priv->sock;
+        uint32_t old_generation;
+        int old_fd = priv->getDescriptorGeneration(old_generation);
         bool close_old;
-        if (!priv->replaceDescriptor(old_fd, fd, close_old)) {
+        if (!priv->replaceDescriptor(old_fd, fd, close_old, nullptr, nullptr, &old_generation)) {
             for (int rfd : fds) {
                 qore_socket_private::closeDescriptor(rfd);
             }
@@ -15774,6 +16199,22 @@ static int qore_socket_bind_check_sandbox(QoreSandboxManager* sandbox_manager, c
     if (sandbox_manager && !sandbox_manager->checkNetworkBind(addr, size,
             qore_socket_sandbox_proto(addr->sa_family, socktype), xsink)) {
         qore_socket_set_sandbox_denied_error();
+        return -1;
+    }
+    return 0;
+}
+
+int qore_socket_bind_descriptor_checked(int fd, const struct sockaddr* addr, int size, int sock_type,
+        QoreSandboxManager* sandbox_manager, ExceptionSink* xsink) {
+    if (qore_socket_bind_check_sandbox(sandbox_manager, addr, size, q_get_sock_type(sock_type), xsink)) {
+        return -1;
+    }
+    if (qore_socket_bind_unshadowed(fd, addr, size, q_get_sock_type(sock_type), sandbox_manager, xsink)
+            == QORE_SOCKET_ERROR) {
+#ifdef _Q_WINDOWS
+        // set errno from windows error
+        sock_get_error();
+#endif
         return -1;
     }
     return 0;
@@ -16778,6 +17219,12 @@ size_t SocketSendPollOperation::getBytesSent() const {
     }
     assert(dynamic_cast<SocketSendPollState*>(poll_state.get()));
     return static_cast<SocketSendPollState*>(poll_state.get())->getBytesSent();
+}
+
+int64 qore_socket_poll_events_ops::getDeliveredBytes(const SocketSendPollOperation& op) {
+    AutoLocker al(op.sock->priv->m);
+    return std::max<int64>(0, static_cast<int64>(op.getBytesSent())
+        - qore_socket_private::getUnacknowledgedBytes(qore_socket_private::get(*op.sock->priv->socket)->sock));
 }
 
 const char* SocketSendPollOperation::getStateImpl() const {
@@ -19643,7 +20090,8 @@ QoreHashNode* qore_socket_poll_events_ops::continuePollImpl(SocketRecvPollOperat
             char* buf = reinterpret_cast<char*>(d->giveBuffer());
             char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
             if (!nbuf) {
-                xsink->outOfMemory();
+                // the size read can come from the peer (issue 7417)
+                qore_socket_raise_recv_string_memory_error(xsink, len);
                 ok = false;
             } else {
                 nbuf[len] = '\0';
@@ -19963,6 +20411,10 @@ int SocketReadHttpHeaderPollOperation::initPollState(ExceptionSink* xsink) {
     assert(sock->priv->m.trylock());
     if (initialized) {
         return 0;
+    }
+    // the rest of a chunked body that was not read to its end would be taken for the header (issue 7417)
+    if (sock->priv->socket->priv->checkHttpChunkedBodyFinished(xsink)) {
+        return -1;
     }
     if (initIntern(xsink)) {
         return -1;
@@ -20356,10 +20808,8 @@ int SocketReadHttpChunkedBodyPollOperation::handleChunkSize(ExceptionSink* xsink
     // the data helper must be used to read the bytes
     QoreStringDataHelper line(*line_val);
     const char* line_str = line.c_str();
-    size_t line_len = line.size();
-    if (line_len >= 2) {
-        line_len -= 2;
-    }
+    // the line is taken as every reader of a chunked body takes it (issue 7417)
+    size_t line_len = qore_socket_private::httpLinePayloadSize(line_str, line.size());
 
     int64_t chunk_size = 0;
     if (qore_socket_exec_parse_http_chunk_size(line_str, line_len, chunk_size, xsink)) {
@@ -20376,6 +20826,15 @@ int SocketReadHttpChunkedBodyPollOperation::handleChunkSize(ExceptionSink* xsink
         }
         chunked_body_state = ChunkedBodyState::RECV_TRAILER;
         return 0;
+    }
+
+    // the limit is applied before the chunk is read, so that no memory is allocated for data over it (issue 7417)
+    int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
+    int64 max_chunked_body_size = priv->getMaxChunkedBodySize();
+    if (max_chunked_body_size > 0 && chunk_size > max_chunked_body_size - body_size) {
+        xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
+            body_size + static_cast<int64>(chunk_size), max_chunked_body_size);
+        return -1;
     }
 
     current_chunk_size = chunk_size;
@@ -20402,15 +20861,20 @@ int SocketReadHttpChunkedBodyPollOperation::handleChunkData(ExceptionSink* xsink
             (int64)(bin->size()), (int64)chunk_size);
         return -1;
     }
+    // the chunk data ends with a line end (RFC 9112 section 7.1)
+    if (memcmp(static_cast<const char*>(bin->getPtr()) + chunk_size, "\r\n", 2)) {
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "the data of a chunk of " QLLD " bytes is not followed by "
+            "a line end", (int64)chunk_size);
+        return -1;
+    }
 
     my_socket_priv* priv = my_socket_priv::getPriv(*sock);
     priv->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_READ, source, bin->getPtr(), chunk_size);
-    if (binary_body) {
-        body_bin->append(bin->getPtr(), chunk_size);
-    } else {
-        body_str->concat(static_cast<const char*>(bin->getPtr()), chunk_size);
-    }
     bytes_consumed = true;
+    if (qore_socket_append_http_body(xsink, binary_body ? *body_bin : nullptr, binary_body ? nullptr : *body_str,
+            bin->getPtr(), chunk_size)) {
+        return -1;
+    }
 
     int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
     int64 max_chunked_body_size = priv->getMaxChunkedBodySize();
@@ -20461,6 +20925,8 @@ int SocketReadHttpChunkedBodyPollOperation::handleTrailer(ExceptionSink* xsink) 
             }
             priv->doReadHttpHeaderEvent(QORE_EVENT_HTTP_FOOTERS_RECEIVED, **out, source);
         }
+        // the whole body has been read
+        my_socket_priv::getPriv(*sock)->finishHttpChunkedBodyRead();
         chunked_body_state = ChunkedBodyState::DONE;
         received = true;
         return 0;
@@ -20476,7 +20942,8 @@ QoreHashNode* SocketReadHttpChunkedBodyPollOperation::continuePoll(ExceptionSink
     }
 
     if (!http_expect_cleared) {
-        my_socket_priv::getPriv(*sock)->clearHttpExpectChunkedBody();
+        // the body is unfinished until the read reaches its end (issue 7417)
+        my_socket_priv::getPriv(*sock)->startHttpChunkedBodyRead();
         http_expect_cleared = true;
     }
 
@@ -20660,6 +21127,8 @@ SocketReadHttpBodyPollOperation::SocketReadHttpBodyPollOperation(ExceptionSink* 
     body = new BinaryNode();
 
     if (chunked) {
+        // the body is unfinished until the read reaches its end (issue 7417)
+        my_socket_priv::getPriv(*sock_obj)->startHttpChunkedBodyRead();
         body_state = BodyState::RECV_CHUNK_SIZE;
         startBodyRead(xsink);
     } else if (content_length > 0) {
@@ -20767,6 +21236,11 @@ QoreHashNode* SocketReadHttpBodyPollOperation::continuePoll(ExceptionSink* xsink
         }
 
         if (!current_op->goalReached()) {
+            // the data ended before the end of a chunked body: it is not taken for the complete body (issue 7417)
+            if (body_state == BodyState::RECV_CHUNK_SIZE || body_state == BodyState::RECV_CHUNK_DATA
+                || body_state == BodyState::RECV_CHUNK_CRLF) {
+                xsink->raiseException("READ-HTTP-CHUNK-ERROR", "the data ended before the end of the chunked body");
+            }
             body_state = BodyState::DONE;
             return nullptr;
         }
@@ -20795,7 +21269,8 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvLength(ExceptionSink* x
     if (data->getType() == NT_BINARY) {
         const BinaryNode* bin = data->get<const BinaryNode>();
         if (bin->size() > 0) {
-            body->append(bin->getPtr(), bin->size());
+            // an exception is raised if the memory cannot be allocated (issue 7417)
+            qore_socket_append_http_body(xsink, body, nullptr, bin->getPtr(), bin->size());
         }
     }
 
@@ -20808,31 +21283,21 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkSize(ExceptionSink
     releaseCurrentOp(xsink);
 
     if (line_val->getType() != NT_STRING) {
+        // the data ended or was not read: the body is not complete (issue 7417)
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "expected a chunk size line, got '%s'",
+            line_val->getFullTypeName());
         body_state = BodyState::DONE;
         return nullptr;
     }
 
     QoreStringValueHelper line(*line_val);
-    const char* str = line->c_str();
-    size_t len = line->size();
-
-    // Strip trailing \r\n
-    if (len >= 2) {
-        len -= 2;
+    // the size is parsed as the other readers of a chunked body parse it (issue 7417)
+    int64_t chunk_size = 0;
+    if (qore_socket_private::parseHttpChunkSize(line->c_str(),
+            qore_socket_private::httpLinePayloadSize(line->c_str(), line->size()), chunk_size, xsink)) {
+        body_state = BodyState::DONE;
+        return nullptr;
     }
-
-    // Find semicolon (chunk extensions)
-    const char* semi = (const char*)memchr(str, ';', len);
-    size_t hex_len = semi ? (size_t)(semi - str) : len;
-
-    // Parse hex chunk size
-    char hex_buf[32];
-    if (hex_len >= sizeof(hex_buf)) {
-        hex_len = sizeof(hex_buf) - 1;
-    }
-    memcpy(hex_buf, str, hex_len);
-    hex_buf[hex_len] = '\0';
-    int64_t chunk_size = strtol(hex_buf, nullptr, 16);
 
     printd(5, "SocketReadHttpBodyPollOperation::handleRecvChunkSize() chunk_size=%lld\n",
         (long long)chunk_size);
@@ -20855,8 +21320,19 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkSize(ExceptionSink
         return continuePoll(xsink);
     }
 
+    // the limit of the socket is applied before the chunk is read, so that no memory is allocated for data over it
+    // (issue 7417)
+    int64 max_chunked_body_size = my_socket_priv::getPriv(*sock_obj)->getMaxChunkedBodySize();
+    if (max_chunked_body_size > 0 && chunk_size > max_chunked_body_size - static_cast<int64>(body->size())) {
+        xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
+            static_cast<int64>(body->size()) + static_cast<int64>(chunk_size), max_chunked_body_size);
+        body_state = BodyState::DONE;
+        return nullptr;
+    }
+
     // Read chunk data + trailing CRLF (chunk_size + 2 bytes)
     body_state = BodyState::RECV_CHUNK_DATA;
+    remaining = chunk_size;
     sock_obj->ref();
     current_op = new SocketRecvPollOperation(xsink, (ssize_t)(chunk_size + 2), sock_obj, false);
     if (*xsink) {
@@ -20871,13 +21347,27 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkData(ExceptionSink
     ValueHolder data_val(current_op->getOutput(), xsink);
     releaseCurrentOp(xsink);
 
-    if (data_val->getType() == NT_BINARY) {
-        const BinaryNode* bin = data_val->get<const BinaryNode>();
-        // Remove trailing CRLF (last 2 bytes)
-        if (bin->size() > 2) {
-            body->append(bin->getPtr(), bin->size() - 2);
-        }
+    // the chunk data, which ends with a line end (RFC 9112 section 7.1); data that ended before it, or a chunk not
+    // followed by a line end, is refused, and the body is not complete (issue 7417)
+    size_t chunk_size = static_cast<size_t>(remaining);
+    const BinaryNode* bin = data_val->getType() == NT_BINARY ? data_val->get<const BinaryNode>() : nullptr;
+    if (!bin || bin->size() != chunk_size + 2) {
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "read " QLLD " bytes for HTTP chunk size " QLLD,
+            bin ? (int64)bin->size() : 0ll, (int64)chunk_size);
+        body_state = BodyState::DONE;
+        return nullptr;
     }
+    if (memcmp(static_cast<const char*>(bin->getPtr()) + chunk_size, "\r\n", 2)) {
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "the data of a chunk of " QLLD " bytes is not followed by "
+            "a line end", (int64)chunk_size);
+        body_state = BodyState::DONE;
+        return nullptr;
+    }
+    if (qore_socket_append_http_body(xsink, body, nullptr, bin->getPtr(), chunk_size)) {
+        body_state = BodyState::DONE;
+        return nullptr;
+    }
+    remaining = 0;
 
     // Read next chunk size
     body_state = BodyState::RECV_CHUNK_SIZE;
@@ -20900,11 +21390,30 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkCrlf(ExceptionSink
     if (line_val->getType() == NT_STRING) {
         QoreStringValueHelper line(*line_val);
         if (line->size() == 2 && !strcmp(line->c_str(), "\r\n")) {
-            // Empty line — chunked transfer complete
+            // Empty line — chunked transfer complete; the whole body has been read
+            my_socket_priv::getPriv(*sock_obj)->finishHttpChunkedBodyRead();
             body_state = BodyState::DONE;
             return nullptr;
         }
-        // Trailer line — read next line; the lines of the section count together against the limit
+        // Trailer line — checked as the other readers of a chunked body check the trailer section, so that the
+        // section ends where they end it: a field line, or an obsolete line folding after one, that ends with CRLF;
+        // a bare LF line end or an empty line in the section is refused, as the text after it would be lost
+        // (the fields are not given by this reader)
+        if (!remaining || (*line->c_str() != ' ' && *line->c_str() != '\t')) {
+            std::string text(line->c_str(), line->size());
+            if (qore_socket_private::checkHttpFieldLines(xsink, &text[0], false, false, "READ-HTTP-CHUNK-ERROR",
+                    "chunked body trailer", true, true)) {
+                body_state = BodyState::DONE;
+                return nullptr;
+            }
+        } else if (line->size() < 2 || memchr(line->c_str(), '\n', line->size() - 1)
+                || memchr(line->c_str(), '\r', line->size() - 2)) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "invalid HTTP chunked body trailer received with a "
+                "bare CR or LF character in an obsolete line folding");
+            body_state = BodyState::DONE;
+            return nullptr;
+        }
+        // read the next line; the lines of the section count together against the limit
         printd(5, "SocketReadHttpBodyPollOperation::handleRecvChunkCrlf() trailer line\n");
         remaining += static_cast<int64_t>(line->size());
         sock_obj->ref();
@@ -20919,7 +21428,9 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkCrlf(ExceptionSink
         return continuePoll(xsink);
     }
 
-    // Unexpected output type — treat as complete
+    // the data ended or was not read: the body is not complete (issue 7417)
+    xsink->raiseException("READ-HTTP-CHUNK-ERROR", "expected a chunked body trailer line, got '%s'",
+        line_val->getFullTypeName());
     body_state = BodyState::DONE;
     return nullptr;
 }
@@ -20933,7 +21444,10 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvClose(ExceptionSink* xs
         const BinaryNode* bin = data_val->get<const BinaryNode>();
         if (bin->size() > 0) {
             has_data = true;
-            body->append(bin->getPtr(), bin->size());
+            if (qore_socket_append_http_body(xsink, body, nullptr, bin->getPtr(), bin->size())) {
+                body_state = BodyState::DONE;
+                return nullptr;
+            }
         }
     }
 
@@ -21030,6 +21544,16 @@ SocketSendAndReadHeaderPollOperation::SocketSendAndReadHeaderPollOperation(Excep
     }
 }
 
+int64 SocketSendAndReadHeaderPollOperation::getResponseSendProgress(bool& waiting_for_socket) const {
+    AutoLocker al(sock->priv->m);
+    if (phase != Phase::Sending || !poll_state) {
+        return -1;
+    }
+    waiting_for_socket = true;
+    return std::max<int64>(0, static_cast<int64>(static_cast<SocketSendPollState*>(poll_state.get())->getBytesSent())
+        - qore_socket_private::getUnacknowledgedBytes(qore_socket_private::get(*sock->priv->socket)->sock));
+}
+
 const char* SocketSendAndReadHeaderPollOperation::getStateImpl() const {
     switch (phase) {
         case Phase::Sending: return "sending";
@@ -21114,8 +21638,11 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
                 }
                 return getSocketPollInfoHash(xsink, SOCK_POLLIN);
             }
-            // Data is available — transition to header reading
-            poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
+            // Data is available — transition to header reading; the rest of a chunked body that was not read to its
+            // end would be taken for the header (issue 7417)
+            if (!sock->priv->socket->priv->checkHttpChunkedBodyFinished(xsink)) {
+                poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
+            }
             if (!*xsink && poll_state
                 && qore_socket_private::limitHttpRead(xsink, poll_state.get(),
                     sock->priv->socket->getMaxHeaderSize(), 0, "header")) {
@@ -21166,10 +21693,11 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
             // Convert binary to string for HTTP header parsing
             size_t len = raw->size();
             char* buf = reinterpret_cast<char*>(raw->giveBuffer());
-            char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
+            char* nbuf = reinterpret_cast<char*>(qore_socket_header_text_realloc(buf, len + 1,
+                "send-and-read-header"));
             if (!nbuf) {
-                free(buf);
-                xsink->outOfMemory();
+                // the buffer has been freed; the exception can be handled, and the connection is not used again
+                qore_socket_raise_recv_string_memory_error(xsink, len);
                 phase = Phase::Error;
                 sock->priv->clearNonBlock();
                 set_non_block = false;
@@ -21354,10 +21882,6 @@ int SocketSendAndReadHeaderPollOperation::startFastSend(std::shared_ptr<const st
         return -1;
     }
     phase = Phase::Sending;
-    if (idle_ttl_ms > 0) {
-        // on the monotonic clock, as the deadline given to the constructor (#6150)
-        idle_timeout_ms = q_get_monotonic_us() / 1000 + idle_ttl_ms;
-    }
     int rc = poll_state->continuePoll(xsink);
     if (*xsink) {
         fast_wire.reset();
@@ -21387,6 +21911,10 @@ int SocketSendAndReadHeaderPollOperation::startFastSend(std::shared_ptr<const st
 }
 
 QoreHashNode* SocketSendAndReadHeaderPollOperation::enterIdle(ExceptionSink* xsink) {
+    // The peer gets the full keep-alive interval after the last response byte.
+    if (idle_ttl_ms > 0) {
+        idle_timeout_ms = q_get_monotonic_us() / 1000 + idle_ttl_ms;
+    }
     responded = true;
     phase = Phase::Idle;
     // the response was sent: a draining server closes the connection unless a request has arrived already, which is
@@ -21423,7 +21951,8 @@ SocketSendStreamAndReadHeaderPollOperation::SocketSendStreamAndReadHeaderPollOpe
           content_length(content_length),
           chunked_encoding(chunked),
           fused(fused),
-          idle_timeout_ms(idle_timeout_ms), header_output(nullptr) {
+          idle_timeout_ms(idle_timeout_ms),
+          idle_ttl_ms(std::max<int64>(0, idle_timeout_ms - q_get_monotonic_us() / 1000)), header_output(nullptr) {
 
     if (!is->isIoThreadSafe()) {
         xsink->raiseException("HTTP-STREAM-ERROR", "InputStream is not I/O thread safe");
@@ -21453,6 +21982,20 @@ SocketSendStreamAndReadHeaderPollOperation::SocketSendStreamAndReadHeaderPollOpe
     }
 }
 
+int64 SocketSendStreamAndReadHeaderPollOperation::getResponseSendProgress(bool& waiting_for_socket) const {
+    AutoLocker al(sock->priv->m);
+    if (phase != Phase::SendHeaders && phase != Phase::StreamBody) {
+        return -1;
+    }
+    waiting_for_socket = bool(poll_state);
+    int64 written = phase == Phase::StreamBody ? hdr_size + bytes_sent : 0;
+    if (poll_state) {
+        written += static_cast<SocketSendPollState*>(poll_state.get())->getBytesSent();
+    }
+    return std::max<int64>(0, written
+        - qore_socket_private::getUnacknowledgedBytes(qore_socket_private::get(*sock->priv->socket)->sock));
+}
+
 const char* SocketSendStreamAndReadHeaderPollOperation::getStateImpl() const {
     switch (phase) {
         case Phase::SendHeaders: return "sending-headers";
@@ -21468,6 +22011,10 @@ const char* SocketSendStreamAndReadHeaderPollOperation::getStateImpl() const {
 }
 
 QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::enterIdle(ExceptionSink* xsink) {
+    // The peer gets the full keep-alive interval after the last response byte.
+    if (idle_ttl_ms > 0) {
+        idle_timeout_ms = q_get_monotonic_us() / 1000 + idle_ttl_ms;
+    }
     phase = Phase::Idle;
     // the response was sent: a draining server closes the connection unless a request has arrived already, which is
     // then read and answered with Connection: close; the controller closes the connection when the operation
@@ -21761,8 +22308,11 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
                     }
                     return getSocketPollInfoHash(xsink, SOCK_POLLIN);
                 }
-                // Data is available — transition to header reading
-                poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
+                // Data is available — transition to header reading; the rest of a chunked body that was not read to its
+                // end would be taken for the header (issue 7417)
+                if (!sock->priv->socket->priv->checkHttpChunkedBodyFinished(xsink)) {
+                    poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
+                }
                 if (!*xsink && poll_state
                     && qore_socket_private::limitHttpRead(xsink, poll_state.get(),
                         sock->priv->socket->getMaxHeaderSize(), 0, "header")) {
@@ -21802,10 +22352,11 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
                 // Convert binary to string for HTTP header parsing
                 size_t len = raw->size();
                 char* buf = reinterpret_cast<char*>(raw->giveBuffer());
-                char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
+                char* nbuf = reinterpret_cast<char*>(qore_socket_header_text_realloc(buf, len + 1,
+                    "send-stream-and-read-header"));
                 if (!nbuf) {
-                    free(buf);
-                    xsink->outOfMemory();
+                    // the buffer has been freed; the exception can be handled, and the connection is not used again
+                    qore_socket_raise_recv_string_memory_error(xsink, len);
                     phase = Phase::Error;
                     sock->priv->clearNonBlock();
                     set_non_block = false;
@@ -22060,8 +22611,10 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                     }
                     // Always read; add write if there are pending sends
                     int events = read_events;
+                    // not for every pumped InputStream: one that cannot progress until the peer sends a frame
+                    // would make this operation run continuously while the socket is writable (qore#7435)
                     if (h2_session->hasPendingData() || h2_session->wantWrite()
-                            || h2_session->hasActiveStreamInputStreams()) {
+                            || h2_session->needsInputStreamPass()) {
                         events |= SOCK_POLLOUT;
                     }
 
@@ -22135,8 +22688,10 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                 // InputStreams that need to be read and flushed.
                 {
                     int events = read_events ? read_events : SOCK_POLLIN;
+                    // not for every pumped InputStream: one that cannot progress until the peer sends a frame
+                    // would make this operation run continuously while the socket is writable (qore#7435)
                     if (h2_session->hasPendingData() || h2_session->wantWrite()
-                            || h2_session->hasActiveStreamInputStreams()) {
+                            || h2_session->needsInputStreamPass()) {
                         events |= SOCK_POLLOUT;
                     }
 

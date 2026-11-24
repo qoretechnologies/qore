@@ -138,6 +138,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
 
         # Unit tests (always run, no credentials needed)
         addTestCase("sanity tests", \sanityTests());
+        addTestCase("read-only action tests", \readOnlyActionTests());
         addTestCase("factory tests", \factoryTests());
         addTestCase("metadata tests", \metadataTests());
         addTestCase("child provider tests", \childProviderTests());
@@ -1110,5 +1111,26 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
                 }
             }
         }
+    }
+
+    #! the actions that only read declare it, and the catalogue reports them as read-only (qore#7454)
+    readOnlyActionTests() {
+        list<string> read_only = (
+            "get-customer",
+            "get-product",
+            "get-blog-post",
+            "get-order",
+            "get-shipment",
+        );
+        foreach string name in (read_only) {
+            *hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppAction("BigCommerce", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # updates an order: reported as changing state
+        assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(
+            DataProvider::DataProviderActionCatalog::getAppAction("BigCommerce", "update-order")));
     }
 }

@@ -59,6 +59,8 @@ class SelectorListElementsTest inherits QUnit::Test {
             "auto indexes: [20, [10, 30], 10, 40, 20, 50, null] (list<auto>)",
             "nullable loop: 300 (integer)",
             "auto loop: 300 (integer)",
+            "numeric hash key: [null, null] (list<nothing>)",
+            "hashdecl index: [null, null] (list<nothing>)",
         );
 
         const Iterations = 3;

@@ -65,7 +65,7 @@ class TestConnection inherits AbstractConnection {
 
     constructor(string name, bool fail = False) : AbstractConnection({
         "name": name,
-        "url": "test://localhost",
+        "url": "test://127.0.0.1",
     }, {"monitor": False}) {
         self.fail = fail;
     }
@@ -997,9 +997,9 @@ string sub own_ping(string url) {
             # the IPv6 host "::1:<port>" with the default port
             push cases, (sprintf("http://[::1]:%d", rest_port6), sprintf("http://[::1:%d]/", rest_port6));
         }
-        # a host with "?" followed by a port and a path: the client's host is "localhost?x", but the URL without its
-        # path reads as host "localhost" with the default port and a query
-        push cases, ("http://localhost", sprintf("http://localhost?x:%d/", rest_port));
+        # a host with "?" followed by a port and a path: the client's host is "127.0.0.1?x", but the URL without its
+        # path reads as host "127.0.0.1" with the default port and a query
+        push cases, ("http://127.0.0.1", sprintf("http://127.0.0.1?x:%d/", rest_port));
 
         code make_http = AbstractConnection sub (string url, *hash<auto> opts) {
             return new HttpConnection("http", "test", url, {"monitor": False}, opts ?? {});
@@ -1052,8 +1052,8 @@ string sub own_ping(string url) {
 
         foreach hash<auto> kind in ({"name": "HTTP", "make": make_http}, {"name": "JSON-RPC", "make": make_jsonrpc}) {
             # a proxy host with "?" followed by a port and a path reads as the proof's proxy without its path
-            AbstractConnection pconn = kind.make("http://127.0.0.1:" + closed_port, {"proxy": "http://localhost"});
-            assertEq("PERMISSION-DENIED", p.callFunction("proxy_ping", pconn, "http://localhost?x:3129/"),
+            AbstractConnection pconn = kind.make("http://127.0.0.1:" + closed_port, {"proxy": "http://127.0.0.1"});
+            assertEq("PERMISSION-DENIED", p.callFunction("proxy_ping", pconn, "http://127.0.0.1?x:3129/"),
                 kind.name + ": a proxy host with \"?\"");
 
             string label = sprintf("%s: credentials in the proxy option", kind.name);

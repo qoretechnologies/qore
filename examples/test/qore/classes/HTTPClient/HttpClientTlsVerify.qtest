@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-platform: macos - OpenSSL certificate verification with CA files and hashed CA dirs over TLS and QUIC
+# test-loopback: localhost - it verifies the certificate host name "localhost" over TCP and QUIC; its TLS listeners listen on both loopback addresses with the same port, its QUIC listeners on 0.0.0.0 and ::1 with the same port, and the listener of each certificate-failure case is bound to the host that its client connects to
 # Copyright 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -255,18 +256,14 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         Logger logger("tls-verify", LoggerLevel::getLevelInfo());
         server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
         server.setDefaultHandler("tls", new TlsVerifyHandler());
-        good_port = server.addListener(<HttpListenerOptionInfo>{
-            "node": "127.0.0.1",
-            "service": 0,
+        good_port = addLoopbackListener(<HttpListenerOptionInfo>{
             "cert": new SSLCertificate(GoodCert),
             "key": new SSLPrivateKey(GoodKey),
-        }).port;
-        wrong_port = server.addListener(<HttpListenerOptionInfo>{
-            "node": "127.0.0.1",
-            "service": 0,
+        });
+        wrong_port = addLoopbackListener(<HttpListenerOptionInfo>{
             "cert": new SSLCertificate(WrongHostCert),
             "key": new SSLPrivateKey(WrongHostKey),
-        }).port;
+        });
         server.waitForAsyncIo();
         quic_good_port = addQuicListener(<HttpListenerOptionInfo>{
             "cert": new SSLCertificate(GoodCert),
@@ -277,6 +274,52 @@ WKEuKQ7xuGuAiIESuSDBsSg=
             "key": new SSLPrivateKey(WrongHostKey),
         });
         server.waitForAsyncIo();
+    }
+
+    #! Adds a TLS listener on both loopback addresses with the same port and returns the port
+    /** The clients connect to \c "localhost", to verify the certificate's host name, and to \c "127.0.0.1": a
+        listener on only one loopback address would leave a client of \c "localhost" to the address in the other
+        family, where a test running beside this one can listen on the same port number (qore#7469).  The port that
+        the system assigns on \c 127.0.0.1 can be in use on \c ::1 (by TCP or by the UDP socket of the paired QUIC
+        listener), in which case another port is taken.  Without an IPv6 loopback address, the listener is only on
+        \c 127.0.0.1.
+    */
+    private int addLoopbackListener(hash<HttpListenerOptionInfo> opts) {
+        for (int attempt = 1; ; ++attempt) {
+            hash<HttpListenerOptionInfo> v4_opts = opts;
+            v4_opts.node = "127.0.0.1";
+            v4_opts.service = 0;
+            hash<auto> v4 = server.addListener(v4_opts);
+            if (!hasIpv6Loopback()) {
+                return v4.port;
+            }
+            try {
+                hash<HttpListenerOptionInfo> v6_opts = opts;
+                v6_opts.node = "::1";
+                v6_opts.service = v4.port;
+                server.addListener(v6_opts);
+            } catch (hash<ExceptionInfo> ex) {
+                # the port is in use on the IPv6 loopback address: another port is taken
+                server.stopListenerID(v4.id);
+                if (attempt == 20) {
+                    rethrow;
+                }
+                continue;
+            }
+            return v4.port;
+        }
+    }
+
+    #! Returns True if the IPv6 loopback address can be bound
+    private static bool hasIpv6Loopback() {
+        Socket s();
+        on_exit s.close();
+        try {
+            s.bindINET("::1", 0, False, AF_INET6);
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+        return True;
     }
 
     #! A TCP connection to the port of a QUIC listener is refused, and does not wait for its timeout (qore#6347)
@@ -309,8 +352,8 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         listening socket is closed once they are accepted: the connections hold the port, so no other socket can bind
         it (an IPv4 connection holds only the IPv4 side of the port: without the IPv6 one, an IPv6 socket could bind
         it), and a connection request to it finds no listening socket and is refused at once, on macOS as on Linux.
-        The QUIC listener then takes the same port number for UDP, which can be in use, in which case another port is
-        taken.
+        The QUIC listener then takes the same port number for UDP, on \c 0.0.0.0 and, if the host has an IPv6
+        loopback, on \c ::1, which can be in use, in which case another port is taken.
     */
     private int addQuicListener(hash<HttpListenerOptionInfo> opts) {
         for (int attempt = 1; ; ++attempt) {
@@ -346,7 +389,17 @@ WKEuKQ7xuGuAiIESuSDBsSg=
             }
             listener.close();
             try {
-                server.addQuicListener(opts, port);
+                hash<auto> v4 = server.addQuicListener(opts, port);
+                # a client of "localhost" can try the IPv6 loopback address first: the QUIC listener receives there
+                # too, so that it reaches no listener of a test running beside this one (qore#7469)
+                if (quic_tcp_v6_held) {
+                    try {
+                        server.addQuicListener(opts + <HttpListenerOptionInfo>{"node": "::1"}, port);
+                    } catch (hash<ExceptionInfo> ex) {
+                        server.stopListenerID(v4.id);
+                        rethrow;
+                    }
+                }
             } catch (hash<ExceptionInfo> ex) {
                 # the UDP port is in use: another port is taken
                 if (attempt == 20) {
@@ -598,8 +651,10 @@ WKEuKQ7xuGuAiIESuSDBsSg=
 
     private singleCertificateFailure(string protocol, string host, bool trusted, string api) {
         string msg = sprintf("%s %s trusted=%y %s", protocol, host, trusted, api);
+        # the listener is bound to the host that the client connects to: a socket bound to "localhost" holds its
+        # port on the name's addresses in the other address family, so that the client reaches no other listener
         Socket listener();
-        listener.bind("127.0.0.1:0");
+        listener.bind(host + ":0");
         listener.listen();
         listener.setCertificate(trusted ? WrongHostCert : GoodCert);
         listener.setPrivateKey(trusted ? WrongHostKey : GoodKey);
@@ -759,9 +814,8 @@ WKEuKQ7xuGuAiIESuSDBsSg=
     }
 
     #! With automatic protocol selection, a refused certificate ends the race of HTTP/3 and HTTP/2 without a retry
-    /** The TLS listeners also receive HTTP/3 on their ports.  With \c "localhost", the HTTP/3 connection can be made
-        to an address in another family than the listener's, where nothing receives datagrams; the certificate refusal
-        of HTTP/2 is reported all the same.
+    /** The TLS listeners also receive HTTP/3 on their ports, on both loopback addresses; the certificate refusal is
+        reported whichever protocol fails first.
     */
     raceCertificateFailureTest() {
         foreach bool trusted in (False, True) {

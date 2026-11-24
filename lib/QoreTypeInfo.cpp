@@ -6117,6 +6117,76 @@ bool QoreTypeInfo::unionHasEnumTypeFor(const QoreTypeInfo* ti, const QoreValue& 
     return n.isEnum() && getUnionType(ti) && qore_type_info_has_enum_spec_for(*ti, n);
 }
 
+//! checks the target of a weak reference that an lvalue holds for the binding of a reference to it (qore#7433)
+/** The weak reference has the type of its target: the target is checked as the assignment of the reference's type
+    checks it, and the lvalue keeps the weak reference.  A destroyed object is its target, as when a weak reference is
+    read, and as for an lvalue that holds a destroyed object.  A target that the type would convert to another value
+    (ex: a hash<string, int> for a reference<hash>) is refused, as the weak reference would not designate the converted
+    value.
+
+    @param weak the weak reference
+    @param target set to the target, with a reference of its own; the caller releases it (an lvalue's lock can be held
+    while a reference is bound to it, and the release of the last reference to the target runs its destructors)
+    @param conv set to the target converted by the type, with a reference of its own; released as \a target
+
+    @return 0 if the target is accepted as it is, -1 if an exception was raised
+*/
+template <typename FilterPolicy>
+static __attribute__((noinline)) int qore_reference_bind_weak_check(const QoreTypeInfo* target_ti,
+        const QoreValue& weak, FilterPolicy policy, ValueHolder& target, ValueHolder& conv, ExceptionSink* xsink) {
+    switch (weak.getType()) {
+        case NT_WEAKREF:
+            // the object, also if it has been destroyed
+            if (QoreObject* obj = weak.get<const WeakReferenceNode>()->get()) {
+                target = QoreValue(obj).refSelf();
+            }
+            break;
+        case NT_WEAKREF_HASH:
+            // a hash freed under the weak reference is an empty one
+            target = QoreValue(weak.get<const WeakHashReferenceNode>()->lock());
+            break;
+        default:
+            assert(weak.getType() == NT_WEAKREF_LIST);
+            // a list freed under the weak reference is an empty one
+            target = QoreValue(weak.get<const WeakListReferenceNode>()->lock());
+            break;
+    }
+    conv = target->refSelf();
+    policy.assignment(target_ti, "<reference>", *conv, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (!qore_value_unchanged_by_conversion(*target, *conv)) {
+        xsink->raiseException("RUNTIME-TYPE-ERROR", "<reference> expects type '%s', but got a weak reference to type "
+            "'%s', which the type would convert to another value that the weak reference does not designate",
+            QoreTypeInfo::getName(target_ti), target->getFullTypeName());
+        return -1;
+    }
+    return 0;
+}
+
+//! binds a reference to an lvalue that holds a weak reference (qore#7433)
+/** The lvalue keeps the weak reference if its target is accepted (see qore_reference_bind_weak_check()): nothing is
+    changed.
+
+    @param weak the weak reference, with a reference that the call takes
+*/
+template <typename FilterPolicy>
+static __attribute__((noinline)) void qore_reference_bind_weak(LValueHelper& lvh, const QoreTypeInfo* target_ti,
+        QoreValue weak, FilterPolicy policy, ExceptionSink* xsink) {
+    ValueHolder target(xsink);
+    ValueHolder conv(xsink);
+    qore_reference_bind_weak_check(target_ti, weak, policy, target, conv, xsink);
+    // the references are released by the helper's destructor, after the lvalue's lock: the release of the last
+    // reference to the target can run destructors, which can need the lock
+    lvh.saveTemp(weak);
+    lvh.saveTemp(target.release());
+    lvh.saveTemp(conv.release());
+    if (!*xsink) {
+        lvh.suppressObjectScan();
+    }
+}
+
 template <typename FilterPolicy>
 bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const QoreAcceptSpec& accept,
         const char* arg_type, bool obj, int param_num, const char* param_name, QoreValue& n,
@@ -6351,9 +6421,14 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     // replaces the value hands the old one to LValueHelper::saveTemp(), which defers the
                     // dereference to the helper's destructor, so this pointer is still backed by a live reference
                     // at the comparison below and its address cannot have been reused
-                    auto assign_back = [target_ti = uTi(), policy](LValueHelper& lvh) {
+                    auto assign_back = [target_ti = uTi(), policy, xsink](LValueHelper& lvh) {
                         QoreValue val = lvh.getReferencedValue();
                         if (val.isNothing()) {
+                            return;
+                        }
+                        qore_type_t vt = val.getType();
+                        if (vt == NT_WEAKREF || vt == NT_WEAKREF_HASH || vt == NT_WEAKREF_LIST) [[unlikely]] {
+                            qore_reference_bind_weak(lvh, target_ti, val, policy, xsink);
                             return;
                         }
                         const AbstractQoreNode* orig = val.getInternalNode();
@@ -6383,8 +6458,10 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                             // type, with or without NOTHING, or a valid object of a compatible class for a type that
                             // does not wrap it in a list; any other value could be converted or rejected by a bind
                             bool unchanged;
-                            // a weak reference has the type of what it refers to, but a bind does not accept it as that,
-                            // and a bind resolves a reference that the lvalue holds
+                            // a weak reference is not checked here: the check takes a reference to its target, whose
+                            // release could need the lock that the assignment holds, so it is refused here although a
+                            // bind without the lock accepts it (qore#7433); a bind resolves a reference that the lvalue
+                            // holds
                             if (current.isEnum() || current.getType() == NT_WEAKREF
                                     || current.getType() == NT_WEAKREF_HASH || current.getType() == NT_WEAKREF_LIST
                                     || current.getType() == NT_REFERENCE) {
@@ -6420,10 +6497,19 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                                 // the value is converted as the assignment below would convert it: a value that the
                                 // type rejects raises the same error as for a variable that can be written, and only
                                 // a value that the conversion changes has to be written back
-                                ValueHolder conv(val->refSelf(), xsink);
-                                policy.assignment(uTi(), "<reference>", *conv, xsink);
-                                if (!*xsink) {
-                                    needs_write = !qore_value_unchanged_by_conversion(*val, *conv);
+                                qore_type_t vt = val->getType();
+                                if (vt == NT_WEAKREF || vt == NT_WEAKREF_HASH || vt == NT_WEAKREF_LIST) [[unlikely]] {
+                                    // the variable keeps a weak reference whose target is accepted (qore#7433); the
+                                    // variable's lock is not held, so the references are released here
+                                    ValueHolder target(xsink);
+                                    ValueHolder conv(xsink);
+                                    qore_reference_bind_weak_check(uTi(), *val, policy, target, conv, xsink);
+                                } else {
+                                    ValueHolder conv(val->refSelf(), xsink);
+                                    policy.assignment(uTi(), "<reference>", *conv, xsink);
+                                    if (!*xsink) {
+                                        needs_write = !qore_value_unchanged_by_conversion(*val, *conv);
+                                    }
                                 }
                             }
                         }

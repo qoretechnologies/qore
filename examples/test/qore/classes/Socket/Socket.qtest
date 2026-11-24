@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-platform: macos - TCP, UNIX-domain and IPv6 sockets, TLS, timeouts, pipes as sockets, async socket I/O
+# test-loopback: localhost - it tests connecting to the name localhost, including the Happy Eyeballs fallback from a ::1 blackhole to 127.0.0.1 at the same port; the servers of its localhost clients are bound to the name "localhost", which listens on its first address and holds the port on the other loopback address, and its 127.0.0.1 servers have 127.0.0.1 clients
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -206,6 +207,8 @@ class SocketTest inherits QUnit::Test {
         addTestCase("SSL upgrade poll output test", \sslUpgradePollOutputTest());
         addTestCase("SSL poll send partial test", \sslPollSendPartialTest());
         addTestCase("SSL write disconnect test", \sslWriteDisconnectTest());
+        addTestCase("SSL write disconnect test: a server write whose ciphertext was staged",
+            \sslWriteDisconnectStagedTest());
         addTestCase("ALPN test", \alpnTest());
         addTestCase("Happy Eyeballs sync connect", \happyEyeballsSyncTest());
         addTestCase("Happy Eyeballs async connect", \happyEyeballsAsyncTest());
@@ -1959,6 +1962,13 @@ class SocketTest inherits QUnit::Test {
         assertEq(1, s.getConnectionId());
     }
 
+    #! A TLS server's write fails with SOCKET-SSL-ERROR once the client has disconnected
+    /** The write's ciphertext goes to the transport at once, or, when the socket buffer is full, is staged and
+        drained later; which of the two fails depends on the timing of the client's close (the staged path is taken
+        under load, and more often on macOS, whose send buffer is smaller).  Both report the failure as
+        SOCKET-SSL-ERROR; the staged path reported it as SOCKET-SEND-ERROR before qore#7383 (qore#7209), and
+        sslWriteDisconnectStagedTest() tests it without depending on the timing.
+    */
     sslWriteDisconnectTest() {
         Queue q();
         background sslReadDisconnect(q);
@@ -1986,6 +1996,57 @@ class SocketTest inherits QUnit::Test {
         }
         #printf("%s: %s\n", ex1.err, ex1.desc);
         assertEq("SOCKET-SSL-ERROR", ex1.err);
+    }
+
+    #! A TLS server's write whose ciphertext was staged fails with SOCKET-SSL-ERROR, as one that was not (qore#7209)
+    /** The write of sslWriteDisconnectTest() on its staged path, forced with dbg_force_staged_write_failure(): the
+        write stages its ciphertext, as with a full socket buffer, and the transport then fails with EPIPE, as when the
+        client closed the connection.
+    */
+    sslWriteDisconnectStagedTest() {
+        Queue q();
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            Socket c();
+            c.connectSSL("127.0.0.1:" + q.get(), 15s);
+            # read until the server closes the connection
+            try {
+                while (c.recvu1(15s)) {
+                }
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }();
+
+        Socket s();
+        s.bind("127.0.0.1:0");
+        s.listen();
+        s.setCertificate(TestCert);
+        s.setPrivateKey(TestCert);
+        q.push(s.getSocketInfo().port);
+        Socket ns = s.acceptSSL(15s);
+        on_exit {
+            ns.close();
+            done.waitForZero();
+        }
+        try {
+            call_function("dbg_force_staged_write_failure", ns);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                testSkip("debug build required for dbg_force_staged_write_failure()");
+            }
+            rethrow;
+        }
+        hash<ExceptionInfo> ex1;
+        try {
+            ns.send(TestCert, 15s);
+            fail("the forced failure of the staged ciphertext must fail the write");
+        } catch (hash<ExceptionInfo> ex) {
+            ex1 = ex;
+        }
+        assertEq("SOCKET-SSL-ERROR", ex1.err, sprintf("the write error (%s)", ex1.desc));
+        assertEq(Err::EPIPE, ex1.arg, "the errno is the exception argument");
+        assertTrue(ns.isOpen(), "the socket stays open after the write failed");
     }
 
     sslReadDisconnect(Queue q) {

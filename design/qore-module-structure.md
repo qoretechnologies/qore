@@ -1004,7 +1004,16 @@ The teardown handles each holder:
 - **Phase 0** (`delUser()`): the `del` callbacks of all user modules run.
 - **Phase 1** (`delUser()`): the namespace data of every user and AOT module Program
   is cleared, and the cycles held up by opaque references that they own are broken,
-  while every module Program exists (holder 1).
+  while every module Program exists (holder 1). The user and AOT modules are cleared
+  together, each before the modules that it requires, directly or through other
+  modules, with the requirements recorded at run time that `cleanup()` also orders by
+  (`getTeardownModuleDependencies()`, `qore_order_module_programs_dependents_first()`):
+  the objects that a module's data holds can be objects of the classes of a module that
+  it requires, whose destructors use the static variables of their own classes
+  (qore#7432). A cycle is broken only after all modules outside it that require it have been cleared.
+  As in `cleanup()`, the first choice is a module that the remaining modules require only at run time.
+  Module names decide ties. The opaque targets are
+  broken in the same order.
 - **Phase 2** (`delUser()`): user modules and native binary modules are deleted in
   dependency order. A native binary module is deleted first, as soon as no module
   left requires it (`deleteUnrequiredNativeModule()`): its `module_delete` function

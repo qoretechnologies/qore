@@ -3950,6 +3950,10 @@ static QoreHashNode* qore_socket_object_exec_read_http_header(QoreSocketObject* 
 
 static QoreStringNode* qore_socket_object_exec_read_http_header_string(QoreSocketObject* s,
         int timeout_ms, ExceptionSink* xsink) {
+    // the rest of a chunked body that was not read to its end would be taken for the header (issue 7417)
+    if (my_socket_priv::getPriv(*s)->checkHttpChunkedBodyFinished(xsink)) {
+        return nullptr;
+    }
     SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n\r\n"));
     s->ref();
     ValueHolder result(qore_socket_object_exec_recv_poll(s,
@@ -3982,11 +3986,8 @@ static QoreStringNode* qore_socket_object_exec_read_http_header_string(QoreSocke
 }
 
 static size_t qore_socket_object_exec_http_line_payload_size(const QoreStringNode& line) {
-    size_t len = line.size();
-    while (len && (line.c_str()[len - 1] == '\r' || line.c_str()[len - 1] == '\n')) {
-        --len;
-    }
-    return len;
+    // the line is taken as every reader of a chunked body takes it (issue 7417)
+    return my_socket_priv::httpLinePayloadSize(line.c_str(), line.size());
 }
 
 static bool qore_socket_object_exec_http_blank_line(const QoreStringNode& line) {
@@ -4120,7 +4121,8 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
         return nullptr;
     }
 
-    priv->clearHttpExpectChunkedBody();
+    // the body is unfinished until the read reaches its end (issue 7417)
+    priv->startHttpChunkedBodyRead();
 
     SimpleRefHolder<BinaryNode> body_bin(binary_body && !os && !recv_callback ? new BinaryNode : nullptr);
     SimpleRefHolder<QoreStringNode> body_str(binary_body || recv_callback
@@ -4143,13 +4145,9 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
         }
 
         size_t line_len = qore_socket_object_exec_http_line_payload_size(**line);
-        const char* line_str = line->c_str();
-        const char* semi = static_cast<const char*>(memchr(line_str, ';', line_len));
-        size_t hex_len = semi ? static_cast<size_t>(semi - line_str) : line_len;
-        std::string hex(line_str, hex_len);
-        long chunk_size = strtol(hex.c_str(), nullptr, 16);
-        if (chunk_size < 0) {
-            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "negative value given for chunk size (%ld)", chunk_size);
+        // the size is parsed as the other readers of a chunked body parse it (issue 7417)
+        int64_t chunk_size = 0;
+        if (my_socket_priv::parseHttpChunkSize(line->c_str(), line_len, chunk_size, xsink)) {
             return nullptr;
         }
 
@@ -4171,6 +4169,8 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
                     xsink, *info, &has_trailers)) {
                 return nullptr;
             }
+            // the whole body has been read
+            priv->finishHttpChunkedBodyRead();
             if (recv_callback) {
                 if (qore_socket_object_exec_run_http_recv_header_callback(obj, recv_callback,
                         has_trailers ? *output : nullptr, info.release(), xsink)) {
@@ -4179,12 +4179,6 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
                 return nullptr;
             }
             return output.release();
-        }
-
-        if (static_cast<unsigned long>(chunk_size) > static_cast<unsigned long>(std::numeric_limits<ssize_t>::max())) {
-            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "chunk size %ld exceeds the maximum supported size",
-                chunk_size);
-            return nullptr;
         }
 
         // apply the limit before the chunk is read, so no data over the limit is read, written, or delivered
@@ -4209,14 +4203,19 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
             if (write_rc == -1 || *xsink) {
                 return nullptr;
             }
-        } else if (!recv_callback && binary_body) {
-            body_bin->append(chunk->getPtr(), chunk->size());
-        } else if (!recv_callback) {
-            body_str->concat(static_cast<const char*>(chunk->getPtr()), chunk->size());
+        } else if (!recv_callback && qore_socket_append_http_body(xsink, *body_bin,
+                binary_body ? nullptr : *body_str, chunk->getPtr(), chunk->size())) {
+            return nullptr;
         }
 
         SimpleRefHolder<BinaryNode> crlf(qore_socket_object_exec_recv_bytes(s, 2, timeout_ms, xsink));
         if (*xsink) {
+            return nullptr;
+        }
+        // the chunk data ends with a line end (RFC 9112 section 7.1)
+        if (crlf->size() != 2 || memcmp(crlf->getPtr(), "\r\n", 2)) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "the data of a chunk of " QLLD " bytes is not followed by "
+                "a line end", static_cast<int64>(chunk_size));
             return nullptr;
         }
         priv->doChunkedReadEvent(QORE_EVENT_HTTP_CHUNKED_DATA_RECEIVED, static_cast<size_t>(chunk_size),
@@ -4829,7 +4828,8 @@ void QoreSocketObject::deref() {
 void QoreSocketObject::closeIo(ExceptionSink* xsink) {
     priv->socket->priv->prepareForClose();
     AutoLocker al(priv->m);
-    if (priv->socket->isOpen()) {
+    // a socket with no descriptor gets none from a connection being made (ex: resolving its host) (qore#7003)
+    if (!priv->socket->priv->endConnectIfNoDescriptor()) {
         qore_socket_private::get(*priv->socket)->shutdown_direct();
         priv->socket->priv->close();
     }
@@ -5643,8 +5643,10 @@ int qore_socket_object_private::checkIdleDataForAsyncPollLocked(ExceptionSink* x
         return -1;
     }
     // bytes that the socket has already read from the descriptor are not seen by a peek of the descriptor: a client
-    // that sent its next request before the response to the previous one (pipelining) has it here; for a server only
-    // (an HTTP client may have bytes there that it does not use, such as a body that a server sent to a HEAD request)
+    // that sent its next request before the response to the previous one (pipelining) has it here, and an HTTP client
+    // has bytes here that follow the response it read, which keep the connection from being reused (qore#7471): the
+    // client checks for them when a response ends, which closes such a connection, and again before it sends its
+    // next request on the connection
     if (buffered_is_data && p->buflen > 0) {
         return 1;
     }
@@ -6354,6 +6356,11 @@ bool qore_socket_object_private::isHttp2StreamEndStreamReceivedForAsyncPoll(int3
     return h2 && h2->isStreamEndStreamReceived(stream_id);
 }
 
+bool qore_socket_object_private::isHttp2StreamLocalOpen(int32_t stream_id) const {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(so);
+    return h2 && h2->isStreamLocalOpen(stream_id);
+}
+
 bool qore_socket_object_private::isHttp2StreamResetForAsyncPoll(int32_t stream_id) const {
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(so);
     return h2 && h2->isStreamReset(stream_id);
@@ -6393,6 +6400,11 @@ void qore_socket_object_private::releaseQuicStream(int64_t session_id, int64_t s
     if (session) {
         session->releaseStream(stream_id);
     }
+}
+
+bool qore_socket_object_private::isQuicBidiStreamOpen(int64_t session_id, int64_t stream_id) const {
+    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(so, session_id);
+    return session && session->isBidiStreamOpen(stream_id);
 }
 
 int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms) {

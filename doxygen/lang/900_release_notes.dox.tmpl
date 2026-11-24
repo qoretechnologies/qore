@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par HttpServer Limits the Request Bodies That It Buffers to 256 MiB by Default
+    A request body that @ref HttpServer::HttpServer "HttpServer" reads into memory and that is larger than
+    @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" (256 MiB) is answered with HTTP 413 when no
+    limit is set (a body that a handler reads as a stream is not limited); set the
+    @ref HttpServer::HttpServerOptionInfo::max_request_body_size "max_request_body_size" option to \c 0 for no limit.
+
     @par Streamed HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
     A streamed HTTP/2 or HTTP/3 response that a handler thread sends is ended when its stream takes less than 1 KiB/s
     while the server waits for it, so that a very slow client can no longer hold a handler thread; a client that keeps
@@ -223,11 +229,23 @@
     @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" change it
     (<a href="https://github.com/qoretechnologies/qore/issues/6867">issue 6867</a>).
 
+    @par HTTP/1.x Messages With Ambiguous Framing Are Refused
+    A request with both \c Transfer-Encoding and \c Content-Length, with a transfer coding other than chunked alone,
+    with more than one \c Host, or with a header line that ends with a bare LF, and a header or trailer section with an
+    empty line before its end are refused (see @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()");
+    @ref httpserverintro "HttpServer" answers such a request with 400 or 501 and closes the connection.
+
     @par A Member of a System Class Cannot Be Combined With a User Member of the Same Name
     A class hierarchy that combines a member of a user class with a member of a system class of the same name is
     refused whatever the order of the parent classes (it was refused in only one order), and the parse error names the
     class being parsed (see @ref class_member_combination;
     <a href="https://github.com/qoretechnologies/qore/issues/6772">issue 6772</a>).
+
+    @par The Handler of an HTTP/1.x Request Gets a Socket of Its Request
+    An HTTP/1.x handler declared by sandboxed code, or that asks for it (as one that gives its socket to code that is not
+    trusted must), gets a socket for its own request only, and aborts the connection with
+    @ref HttpServer::http_abort_connection() "http_abort_connection()" (see @ref httpserver_handler_socket; issues
+    <a href="https://github.com/qoretechnologies/qore/issues/7305">7305</a>, <a href="https://github.com/qoretechnologies/qore/issues/7338">7338</a>).
 
     @par HTTP Handlers Get an Object of Their Listener's Interface, Not the Listener
     The handlers of an HTTP server get an object with only the methods of
@@ -2811,6 +2829,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a pseudo-method call runs the method of the pseudo-class of the value's type at run time, also when the parser
+      resolved the call from another type, and the code of a pseudo-class refuses a value of another type with an
+      exception (see the note on pseudo-classes in @ref qore_classes;
+      <a href="https://github.com/qoretechnologies/qore/issues/7363">issue 7363</a>)
     - @ref RestClient::AbstractRestConnection::getAsync() "RestConnection::getAsync(False, rtopts)" accepts
       string-valued runtime options when it adds the default \c skip_login flag (issue #7408).
     - the frames of the calls that the initialization of a module makes name the module's
@@ -2830,6 +2852,10 @@
       Program family that had been released before, is released too and no longer reaches the next task of the worker;
       the release repeats until no data is left, and refuses what destructors save in its last pass, so that it always
       ends (<a href="https://github.com/qoretechnologies/qore/issues/7398">issue 7398</a>)
+    - a cycle of references between local variables (\c reference r = \a; a = \r;) is freed when the function that made
+      it returns, and no longer leaks; a cycle that a closure that captured one of its variables can still reach is
+      freed with the closure
+      (<a href="https://github.com/qoretechnologies/qore/issues/7329">issue 7329</a>)
     - @ref Qore::HTTPClient::getURL() "HTTPClient::getURL()", @ref Qore::HTTPClient::getProxyURL() "getProxyURL()"
       and @ref Qore::HTTPClient::getSafeProxyURL() "getSafeProxyURL()" give an IPv6 host in brackets and the path of a
       UNIX domain socket with every reserved character encoded; the URL was ambiguous without them, and
@@ -2904,6 +2930,10 @@
       a @ref weak_assignment_operator "weak reference" from the list or hash that it designates, instead of removing
       the weak reference itself or nothing
       (<a href="https://github.com/qoretechnologies/qore/issues/7306">issue 7306</a>)
+    - a variable that holds a @ref weak_assignment_operator "weak reference" can be given to a reference parameter of
+      the plain type of its target (which raised \c RUNTIME-TYPE-ERROR) and keeps it; a target that the parameter's
+      type would convert is refused instead of being replaced by a copy
+      (<a href="https://github.com/qoretechnologies/qore/issues/7433">issue 7433</a>)
     - the @ref remove "remove" and @ref delete "delete" operators remove a member of an object reached through a
       @ref weak_assignment_operator "weak reference" in the AST interpreter, as in the other execution modes, and no
       longer let an object that is still referenced be collected after such a removal in any mode
@@ -2994,6 +3024,12 @@
       the attempt's descriptor again when the connect operation was destroyed, closing any descriptor that had been
       given the number meanwhile, such as an HTTP client's event notifier
       (<a href="https://github.com/qoretechnologies/qore/issues/6962">issue 6962</a>)
+    - a connection of a @ref Qore::Socket "Socket" closed by another thread while it was being made could still use
+      the closed socket; it now fails as closed
+      (<a href="https://github.com/qoretechnologies/qore/issues/7003">issue 7003</a>)
+    - a UNIX socket connection of a @ref Qore::Socket "Socket" closed by another thread while it was being made could
+      still use the closed socket; it now fails as closed
+      (<a href="https://github.com/qoretechnologies/qore/issues/7156">issue 7156</a>)
     - the internal state and helpers of the data provider index classes (@ref providerindexutilintro
       "ProviderIndexUtil" and @ref providerindexintro "ProviderIndex") are not visible to subclasses; see
       @ref providerindexutil_v1_2 and @ref providerindex_v1_4 (<a href="https://github.com/qoretechnologies/qore/issues/7044">issue 7044</a>)
@@ -4513,6 +4549,30 @@
     - the \c keys operator, the merge of an object into a hash and the iteration over its members list, for the code of a
       class that a subclass inherits with \c private:internal, the members that it uses on an object of a further
       subclass; they returned nothing (<a href="https://github.com/qoretechnologies/qore/issues/7180">issue 7180</a>)
+    - no HTTP header is read on a @ref Qore::Socket "Socket" after a chunked body read stopped before its end
+      (@ref Qore::Socket::unfinishedHttpChunkedBody() "unfinishedHttpChunkedBody()"), chunk sizes are checked alike,
+      and a body read allocates memory as its data arrives, so that a body can neither be taken for another message
+      nor end the process (<a href="https://github.com/qoretechnologies/qore/issues/7417">issue 7417</a>)
+    - the trailer section of a chunked HTTP/1.x body ends where every reader ends it: a section with a line that ends
+      with a bare LF or with an empty line before its end is refused, so that the bytes after it cannot be taken for
+      another message
+    - an HTTP/1.x header ends where every reader ends it: a header with an empty line before its end, or a request
+      line or request field line that ends with a bare LF, is refused (see @ref Qore::Socket::readHTTPHeader()
+      "Socket::readHTTPHeader()"), so that the bytes after it cannot be taken for another message
+    - the \c Transfer-Encoding of an HTTP/1.x message frames its body as RFC 9112 requires in every reader, the HTTP
+      client and @ref httpserverintro "HttpServer": the chunked coding is recognized without regard to case and
+      whitespace, a request whose framing is ambiguous or unsupported is refused, and a response whose final
+      transfer coding is not chunked is read until the connection closes
+    - the parse of a circular @ref inheritance "class hierarchy" whose code looks up a method or member of a class
+      of the cycle ends with the parse error of the circular hierarchy instead of never ending or exhausting the
+      stack (<a href="https://github.com/qoretechnologies/qore/issues/7464">issue 7464</a>)
+    - an HTTP/1.x client connection is not reused after a response, including one without a body, when more data
+      follows the response on it, nor after a \c 101 response that does not switch the connection over (see
+      @ref httpclient_persistence "HTTPClient connection persistence")
+    - the HTTP/1.x client skips every interim \c 1xx response, such as \c 102 and \c 103, and returns the final
+      response, and fails a request answered with a \c 101 response that it did not ask for (see
+      @ref httpclient_interim_responses "HTTPClient interim responses";
+      <a href="https://github.com/qoretechnologies/qore/issues/7483">issue 7483</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 
