@@ -1,0 +1,209 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class EnvConnectionLookupAfterMissTest
+
+#! Connection names are looked up through the QORE_DATA_PROVIDERS modules after a lookup that resolves nothing
+#! (qore#7484)
+/** DataProvider::tryLoadProviderForConnectionFromEnv() loads each \c QORE_DATA_PROVIDERS module and looks the name up
+    (DataProvider::checkSymbol()); a module whose registration was complete (with or without a provider map) was
+    recorded after a lookup that resolved nothing, and a recorded module was skipped before the name was looked up, so
+    every later lookup of a valid name returned NOTHING.  A worker looks names up in orders with misses, in each
+    execution mode, with a module that is the connection provider and the \c QORE_DATA_PROVIDERS module and has no
+    \c get_data_provider_map(), with a \c QORE_DATA_PROVIDERS module whose provider map is loaded, and with both.  An
+    exception of a lookup reaches the caller whether or not a lookup was made before: the first lookup through a module
+    reported it as an invalid module, and returned NOTHING.
+*/
+class EnvConnectionLookupAfterMissTest inherits QUnit::Test {
+    public {
+        #! the module: a connection provider and QORE_DATA_PROVIDERS module without get_data_provider_map()
+        const Module = "%modern
+%requires ConnectionProvider
+
+module EnvLookupAfterMissConnections {
+    version = \"1.0\";
+    desc = \"connection provider and QORE_DATA_PROVIDERS module without get_data_provider_map()\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+}
+
+class EnvLookupAfterMissDataProvider inherits AbstractDataProvider {
+    string getName() {
+        return \"after-miss\";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{\"type\": \"EnvLookupAfterMissDataProvider\"};
+    }
+}
+
+class EnvLookupAfterMissConnection inherits AbstractConnection {
+    constructor() : AbstractConnection({\"name\": \"good\", \"desc\": \"test\", \"url\": \"aftermiss://x\"}) {
+    }
+
+    string getType() {
+        return \"aftermiss\";
+    }
+
+    bool hasDataProvider() {
+        return True;
+    }
+
+    AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        return new EnvLookupAfterMissDataProvider();
+    }
+
+    final private int getConnectionDomainsImpl() {
+        return 0;
+    }
+
+    private object getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new Mutex();
+    }
+}
+
+class EnvLookupAfterMissFailingConnection inherits EnvLookupAfterMissConnection {
+    AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        throw \"AFTER-MISS-ERROR\", \"the data provider cannot be created\";
+    }
+}
+
+public namespace EnvLookupAfterMissConnections {
+    public ConnectionProvider::AbstractConnection sub get_mod_connection(string name) {
+        if (name == \"failing\") {
+            return new EnvLookupAfterMissFailingConnection();
+        }
+        if (name != \"good\") {
+            throw \"CONNECTION-ERROR\", sprintf(\"unknown connection %y\", name);
+        }
+        return new EnvLookupAfterMissConnection();
+    }
+
+    public *hash<string, ConnectionProvider::AbstractConnection> sub get_mod_connections() {
+        return {\"good\": new EnvLookupAfterMissConnection()};
+    }
+}
+";
+
+        #! a QORE_DATA_PROVIDERS module with a provider map, whose registration is complete once its provider module
+        #! is loaded
+        const MapModule = "%modern
+module EnvLookupAfterMissMap {
+    version = \"1.0\";
+    desc = \"QORE_DATA_PROVIDERS module with a provider map\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+}
+
+public namespace EnvLookupAfterMissMap {
+    public hash<string, string> sub get_data_provider_map() {
+        return {\"aftermissprov\": \"EnvLookupAfterMissProvider\"};
+    }
+}
+";
+
+        #! the provider module of the map
+        const ProviderModule = "%modern
+module EnvLookupAfterMissProvider {
+    version = \"1.0\";
+    desc = \"provider module of a QORE_DATA_PROVIDERS map\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+}
+";
+
+        #! the worker: looks up the names given as arguments and prints the name of each data provider found
+        const Worker = "%modern
+%requires ConnectionProvider
+%requires DataProvider
+
+foreach string name in (ARGV) {
+    try {
+        *AbstractDataProvider dp = DataProvider::tryLoadProviderForConnectionFromEnv(name);
+        printf(\"%s: %s\\n\", name, dp ? dp.getName() : \"-\");
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"%s: %s\\n\", name, ex.err);
+    }
+}
+";
+
+        #! the QORE_DATA_PROVIDERS modules, the lookups of each run and the output expected
+        const Runs = (
+            # a module without get_data_provider_map(): a valid name before and after misses
+            ("EnvLookupAfterMissConnections", ("good", "missing", "good", "missing2", "good"),
+                ("good: after-miss", "missing: -", "good: after-miss", "missing2: -", "good: after-miss")),
+            # a miss first
+            ("EnvLookupAfterMissConnections", ("missing", "good", "good"),
+                ("missing: -", "good: after-miss", "good: after-miss")),
+            # a module with a provider map, which is recorded the same way
+            ("EnvLookupAfterMissMap", ("good", "missing", "good"),
+                ("good: after-miss", "missing: -", "good: after-miss")),
+            # an exception of the lookup, as the first lookup through the module and after a miss
+            ("EnvLookupAfterMissConnections", ("failing", "missing", "failing", "good"),
+                ("failing: AFTER-MISS-ERROR", "missing: -", "failing: AFTER-MISS-ERROR", "good: after-miss")),
+            # both modules
+            ("EnvLookupAfterMissMap" + PathSep + "EnvLookupAfterMissConnections",
+                ("missing", "good", "missing2", "good"),
+                ("missing: -", "good: after-miss", "missing2: -", "good: after-miss")),
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        TmpDir tmp("qore-env-connection-lookup-after-miss-");
+    }
+
+    constructor() : QUnit::Test("EnvConnectionLookupAfterMissTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("lookups after a miss in each execution mode", \testExecModes());
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        string mod_dir = tmp.path + DirSep + "modules";
+        mkdir(mod_dir);
+        writeFile(mod_dir + DirSep + "EnvLookupAfterMissConnections.qm", Module);
+        writeFile(mod_dir + DirSep + "EnvLookupAfterMissMap.qm", MapModule);
+        writeFile(mod_dir + DirSep + "EnvLookupAfterMissProvider.qm", ProviderModule);
+        string worker = tmp.path + DirSep + "worker.q";
+        writeFile(worker, Worker);
+        string qlib = normalize_dir(get_script_dir() + "/../../../../qlib");
+        string module_path = mod_dir + PathSep + qlib + (ENV.QORE_MODULE_DIR ? PathSep + ENV.QORE_MODULE_DIR : "");
+
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            foreach list<auto> run in (Runs) {
+                # the modules are loaded in a Program of their own (DataProvider::loadFromEnvironment()), which takes
+                # the default execution mode, not that of the worker, so the native code of a mode is not checked
+                string out = ExecModeHarness::run(sprintf("QORE_MODULE_DIR=%s "
+                    "QORE_CONNECTION_PROVIDERS=EnvLookupAfterMissConnections "
+                    "QORE_DATA_PROVIDERS=%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s %s",
+                    module_path, run[0], libqore_dir, libqore_dir, qore_bin, mode, worker, run[1].join(" ")),
+                    ExecModeHarness::NativeCheck::None);
+                assertEq(run[2], (select out.split("\n"), $1), sprintf("%s: %s: %s", mode, run[0],
+                    run[1].join(" ")));
+            }
+        }
+    }
+
+    private writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(contents);
+        f.close();
+    }
+}

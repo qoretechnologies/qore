@@ -1690,6 +1690,18 @@ public:
         message_limit = true;
     }
 
+    //! Ends the data at the end of an HTTP/1.x header section instead of at the pattern (qore#7491)
+    /** The header ends at its first empty line, where a line ends with LF, which a CR can precede (RFC 9112 section
+        2.2): at the first \c "\n\n" or \c "\n\r\n", so that \c "\r\n\r\n", \c "\r\n\n", \c "\n\r\n"
+        and \c "\n\n" all end it, where the parser of the header (qore_socket_private::checkHttpFieldLines()) finds
+        its end.  A CR that no LF follows does not end a line; the parser refuses it.  The pattern must be
+        \c "\r\n\r\n", whose matches this includes.
+    */
+    DLLLOCAL void setHttpHeaderEnd() {
+        assert(size == 4 && !memcmp(bytes, "\r\n\r\n", 4));
+        http_header_end = true;
+    }
+
 private:
     //! Receives data; continuePoll() records received data on the socket
     DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
@@ -1704,6 +1716,8 @@ private:
     bool line_limit = false;
     //! true if the limit is that of a message (qore#6914)
     bool message_limit = false;
+    //! true if the data ends at the end of an HTTP/1.x header section (qore#7491); see setHttpHeaderEnd()
+    bool http_header_end = false;
 
     qore_socket_private* sock;
     // we are using QoreStringNode as it has a much better append / concat implementation than BinaryNode
@@ -2105,6 +2119,17 @@ struct qore_socket_private : public QoreReferenceCounter {
     using CloseWakes = std::vector<std::shared_ptr<std::function<void()>>>;
     //! Waits on a socket without a descriptor (e.g. during DNS resolution), protected by close_m.
     CloseWakes generation_wakes;
+#ifdef DEBUG
+    //! A single allocation failure in the registration of this socket's next generation wake.
+    enum class WakeAllocation { None, Callback, SocketList, OperationMap, Recheck };
+    std::atomic<WakeAllocation> dbg_wake_failure{WakeAllocation::None};
+
+    DLLLOCAL void dbgCheckWakeAllocation(WakeAllocation point) {
+        if (dbg_wake_failure.compare_exchange_strong(point, WakeAllocation::None, std::memory_order_relaxed)) {
+            throw std::bad_alloc();
+        }
+    }
+#endif
 
     //! Registers a one-shot wake for the next close if the socket still has no descriptor.
     //! Releasing the returned hold unregisters it.
@@ -4841,7 +4866,8 @@ public:
         @param max_size the limit of the whole section in bytes
         @param used the size of the part of the section that was read before this state, which is counted in the
             limit
-        @param what what is read: \c "header", \c "chunked body trailer" or \c "chunk size line"
+        @param what what is read: \c "header", \c "chunked body trailer" or \c "chunk size line"; a header is read
+            up to the first empty line, whatever its line ends (see SocketRecvUntilBytesPollState::setHttpHeaderEnd())
 
         @return 0 if the state was limited, -1 if the part of the section read already leaves no room for the data of
         the state, and an exception was raised
@@ -4850,6 +4876,11 @@ public:
             const char* what) {
         assert(state);
         assert(dynamic_cast<SocketRecvUntilBytesPollState*>(state));
+        // every reader of a header section ends it where its parser ends it: at the first empty line, whatever the
+        // line ends (qore#7491)
+        if (!strcmp(what, "header")) {
+            static_cast<SocketRecvUntilBytesPollState*>(state)->setHttpHeaderEnd();
+        }
         // a state limit of 0 means no limit: nothing is left, and the data to come cannot be empty
         if (used >= max_size) {
             raiseHttpHeaderTooLarge(xsink, max_size, what);
@@ -4857,6 +4888,61 @@ public:
         }
         static_cast<SocketRecvUntilBytesPollState*>(state)->setLimit(max_size - used, what, max_size);
         return 0;
+    }
+
+    //! returns the size of the text of an HTTP/1.x header section read up to its end, without the empty line that
+    //! ends it and the line end before it (qore#7491)
+    /** The header ends with \c "\n\n" or \c "\n\r\n", where a CR can precede the first LF (see
+        SocketRecvUntilBytesPollState::setHttpHeaderEnd())
+
+        @param str the text read
+        @param len the length of the text in bytes
+
+        @return the size of the text without its end, or \a len if the text does not end as a header section ends
+    */
+    DLLLOCAL static size_t getHttpHeaderTextSize(const char* str, size_t len) {
+        assert(str || !len);
+        // the empty line
+        size_t end;
+        if (len >= 2 && str[len - 1] == '\n' && str[len - 2] == '\n') {
+            end = len - 1;
+        } else if (len >= 3 && str[len - 1] == '\n' && str[len - 2] == '\r' && str[len - 3] == '\n') {
+            end = len - 2;
+        } else {
+            return len;
+        }
+        // the line end before it
+        assert(end && str[end - 1] == '\n');
+        --end;
+        if (end && str[end - 1] == '\r') {
+            --end;
+        }
+        return end;
+    }
+
+    //! returns the start of a line of HTTP text received, for the argument of an exception, with its non-printable
+    //! bytes and backslashes escaped as \c "\xhh"
+    /** The line is not given in the description of an exception, which a client checks for text of its own (such as
+        for a closed connection, which is retried)
+
+        @param str the start of the line
+        @param len the length of the line in bytes, without its line end
+    */
+    DLLLOCAL static QoreStringNode* getHttpLineArg(const char* str, size_t len) {
+        QoreStringNode* line = new QoreStringNode;
+        static constexpr size_t MaxShown = 64;
+        for (size_t i = 0; i < len && i < MaxShown; ++i) {
+            unsigned char c = static_cast<unsigned char>(str[i]);
+            if (c < 0x20 || c >= 0x7f || c == '\\') {
+                line->sprintf("\\x%02x", static_cast<unsigned>(c));
+            } else {
+                line->concat(static_cast<char>(c));
+            }
+        }
+        if (len > MaxShown) {
+            line->concat("...");
+        }
+        return line;
     }
 
     //! raises an exception if HTTP header or trailer text received contains a NUL character
@@ -4885,6 +4971,8 @@ public:
 
     //! checks the lines of an HTTP header or trailer section as RFC 9112 requires
     /** - a CR is allowed only before the LF that ends a line; a bare CR is invalid (RFC 9112 section 2.2)
+        - a field line has no control characters other than HTAB (RFC 9110 sections 5.1 and 5.5); the exception
+          raised for one has the start of the line, with its non-printable bytes escaped, as its argument
         - a line may end with LF instead of CRLF (section 2.2), unless \a reject_bare_lf is true
         - a field line has a colon, the field name before it is not empty and has no whitespace, as between the name
           and the colon (sections 5 and 5.1)
@@ -4893,9 +4981,10 @@ public:
           before the first field line is refused (section 2.2)
 
         The check ends at the first empty line, which ends the section; if \a end_at_empty_line is true, text after
-        it is refused: the readers find the end of a section where its line ends are CRLF, and a parser that ended it
-        at an earlier empty line would lose the text after it, which the sender meant as something else (the next
-        message, or the rest of the section)
+        it is refused: the readers of a trailer section read its lines up to CRLF, and a parser that ended it at an
+        earlier empty line would lose the text after it, which the sender meant as something else (the next message,
+        or the rest of the section); the readers of a header end it at its first empty line, whatever its line ends
+        (qore#7491), so no text follows it
 
         @param xsink for the exception
         @param str the text received, NUL-terminated; obsolete line foldings are replaced with spaces in it
@@ -4944,6 +5033,21 @@ public:
                     return -1;
                 }
                 break;
+            }
+            if (!start_line) {
+                // a field line has no control characters other than HTAB: a field value is made of visible
+                // characters, SP, HTAB and obs-text (RFC 9110 section 5.5), and a field name of visible characters
+                // (section 5.1); a CR before the LF that ends the line is not in it (qore#7491)
+                for (const char* c = line; c < le; ++c) {
+                    unsigned char uc = static_cast<unsigned char>(*c);
+                    if ((uc < 0x20 && uc != '\t') || uc == 0x7f) {
+                        xsink->raiseExceptionArg(err, getHttpLineArg(line, le - line), "invalid HTTP %s received "
+                            "with the control character 0x%02x in a field line at byte offset %zu; a field line can "
+                            "have no control characters other than HTAB (RFC 9110 section 5.5)", what,
+                            static_cast<unsigned>(uc), static_cast<size_t>(c - str));
+                        return -1;
+                    }
+                }
             }
             if (start_line) {
                 start_line = false;
@@ -5215,9 +5319,74 @@ public:
         return 0;
     }
 
+    //! checks the status line at the start of the header of an HTTP/1.x response (qore#7485)
+    /** The line must be <tt>HTTP-version SP status-code [ SP [ reason-phrase ] ]</tt>:
+        <tt>HTTP-version = "HTTP/" DIGIT "." DIGIT</tt>, a single space, a status code of exactly three digits in the
+        range 100 - 599 (RFC 9110 section 15: other values are invalid), and either the end of the line or a space and
+        a reason phrase of <tt>HTAB / SP / VCHAR / obs-text</tt>, which can be empty; nothing can precede the version,
+        not even whitespace or an empty line.  The line ends with LF, which a CR can precede.  RFC 9112 section 4
+        requires the space after the status code, but a line that ends right after the code is unambiguous, and is
+        accepted, as other clients do, since servers send it.
+
+        @param xsink for the \c SOCKET-HTTP-ERROR exception raised for an invalid status line
+        @param str the header, which the first line of is checked
+
+        @return 0 if the status line is valid, -1 if not, with an exception raised
+    */
+    DLLLOCAL static int checkHttpStatusLine(ExceptionSink* xsink, const char* str) {
+        assert(str);
+        const char* lf = strchr(str, '\n');
+        size_t len = lf ? static_cast<size_t>(lf - str) : strlen(str);
+        if (len && str[len - 1] == '\r') {
+            --len;
+        }
+        // a line terminator or the end of the string is neither a digit nor a space, so each test below stops at the
+        // end of a shorter line
+        auto is_digit = [](char c) -> bool { return c >= '0' && c <= '9'; };
+        const char* why = nullptr;
+        if (strncmp(str, "HTTP/", 5) || !is_digit(str[5]) || str[6] != '.' || !is_digit(str[7]) || str[8] != ' ') {
+            why = "it does not start with an HTTP version (\"HTTP/\" DIGIT \".\" DIGIT) followed by a space";
+        } else if (!is_digit(str[9]) || !is_digit(str[10]) || !is_digit(str[11]) || len < 12
+                || (len > 12 && str[12] != ' ')) {
+            why = "the status code is not three digits followed by a space or the end of the line";
+        } else {
+            int code = (str[9] - '0') * 100 + (str[10] - '0') * 10 + (str[11] - '0');
+            if (code < 100 || code > 599) {
+                why = "the status code is not in the range 100 - 599";
+            } else {
+                for (size_t i = 13; i < len; ++i) {
+                    unsigned char c = static_cast<unsigned char>(str[i]);
+                    if ((c < 0x20 && c != '\t') || c == 0x7f) {
+                        why = "the reason phrase has a control character";
+                        break;
+                    }
+                }
+            }
+        }
+        if (!why) {
+            return 0;
+        }
+        // the start of the line is given in the argument of the exception, with its non-printable bytes escaped; it
+        // is not given in the description, which a client checks for text of its own (such as for a closed
+        // connection, which is retried)
+        xsink->raiseExceptionArg("SOCKET-HTTP-ERROR", getHttpLineArg(str, len), "invalid HTTP response status line received: %s; "
+            "expecting \"HTTP/<digit>.<digit> <status code 100 - 599> <reason phrase>\" (RFC 9112 section 4)", why);
+        return -1;
+    }
+
     //! processes a header string to a hash and raises socket events
+    /** @param xsink for any exception raised
+        @param hdr the header string
+        @param info an optional hash for header information
+        @param source the event source
+        @param headers_raw_key the key of the fields with their original names in \a info
+        @param expect_response true if the header must be that of a response, as an HTTP client reads (qore#7485): its
+        first line is checked as a status line (see checkHttpStatusLine()) whatever it starts with; when false, a
+        header that starts with \c "HTTP/" is a response, whose status line is checked alike, and any other is a request
+    */
     DLLLOCAL QoreHashNode* processHttpHeaderString(ExceptionSink* xsink, QoreStringNodeHolder& hdr,
-            QoreHashNode* info, int source, const char* headers_raw_key = "headers-raw") {
+            QoreHashNode* info, int source, const char* headers_raw_key = "headers-raw",
+            bool expect_response = false) {
         // the rest of a chunked body that was not read to its end would be taken for this header (issue 7417)
         if (checkHttpChunkedBodyFinished(xsink)) {
             return nullptr;
@@ -5230,11 +5399,18 @@ public:
         }
         // the field lines are checked as RFC 9112 requires; an obsolete line folding is refused in a request and
         // replaced with spaces in a response, which a user agent must do (RFC 9112 section 5.2); the readers end a
-        // header at its first empty line with CRLF line ends, so a line of a request that ends with a bare LF is
-        // refused, as is text after the first empty line of any header: a parser that took a bare LF as a line end
-        // would end the header there, and the text after it, which can be another message, would be lost; a line of
-        // a response can end with LF, which a recipient may accept (RFC 9112 section 2.2)
-        bool is_request = strncmp(hdr->c_str(), "HTTP/", 5) != 0;
+        // header at its first empty line, where a line ends with LF, which a CR can precede (qore#7491); a line of a
+        // response can end with LF, which a recipient may accept (RFC 9112 section 2.2), while a line of a request
+        // that ends with a bare LF is refused (HttpServer answers 400 and closes the connection), as a server that
+        // takes the end of a request where another recipient does not would let a request be smuggled; text after
+        // the first empty line of any header is refused
+        bool is_request = !expect_response && strncmp(hdr->c_str(), "HTTP/", 5) != 0;
+        // the status line of a response is checked first (qore#7485): one that is not valid, such as one with other
+        // data before it or a status code that is not three digits, would be read as a request line, or give a wrong
+        // status code
+        if (!is_request && checkHttpStatusLine(xsink, hdr->c_str())) {
+            return nullptr;
+        }
         if (checkHttpFieldLines(xsink, const_cast<char*>(hdr->c_str()), true, is_request, "SOCKET-HTTP-ERROR",
                 "header", is_request, true)) {
             return nullptr;

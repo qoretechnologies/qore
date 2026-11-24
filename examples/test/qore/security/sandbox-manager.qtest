@@ -2346,19 +2346,26 @@ nothing sub probeSymlink(string target, string link_path) {
         sm.setFilesystemSandboxRoot(inside);
         Program p = makeFsProbeProgram(sm);
 
-        # a link created by the sandboxed code itself, pointing at a file outside the root that
-        # does not exist yet
-        p.callFunction("probeSymlink", outside + "/created.txt", inside + "/escape");
-        assertTrue(is_link(inside + "/escape"), "the sandboxed program created the link");
+        # the sandboxed code cannot create a link to a file outside the root that does not exist yet, nor one through
+        # such a link: the target of a link is checked as the link reaches it (qore#7498)
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
+            p.callFunction("probeSymlink", outside + "/created.txt", inside + "/escape");
+        }, NOTHING, "the sandboxed program cannot create a dangling link to outside the root");
+        assertFalse(is_link(inside + "/escape"), "no link was created");
 
+        # a dangling link to outside the root that the sandbox did not create (here the host's)
+        symlink(outside + "/created.txt", inside + "/escape");
         assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
             p.callFunction("probeWrite", inside + "/escape", "PWNED");
         }, NOTHING, "writing through a dangling link to outside the root is denied");
         assertFalse(is_file(outside + "/created.txt"), "nothing was created outside the root");
 
-        # the same through a chain of dangling links
-        p.callFunction("probeSymlink", inside + "/escape", inside + "/escape2");
-        p.callFunction("probeSymlink", inside + "/escape2", inside + "/escape3");
+        # the same through a chain of dangling links, which the sandboxed code cannot extend either
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
+            p.callFunction("probeSymlink", inside + "/escape", inside + "/escape2");
+        }, NOTHING, "the sandboxed program cannot create a link through a dangling link to outside the root");
+        symlink(inside + "/escape", inside + "/escape2");
+        symlink(inside + "/escape2", inside + "/escape3");
         assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
             p.callFunction("probeWrite", inside + "/escape3", "PWNED");
         }, NOTHING, "writing through a chain of dangling links to outside the root is denied");

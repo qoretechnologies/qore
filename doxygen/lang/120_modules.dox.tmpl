@@ -1378,8 +1378,11 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
       when parsing modules
 
     When parsing module code, the default warning mask is set to @ref Qore::WARN_MODULES "WARN_MODULES", and any
-    warnings are treated as errors.   Furthermore, any restrictions that the importing @ref Qore::Program "Program"
-    object has will be added to the module's @ref Qore::Program "Program" object, including the extended parse
+    warnings are treated as errors (@ref Qore::load_module_warn() "load_module_warn()" returns them instead).  This
+    applies to every file of a @ref separated_modules "separated module" as to a module in a single file, including
+    the warnings that are found only when the module's code is committed, such as \c INVALID-OPERATION.  Furthermore,
+    any restrictions that the importing @ref Qore::Program "Program" object has will be added to the module's
+    @ref Qore::Program "Program" object, including the extended parse
     options (for example \c no-class-defs, \c no-new or \c no-module-path-directives), as will its permissions
     (for example @ref allow-weak-references "%allow-weak-references" or
     @ref allow-opaque-references "%allow-opaque-references").  Options that only select language behavior (the

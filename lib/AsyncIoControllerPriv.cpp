@@ -36,6 +36,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include <qore/SocketPollOperation.h>
+#include "qore/intern/QoreLastAttemptPollOperation.h"
 // QC_SocketPollOperation.h no longer needed — controller_notifier plumbing removed
 #include "qore/intern/QC_Http2PollOperationBase.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
@@ -8500,6 +8501,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         // test flake (test#2 in pipeline 49637) is the canonical symptom.
         int processed_target_this_iter = t.submit_seq.load(std::memory_order_acquire);
 
+#ifdef DEBUG
+        // the microseconds that the dbg_phase1_time_offset test hook adds to this iteration's time (qore#7480)
+        int64 dbg_time_offset_us = 0;
+#endif
         // Re-check cmdq after processCommands returns.  Producers mutate cmdq
         // while holding m, so taking the same lock here gives a reliable view
         // before we do normal I/O work or go back to kqueue/epoll.
@@ -8508,6 +8513,13 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             if (!t.cmdq.empty()) {
                 continue;
             }
+#ifdef DEBUG
+            if (t.dbg_phase1_time_offset) {
+                bool has_ready = !ready_socket_hashes.empty() || !ready_socket_events.empty()
+                    || !ready_key_events.empty() || !ssl_deferred_hashes.empty() || !t.wake_socket_hashes.empty();
+                dbg_time_offset_us = t.dbg_phase1_time_offset(t, has_ready);
+            }
+#endif
         }
 
         // --- PHASE 1: Snapshot under lock ---
@@ -8520,6 +8532,16 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             bool timed_out;
             bool was_ready;  // true if this op was triggered by a ready event (kqueue/epoll)
             int ready_events;  // QORE_EV_* mask that triggered this op
+            // true if the event loop reported this op's descriptor ready (not a wake or an SSL-deferred recheck)
+            bool event_ready;
+            // true if this op's step runs on this thread (a C++ poll operation without needsWorkerDispatch()), as
+            // determined when it was queued; Phase 2 runs the step where this says, so that an op given a last
+            // attempt cannot be dispatched to a callback worker (qore#7480)
+            bool io_thread_step;
+            // true if this op opted in to a last attempt (QoreLastAttemptPollOperation) and its
+            // positive deadline has passed: its step is its last attempt, and it times out if the step asks to wait
+            // again (qore#7480)
+            bool last_attempt;
         };
         std::vector<OpToPoll> ops_to_poll;
         int64 poll_deadline_us = 0;
@@ -8569,26 +8591,56 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             // Event-driven Phase 1: only process entries that are ready, new,
             // or have expired timeouts.  O(ready + new + expired) instead of O(n).
             int64 now_us = get_epoch_us();
+#ifdef DEBUG
+            now_us += dbg_time_offset_us;
+#endif
             ++t.phase1_gen;
 
             // Helper lambda: queue an entry if not already queued this generation
+            // event_ready: the event loop reported the op's descriptor ready; a ready op without it was woken (a
+            // WakeSocket command, a close wake) or is rechecked for SSL-buffered data
+            //
+            // An op whose positive deadline has passed (timed_out: Step C) times out without a step, so that
+            // readiness cannot keep it alive past its deadline (level-triggered readiness, as of macOS kqueue
+            // connect-ready, would otherwise do so forever).  The only exception is an op that opted in to a last
+            // attempt (QoreLastAttemptPollOperation: a plain TCP accept), whose step completes
+            // it or asks to wait again without starting anything: it gets exactly one last step at the expiry of its
+            // deadline, whether or not the poll before this iteration reported its descriptor ready (the loop can go
+            // round without polling, when a command arrives before the poll, and a capped batch of events can leave
+            // the descriptor out), so that a result that is available at the deadline is delivered (ex: a connection
+            // in a listener's backlog when the I/O thread gets to the listener only after the deadline); a step that
+            // asks to wait again ends the op with the timeout (see Phase 2).  It gets none if it was woken in this
+            // iteration (a WakeSocket command, a close wake, an SSL-deferred recheck), if its ready event carries an
+            // error or hang-up flag (as of a closed descriptor, which is not usable for a clean step), or if its step
+            // does not run on this thread (a step on a callback worker returns as a command, which cannot end the op
+            // with its timeout) (qore#7480).  Do not apply this to timeout_us == 0: those are nonblocking probes,
+            // whose first step is their probe.
+            auto last_attempt_allowed = [&](const PollInfo& pinfo, bool io_thread_step) -> bool {
+                return pinfo.timeout_us > 0 && pinfo.last_woken_gen != t.phase1_gen && io_thread_step
+                    && qore_poll_op_completes_in_last_attempt(pinfo.spop_base);
+            };
             auto try_queue = [&](PollInfo& pinfo, bool timed_out,
-                    bool ready = false, int ready_events = 0) -> bool {
+                    bool ready = false, int ready_events = 0, bool event_ready = false) -> bool {
+                if (ready && !event_ready) {
+                    // a woken op gets no last attempt at its deadline, also if its descriptor was reported ready
+                    // in this iteration as well (qore#7480)
+                    pinfo.last_woken_gen = t.phase1_gen;
+                }
                 if (pinfo.last_queued_gen == t.phase1_gen) {
                     if (timed_out && pinfo.timeout_us > 0) {
-                        // A ready fd can queue an op before Step C sees its
-                        // expired operation timeout.  For elapsed positive
-                        // deadlines, the timeout must win, or level-triggered
-                        // readiness can keep the op alive forever (observed
-                        // with macOS kqueue connect-ready).  Do not apply this
-                        // to timeout_us == 0: those are nonblocking probes and
-                        // must still run continuePoll() when readiness is
-                        // available.
+                        // A ready fd can queue an op before Step C sees its expired operation timeout: the op gets
+                        // its one last attempt with its ready event, or times out without a step (see above)
                         for (auto& queued : ops_to_poll) {
                             if (queued.op_id == pinfo.op_id && queued.was_ready) {
-                                queued.timed_out = true;
-                                queued.was_ready = false;
-                                queued.ready_events = 0;
+                                if (queued.event_ready && !(queued.ready_events & QORE_EV_ERROR)
+                                        && last_attempt_allowed(pinfo, queued.io_thread_step)) {
+                                    queued.last_attempt = true;
+                                } else {
+                                    queued.timed_out = true;
+                                    queued.was_ready = false;
+                                    queued.ready_events = 0;
+                                    queued.event_ready = false;
+                                }
                                 return true;
                             }
                         }
@@ -8598,16 +8650,24 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 if (pinfo.continue_poll_in_flight) {
                     return false;  // dispatched to worker
                 }
+                bool io_thread_step = pinfo.spop_base && !pinfo.spop_base->needsWorkerDispatch();
                 pinfo.last_queued_gen = t.phase1_gen;
+                if (timed_out && last_attempt_allowed(pinfo, io_thread_step)) {
+                    // Step C: the op's descriptor was not reported ready in this iteration; its last attempt is a
+                    // probe of the descriptor (see above) (qore#7480)
+                    ops_to_poll.push_back({pinfo.op_id, pinfo.spop_obj, pinfo.spop_base, false, false, 0, false,
+                        true, true});
+                    return true;
+                }
                 ops_to_poll.push_back({pinfo.op_id, pinfo.spop_obj, pinfo.spop_base, timed_out, ready,
-                    ready_events});
+                    ready_events, event_ready, io_thread_step, false});
                 return true;
             };
             // queues the operation with the given ID, if it is still in the cache
             auto try_queue_id = [&](uint64_t op_id, bool timed_out, bool ready = false,
-                    int ready_events = 0) -> bool {
+                    int ready_events = 0, bool event_ready = false) -> bool {
                 OpCache::node_t* node = t.cache.findId(op_id);
-                return node ? try_queue(node->second, timed_out, ready, ready_events) : false;
+                return node ? try_queue(node->second, timed_out, ready, ready_events, event_ready) : false;
             };
 
             // --- Step A: New entries (need first continuePoll) ---
@@ -8664,7 +8724,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     auto queue_if_matching = [&](PollInfo& pinfo) {
                         auto eit = t.key_events.find(pinfo.op_id);
                         if (eit == t.key_events.end()) {
-                            try_queue(pinfo, false, true, event_mask);
+                            try_queue(pinfo, false, true, event_mask, true);
                             return;
                         }
                         int matched_events = eit->second & event_mask;
@@ -8672,7 +8732,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                             matched_events |= QORE_EV_ERROR;
                         }
                         if (matched_events) {
-                            try_queue(pinfo, false, true, matched_events);
+                            try_queue(pinfo, false, true, matched_events, true);
                         }
                     };
 
@@ -8696,7 +8756,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             };
             auto expand_ready_key_events = [&](const std::unordered_map<uint64_t, int>& ready_events) {
                 for (auto& [op_id, event_mask] : ready_events) {
-                    try_queue_id(op_id, false, true, event_mask);
+                    try_queue_id(op_id, false, true, event_mask, true);
                 }
             };
             expand_ready_key_events(ready_key_events);
@@ -8782,7 +8842,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 if (pinfo.timeout_us >= 0 && pinfo.timeout_date_us > 0
                         && pinfo.timeout_date_us <= now_us) {
                     // a queued operation re-arms its deadlines in Phase 3; one that cannot be queued (its
-                    // continuePoll() is in flight) gets them back with its result
+                    // continuePoll() is in flight) gets them back with its result; an operation that opted in to a
+                    // last attempt gets it here (see try_queue()) (qore#7480)
                     try_queue(pinfo, true);
                     continue;
                 }
@@ -8933,6 +8994,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 postDeletedObjCancel(op.spop_obj, t.thread_idx);
                 continue;
             }
+            // only an op whose step runs on this thread gets a last attempt (see Phase 1) (qore#7480)
+            assert(!op.last_attempt || (op.spop_base && op.io_thread_step));
             PollResult result;
             result.op_id = op.op_id;
             result.spop_obj = op.spop_obj;
@@ -8967,18 +9030,14 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 
             if (op.timed_out) {
                 // Create timeout exception hash
-                ReferenceHolder<QoreHashNode> ex(new QoreHashNode(hashdeclExceptionInfo, xsink), xsink);
-                if (!*xsink) {
-                    ex->setKeyValue("err", new QoreStringNode("SOCKET-TIMEOUT"), xsink);
-                    ex->setKeyValue("desc", new QoreStringNode("socket operation timed out"), xsink);
-                    ex->setKeyValue("type", new QoreStringNode("User"), xsink);
-                    result.ex_hash = ex.release();
-                }
+                result.ex_hash = makeOperationTimeoutException(xsink);
             } else if (op.spop_base) {
                 // C++ poll operation.  Ops that call Qore evalMethod(), block, or do
                 // synchronous I/O must signal this via needsWorkerDispatch() == true;
                 // those are dispatched to the worker pool just like Qore-only ops.
-                if (op.spop_base->needsWorkerDispatch()) {
+                // The answer was taken when the op was queued in Phase 1, which decided
+                // on its last attempt with it (qore#7480)
+                if (!op.io_thread_step) {
                     // C++ base delegates to Qore inner op — dispatch to worker thread
                     ensureCallDispatcher();
                     {
@@ -9084,6 +9143,13 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     }
                     poll_xsink.clear();
                     release_step_info(new_info);
+                } else if (op.last_attempt) {
+                    // the last attempt of an operation that opted in to one (its deadline has passed) asks to wait
+                    // again: the operation times out, and readiness cannot keep it alive past its deadline
+                    // (qore#7480)
+                    release_step_info(new_info);
+                    result.timed_out = true;
+                    result.ex_hash = makeOperationTimeoutException(xsink);
                 } else {
                     result.new_poll_info = new_info;
                 }
@@ -9390,8 +9456,13 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                 pinfo.cached_sock_obj = poll_sock;
                                 ASYNC_IO_TRACE("Phase3 UPDATE key='%s' sock='%s' events=%d\n",
                                     key.c_str(), sock_hash.c_str(), events);
-                                noteDescriptorlessWait(pinfo, updateEventLoopRegistration(t, result.op_id,
-                                    poll_sock, sock_hash, events, force_fd_reregister, xsink));
+                                auto registration = updateEventLoopRegistration(t, result.op_id, poll_sock,
+                                    sock_hash, events, force_fd_reregister, xsink);
+                                if (!finishWaitRegistration(t, *node, registration, xsink)) {
+                                    // The cache owned this reference. The ready-socket pass below must skip it.
+                                    result.new_poll_info = nullptr;
+                                    continue;
+                                }
                                 pinfo.submit_route_sock_hash.clear();
                                 pinfo.submit_route_thread_idx = -1;
                                 updateExtraFds(t, result.op_id, poll_sock, result.new_poll_info,
@@ -11498,8 +11569,11 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                     pinfo.cached_sock_hash = sock_hash;
                                     pinfo.cached_events = events;
                                     pinfo.cached_sock_obj = poll_sock;
-                                    noteDescriptorlessWait(pinfo, updateEventLoopRegistration(t, pinfo.op_id,
-                                        poll_sock, sock_hash, events, force_fd_reregister, xsink));
+                                    auto registration = updateEventLoopRegistration(t, pinfo.op_id, poll_sock,
+                                        sock_hash, events, force_fd_reregister, xsink);
+                                    if (!finishWaitRegistration(t, *it, registration, xsink)) {
+                                        break;
+                                    }
                                     updateExtraFds(t, pinfo.op_id, poll_sock,
                                         cmd.continue_poll_result, xsink);
                                 }
@@ -12412,7 +12486,7 @@ void AsyncIoControllerPriv::deliverBackstopCompletionIfUndelivered(PollInfo& pin
         pinfo.owner, pinfo.sandbox_ctx, pinfo.sync_release.get(), pinfo.app_pgm_id);
 }
 
-bool AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint64_t op_id,
+AsyncIoControllerPriv::WaitRegistration AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint64_t op_id,
         QoreObject* socket, const std::string& sock_hash, int events, bool force_fd_reregister,
         ExceptionSink* xsink) {
     // Convert SOCK_POLLIN/SOCK_POLLOUT to QORE_EV_READ/QORE_EV_WRITE
@@ -12442,11 +12516,26 @@ bool AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint
                 priv = wrapper->getPollSocket();
             }
             if (priv && priv->sock == QORE_INVALID_SOCKET) {
-                if (auto hold = priv->holdGenerationWake(makeCloseWake(t, sock_hash))) {
-                    t.generation_holds.emplace(op_id, std::move(hold));
+                try {
+#ifdef DEBUG
+                    using WakeAllocation = qore_socket_private::WakeAllocation;
+                    priv->dbgCheckWakeAllocation(WakeAllocation::Callback);
+#endif
+                    if (auto hold = priv->holdGenerationWake(makeCloseWake(t, sock_hash))) {
+#ifdef DEBUG
+                        priv->dbgCheckWakeAllocation(WakeAllocation::OperationMap);
+#endif
+                        t.generation_holds.emplace(op_id, std::move(hold));
+                    }
+#ifdef DEBUG
+                    priv->dbgCheckWakeAllocation(WakeAllocation::Recheck);
+#endif
+                    // A close between the poll step and registration must also be observed.
+                    t.wake_socket_hashes.insert(sock_hash);
+                } catch (const std::bad_alloc&) {
+                    // Unregistering the operation also drops any hold published before the failed insertion.
+                    return WaitRegistration::NoMemory;
                 }
-                // A close between the poll step and registration must also be observed.
-                t.wake_socket_hashes.insert(sock_hash);
             }
         }
     } else {
@@ -12455,20 +12544,20 @@ bool AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint
 
     // the descriptor of an object whose operations wait for its events is registered, unless the object has none
     if (!computeEventUnion(t, sock_hash) || t.registered_fds.count(sock_hash)) {
-        return false;
+        return WaitRegistration::Registered;
     }
     AbstractPollableIoObjectBase* s = static_cast<AbstractPollableIoObjectBase*>(
         socket->getReferencedPrivateDataIfExists(CID_ABSTRACTPOLLABLEIOOBJECTBASE));
     if (!s) {
         // a deleted object; its operations are ended for it (see makeSocketWaitGenerationException())
-        return false;
+        return WaitRegistration::Registered;
     }
     int fd = s->getPollableDescriptor();
     s->deref(xsink);
     if (fd >= 0) {
         // the hold of the descriptor failed: the object was closed or its descriptor replaced after it was read, and
         // its operations run again (see addSocketFd())
-        return false;
+        return WaitRegistration::Registered;
     }
     // the object was closed before its descriptor could be registered, by a thread that closed it without the
     // controller (a module's object closed by its own API, for example), so no event can come for it, and the
@@ -12476,7 +12565,29 @@ bool AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint
     ASYNC_IO_TRACE("updateEventLoop[%d]: op=%llu sock='%s' has no descriptor\n", t.thread_idx,
         (unsigned long long)op_id, sock_hash.c_str());
     t.wake_socket_hashes.insert(sock_hash);
-    return ev_flags != 0;
+    return ev_flags ? WaitRegistration::Descriptorless : WaitRegistration::Registered;
+}
+
+bool AsyncIoControllerPriv::finishWaitRegistration(IoThreadContext& t, OpCache::node_t& node,
+        WaitRegistration outcome, ExceptionSink* xsink) {
+    if (outcome != WaitRegistration::NoMemory) {
+        auto& waits = node.second.descriptorless_waits;
+        waits = outcome == WaitRegistration::Descriptorless ? waits + 1 : 0;
+        return true;
+    }
+
+    // Take the operation out of the cache before aborting it, as abort can call back into the controller.
+    std::string key = node.first;
+    PollInfo pinfo = retireOp(t, t.cache.find(key), xsink);
+    ExceptionSink failure;
+    failure.raiseException("OUT-OF-MEMORY", "could not register a socket close notification for the pending operation");
+    ReferenceHolder<QoreHashNode> ex(qore_exception_sink_ops(failure).getException()->makeExceptionObject(), xsink);
+    failure.clear();
+    doCancelIntern(pinfo, xsink, *ex);
+    pinfo.cleanup(xsink);
+    AutoLocker al(m);
+    signalCancelLocked(key);
+    return false;
 }
 
 QoreHashNode* AsyncIoControllerPriv::makeDescriptorlessWaitException(PollInfo& pinfo, ExceptionSink* xsink) {
@@ -12489,6 +12600,16 @@ QoreHashNode* AsyncIoControllerPriv::makeDescriptorlessWaitException(PollInfo& p
             "it, and the operation waited for it again after the close", obj ? obj->getClassName() : "I/O");
         ex->setKeyValue("err", new QoreStringNode("SOCKET-CLOSED"), xsink);
         ex->setKeyValue("desc", desc.release(), xsink);
+        ex->setKeyValue("type", new QoreStringNode("User"), xsink);
+    }
+    return *xsink ? nullptr : ex.release();
+}
+
+QoreHashNode* AsyncIoControllerPriv::makeOperationTimeoutException(ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> ex(new QoreHashNode(hashdeclExceptionInfo, xsink), xsink);
+    if (!*xsink) {
+        ex->setKeyValue("err", new QoreStringNode("SOCKET-TIMEOUT"), xsink);
+        ex->setKeyValue("desc", new QoreStringNode("socket operation timed out"), xsink);
         ex->setKeyValue("type", new QoreStringNode("User"), xsink);
     }
     return *xsink ? nullptr : ex.release();

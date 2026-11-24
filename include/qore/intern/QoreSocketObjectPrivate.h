@@ -114,6 +114,16 @@ public:
     */
     DLLLOCAL int checkIdleDataForAsyncPollLocked(ExceptionSink* xsink, bool buffered_is_data = false);
 
+    //! Returns the number of bytes that the socket has read from its descriptor and not yet returned to a reader
+    /** Such bytes are returned before any other by the next read, also after a TLS connection is started on the
+        socket, which never reads them: an HTTP client checks that none follow a proxy's response to \c CONNECT
+        before it starts the TLS connection to the target server through the tunnel (qore#7486).  Acquires the
+        socket lock.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL size_t getBufferedReadBytes() const;
+
     //! Error-reporting variant of @ref setNoDelay() for poll operation code.
     /** @ref setNoDelay() is already safe on async I/O execution paths -- libqore selects the
         inline (non-controller) route for socket config actions itself -- so this helper differs
@@ -602,6 +612,24 @@ public:
         @since %Qore 3.0
     */
     DLLLOCAL QoreHashNode* dbgGetStreamRecordCounts(int64_t session_id, ExceptionSink* xsink);
+
+    //! Debug-only: writes data on the TLS connection of the socket in the calling thread, without the I/O thread
+    /** Called via the @c dbg_tls_answer_and_reset() debug builtin in @ref lib/ql_debug.cpp, so a test peer can answer
+        while the I/O thread of its socket is held by a debug hook (issue #7523).  The socket must have no I/O
+        operation in progress.
+
+        @param data the data to write
+        @param size the size of the data
+        @param timeout_ms the time the write may wait for the socket
+        @param fd set to the socket's descriptor
+        @param xsink raises \c DBG-ARGUMENT-ERROR if the socket has no TLS connection, \c DBG-TLS-WRITE-ERROR if the
+        write fails or does not complete in time
+
+        @return 0 if all the data was written, -1 if not (exception raised)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int dbgTlsWriteNow(const char* data, size_t size, int timeout_ms, int& fd, ExceptionSink* xsink);
 #endif
 };
 

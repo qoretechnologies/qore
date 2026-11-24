@@ -3053,6 +3053,12 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     endif()
 
     if (NOT DEFINED QCC_FORMAT_STAMP)
+        # A standalone module is built by the build-tree owner. Its install target can run as a different user:
+        # building "all" there would regenerate the stamp and compiled modules with that user's permissions.
+        # Leave an embedding project's install target and any explicit generator setting to the caller.
+        if (PROJECT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR AND NOT DEFINED CMAKE_SKIP_INSTALL_ALL_DEPENDENCY)
+            set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY ON CACHE BOOL "Install built module files without rebuilding all")
+        endif ()
         # A module built outside the Qore source tree: every AOT .qmod depends on this stamp, which is rewritten
         # whenever qcc, the Qore library or the installed qcc format fingerprint changes.  qcc itself is not always
         # relinked or reinstalled when a new Qore library is installed, so depending on the qcc executable alone left
@@ -3243,7 +3249,8 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # fixes that don't affect qmod output.  QoreAOTRuntime.cpp is part of
     # the stamp because it deserializes and registers slot-map metadata from
     # qmods; stale qmods can fail at load time if that path changes.
-    set(_qmod_opt_flags)
+    # @assert and @debug are compiled when qcc parses the module. Include them in Debug qmods.
+    set(_qmod_opt_flags "$<$<CONFIG:Debug>:--parse-option=enable-debug>")
     # Final module output uses the same source-prefix maps as native compilation.
     string(TOUPPER "${CMAKE_BUILD_TYPE}" _qore_qcc_build_type)
     separate_arguments(_qore_qcc_cxx_flags NATIVE_COMMAND
@@ -3309,6 +3316,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             DEPFILE ${_qmod_dep}
             WORKING_DIRECTORY ${_qmod_out_dir}
             COMMENT "AOT compile ${_name}.qmod"
+            COMMAND_EXPAND_LISTS
             VERBATIM
         )
         # Per-resource copy commands so rebuilds fire when a resource
@@ -3374,6 +3382,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             DEPFILE ${_qmod_dep}
             WORKING_DIRECTORY ${_qmod_out_dir}
             COMMENT "AOT compile ${_name}.qmod"
+            COMMAND_EXPAND_LISTS
             VERBATIM
         )
     endif()
