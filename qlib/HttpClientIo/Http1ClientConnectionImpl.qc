@@ -44,6 +44,14 @@ public class Http1ClientConnection inherits HttpClientConnection {
         #! Cached socket reference — must return the same object on every call
         #! so the AsyncIoController's obj_to_sock_hash lookup works correctly
         Socket cached_socket;
+
+        #! The stream ID of the last streaming request on the connection that asked for a protocol upgrade
+        /** Its caller takes the socket over with @ref getSocket() (qore#7500)
+        */
+        *int upgrade_stream_id;
+
+        #! The stream ID of the upgrade request whose caller took the socket over with @ref getSocket() (qore#7500)
+        *int taken_over_stream_id;
     }
 
     #! Copying is not supported
@@ -116,7 +124,62 @@ public class Http1ClientConnection inherits HttpClientConnection {
     }
 
     #! Returns the underlying socket (cached for stable identity)
+    /** After a streaming request that asked for a protocol upgrade was submitted on the connection, its caller takes
+        the socket over with this call, which it makes when the request is answered with \c 101: the release of the
+        request's stream handle then leaves the connection to the caller (see @ref closeUnclaimedUpgrade()).  The
+        take-over is recorded also when the call comes before the \c 101 response has been fully processed, as it
+        does when the caller takes the socket as soon as it has the response header.
+    */
     Socket getSocket() {
+        {
+            AutoLock al(lock);
+            if (exists upgrade_stream_id) {
+                taken_over_stream_id = upgrade_stream_id;
+            }
+        }
+        return getSocketIntern();
+    }
+
+    #! Closes the connection of a request that asked for a protocol upgrade, unless the caller took its socket over
+    /** Called when the stream handle of a request that asked for a protocol upgrade with an \c Upgrade header is
+        released.  After a \c 101 response, the connection belongs to the caller of the request, who takes its socket
+        over with @ref getSocket() or closes it; a connection that the caller did neither for would keep its active
+        stream for the life of the connection manager, which never gives it to another request (qore#7500).  The
+        request is canceled, which closes the connection if the request is still active on it (it was answered with
+        \c 101, or its response has not been received yet); the connection manager then removes it from its pool.  A
+        connection whose socket the caller took over is left as it is.
+
+        @param stream_id the stream ID of the request
+
+        @since HttpClientIo 1.0
+    */
+    closeUnclaimedUpgrade(int stream_id) {
+        {
+            AutoLock al(lock);
+            if (taken_over_stream_id == stream_id) {
+                return;
+            }
+        }
+        if (poll_op.isClosed()) {
+            return;
+        }
+        log(LoggerLevel::DEBUG, "closing the connection of upgrade stream %d, whose handle was released without "
+            "the socket being taken over", stream_id);
+        cancelRequest(stream_id);
+    }
+
+    #! Returns @ref True if the request header fields have an \c Upgrade field, which asks for a protocol upgrade
+    static bool hasUpgradeHeader(*hash<auto> headers) {
+        foreach string key in (keys headers) {
+            if (key.lwr() == "upgrade") {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Returns the underlying socket (cached for stable identity) without taking it over
+    private Socket getSocketIntern() {
         if (!cached_socket) {
             cached_socket = poll_op.getSocket();
         }
@@ -140,7 +203,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             ctl = controller_ref;
         }
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getSocketIntern());
         }
         return sid;
     }
@@ -182,6 +245,11 @@ public class Http1ClientConnection inherits HttpClientConnection {
         int sid = poll_op.submitRequestStreaming(method, path, headers, body, channel,
             max_concurrent_streams, streaming, body_streaming, notifier,
             sse_install_eligible);
+        # the caller of a request that asks for an upgrade takes the socket over after a 101 response (qore#7500)
+        if (Http1ClientConnection::hasUpgradeHeader(headers)) {
+            AutoLock al(lock);
+            upgrade_stream_id = sid;
+        }
         # Wake the I/O controller so it processes the queued request
         *AsyncSocketIoController ctl;
         {
@@ -189,7 +257,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             ctl = controller_ref;
         }
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getSocketIntern());
         }
         return sid;
     }
@@ -238,7 +306,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             poll_op.pushSendData();  # NOTHING = EOF sentinel
         }
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getSocketIntern());
         }
     }
 
@@ -294,7 +362,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             ctl = controller_ref;
         }
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getSocketIntern());
         }
         return sid;
     }
@@ -314,7 +382,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
         }
         if (ctl) {
             try {
-                ctl.cancelAndClose(sock: self.getSocket());
+                ctl.cancelAndClose(sock: getSocketIntern());
             } catch () {
                 # Ignore close errors during close
             }
@@ -326,7 +394,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             }
         }
         try {
-            self.getSocket().close();
+            getSocketIntern().close();
         } catch () {
             # Ignore close errors during close
         }

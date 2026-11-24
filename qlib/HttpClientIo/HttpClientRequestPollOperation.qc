@@ -45,7 +45,10 @@ public hashdecl HttpClientRequestPollOptions {
     #! handed over to the caller
     /** The output has no body; the body received with the headers is returned by
         @ref HttpClientRequestPollOperation::getInitialBody(), and the rest of the body is read from the stream
-        returned by @ref HttpClientRequestPollOperation::getStream()
+        returned by @ref HttpClientRequestPollOperation::getStream().  After a \c 101 response to an HTTP/1.1
+        request that asked for a protocol upgrade, the connection belongs to the caller, as with
+        @ref HttpClientConnectionManager::acquireAndStartStreaming(): it is closed when the stream is released (with
+        the operation) unless the caller took its socket over (since HttpClientIo 1.0, qore#7500)
     */
     bool keep_stream = False;
 

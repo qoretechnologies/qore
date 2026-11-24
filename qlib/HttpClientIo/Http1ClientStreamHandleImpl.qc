@@ -68,6 +68,9 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
 
         #! Whether this stream uses chunked request-body streaming (sendData allowed)
         bool request_body_streaming = False;
+
+        #! True if the streaming request asked for a protocol upgrade with an \c Upgrade header (qore#7500)
+        bool upgrade_requested = False;
     }
 
     #! Creates a new stream handle
@@ -75,6 +78,26 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
             *LoggerInterface logger, timeout connect_timeout = DefaultConnectTimeout)
             : HttpClientStreamHandle(conn, request_timeout, logger, connect_timeout) {
         h1conn = conn;
+    }
+
+    #! Closes the connection of a request that asked for a protocol upgrade unless its socket was taken over
+    /** After a \c 101 response, the connection belongs to the caller of the request, who takes its socket over with
+        @ref HttpClientConnection::getSocket() "getConnection().getSocket()" or closes it with
+        @ref HttpClientConnection::close() "getConnection().close()"; when the stream handle is released without
+        either, the connection is closed and the connection manager removes it from its pool, which would otherwise
+        keep it with an active stream (qore#7500).  The connection of a request that asked for an upgrade and whose
+        response has not been received yet is closed as well, as nobody can take it over.
+    */
+    destructor() {
+        if (!upgrade_requested || !exists stream_id) {
+            return;
+        }
+        try {
+            h1conn.closeUnclaimedUpgrade(stream_id);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::WARN, "closing the connection of upgrade stream %d failed: %s: %s", stream_id, ex.err,
+                ex.desc);
+        }
     }
 
     #! Copying is not supported
@@ -204,6 +227,9 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
             cancelled = recordSubmittedStream(h1conn.submitRequestStreaming(method, path, headers, body,
                 data_channel, True, body_streaming, notifier, sse_install_eligible));
             @assert(stream_id >= 0);
+            # the connection of a request that asked for an upgrade is closed when the handle is released, unless
+            # the caller takes its socket over (qore#7500)
+            upgrade_requested = Http1ClientConnection::hasUpgradeHeader(headers);
             releaseReservationIfHeld();
         } catch (hash<ExceptionInfo> ex) {
             {

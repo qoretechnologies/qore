@@ -459,7 +459,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         HttpClientConnectionBase::releaseStreamReservation();
 
         if (!suppress_wake && ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getPollOperation().getSocket());
         }
 
         # Return the Promise alongside the Future so the caller keeps it alive
@@ -517,7 +517,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         HttpClientConnectionBase::releaseStreamReservation();
 
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getPollOperation().getSocket());
         }
 
         return {
@@ -546,7 +546,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             ctl = controller_ref;
         }
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getPollOperation().getSocket());
         }
     }
 

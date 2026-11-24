@@ -1036,7 +1036,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         to another request, and the caller takes its socket over with \c getConnection().getSocket() (see
         @ref HttpClientStreamHandle::getConnection() and @ref HttpClientConnection::getSocket()) to use the new
         protocol, as the WebSocketClient module does, and ends it with \c getConnection().close() (see
-        @ref HttpClientConnection::close()), which closes the socket.  A request body streamed with \a body_streaming
+        @ref HttpClientConnection::close()), which closes the socket.  A stream handle that is released before its
+        caller took the socket over closes the connection, which the manager then removes from its pool (since
+        HttpClientIo 1.0, qore#7500), as does one released before the response to a request that asked for an
+        upgrade has arrived.  A request body streamed with \a body_streaming
         that is not complete when the \c 101 response arrives must still be completed (RFC 9110 section 7.8), but
         not with @ref HttpClientStreamHandle::sendData() "sendData()", as the stream has ended: the caller writes
         the rest of the chunked body, with its last chunk, on the socket that it takes over, before any data of the
@@ -3202,7 +3205,7 @@ printf("%d connection(s) migrated\n", migrated);
         # directly to setUserTimeout(int).
         if (opts.tcp_user_timeout > 0) {
             try {
-                conn.getSocket().setUserTimeout(opts.tcp_user_timeout);
+                conn.getPollOperation().getSocket().setUserTimeout(opts.tcp_user_timeout);
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::DEBUG,
                     "TCP_USER_TIMEOUT could not be applied: %s: %s",
@@ -4656,7 +4659,9 @@ printf("%d connection(s) migrated\n", migrated);
     private submitConnectionToController(string key, HttpClientConnection conn,
             bool initial = True) {
         HttpClientPollOperation op = conn.getPollOperation();
-        Socket sock = conn.getSocket();
+        # the socket of the poll operation, the object that HttpClientConnection::getSocket() returns as well, which
+        # a caller takes over with it after a 101 response (qore#7500)
+        Socket sock = conn.getPollOperation().getSocket();
         string controller_key = sprintf("%s:conn:%d", owner_id, conn.getConnectionId());
 
         if (initial) {
@@ -5371,7 +5376,9 @@ printf("%d connection(s) migrated\n", migrated);
         if (conn.getConnectionState() == HttpClientConnectionState::Connecting) {
             return True;
         }
-        if (!conn.getSocket().isOpen()) {
+        # the socket of the poll operation: HttpClientConnection::getSocket() takes the socket of a connection whose
+        # protocol is switched over from its stream (qore#7500)
+        if (!conn.getPollOperation().getSocket().isOpen()) {
             log(LoggerLevel::DEBUG, "connection %d socket is closed",
                 conn.getConnectionId());
             return False;
