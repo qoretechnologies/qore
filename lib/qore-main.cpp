@@ -405,6 +405,13 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
     qore_initialized.store(true, std::memory_order_relaxed);
 }
 
+//! Set when cleanup leaves the library allocated for a foreign thread, including one found by clearRemainingPrograms().
+static std::atomic<bool> cleanup_left_for_foreign_thread{false};
+
+bool qore_cleanup_left_library() {
+    return qore_module_cleanup_abandoned() || cleanup_left_for_foreign_thread.load(std::memory_order_acquire);
+}
+
 // NOTE: we do not cleanup in reverse initialization order
 // the threading subsystem is deleted before the modules are
 // unloaded in case there are any module-specific thread
@@ -525,6 +532,7 @@ void qore_cleanup() {
     // system namespace, the thread data), so the library is not torn down any further; everything that remains is
     // reachable and is released with the process
     if (modules_left || qore_program_private::hasLeftPrograms()) {
+        cleanup_left_for_foreign_thread.store(true, std::memory_order_release);
         printd(5, "qore_cleanup() leaving the library as it is: a Program was left for a foreign thread\n");
         // a background compile still in LLVM is waited for, so that no compile is in LLVM when this function returns
         // (issue #6296); the engine stays, as the foreign thread can still run compiled code

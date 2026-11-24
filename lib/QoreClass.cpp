@@ -6042,8 +6042,16 @@ qore_type_t QoreClass::getPseudoClassType() const {
         return NT_BOOLEAN;
     }
 
+    if (priv->name == "<buffer>") {
+        return NT_BUFFER;
+    }
+
     if (priv->name == "<callref>") {
         return NT_FUNCREF;
+    }
+
+    if (priv->name == "<char>") {
+        return NT_CHAR;
     }
 
     if (priv->name == "<closure>") {
@@ -6060,10 +6068,6 @@ qore_type_t QoreClass::getPseudoClassType() const {
 
     if (priv->name == "<hash>") {
         return NT_HASH;
-    }
-
-    if (priv->name == "<int>") {
-        return NT_INT;
     }
 
     if (priv->name == "<int>") {
@@ -6639,12 +6643,22 @@ const QoreMethod* qore_class_private::parseFindNormalMethod(const char* nme, con
     return parseCheckContextCallableMethod(nme, parseFindNormalMethodIntern(nme, class_ctx), class_ctx, false);
 }
 
+//! Whether a static lookup should bind to the caller's own method before looking at overrides (qore#7456).
+static bool parse_prefers_own_static_method(const qore_class_private& receiver, const qore_class_private& caller,
+        const QoreMethod& method) {
+    ClassAccess access = Public;
+    return qore_method_private::getAccess(method) == Internal
+        || (qore_method_private::get(method)->getFunction()->hasPrivateInternalVariants()
+            && receiver.inAccessHierarchy(caller, access));
+}
+
 const QoreMethod* qore_class_private::parseFindStaticMethod(const char* nme, const qore_class_private* class_ctx) {
     // if we have a class context, first we have to check here for an internal method
     if (class_ctx) {
         const QoreMethod* m = class_ctx->parseFindLocalStaticMethod(nme);
-        if (m && qore_method_private::getAccess(*m) == Internal)
+        if (m && parse_prefers_own_static_method(*this, *class_ctx, *m)) {
             return m;
+        }
     }
 
     return parseCheckContextCallableMethod(nme, parseFindStaticMethodIntern(nme, class_ctx), class_ctx, true);
@@ -6682,8 +6696,7 @@ const QoreMethod* qore_class_private::parseFindAnyMethod(const char* nme, const 
         // a normal method that the class context cannot call: a static method of the name that it can call is called
         // instead, as at run time (qore#6759)
         if (parseContextCannotCall(m, class_ctx)) {
-            const QoreMethod* sm = parseCheckContextCallableMethod(nme, parseFindStaticMethodIntern(nme, class_ctx),
-                class_ctx, true);
+            const QoreMethod* sm = parseFindStaticMethod(nme, class_ctx);
             if (sm && !parseContextCannotCall(sm, class_ctx)) {
                 return sm;
             }
@@ -6691,7 +6704,7 @@ const QoreMethod* qore_class_private::parseFindAnyMethod(const char* nme, const 
         return m;
     }
 
-    m = parseCheckContextCallableMethod(nme, parseFindStaticMethodIntern(nme, class_ctx), class_ctx, true);
+    m = parseFindStaticMethod(nme, class_ctx);
     return m && parse_lookup_callable(m, class_ctx) ? m : nullptr;
 }
 
@@ -6702,7 +6715,7 @@ const QoreMethod* qore_class_private::parseFindAnyMethodStaticFirst(const char* 
     // if we have a class context, first we have to check here for an internal method
     if (class_ctx) {
         m = class_ctx->parseFindLocalStaticMethod(nme);
-        if (m && qore_method_private::getAccess(*m) != Internal) {
+        if (m && !parse_prefers_own_static_method(*this, *class_ctx, *m)) {
             m = class_ctx->parseFindLocalMethod(nme);
             if (m && qore_method_private::getAccess(*m) != Internal) {
                 m = nullptr;

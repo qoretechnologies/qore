@@ -364,6 +364,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   modes and as a qcc executable, which arm a debug hook and whose failed module load ends the process
         # - module-init-frames (#7289): its probes run in child processes that set their own --exec-mode, with the
         #   modules loaded from source and compiled with qcc, as a module is initialized once in a process
+        # - HttpServerRecvGrowFailure (#7417): the server whose read fails runs in a child process of the qore
+        #   interpreter in the default mode, under a limit of its address space
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
@@ -471,6 +473,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/HttpClientIo/ConnectionManagerTeardown.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaImportTool.qtest",
                                  "examples/test/qlib/HttpClientIo/ModuleCleanupCancel.qtest",
+                                 "examples/test/qlib/HttpServer/HttpServerRecvGrowFailure.qtest",
                                  "examples/test/qlib/ConnectionProvider/NamedConnectionCreation.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-1.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-2.qtest",

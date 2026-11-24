@@ -1404,6 +1404,9 @@ private:
         std::unique_ptr<char[]> pending_iouring_buf;
         //! Length of data in pending_iouring_buf
         size_t pending_iouring_len = 0;
+        //! A chunk read on the other paths that the stream's send limit refused, sent before anything more is read
+        //! (qore#7460)
+        SimpleRefHolder<BinaryNode> retained_chunk;
         //! Declared Content-Length from response headers (-1 if not declared)
         //! and cumulative bytes sent.  Used to detect short-stream bugs (the
         //! InputStream EOFs before the declared byte count) so the server
@@ -1437,6 +1440,10 @@ private:
             }
         }
     };
+    DLLLOCAL void processStreamInputStream(int32_t stream_id, StreamInputStreamInfo& info, ExceptionSink* xsink);
+    DLLLOCAL void resetFailedInputStream(int32_t stream_id, StreamInputStreamInfo& info, ExceptionSink& error,
+        ExceptionSink* xsink);
+
     std::unordered_map<int32_t, StreamInputStreamInfo> stream_input_streams_;
 
     //! Atomic flag for lock-free hasActiveStreamInputStreams() checks in the I/O hot path
@@ -1477,6 +1484,14 @@ public:
     DLLLOCAL bool hasActiveStreamInputStreams() const {
         return has_active_input_streams_.load(std::memory_order_acquire);
     }
+
+    //! Returns true if a pass of processStreamInputStreams() can make progress without a socket event (qore#7435)
+    /** A stream whose send buffer is full waits for the peer's credit, which arrives as a frame (a read event); one
+        whose InputStream is a monitored descriptor, or which has an io_uring read in flight, waits for that.  Asking
+        to be woken for writability for such streams only made the connection's operation run again and again while
+        the socket was writable.
+    */
+    DLLLOCAL bool needsInputStreamPass() const;
 
     //! Process one chunk from each active InputStream (called by I/O thread)
     /** @since %Qore 3.0

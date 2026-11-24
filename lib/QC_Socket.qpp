@@ -1785,10 +1785,9 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
             if (write_rc == -1 || *xsink) {
                 return nullptr;
             }
-        } else if (!recv_callback && binary_body) {
-            body_bin->append(chunk->getPtr(), chunk->size());
-        } else if (!recv_callback) {
-            body_str->concat(static_cast<const char*>(chunk->getPtr()), chunk->size());
+        } else if (!recv_callback && qore_socket_append_http_body(xsink, *body_bin,
+                binary_body ? nullptr : *body_str, chunk->getPtr(), chunk->size())) {
+            return nullptr;
         }
 
         SimpleRefHolder<BinaryNode> crlf(socket_exec_recv_bytes(self, s, 2, timeout_ms, xsink));
@@ -4704,7 +4703,9 @@ string data = sock.recv(-1); # read all data available
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-CLOSED the remote end has closed the connection.
-    @throw SOCKET-RECV-ERROR there was an error receiving the data.
+    @throw SOCKET-RECV-ERROR there was an error receiving the data, or the memory for the data could not be
+    allocated; the memory grows as the data arrives, and a read whose memory cannot grow shuts the connection down, as
+    the rest of the data cannot be told apart from what follows it
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR there was an SSL error while reading data from the socket
 
@@ -4734,7 +4735,9 @@ binary data = sock.recvBinary(-1); # read all data available
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-CLOSED the remote end has closed the connection.
-    @throw SOCKET-RECV-ERROR there was an error receiving the data.
+    @throw SOCKET-RECV-ERROR there was an error receiving the data, or the memory for the data could not be
+    allocated; the memory grows as the data arrives, and a read whose memory cannot grow shuts the connection down, as
+    the rest of the data cannot be told apart from what follows it
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR there was an SSL error while reading data from the socket
 
@@ -5926,7 +5929,7 @@ hash<auto> ans = sock.readHTTPChunkedBody(20s);
 
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-CLOSED The remote end has closed the connection
-    @throw SOCKET-RECV-ERROR There was an error receiving the data
+    @throw SOCKET-RECV-ERROR There was an error receiving the data, or the memory for the body could not be allocated
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
@@ -5960,7 +5963,7 @@ hash<auto> ans = sock.readHTTPChunkedBodyBinary(20s);
 
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-CLOSED The remote end has closed the connection
-    @throw SOCKET-RECV-ERROR There was an error receiving the data
+    @throw SOCKET-RECV-ERROR There was an error receiving the data, or the memory for the body could not be allocated
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line

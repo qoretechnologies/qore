@@ -156,6 +156,17 @@ DLLLOCAL int qore_socket_exec_close_private(qore_socket_private* priv);
 //! Raises \a err and returns -1 if a UNIX socket path does not fit a socket address with its terminator (issue #6910)
 DLLLOCAL int qore_socket_check_unix_path(const char* path, const char* err, ExceptionSink* xsink);
 #endif
+
+//! Appends data received to an HTTP message body (the binary body, or the string body if \a body_bin is nullptr)
+/** The size of a body comes from the peer, so a body that cannot grow fails the read without ending the process or
+    losing data silently (issue 7417)
+
+    @return 0 for OK, -1 if the memory could not be allocated (a SOCKET-RECV-ERROR exception is raised; the body is
+    unchanged)
+*/
+DLLLOCAL int qore_socket_append_http_body(ExceptionSink* xsink, BinaryNode* body_bin, QoreString* body_str,
+        const void* data, size_t size);
+
 DLLLOCAL int do_read_error(ssize_t rc, const char* method_name, int timeout_ms, ExceptionSink* xsink);
 DLLLOCAL int sock_get_raw_error();
 #if defined(DEBUG) && !defined(_Q_WINDOWS)
@@ -228,6 +239,23 @@ private:
 */
 DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, const struct sockaddr* addr, int size,
     int sock_type, int protocol, QoreSandboxManager* sandbox_manager, ExceptionSink* xsink);
+
+//! Binds an open socket descriptor to a numeric address, with the network policy check of any bind
+/** The descriptor variant of qore_socket_bind_family_sockaddr_direct() for a descriptor that no socket owns yet, such
+    as a connection attempt of the address family race of a QUIC client connection; it neither resolves nor waits.
+
+    @param fd the open socket descriptor
+    @param addr the address to bind to
+    @param size the size of the address
+    @param sock_type the socket type (ex: \c SOCK_DGRAM)
+    @param sandbox_manager the sandbox manager whose network policy governs the bind, if any
+    @param xsink raises \c NETWORK-ACCESS-DENIED if the policy denies the bind
+
+    @return 0 for success, -1 for error; a failed bind leaves its error number in errno without raising an exception,
+    and the caller closes the descriptor
+*/
+DLLLOCAL int qore_socket_bind_descriptor_checked(int fd, const struct sockaddr* addr, int size, int sock_type,
+    QoreSandboxManager* sandbox_manager, ExceptionSink* xsink);
 
 //! Binds a socket descriptor so that, on macOS, a socket on all interfaces never shares its port with an IPv4 socket
 /** A socket on all interfaces shares its port with any socket bound to a more specific address of the same port,
@@ -776,6 +804,11 @@ DLLLOCAL bool qore_descriptor_hold_set_close_wake(const std::shared_ptr<void>& h
 /** For the C++ unit tests of a close of a registered connection (qore#7003)
 */
 DLLLOCAL extern std::atomic<void (*)()> qore_dbg_before_close_wakes;
+//! Debug builds: if set, called with the socket by the thread that closes it right after prepareForClose() shut the
+//! descriptor down, without the socket's close lock, before the close gives the descriptor up
+/** For the C++ unit tests of a connection step between the shutdown of a close and the close
+*/
+DLLLOCAL extern std::atomic<void (*)(qore_socket_private*)> qore_dbg_after_pre_close_shutdown;
 #endif
 
 #ifdef DEBUG
@@ -1282,8 +1315,15 @@ private:
         qore_socket_private::DescriptorHold): the descriptor is then closed when the I/O thread has removed it, so its
         number cannot be given to another object before; otherwise it is closed now.  If a concurrent close of the
         socket has released the descriptor already, nothing is closed here.
+
+        @return true if the socket gave the descriptor up, false if it was closed, or given another descriptor, since
+        this operation last gave it one
     */
-    DLLLOCAL void releasePrimaryFd(int fd, ConnAttempt* next);
+    DLLLOCAL bool releasePrimaryFd(int fd, ConnAttempt* next);
+
+    //! Raises the connection's error, or the close's if the socket was closed since this operation last gave it a
+    //! descriptor (whose effect, such as a shutdown's error, can be what made the attempts fail)
+    DLLLOCAL void raiseConnectErrorOrClosed(ExceptionSink* xsink);
 
     //! Returns true if the socket was closed, or given another descriptor, since this operation last gave it one
     /** Read with the socket's close lock held, where a close changes the generation (see @ref sock_gen)
@@ -1486,8 +1526,11 @@ private:
     //! Receives data; continuePoll() records received data on the socket
     DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
 
-    //! Makes room in the buffer for more data; returns -1 if the memory cannot be allocated
-    DLLLOCAL int grow(ExceptionSink* xsink);
+    //! Makes room in the buffer for more data
+    /** @return -1 if the memory cannot be allocated: a SOCKET-RECV-ERROR exception is raised, the data received is
+        lost, and the connection is shut down, as the rest of the data cannot be told apart from what follows it
+    */
+    DLLLOCAL int grow(ExceptionSink* xsink, int fd);
 
     //! the most memory allocated for the data before any of it has been received
     /** The size to receive can come from the peer (a Content-Length or a chunk size), so the buffer grows as the
@@ -1501,6 +1544,8 @@ private:
     //! the size of the buffer allocated for the data
     size_t allocated = 0;
     bool retry_tls_read = false;
+    //! true if the buffer could not grow: the data received is lost, and the read cannot continue
+    bool failed = false;
     size_t received = 0;
 };
 
@@ -2056,8 +2101,16 @@ struct qore_socket_private : public QoreReferenceCounter {
         std::shared_ptr<std::function<void()>> close_wake;
     };
 
+    using CloseWakes = std::vector<std::shared_ptr<std::function<void()>>>;
+    //! Waits on a socket without a descriptor (e.g. during DNS resolution), protected by close_m.
+    CloseWakes generation_wakes;
+
+    //! Registers a one-shot wake for the next close if the socket still has no descriptor.
+    //! Releasing the returned hold unregisters it.
+    DLLLOCAL std::shared_ptr<void> holdGenerationWake(std::function<void()> wake);
+
     //! the wakes that a close that gave the descriptor up while it was held runs once @ref close_m is released
-    std::vector<std::shared_ptr<std::function<void()>>> pending_close_wakes;
+    CloseWakes pending_close_wakes;
 
     //! Runs the wakes of a close that gave the descriptor up while it was held; called without @ref close_m held
     DLLLOCAL void runPendingCloseWakes() {
@@ -2066,6 +2119,10 @@ struct qore_socket_private : public QoreReferenceCounter {
             CloseLockHelper cl(*this);
             wakes.swap(pending_close_wakes);
         }
+        runCloseWakes(wakes);
+    }
+
+    DLLLOCAL static void runCloseWakes(const CloseWakes& wakes) {
         if (wakes.empty()) {
             return;
         }
@@ -2844,13 +2901,16 @@ public:
         @return true if the socket had no descriptor, false if it has one, which the caller then closes
     */
     DLLLOCAL bool endConnectIfNoDescriptor() {
-        CloseLockHelper cl(*this);
-        if (sock != QORE_INVALID_SOCKET) {
-            return false;
+        CloseWakes wakes;
+        {
+            CloseLockHelper cl(*this);
+            if (sock != QORE_INVALID_SOCKET) {
+                return false;
+            }
+            ++fd_generation;
+            wakes.swap(generation_wakes);
         }
-        // a close of a socket without a descriptor wakes no operation: one that waits for the resolver of its host
-        // ends at the resolver's next reply or timeout (no leak, no reuse of a descriptor; qore#7371)
-        ++fd_generation;
+        runCloseWakes(wakes);
         return true;
     }
 
@@ -2961,8 +3021,20 @@ public:
         // SSL_write currently in flight on this socket; if a racing close
         // has already released the fd, there is nothing to shut down.  A TLS
         // connection that no call is using sends its close_notify alert first.
-        CloseLockHelper cl(*this);
-        if (sock != QORE_INVALID_SOCKET) {
+#ifdef DEBUG
+        bool shut = false;
+#endif
+        {
+            CloseLockHelper cl(*this);
+            if (sock == QORE_INVALID_SOCKET) {
+                return;
+            }
+            // the shutdown is the start of the close: the descriptor generation changes with it, so that a connection
+            // that sees its effect on the descriptor (a connection attempt that reads the shutdown's error) sees the
+            // socket closed, and fails as closed, not with the error that the shutdown caused; the close changes it
+            // again when it gives the descriptor up.  Nothing takes a changed generation for a released descriptor:
+            // the descriptor stays the socket's, open, until the close
+            ++fd_generation;
 #ifdef DEBUG
             if (dbgAbortiveCloseLocked()) {
                 return;
@@ -2970,23 +3042,34 @@ public:
 #endif
             sendTlsCloseNotifyLocked();
             ::shutdown(sock, SHUTDOWN_ARG);
+#ifdef DEBUG
+            shut = true;
+#endif
         }
+#ifdef DEBUG
+        // a test holds the close here, after the shutdown and before the close, without the close lock
+        if (shut) {
+            if (void (*hook)(qore_socket_private*) = qore_dbg_after_pre_close_shutdown.load(std::memory_order_acquire)) {
+                hook(this);
+            }
+        }
+#endif
     }
 
     //! Closes the descriptor and resets the connection state; does nothing if the descriptor is already released
     DLLLOCAL int close_and_reset() {
-        int rc;
+        int rc = 0;
+        CloseWakes wakes;
         {
             CloseLockHelper cl(*this);
+            wakes.swap(generation_wakes);
             if (sock == QORE_INVALID_SOCKET) {
-                // a connection that is being made (ex: resolving its host) gives the socket no descriptor after a
-                // close (see SocketConnectInetHappyEyeballsPollState::socketChanged(), qore#7003); the close wakes no
-                // operation: one that waits for the resolver ends at its next reply or timeout (qore#7371)
                 ++fd_generation;
-                return 0;
+            } else {
+                rc = close_and_reset_locked();
             }
-            rc = close_and_reset_locked();
         }
+        runCloseWakes(wakes);
         runPendingCloseWakes();
         return rc;
     }
@@ -3109,6 +3192,26 @@ public:
             *new_generation = fd_generation;
         }
         fd_nonblocking.store(nonblocking, std::memory_order_relaxed);
+    }
+
+    //! Makes a connected UDP descriptor, an owned descriptor, the descriptor of the socket, which has none
+    /** Used by the address family race of a QUIC client connection (SocketQuicClientPollOperation) for the
+        connection attempt that wins: the socket is then as if it had been bound to the wildcard address of the family
+        and connected
+
+        @param fd the descriptor, which is non-blocking
+        @param adopt the owned descriptor (see qore_owned_descriptor_create()), which is reset
+        @param family the address family of the descriptor
+    */
+    DLLLOCAL void adoptDatagramDescriptor(int fd, std::shared_ptr<SharedDescriptor>& adopt, int family) {
+        assert(sock == QORE_INVALID_SOCKET);
+        setDescriptor(fd, adopt, true);
+        resetCloseInterrupt();
+        sfamily = family;
+        stype = SOCK_DGRAM;
+        sprot = 0;
+        port = -1;
+        listening = false;
     }
 
     //! Closes a socket descriptor that is not the socket's own descriptor
@@ -3363,6 +3466,7 @@ public:
         QoreStringNode* old_ssl_err_str;
         QoreObject* old_remote_cert;
         std::shared_ptr<Http2Session> old_h2_session;
+        CloseWakes wakes;
         std::function<void(int32_t, Http2StreamInfo*, ExceptionSink*)> old_h2_stream_complete_callback;
         int rc = 0;
         {
@@ -3372,6 +3476,7 @@ public:
             old_remote_cert = remote_cert;
             remote_cert = nullptr;
             old_h2_session = h2_session.take();
+            wakes.swap(generation_wakes);
             old_h2_stream_complete_callback.swap(h2_stream_complete_callback);
 
             if (sock >= 0) {
@@ -3418,9 +3523,6 @@ public:
 
                 rc = close_and_reset_locked();
             } else {
-                // a connection that is being made (ex: resolving its host) gives the socket no descriptor after a
-                // close (see SocketConnectInetHappyEyeballsPollState::socketChanged(), qore#7003); the close wakes no
-                // operation: one that waits for the resolver ends at its next reply or timeout (qore#7371)
                 ++fd_generation;
             }
         }
@@ -3443,6 +3545,7 @@ public:
             old_ssl_err_str->deref();
         }
         // the async I/O registrations of a descriptor given up while it was held (see close_and_reset_locked())
+        runCloseWakes(wakes);
         runPendingCloseWakes();
         return rc;
     }
@@ -5722,6 +5825,11 @@ DLLLOCAL extern std::atomic<bool> qore_dbg_connect_complete_before_immediate_che
     SocketConnectInetHappyEyeballsPollState::continuePoll()
 */
 DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_before_check_attempts;
+//! Debug builds: if set, called by a happy-eyeballs connect step right after it checked that the socket was not
+//! closed, before it checks its attempts
+/** For the C++ unit tests of a close by another thread that lands after the step's check of the socket
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_after_socket_check;
 
 //! Debug builds: if set, called by a happy-eyeballs connect step right before the socket takes the winning attempt's
 //! descriptor over

@@ -130,8 +130,10 @@ public class HttpPersistentRequestEnd {
             i = remove info;
             r = remove runner;
         }
-        # the notification does not refer to this object, which the caller can release before the notification runs
-        code<nothing()> c = getNotification(t, i);
+        # the notification does not refer to this object, which the caller can release before the notification runs;
+        # work of the module cleanup that makes it hands itself over to the thread that runs it, also if the runner
+        # fails (qore#7339)
+        code<nothing()> c = AsyncIoController::wrapModuleCleanupWork(getNotification(t, i));
         try {
             r(c);
         } catch (hash<ExceptionInfo> ex) {

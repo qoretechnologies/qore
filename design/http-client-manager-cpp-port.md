@@ -809,14 +809,11 @@ is executed.
 | `Http1ClientPollOperationPriv::cancelStream()`, in-flight exchange | `action->executeError()` |
 | `Http1ClientPollOperationPriv::dispatchResponse()` / `dispatchStreamingEnd()`, `Connection: close` | `action->execute()` |
 
-The rule binds only the paths that *close* the connection.
-`Http3ClientPollOperationPriv::setError()` has one branch that does not: while
-happy-eyeballs attempts are still racing, the failure is handed to the owner
-(`onInnerHandshakeFailed()`), which decides whether any candidate remains.  That
-branch keeps its original order, because it has nothing to settle — a connection
-still racing its handshake never reached `READY`, so it was never pooled — and
-because the callback tears the losing attempts down, including the poll op
-running `setError()`.
+The rule binds only the paths that *close* the connection; every branch of
+`Http3ClientPollOperationPriv::setError()` closes it.  The address family race of
+an HTTP/3 connection (RFC 8305) runs inside its single poll operation
+(`SocketQuicClientPollOperation`), so a failed connection attempt never reaches
+`setError()`: only the failure of the whole race does.
 
 The last row was always correct; the rest were not, and the resulting defect is
 worth recording because nothing about it looks like a race from the outside.

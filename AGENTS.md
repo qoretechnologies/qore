@@ -65,6 +65,10 @@
   its own where perl or `setsid` is available (otherwise it is signalled alone); when it exceeds its time limit or the
   run is interrupted, every process of the group is ended with it (after its call stacks are dumped), on every
   platform.  A test must not rely on a process of its own outliving it, nor on being in the runner's process group.
+- The runner searches build and source modules, then the external module directories configured with CMake. Older builds
+  also accept existing directories under the source or build root from `QORE_MODULE_DIR`. To supply your own external
+  module path, set `QORE_MODULE_DIR_ONLY=1` and `QORE_MODULE_DIR`. The runner keeps only existing directories under
+  those same roots from `QORE_INCLUDE_DIR` unless you set `QORE_TEST_ALLOW_EXTERNAL_INCLUDES=1`.
 - Use `QORE_TEST_OPTS` and database env vars (for example `QORE_DB_CONNSTR`) when tests need external services.
 - A test that uses `examples/test/ExecModeHarness.qm` declares `# test-exec-mode: children - <why>` when all its checks
   run in child processes that set their own `--exec-mode` (the CI jobs that run every test in one execution mode leave

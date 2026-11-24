@@ -339,6 +339,23 @@ sub remove_delete() {
     }
 }
 
+#! Sharing just the outer container shares the leaf indirectly, even when the leaf has only one strong reference.
+sub sharedOuter() {
+    hash<auto> h = {"k": mk()};
+    hash<auto> hcopy = h;
+    list<auto> wh;
+    wh := h.k;
+    wh[0].x = 17;
+    printf("shared hash root: %d %d\n", h.k[0].x, hcopy.k[0].x);
+
+    list<auto!> l = (mk(),);
+    list<auto!> lcopy = l;
+    list<auto> wl;
+    wl := l[0];
+    wl[0].x = 23;
+    printf("shared list root: %d %d\n", l[0][0].x, lcopy[0][0].x);
+}
+
 literals();
 shared();
 unshared();
@@ -348,3 +365,4 @@ no_value_paths();
 indexes();
 negative_paths();
 remove_delete();
+sharedOuter();
