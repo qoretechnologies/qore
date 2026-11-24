@@ -2498,7 +2498,9 @@ printf("%d connection(s) migrated\n", migrated);
         if (bound_proof) {
             return bound_proof;
         }
-        return lent_proof && SandboxManager::isCallerRestricted(DOM_NETWORK) ? lent_proof : NOTHING;
+        # the borrower counts also when it calls through the method of a lent object, whose capability frame lends
+        # nothing here (qore#7052): a restricted borrower is always bound to the proof (fail closed)
+        return lent_proof && SandboxManager::isLentToRestricted(DOM_NETWORK) ? lent_proof : NOTHING;
     }
 
     #! Refuses a request target that a manager bound to its client's target does not allow (qore#7262)
