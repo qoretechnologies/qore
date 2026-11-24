@@ -135,6 +135,19 @@ struct LVPathStep;
 class QoreMemberInfo;
 enum class LVPathStepKind : uint8_t;
 
+//! Takes a reference to a uniquely owned container; the caller protects its slot until this returns.
+DLLLOCAL inline bool qore_try_ref_unique_container(QoreValue value, QoreValue& result) {
+    if (!value.isPlainPointer() || (value.getType() != NT_LIST && value.getType() != NT_HASH)
+            || !value.getInternalNode()->is_unique()) {
+        return false;
+    }
+    result = value.refSelf();
+    return true;
+}
+
+//! Reads a uniquely owned list or hash from a simple thread-local lvalue path (qore#7301).
+DLLLOCAL bool qore_try_read_unique_weak_path(const struct LVPathStep* steps, size_t size, QoreValue& result);
+
 //! Returns the class static variable named by a \c "ClassPath::varName" lvalue path in the given program
 /** @param pgm the program whose namespace is searched
     @param full_name the lvalue path root name, in the runtime class-path form used by LVPathStep::name
