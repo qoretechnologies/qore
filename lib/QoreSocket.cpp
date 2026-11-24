@@ -9697,6 +9697,10 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
                 if (a.fd != QORE_INVALID_SOCKET && a.sock_hold) {
                     int fd = a.fd;
                     a.fd = QORE_INVALID_SOCKET;
+                    // the result does not matter here: the step fails with the exception that it has already, and a
+                    // refusal means that the socket was closed meanwhile, whose close then releases the descriptor;
+                    // the attempt's hold is released in either case, which closes the descriptor only if the socket
+                    // gave it up
                     releasePrimaryFd(fd, nullptr);
                     sock->releaseAttemptHold(a.sock_hold);
                     break;
