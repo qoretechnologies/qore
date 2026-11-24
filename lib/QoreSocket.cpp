@@ -9540,7 +9540,7 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
 
         rc = startNextConnect(xsink);
         if (rc < 0 && !*xsink) {
-            raiseConnectError(xsink);
+            raiseConnectErrorOrClosed(xsink);
         }
         if (rc <= 0) {
             if (rc == 0) {
@@ -9596,6 +9596,13 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
         return -1;
     }
 
+#ifdef DEBUG
+    // a test closes the socket here, after the step's check of the socket, as another thread can
+    if (void (*hook)() = qore_dbg_connect_after_socket_check.load(std::memory_order_acquire)) {
+        hook();
+    }
+#endif
+
     // Check all active attempts for completion
     for (size_t i = 0; i < active_attempts.size(); ++i) {
         if (active_attempts[i].fd == QORE_INVALID_SOCKET) {
@@ -9646,8 +9653,15 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
                         break;
                     }
                 }
-                releasePrimaryFd(fd, next);
+                bool released = releasePrimaryFd(fd, next);
                 sock->releaseAttemptHold(active_attempts[i].sock_hold);
+                if (!released) {
+                    // the socket was closed since the step checked it (by another thread, whose close can be what
+                    // made the attempt fail, as its shutdown does): the connection fails as closed
+                    closeAllFds();
+                    qore_socket_raise_canceled("connect", xsink);
+                    return -1;
+                }
             } else {
                 // an extra fd of the operation: an async I/O thread that has it registered closes it when it has
                 // removed it
@@ -9709,8 +9723,9 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
     }
 
     if (!any_active) {
-        // the socket has no descriptor: the attempt that was its descriptor gave it up through releasePrimaryFd()
-        raiseConnectError(xsink);
+        // every attempt failed: the attempt that was the socket's descriptor gave it up through releasePrimaryFd(),
+        // unless the socket was closed meanwhile, which is then the error
+        raiseConnectErrorOrClosed(xsink);
         return -1;
     }
 
@@ -10080,6 +10095,7 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
 std::atomic<bool> qore_dbg_connect_no_immediate_check{false};
 std::atomic<bool> qore_dbg_connect_complete_before_immediate_check{false};
 std::atomic<void (*)()> qore_dbg_connect_before_check_attempts{nullptr};
+std::atomic<void (*)()> qore_dbg_connect_after_socket_check{nullptr};
 std::atomic<void (*)()> qore_dbg_connect_before_assign_winner{nullptr};
 std::atomic<void (*)(int)> qore_dbg_connect_before_adopt{nullptr};
 std::atomic<void (*)()> qore_dbg_connect_in_resolve{nullptr};
@@ -10104,21 +10120,33 @@ QoreObject* qore_socket_dbg_new_controller_pollable(QoreSocket* s) {
 }
 #endif
 
-void SocketConnectInetHappyEyeballsPollState::releasePrimaryFd(int fd, ConnAttempt* next) {
+bool SocketConnectInetHappyEyeballsPollState::releasePrimaryFd(int fd, ConnAttempt* next) {
     bool close_old = false;
 #ifdef DEBUG
     qore_socket_dbg_before_adopt(3);
 #endif
-    if (sock->replaceDescriptor(fd, next ? next->fd : QORE_INVALID_SOCKET, close_old, next ? &next->owned : nullptr,
+    if (!sock->replaceDescriptor(fd, next ? next->fd : QORE_INVALID_SOCKET, close_old, next ? &next->owned : nullptr,
             next ? &next->sock_hold : nullptr, &sock_gen, &sock_gen)) {
-        // the attempt that gives the descriptor up has a hold of it, so the socket leaves its close to the hold
-        if (close_old) {
-            qore_socket_private::closeDescriptor(fd);
-        }
-        if (next) {
-            sock->resetCloseInterrupt();
-        }
+        // the socket was closed, or given another descriptor, since this operation gave it this one
+        return false;
     }
+    // the attempt that gives the descriptor up has a hold of it, so the socket leaves its close to the hold
+    if (close_old) {
+        qore_socket_private::closeDescriptor(fd);
+    }
+    if (next) {
+        sock->resetCloseInterrupt();
+    }
+    return true;
+}
+
+void SocketConnectInetHappyEyeballsPollState::raiseConnectErrorOrClosed(ExceptionSink* xsink) {
+    if (socketChanged()) {
+        closeAllFds();
+        qore_socket_raise_canceled("connect", xsink);
+        return;
+    }
+    raiseConnectError(xsink);
 }
 
 bool SocketConnectInetHappyEyeballsPollState::socketChanged() const {
