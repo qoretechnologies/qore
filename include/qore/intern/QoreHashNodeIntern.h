@@ -1085,36 +1085,58 @@ public:
     DLLLOCAL void freeMembersOutOfLine(ExceptionSink* xsink);
 
 
-    //! The nodes of the member list of the members that clear() released, freed at its end in a scattered order
-    /** The release of a hash frees the nodes of its member list after the values, and those of its key map in the
-        order of its buckets: the node of a member is between the memory of its value and that of the next member.
-        clear() deletes each member, and frees the node of its key map, before its value is freed, so its list nodes
-        are what is left between the values; freeing them in their order merged the memory freed before into one
-        chunk that grew with each node, which made glibc consolidate and trim the heap at almost every node
-        (qore#7265).  The nodes are dealt into lists that are freed one after the other, so that the chunks that all
-        but the last list merge span at most that many members.  Nothing is allocated.
+    //! The nodes of the member list of the members that clear() released (qore#7265)
+    /** With glibc, they are freed at the end of clear() in a scattered order; with other allocators, at once.
+
+        Why the order exists: clear() must delete each member, and free the node of its key map, before its value is
+        freed (the map must not refer to a deleted member while code runs), so the node of its member list is what is
+        left between the memory of one value and that of the next.  Freeing it at once, or freeing all of them in their
+        order at the end, merged the memory freed before into one chunk that grew with each value or node; once a
+        merged free chunk reaches 64 KiB, glibc's _int_free_maybe_trim() consolidates the fast bins and calls
+        systrim() at every free, which ran at 0.96 of the values against 0.08 for the release of a hash, which frees
+        the nodes after the values and those of its key map in the order of its buckets.  The nodes are dealt into
+        lists that are freed one after the other, so that the chunks that all but the last list merge span at most
+        that many members: systrim() ran at 0.11 of the values.
+
+        Measured (Ir or instructions per value, delete_all_thread_data() of N objects (qo) and of N objects whose
+        destructors save a value each (qd), against the release before qore#7265):
+        - glibc 2.43 (canoe, callgrind): qo +45 with the scattered order (+65 at once, with the trims), qd -250;
+        - musl (Alpine, callgrind): scattered, qo -7..+31 and qd -311..-390; at once, qo -1..-17 and qd -436..-543;
+        - macOS (instructions retired, minimum of runs): scattered, qd +1401; at once, qd +219 and qo +10 (within
+          the noise of the measurement there, several hundred instructions per value).
+        So only glibc frees the nodes in the scattered order.
+
+        Do not simplify the order or make it unconditional without measuring again on each allocator.
     */
     class ReleasedNodes {
     public:
-        //! moves the node at \a li of \a l to the nodes released
+        //! moves the node at \a li of \a l to the nodes released (glibc), or frees it
         DLLLOCAL void add(qhlist_t& l, qhlist_t::iterator li) {
+#ifdef __GLIBC__
             lists[next].splice(lists[next].end(), l, li);
             if (++next == ways) {
                 next = 0;
             }
+#else
+            l.erase(li);
+#endif
         }
 
         //! frees the nodes, one list after the other
         DLLLOCAL void free() {
+#ifdef __GLIBC__
             for (qhlist_t& l : lists) {
                 l.clear();
             }
+#endif
         }
 
     private:
+#ifdef __GLIBC__
         static constexpr unsigned ways = 61;
         qhlist_t lists[ways];
         unsigned next = 0;
+#endif
     };
 
     //! takes the value of the first member, deletes the member and frees the value, which can run code that changes
