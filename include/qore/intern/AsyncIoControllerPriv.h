@@ -447,6 +447,11 @@ public:
         //! For DT_CALLBACK: the run-time parse options of the code that registered the callback, installed while it
         //! runs, or empty (see AsyncIoRuntimeOptions)
         AsyncIoRuntimeOptions runtime_po;
+        //! For DT_CALLBACK: the sandbox context applied while the item's arguments are released, or empty
+        /** The arguments of the timer callback of the host hold the data of a timer of other code, whose destructors
+            are that code's: they are released in its context, while the callback runs in the host's (qore#7010)
+        */
+        AsyncIoSandboxContext release_ctx;
         //! For DT_CONTINUE_POLL: read the operation's state after continuePoll() for its state events
         bool read_state = false;
         //! For DT_CONTINUE_POLL: the ID of the operation in the I/O thread's cache; see OpCache
@@ -510,7 +515,8 @@ public:
     */
     DLLLOCAL void dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args,
         const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
-        AsyncIoRuntimeOptions runtime_po = AsyncIoRuntimeOptions(), qore_program_id_t app_pgm_id = 0);
+        AsyncIoRuntimeOptions runtime_po = AsyncIoRuntimeOptions(), qore_program_id_t app_pgm_id = 0,
+        AsyncIoSandboxContext release_ctx = AsyncIoSandboxContext());
 
     //! Dispatch continuePoll() asynchronously with result delivery back to I/O thread
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
@@ -1136,6 +1142,42 @@ public:
     //! Debug-only: waits until a thread waits in a flush of the callbacks of an owner (see
     //! QoreCallDispatcher::dbgWaitOwnerIdleWaiter())
     DLLLOCAL bool dbgWaitOwnerFlushBlocked(int timeout_ms);
+
+    //! Debug-only: returns the generation of the work that added the timer (TimerInfo::adder_gen), or -1 if there is
+    //! no timer with the ID
+    DLLLOCAL int64 dbgTimerAdderGen(int64_t id);
+
+    //! Debug-only: holds every I/O thread before it drains its command queue (True), or releases them (False)
+    /** A held thread processes no command, so the commands pushed meanwhile are processed in order when it is
+        released; it runs the actions of dbgRunOnHeldIoThread() while it is held.  Stopping the controller releases
+        it (qore#7010)
+    */
+    DLLLOCAL void dbgHoldIoCommands(bool hold);
+
+    //! Debug-only: waits until the first I/O thread is held before its command queue; false if the wait timed out
+    DLLLOCAL bool dbgWaitIoCommandsHeld(int timeout_ms);
+
+    //! Debug-only: runs \a action on the first I/O thread while it is held before its command queue, before it
+    //! processes the commands queued, and waits for it to complete
+    /** @return 0 if the action ran, -1 if the thread is not held, or the wait timed out or was ended by the release of
+        the thread, with an exception raised in \a xsink
+    */
+    DLLLOCAL int dbgRunOnHeldIoThread(std::function<void(ExceptionSink*)> action, int timeout_ms,
+        ExceptionSink* xsink);
+
+    //! Debug-only: cancels the operations of the owner on the held first I/O thread, as code there that runs for the
+    //! given application (-1 none, 0 trusted code), before the thread processes the commands queued
+    DLLLOCAL int dbgCancelOwnerOnIoThread(const std::string& owner, int64 app_id, int timeout_ms,
+        ExceptionSink* xsink);
+
+    //! Debug-only: queues a cancel of the operations of the owner, as code that runs for the given application (-1
+    //! none, 0 trusted code) requests it on another I/O thread, to the held first I/O thread
+    /** The command is processed when the thread is released, after the commands queued before it and before those
+        queued after it: it records a canceled-key tombstone for the key of each operation that it cancels, which
+        refuses as stale a submission of the key queued after it, as it was pushed before the cancel was processed
+        @return 0 if the command was queued, -1 if the thread is not held, with an exception raised in \a xsink
+    */
+    DLLLOCAL int dbgQueueCancelOwner(const std::string& owner, int64 app_id, ExceptionSink* xsink);
 
     //! Debug-only: returns true if a submission takes the key of an operation that it may not replace (see
     //! submitTakesKeyOfOther())
@@ -2205,6 +2247,13 @@ private:
         //! Test hook: called by the thread with the controller's lock held just before it checks its command queue
         //! for the last time before it polls its event loop; it may push a command to the queue
         std::function<void(IoThreadContext&)> dbg_before_poll;
+        //! Test hook: when set, the thread waits on \c dbg_cond before it drains its command queue until it is
+        //! cleared, running the actions of \c dbg_actions meanwhile (see dbgHoldIoCommands())
+        bool dbg_hold_commands = false;
+        //! Test hook: true while the thread waits before it drains its command queue
+        bool dbg_commands_held = false;
+        //! Test hook: the actions that the held thread runs, on the thread, before it drains its command queue
+        std::deque<std::function<void()>> dbg_actions;
 #endif
 
         QoreEventLoop* loop = nullptr;
@@ -2540,6 +2589,15 @@ private:
     */
     DLLLOCAL bool cancelByKeyOnIoThread(const std::string& uh, int own_idx, ExceptionSink* xsink,
         const AioAppRestriction& restrict_app = AioAppRestriction());
+
+    //! cancelByOwner() with the restriction of the calling code already computed
+    DLLLOCAL int cancelByOwnerIntern(const std::string& owner_str, const AioAppRestriction& restrict_app,
+        ExceptionSink* xsink);
+
+#ifdef DEBUG
+    //! Test hook: holds the calling I/O thread before it drains its command queue while dbgHoldIoCommands() is set
+    DLLLOCAL void dbgHoldBeforeCommands(IoThreadContext& t);
+#endif
 
     //! cancelByKey() from a non-I/O thread with several I/O threads: searches every live I/O thread and waits
     /** @param uh the operation key

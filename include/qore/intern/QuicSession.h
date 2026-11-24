@@ -259,6 +259,8 @@ class HttpFastContext;
 struct QuicTimerWriteResult {
     ngtcp2_tstamp next_expiry = UINT64_MAX;  //!< next timer expiry after processing
     bool error = false;                       //!< true if an error occurred
+    //! the datagrams at the front of the batch that earlier sends did not send (see QuicSession::sendPackets())
+    int kept = 0;
 };
 
 //! A received QUIC packet ready for batch processing
@@ -459,6 +461,9 @@ public:
     DLLLOCAL int writePackets(QuicPacketBatch& batch, ExceptionSink* xsink);
 
     //! Get next timer expiry in nanoseconds (UINT64_MAX if none)
+    /** For a poll timeout: no later than the time to send again the datagrams kept after a send that failed with
+        ENOBUFS (see sendPackets())
+    */
     DLLLOCAL ngtcp2_tstamp getExpiry() const;
 
     //! Handle timer expiry (retransmission, keep-alive, etc.)
@@ -467,11 +472,39 @@ public:
     //! Coalesced timer check + packet generation under a single lock acquisition
     /** Replaces the separate getExpiry() → handleExpiry() → writePackets() → getExpiry()
         sequence with a single lock acquisition.
-        @param packets output: generated QUIC packets
+        The datagrams that earlier sends did not send (see sendPackets()) come first in @p packets, before those
+        written now.
+
+        @param packets output: generated QUIC packets, after the datagrams of @p packets on entry
         @param xsink exception sink
-        @return result containing next_expiry and error flag
+        @return result containing next_expiry, the number of datagrams kept from earlier sends, and error flag
     */
     DLLLOCAL QuicTimerWriteResult processTimerAndWrite(QuicPacketBatch& packets, ExceptionSink* xsink);
+
+    //! Sends the datagrams that processTimerAndWrite() wrote, and keeps those not sent for the session's next write
+    /** ngtcp2 counts a datagram as sent when it writes it, so one that is not sent is lost to the connection, which
+        recovers it only with its loss recovery (PTO), with exponential backoff.  The datagrams not sent are kept by
+        the session, not by the operation that sent them: the next processTimerAndWrite() puts them first, so that
+        whichever operation writes next for the session sends them before any written after them, and in order
+        (qore#7414).  A send that failed with ENOBUFS waits with a backoff (QuicSendBackoff; see getSendRetryAt()).
+
+        Called on the I/O thread of the session's socket, as processTimerAndWrite() is.
+
+        @param fd the socket
+        @param batch the datagrams to send; empty on return, also on an error
+        @param addr destination address, or nullptr for connected UDP sockets
+        @param addrlen destination address length, or 0 for connected UDP sockets
+        @param local_addr per-session local address for source IP pinning, or nullptr
+        @param local_addrlen local address length, or 0
+
+        @return how the datagrams kept are sent again; QuicSendResult::Error with errno set, with the datagrams not
+        sent dropped, for an error that is not retried
+    */
+    DLLLOCAL QuicSendResult sendPackets(int fd, QuicPacketBatch& batch, const struct sockaddr* addr,
+            socklen_t addrlen, const struct sockaddr* local_addr = nullptr, socklen_t local_addrlen = 0);
+
+    //! Returns the time to send again the datagrams kept after a send that failed with ENOBUFS, or UINT64_MAX
+    DLLLOCAL ngtcp2_tstamp getSendRetryAt() const;
 
     //! Process a batch of received packets under a single lock acquisition
     /** Replaces N separate readPacket() calls with a single lock acquisition.
@@ -806,6 +839,13 @@ public:
         @return bytes in flight (0 if all sent data has been ACKed)
     */
     DLLLOCAL uint64_t getBytesInFlight() const;
+
+#ifdef DEBUG
+    //! Debug-only, for tests: the packets that the connection sent, and those of them that it declared lost
+    /** @return false if the connection is not set up
+    */
+    DLLLOCAL bool getPacketCounts(uint64_t& sent, uint64_t& lost) const;
+#endif
 
     //! Remove a dispatched stream from the session map
     /** Called after the handler has finished processing all body data.
@@ -2322,6 +2362,11 @@ private:
     //! markStreamComplete) that also need the lock. A non-recursive mutex
     //! would deadlock.
     mutable std::recursive_mutex mtx_;
+
+    //! the datagrams that a send did not send, which the next processTimerAndWrite() puts first (qore#7414)
+    QuicPacketBatch unsent_;
+    //! the delay of unsent_ after a send that failed with ENOBUFS
+    QuicSendBackoff send_backoff_;
 
     //! Socket objects to wake when stream drain notifications fire
     std::mutex drain_waiters_mtx_;

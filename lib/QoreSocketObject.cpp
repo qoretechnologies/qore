@@ -46,6 +46,7 @@
 #include "qore/intern/QC_SSLPrivateKey.h"
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/QuicCommon.h"
+#include "qore/intern/QuicPollTimeout.h"
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/FileInputStream.h"
 #include "qore/intern/FileOutputStream.h"
@@ -1047,6 +1048,11 @@ public:
             return nullptr;
         }
 
+#ifdef DEBUG
+        // a test can hold a stream's data until this flush, which writes it then (on the I/O thread of the socket)
+        qore_dbg_quic_flush_releases_held(session_id);
+#endif
+        // the datagrams that earlier sends of the session did not send come first (qore#7414)
         QuicPacketBatch pkt_batch;
         auto tw = session->processTimerAndWrite(pkt_batch, xsink);
         if (tw.error || *xsink) {
@@ -1065,11 +1071,33 @@ public:
 
             my_socket_priv* priv = my_socket_priv::getPriv(*sock);
             int fd = qore_socket_ops(priv->socket).getDescriptor();
-            int sent = sendQuicPacketsBatch(fd, pkt_batch,
+            // the datagrams not sent are kept by the session and sent when they can be, by this operation or by
+            // whichever writes next for the session: ngtcp2 counts them as sent (qore#7414)
+#ifdef DEBUG
+            // a test can fail the sends of this operation alone
+            QuicTestFlushSending flush_sending;
+#endif
+            QuicSendResult rc = session->sendPackets(fd, pkt_batch,
                 reinterpret_cast<const struct sockaddr*>(&peer_addr), peer_addrlen,
                 reinterpret_cast<const struct sockaddr*>(&local_addr), local_addrlen);
-            if (sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-                xsink->raiseErrnoException("QUIC-SEND-ERROR", errno, "sendto/sendmmsg() failed");
+            switch (rc) {
+                case QuicSendResult::Sent:
+                    break;
+                case QuicSendResult::WaitWritable:
+                    return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                case QuicSendResult::Backoff: {
+                    // no event reports when the datagrams can be sent, and a UDP socket is writable all the while:
+                    // the operation waits for no event, only for the time to send them again
+                    QoreHashNode* poll_info = getSocketPollInfoHash(xsink, 0);
+                    if (poll_info) {
+                        poll_info->setKeyValue("poll_timeout_ms",
+                            qore_quic_poll_timeout_ms(session->getSendRetryAt(), QuicSession::timestamp()), xsink);
+                    }
+                    return poll_info;
+                }
+                case QuicSendResult::Error:
+                    xsink->raiseErrnoException("QUIC-SEND-ERROR", errno, "sendto/sendmmsg() failed");
+                    break;
             }
         }
 

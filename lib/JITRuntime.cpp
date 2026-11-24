@@ -7862,6 +7862,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_instanceof(uint64_t val_bits, const QoreTy
 // A path that cannot be resolved is not cached and is not an error for instanceof: no value is an instance of it (a
 // deferred placeholder that the resolver returns for an unknown class or hashdecl in a complex type is cached as any
 // other type).  QORE_DISABLE_AOT_INSTANCEOF_TYPE_CACHE turns the cache off.
+// The cache is set-associative (qore#7416): which paths share a set depends only on the layout of the compiled code,
+// so a direct-mapped cache made two hot paths that share a slot evict each other on every evaluation when a module
+// grew; the ways of a set are kept in the order of their last use, so that a few hot paths that share a set all stay.
+std::atomic<uint64_t> qore_aot_instanceof_resolve_count{0};
+#ifdef DEBUG
+std::atomic<bool> qore_aot_instanceof_one_set{false};
+#endif
+
 extern "C" DLLEXPORT uint64_t qore_rt_instanceof_by_type_path(uint64_t val_bits,
         const char* type_path, ExceptionSink* xsink) {
     QoreProgram* pgm = getProgram();
@@ -7871,6 +7879,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_instanceof_by_type_path(uint64_t val_bits,
     // resolves the path; a path with a type parameter of the signature of the code that runs is resolved for the
     // instantiation that runs
     auto resolve = [pgm, type_path](bool signature_type_param) -> const QoreTypeInfo* {
+        qore_aot_instanceof_resolve_count.fetch_add(1, std::memory_order_relaxed);
         std::string error;
         QoreAOTTypeResolver resolver(pgm);
         if (signature_type_param) {
@@ -7891,26 +7900,52 @@ extern "C" DLLEXPORT uint64_t qore_rt_instanceof_by_type_path(uint64_t val_bits,
         //! true if the path has a type parameter of a signature: it is resolved on every evaluation
         bool per_call = false;
     };
-    static constexpr unsigned INSTANCEOF_TYPE_CACHE_BITS = 6;
-    thread_local InstanceOfTypeCacheEntry cache[1u << INSTANCEOF_TYPE_CACHE_BITS];
+    // 64 sets of 4 ways, the most recently used first
+    static constexpr unsigned INSTANCEOF_TYPE_CACHE_SET_BITS = 6;
+    static constexpr unsigned INSTANCEOF_TYPE_CACHE_WAYS = 4;
+    thread_local InstanceOfTypeCacheEntry cache[1u << INSTANCEOF_TYPE_CACHE_SET_BITS][INSTANCEOF_TYPE_CACHE_WAYS];
     const qore_program_id_t pgm_id = pgm->getProgramId();
     // the paths of related types are adjacent in the image (the path of T can be the end of the path of *T, one byte
-    // after it), so the slot is taken from the high bits of a multiplicative mix of the whole address and the id
+    // after it), so the set is taken from the high bits of a multiplicative mix of the whole address and the id
     const uint64_t hash = (static_cast<uint64_t>(reinterpret_cast<uintptr_t>(type_path))
         ^ (static_cast<uint64_t>(pgm_id) * 0x9e3779b97f4a7c15ull)) * 0x9e3779b97f4a7c15ull;
-    InstanceOfTypeCacheEntry& entry = cache[hash >> (64 - INSTANCEOF_TYPE_CACHE_BITS)];
-    if (entry.type_path != type_path || entry.pgm_id != pgm_id) {
-        // the path is scanned for a signature type parameter only when its entry is made
-        if (qore_aot_type_path_has_signature_type_param(type_path)) {
-            entry = {type_path, pgm_id, nullptr, true};
-        } else {
-            const QoreTypeInfo* ti = resolve(false);
-            if (!ti) {
-                return toBits(QoreValue(false));
-            }
-            entry = {type_path, pgm_id, ti, false};
-        }
+    unsigned set_index = static_cast<unsigned>(hash >> (64 - INSTANCEOF_TYPE_CACHE_SET_BITS));
+#ifdef DEBUG
+    if (qore_aot_instanceof_one_set.load(std::memory_order_relaxed)) {
+        set_index = 0;
     }
+#endif
+    InstanceOfTypeCacheEntry* ways = cache[set_index];
+    // the most recently used way first: the usual hit checks one way (its path and Program id)
+    if (ways[0].type_path != type_path || ways[0].pgm_id != pgm_id) {
+        unsigned i = 1;
+        while (i < INSTANCEOF_TYPE_CACHE_WAYS && (ways[i].type_path != type_path || ways[i].pgm_id != pgm_id)) {
+            ++i;
+        }
+        InstanceOfTypeCacheEntry found;
+        if (i < INSTANCEOF_TYPE_CACHE_WAYS) {
+            found = ways[i];
+        } else {
+            // a miss: the least recently used way is replaced; the path is scanned for a signature type parameter
+            // only when its entry is made
+            i = INSTANCEOF_TYPE_CACHE_WAYS - 1;
+            if (qore_aot_type_path_has_signature_type_param(type_path)) {
+                found = {type_path, pgm_id, nullptr, true};
+            } else {
+                const QoreTypeInfo* ti = resolve(false);
+                if (!ti) {
+                    return toBits(QoreValue(false));
+                }
+                found = {type_path, pgm_id, ti, false};
+            }
+        }
+        // the entry becomes the most recently used
+        for (; i; --i) {
+            ways[i] = ways[i - 1];
+        }
+        ways[0] = found;
+    }
+    const InstanceOfTypeCacheEntry& entry = ways[0];
     if (entry.per_call) {
         const QoreTypeInfo* ti = resolve(true);
         return ti ? qore_rt_instanceof(val_bits, ti) : toBits(QoreValue(false));
@@ -18240,8 +18275,10 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
     };
 
     if (ct == NT_HASH) {
-        // the lvalue's own hash or the hash of a weak reference that it holds, which is changed itself (qore#7306)
-        QoreHashNode* h = lvh.getRemovalHash(lvh.getType());
+        // the lvalue's own hash or the hash of a weak reference that it holds, which is changed itself (qore#7306);
+        // the type is read before the removal, which can free the lvalue's storage (qore#7402)
+        const qore_type_t lt = lvh.getType();
+        QoreHashNode* h = lvh.getRemovalHash(lt);
         if (!h) {
             return QoreValue();
         }
@@ -18272,7 +18309,7 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
             return QoreValue();
         }
         if (old_count && !qore_hash_private::getScanCount(*h)) {
-            lvh.setRemovalDelta(-1, lvh.getType() == NT_WEAKREF_HASH);
+            lvh.setRemovalDelta(-1, lt == NT_WEAKREF_HASH);
         }
         lvh.removedValue(QoreValue(*rvh));
         if (is_delete) {
@@ -18369,8 +18406,10 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
     };
 
     if (ct == NT_LIST) {
-        // the lvalue's own list or the list of a weak reference that it holds, which is changed itself (qore#7306)
-        QoreListNode* l = lvh.getRemovalList(lvh.getType());
+        // the lvalue's own list or the list of a weak reference that it holds, which is changed itself (qore#7306);
+        // the type is read before the removal, which can free or move the lvalue's storage (qore#7402)
+        const qore_type_t lt = lvh.getType();
+        QoreListNode* l = lvh.getRemovalList(lt);
         if (!l) {
             return QoreValue();
         }
@@ -18436,7 +18475,7 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         }
         if (needs_scan(*v)) {
             if (!qore_list_private::getScanCount(*l)) {
-                lvh.setRemovalDelta(-1, lvh.getType() == NT_WEAKREF_LIST);
+                lvh.setRemovalDelta(-1, lt == NT_WEAKREF_LIST);
             }
         }
         // dereference the spliced-out entries once the lvalue locks are released: a destructor is

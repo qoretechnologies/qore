@@ -173,6 +173,12 @@ DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closur
 //! client grants no flow-control credit; set by dbg_quic_hold_stream_data()
 DLLLOCAL bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id);
 
+//! releases the stream held with dbg_quic_hold_stream_data(..., True) if it is a stream of the session
+/** Called by Socket::flushQuicPendingData() on the I/O thread of the session's socket before it writes, so that the
+    flush, and not the server's poll operation, writes the data that was held (qore#7414)
+*/
+DLLLOCAL void qore_dbg_quic_flush_releases_held(int64_t session_id);
+
 //! the stateless resets that the QUIC listeners of the process sent and that its QUIC clients received (qore#6931);
 //! see dbg_quic_stateless_reset_counts()
 DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent;
@@ -215,6 +221,10 @@ DLLLOCAL void qore_dbg_note_is_http2_poll();
 //! Returns the bytes of progress that dbg_quic_simulate_stream_progress() adds to the acknowledged byte count of a
 //! stream for this read of the count (0 when no progress is simulated for the stream)
 DLLLOCAL int64_t qore_dbg_quic_simulated_stream_progress(int64_t stream_id);
+
+//! Returns the progress that dbg_http_ws_simulate_send_progress() simulates for the sends of the HTTP/1.1 WebSocket
+//! server connections at the given time of the monotonic clock in milliseconds, or -1 when none is simulated
+DLLLOCAL int64_t qore_dbg_ws_simulated_send_progress(int64_t now_ms);
 //! the accounting of the stream credit that the HTTP/2 and HTTP/3 clients defer until the application consumes the
 //! data (issue #5820), for dbg_http_stream_credit_stats(): after every stream has ended, deferred == credited +
 //! settled (a byte is credited when it is consumed, or settled with its stream when the stream or its session ends

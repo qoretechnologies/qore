@@ -343,6 +343,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - QdpNoTty (#7125): its checks run qdp in child processes in a new session, without a controlling terminal
         # - QdpAppActionOptions (#7126): its checks run qdp in child processes of its own binary
         # - QdpListenNoTty (#7130): its checks run qdp in child processes in a new session, with stdin not a terminal
+        # - QdpInfo (#7386): its checks run qdp in child processes of its own binary
+        # - FileForegroundTty (#7387): its checks run in child processes of its own binary, on a new terminal
         # - type-name-encoding (#6814): each case runs in a child process with a default encoding of its own
         # - value-encoding (#6960): the checks run in child processes with a default encoding of their own
         # - AOTFusedFoldVerify (#6549): its checks compile with qcc and run the module in a child process started
@@ -362,6 +364,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   modes and as a qcc executable, which arm a debug hook and whose failed module load ends the process
         # - HttpServerRecvGrowFailure (#7417): the server whose read fails runs in a child process of the qore
         #   interpreter in the default mode, under a limit of its address space
+        # - module-init-frames (#7289): its probes run in child processes that set their own --exec-mode, with the
+        #   modules loaded from source and compiled with qcc, as a module is initialized once in a process
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
@@ -463,6 +467,8 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/DataProvider/QdpNoTty.qtest",
                                  "examples/test/qlib/DataProvider/QdpAppActionOptions.qtest",
                                  "examples/test/qlib/DataProvider/QdpListenNoTty.qtest",
+                                 "examples/test/qlib/DataProvider/QdpInfo.qtest",
+                                 "examples/test/qore/classes/File/FileForegroundTty.qtest",
                                  "examples/test/qore/parser/type-name-encoding.qtest",
                                  "examples/test/qlib/HttpClientIo/ConnectionManagerTeardown.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaImportTool.qtest",
@@ -503,6 +509,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "modules/i18n/test/short-string-access.qtest",
                                  "modules/logger_bin/test/short-string-access.qtest",
                                  "modules/tokenizer/test/short-string-access.qtest",
+                                 "examples/test/qore/misc/module-init-frames.qtest",
                                  "examples/test/qore/functions/value-string-target-encoding/value-string-target-encoding.qtest"]),
                          sorted(non_harness_children))
 

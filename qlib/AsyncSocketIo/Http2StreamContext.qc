@@ -196,7 +196,7 @@ public class Http2StreamContext inherits AbstractStreamContext {
         int ended_waits = 0;
         # True once this send has waited with a minimum rate set: the time after it is not waiting for the peer
         bool rate_wait;
-        on_exit if (rate_wait) {
+        on_error if (rate_wait) {
             try {
                 send_rate.update(getTakenBytes(), False);
             } catch () {
@@ -237,8 +237,8 @@ public class Http2StreamContext inherits AbstractStreamContext {
                     rate_wait = True;
                     if (send_rate.update(taken, True, now)) {
                         throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/2 stream %d: the peer took less than the minimum "
-                            "rate of %d bytes/s over %d ms; %d bytes were not sent", stream_id,
-                            send_rate.getMinRate(), send_rate.getWindow(), data.size());
+                            "rate of %d bytes/s; %d bytes were not sent", stream_id,
+                            send_rate.getMinRate(), data.size());
                     }
                     int check_ms = send_rate.getCheckInterval();
                     wait_ms = wait_ms < 0 ? check_ms : min(wait_ms, check_ms);
@@ -252,6 +252,15 @@ public class Http2StreamContext inherits AbstractStreamContext {
                 throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/2 stream %d: the stream ended with its send buffer full; "
                     "%d bytes were not sent", stream_id, data.size());
             }
+        }
+        if (rate_wait) {
+            int taken = -1;
+            try {
+                taken = getTakenBytes();
+            } catch () {
+                # the stream or its session is gone: nothing more is measured
+            }
+            endRateWait(taken, end_stream, sprintf("HTTP/2 stream %d", stream_id));
         }
         # the stream was ended with the data: it is not ended again
         if (end_stream) {

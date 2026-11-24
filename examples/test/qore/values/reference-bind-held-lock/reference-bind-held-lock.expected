@@ -1,0 +1,29 @@
+member of the same object: ["list<reference<int>>", 3]
+member that needs a conversion: ["REFERENCE-BIND-ERROR", null, "string", "7"]
+member rejected: ["RUNTIME-TYPE-ERROR", null, "x"]
+two elements: [9, 4]
+member of another object: 8
+object after the assignment: [1, 11]
+global variable: ["integer", 5]
+global variable that needs a conversion: ["REFERENCE-BIND-ERROR", null, "string", "5"]
+reference to an ancestor of the target: ["REFERENCE-BIND-ERROR", null, "hash<string, *list<reference<hash<string, *list<auto>>>>>"]
+closure-bound variable: ["integer", 2]
+member holding an object: "list<reference<object>>"
+member holding an object of a recursive set: "list<reference<object>>"
+path through another object with a shared container: ["REFERENCE-BIND-ERROR", null, "string", "string"]
+path through another object in a recursive set: "REFERENCE-BIND-ERROR"
+object in a committed recursive set: "list<reference<object>>"
+object of a subclass: "list<reference<object<BaseValue>>>"
+enum value: ["REFERENCE-BIND-ERROR", null]
+list with a wider element type: ["REFERENCE-BIND-ERROR", null]
+list of the type: "list<reference<list<int>>>"
+relative date for an absolute date: ["REFERENCE-BIND-ERROR", null]
+list of relative dates for a list of absolute dates: ["REFERENCE-BIND-ERROR", null]
+object for a soft list: ["REFERENCE-BIND-ERROR", null]
+deleted object: ["REFERENCE-BIND-ERROR", null]
+weak reference to a list: ["REFERENCE-BIND-ERROR", null]
+weak reference to a plain list: ["REFERENCE-BIND-ERROR", null]
+weak reference to a plain hash: ["REFERENCE-BIND-ERROR", null]
+reference held in the referenced lvalue: "list<reference<*reference<int>>>"
+member notification of the same object: ["REFERENCE-BIND-ERROR", null, 4, 1]
+member notification of another object: ["integer", 3, True]

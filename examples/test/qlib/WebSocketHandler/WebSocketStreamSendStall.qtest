@@ -210,6 +210,8 @@ class WebSocketStreamSendStallTest inherits QUnit::Test {
             \testH1Progress());
         addTestCase("HTTP/1.1: a client reading steadily above the rate, seen in steps, is not cut off",
             \testH1SteadyAboveRate());
+        addTestCase("HTTP/1.1: a client taking the data steadily below the rate, seen in steps, is cut off",
+            \testH1SteadyBelowRate());
         addTestCase("the options of the minimum rate", \testRateOptions());
         foreach string ver in (("2.0", "3.0")) {
             addTestCase(sprintf("HTTP/%s: frames queued before direct sends: no progress", ver), \testQueuedStall(),
@@ -391,31 +393,46 @@ class WebSocketStreamSendStallTest inherits QUnit::Test {
             "for its rate");
     }
 
-    #! a client reading steadily above the minimum rate is seen to progress only in large steps, and is not cut off
+    #! a client taking the data steadily above the minimum rate, seen to progress only in steps, is not cut off
+    /** The peer is simulated with dbg_http_ws_simulate_send_progress(): progress at twice the minimum rate, seen
+        once per half window, derived from the clock that the server's checks read, so that the case does not depend on
+        when the client's thread runs (a real client pacing its reads fell below the rate on a loaded host, and was cut
+        off then, rightly).  The real client takes nothing meanwhile, so the send waits and checks the rate all the
+        while; testH1BelowRate() checks the rate with the progress of a real client.
+    */
     testH1SteadyAboveRate() {
         handler.second_size = H1Payload;
         handler.setSendTimeout(HangGuard);
         handler.setSendMinRate(H1SteadyMinRate, RateWindow);
+        call_function("dbg_http_ws_simulate_send_progress", 2 * H1SteadyMinRate, RateWindowMs / 2);
+        on_exit call_function("dbg_http_ws_simulate_send_progress", 0, 0);
         Socket c = h1Connect();
         on_exit {
             c.close();
             handler.closed.get(HangGuard);
         }
-        int start = clock_get_monotonic_us();
-        int got = 0;
-        while (True) {
-            int elapsed_us = clock_get_monotonic_us() - start;
-            if (elapsed_us >= H1SteadyMs * 1000) {
-                break;
-            }
-            int due_us = got * 1000000 / (2 * H1SteadyMinRate);
-            if (due_us > elapsed_us) {
-                usleep(due_us - elapsed_us);
-                continue;
-            }
-            got += c.recvBinary(4096, HangGuard).size();
+        # the connection is not closed while the simulated peer takes the data steadily, for several windows
+        try {
+            handler.closed.get(H1SteadyMs);
+            assertTrue(False, "the connection was closed");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("QUEUE-TIMEOUT", ex.err, "the connection was not closed");
         }
-        assertEq(0, handler.closed.size(), "the connection was not closed");
+        assertEq(0, appender.messages.size(), "no send timed out or was below the minimum rate");
+    }
+
+    #! a simulated peer taking the data steadily at a quarter of the minimum rate is cut off: the server's check sees
+    #! the simulated progress
+    testH1SteadyBelowRate() {
+        handler.second_size = H1Payload;
+        handler.setSendTimeout(HangGuard);
+        handler.setSendMinRate(H1SteadyMinRate, RateWindow);
+        call_function("dbg_http_ws_simulate_send_progress", H1SteadyMinRate / 4, RateWindowMs / 2);
+        on_exit call_function("dbg_http_ws_simulate_send_progress", 0, 0);
+        Socket c = h1Connect();
+        on_exit c.close();
+        assertEq(Type::Int, handler.closed.get(HangGuard).type(), "the connection ended");
+        assertRegex("took less than the minimum rate", appender.messages.get(HangGuard).msg, "for its rate");
     }
 
     #! a client that reads the messages gets all of them, with the default rate

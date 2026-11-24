@@ -2251,6 +2251,11 @@ int QoreModuleDefContext::init(QoreProgram& pgm, ExceptionSink& xsink) {
         // not with the restrictions of the code that loads the module
         QoreModuleLifecycleBarrierHelper lifecycle_barrier;
         LoadTimeParseOptionsHelper lifecycle_po(pgm.getParseOptions());
+        // the init closure is part of the module's initialization: for a module loaded at run time, the call Program
+        // context is still the loading code's, and the frames of the calls that the closure makes name the module's
+        // Program, as those of the rest of its initialization do (qore#7289)
+        QoreModuleInitFramesHelper init_frames;
+        init_frames.set(&pgm);
 
         ValueHolder cn(init_c.eval(&xsink), &xsink);
         assert(!xsink);

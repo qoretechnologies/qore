@@ -101,6 +101,14 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Streamed HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
+    A streamed HTTP/2 or HTTP/3 response that a handler thread sends is ended when its stream takes less than 1 KiB/s
+    while the server waits for it, so that a very slow client can no longer hold a handler thread; a client that keeps
+    taking data is no longer cut off after a fixed number of retries.  The rate applies to each stream, so a listener
+    that serves clients with many concurrent streams on a slow connection may need a lower value.  Set the
+    @ref HttpServer::HttpListenerOptionInfo::stream_send_min_rate "stream_send_min_rate" listener option to \c 0 to
+    disable the check (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>).
+
     @par A Lent Connection Gives Restricted Code Only Clients Bound to the Host's Target
     Code restricted from the \c NETWORK domain gets no synchronous client from a lent REST, YAML-RPC or server-sent
     event connection (\c PERMISSION-DENIED), and the HTTP clients that it gets connect only to the target of the code
@@ -1354,6 +1362,10 @@
     @par Hash Identity Test
     @ref <hash>::isSame() "<hash>::isSame()" tests in a constant time whether two hashes are the same hash value
     (identity, not equality; <a href="https://github.com/qoretechnologies/qore/issues/7240">issue 7240</a>).
+    @par Foreground Terminal Test
+    @ref Qore::ReadOnlyFile::isForegroundTty() "ReadOnlyFile::isForegroundTty()" tells whether a file is the
+    controlling terminal and the process is in its foreground, so that it can read keys and set the terminal's
+    attributes (<a href="https://github.com/qoretechnologies/qore/issues/7387">issue 7387</a>).
 
     @par Isolation Domains (Tenants)
     A host assigns its sandboxes to tenants with
@@ -2174,6 +2186,11 @@
       - see @ref httpclientdataprovider_v1_2 for all changes
 
     - @ref httpserverintro "HttpServer" module
+      - a streamed HTTP/2 or HTTP/3 response to a client that takes nothing for the stall time fails with
+        \c STREAM-SEND-TIMEOUT, and one that keeps taking the data is not cut off; the new
+        @ref HttpServer::HttpListenerOptionInfo::stream_send_min_rate "stream_send_min_rate" listener option sets a
+        minimum rate (1 KiB/s by default)
+        (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>)
       - async I/O for high-concurrency connection handling
         (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>) and HTTP/3 (see
         @ref httpserverhttp3)
@@ -2794,6 +2811,25 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref RestClient::AbstractRestConnection::getAsync() "RestConnection::getAsync(False, rtopts)" accepts
+      string-valued runtime options when it adds the default \c skip_login flag (issue #7408).
+    - the frames of the calls that the initialization of a module makes name the module's
+      @ref Qore::Program "Program" (@ref Qore::CallStackInfo "CallStackInfo" \c programid) also when the module is
+      loaded at run time (@ref Qore::Program::loadModule() "Program::loadModule()",
+      @ref Qore::load_module() "load_module()"); they named the Program of the code that loaded the module
+      (<a href="https://github.com/qoretechnologies/qore/issues/7289">issue 7289</a>)
+    - a @ref RestClientIo::RestClientIo "RestClientIo" client (and any other client that gives its connection manager the
+      proof of its creator when trusted code creates it) that trusted code lends to code restricted from the \c NETWORK
+      functional domain is bound for that code to the client's target, proxy and CA locations, as the clients of
+      @ref ConnectionProvider are: a copy of the client with another URL, its connection manager and the redirects of
+      its requests no longer reach another origin for the restricted code; a client that is given a shared connection
+      manager takes no proof and is not bound
+      (<a href="https://github.com/qoretechnologies/qore/issues/7295">issue 7295</a>)
+    - the thread-local data of a @ref Qore::Thread::ThreadPool "ThreadPool" worker that a destructor saved with
+      \c save_thread_data() while the data of the worker's task was released, in a
+      Program family that had been released before, is released too and no longer reaches the next task of the worker;
+      the release repeats until no data is left, and refuses what destructors save in its last pass, so that it always
+      ends (<a href="https://github.com/qoretechnologies/qore/issues/7398">issue 7398</a>)
     - @ref Qore::HTTPClient::getURL() "HTTPClient::getURL()", @ref Qore::HTTPClient::getProxyURL() "getProxyURL()"
       and @ref Qore::HTTPClient::getSafeProxyURL() "getSafeProxyURL()" give an IPv6 host in brackets and the path of a
       UNIX domain socket with every reserved character encoded; the URL was ambiguous without them, and
@@ -2873,6 +2909,9 @@
       splice or extract), through a @ref weak_assignment_operator "weak reference" to the list or hash, no longer lets
       an object that is still referenced be collected
       (<a href="https://github.com/qoretechnologies/qore/issues/7373">issue 7373</a>)
+    - <tt>-=</tt> on a variable that holds a @ref weak_assignment_operator "weak reference" to an object removes the
+      members from the object and keeps the weak reference, instead of replacing it with an integer
+      (<a href="https://github.com/qoretechnologies/qore/issues/7368">issue 7368</a>)
     - @ref httpserverintro "HttpServer" answers a handler's informational response (1xx) other than 101 with an error
       instead of sending it as the final response
       (<a href="https://github.com/qoretechnologies/qore/issues/7222">issue 7222</a>)
@@ -2966,6 +3005,10 @@
     - fixed \c qdp \c listen ending with an unhandled \c TERMIOS-GET-ERROR exception when stdin was not a terminal; it
       then stops on its timeout or a signal instead of a keystroke, and the interactive mode ends with a usage error
       (<a href="https://github.com/qoretechnologies/qore/issues/7130">issue 7130</a>)
+    - fixed \c qdp \c listen as a background job of a shell ending with an unhandled \c FILE-READ-ERROR exception
+      at the first input on the terminal, and putting the terminal in raw mode while it ran; it then stops on its
+      timeout or a signal, and the interactive mode ends with a usage error
+      (<a href="https://github.com/qoretechnologies/qore/issues/7387">issue 7387</a>)
     - a data provider instance or action set that callers with different restrictions share no longer keeps a type
       that @ref sandboxing "sandboxed" code built for the other callers (the OpenApi3, Swagger, RestSchema and
       AsyncApi request providers, the record table provider and RestSchemaActions actions;

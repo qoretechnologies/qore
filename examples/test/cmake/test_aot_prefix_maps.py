@@ -82,6 +82,11 @@ def ar_members(data):
     return members
 
 
+def depfile_prerequisite(path):
+    """Return the canonical path with qcc's depfile escaping."""
+    return str(path.resolve()).replace("\\", "\\\\").replace(" ", "\\ ")
+
+
 class AotPrefixMapsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -129,11 +134,14 @@ class AotPrefixMapsTest(unittest.TestCase):
                       f"--file-prefix-map={source}={mapped_prefix}",
                       "--file-prefix-map=/literal/source=/must-not-change-literals", *extra,
                       f"--depfile={output}/module.d", "-o", artifact, source if split else module)
-        self.assertIn(str(module).replace(" ", "\\ "), (output / "module.d").read_text())
+        self.assertIn(depfile_prerequisite(module), (output / "module.d").read_text())
         index = json.loads(self.run_tool(QCC, "--dump-index-json", artifact))
         self.assertEqual(mapped_prefix + "/ReproProbe.qm", index["source"])
-        self.assertNotIn(str(source), json.dumps(index))
-        self.assertNotIn(str(source).encode(), artifact.read_bytes())
+        index_json = json.dumps(index)
+        artifact_bytes = artifact.read_bytes()
+        for path in {source, source.resolve()}:
+            self.assertNotIn(str(path), index_json)
+            self.assertNotIn(str(path).encode(), artifact_bytes)
         self.env["QORE_MODULE_DIR"] = str(output)
         result = self.run_tool(QORE, "-l", "ReproProbe", "-e",
             'printf("%d\\n%s\\n%s\\n", repro_value(41), repro_literal(), repro_location());')
@@ -616,7 +624,7 @@ try {
                 self.run_tool(QCC, "-m", f"--file-prefix-map={source}=/usr/src/qore-test",
                               f"--depfile={output}/{module.stem}.d",
                               "-o", output / (module.stem + ".qmod"), module)
-            self.assertIn(str(output / "ReproProvider.qmod"),
+            self.assertIn(depfile_prerequisite(output / "ReproProvider.qmod"),
                           (output / "ReproConsumer.d").read_text())
             source.rename(source.with_suffix(".hidden"))
             deployed = output.with_suffix(".deployed")
