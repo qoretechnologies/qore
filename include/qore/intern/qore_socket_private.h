@@ -2105,6 +2105,17 @@ struct qore_socket_private : public QoreReferenceCounter {
     using CloseWakes = std::vector<std::shared_ptr<std::function<void()>>>;
     //! Waits on a socket without a descriptor (e.g. during DNS resolution), protected by close_m.
     CloseWakes generation_wakes;
+#ifdef DEBUG
+    //! A single allocation failure in the registration of this socket's next generation wake.
+    enum class WakeAllocation { None, Callback, SocketList, OperationMap, Recheck };
+    std::atomic<WakeAllocation> dbg_wake_failure{WakeAllocation::None};
+
+    DLLLOCAL void dbgCheckWakeAllocation(WakeAllocation point) {
+        if (dbg_wake_failure.compare_exchange_strong(point, WakeAllocation::None, std::memory_order_relaxed)) {
+            throw std::bad_alloc();
+        }
+    }
+#endif
 
     //! Registers a one-shot wake for the next close if the socket still has no descriptor.
     //! Releasing the returned hold unregisters it.

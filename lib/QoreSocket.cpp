@@ -6002,6 +6002,9 @@ std::shared_ptr<void> qore_socket_private::holdGenerationWake(std::function<void
     if (sock != QORE_INVALID_SOCKET) {
         return nullptr;
     }
+#ifdef DEBUG
+    dbgCheckWakeAllocation(WakeAllocation::SocketList);
+#endif
     generation_wakes.push_back(hold->wake);
     return hold;
 }
