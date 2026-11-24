@@ -7613,7 +7613,7 @@ public:
     DLLLOCAL AbstractStatement* getStatementFromIndex(const char* name, int line) {
         printd(5, "qore_program_private::getStatementFromIndex('%s',%d), this: %p, file#: %d, label#: %d\n", name, line, this, (int)(statementByFileIndex.size()), (int)(statementByLabelIndex.size()));
         AutoLocker al(&plock);
-        name_section_sline_statement_map_t::iterator it;
+        name_section_sline_statement_map_t::const_iterator it;
         if (statementByFileIndex.empty()) {
             return nullptr;
         }

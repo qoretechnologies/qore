@@ -1831,15 +1831,15 @@ const QoreProgramLocation* qore_program_private_base::getRuntimeLocation(const Q
     // the runtime locations are protected by the stripe lock alone, as the locations of parsed code
     // (getLocationIntern()); fork() waits for the change (see recordLock())
     std::lock_guard<std::mutex> rl(threadContainerLock());
-    loc_set_t::iterator i = rt_loc_set.find(&loc1);
-    if (i != rt_loc_set.end()) {
+    loc_set_t::iterator i = rt_loc_set.lower_bound(&loc1);
+    if (i != rt_loc_set.end() && !ltpgm()(&loc1, *i)) {
         return *i;
     }
     std::unique_ptr<QoreProgramLocation> lp(new QoreProgramLocation(loc1));
     rt_pgmloc.push_back(lp.get());
     // owned by rt_pgmloc from here on
     QoreProgramLocation* rv = lp.release();
-    rt_loc_set.insert(rv);
+    rt_loc_set.insert(i, rv);
     return rv;
 }
 
@@ -4207,13 +4207,13 @@ void qore_program_private::del(ExceptionSink* xsink) {
 
     //printd(5, "QoreProgram::~QoreProgram() this: %p deleting root ns %p\n", this, RootNS);
 
-    for (name_section_sline_statement_map_t::iterator it = statementByFileIndex.begin(); it != statementByFileIndex.end(); it++) {
+    for (name_section_sline_statement_map_t::const_iterator it = statementByFileIndex.begin(); it != statementByFileIndex.end(); it++) {
         it->second->sectionMap.clear();
         it->second->statementMap.clear();
         delete it->second;
     }
     statementByFileIndex.clear();
-    for (name_section_sline_statement_map_t::iterator it = statementByLabelIndex.begin(); it != statementByLabelIndex.end(); it++) {
+    for (name_section_sline_statement_map_t::const_iterator it = statementByLabelIndex.begin(); it != statementByLabelIndex.end(); it++) {
         it->second->sectionMap.clear();
         it->second->statementMap.clear();
         delete it->second;
@@ -4333,7 +4333,7 @@ void qore_program_private::addStatementToIndexIntern(name_section_sline_statemen
     if ((!statement && !section) || !key)
         return;
     section_sline_statement_map_t *sssm;
-    name_section_sline_statement_map_t::iterator it = statementIndex->find(key);
+    name_section_sline_statement_map_t::const_iterator it = statementIndex->find(key);
     if (it == statementIndex->end()) {
         printd(5, "qore_program_private::addStatementToIndexIntern(%p,'%s',%d,'%s',%d) key not found, this: %p\n", statementIndex, key, offs, section ? section : (const char*)"(null)",sectionOffs, this);
         std::unique_ptr<section_sline_statement_map_t> new_sssm(new section_sline_statement_map_t());
