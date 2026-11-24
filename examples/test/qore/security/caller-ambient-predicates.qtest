@@ -1,0 +1,128 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires ../../TestInterpreter.qm
+
+%exec-class CallerAmbientPredicatesTest
+
+#! SandboxManager::callerMayReadExternalInfo() and SandboxManager::callerMayReceiveHostSecrets() answer for the code
+#! that calls library code (qore#6844)
+/** Library code that resolves ambient host data for its caller asks them first; a method of an object that the host
+    lent lends nothing to them, while the host's policy barriers and capabilities do
+*/
+class CallerAmbientPredicatesTest inherits QUnit::Test {
+    public {
+        #! the results of the host's own code
+        const HostExpected = {
+            "host_direct": "T/T",
+            "host_barrier": "T/T",
+            "host_capability": "T/T",
+        };
+
+        #! the results for code that may read external information and receive host secrets
+        const All = {
+            "direct": "T/T",
+            "lent": "T/T",
+            "lent_restricted": False,
+            "lent_barrier": "T/T",
+            "barrier": "T/T",
+            "barrier_callback": "T/T",
+            "capability": "T/T",
+            "own_ref": "T/T",
+            "library_ref": "T/T",
+        };
+
+        #! the results for code restricted from external information: only the host's grants lend it
+        const NoExternalInfo = {
+            "direct": "F/F",
+            # the lent object lends the domain to isCallerRestricted(), but nothing to the predicates
+            "lent": "F/F",
+            "lent_restricted": False,
+            "lent_barrier": "T/T",
+            "barrier": "T/T",
+            # the restricted code's own callback inside the grant
+            "barrier_callback": "F/F",
+            "capability": "T/T",
+            # a call reference that the restricted code created, or that library code created for it
+            "own_ref": "F/F",
+            "library_ref": "F/F",
+        };
+
+        #! the results for sandboxed code that is not restricted: it may read external information, but receives no
+        #! secrets of the host outside a grant
+        const Sandboxed = {
+            "direct": "T/F",
+            "lent": "T/F",
+            "lent_restricted": False,
+            "lent_barrier": "T/T",
+            "barrier": "T/T",
+            "barrier_callback": "T/F",
+            "capability": "T/T",
+            "own_ref": "T/F",
+            "library_ref": "T/F",
+        };
+
+        #! the expected results by kind of calling code
+        const Expected = {
+            "unrestricted": All,
+            # a restriction of another domain does not count
+            "other_restriction": All,
+            "no_external_info": NoExternalInfo,
+            "lockdown": NoExternalInfo,
+            "sandboxed": Sandboxed,
+            "sandboxed_no_external_info": NoExternalInfo,
+        };
+    }
+
+    constructor() : Test("CallerAmbientPredicates", "1.0", \ARGV) {
+        addTestCase("predicates", \predicateTest());
+        set_return_value(main());
+    }
+
+    predicateTest() {
+        string dir = normalize_dir(get_script_dir()) + DirSep + "caller-ambient" + DirSep;
+        string out = backquote(sprintf("QORE_MODULE_DIR='%s' '%s' '%s' 2>&1", (dir, ENV.QORE_MODULE_DIR).join(PathSep),
+            TestInterpreter::qore_interpreter(), dir + "AmbientChild.q"));
+        hash<string, string> r = parse(out);
+        int n = 0;
+        foreach hash<auto> i in (HostExpected.pairIterator()) {
+            assertEq(sprintf("%y", i.value), r{i.key}, i.key);
+            ++n;
+        }
+        # the calling code in every execution mode
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            foreach hash<auto> k in (Expected.pairIterator()) {
+                foreach hash<auto> i in (k.value.pairIterator()) {
+                    string key = mode + "_" + k.key + "_" + i.key;
+                    assertEq(sprintf("%y", i.value), r{key}, key);
+                    ++n;
+                }
+            }
+        }
+        assertEq(n, r.size(), "every result was checked: " + out);
+    }
+
+    #! parses the output of the child process: one line per result, with the key, \c "=" and the value written with
+    #! \c %y
+    private hash<string, string> parse(string out) {
+        hash<string, string> rv;
+        foreach string line in (out.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            *list<*string> kv = (line =~ x/^([a-z_]+)=(.*)$/);
+            if (!kv) {
+                throw "CHILD-OUTPUT-ERROR", sprintf("unexpected output: %s", out);
+            }
+            rv{kv[0]} = kv[1];
+        }
+        return rv ?? {};
+    }
+}

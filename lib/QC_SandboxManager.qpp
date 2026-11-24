@@ -1906,6 +1906,82 @@ static bool SandboxManager::isLentToRestricted(softint domain) [flags=RET_VALUE_
     return qore_caller_lent_to_restricts_domain(domain);
 }
 
+//! Returns @ref True if the calling code could read the host's environment and other ambient information itself
+/** Library code that resolves data of the host for its caller rather than taking it from the caller (environment
+    variables, instance or container metadata, application default credential files, the process's default
+    credentials, options taken from the environment) does so only if this method returns @ref True: a module's code
+    runs with its own %Program's options, so without the check it would give a caller what the caller may not read
+    itself (see @ref sandbox_ambient_host_data).
+
+    It returns @ref False if the calling code is restricted from @ref Qore::DOM_EXTERNAL_INFO "DOM_EXTERNAL_INFO"
+    (for example with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" or
+    @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN"), as isLentToRestricted() resolves it: the code of the module on the way,
+    and of the objects and callbacks that restricted code created, counts as isCallerRestricted() counts it, but a
+    method of an object that the host lent (see @ref sandbox_lent_objects) lends nothing here, so a restricted
+    borrower gets no ambient data through it.  The host grants access with a policy barrier (callWithSystemPolicy())
+    or a capability (createSystemPolicyCall()): only the code that runs inside the grant counts then.  A sandbox that
+    governs the code without restricting the domain does not make it return @ref False; see
+    callerMayReceiveHostSecrets() for credentials that sandboxed code must not receive either.
+
+    It reveals only whether the calling code is restricted, so it is not restricted itself.
+
+    @return @ref True if the calling code could read the host's environment itself, or the host granted it;
+    @ref False if not
+
+    @par Example:
+    @code{.py}
+# a setting from the environment only for a caller that could read it itself
+*string region = SandboxManager::callerMayReadExternalInfo() ? ENV.SERVICE_REGION : NOTHING;
+    @endcode
+
+    @see
+    - callerMayReceiveHostSecrets()
+    - isLentToRestricted()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::callerMayReadExternalInfo() [flags=RET_VALUE_ONLY] {
+    return qore_caller_may_read_external_info();
+}
+
+//! Returns @ref True if the calling code may receive secrets of the host, such as credentials resolved from the host
+/** As callerMayReadExternalInfo(), and in addition @ref False if the calling code is sandboxed: a sandboxed %Program
+    is on the way (also one that sandboxed code created), a sandbox governs the code, or the code of an object or
+    callback that sandboxed code created runs.  Library code that resolves a credential of the host for its caller
+    (a key from the environment, a token of an instance metadata service, the process's default Kerberos
+    credential) and hands it to the caller, or acts with it for the caller, asks it first (see
+    @ref sandbox_ambient_host_data).
+
+    The host grants access with a policy barrier (callWithSystemPolicy()) or a capability
+    (createSystemPolicyCall()): only the code that runs inside the innermost grant counts then (the %Programs entered
+    inside it, the sandbox that governs that code, and the provenance of the objects and callbacks whose code runs:
+    all of it under a policy barrier, the frames inside a capability's boundary), so trusted code can use a
+    credential of the host for a sandboxed caller; a method of an object that the host lent lends nothing here.  It
+    fails closed: @ref False if the sandbox that governs the code cannot be resolved.
+
+    It reveals only whether the calling code is sandboxed or restricted, so it is not restricted itself.
+
+    @return @ref True if the calling code may receive the host's secrets, or the host granted it; @ref False if not
+
+    @par Example:
+    @code{.py}
+# the host's credentials only for a caller that may receive them
+if (!SandboxManager::callerMayReceiveHostSecrets()) {
+    throw "CREDENTIALS-ERROR", "no credentials were given, and the host's credentials are not available to the "
+        "calling code";
+}
+    @endcode
+
+    @see
+    - callerMayReadExternalInfo()
+    - isSandboxed()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::callerMayReceiveHostSecrets() [flags=RET_VALUE_ONLY] {
+    return qore_caller_may_receive_host_secrets();
+}
+
 //! Returns whether entering a Qore callable with the given functional domains would be denied by the caller's restrictions
 /** Uses the caller check for a function or method declared with \c [dom=...]. A library module's own initialization
     is checked independently of the Program that loaded it. On an ordinary call, the caller's restrictions apply.

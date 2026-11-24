@@ -8391,6 +8391,93 @@ bool qore_caller_lent_to_restricts_domain(int64 domain) {
     return qore_get_calling_code_restrictions(td).hasAny(dom) || qore_get_lent_to_restrictions(td).hasAny(dom);
 }
 
+bool qore_caller_may_read_external_info() {
+    // a lent object's capability frame lends nothing: the code that it was lent to counts (fails closed)
+    return !qore_caller_lent_to_restricts_domain(QDOM_EXTERNAL_INFO);
+}
+
+//! returns true if the calling code is sandboxed, as qore_caller_is_sandboxed() resolves it, but under a host grant
+//! only the code that runs inside the innermost one counts (qore#6844)
+/** The Programs entered inside the grant, the Program of a builtin call made inside it, the provenance of the objects
+    and callbacks whose code runs (all of it under a policy barrier, the frames inside a capability's boundary) and
+    the sandbox that governs the code inside it (as the policy checks resolve it); without a grant, as
+    qore_caller_is_sandboxed(), and in addition the provenance of the objects and callbacks that sandboxed code
+    created.  Capability frames of lent objects are not looked at: they lend nothing here.  Fails closed
+*/
+static bool qore_granted_caller_is_sandboxed(ThreadData* td) {
+    assert(td);
+    assert(td->sandbox_policy_barrier_snapshots.size() == td->sandbox_policy_barrier_ctx.size());
+    const bool granted = !td->sandbox_policy_barrier_ctx.empty();
+    if (!granted && qore_caller_is_sandboxed()) {
+        return true;
+    }
+    const ThreadData::ModuleInitBarrier* mib = qore_get_caller_module_init_barrier(td);
+    const ProgramThreadCountContextHelper* grant_ctx = granted ? td->sandbox_policy_barrier_ctx.back() : nullptr;
+    const ThreadData::GrantSnapshot* grant = granted ? &td->sandbox_policy_barrier_snapshots.back() : nullptr;
+    if (granted) {
+        // a sandboxed caller that a parse or module load in another Program hid from the walk (fails closed: it is
+        // not known whether it was set inside the grant)
+        if (td->sandboxed_caller
+                && (!mib || td->sandboxed_caller->getBarrierDepth() >= td->module_init_barriers.size())) {
+            return true;
+        }
+        if (!mib || mib->build || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
+            if (qore_program_is_sandboxed(td->current_pgm)) {
+                return true;
+            }
+        }
+        for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+            if (ch == grant_ctx || (mib && (ch == mib->ctx || ch->getOldContext() == mib->ctx))) {
+                break;
+            }
+            if (qore_program_is_sandboxed(ch->getOldProgram())) {
+                return true;
+            }
+        }
+        if (!mib && td->current_pgm != td->call_program_context
+                && td->call_program_context != grant->call_program_context
+                && qore_program_is_sandboxed(td->call_program_context)) {
+            return true;
+        }
+    }
+    // the objects and callbacks that sandboxed code created; a capability's boundary hides the frames before it
+    const QoreSandboxProvenanceHelper* boundary = (granted && td->trusted_policy_depth)
+        ? td->trusted_policy_boundary : nullptr;
+    for (const auto* frame = td->sandbox_provenance; frame; frame = frame->getPrevious()) {
+        if ((mib && frame == mib->provenance) || (boundary && frame == boundary)) {
+            break;
+        }
+        const QoreSandboxContext* ctx = frame->getContext();
+        if (ctx->capturer_sandboxed || ctx->manager || ctx->policy_manager || ctx->provenance_manager
+                || ctx->provenance_policy_manager) {
+            return true;
+        }
+    }
+    if (!granted) {
+        return false;
+    }
+    // a sandbox that governs the code inside the grant
+    try {
+        ReferenceHolder<QoreSandboxManager> sm(find_thread_sandbox_manager_ref_intern(nullptr, true), nullptr);
+        return static_cast<bool>(sm);
+    } catch (std::bad_alloc&) {
+        // the sandbox cannot be resolved: fail closed
+        return true;
+    }
+}
+
+bool qore_caller_may_receive_host_secrets() {
+    if (!qore_caller_may_read_external_info()) {
+        return false;
+    }
+    ThreadData* td = thread_data.get();
+    // before the library is initialized, only the embedding application runs
+    if (!td) {
+        return true;
+    }
+    return !qore_granted_caller_is_sandboxed(td);
+}
+
 //! returns the nearest Program on the call stack that is not a module's, as qore_get_caller_domain_restrictions()
 //! walks to it, or nullptr if there is none (only module code is on the stack, or the walk stops at the barrier of
 //! the initialization of library code, or of a trusted build)

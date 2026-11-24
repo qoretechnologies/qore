@@ -2344,6 +2344,28 @@ DLLLOCAL bool qore_caller_restricts_terminal_io();
 */
 DLLLOCAL bool qore_caller_lent_to_restricts_domain(int64 domain);
 
+//! Returns true if the code that calls into the library could read the host's environment and other ambient
+//! information itself (qore#6844)
+/** False if the calling code is restricted from @ref QDOM_EXTERNAL_INFO, as qore_caller_lent_to_restricts_domain()
+    resolves it: a method of an object that the host lent (a capability frame, qore#7052) lends nothing here, so the
+    code that the object was lent to counts, while the host's policy barriers (SandboxManager::callWithSystemPolicy())
+    and system-policy capabilities (SandboxManager::createSystemPolicyCall()) still lend what they lend.  Library code
+    that resolves ambient host data for its caller (environment variables, instance metadata, application default
+    credentials, the process's default credentials) asks it first; fails closed
+*/
+DLLLOCAL bool qore_caller_may_read_external_info();
+
+//! Returns true if the code that calls into the library may receive secrets of the host (qore#6844)
+/** True only if qore_caller_may_read_external_info() is true and the calling code is not sandboxed: no sandboxed
+    %Program is on the way (also one that sandboxed code created, without a manager of its own), no sandbox governs
+    the code, and no object or callback whose code runs was created by sandboxed code.  Under a host grant (the
+    innermost policy barrier of SandboxManager::callWithSystemPolicy() or of a capability of
+    SandboxManager::createSystemPolicyCall()) only the code that runs inside it counts, as for the restrictions of the
+    calling code; a capability frame of a lent object lends nothing.  Fails closed: false if the governing sandbox
+    cannot be resolved for lack of memory
+*/
+DLLLOCAL bool qore_caller_may_receive_host_secrets();
+
 //! returns true if the calling code may have the process load native code that it chose (a binary module from outside
 //! the module path)
 /** Native code is trusted code: no sandbox governs it.  Trusted code may load it, and code that is not trusted only if

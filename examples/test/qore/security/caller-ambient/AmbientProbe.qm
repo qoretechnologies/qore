@@ -1,0 +1,63 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a library module (found in the module path) that reports the ambient-data predicates of its caller (qore#6844)
+
+%modern
+
+module AmbientProbe {
+    version = "1.0";
+    desc = "ambient host data predicate probe (qore#6844)";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    # a call reference created while serving a restricted caller keeps its restrictions (its provenance), so the one
+    # that the policy barrier calls is created here
+    init = sub () {
+        AmbientProbe::Probe = \AmbientProbe::probe();
+    };
+}
+
+public namespace AmbientProbe {
+    #! the call reference that the policy barrier calls, created in the module's initialization
+    our code Probe;
+
+    #! the predicates of the calling code: "<read>/<secrets>", each "T" or "F"
+    public string sub probe() {
+        return sprintf("%s/%s", SandboxManager::callerMayReadExternalInfo() ? "T" : "F",
+            SandboxManager::callerMayReceiveHostSecrets() ? "T" : "F");
+    }
+
+    #! the predicates under a policy barrier that this module's code establishes
+    public string sub barrier_probe() {
+        return SandboxManager::callWithSystemPolicy(Probe);
+    }
+
+    #! calls the caller's callback under a policy barrier that this module's code establishes
+    public auto sub barrier_callback(code c) {
+        return SandboxManager::callWithSystemPolicy(c);
+    }
+
+    #! returns a call reference to probe() created by this module's code for its caller
+    public code sub make_ref() {
+        return \probe();
+    }
+
+    #! an object that the host lends
+    public class Lent {
+        #! the predicates in a method of the lent object
+        public string probe() {
+            return AmbientProbe::probe();
+        }
+
+        #! the restriction of the calling code as isCallerRestricted() sees it (the lent object lends it)
+        public bool callerRestricted() {
+            return SandboxManager::isCallerRestricted(DOM_EXTERNAL_INFO);
+        }
+
+        #! the predicates under a policy barrier that the lent object's code establishes
+        public string barrierProbe() {
+            return AmbientProbe::barrier_probe();
+        }
+    }
+}
