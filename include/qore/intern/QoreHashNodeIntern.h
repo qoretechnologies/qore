@@ -37,6 +37,10 @@
 #include <list>
 
 // to maintain the order of inserts
+// returns 0 if the current code may delete the object, otherwise raises an exception and returns -1 (qore#6842); see
+// QoreObjectIntern.h
+DLLLOCAL int qore_check_object_delete(const QoreObject& obj, const char* action, ExceptionSink* xsink);
+
 class HashMember {
 public:
     QoreValue val{};
