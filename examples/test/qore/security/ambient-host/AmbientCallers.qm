@@ -90,7 +90,7 @@ public namespace AmbientCallers {
     public auto sub invoke(*string cls, string name, *softlist<auto> args) {
         # the module of the target, in this module's Program (a no-op once it is loaded)
         *string mod = ((cls ?? name) =~ x/^([^:]+)::/)[0];
-        if (mod) {
+        if (mod && mod != "Qore") {
             load_module(mod);
         }
         return cls ? call_static_method_args(cls, name, args) : call_function_args(name, args);

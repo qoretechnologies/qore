@@ -167,7 +167,9 @@ module SqlUtil {
     - the connection that the data names (see below)
     - for data with no credentials, a credential resolver registered with
       @ref SqlUtil::sqlutil_register_ds_credential_resolver() "sqlutil_register_ds_credential_resolver()", which gets
-      the masked configuration and gives the full one from the configured source
+      the masked configuration and gives the full one from the configured source; only for code that may receive the
+      host's secrets (\c PERMISSION-DENIED for code restricted from external information and for sandboxed code, see
+      @ref sandbox_ambient_host_data)
     - a deserializer registered with @ref SqlUtil::sqlutil_register_ds_deserializer()
       "sqlutil_register_ds_deserializer()", which gets the string of the serializer; for data with no credentials, it
       gets @ref SqlUtil::SqlUtilNoCredentials "SqlUtilNoCredentials" (an empty string), never masked credentials,
@@ -8622,6 +8624,12 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
         name is a JDBC URL), so a resolver cannot identify such a datasource by its database name; data serialized with
         the datasource of a named connection keeps the name of the connection and is restored by it (qore#7275)
 
+        The credentials that the resolver gives are the host's secrets: data is restored with them only for code that
+        may receive the host's secrets (see @ref Qore::SandboxManager::callerMayReceiveHostSecrets()
+        "SandboxManager::callerMayReceiveHostSecrets()" and @ref sandbox_ambient_host_data); code restricted from
+        external information and sandboxed code get \c PERMISSION-DENIED, unless the host grants them with a policy
+        barrier or a system-policy capability (qore#6844)
+
         @param new_ds_resolve the callback, with the signature
         <tt>hash<auto>|string sub (string type, hash<auto> masked_config)</tt>, or @ref nothing to remove it
 
@@ -8698,6 +8706,12 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
         if (exists dsh.ds_masked && ds_resolve) {
             # data with no credentials: the credential resolver gives them, also when a deserializer is registered
             check_caller_database();
+            # the credentials that the host's resolver gives are the host's secrets (qore#6844)
+            if (!SandboxManager::callerMayReceiveHostSecrets()) {
+                throw "PERMISSION-DENIED", sprintf("the credentials of datasource %s that the host's credential "
+                    "resolver gives are not available to the calling code; deserialize the data with a datasource "
+                    "that the host provides", mask_datasource(dsh.ds_masked, SqlUtilMaskOptions));
+            }
             return sqlutil_resolve_ds(type, dsh.ds_masked);
         }
         if (ds_get) {
