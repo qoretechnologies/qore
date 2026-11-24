@@ -220,6 +220,10 @@ DLLLOCAL void qore_dbg_quic_unregister_session(int64_t session_id) noexcept;
 //! in dbg_quic_wait_dropped_client_datagrams() (qore#7452)
 DLLLOCAL void qore_dbg_quic_note_dropped_client_datagram();
 
+//! Returns True if dbg_io_uring_defer_completions() leaves the io_uring completions that a poll of an I/O thread
+//! reports to the drain at the end of the thread's iteration (qore#7435)
+DLLLOCAL bool qore_dbg_io_uring_completions_deferred();
+
 //! Returns True if dbg_http2_hold_stream_data() holds the buffered data of this HTTP/2 stream back
 DLLLOCAL bool qore_dbg_h2_stream_data_held(int32_t stream_id);
 
