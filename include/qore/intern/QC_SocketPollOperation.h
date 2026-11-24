@@ -44,6 +44,7 @@
 #include "qore/intern/QuicSession.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
 #include "qore/intern/QoreIoClassesOps.h"
+#include "qore/intern/QoreLastAttemptPollOperation.h"
 
 class QoreEventNotifier;
 
@@ -512,7 +513,7 @@ protected:
     }
 };
 
-class SocketAcceptPollOperation : public SocketAcceptPollSocketOperationBase {
+class SocketAcceptPollOperation : public SocketAcceptPollSocketOperationBase, public QoreLastAttemptPollOperation {
 public:
     DLLLOCAL SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
     DLLLOCAL SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool ssl);

@@ -36,6 +36,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include <qore/SocketPollOperation.h>
+#include "qore/intern/QoreLastAttemptPollOperation.h"
 // QC_SocketPollOperation.h no longer needed — controller_notifier plumbing removed
 #include "qore/intern/QC_Http2PollOperationBase.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
@@ -8537,7 +8538,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             // determined when it was queued; Phase 2 runs the step where this says, so that an op given a last
             // attempt cannot be dispatched to a callback worker (qore#7480)
             bool io_thread_step;
-            // true if this op opted in to a last attempt (SocketPollOperationBase::completesInLastAttempt()) and its
+            // true if this op opted in to a last attempt (QoreLastAttemptPollOperation) and its
             // positive deadline has passed: its step is its last attempt, and it times out if the step asks to wait
             // again (qore#7480)
             bool last_attempt;
@@ -8602,7 +8603,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             // An op whose positive deadline has passed (timed_out: Step C) times out without a step, so that
             // readiness cannot keep it alive past its deadline (level-triggered readiness, as of macOS kqueue
             // connect-ready, would otherwise do so forever).  The only exception is an op that opted in to a last
-            // attempt (SocketPollOperationBase::completesInLastAttempt(): a plain TCP accept), whose step completes
+            // attempt (QoreLastAttemptPollOperation: a plain TCP accept), whose step completes
             // it or asks to wait again without starting anything: it gets exactly one last step at the expiry of its
             // deadline, whether or not the poll before this iteration reported its descriptor ready (the loop can go
             // round without polling, when a command arrives before the poll, and a capped batch of events can leave
@@ -8616,7 +8617,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             // whose first step is their probe.
             auto last_attempt_allowed = [&](const PollInfo& pinfo, bool io_thread_step) -> bool {
                 return pinfo.timeout_us > 0 && pinfo.last_woken_gen != t.phase1_gen && io_thread_step
-                    && pinfo.spop_base->completesInLastAttempt();
+                    && qore_poll_op_completes_in_last_attempt(pinfo.spop_base);
             };
             auto try_queue = [&](PollInfo& pinfo, bool timed_out,
                     bool ready = false, int ready_events = 0, bool event_ready = false) -> bool {
