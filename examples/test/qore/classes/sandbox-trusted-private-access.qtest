@@ -31,7 +31,8 @@
     a method and the private constructors of a trusted class are refused too, also in the class's own base-class
     constructor call (variants-ctors.q); the version of a base class of a method can be
     called only by its override (super-call.q); the members and methods that a trusted class inherits privately are
-    refused (private-inheritance.q).  The uses of
+    refused (private-inheritance.q); the copy of an object of a trusted class keeps its private members private, also
+    in the copy() method of a sandboxed subclass (copy.q).  The uses of
     the private hooks of library classes that stay allowed (overrides, private and public, a recursive call of the own
     override, the implementation of private abstract hooks, the call of the library class's version of an overridden
     method) and the call of another private method of a library class, which is refused, are in library-hooks.q; the
@@ -47,7 +48,7 @@ class SandboxTrustedPrivateAccessTest inherits QUnit::Test {
 
         const Modes = ("ast", "ir", "jit", "tiered");
         const Programs = ("probe", "lookalike", "lookalike-internal", "library-hooks", "public-hooks", "stream-request",
-            "final-hooks", "variants-ctors", "super-call", "super-call-variant", "private-inheritance");
+            "final-hooks", "variants-ctors", "super-call", "super-call-variant", "private-inheritance", "copy");
     }
 
     constructor() : QUnit::Test("SandboxTrustedPrivateAccessTest", "1.0", \ARGV) {
