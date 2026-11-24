@@ -123,6 +123,10 @@ public:
         sock->deref();
     }
 
+    DLLLOCAL qore_socket_private* getPollSocket() const override {
+        return sock;
+    }
+
     DLLLOCAL virtual int getPollableDescriptor() const override {
         return sock->sock;
     }
