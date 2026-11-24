@@ -835,7 +835,8 @@ static bool qore_finalize_signature_type_args(const UserSignature* sig, type_vec
 }
 
 //! Infers the type arguments of a generic variant from the argument types and the explicit type arguments
-static bool qore_infer_signature_type_args(const AbstractQoreFunctionVariant* variant, const type_vec_t& arg_types,
+template <typename ArgumentType>
+static bool qore_infer_signature_type_args_impl(const UserSignature* sig, size_t nargs, ArgumentType argument_type,
         const std::vector<bool>* supplied, const QoreTypeInfo* receiver_type_info,
         QoreTypeParamInstantiation* type_param_inst, const type_vec_t* explicit_type_args = nullptr,
         const QoreTypeParamInstantiation* explicit_inst = nullptr) {
@@ -843,7 +844,6 @@ static bool qore_infer_signature_type_args(const AbstractQoreFunctionVariant* va
         type_param_inst->clear();
     }
 
-    const UserSignature* sig = qore_get_variant_generic_signature(variant);
     if (!sig) {
         return !explicit_type_args || explicit_type_args->empty();
     }
@@ -876,10 +876,10 @@ static bool qore_infer_signature_type_args(const AbstractQoreFunctionVariant* va
         if (supplied && (pi >= supplied->size() || !(*supplied)[pi])) {
             continue;
         }
-        if (pi >= arg_types.size()) {
+        if (pi >= nargs) {
             continue;
         }
-        const QoreTypeInfo* actual = arg_types[pi];
+        const QoreTypeInfo* actual = argument_type(pi);
         if (!actual || !QoreTypeInfo::hasType(actual)) {
             continue;
         }
@@ -899,6 +899,15 @@ static bool qore_infer_signature_type_args(const AbstractQoreFunctionVariant* va
         type_param_inst->type_args = std::move(bindings);
     }
     return true;
+}
+
+static bool qore_infer_signature_type_args(const AbstractQoreFunctionVariant* variant, const type_vec_t& arg_types,
+        const std::vector<bool>* supplied, const QoreTypeInfo* receiver_type_info,
+        QoreTypeParamInstantiation* type_param_inst, const type_vec_t* explicit_type_args = nullptr,
+        const QoreTypeParamInstantiation* explicit_inst = nullptr) {
+    return qore_infer_signature_type_args_impl(qore_get_variant_generic_signature(variant), arg_types.size(),
+        [&](size_t i) { return arg_types[i]; }, supplied, receiver_type_info, type_param_inst, explicit_type_args,
+        explicit_inst);
 }
 
 static const QoreTypeInfo* qore_get_runtime_value_type_info(const QoreValue& v) {
@@ -978,14 +987,33 @@ static bool qore_infer_signature_type_args_runtime(const AbstractQoreFunctionVar
         return true;
     }
 
-    type_vec_t arg_types;
-    size_t nargs = args ? args->size() : 0;
-    arg_types.reserve(nargs);
-    for (size_t i = 0; i < nargs; ++i) {
-        arg_types.push_back(qore_get_runtime_value_type_info(args->retrieveEntry(i)));
+    const size_t nargs = args ? args->size() : 0;
+    auto argument_type = [args](size_t i) { return qore_get_runtime_value_type_info(args->retrieveEntry(i)); };
+    if (sig->positional_type_params && sig->resolved && type_param_inst && nargs == sig->numParams()
+            && (!explicit_inst || explicit_inst->type_args.size() <= nargs)) {
+        // The signature already proves the mapping. An exact explicit argument agrees with inference; a
+        // different one needs the usual substitution and compatibility check. NOTHING may need a default.
+        type_param_inst->type_args.clear();
+        type_param_inst->type_args.reserve(nargs);
+        for (size_t i = 0; i < nargs; ++i) {
+            const QoreTypeInfo* actual = argument_type(i);
+            if (!QoreTypeInfo::hasType(actual) || actual == nothingTypeInfo) {
+                break;
+            }
+            if (explicit_inst && i < explicit_inst->type_args.size()
+                    && (explicit_inst->type_args[i] != actual || qore_type_contains_type_parameter(actual))) {
+                break;
+            }
+            type_param_inst->type_args.push_back(actual);
+        }
+        if (type_param_inst->type_args.size() == nargs) {
+            type_param_inst->owner = sig;
+            return true;
+        }
     }
-    return qore_infer_signature_type_args(variant, arg_types, nullptr, receiver_type_info, type_param_inst, nullptr,
-        explicit_inst);
+
+    return qore_infer_signature_type_args_impl(sig, nargs, argument_type, nullptr, receiver_type_info, type_param_inst,
+        nullptr, explicit_inst);
 }
 
 static bool qore_named_position_filled(const std::vector<size_t>& source_to_param, size_t pi);
@@ -3339,6 +3367,16 @@ int UserSignature::resolveTypes() {
         }
     }
 
+    if (!err && !type_params.empty() && type_params.size() == typeList.size()) {
+        positional_type_params = true;
+        for (size_t i = 0; i < typeList.size(); ++i) {
+            const auto* param = qore_get_type_parameter_type_info(typeList[i]);
+            if (type_params[i].hasBound() || !param || param->getOwnerSignature() != this || param->getIndex() != i) {
+                positional_type_params = false;
+                break;
+            }
+        }
+    }
     types_err = err;
     return err;
 }

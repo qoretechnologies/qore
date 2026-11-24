@@ -619,6 +619,8 @@ public:
     bool resolved;
     //! the types have been resolved (resolveTypes()), with the result in types_err
     bool types_resolved = false;
+    //! For f<A, B, ...>(A, B, ...), each positional argument binds its own unbounded type parameter.
+    bool positional_type_params = false;
     int types_err = 0;
     //! true for the signature of a closure, which names the type parameters of the code that it is in (qore#5733)
     bool closure = false;
@@ -689,6 +691,7 @@ public:
     DLLLOCAL void setFirstParamType(const QoreTypeInfo* typeInfo) {
         assert(!typeList.empty());
         typeList[0] = typeInfo;
+        positional_type_params = false;
         clearTypeParameterSubstitutionCache();
     }
 
@@ -706,6 +709,7 @@ public:
     }
 
     DLLLOCAL void setTypeParameters(std::vector<QoreGenericTypeParam>&& n_type_params) {
+        positional_type_params = false;
         type_params = std::move(n_type_params);
         declares_type_parameters = !type_params.empty();
         type_param_default_types.clear();
