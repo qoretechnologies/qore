@@ -128,12 +128,14 @@ class Derived inherits Base {
             "class MC inherits MP { string m(int x, int y = 0, string b) { return \"c\"; } }",
             "child class method MC::m\\(int x, int y = 0, string b\\) cannot overload parent class method final "
             "MP::m\\(int a, string b\\)", "named with a positional argument");
-        # other names: no named call of the final variant can select it
-        Program p = parseAccepted("class NB { final string m(int a, string b) { return \"b\"; } } "
-            "class NC inherits NB { string m(string c, int d) { return \"c\"; } }\n"
-            "string sub t() { NB o = new NC(); return o.m(a: 1, b: \"x\") + o.m(1, \"x\") "
-            "+ (new NC()).m(c: \"x\", d: 1); }", "named other names");
-        assertEq("bbc", p.callFunction("t"));
+        # Different parameter names and types still declare the inherited final name.
+        assertRejected("class NB { final string m(int a, string b) { return \"b\"; } } "
+            "class NC inherits NB { string m(string c, int d) { return \"c\"; } }",
+            "name is reserved by parent class method final NB::m", "named other names");
+        assertRejected("class Palette { string draw(int x) { return x.toString(); } "
+            "final string draw(string x) { return x; } } "
+            "class Shade inherits Palette { private:internal string draw(date d) { return d.toString(); } }",
+            "name is reserved by parent class method final Palette::draw", "final among local variants");
         # a grandchild
         assertRejected("class C inherits Derived { string h(*string s) { return \"c\"; } }",
             "child class method C::h\\(\\*string s\\) cannot overload parent class method final Base::h",
@@ -144,39 +146,28 @@ class Derived inherits Base {
         assertRejected("class C inherits Base { static string s(softint i) { return \"c\"; } }",
             "child class method static C::s\\(softint i\\) cannot overload parent class method final static "
             "Base::s\\(int i\\)", "static overload");
-        Program p = parseAccepted("class C inherits Base { static string s(string v) { return \"c\"; } }
-string sub test(auto v) { return C::s(v); }", "static disjoint");
-        p.run();
-        assertEq("c", p.callFunction("test", "x"));
-        assertEq("final", p.callFunction("test", 1));
+        assertRejected("class C inherits Base { static string s(string v) { return v; } }",
+            "name is reserved by parent class method final static Base::s", "disjoint static overload");
+        assertRejected("class C inherits Derived { static int h(int i) { return i; } }",
+            "name is reserved by parent class method final Base::h", "static declaration in grandchild");
+        assertRejected("class C inherits Base { int s(int i) { return i; } }",
+            "name is reserved by parent class method final static Base::s", "instance declaration for static name");
     }
 
     #! a class with two parent classes (the final method's class first) and a child that overrides the method with
     #! another signature (qore#5994: the shape of Qorus's AbstractServiceSoapHandler and its subclasses)
     testGrandchild() {
-        Program p = parseAccepted("
+        assertRejected("
 class SoapLike {
     final string hr(hash<auto> cx, hash<auto> hdr, *data body) { return \"soap final\"; }
 }
 class HttpLike {
     string hr(string listener, hash<auto> cx, hash<auto> hdr, *data body) { return \"http\"; }
-    string other(int i) { return \"other\"; }
 }
-class Service inherits SoapLike, HttpLike {
-    string hr(string listener, hash<auto> cx, hash<auto> hdr, *data body) { return \"service \" + listener; }
-}
+class Service inherits SoapLike, HttpLike {}
 class ServiceChild inherits Service {
-    string hr(int n, string listener, hash<auto> cx, hash<auto> hdr, *data body) { return \"child \" + n; }
-}
-class ServiceGrandchild inherits ServiceChild {
-}
-list<string> sub test() {
-    auto c = new ServiceChild();
-    auto g = new ServiceGrandchild();
-    return (c.hr({}, {}), c.hr(\"L\", {}, {}), c.hr(1, \"L\", {}, {}), g.hr({}, {}), g.hr(2, \"L\", {}, {}));
-}", "grandchild accepted");
-        p.run();
-        assertEq(("soap final", "service L", "child 1", "soap final", "child 2"), p.callFunction("test"));
+    string hr(int n, string listener, hash<auto> cx, hash<auto> hdr, *data body) { return listener; }
+}", "name is reserved by parent class method final SoapLike::hr", "grandchild declares final name");
 
         # the class that lists the sibling first does not reach the final method, also through children
         assertRejected("
@@ -215,15 +206,12 @@ class CycD inherits CycC {
 # Base before the other parent class
 class T1 inherits Base, Other {}
 class T2 inherits Derived, Plain {}
-# overloads that accept none of the final variants' arguments
-class C inherits Base {
-    string h(int i) { return \"int\"; }
-    string h(string a, string b) { return \"two\"; }
-    string k(int i) { return \"int\"; }
+# overloads declared alongside a final variant are inherited together
+class Palette {
+    final string label(string s) { return s; }
+    string label(int i) { return i.toString(); }
 }
-class G inherits C {
-    string h(binary b) { return \"binary\"; }
-}
+class MoreColors inherits Palette {}
 # a final private:internal method is not inherited
 class I {
     private:internal final string q() { return \"i\"; }
@@ -235,15 +223,12 @@ class J inherits I {
 list<string> sub test() {
     auto t1 = new T1();
     auto t2 = new T2();
-    auto c = new C();
-    auto g = new G();
+    auto colors = new MoreColors();
     auto j = new J();
-    return (t1.m(), t2.m(), c.h(\"x\"), c.h(1), c.h(\"a\", \"b\"), c.k(c, <00>), c.k(1), g.h(\"x\"), g.h(<00>),
-        g.m(), j.q(), j.callQ());
+    return (t1.m(), t2.m(), colors.label(\"blue\"), colors.label(2), j.q(), j.callQ());
 }", "accepted");
         p.run();
-        assertEq(("final", "final", "final", "int", "two", "final", "int", "final", "binary", "final", "j", "i"),
-            p.callFunction("test"));
+        assertEq(("final", "final", "blue", "2", "j", "i"), p.callFunction("test"));
     }
 
     #! a sandboxed Program cannot replace a final method of a trusted class it subclasses
@@ -256,15 +241,15 @@ list<string> sub test() {
             "overload parent class method final TrustedBase::charge", \p.parse(),
             ("class Sub inherits TrustedBase { string charge(object a, *binary body) { return \"sub\"; } }", "sub"));
 
-        # a disjoint overload is accepted, and the trusted method is still called for its arguments
+        # a new method with a distinct name is accepted alongside the inherited final method
         Program p2(PO_NEW_STYLE);
         p2.setSandboxManager(mgr);
         p2.importClass("TrustedBase");
-        p2.parse("class Sub inherits TrustedBase { string log(int code) { return \"sub\"; } }
+        p2.parse("class Sub inherits TrustedBase { string formatCode(int code) { return \"sub\"; } }
 object sub make() { return new Sub(); }", "sub2");
         object o = p2.callFunction("make");
         assertEq("final", o.log("x"));
-        assertEq("sub", o.log(1));
+        assertEq("sub", o.formatCode(1));
         assertEq("final", o.charge(o, <00>));
     }
 }
