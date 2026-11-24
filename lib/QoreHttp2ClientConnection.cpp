@@ -724,9 +724,9 @@ void Http2ClientConnection::sendStreamDataWaitingForDrain(int64_t stream_id, con
         }
         // a full send buffer took nothing of the data: the send waits for the buffer to drain and is made again
         // (qore#7465); a send on the I/O thread cannot wait
-        QoreValue err = xsink->getExceptionErr();
-        if (err.getType() != NT_STRING || strcmp(err.get<const QoreStringNode>()->c_str(), "HTTP2-FLOW-CONTROL")
-                || !sock_priv || qore_on_async_io_thread()) {
+        // note: the error code can be held in inline short string storage, which has no QoreStringNode
+        QoreStringDataHelper err(xsink->getExceptionErr());
+        if (!err || strcmp(err.c_str(), "HTTP2-FLOW-CONTROL") || !sock_priv || qore_on_async_io_thread()) {
             return;
         }
         xsink->clear();
