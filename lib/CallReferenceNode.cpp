@@ -535,6 +535,20 @@ const QoreProgram* RunTimeResolvedMethodReferenceNode::getOriginCodeProgram() co
     return qore_call_reference_code_program(this);
 }
 
+bool qore_closure_note_execution_program(const ResolvedCallReferenceNode* closure, const QoreProgram* exec_pgm) {
+    const QoreFunction* f = closure->getFunction();
+    const AbstractQoreFunctionVariant* v = f ? f->first() : nullptr;
+    const UserVariantBase* uvb = v ? v->getUserVariantBase() : nullptr;
+    if (!uvb || !uvb->pgm || !exec_pgm || exec_pgm == uvb->pgm) {
+        return false;
+    }
+    // (the flag is set before the closure can be called: it is published with the closure)
+    if (!(uvb->fast_call_blocks.load(std::memory_order_relaxed) & UserVariantBase::FAST_CALL_BLOCK_RUNS_FOREIGN)) {
+        uvb->fast_call_blocks.fetch_or(UserVariantBase::FAST_CALL_BLOCK_RUNS_FOREIGN, std::memory_order_release);
+    }
+    return true;
+}
+
 const QoreProgram* qore_closure_code_program(const ResolvedCallReferenceNode* closure) {
     // a closure's code is that of the Program that defines it (see qore_call_reference_code_program())
     const QoreProgram* pgm = qore_function_code_program(closure->getFunction());

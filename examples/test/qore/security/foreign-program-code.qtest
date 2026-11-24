@@ -1,0 +1,111 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - JIT and AOT code generation and qcc executables of calls across Programs, file and socket sandbox policy
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ForeignProgramCodeTest
+
+#! Code compiled in one Program that runs in another Program runs with the restrictions of both (qore#7202)
+/** The checks of the calling code (SandboxManager::isCallerRestricted(), isLentToRestricted(),
+    callerMayReadExternalInfo(), callerMayReceiveHostSecrets(), isTerminalIoAllowed(), isSandboxed()), made by such code
+    and by the module code that it calls, count the restrictions of the Program that compiled it, its run-time options
+    have them, and the sandbox of that Program governs it; the host code that it calls answers for itself, a host grant
+    lends what it lends, the code of a Program without restrictions is not affected, and the code is refused once its
+    Program is deleted.  The checks are in foreign-program-code/foreign-program-code-worker.q, whose output must be one
+    "ok" line per case, in each execution mode and as a program compiled with qcc.
+*/
+class ForeignProgramCodeTest inherits QUnit::Test {
+    public {
+        #! the cases of each worker, in the order it runs them
+        const Workers = {
+            "foreign-program-code-worker.q": ("restricted-direct", "restricted-runtime-options", "restricted-module",
+                "restricted-calls-host", "restricted-module-calls-host", "restricted-by-name", "restricted-thread",
+                "restricted-grant", "sandboxed-direct-secrets", "sandboxed-direct-sandboxed",
+                "sandboxed-module-secrets", "sandboxed-policy-file", "sandboxed-policy-network",
+                "sandboxed-policy-nested", "sandboxed-policy-later", "sandboxed-policy-later-function",
+                "deleted-tenant", "sandboxed-policy-host-file", "deleted-self", "deleted-self-after",
+                "deleted-wait", "held-hot", "held-hot-released", "held-background", "unrestricted-direct",
+                "unrestricted-module"),
+            "foreign-program-code-trust-worker.q": ("restricted-lift-own", "restricted-lift-foreign",
+                "restricted-lift-policy", "restricted-isolation-own", "restricted-isolation-foreign",
+                "sandboxed-registry-own", "sandboxed-registry-foreign", "sandboxed-set-manager-own",
+                "sandboxed-set-manager-foreign", "sandboxed-introspection-own", "sandboxed-introspection-foreign",
+                "debugger-own", "debugger-foreign", "sandboxed-module-registry-own",
+                "sandboxed-module-registry-foreign", "sandboxed-module-lift-own", "sandboxed-module-lift-foreign",
+                "sandboxed-module-barrier-own", "sandboxed-module-barrier-foreign", "restricted-module-registry-own",
+                "restricted-module-registry-foreign", "restricted-module-lift-own", "restricted-module-lift-foreign",
+                "restricted-module-barrier-own", "restricted-module-barrier-foreign", "sandboxed-module-cmd-own", "sandboxed-module-cmd-foreign",
+                "sandboxed-defer-own", "sandboxed-defer-foreign", "callback-background", "callback-thread-pool",
+                "callback-timer", "callback-destructor", "callback-thread-pool-sandboxed"),
+        };
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string dir = get_script_dir() + DirSep + "foreign-program-code" + DirSep;
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("ForeignProgramCodeTest", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        addTestCase("each execution mode", \testModes());
+        addTestCase("qcc executables", \testCompiled());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! the cases that need a library with debugging (the teardown hold of the debug builtins)
+    const DebugCases = ("deleted-wait",);
+
+    #! the expected output of a worker
+    private static string expected(string worker) {
+        return (map $1 + "=ok\n", Workers{worker},
+            Option::HAVE_LIBRARY_DEBUGGING || !inlist($1, DebugCases)).join("");
+    }
+
+    testModes() {
+        foreach string worker in (keys Workers) {
+            string w = quote(dir + worker);
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                # the Programs that the worker creates run with its execution mode
+                assertEq(expected(worker), ExecModeHarness::run(prefix + quote(qore_bin)
+                    + " -b --enable-debug --exec-mode=" + mode + " " + w, ExecModeHarness::NativeCheck::None),
+                    worker + " " + mode);
+            }
+            assertEq(expected(worker), ExecModeHarness::run_ir_tier(prefix + quote(qore_bin)
+                + " -b --enable-debug --exec-mode=tiered " + w), worker + " " + ExecModeHarness::IRTierName);
+        }
+    }
+
+    testCompiled() {
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        TmpDir tmp("qore-foreign-program-code-exe-");
+        foreach string worker in (keys Workers) {
+            foreach string opt in (("-O0", "-O3")) {
+                string exe = tmp.path + DirSep + replace(worker, ".q", "") + opt;
+                ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -o " + quote(exe) + " "
+                    + quote(dir + worker));
+                assertTrue(is_file(exe), "qcc " + opt + " produced the executable of " + worker);
+                assertEq(expected(worker), ExecModeHarness::run_any(prefix + quote(exe) + " -b"),
+                    worker + " qcc " + opt);
+            }
+        }
+    }
+}

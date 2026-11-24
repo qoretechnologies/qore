@@ -1720,9 +1720,25 @@ public:
         setProgram() is called only before the variant can be called
     */
     mutable std::atomic<bool> pgm_module_lifetime{false};
-    //! true once the deletion of \a pgm has started: a fast path that evaluates the variant's code without entering
-    //! the Program takes the call path then, which refuses the call (qore#5822)
-    mutable std::atomic<bool> pgm_deleted{false};
+    //! the reasons why the fast paths of native code take the call path for the variant: a bitmask of
+    //! FAST_CALL_BLOCK_* values, tested with one load by the fast paths (fastCallBlocked())
+    mutable std::atomic<uint8_t> fast_call_blocks{0};
+    //! fast_call_blocks: the deletion of \a pgm has started: a fast path that evaluates the variant's code without
+    //! entering the Program takes the call path then, which refuses the call (qore#5822)
+    static constexpr uint8_t FAST_CALL_BLOCK_PGM_DELETED = 1;
+    //! fast_call_blocks: a closure of the variant was created that runs in another Program than \a pgm: the call path
+    //! holds \a pgm before anything of the variant (its parameter types) is read (qore#7202); never cleared
+    static constexpr uint8_t FAST_CALL_BLOCK_RUNS_FOREIGN = 2;
+
+    //! returns true once the deletion of \a pgm has started (see FAST_CALL_BLOCK_PGM_DELETED)
+    DLLLOCAL bool pgmDeleted() const {
+        return fast_call_blocks.load(std::memory_order_acquire) & FAST_CALL_BLOCK_PGM_DELETED;
+    }
+
+    //! returns true if the fast paths of native code take the call path for the variant (see fast_call_blocks)
+    DLLLOCAL bool fastCallBlocked() const {
+        return fast_call_blocks.load(std::memory_order_acquire);
+    }
     //! the previous variant in its Program's list of variants; protected by the Program's user_variant_lock (see
     //! qore_program_private::registerUserVariant())
     mutable const UserVariantBase* uv_prev = nullptr;
@@ -2361,7 +2377,10 @@ public:
             ThreadFrameBoundaryHelper(!*n_xsink),
             uvb(n_uvb), argv(n_xsink), xsink(n_xsink), exec_pgm(getExecutionProgram(n_uvb, ceh)) {
         assert(xsink);
-        if (*xsink || uvb->setupCall(ceh, argv, xsink)) {
+        // (code compiled in another Program than the one it runs in holds the Program that compiled it while the
+        // call runs, qore#7202; the context releases it when it is left, see holdForeignCodeProgram())
+        if (*xsink || (exec_pgm != uvb->pgm && holdForeignCodeProgram(uvb->pgm, xsink))
+                || uvb->setupCall(ceh, argv, xsink)) {
             uvb = nullptr;
         }
     }
@@ -3328,7 +3347,7 @@ protected:
     (refineInterpreterEffectSummary()); their Programs free that code with their namespaces when they are deleted, also
     while another thread reads it.  Each Program reached is held (qore_program_private::tryHoldForCompile()), which its
     teardown waits for without the hold being visible to its code (qore#5874).  A Program that its teardown has marked
-    (UserVariantBase::pgm_deleted, or qore_program_private::ptid, which refuses the hold) is not held, and its code is
+    (UserVariantBase::pgmDeleted(), or qore_program_private::ptid, which refuses the hold) is not held, and its code is
     not read: the function is called through the call path, which refuses the call (qore#5822).  The root function's
     Program is held as well (holdRoot()): the thread that reads its code need not be counted in it (the fast call path
     can run code of the current Program without entering it).  The holds are released with release() or when the
@@ -3688,6 +3707,17 @@ public:
     */
     DLLLOCAL QoreValue evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
         QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args = false) const;
+
+    //! evalClosure() for a closure that runs in another Program than the one that compiled it: holds that Program
+    //! before anything of the variant is read (qore#7202); out of line, so that the other closures only test for it
+    DLLLOCAL QORE_INTERN_NOINLINE QoreValue evalForeignClosure(const QoreClosureBase& closure_base, QoreProgram* pgm,
+        const QoreListNode* args, QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink,
+        bool tmp_args) const;
+
+    //! the call of evalClosure() and evalForeignClosure(); inlined into both, so that the call of a closure keeps one
+    //! frame on its path
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue evalClosureBody(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
+        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args) const;
 
     //! evalClosure() with arguments in source order with the names in \a arg_names, which are bound to the
     //! parameters of the closure's variant by name (M4 phase 3)

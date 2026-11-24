@@ -1778,7 +1778,8 @@ static int check_sandbox_uncontrolled_api(const QoreFunction* func, const Abstra
         return 0;
     }
     // the sandbox introspection and barrier APIs: trusted code calls them for its sandboxed callers
-    if (is_caller_judged_uncontrolled_api(func, variant) && !qore_program_is_sandboxed(::getProgram())) {
+    // (code compiled in another Program than the one it runs in is that Program's code, qore#7202)
+    if (is_caller_judged_uncontrolled_api(func, variant) && !qore_calling_code_is_sandboxed()) {
         return 0;
     }
     std::string class_path = func->classPath();
@@ -7494,6 +7495,8 @@ UserVariantExecHelper::~UserVariantExecHelper() {
         //    sig->lv[i]->getValueTypeName());
         sig->lv[i]->uninstantiate(xsink);
     }
+    // the hold of the Program that compiled code that runs in another Program (see holdForeignCodeProgram()) is
+    // released by the base context after the parameters, which can refer to the types of that Program
 }
 
 QoreProgram* UserVariantExecHelper::getExecutionProgram(const UserVariantBase* uvb, CodeEvaluationHelper* ceh) {
@@ -7514,7 +7517,7 @@ QoreParseOptions qore_compose_module_call_parse_options(const QoreParseOptions& 
 }
 
 QoreParseOptions get_module_own_access_parse_options() {
-    return QoreParseOptions(PO_NO_NETWORK | PO_NO_FILESYSTEM);
+    return QoreParseOptions(QORE_MODULE_OWN_ACCESS_OPTIONS);
 }
 
 //! returns \a po with the options of get_module_own_access_parse_options() taken from the module's Program
@@ -7557,6 +7560,9 @@ static void qore_set_module_call_runtime_po_override(QoreCallParseOptionsOverrid
         const QoreParseOptions* caller_po, const QoreProgram* caller_pgm, ThreadData* td) {
     assert(qore_program_is_module(module_pgm));
     o.td = td;
+    // module code that code compiled in another Program than the one it runs in calls runs for that code: the
+    // restrictions that it was compiled with stay the calling code's (qore#7202)
+    o.code_pgm = runtime_get_foreign_code_program(td);
     o.mask = get_user_variant_runtime_po_override_mask();
     const QoreParseOptions& own_po = qore_program_private::getParseOptions(*module_pgm);
     o.replace = get_module_own_access_parse_options();
@@ -7604,7 +7610,8 @@ void qore_set_user_call_runtime_po_override_slow(RuntimeParseOptionsOverrideHelp
     if (exec_pgm && exec_pgm != uvb->pgm) {
         // the code runs in another Program, so its caller restrictions all apply: this is user code whose Program has
         // released it (see qore_get_method_pgm_context() and qore_get_function_pgm_context()), which runs in its
-        // caller's Program, whose state it would change
+        // caller's Program, whose state it would change, or other code that runs in another Program than the one that
+        // compiled it
         o.mask = get_user_variant_runtime_po_override_mask();
         if (module_code) {
             o.value = keep_module_own_access_parse_options(
@@ -7612,7 +7619,13 @@ void qore_set_user_call_runtime_po_override_slow(RuntimeParseOptionsOverrideHelp
                     caller_po ? *caller_po : runtime_get_effective_parse_options_for(caller_pgm)), uvb->pgm);
             o.replace = get_module_own_access_parse_options();
         } else {
-            o.value = qore_program_private::getParseOptions(*exec_pgm);
+            // code compiled in another Program is never the code of the Program that it runs in (qore#7202): it runs
+            // with the restricting options of both and only the explicitly-allowed options that both have, and the
+            // checks of the calling code count the Program that compiled it (QoreRuntimePoState::code_pgm).  The
+            // call holds that Program (UserVariantExecHelper), and its options only gain restrictions
+            o.value = qore_compose_module_call_parse_options(qore_program_private::getParseOptions(*exec_pgm),
+                qore_program_private::getParseOptions(*uvb->pgm));
+            o.code_pgm = uvb->pgm;
         }
         helper.set(o);
         return;
@@ -7722,11 +7735,11 @@ void UserVariantBase::setProgram(QoreProgram* p) {
         qore_program_private::get(*pgm)->unregisterUserVariant(this);
     }
     if (p) {
-        // sets pgm_deleted if the deletion of the Program has started
+        // sets FAST_CALL_BLOCK_PGM_DELETED if the deletion of the Program has started
         qore_program_private::get(*p)->registerUserVariant(this);
         p->depRef();
     } else {
-        pgm_deleted.store(false, std::memory_order_relaxed);
+        fast_call_blocks.fetch_and(static_cast<uint8_t>(~FAST_CALL_BLOCK_PGM_DELETED), std::memory_order_relaxed);
     }
     if (pgm) {
         // can delete the Program, whose memory the variant kept: no lock is held here
@@ -7750,7 +7763,12 @@ void qore_program_private::registerUserVariant(const UserVariantBase* v) {
     user_variants = v;
     // a variant registered while the Program is being deleted (an AOT closure deserialized lazily, for example) is
     // marked as those that existed when the deletion started
-    v->pgm_deleted.store(user_variants_deleted, std::memory_order_release);
+    if (user_variants_deleted) {
+        v->fast_call_blocks.fetch_or(UserVariantBase::FAST_CALL_BLOCK_PGM_DELETED, std::memory_order_release);
+    } else {
+        v->fast_call_blocks.fetch_and(static_cast<uint8_t>(~UserVariantBase::FAST_CALL_BLOCK_PGM_DELETED),
+            std::memory_order_release);
+    }
 }
 
 void qore_program_private::unregisterUserVariant(const UserVariantBase* v) {
@@ -7776,7 +7794,7 @@ void qore_program_private::markUserVariantsDeleted() {
     std::lock_guard<std::mutex> lock(user_variant_lock);
     user_variants_deleted = true;
     for (const UserVariantBase* v = user_variants; v; v = v->uv_next) {
-        v->pgm_deleted.store(true, std::memory_order_release);
+        v->fast_call_blocks.fetch_or(UserVariantBase::FAST_CALL_BLOCK_PGM_DELETED, std::memory_order_release);
     }
 }
 
@@ -9153,7 +9171,7 @@ bool QoreProgramCodeHolds::holdVariant(const AbstractQoreFunctionVariant* varian
     if (!uvb) {
         return true;
     }
-    if (uvb->pgm_deleted.load(std::memory_order_acquire)) {
+    if (uvb->pgmDeleted()) {
 #ifdef DEBUG
         if (hook_name) {
             qore_dbg_batch_collection_refused(*hook_name);
@@ -11060,7 +11078,40 @@ int QoreFunction::parseInitIntern(qore_ns_private* ns) {
     return err;
 }
 
+//! holds the Program that compiled a closure's code if the closure runs in another Program (qore#7202)
+/** @return true if the Program cannot be held (PROGRAM-ERROR is raised)
+*/
+static bool holdForeignClosureProgram(QoreForeignCodeProgramHold& hold, const AbstractQoreFunctionVariant* variant,
+        QoreProgram* exec_pgm, ExceptionSink* xsink) {
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    if (!uvb || !uvb->pgm || !exec_pgm || exec_pgm == uvb->pgm) {
+        return false;
+    }
+    return hold.hold(uvb->pgm, xsink) != 0;
+}
+
 QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm,
+        const QoreListNode* args, QoreObject *self, const qore_class_private* class_ctx, ExceptionSink* xsink,
+        bool tmp_args) const {
+    if (closure_base.runsForeign()) {
+        return evalForeignClosure(closure_base, pgm, args, self, class_ctx, xsink, tmp_args);
+    }
+    return evalClosureBody(closure_base, pgm, args, self, class_ctx, xsink, tmp_args);
+}
+
+QoreValue UserClosureFunction::evalForeignClosure(const QoreClosureBase& closure_base, QoreProgram* pgm,
+        const QoreListNode* args, QoreObject *self, const qore_class_private* class_ctx, ExceptionSink* xsink,
+        bool tmp_args) const {
+    // the Program that compiled the closure's code is held before anything of the variant (its parameter types) is
+    // read: the code refers to what is deleted with it (qore#7202)
+    QoreForeignCodeProgramHold foreign_hold;
+    if (holdForeignClosureProgram(foreign_hold, first(), pgm, xsink)) {
+        return QoreValue();
+    }
+    return evalClosureBody(closure_base, pgm, args, self, class_ctx, xsink, tmp_args);
+}
+
+QoreValue UserClosureFunction::evalClosureBody(const QoreClosureBase& closure_base, QoreProgram* pgm,
         const QoreListNode* args, QoreObject *self, const qore_class_private* class_ctx, ExceptionSink* xsink,
         bool tmp_args) const {
     RuntimeConfig& rc = rc_get_current_ref();
@@ -11109,6 +11160,12 @@ QoreValue UserClosureFunction::evalClosureNamed(const QoreClosureBase& closure_b
     // Program that is being deleted is refused before the signature is read) and with the type arguments of the code
     // that created the closure, as for a call with positional arguments (see evalClosure())
     const AbstractQoreFunctionVariant* variant = nullptr;
+    // a closure that runs in another Program than the one that compiled it holds that Program first (see
+    // evalForeignClosure())
+    QoreForeignCodeProgramHold foreign_hold;
+    if (closure_base.runsForeign() && holdForeignClosureProgram(foreign_hold, first(), pgm, xsink)) {
+        return QoreValue();
+    }
     QoreClosureTypeContextHelper type_context(&closure_base);
     const QoreClosureTypeContext* closure_type_context = closure_base.getTypeContext();
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "<anonymous closure>", args, nullptr, class_ctx, nullptr, pgm,

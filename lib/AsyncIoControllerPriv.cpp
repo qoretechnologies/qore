@@ -5942,7 +5942,9 @@ qore_program_id_t AsyncIoControllerPriv::callerAppId() {
     // the code of a callback of an operation runs for the application of the operation, unless it is the code of a
     // sandboxed application Program, which runs for its own application: the callback of an operation that other
     // code submitted with an object of sandboxed code does not act for the submitter
-    if (aio_callback_app_set && !(pgm && !qore_program_is_module(pgm) && qore_program_is_sandboxed(pgm))) {
+    // (code compiled in a sandboxed Program that runs in another Program is that Program's code, qore#7202)
+    if (aio_callback_app_set && !(pgm && !qore_program_is_module(pgm) && qore_program_is_sandboxed(pgm))
+            && !qore_program_is_sandboxed(qore_foreign_calling_code_program())) {
         return aio_callback_app_id;
     }
     // a module is no application: sandboxed module code that no call and no callback records an application for

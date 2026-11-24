@@ -8196,7 +8196,8 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
     if (pgm && pgm != getProgram() && origin != QoreModuleCommandContext::MC_REPLAY) {
         static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
             & ~QoreParseOptions(QDOM_IN_MODULE);
-        if (qore_program_is_sandboxed(getProgram())) {
+        // (code compiled in another Program than the one it runs in is that Program's code, qore#7202)
+        if (qore_calling_code_is_sandboxed()) {
             xsink->raiseException("RUNTIME-COMMAND-ERROR", new QoreStringNodeMaker("cannot issue a command for "
                 "module '%s' to another Program: sandboxed code can only issue module commands to its own Program",
                 mname));

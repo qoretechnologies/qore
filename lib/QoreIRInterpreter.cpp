@@ -6766,6 +6766,9 @@ private:
     class CalleeOverride {
     public:
         DLLLOCAL CalleeOverride(QoreProgram* exec_pgm, const UserVariantBase* uvb, QoreProgram* caller_pgm) {
+            // the inline calls run code in the Program that compiled it, or module code: code compiled in another
+            // Program than the one it runs in is called through the call helper, which holds that Program (qore#7202)
+            assert(!uvb->pgm || exec_pgm == uvb->pgm || qore_program_is_module_inline(uvb->pgm));
             qore_set_user_call_runtime_po_override(helper, exec_pgm, uvb, nullptr, caller_pgm);
         }
 
@@ -7624,7 +7627,7 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     }
     // the increment runs without entering the closure's Program, which is the caller's here: once its deletion has
     // started, the call path decides, as for the AST interpreter (qore#5822)
-    if (nargs == 0 && simple_increment && !uvb->pgm_deleted.load(std::memory_order_acquire)
+    if (nargs == 0 && simple_increment && !uvb->fastCallBlocked()
             && tryExecuteSimpleClosureIncrement(cb, simple_increment->local,
                 simple_increment->delta, result, xsink)) {
         if (may_invalidate_external_caches) {

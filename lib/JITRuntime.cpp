@@ -9980,10 +9980,13 @@ static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
     // the call (qore#5822)
     if (disabled || !uvb || arg_cleanups
             || uvb->hasLazyAOTClosureIR()
-            || uvb->pgm_deleted.load(std::memory_order_acquire)
+            || uvb->fastCallBlocked()
             || !uvb->isStaticallyFastCallEligible()) {
         return false;
     }
+    // (also for a closure that runs in another Program than the one that compiled it: a native leaf is a recognized
+    // operation on the arguments and captured variables, evaluated by the library, which runs none of the closure's
+    // compiled code and refers to nothing that its Program declares, so it needs no hold of that Program, qore#7202)
 
     struct NativeClosureLeafCache {
         NativeClosureLeafCache()
@@ -10059,8 +10062,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
         // a closure of a Program being deleted takes the call path, which refuses the call, before its signature,
-        // whose types can be those of the Program's classes, is read (qore#5822)
-        if (uvb && !uvb->pgm_deleted.load(std::memory_order_acquire) && !uvb->hasLazyAOTClosureIR()
+        // whose types can be those of the Program's classes, is read (qore#5822), and so does a closure that runs in
+        // another Program than the one that compiled it, which holds that Program first (qore#7202)
+        if (uvb && !uvb->fastCallBlocked() && !uvb->hasLazyAOTClosureIR()
                 && (uvb->hasCachedFunction() || uvb->getCachedIR())
                 && !qore_rt_debugger_attached(uvb)
                 && closureDirectArgsNeedNoBinding(uvb, nullptr, 0, xsink)) {
@@ -10115,8 +10119,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
         // a closure of a Program being deleted takes the call path, which refuses the call, before its signature,
-        // whose types can be those of the Program's classes, is read (qore#5822)
-        if (uvb && !uvb->pgm_deleted.load(std::memory_order_acquire) && !uvb->hasLazyAOTClosureIR()
+        // whose types can be those of the Program's classes, is read (qore#5822), and so does a closure that runs in
+        // another Program than the one that compiled it, which holds that Program first (qore#7202)
+        if (uvb && !uvb->fastCallBlocked() && !uvb->hasLazyAOTClosureIR()
                 && (uvb->hasCachedFunction() || uvb->getCachedIR())
                 && !qore_rt_debugger_attached(uvb)
                 && closureDirectArgsNeedNoBinding(uvb, &arg0_bits, 1, xsink)) {
@@ -10179,8 +10184,9 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
         // a closure of a Program being deleted takes the call path, which refuses the call, before its signature,
-        // whose types can be those of the Program's classes, is read (qore#5822)
-        if (uvb && !uvb->pgm_deleted.load(std::memory_order_acquire) && !uvb->hasLazyAOTClosureIR()
+        // whose types can be those of the Program's classes, is read (qore#5822), and so does a closure that runs in
+        // another Program than the one that compiled it, which holds that Program first (qore#7202)
+        if (uvb && !uvb->fastCallBlocked() && !uvb->hasLazyAOTClosureIR()
                 && (uvb->hasCachedFunction() || uvb->getCachedIR())
                 && !qore_rt_debugger_attached(uvb)
                 && closureDirectArgsNeedNoBinding(uvb, args, nargs, xsink)) {
@@ -13751,6 +13757,16 @@ static QORE_ALWAYS_INLINE QoreProgram* qore_rt_function_execution_program(QorePr
     (and a sandboxed caller's restrictions), a call of module code by code of the same module keeps the override in
     effect, and otherwise any override of the caller is cleared for the call.
 */
+//! asserts that a fast call runs the variant's code in the Program that compiled it, or module code (qore#7202)
+/** Code compiled in another Program than the one it runs in is called only through the call helper
+    (UserVariantExecHelper) and the closure call path (UserClosureFunction::evalClosure()), which hold the Program
+    that compiled it
+*/
+static QORE_ALWAYS_INLINE void qore_rt_assert_own_program_code(const QoreProgram* exec_pgm,
+        const UserVariantBase* uvb) {
+    assert(!exec_pgm || !uvb->pgm || exec_pgm == uvb->pgm || qore_program_is_module_inline(uvb->pgm));
+}
+
 class QoreRtUserCallOverrideHelper {
 public:
     //! \a caller_pgm is the Program the call was made from, before it switched to \a exec_pgm
@@ -14347,6 +14363,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_t(const QoreFunction
         if constexpr (CONSUME) {
             argv_context = &function_context;
         }
+        qore_rt_assert_own_program_code(exec_pgm, uvb);
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
@@ -14482,6 +14499,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_consume_args(const QoreFunction*
 template <bool CONSUME>
 static QORE_INTERN_ALWAYS_INLINE uint64_t execClosureDirect_t(const QoreClosureBase* cb, const UserVariantBase* uvb,
         int nargs, const uint64_t* args, ExceptionSink* xsink, uint64_t** arg_cleanups) {
+    // a closure that runs in another Program than the one that compiled it is called through the call path, which
+    // holds that Program before anything of the variant is read (UserVariantBase::FAST_CALL_BLOCK_RUNS_FOREIGN,
+    // qore#7202)
+    assert(!cb || !cb->getProgram() || !uvb->pgm || cb->getProgram() == uvb->pgm);
     QoreSandboxProvenanceHelper provenance(cb);
     const UserSignature* sig = uvb->getUserSignature();
     unsigned num_params = sig->numParams();
@@ -14732,6 +14753,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t execClosureDirect_t(const QoreClosureB
 
     return toBits(qore_release_value_with_exception(val, xsink));
 }
+
 
 #ifdef QORE_JIT_RUNTIME_GIVEN_ARGS_DEFS
 //! defined in JITRuntimeGivenArgs.cpp (see qore_rt_call_fast_consume_impl())
@@ -14994,6 +15016,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_with_target_t(uint64
         if constexpr (CONSUME) {
             argv_context = &function_context;
         }
+        qore_rt_assert_own_program_code(exec_pgm, uvb);
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         execJITWithDeopt<CONSUME>(uvb, call_name, [target_fn](ExceptionSink* xs, bool& /*inv*/) {
             return target_fn(xs);
@@ -15262,6 +15285,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_self_recursive_t(const Ab
         if constexpr (CONSUME) {
             argv_context = &argv_helper;
         }
+        qore_rt_assert_own_program_code(exec_pgm, uvb);
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         execJITWithDeopt<CONSUME>(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
             return uvb->execCachedFunction(xs, inv);
@@ -15678,6 +15702,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_method_fast_impl_t(const 
         if constexpr (CONSUME) {
             argv_context = &argv_helper;
         }
+        qore_rt_assert_own_program_code(exec_pgm, uvb);
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
@@ -20362,6 +20387,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
             if constexpr (CONSUME) {
                 argv_context = &function_context;
             }
+            qore_rt_assert_own_program_code(exec_pgm, uvb);
             QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
             if (uvb->hasCachedFunction()) {
                 execJITWithDeopt<CONSUME>(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
@@ -22355,6 +22381,7 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
         if constexpr (CONSUME) {
             argv_context = &argv_helper;
         }
+        qore_rt_assert_own_program_code(exec_pgm, uvb);
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
@@ -24119,6 +24146,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_static_method_direct_impl
         if constexpr (CONSUME) {
             argv_context = &method_context;
         }
+        qore_rt_assert_own_program_code(exec_pgm, uvb);
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         if (uvb->hasCachedFunction()) {
             // JIT/AOT fast path

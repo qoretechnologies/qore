@@ -133,6 +133,11 @@ struct QoreClosureTypeContext {
 
 class QoreClosureBase : public ResolvedCallReferenceNode {
 public:
+    //! returns true if the closure runs in another Program than the one that compiled its code (qore#7202)
+    DLLLOCAL bool runsForeign() const {
+        return runs_foreign;
+    }
+
     QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const override = 0;
 
     //! calls the closure with a temporary argument list, whose values its parameters take over, as the AST
@@ -169,6 +174,9 @@ protected:
         the closure is created and never changed
     */
     bool module_init;
+    //! true if the closure runs in another Program than the one that compiled its code (qore#7202); set when the
+    //! closure is created and never changed (see qore_closure_note_execution_program())
+    bool runs_foreign = false;
 
     //! copies the type arguments and the receiver type of the code that creates the closure
     DLLLOCAL void captureTypeContext();
@@ -352,6 +360,7 @@ public:
         pgm->depRef();
         // a closure of library module code records the restrictions of the code that creates it (qore#6520)
         qore_capture_call_reference_origin(this, qore_closure_code_program(this));
+        runs_foreign = qore_closure_note_execution_program(this, pgm);
     }
 
     DLLLOCAL virtual ~QoreClosureNode() {
@@ -411,6 +420,7 @@ public:
         }
         // a closure of library module code records the restrictions of the code that creates it (qore#6520)
         qore_capture_call_reference_origin(this, qore_closure_code_program(this));
+        runs_foreign = qore_closure_note_execution_program(this, obj->getProgram());
     }
 
     DLLLOCAL ~QoreObjectClosureNode() {

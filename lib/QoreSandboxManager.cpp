@@ -1279,8 +1279,13 @@ namespace {
 std::mutex untrusted_creators_lock;
 std::unordered_map<const QoreSandboxManager*, qore_program_id_t> untrusted_creators;
 
-//! returns the ID of the current Program, or QORE_NO_PROGRAM_ID
+//! returns the ID of the Program of the calling code, or QORE_NO_PROGRAM_ID
+/** The current Program, or the Program that compiled the code when it runs in another Program (qore#7202)
+*/
 qore_program_id_t qore_sandbox_caller_pgm_id() {
+    if (const QoreProgram* code_pgm = qore_foreign_calling_code_program()) {
+        return code_pgm->getProgramId();
+    }
     QoreProgram* pgm = getProgram();
     return pgm ? pgm->getProgramId() : QORE_NO_PROGRAM_ID;
 }

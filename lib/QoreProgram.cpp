@@ -7864,3 +7864,30 @@ void qore_drop_exit_hooks(QoreProgram* pgm) {
     }
     xsink.handleExceptions();
 }
+
+int QoreForeignCodeProgramHold::hold(QoreProgram* code_pgm, ExceptionSink* n_xsink) {
+    assert(!pgm);
+    int t = q_gettid();
+    if (qore_program_private::get(*code_pgm)->incThreadCount(t, n_xsink)) {
+        return -1;
+    }
+    pgm = code_pgm;
+    xsink = n_xsink;
+    tid = t;
+    return 0;
+}
+
+void QoreForeignCodeProgramHold::release() {
+    QoreProgram* p = pgm;
+    pgm = nullptr;
+    // a deletion of the Program that the code made while it was held is completed here (see deferDerefIfRunning()):
+    // the exceptions of the destructors that it runs go to the sink of the call; without one (see hold()), they are
+    // reported here, as no caller receives them
+    if (xsink) {
+        qore_program_private::decThreadCount(*p, tid, xsink);
+        return;
+    }
+    ExceptionSink local_xsink;
+    qore_program_private::decThreadCount(*p, tid, &local_xsink);
+    local_xsink.handleExceptions();
+}

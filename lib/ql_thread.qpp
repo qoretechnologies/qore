@@ -1566,7 +1566,8 @@ auto defer_thread_cancel(code cleanup, ...) [dom=THREAD_CONTROL;flags=MODULE_OWN
     // Program, the function only calls the code; called by trusted code, the deferral is suspended again
     // while sandboxed code that the cleanup calls runs (ProgramThreadCountContextHelper)
     std::optional<QoreCancelDeferralHelper> cdh;
-    if (!qore_program_is_sandboxed(getProgram())) {
+    // (code compiled in another Program than the one it runs in is that Program's code, qore#7202)
+    if (!qore_calling_code_is_sandboxed()) {
         cdh.emplace();
     }
     ReferenceHolder<QoreListNode> vargs(xsink);

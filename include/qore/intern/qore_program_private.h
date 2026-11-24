@@ -2475,7 +2475,7 @@ public:
     DLLLOCAL static void dbgProgramDestroyed();
 #endif
 
-    //! Marks the user variants of the Program's code when its deletion starts (UserVariantBase::pgm_deleted)
+    //! Marks the user variants of the Program's code when its deletion starts (UserVariantBase::FAST_CALL_BLOCK_PGM_DELETED)
     /** A variant can outlive its Program (a closure or a call reference stored in another Program, for example); the
         fast paths that evaluate its code without entering the Program (the native leaf of a closure) check the mark,
         so that the call path refuses the call with PROGRAM-ERROR, as for the AST interpreter (qore#5822)
