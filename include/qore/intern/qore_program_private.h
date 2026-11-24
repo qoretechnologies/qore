@@ -1449,6 +1449,13 @@ public:
     */
     std::atomic<bool> any_sandbox_manager{false};
 
+    //! the number of time zones that the Program loaded from zoneinfo file paths (QoreTimeZoneManager::loadPath())
+    /** Changed only under the write lock of the time zone manager, which checks it against its per-Program quota
+    */
+    unsigned tz_path_zone_count = 0;
+    //! the size of the zoneinfo files of the time zones that the Program loaded from paths
+    size_t tz_path_zone_bytes = 0;
+
     //! true if \c sandbox_manager adds to the sandbox of the Program's callers instead of governing its code alone
     /** Set when code that a sandbox governs sets the manager with Program::setSandboxManager() (see
         setOwnSandboxManager()): the walk of the thread's sandbox stack visits the manager and goes on to the callers,
@@ -5346,11 +5353,7 @@ public:
             // that load
             if (module_header_closed && (module_own_dom & QDOM_LOCALE_CONTROL)
                     && !(module_trusted_dom & QDOM_LOCALE_CONTROL) && !locale_control_restricted_after_header) {
-                if (*zone == '-' || *zone == '+') {
-                    QTZM.findCreateOffsetZone(zone, &xsink);
-                } else {
-                    QTZM.findLoadRegion(zone, &xsink);
-                }
+                findTimeZoneDirectiveZone(zone, &xsink);
                 if (xsink) {
                     mergeParseException(xsink);
                     return;
@@ -5373,6 +5376,36 @@ public:
         time_zone_trusted_only = false;
     }
 
+    //! returns the zone that the %set-time-zone directive with the given argument names in this Program
+    /** A UTC offset, a region (loaded as a name from data: never as a path), or a zoneinfo file path.  A path is
+        refused in a Program whose file-system access is restricted (PO_NO_FILESYSTEM or a sandbox manager), as the
+        directive is processed while the Program is parsed, when the restrictions of the code that runs are those of
+        the caller of the parse, not of this Program; otherwise it is loaded subject to the restrictions of that
+        caller.
+
+        @param zone the argument of the directive
+        @param xsink for the exception if the zone cannot be found or created or the path is refused
+
+        @return the zone; nullptr for UTC or if an exception was raised
+    */
+    DLLLOCAL const AbstractQoreZoneInfo* findTimeZoneDirectiveZone(const char* zone, ExceptionSink* xsink) {
+        if (*zone == '-' || *zone == '+') {
+            return QTZM.findCreateOffsetZone(zone, xsink);
+        }
+        if (*zone && QoreTimeZoneManager::isPathName(zone)) {
+            if ((pwo.parse_options & PO_NO_FILESYSTEM) || any_sandbox_manager.load(std::memory_order_acquire)
+                    || creator_sandbox_manager.load(std::memory_order_acquire)
+                    || creator_policy_manager.load(std::memory_order_acquire)) {
+                xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the %%set-time-zone directive cannot name a "
+                    "zoneinfo file path in a Program with restricted file-system access; use a time zone region "
+                    "name or a UTC offset");
+                return nullptr;
+            }
+            return QTZM.findLoadRegionFromPath(zone, xsink, pgm);
+        }
+        return QTZM.findLoadRegion(zone, xsink);
+    }
+
     //! sets the time zone of the Program as the %set-time-zone directive with the given argument does
     /** @param zone a region name or a UTC offset (starting with \c + or \c -)
         @param xsink for the exception if the zone cannot be found or created
@@ -5382,8 +5415,7 @@ public:
         Also used by the AOT loader for the directive recorded in an AOT image (qore#6270)
     */
     DLLLOCAL int setTimeZoneDirective(const char* zone, ExceptionSink* xsink) {
-        const AbstractQoreZoneInfo *tz = (*zone == '-' || *zone == '+') ? QTZM.findCreateOffsetZone(zone, xsink)
-            : QTZM.findLoadRegion(zone, xsink);
+        const AbstractQoreZoneInfo *tz = findTimeZoneDirectiveZone(zone, xsink);
         if (*xsink) {
             assert(!tz);
             return -1;

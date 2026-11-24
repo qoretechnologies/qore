@@ -8,9 +8,60 @@ immutable after construction; lookups need no lock.
 
 ## Reading
 
-The whole file is read with `QoreFile::readBinary()`, up to `QoreZoneInfo::MaxFileSize` (1 MiB; real zoneinfo
-files are less than 8 KiB), and parsed from memory:
+The whole file is read, up to `QoreZoneInfo::MaxFileSize` (1 MiB; real zoneinfo files are less than 8 KiB), and
+parsed from memory (`QoreZoneInfo::init()`):
 
+- A path (`findLoadRegionFromPath()`; `findLoadRegionOrPath()` passes names starting with `/` or `.` from
+  `TimeZone::setRegion()` and `Program::setTimeZoneRegion()` to it) is made absolute with the current directory once
+  and checked against `PO_NO_FILESYSTEM` and the file-system policy of the code that runs (`checkPathPolicy()`,
+  errors name the path as given) before anything else. `loadPath()` then, without the lock: opens exactly that path
+  with `O_NONBLOCK`, requires a regular file (`fstat()`), determines the canonical path of the open file
+  (`F_GETPATH` on macOS, `/proc/self/fd/N` on Linux, `realpath()` otherwise) and verifies that it names the open
+  file (`stat()` device and inode), checks the policy again for that path (the open can reach another file than the
+  checked path named), reads the file and computes the SHA-256 of its data. `pathmap` maps the canonical path to the
+  zone and digest; an entry is used only with the same digest, so a reused inode, another file or changed data never
+  gets another file's zone, and spellings and symbolic links of one file share a zone (on Linux hard links are
+  separate entries; on macOS `F_GETPATH` gives the link name the kernel has cached, so a zone can be named by any
+  link name of its file: that can only lead to false denials, never to access to another file). A changed file gets
+  a new zone; the old one is kept in `retired_path_zones`, as dates refer to it. New zones are inserted under the
+  write lock: when another thread inserted the same data first, its zone is used; when it inserted other data (the
+  file changed), the zone inserted last replaces it in the cache and the replaced one is retired. A new zone is
+  charged with its parsed size (`QoreZoneInfo::memorySize()`; files with more than 10000 transitions are refused)
+  to the sandbox that governs the loading code (`QoreSandboxMemoryAccount` of each member of a composite sandbox:
+  `tz_path_zones`/`tz_path_bytes` against 256 zones and 32 MiB, and `used` against its memory limit, permanently),
+  to its isolation domain (`domain_path_quota`, the same limits) and to the process total for sandboxed code (16384
+  zones, 256 MiB); code that no sandbox governs is charged to its Program (`qore_program_private`, 256 zones, 32 MiB)
+  and not limited by the process total. The zone is named by the canonical path (the directory of the local time
+  file is dropped from the name if a canonical region name follows, #3736). On Windows, where the file is not
+  identified by its handle, code that a sandbox governs cannot load a path; trusted code's paths are made absolute,
+  read without the lock and cached by that path (at most 16384).
+- The `%set-time-zone` parse directive (`qore_program_private::findTimeZoneDirectiveZone()`) is processed while
+  the Program is parsed, when the code that runs is the caller of the parse: a path is refused when the parsed
+  Program has `PO_NO_FILESYSTEM` or any sandbox manager; a region goes to the region loader.
+- Deserialized dates and TimeZone objects (`QoreTimeZoneManager::findDataRegion()`): the name is data and never
+  opens a path: the region name of the local zone is the local zone (no file access, also if the name is a path), a
+  canonical name goes to the region loader, and anything else (a path, a NUL character) raises the uniform unknown
+  region error.
+- The local zone at startup: a relative `TZ` value or an absolute path in the zoneinfo directory followed by a
+  canonical region name is loaded as a region; any other absolute path is read at exactly that path with
+  `O_NONBLOCK`. Nothing is read relative to the current directory.
+- A region (`QoreTimeZoneManager::findLoadRegion()`) is the runtime's own read of its time zone database, not
+  subject to the file-system policy of the code that names it, so that sandboxed code can deserialize a date in a
+  region that is not cached yet (qore#7442). It takes names from data as well (`find_create_timezone()` for DBI
+  drivers and Arrow/Parquet imports, AOT/JIT date literals, regions of deserialized dates), so a name is never
+  loaded as a path there. The region name of the local zone returns it. A canonical name (`isRegionName()`:
+  components of `[A-Za-z0-9_+-]` separated by single `/`) is looked up in `tzmap` under the read lock (only the
+  region loader stores zones there under region names) and otherwise loaded by `loadRegion()` without the lock:
+  `open_region_file()` opens the `realpath()` of the zoneinfo directory with `O_DIRECTORY` and walks the region's
+  components with `openat()` and `O_NOFOLLOW` (`O_DIRECTORY` for directories, `O_NONBLOCK` for the file), so a
+  component replaced during the walk cannot lead outside; a component that is a symbolic link is read with
+  `readlinkat()` and followed only inside of the directory (`..` cannot go above it, an absolute target must be in
+  it, at most 40 links); then `fstat()` must show a regular file, which is read with `read()`. The zone is inserted
+  under the write lock; a zone that another thread inserted first is kept. Every failure up to the parse raises
+  the same `TZINFO-ERROR` `unknown time zone region "<name>"` (`raiseUnknownRegion()`), so the error does not show
+  whether a path exists; errors in the data name the region. Any other name raises that error too. `checkRegion()`
+  gives it for a region string with a NUL character, a `..` or empty component or a backslash. The zoneinfo
+  directory must not be writable by untrusted code (hard links and files put there cannot be told apart).
 - `parse()` checks the version 1 header, computes the size of each data block from the header counts in 64-bit
   arithmetic and checks it against the file size before anything in the block is read. A version 1 file is read
   from its 32-bit block. In a version 2+ file the version 1 header and block are only skipped; the 64-bit block

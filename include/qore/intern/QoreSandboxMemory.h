@@ -74,6 +74,14 @@ public:
     //! the limit in bytes, 0 for none
     std::atomic<int64_t> limit{0};
 
+    //! the number of time zones that code the sandbox governs loaded from zoneinfo file paths
+    /** Zones are never freed, so their memory stays charged to \c used; changed only under the write lock of the
+        time zone manager (QoreTimeZoneManager::loadPath())
+    */
+    unsigned tz_path_zones = 0;
+    //! the memory of the time zones that code the sandbox governs loaded from paths
+    int64_t tz_path_bytes = 0;
+
 private:
     std::atomic<int> refs{1};
 };

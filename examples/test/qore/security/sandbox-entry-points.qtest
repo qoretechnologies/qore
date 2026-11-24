@@ -338,8 +338,9 @@ class SandboxEntryPointsTest inherits QUnit::Test {
         string hex = make_hex_string(Serializable::serialize(d));
         binary data = parse_hex_string(replace(hex, make_hex_string(binary(region)),
             make_hex_string(binary(date_path))));
-        assertNoFilesystem(sub () { p.callFunction("des", data); },
-            "a deserialized date with a zoneinfo path under PO_NO_FILESYSTEM");
+        # a zone named in data is never a path: the same error as for an unknown region (qore#7442)
+        assertThrows("TZINFO-ERROR", "^unknown time zone region \"" + regex_escape(date_path) + "\"",
+            \p.callFunction(), ("des", data), "a deserialized date with a zoneinfo path under PO_NO_FILESYSTEM");
 
         if (!zoneinfo) {
             return;
@@ -357,22 +358,22 @@ class SandboxEntryPointsTest inherits QUnit::Test {
 
     testTimeZoneRegions() {
         Program p(PO_NEW_STYLE);
-        list<hash<auto>> cases = (
-            {"region": "Europe/../../../../etc/passwd", "desc": "contains a \"..\" path component"},
-            {"region": "Europe/../UTC", "desc": "contains a \"..\" path component"},
-            {"region": "Europe//Prague", "desc": "contains an empty path component"},
-            {"region": "Europe/Prague/", "desc": "contains an empty path component"},
-            {"region": "Europe\\Prague", "desc": "contains a backslash"},
+        list<string> cases = (
+            "Europe/../../../../etc/passwd",
+            "Europe/../UTC",
+            "Europe//Prague",
+            "Europe/Prague/",
+            "Europe\\Prague",
         );
-        foreach hash<auto> c in (cases) {
-            string desc = sprintf("^time zone region \"%s\" %s", replace(replace(c.region, "\\", "\\\\"), ".", "\\."),
-                c.desc);
-            assertThrows("TZINFO-ERROR", desc, sub () { TimeZone t(c.region); }, NOTHING,
-                "TimeZone(" + c.region + ")");
-            assertThrows("TZINFO-ERROR", desc, sub () { TimeZone::setRegion(c.region); }, NOTHING,
-                "TimeZone::setRegion(" + c.region + ")");
-            assertThrows("TZINFO-ERROR", desc, \p.setTimeZoneRegion(), (c.region,),
-                "Program::setTimeZoneRegion(" + c.region + ")");
+        foreach string r in (cases) {
+            # every refused region raises the same error, which does not show whether a file exists (qore#7442)
+            string desc = sprintf("^unknown time zone region \"%s\"$", regex_escape(r));
+            assertThrows("TZINFO-ERROR", desc, sub () { TimeZone t(r); }, NOTHING,
+                "TimeZone(" + r + ")");
+            assertThrows("TZINFO-ERROR", desc, sub () { TimeZone::setRegion(r); }, NOTHING,
+                "TimeZone::setRegion(" + r + ")");
+            assertThrows("TZINFO-ERROR", desc, \p.setTimeZoneRegion(), (r,),
+                "Program::setTimeZoneRegion(" + r + ")");
         }
 
         # a serialized date with a region of the same length with a ".." component
@@ -381,7 +382,7 @@ class SandboxEntryPointsTest inherits QUnit::Test {
         date d = (new TimeZone(region)).date("2026-01-15T10:00:00");
         string hex = make_hex_string(Serializable::serialize(d));
         binary data = parse_hex_string(replace(hex, make_hex_string(binary(region)), make_hex_string(binary(bad))));
-        assertThrows("TZINFO-ERROR", "^time zone region \"Europe/\\.\\./UTC\" contains a \"\\.\\.\" path component",
+        assertThrows("TZINFO-ERROR", "^unknown time zone region \"Europe/\\.\\./UTC\" \\(while deserializing",
             auto sub () { return Serializable::deserialize(data); }, NOTHING, "Serializable::deserialize() of a date");
 
         # a region without such components and a path with them are not affected

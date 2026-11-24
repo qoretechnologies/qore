@@ -3121,10 +3121,11 @@ auto Program::getGlobalVariable(string variable_name, *reference<bool> found) [f
 pgm.setTimeZoneRegion("Europe/Prague");
     @endcode
 
-    @throw TZINFO-ERROR Unable to read zoneinfo file; invalid file magic; error parsing zoneinfo file, etc
-    @throw TZINFO-ERROR the region contains a NUL character; see @ref path_nul_characters
-    @throw TZINFO-ERROR the region contains a \c ".." or empty path component or a backslash; see
-    @ref sandbox_fs_tz_regions
+    @throw TZINFO-ERROR invalid file magic; error parsing zoneinfo file, etc
+    @throw TZINFO-ERROR <tt>unknown time zone region</tt>: the region is not a canonical region name, its file is
+    outside of the zoneinfo directory or it does not exist; see @ref sandbox_fs_tz_regions
+    @throw ILLEGAL-FILESYSTEM-ACCESS the region is a path (absolute or starting with \c ".") and the
+    @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" sandboxing restriction is set
  */
 nothing Program::setTimeZoneRegion(string region) [flags=NAMED_ARGS] {
     // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
@@ -3134,7 +3135,7 @@ nothing Program::setTimeZoneRegion(string region) [flags=NAMED_ARGS] {
     if (QoreTimeZoneManager::checkRegion(*region, false, xsink)) {
         return QoreValue();
     }
-    const AbstractQoreZoneInfo *zone = QTZM.findLoadRegion(region->c_str(), xsink);
+    const AbstractQoreZoneInfo *zone = QTZM.findLoadRegionOrPath(region->c_str(), xsink);
     if (!*xsink) {
         p->setTZ(zone);
     }
