@@ -1,0 +1,7 @@
+left enum / right enum / left hash / right hash
+left enum
+right enum
+left hash
+right hash
+child: right enum / right hash
+cross-namespace assignment: PARSE-TYPE-ERROR

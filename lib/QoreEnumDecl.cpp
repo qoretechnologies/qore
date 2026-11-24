@@ -209,7 +209,7 @@ QoreEnumDecl* qore_enum_decl_private::newEnumDecl(const char* n, const QoreTypeI
 }
 
 bool qore_enum_decl_private::equal(const qore_enum_decl_private& other) const {
-    if (name != other.name || members.size() != other.members.size()) {
+    if (name != other.name || path != other.path || members.size() != other.members.size()) {
         return false;
     }
     if (!QoreTypeInfo::equal(baseTypeInfo, other.baseTypeInfo)) {

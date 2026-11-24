@@ -235,7 +235,7 @@ public:
         if (orig == other.orig) {
             return true;
         }
-        if (name != other.name || members.size() != other.members.size())
+        if (name != other.name || path != other.path || members.size() != other.members.size())
             return false;
 
         for (HashDeclMemberMap::const_iterator ti = members.member_list.begin(),
