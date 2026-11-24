@@ -62,6 +62,11 @@
 #include <cassert>
 #include <cstring>
 
+bool qore_direct_object_calls_disabled() {
+    static constinit QoreEnvFlag disabled("QORE_DISABLE_DIRECT_OBJECT_CALLS");
+    return disabled.get();
+}
+
 namespace {
 //! The stack of an iterative walk of a class hierarchy (issue #6047)
 /** The first levels are kept in place, so that a walk of the common, shallow hierarchy does not allocate; deeper
@@ -2801,7 +2806,11 @@ int8_t qore_class_private::computeMemberInitCode() const {
     // path are marked, so that the walk of the base class constructors of its objects walks each once (qore#6513)
     markMultiPathAncestors();
     int8_t rv = 0;
+    bool has_initializer = false;
     for (auto& i : member_init_list) {
+        if (!i.info->exp.isNothing()) {
+            has_initializer = true;
+        }
         if (i.info->initIsCode()) {
             if (i.info->getClass() != this) {
                 rv = 2;
@@ -2809,6 +2818,11 @@ int8_t qore_class_private::computeMemberInitCode() const {
             }
             rv = 1;
         }
+    }
+    // a list with code has an initializer
+    assert(!rv || has_initializer);
+    if (has_initializer) {
+        rv |= QCMI_HAS_INITIALIZER;
     }
     member_init_code.store(rv, std::memory_order_relaxed);
     return rv;
@@ -2854,6 +2868,18 @@ int qore_class_private::initMembers(QoreObject& o, bool& need_scan, ExceptionSin
     assert(xsink);
     if (members.empty() && !scl)
         return 0;
+
+    // without any initializer, no code runs and no value is assigned: the members are created without a value, in
+    // their storage (the object's hash, or the private:internal hash of their class), as initMember() creates a member
+    // without an initializer, and need neither the object context nor self (qore#7336)
+    if (memberInitIsPlain() && !qore_direct_object_calls_disabled()) {
+        qore_object_private* opriv = qore_object_private::get(o);
+        for (auto& i : member_init_list) {
+            assert(i.info->exp.isNothing());
+            opriv->getMemberValueRefForInitialization(i.name, i.member_class_ctx);
+        }
+        return 0;
+    }
 
 #ifdef QORE_MANAGE_STACK
     if (check_stack(xsink))

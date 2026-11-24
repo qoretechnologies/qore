@@ -3542,7 +3542,7 @@ public:
     //! needs neither the lock nor a reference to it (see getSourceProgramForCall()); never cleared
     mutable std::atomic<bool> spgm_module_lifetime{false};
 
-    //! the cached result of getMemberInitCode(): -1 if not computed for the current member initialization list
+    //! the cached result of getMemberInitState(): -1 if not computed for the current member initialization list
     mutable std::atomic<int8_t> member_init_code{-1};
 
     //! true if the class is reached through more than one path in the hierarchy of a class whose objects are created
@@ -5305,11 +5305,29 @@ public:
         Computed once the list is complete (see addLocalMembersForInit())
     */
     DLLLOCAL int8_t getMemberInitCode() const {
+        return getMemberInitState() & QCMI_CODE_MASK;
+    }
+
+    //! returns true if no member in the member initialization list has an initializer (qore#7336)
+    /** The members of an object of such a class are then created without a value, and no code runs: they need no
+        object context (see initMembers())
+    */
+    DLLLOCAL bool memberInitIsPlain() const {
+        return !(getMemberInitState() & QCMI_HAS_INITIALIZER);
+    }
+
+    //! the code level of getMemberInitCode() in the state cached in member_init_code
+    static constexpr int8_t QCMI_CODE_MASK = 3;
+    //! set in the state cached in member_init_code if any member in the member initialization list has an initializer
+    static constexpr int8_t QCMI_HAS_INITIALIZER = 4;
+
+    //! returns the cached state of the member initialization list: getMemberInitCode() and QCMI_HAS_INITIALIZER
+    DLLLOCAL int8_t getMemberInitState() const {
         int8_t rv = member_init_code.load(std::memory_order_relaxed);
         return rv < 0 ? computeMemberInitCode() : rv;
     }
 
-    //! computes and caches the result of getMemberInitCode()
+    //! computes and caches the state returned by getMemberInitState()
     DLLLOCAL int8_t computeMemberInitCode() const;
 
     //! returns true if code of this class may call another method than a private method of one of its parent classes
@@ -6799,6 +6817,15 @@ private:
 /** Returns nullptr if the method runs in the caller's Program; the holder must be declared before the helper that
     enters the Program returned
 */
+//! Returns true if objects are created and destroyed without the shortcuts of qore#7336
+/** Set with the environment variable \c QORE_DISABLE_DIRECT_OBJECT_CALLS (read once), so that the tests can compare
+    what the shortcuts do with what the general call path does: the creation of the members of a class without
+    member initializers (qore_class_private::initMembers()), the calls of builtin constructors without arguments and of
+    builtin destructors without a CodeEvaluationHelper, and the direct calls of user constructors; see
+    design/object-construction-cost.md
+*/
+DLLLOCAL bool qore_direct_object_calls_disabled();
+
 DLLLOCAL QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSourceProgramHolder& holder,
         QoreProgram* explicit_pgm = nullptr);
 
