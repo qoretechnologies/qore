@@ -1,0 +1,41 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+#! library code for caller-restriction-capability.qtest: a class of another module that inherits the lent connection
+#! class of CapProbe (qore#7052)
+
+%modern
+%requires CapProbe
+
+module CapInherit {
+    version = "1.0";
+    desc = "capability provenance probe: a subclass of a class of another module (qore#7052)";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace CapInherit {
+    #! an object whose methods report whether their caller is restricted from the network
+    public class Own {
+        #! returns True if the calling code is restricted from the network
+        public bool probe() {
+            return SandboxManager::isCallerRestricted(DOM_NETWORK);
+        }
+    }
+
+    #! a connection of CapProbe's class with methods of this module: CapProbe's methods create objects as CapProbe's
+    #! code, this class's methods as this module's code
+    public class Sub inherits CapProbe::Conn {
+        #! creates an object of this module's class in a method of this module
+        public object makeOwn() {
+            return new Own();
+        }
+
+        #! overrides CapProbe's hook, which CapProbe's makeHooked() calls: the object is created in CapProbe's lent
+        #! method, so it is not lent (it is not of CapProbe's classes)
+        public object makeHook() {
+            return new Own();
+        }
+    }
+}

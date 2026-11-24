@@ -1,0 +1,43 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# InitFramesInit.qm - test module: the frames of the calls that the init closure of a module makes (qore#7289)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires InitFramesProbe
+
+module InitFramesInit {
+    version = "1.0";
+    desc = "test module: the frames of the calls that the init closure of a module makes";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        InitFramesInit::InitFramesInit::at_init = InitFramesProbe::Probe::callerPgm();
+        InitFramesInit::InitFramesInit::at_init_fn = InitFramesInit::InitFramesInit::later();
+    };
+}
+
+public namespace InitFramesInit {
+public class InitFramesInit {
+    public {
+        #! the Program that the frame of a call made directly by the init closure names
+        static *int at_init;
+        #! the Program that the frame of a call made by the module's code that the init closure calls names
+        static *int at_init_fn;
+    }
+
+    #! the Program that the frame of a call that the module's code makes names: the module's
+    static int later() {
+        return InitFramesProbe::Probe::callerPgm();
+    }
+
+    #! what the init closure saw, against the module's own Program
+    static string report() {
+        int own = later();
+        return sprintf("init-closure=%s init-closure-fn=%s",
+            at_init == own ? "module" : (exists at_init ? "OTHER" : "none"),
+            at_init_fn == own ? "module" : (exists at_init_fn ? "OTHER" : "none"));
+    }
+}
+}

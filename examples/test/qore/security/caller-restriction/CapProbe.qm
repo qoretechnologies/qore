@@ -1,0 +1,134 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+#! library code for caller-restriction-capability.qtest: a connection that creates a client whose constructor declares
+#! the network domain lazily, in its methods, as the connections of the library do
+
+%modern
+%requires CapGadget
+
+module CapProbe {
+    domains = "NETWORK,THREAD_CONTROL,THREAD_CLASS,MODULES,PROCESS";
+    version = "1.0";
+    desc = "capability provenance probe (qore#7052)";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    # the library's own shared state, created for nobody: not lent by anybody
+    init = sub () {
+        CapProbe::Shared = new CapProbe::Conn();
+    };
+}
+
+public namespace CapProbe {
+    our Conn Shared;
+
+    #! returns the connection that the library created in its initialization
+    public Conn sub shared() {
+        return Shared;
+    }
+
+    #! returns the connection that CapLazy created in its initialization, once a lent connection loaded it
+    public Conn sub lazy_shared() {
+        return call_function("CapLazy::shared");
+    }
+
+    our list<bool> DestructorProbes;
+
+    #! returns what the destructors of DtorProbe objects found
+    public list<bool> sub destructor_probes() {
+        return DestructorProbes;
+    }
+
+    #! an object whose destructor records whether its caller is restricted from the network
+    public class DtorProbe {
+        destructor() {
+            DestructorProbes += SandboxManager::isCallerRestricted(DOM_NETWORK);
+        }
+    }
+
+    #! a client: its constructor declares the network domain
+    public class Client {
+        constructor() [dom=NETWORK] {
+        }
+    }
+
+    #! a connection that creates its client when it is used
+    #! the check that Conn::lentToRestrictedUnderBarrier() makes under the barrier
+    public bool sub barrierLentToRestricted() {
+        return SandboxManager::isLentToRestricted(DOM_NETWORK);
+    }
+
+    public class Conn {
+        #! creates the client
+        public string get() {
+            try {
+                Client c();
+                return "client";
+            } catch (hash<ExceptionInfo> ex) {
+                return ex.err;
+            }
+        }
+
+        public bool probe() {
+            return SandboxManager::isCallerRestricted(DOM_NETWORK);
+        }
+
+        #! returns True if the code that the connection was lent to is restricted from the network (qore#7262)
+        public bool lentToRestricted() {
+            return SandboxManager::isLentToRestricted(DOM_NETWORK);
+        }
+
+        #! returns isLentToRestricted() under a policy barrier that this module's code establishes in the method
+        public bool lentToRestrictedUnderBarrier() {
+            return SandboxManager::callWithSystemPolicy(\barrierLentToRestricted());
+        }
+
+        #! calls code of whoever uses the connection
+        public auto callback(code c) {
+            return c();
+        }
+
+        #! creates another connection, as a lazy creation inside a method does
+        public Conn nested() {
+            return new Conn();
+        }
+
+        #! a thread started by a method of the connection
+        public bool threadProbe() {
+            Queue q();
+            background q.push(SandboxManager::isCallerRestricted(DOM_NETWORK));
+            return q.get();
+        }
+
+        #! the loading of native code is not lent
+        public bool nativeProbe() {
+            return SandboxManager::isCallerRestricted(DOM_UNCONTROLLED_API);
+        }
+
+        #! only the domains that a host grant lends are lent: not the process domain
+        public bool processProbe() {
+            return SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL);
+        }
+
+        #! creates an object of the class that its caller names (a factory by name)
+        public object make(string cls) {
+            return create_object(cls);
+        }
+
+        #! creates an object with a method that a subclass can override (a template method)
+        public object makeHooked() {
+            return makeHook();
+        }
+
+        #! creates an object of this module's class; see makeHooked()
+        public object makeHook() {
+            return new Conn();
+        }
+
+        #! loads a library module for the first time
+        public nothing loadLazy() {
+            load_module("CapLazy");
+        }
+    }
+}

@@ -1,0 +1,41 @@
+auto += hash: o.a 5 o.b 6 rv is o True aw is o True
+auto += hash: weak kept True
+typed += hash: o.a "x" o.b "y" o.n 7
+typed += hash: weak kept True
++= object: o.a 10 o.b 12 s.a 10
++= object: weak kept True
+unchanged: o.a 1 values [True, True, True, True, True]
+unchanged strong: True
+unchanged: weak kept True
+typed member weak: RUNTIME-TYPE-ERROR
+typed member strong: RUNTIME-TYPE-ERROR
+typed member: o.n 0
+typed member: weak kept True
+undeclared: 1
+private: PRIVATE-MEMBER
+private kept: 3
+own private: 30
+self: o.a 21
+from the lvalue's object: o.a 22 o.w is o True
+from the merged object's holder: t.a 23
+holders: [31, 32, 33, 34, 35]
+holders: weak kept True
+holders kept: [null, null, null]
+deleted weak: OBJECT-ALREADY-DELETED
+deleted strong: OBJECT-ALREADY-DELETED
+deleted += int: rv is keep True
+released: null
+released += hash: OBJECT-ALREADY-DELETED
+released += int: null dw null
+plain: o.a 41 so is o True
+*=: weak 0 strong 0 o.a 1
+|=: weak 4
+cycle strong: "peer" holder null
+cycle weak: "peer" holder null x is h True
+Releaser destructor: releasing gl
+L destructor
+last reference own lock: done, gl null
+Releaser destructor: releasing gl
+L destructor
+last reference: done, gl null lw null
+end

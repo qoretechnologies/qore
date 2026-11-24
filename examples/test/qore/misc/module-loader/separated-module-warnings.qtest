@@ -21,8 +21,9 @@
     file's own warning directives still apply only to that file.
 
     The module loader raises parse-time warnings as exceptions and does not report the warnings found when the
-    module is committed, so its cases use an unknown warning name; qcc reports both kinds, so its cases use a
-    duplicate local variable.
+    module is committed, so its cases use an unknown warning name; qcc raises the parse-time warnings as errors as the
+    loader does, and reports the warnings found when the module is committed (qore#7314), so its cases use a
+    duplicate local variable, which is found when the module is committed.
 */
 class SeparatedModuleWarningsTest inherits QUnit::Test {
     public {

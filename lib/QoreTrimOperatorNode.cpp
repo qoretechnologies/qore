@@ -99,6 +99,11 @@ QoreValue QoreTrimOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
     if (!val)
         return QoreValue();
 
+    // a weak reference to a list or a hash: its container is changed (qore#7297)
+    if (val.viewWeakContainer()) {
+        return QoreValue();
+    }
+
     qore_type_t vtype = val.getType();
     if (vtype != NT_LIST && vtype != NT_STRING && vtype != NT_HASH)
         return QoreValue();

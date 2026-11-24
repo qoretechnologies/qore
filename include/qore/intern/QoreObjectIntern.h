@@ -248,6 +248,11 @@ public:
     QoreProgram* pgm;
     //! Immutable creation context; does not retain a Program or any Qore object
     QoreSandboxContext* sandbox_provenance = nullptr;
+    //! true if the object is a capability (qore#7052): an object of module code that the host's code created without
+    //! restrictions; a call of one of its methods that enters the Program of its code marks the context that it
+    //! enters as a grant (see ProgramThreadCountContextHelper::set() and ThreadData::CapabilityFrame); read only when
+    //! a call enters another Program, never by calls within one
+    bool capability_origin = false;
     cdmap_t* cdmap = nullptr;
 
     // used for garbage collection
@@ -824,12 +829,13 @@ public:
     }
 
     DLLLOCAL void doPrivateException(const char* mem, ExceptionSink* xsink) const {
-        xsink->raiseException("PRIVATE-MEMBER", "'%s' is a private member of class '%s'", mem, theclass->getName());
+        xsink->raiseException("PRIVATE-MEMBER", "'%s' is a private member of class '%s'", mem,
+            qore_class_private::get(*theclass)->memberDiagnosticName());
     }
 
     DLLLOCAL void doPublicException(const char* mem, ExceptionSink* xsink) const {
         xsink->raiseException("INVALID-MEMBER", "'%s' is not a registered member of class '%s'", mem,
-            theclass->getName());
+            qore_class_private::get(*theclass)->memberDiagnosticName());
     }
 
     DLLLOCAL virtual const char* getName() const {
@@ -1210,8 +1216,12 @@ public:
         // unlock previous lock and release from AutoVLock structure
         vl.del();
 
-        // lock current object
-        qore_var_rwlock_ops(pobj->rml).wrlock();
+        // lock current object, unless the assignment of this thread holds its lock while it binds a reference: the lock
+        // and the reference to the object stay with that assignment (qore#7380)
+        if (!qore_var_rwlock_ops(pobj->rml).wrlockUnlessHeldForBind(&vl)) {
+            pobj->obj->tDeref();
+            pobj = nullptr;
+        }
     }
 
     DLLLOCAL ~qore_object_lock_handoff_helper() {
@@ -1224,8 +1234,10 @@ public:
     }
 
     DLLLOCAL void stayLocked() {
-        qore_auto_vlock_ops(vl).set(pobj->obj, &pobj->rml);
-        pobj = nullptr;
+        if (pobj) {
+            qore_auto_vlock_ops(vl).set(pobj->obj, &pobj->rml);
+            pobj = nullptr;
+        }
     }
 };
 

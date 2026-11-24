@@ -244,3 +244,34 @@ foreach Base o in ((new Base(), new Derived(), new Base(), new Inherits(), new I
     p.parse(ChildCode, "child");
     p.run();
 }
+
+# A catch that falls through a typed method reaches the run-time block-return check (#7370).
+class MethodFrame<T> {
+    T identity(T value) { return value; }
+    T checked(auto value) {
+        try { return identity(value); } catch (hash<ExceptionInfo> ex) { }
+    }
+}
+
+class PlainFrame {
+    run() {}
+    int missing() { run(); }
+}
+
+MethodFrame<int> frame();
+PlainFrame plain();
+# Call once successfully before testing the error on the specialized receiver.
+frame.checked(1);
+try {
+    plain.missing();
+} catch (hash<ExceptionInfo> ex) {
+    printf("plain block return: %s %y\n", ex.err, map $1.function, ex.callstack);
+}
+try {
+    frame.checked("bad");
+} catch (hash<ExceptionInfo> ex) {
+    printf("generic block return: %s %y\n", ex.err, map $1.function, ex.callstack);
+}
+if (ARGV[0] == "uncaught") {
+    frame.checked("bad");
+}

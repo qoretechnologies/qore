@@ -1976,10 +1976,15 @@ endfunction()
 # set(MY_QPP foo.qpp bar.qpp)
 # qore_wrap_qpp_value(MY_CPP ${MY_QPP})
 # qore_wrap_qpp_value(MY_CPP DOXLIST MY_DOX METALIST MY_META STUBLIST MY_STUB ${MY_QPP})
+# qore_wrap_qpp_value(MY_CPP APILIST MY_API ${MY_QPP})
+#
+# APILIST <var> also writes each file's API metadata (<name>.api.json: the metadata without documentation and source
+# path, qpp --api-metadata) and appends its path to <var>; libqore's builtin API identity is a digest of them
+# (cmake/QoreWriteBuiltinApiIdentity.cmake, qore#7183)
 #
 MACRO (QORE_WRAP_QPP_VALUE _cpp_files)
     set(options)
-    set(oneValueArgs DOXLIST METALIST STUBLIST)
+    set(oneValueArgs DOXLIST METALIST STUBLIST APILIST)
     set(multiValueArgs OPTIONS)
 
     cmake_parse_arguments(_WRAP_QPP "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
@@ -2017,14 +2022,23 @@ MACRO (QORE_WRAP_QPP_VALUE _cpp_files)
             SET(_stub_outputs ${_stubfile})
         ENDIF(_WRAP_QPP_STUBLIST)
 
+        # API metadata output is opt-in, as stub output is (APILIST <var>)
+        SET(_api_arg)
+        SET(_api_outputs)
+        IF(_WRAP_QPP_APILIST)
+            SET(_apifile ${CMAKE_CURRENT_BINARY_DIR}/${_outfile}.api.json)
+            SET(_api_arg --api-metadata=${_apifile})
+            SET(_api_outputs ${_apifile})
+        ENDIF(_WRAP_QPP_APILIST)
+
         SET(_table_arg)
         IF(QORE_DOX_TABLE_STRICT)
             SET(_table_arg --table-strict)
         ENDIF(QORE_DOX_TABLE_STRICT)
 
-        ADD_CUSTOM_COMMAND(OUTPUT ${_cppfile} ${_doxfile} ${_metafile} ${_stub_outputs}
+        ADD_CUSTOM_COMMAND(OUTPUT ${_cppfile} ${_doxfile} ${_metafile} ${_stub_outputs} ${_api_outputs}
                            COMMAND ${QORE_QPP_EXECUTABLE}
-                           ARGS --javadoc=${CMAKE_CURRENT_BINARY_DIR}/java --output=${_cppfile} --dox-output=${_doxfile} --metadata=${_metafile} ${_table_arg} ${_stub_arg} ${_qore_qpp_prefix_args} ${_infile}
+                           ARGS --javadoc=${CMAKE_CURRENT_BINARY_DIR}/java --output=${_cppfile} --dox-output=${_doxfile} --metadata=${_metafile} ${_table_arg} ${_stub_arg} ${_api_arg} ${_qore_qpp_prefix_args} ${_infile}
                            MAIN_DEPENDENCY ${_infile}
                            DEPENDS ${QORE_QPP_EXECUTABLE}
                            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -2040,6 +2054,9 @@ MACRO (QORE_WRAP_QPP_VALUE _cpp_files)
         IF(_WRAP_QPP_STUBLIST)
            SET(${_WRAP_QPP_STUBLIST} ${${_WRAP_QPP_STUBLIST}} ${_stubfile})
         ENDIF(_WRAP_QPP_STUBLIST)
+        IF(_WRAP_QPP_APILIST)
+           SET(${_WRAP_QPP_APILIST} ${${_WRAP_QPP_APILIST}} ${_apifile})
+        ENDIF(_WRAP_QPP_APILIST)
         #MESSAGE(STATUS "DEBUG D: " _WRAP_QPP_DOXLIST " ${D}:" ${_WRAP_QPP_DOXLIST} " ${${D}}:" ${${_WRAP_QPP_DOXLIST}})
     ENDFOREACH (it)
 
@@ -2816,6 +2833,9 @@ MACRO (QORE_QMOD_CACHE_SETUP)
         QORE_GET_QCC_COMMAND(_qore_qmod_cache_qcc)
         set(QORE_QMOD_CACHE_CONTEXT ${CMAKE_BINARY_DIR}/qmod-cache-context.json)
         set(_qore_qmod_cache_inputs --input=${QCC_FORMAT_STAMP} --input=${CMAKE_BINARY_DIR}/aot-link.conf)
+        if (DEFINED QORE_EXTERNAL_MODULE_DIRS_FILE)
+            list(APPEND _qore_qmod_cache_inputs --input=${QORE_EXTERNAL_MODULE_DIRS_FILE})
+        endif()
         if (DEFINED QORE_AOT_PROBE_STAMP)
             list(APPEND _qore_qmod_cache_inputs --input=${QORE_AOT_PROBE_STAMP})
         endif()
@@ -3239,9 +3259,10 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         endif()
         list(APPEND _qmod_opt_flags "-O${QORE_AOT_MODULE_OPT_LEVEL}")
     endif()
-    set(_qmod_probe_dep "")
+    # A new search order can select a different module with the same API and an older timestamp.
+    set(_qmod_probe_dep ${QORE_EXTERNAL_MODULE_DIRS_FILE})
     if (DEFINED QORE_AOT_PROBE_STAMP)
-        set(_qmod_probe_dep ${QORE_AOT_PROBE_STAMP})
+        list(APPEND _qmod_probe_dep ${QORE_AOT_PROBE_STAMP})
     endif()
     # In the Qore build, each qmod also depends on the AOT runtime identity header, which qcc-format-version rewrites
     # only when the identity changes (qore_aot_runtime_identity_targets() in cmake/QoreMacrosIntern.cmake): a qmod
@@ -3250,6 +3271,13 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # fingerprint was rewritten after its qmods had been compiled for the previous identity (qore#6221)
     if (DEFINED QORE_AOT_RUNTIME_IDENTITY_HEADER)
         list(APPEND _qmod_probe_dep ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
+    endif()
+    # and on the builtin API identity header, which qore-builtin-api-identity rewrites only when the API metadata of
+    # libqore's qpp files changes (a domain, flag or signature of a builtin class, function or constant): a qmod
+    # older than the header was compiled against other builtin metadata, which it may have built into its code, and
+    # the libqore built with the header loads its source instead (qore#7183)
+    if (DEFINED QORE_BUILTIN_API_IDENTITY_HEADER)
+        list(APPEND _qmod_probe_dep ${QORE_BUILTIN_API_IDENTITY_HEADER})
     endif()
     # With the qmod build cache (QORE_QMOD_CACHE_DIR, see design/qmod-build-cache.md), qcc runs through the cache
     # tool, which supplies the module from the cache when every input is unchanged; without it the command is qcc's

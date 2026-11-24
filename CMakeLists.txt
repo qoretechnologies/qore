@@ -102,10 +102,6 @@ option(QORE_REQUIRE_SYSTEM_DEPENDENCIES
        "Require installed dependencies instead of downloading and bundling fallback sources"
        OFF)
 
-option(QORE_BUILD_WITH_EXTERNAL_MODULES
-       "Allow installed Qore modules to provide optional features in build outputs"
-       ON)
-
 option(QORE_STACK_USAGE_REPORT
        "Compile libqore with -fstack-usage for tools/check-stack-usage.py (frame sizes of the per-call path)"
        OFF)
@@ -182,15 +178,6 @@ foreach(mod_dir ${QORE_BINARY_MODULE_SOURCE_DIRS})
         list(APPEND QORE_BINARY_MODULE_DIRS "${CMAKE_BINARY_DIR}/modules/${mod_name}")
     endif ()
 endforeach ()
-if (WIN32 OR MSYS OR MINGW)
-    set(QORE_MODULE_DIR_FOR_DOCS "${CMAKE_SOURCE_DIR}/qlib")
-    list(APPEND QORE_MODULE_DIR_FOR_DOCS ${QORE_BINARY_MODULE_DIRS})
-    string(REPLACE ";" "\\;" QORE_MODULE_DIR_FOR_DOCS "${QORE_MODULE_DIR_FOR_DOCS}")
-else (WIN32 OR MSYS OR MINGW)
-    set(QORE_MODULE_DIR_FOR_DOCS "${CMAKE_SOURCE_DIR}/qlib")
-    list(APPEND QORE_MODULE_DIR_FOR_DOCS ${QORE_BINARY_MODULE_DIRS})
-    string(REPLACE ";" ":" QORE_MODULE_DIR_FOR_DOCS "${QORE_MODULE_DIR_FOR_DOCS}")
-endif (WIN32 OR MSYS OR MINGW)
 set(QORE_QDX_COMMAND ${QORE_INTERPRETER} ${QORE_QDX_EXECUTABLE})
 set(QORE_QJAR_COMMAND ${QORE_INTERPRETER} ${QORE_QJAR_EXECUTABLE})
 # simulate QoreConfig
@@ -234,6 +221,9 @@ else (WIN32 OR MSYS or MINGW)
     set(USER_MODULE_DIR ${CMAKE_INSTALL_FULL_DATADIR}/qore-modules/)
     set(USER_MODULE_VER_DIR ${USER_MODULE_DIR}${VERSION})
 endif (WIN32 OR MSYS OR MINGW)
+
+include(cmake/QoreExternalModuleDirs.cmake)
+qore_build_module_path(QORE_MODULE_DIR_FOR_DOCS "${CMAKE_SOURCE_DIR}/qlib" ${QORE_BINARY_MODULE_DIRS})
 
 # Install directory for native Qore i18n catalogs.
 #
@@ -1529,10 +1519,8 @@ if (DEFINED ENV{QORE_DOC_DEFINES})
         set(QORE_DOC_DEFINES "${_QORE_DOC_DEFINES_ENV}")
     endif ()
 endif ()
-set(QORE_DOCS_ENV QORE_MODULE_DIR=${QORE_MODULE_DIR_FOR_DOCS} QORE_DOC_DEFINES=${QORE_DOC_DEFINES})
-if (NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
-    list(APPEND QORE_DOCS_ENV "QORE_MODULE_DIR_ONLY=1")
-endif()
+set(QORE_DOCS_ENV "QORE_MODULE_DIR=${QORE_MODULE_DIR_FOR_DOCS}" "QORE_MODULE_DIR_ONLY=1"
+    "QORE_DOC_DEFINES=${QORE_DOC_DEFINES}")
 
 check_cxx_source_compiles("#include <sys/stat.h>
 int main() {
@@ -1689,10 +1677,13 @@ if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
     set(LIBQORE_QPP_SRC ${LIBQORE_QPP_SRC} lib/ql_alloc_tracking.qpp)
 endif ()
 
-qore_wrap_qpp_value(LIBQORE_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC ${LIBQORE_QPP_SRC})
-qore_wrap_qpp_value(PSEUDO_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC ${PSEUDO_QPP_SRC})
+qore_wrap_qpp_value(LIBQORE_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC APILIST QPP_API_SRC
+    ${LIBQORE_QPP_SRC})
+qore_wrap_qpp_value(PSEUDO_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC APILIST QPP_API_SRC
+    ${PSEUDO_QPP_SRC})
 
-add_custom_target(QPP_GENERATED_FILES DEPENDS ${LIBQORE_QPP_CPP_SRC} ${PSEUDO_QPP_CPP_SRC})
+# the API metadata files too, which qore-builtin-api-identity reads after this target (qore#7183)
+add_custom_target(QPP_GENERATED_FILES DEPENDS ${LIBQORE_QPP_CPP_SRC} ${PSEUDO_QPP_CPP_SRC} ${QPP_API_SRC})
 
 # install qpp metadata files into per-module subdirectory
 install(FILES ${QPP_META_SRC}
@@ -1889,6 +1880,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreIRAnalysis.cpp
     lib/QoreIRLowering.cpp
     lib/QoreIRToLLVM.cpp
+    lib/QoreIRToLLVMOwnedEntries.cpp
     lib/QoreIRFrameCheck.cpp
     lib/QoreIRVerifier.cpp
     lib/QoreIRTakeOver.cpp
@@ -2611,9 +2603,12 @@ if (SINGLE_COMPILATION_UNIT)
     # - QoreIRTakeOver.cpp, QoreClassGivenArgs.cpp, JITRuntimeTakeOver.cpp: the analysis of the parameters that take
     #   their arguments over, and the calls with the arguments given to them of the code that a member holds and of
     #   the callees that the JIT runtime finds at run time (issue #5958), for the same reason
+    # - QoreIRToLLVMOwnedEntries.cpp: the copies of the AOT fast entries that take their arguments over (issue
+    #   #6105), compiled with hidden visibility (below), so that the LLVM templates that it instantiates are not
+    #   exported
     set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp lib/qore_aot_runtime_identity.cpp
         lib/JITRuntimeGivenArgs.cpp lib/QoreIRInterpreterGivenArgs.cpp lib/QoreIRTakeOver.cpp
-        lib/QoreClassGivenArgs.cpp lib/JITRuntimeTakeOver.cpp)
+        lib/QoreClassGivenArgs.cpp lib/JITRuntimeTakeOver.cpp lib/QoreIRToLLVMOwnedEntries.cpp)
     if (SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1)
         # sources that cannot share a translation unit with the LLVM users (see cmake/QoreScuChunks.cmake)
         list(APPEND LIBQORE_EXTRA_SRC ${LIBQORE_SCU_ISOLATED_SRC})
@@ -2652,6 +2647,12 @@ else (SINGLE_COMPILATION_UNIT)
 endif (SINGLE_COMPILATION_UNIT)
 # an edit made while a libqore object compiles must not be lost (issue #6951)
 qore_compile_race_guard(libqore)
+# the copies of the AOT fast entries that take their arguments over (issue #6105): the LLVM templates that the copy
+# instantiates are not exported from libqore
+if (NOT MSVC)
+    set_source_files_properties(${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVMOwnedEntries.cpp
+        PROPERTIES COMPILE_OPTIONS "-fvisibility=hidden;-fvisibility-inlines-hidden")
+endif ()
 
 add_dependencies(QPP_GENERATED_FILES qpp)
 add_dependencies(libqore QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision qore-aot-runtime-identity CHECK_GRAMMAR_CONFLICTS)
@@ -2944,6 +2945,10 @@ add_executable(qore-aot-dot-target-test examples/test/ir/aot_dot_target.cpp)
 target_include_directories(qore-aot-dot-target-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-aot-dot-target-test PRIVATE libqore)
+add_executable(qore-user-signature-link-test examples/test/ir/user_signature_link.cpp)
+target_include_directories(qore-user-signature-link-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-user-signature-link-test PRIVATE libqore)
 add_executable(qore-aot-ir-instruction-test examples/test/ir/aot_ir_instruction_validation.cpp)
 target_include_directories(qore-aot-ir-instruction-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
@@ -3316,6 +3321,7 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/lib/QoreIRExprRegistry.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVMOwnedEntries.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRFrameCheck.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp
     # the analysis of the parameters that take their arguments over, compiled from QoreIRVerifier.cpp
@@ -3467,8 +3473,44 @@ qore_aot_runtime_identity_targets(
     INPUT_LABELS ${_qcc_format_sources_labels}
     HEADER ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
 add_dependencies(qcc qcc-format-version)
+
+# The builtin API identity of libqore: a digest of the API metadata of its qpp files (qpp --api-metadata: the
+# metadata of its builtin classes, functions, constants, hashdecls and enums without documentation), which qcc records
+# in every AOT module it compiles; the module loader takes a module recorded with another identity for out of date
+# and loads its source instead, or refuses it, as its code can have builtin metadata built in, such as the functional
+# domains that a class inherits from a builtin base class (see cmake/QoreWriteBuiltinApiIdentity.cmake and
+# design/aot-object-files-and-module-artifacts.md "AOT Module Builtin API Identity", qore#7183).  As for the AOT
+# runtime identity, the header is only rewritten when the identity changes, by a target that runs in every build;
+# only a change to the API metadata changes it, so every qmod, which depends on the header, is rebuilt only then.
+set(QORE_BUILTIN_API_IDENTITY_HEADER ${CMAKE_BINARY_DIR}/include/qore/intern/qore_builtin_api_identity.h)
+set(_qore_builtin_api_files ${CMAKE_BINARY_DIR}/qore-builtin-api-files.txt)
+string(REPLACE ";" "\n" _qore_builtin_api_files_content "${QPP_API_SRC}")
+string(APPEND _qore_builtin_api_files_content "\n")
+if (EXISTS "${_qore_builtin_api_files}")
+    file(READ "${_qore_builtin_api_files}" _qore_builtin_api_files_old)
+else()
+    set(_qore_builtin_api_files_old "")
+endif()
+if (NOT _qore_builtin_api_files_old STREQUAL _qore_builtin_api_files_content)
+    file(WRITE "${_qore_builtin_api_files}" "${_qore_builtin_api_files_content}")
+endif()
+add_custom_target(qore-builtin-api-identity
+    COMMAND ${CMAKE_COMMAND}
+        -DINPUT_LIST=${_qore_builtin_api_files}
+        -DOUTPUT=${QORE_BUILTIN_API_IDENTITY_HEADER}
+        -P ${CMAKE_SOURCE_DIR}/cmake/QoreWriteBuiltinApiIdentity.cmake
+    BYPRODUCTS ${QORE_BUILTIN_API_IDENTITY_HEADER}
+    COMMENT "Checking the builtin API identity"
+    VERBATIM
+)
+# the API metadata files are written by the qpp commands of QPP_GENERATED_FILES; the target names none of them in its
+# DEPENDS, as the Makefile generators would give it its own copy of the qpp rules, which could run at the same time as
+# those of QPP_GENERATED_FILES or before qpp is built
+add_dependencies(qore-builtin-api-identity QPP_GENERATED_FILES)
+add_dependencies(qore-aot-runtime-identity qore-builtin-api-identity)
+add_dependencies(qcc qore-builtin-api-identity)
 set_source_files_properties(${CMAKE_SOURCE_DIR}/lib/qore_aot_runtime_identity.cpp
-    PROPERTIES OBJECT_DEPENDS ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
+    PROPERTIES OBJECT_DEPENDS "${QORE_AOT_RUNTIME_IDENTITY_HEADER};${QORE_BUILTIN_API_IDENTITY_HEADER}")
 
 set(QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP ${CMAKE_BINARY_DIR}/qcc-format-source-qmod-clean.stamp)
 add_custom_command(
@@ -3813,55 +3855,8 @@ set(QORE_QM_METADATA_SUBDIR core-qlib)
 # the build directories of the in-tree binary modules, which QORE_BINARY_MODULE_QORE() records as the modules are
 # declared above, so that a new module is on the module path of the metadata extraction without a list to keep in sync
 get_property(QORE_QM_METADATA_MODULE_DIRS GLOBAL PROPERTY QORE_INTREE_BINARY_MODULE_DIRS)
-string(REPLACE ";" ":" QORE_QM_METADATA_MODULE_DIRS_STR "${QORE_QM_METADATA_MODULE_DIRS}")
-set(QORE_BUILD_EXTERNAL_MODULE_DIRS)
-if (QORE_BUILD_WITH_EXTERNAL_MODULES)
-    set(QORE_BUILD_EXTERNAL_MODULE_DIRS
-        ${CMAKE_INSTALL_FULL_DATADIR}/qore-modules
-        ${CMAKE_INSTALL_FULL_LIBDIR}/qore-modules
-        /usr/local/share/qore-modules
-        /usr/local/lib/qore-modules
-        /usr/share/qore-modules
-        /usr/lib/qore-modules)
-    if(CMAKE_LIBRARY_ARCHITECTURE)
-        list(APPEND QORE_BUILD_EXTERNAL_MODULE_DIRS
-            /usr/local/lib/${CMAKE_LIBRARY_ARCHITECTURE}/qore-modules
-            /usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}/qore-modules)
-    endif()
-    if(APPLE)
-        list(APPEND QORE_BUILD_EXTERNAL_MODULE_DIRS
-            /opt/local/share/qore-modules
-            /opt/local/lib/qore-modules
-            /opt/homebrew/share/qore-modules
-            /opt/homebrew/lib/qore-modules)
-    endif()
-    list(REMOVE_DUPLICATES QORE_BUILD_EXTERNAL_MODULE_DIRS)
-endif()
-string(REPLACE ";" ":" QORE_BUILD_EXTERNAL_MODULE_DIRS_STR "${QORE_BUILD_EXTERNAL_MODULE_DIRS}")
-# The directories of the installed (external) modules that the qlib qmods are compiled against: run_tests.sh appends
-# them to QORE_MODULE_DIR, so that the tests find the modules that the qmods of this build require.  Otherwise a qmod
-# compiled against a module installed outside this build's prefix cannot load it at test time and falls back to its
-# source (BINARY-MODULE-SOURCE-FALLBACK).  Empty when QORE_BUILD_WITH_EXTERNAL_MODULES is OFF.
-file(WRITE ${CMAKE_BINARY_DIR}/qore-external-module-dirs.txt.in "${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}\n")
-configure_file(
-    ${CMAKE_BINARY_DIR}/qore-external-module-dirs.txt.in
-    ${CMAKE_BINARY_DIR}/qore-external-module-dirs.txt
-    COPYONLY)
-set(QORE_BUILD_MODULE_DIRS_STR
-    "${QORE_QM_METADATA_MODULE_DIRS_STR}:${CMAKE_SOURCE_DIR}/qlib")
-if (QORE_BUILD_EXTERNAL_MODULE_DIRS_STR)
-    string(APPEND QORE_BUILD_MODULE_DIRS_STR ":${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}")
-endif()
-set(QORE_QM_METADATA_ENV
-    "QORE_MODULE_DIR=${QORE_BUILD_MODULE_DIRS_STR}"
-    "QORE_INCLUDE_DIR="
-    "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
-if (NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
-    # QORE_MODULE_DIR normally augments the runtime's installed search paths.
-    # Package builds must also omit those defaults: a successful %try-module
-    # becomes a hard dependency of the resulting AOT artifact.
-    list(APPEND QORE_QM_METADATA_ENV "QORE_MODULE_DIR_ONLY=1")
-endif()
+qore_build_module_env(QORE_QM_METADATA_ENV ${QORE_QM_METADATA_MODULE_DIRS} "${CMAKE_SOURCE_DIR}/qlib")
+list(APPEND QORE_QM_METADATA_ENV "QORE_INCLUDE_DIR=" "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
 # every in-tree binary module (QORE_BINARY_MODULE_QORE()) installs its qmod with the qore-bootstrap component, so the
 # qore-bootstrap target builds each of them; the list is recorded as the modules are declared above, so a new module
 # cannot be left out (a module missing from a list kept by hand failed only at install time: "file INSTALL cannot find
@@ -3893,16 +3888,17 @@ find_program(_qore_exe NAMES qore HINTS ${CMAKE_INSTALL_FULL_BINDIR})
 # when the probe set actually changes.
 set(_qore_aot_probe_modules xml uuid msgpack process imagemagick sysconf oracle)
 set(_qore_aot_probe_content "")
-if(NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
+if(NOT QORE_BUILD_EXTERNAL_MODULE_DIRS)
     foreach(_pm ${_qore_aot_probe_modules})
         string(APPEND _qore_aot_probe_content "${_pm}=disabled\n")
     endforeach()
 elseif(_qore_exe)
+    qore_build_module_env(_qore_probe_env)
     foreach(_pm ${_qore_aot_probe_modules})
         # The probe searches the external module directories that the AOT compile searches (QORE_QM_METADATA_ENV)
         # and not those of the environment cmake runs in, so that it records the modules the qmods are compiled with.
         execute_process(
-            COMMAND ${CMAKE_COMMAND} -E env "QORE_MODULE_DIR=${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}"
+            COMMAND ${CMAKE_COMMAND} -E env ${_qore_probe_env}
                 ${_qore_exe} -l ${_pm} -ne
                 "printf(\"%d.%d\", get_module_hash().${_pm}.api_major, get_module_hash().${_pm}.api_minor);"
             RESULT_VARIABLE _pm_rc

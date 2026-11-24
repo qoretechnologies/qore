@@ -4005,8 +4005,8 @@ static type_vec_t normalize_union_key(const type_vec_t& member_types) {
     return key;
 }
 
-// Helper function to build the union type name
-static QoreString build_union_name(const type_vec_t& member_types, bool or_nothing) {
+// Helper function to build the union type name, or its path (with the paths of the members, qore#7331)
+static QoreString build_union_name(const type_vec_t& member_types, bool or_nothing, bool path = false) {
     QoreString name;
     if (or_nothing) {
         name.concat('*');
@@ -4016,7 +4016,7 @@ static QoreString build_union_name(const type_vec_t& member_types, bool or_nothi
         if (i > 0) {
             name.concat(", ");
         }
-        name.concat(QoreTypeInfo::getName(member_types[i]));
+        name.concat(path ? QoreTypeInfo::getPath(member_types[i]) : QoreTypeInfo::getName(member_types[i]));
     }
     name.concat('>');
     return name;
@@ -4074,9 +4074,10 @@ static QoreUnionTypeInfo* qore_make_union_type(const type_vec_t& key, bool or_no
     // Build the name
     // the name is built from the members without duplicates, as an AOT image writes and reads the type (qore#5858)
     QoreString name = build_union_name(key, or_nothing && !has_nothing);
+    QoreString path = build_union_name(key, or_nothing && !has_nothing, true);
 
     // Create the union type
-    QoreUnionTypeInfo* ti = new QoreUnionTypeInfo(std::move(accept_vec), std::move(return_vec), name, key,
+    QoreUnionTypeInfo* ti = new QoreUnionTypeInfo(std::move(accept_vec), std::move(return_vec), name, path, key,
         or_nothing || has_nothing);
     ti->initExactMembers(value_types);
     return ti;
@@ -6117,6 +6118,76 @@ bool QoreTypeInfo::unionHasEnumTypeFor(const QoreTypeInfo* ti, const QoreValue& 
     return n.isEnum() && getUnionType(ti) && qore_type_info_has_enum_spec_for(*ti, n);
 }
 
+//! checks the target of a weak reference that an lvalue holds for the binding of a reference to it (qore#7433)
+/** The weak reference has the type of its target: the target is checked as the assignment of the reference's type
+    checks it, and the lvalue keeps the weak reference.  A destroyed object is its target, as when a weak reference is
+    read, and as for an lvalue that holds a destroyed object.  A target that the type would convert to another value
+    (ex: a hash<string, int> for a reference<hash>) is refused, as the weak reference would not designate the converted
+    value.
+
+    @param weak the weak reference
+    @param target set to the target, with a reference of its own; the caller releases it (an lvalue's lock can be held
+    while a reference is bound to it, and the release of the last reference to the target runs its destructors)
+    @param conv set to the target converted by the type, with a reference of its own; released as \a target
+
+    @return 0 if the target is accepted as it is, -1 if an exception was raised
+*/
+template <typename FilterPolicy>
+static __attribute__((noinline)) int qore_reference_bind_weak_check(const QoreTypeInfo* target_ti,
+        const QoreValue& weak, FilterPolicy policy, ValueHolder& target, ValueHolder& conv, ExceptionSink* xsink) {
+    switch (weak.getType()) {
+        case NT_WEAKREF:
+            // the object, also if it has been destroyed
+            if (QoreObject* obj = weak.get<const WeakReferenceNode>()->get()) {
+                target = QoreValue(obj).refSelf();
+            }
+            break;
+        case NT_WEAKREF_HASH:
+            // a hash freed under the weak reference is an empty one
+            target = QoreValue(weak.get<const WeakHashReferenceNode>()->lock());
+            break;
+        default:
+            assert(weak.getType() == NT_WEAKREF_LIST);
+            // a list freed under the weak reference is an empty one
+            target = QoreValue(weak.get<const WeakListReferenceNode>()->lock());
+            break;
+    }
+    conv = target->refSelf();
+    policy.assignment(target_ti, "<reference>", *conv, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (!qore_value_unchanged_by_conversion(*target, *conv)) {
+        xsink->raiseException("RUNTIME-TYPE-ERROR", "<reference> expects type '%s', but got a weak reference to type "
+            "'%s', which the type would convert to another value that the weak reference does not designate",
+            QoreTypeInfo::getName(target_ti), target->getFullTypeName());
+        return -1;
+    }
+    return 0;
+}
+
+//! binds a reference to an lvalue that holds a weak reference (qore#7433)
+/** The lvalue keeps the weak reference if its target is accepted (see qore_reference_bind_weak_check()): nothing is
+    changed.
+
+    @param weak the weak reference, with a reference that the call takes
+*/
+template <typename FilterPolicy>
+static __attribute__((noinline)) void qore_reference_bind_weak(LValueHelper& lvh, const QoreTypeInfo* target_ti,
+        QoreValue weak, FilterPolicy policy, ExceptionSink* xsink) {
+    ValueHolder target(xsink);
+    ValueHolder conv(xsink);
+    qore_reference_bind_weak_check(target_ti, weak, policy, target, conv, xsink);
+    // the references are released by the helper's destructor, after the lvalue's lock: the release of the last
+    // reference to the target can run destructors, which can need the lock
+    lvh.saveTemp(weak);
+    lvh.saveTemp(target.release());
+    lvh.saveTemp(conv.release());
+    if (!*xsink) {
+        lvh.suppressObjectScan();
+    }
+}
+
 template <typename FilterPolicy>
 bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const QoreAcceptSpec& accept,
         const char* arg_type, bool obj, int param_num, const char* param_name, QoreValue& n,
@@ -6351,9 +6422,14 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     // replaces the value hands the old one to LValueHelper::saveTemp(), which defers the
                     // dereference to the helper's destructor, so this pointer is still backed by a live reference
                     // at the comparison below and its address cannot have been reused
-                    auto assign_back = [target_ti = uTi(), policy](LValueHelper& lvh) {
+                    auto assign_back = [target_ti = uTi(), policy, xsink](LValueHelper& lvh) {
                         QoreValue val = lvh.getReferencedValue();
                         if (val.isNothing()) {
+                            return;
+                        }
+                        qore_type_t vt = val.getType();
+                        if (vt == NT_WEAKREF || vt == NT_WEAKREF_HASH || vt == NT_WEAKREF_LIST) [[unlikely]] {
+                            qore_reference_bind_weak(lvh, target_ti, val, policy, xsink);
                             return;
                         }
                         const AbstractQoreNode* orig = val.getInternalNode();
@@ -6368,9 +6444,51 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     // the variable is resolved for reading first: one that the reference cannot write, such as a
                     // read-only import, is left as it is when its value already has the reference's type
                     // (qore#5664)
+                    // the lock of the assignment being checked can guard the referenced lvalue (qore#7380)
                     std::optional<LValueHelper> lvh;
-                    lvh.emplace(*r, xsink, LValueHelper::ReadAccess(), true);
-                    if (*lvh && lvh->isWriteProtected()) {
+                    lvh.emplace(*r, xsink, LValueHelper::ReadAccess(), LValueHelper::ReferenceBind());
+                    if (*lvh && lvh->hasReusedBindLock()) {
+                        // under a lock of the assignment being checked the value is only inspected, where it is:
+                        // nothing is changed, so no object scan is needed, and no reference is taken, whose release
+                        // could take the lock that the assignment holds (qore#7380)
+                        lvh->suppressObjectScan();
+                        const QoreValue current = lvh->getValue();
+                        if (!current.isNothing()) {
+                            qore_type_result_e rv = QoreTypeInfo::runtimeAcceptsValue(uTi(), current);
+                            // only a value that certainly needs no conversion is accepted: a value of exactly the
+                            // type, with or without NOTHING, or a valid object of a compatible class for a type that
+                            // does not wrap it in a list; any other value could be converted or rejected by a bind
+                            bool unchanged;
+                            // a weak reference is not checked here: the check takes a reference to its target, whose
+                            // release could need the lock that the assignment holds, so it is refused here although a
+                            // bind without the lock accepts it (qore#7433); a bind resolves a reference that the lvalue
+                            // holds
+                            if (current.isEnum() || current.getType() == NT_WEAKREF
+                                    || current.getType() == NT_WEAKREF_HASH || current.getType() == NT_WEAKREF_LIST
+                                    || current.getType() == NT_REFERENCE) {
+                                unchanged = false;
+                            } else if (current.getType() == NT_OBJECT) {
+                                unchanged = rv != QTI_NOT_EQUAL && current.get<const QoreObject>()->isValid()
+                                    && !QoreTypeInfo::parseAcceptsReturns(uTi(), NT_LIST);
+                            } else {
+                                const QoreTypeInfo* value_ti = current.getTypeInfo();
+                                qore_type_t vt = current.getType();
+                                // a plain scalar that the type returns as it is (an int for a softint); a date is not
+                                // one of them, as a type can restrict it to absolute or relative dates
+                                unchanged = value_ti == uTi() || get_or_nothing_type_check(value_ti) == uTi()
+                                    || (rv == QTI_IDENT && (vt == NT_INT || vt == NT_FLOAT || vt == NT_NUMBER
+                                        || vt == NT_STRING || vt == NT_BOOLEAN || vt == NT_BINARY));
+                            }
+                            if (rv == QTI_NOT_EQUAL) {
+                                xsink->raiseException("RUNTIME-TYPE-ERROR", "<reference> expects type '%s', but got "
+                                    "type '%s' instead", QoreTypeInfo::getName(uTi()), current.getFullTypeName());
+                            } else if (!unchanged) {
+                                xsink->raiseException("REFERENCE-BIND-ERROR", "cannot convert the value of a reference "
+                                    "to type '%s' while assigning to an lvalue whose lock its path goes through",
+                                    QoreTypeInfo::getName(uTi()));
+                            }
+                        }
+                    } else if (*lvh && lvh->isWriteProtected()) {
                         bool needs_write = false;
                         {
                             ValueHolder val(lvh->getReferencedValue(), xsink);
@@ -6380,18 +6498,34 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                                 // the value is converted as the assignment below would convert it: a value that the
                                 // type rejects raises the same error as for a variable that can be written, and only
                                 // a value that the conversion changes has to be written back
-                                ValueHolder conv(val->refSelf(), xsink);
-                                policy.assignment(uTi(), "<reference>", *conv, xsink);
-                                if (!*xsink) {
-                                    needs_write = !qore_value_unchanged_by_conversion(*val, *conv);
+                                qore_type_t vt = val->getType();
+                                if (vt == NT_WEAKREF || vt == NT_WEAKREF_HASH || vt == NT_WEAKREF_LIST) [[unlikely]] {
+                                    // the variable keeps a weak reference whose target is accepted (qore#7433); the
+                                    // variable's lock is not held, so the references are released here
+                                    ValueHolder target(xsink);
+                                    ValueHolder conv(xsink);
+                                    qore_reference_bind_weak_check(uTi(), *val, policy, target, conv, xsink);
+                                } else {
+                                    ValueHolder conv(val->refSelf(), xsink);
+                                    policy.assignment(uTi(), "<reference>", *conv, xsink);
+                                    if (!*xsink) {
+                                        needs_write = !qore_value_unchanged_by_conversion(*val, *conv);
+                                    }
                                 }
                             }
                         }
                         if (needs_write && !*xsink) {
                             // the value has to be changed: resolving the variable for writing raises the exception
                             // that says why it cannot be, unless it has become writable in the meantime
-                            lvh.emplace(*r, xsink, true);
-                            if (*lvh) {
+                            lvh.emplace(*r, xsink, LValueHelper::ReferenceBind());
+                            // the path can differ from the one read above and reach a lock that the assignment holds,
+                            // under which nothing can be written (qore#7380)
+                            if (*lvh && lvh->hasReusedBindLock()) {
+                                lvh->suppressObjectScan();
+                                xsink->raiseException("REFERENCE-BIND-ERROR", "cannot convert the value of a reference "
+                                    "to type '%s' while assigning to an lvalue whose lock its path goes through",
+                                    QoreTypeInfo::getName(uTi()));
+                            } else if (*lvh) {
                                 assign_back(*lvh);
                             }
                         }
@@ -6549,6 +6683,26 @@ bool QoreTypeSpec::operator!=(const QoreTypeSpec& other) const {
 }
 
 
+//! a reference to the list or hash of a weak reference that the type match reads, released when it is taken only
+//! (qore#7375): the match of any other value costs no exception sink
+template <typename T>
+struct qore_weak_target_ref {
+    T* target = nullptr;
+
+    DLLLOCAL qore_weak_target_ref() = default;
+    qore_weak_target_ref(const qore_weak_target_ref&) = delete;
+    qore_weak_target_ref& operator=(const qore_weak_target_ref&) = delete;
+
+    DLLLOCAL ~qore_weak_target_ref() {
+        if (target) [[unlikely]] {
+            // the release of a last reference raises its destructors' exceptions here, as
+            // WeakListReferenceNode::getAsBoolImpl() does
+            ExceptionSink xsink;
+            target->deref(&xsink);
+        }
+    }
+};
+
 qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool exact, bool fold) const {
     return runtimeAcceptsValueImpl(n, exact, fold, DefaultTypeMatchPolicy{});
 }
@@ -6674,12 +6828,16 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
         case QTS_COMPLEXHASH: {
             const QoreTypeInfo* ti = nullptr;
             const QoreHashNode* h = nullptr;
+            // the hash of a weak reference is read with a reference of its own, as another thread can free it
+            // meanwhile (qore#7375)
+            qore_weak_target_ref<QoreHashNode> weak_target;
             if (ot == NT_HASH) {
                 h = n.get<const QoreHashNode>();
                 ti = h->getValueTypeInfo();
-            } else if (ot == NT_WEAKREF_HASH) {
-                // its type and its size, which reads as empty once it is freed (see WeakHashReferenceNode::borrow())
-                h = n.get<const WeakHashReferenceNode>()->borrow();
+            } else if (ot == NT_WEAKREF_HASH) [[unlikely]] {
+                // its type and its size, which reads as empty once it is freed (see WeakHashReferenceNode::lock())
+                weak_target.target = n.get<const WeakHashReferenceNode>()->lock();
+                h = weak_target.target;
                 ti = h->getValueTypeInfo();
             }
             if (!h) {
@@ -6719,12 +6877,16 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
         case QTS_COMPLEXSOFTLIST: {
             const QoreTypeInfo* ti = nullptr;
             const QoreListNode* l = nullptr;
+            // the list of a weak reference is read with a reference of its own, as another thread can free it
+            // meanwhile (qore#7375)
+            qore_weak_target_ref<QoreListNode> weak_target;
             if (ot == NT_LIST) {
                 l = n.get<const QoreListNode>();
                 ti = l->getValueTypeInfo();
-            } else if (ot == NT_WEAKREF_LIST) {
-                // its type and its size, which reads as empty once it is freed (see WeakListReferenceNode::borrow())
-                l = n.get<const WeakListReferenceNode>()->borrow();
+            } else if (ot == NT_WEAKREF_LIST) [[unlikely]] {
+                // its type and its size, which reads as empty once it is freed (see WeakListReferenceNode::lock())
+                weak_target.target = n.get<const WeakListReferenceNode>()->lock();
+                l = weak_target.target;
                 ti = l->getValueTypeInfo();
             }
             if (l) {
@@ -8964,22 +9126,59 @@ const QoreTypeInfo* QoreTypeInfo::getReturnComplexBufferOrNothing(const QoreType
     return ti->return_vec[0].spec.getComplexBuffer();
 }
 
-void QoreTypeInfo::getNodeType(QoreString& str, const QoreValue& n) {
+bool QoreTypeInfo::diagnosticNamesCollide(const QoreTypeInfo* left, const QoreTypeInfo* right) {
+    if (!left || !right || left == right) {
+        return false;
+    }
+    const QoreClass* left_class = getReturnClass(left);
+    const QoreClass* right_class = getReturnClass(right);
+    if (left_class && right_class && !strcmp(left_class->getName(), right_class->getName())
+            && strcmp(left_class->getPath(), right_class->getPath())) {
+        return true;
+    }
+    // Includes classes nested in containers and generic arguments.
+    return !strcmp(getName(left), getName(right)) && strcmp(getPath(left), getPath(right));
+}
+
+std::string QoreTypeInfo::diagnosticTypePath(const QoreTypeInfo* ti) {
+    const QoreClass* cls = getReturnClass(ti);
+    if (cls && dynamic_cast<const QoreClassTypeInfo*>(ti)) {
+        return std::string(ti->tname.c_str()[0] == '*' ? "*object<" : "object<")
+            + qore_class_private::diagnosticPath(*cls) + ">";
+    }
+    return getPath(ti);
+}
+
+void QoreTypeInfo::describeTypeComparison(QoreString& str, const QoreTypeInfo* left, const char* separator,
+        const QoreTypeInfo* right) {
+    if (diagnosticNamesCollide(left, right)) {
+        str.sprintf("%s%s%s", diagnosticTypePath(left).c_str(), separator, diagnosticTypePath(right).c_str());
+    } else {
+        getThisType(left, str);
+        str.concat(separator);
+        getThisType(right, str);
+    }
+}
+
+void QoreTypeInfo::describeTypeMismatch(QoreString& str, const QoreValue& n) const {
+    bool qualify = diagnosticNamesCollide(this, n.getFullTypeInfo());
+    str.sprintf("expects type '%s', but got ", qualify ? diagnosticTypePath(this).c_str() : tname.c_str());
     qore_type_t nt = n.getType();
     if (nt == NT_NOTHING) {
         str.concat("no value");
         return;
     }
     if (nt != NT_OBJECT) {
-        str.sprintf("type '%s'", n.getFullTypeName());
+        str.sprintf("type '%s'", qualify ? n.getFullTypeName(true) : n.getFullTypeName());
         return;
     }
     const QoreObject* obj = n.get<const QoreObject>();
+    const char* name = qualify ? qore_class_private::diagnosticPath(*obj->getClass()) : obj->getClassName();
     if (!obj->isValid()) {
-        str.sprintf("no value (deleted object of class '%s')", obj->getClassName());
+        str.sprintf("no value (deleted object of class '%s')", name);
         return;
     }
-    str.sprintf("an object of class '%s'", obj->getClassName());
+    str.sprintf("an object of class '%s'", name);
 }
 
 void QoreTypeInfo::ptext(QoreString& str, const char* arg_type, int param_num, const char* param_name) {
@@ -9031,8 +9230,7 @@ int QoreTypeInfo::doTypeException(const char* arg_type, int param_num, const cha
 
     SimpleRefHolder<QoreStringNode> desc(new QoreStringNode);
     QoreTypeInfo::ptext(**desc, arg_type, param_num, param_name);
-    desc->sprintf("expects type '%s', but got ", tname.c_str());
-    QoreTypeInfo::getNodeType(**desc, n);
+    describeTypeMismatch(**desc, n);
     desc->concat(" instead");
     // the structured diagnostic of the error, for tools and coding assistants; see QoreRuntimeDiagnostic.h
     const char* container = nullptr;
@@ -9062,7 +9260,10 @@ int QoreTypeInfo::doTypeException(const char* arg_type, int param_num, const cha
 }
 
 QoreHashNode* QoreTypeInfo::makeRuntimeDiagnostic(const QoreValue& n, const char* container) const {
-    std::vector<std::pair<std::string, std::string>> facts = {{"expectedType", tname.c_str()}};
+    bool qualify = diagnosticNamesCollide(this, n.getFullTypeInfo());
+    std::vector<std::pair<std::string, std::string>> facts = {
+        {"expectedType", qualify ? diagnosticTypePath(this) : tname.c_str()}
+    };
     if (n.isNothing()) {
         return qore_make_runtime_diagnostic(QORE_RTD_NO_VALUE_FOR_TYPE,
             "a value of this type is required, but there is no value (NOTHING), as for a variable that was declared "
@@ -9072,7 +9273,7 @@ QoreHashNode* QoreTypeInfo::makeRuntimeDiagnostic(const QoreValue& n, const char
              "declare an optional type, such as *int, where no value is expected"});
     } else {
         QoreString actual;
-        facts.push_back({"actualType", n.getFullTypeName(false, actual)});
+        facts.push_back({"actualType", n.getFullTypeName(qualify, actual)});
         if (container) {
             facts.push_back({"container", container});
             return qore_make_runtime_diagnostic(QORE_RTD_CONTAINER_VALUE_TYPE,
@@ -9093,8 +9294,8 @@ int QoreTypeInfo::doObjectHashDeclTypeException(const char* arg_type, const char
         ExceptionSink* xsink) const {
     assert(xsink);
     SimpleRefHolder<QoreStringNode> desc(new QoreStringNode);
-    desc->sprintf("%s '%s' expects type '%s', but got ", arg_type, param_name, tname.c_str());
-    QoreTypeInfo::getNodeType(**desc, n);
+    desc->sprintf("%s '%s' ", arg_type, param_name);
+    describeTypeMismatch(**desc, n);
     desc->concat(" instead");
     ReferenceHolder<QoreHashNode> diag(makeRuntimeDiagnostic(n, nullptr), nullptr);
     xsink->raiseExceptionArg("RUNTIME-TYPE-ERROR", diag.release(), desc.release());

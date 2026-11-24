@@ -1,0 +1,5 @@
+returned: 7
+kept: "CIRCULAR-REFERENCE-ERROR v=7" "CIRCULAR-REFERENCE-ERROR v=8"
+shared: 1 "CIRCULAR-REFERENCE-ERROR n=1" 2
+one left: 3
+done

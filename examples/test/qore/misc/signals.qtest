@@ -364,7 +364,7 @@ class SignalTest inherits QUnit::Test {
 
         # a signal that ends the process, with and without a handler that was removed: by its default action, or for
         # SIGTERM and SIGHUP with the exit code of the signal thread
-        foreach int sig in (SIGTERM, SIGHUP, SIGUSR1, SIGUSR2) {
+        foreach int sig in (SIGINT, SIGTERM, SIGHUP, SIGUSR1, SIGUSR2) {
             # a shell cannot reset a signal that it inherited as ignored; those cases are checked below in any case
             if (!SignalTest::startedWithSignalIgnored(sig)) {
                 foreach string mode in ("never", "unset", "removed") {
@@ -388,7 +388,7 @@ class SignalTest inherits QUnit::Test {
 
         # negative: a signal that was ignored when the process started stays ignored, with and without a handler that
         # was removed, and a handler that is set handles it
-        foreach int sig in (SIGHUP, SIGTERM) {
+        foreach int sig in (SIGINT, SIGHUP, SIGTERM) {
             string start = sprintf("trap '' %d; ", sig);
             foreach string mode in ("never", "unset", "removed") {
                 hash<auto> res = runDisposition(script, sig, mode, "survives", start);
@@ -420,11 +420,6 @@ class SignalTest inherits QUnit::Test {
                 assertTrue(inlist(res.rc, (0, 128 + SIGHUP)), sprintf("%s: %y", mode, res));
             }
         }
-
-        # SIGINT does as the process inherited, which an ignored SIGINT of the test run changes: the same in any case
-        hash<auto> never = runDisposition(script, SIGINT, "never", "survives");
-        hash<auto> removed = runDisposition(script, SIGINT, "removed", "survives");
-        assertEq(never.rc, removed.rc, sprintf("%y %y", never, removed));
     }
 
     # a reserved signal cannot have a handler, and removing a handler that it cannot have changes nothing

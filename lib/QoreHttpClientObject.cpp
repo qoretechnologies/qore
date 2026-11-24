@@ -4119,7 +4119,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             if (q_check_path(**path, "HTTP-CLIENT-OPTION-ERROR", xsink)) {
                 return -1;
             }
-            if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_restricts_domain(QDOM_FILESYSTEM)) {
+            // a method of a lent object (a capability frame, qore#7052) lends nothing here: the file is opened for
+            // the code that the object was lent to, which can be restricted (qore#7052 follow-up)
+            if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_lent_to_restricts_domain(QDOM_FILESYSTEM)) {
                 xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the ssl_cert_path option requires filesystem access "
                     "in the current Program and its caller");
                 return -1;
@@ -4195,7 +4197,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             if (q_check_path(**path, "HTTP-CLIENT-OPTION-ERROR", xsink)) {
                 return -1;
             }
-            if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_restricts_domain(QDOM_FILESYSTEM)) {
+            // a method of a lent object (a capability frame, qore#7052) lends nothing here: the file is opened for
+            // the code that the object was lent to, which can be restricted (qore#7052 follow-up)
+            if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_lent_to_restricts_domain(QDOM_FILESYSTEM)) {
                 xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the ssl_key_path option requires filesystem access "
                     "in the current Program and its caller");
                 return -1;
@@ -4244,9 +4248,11 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             return -1;
         }
         const char* path = path_str->c_str();
-        if (runtime_check_parse_option(PO_NO_FILESYSTEM)) {
-            xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"%s\" option = \"%s\" when "
-                "sandboxing restriction PO_NO_FILESYSTEM is set", key, path);
+        // as for the client certificate and key paths: the code that calls the code that creates the client counts,
+        // also through the method of a lent object (qore#7052)
+        if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_lent_to_restricts_domain(QDOM_FILESYSTEM)) {
+            xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the \"%s\" option requires filesystem access in the "
+                "current Program and its caller", key);
             return -1;
         }
         QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
@@ -7123,9 +7129,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             // at this boundary so the documented error reaches the caller
             q_future_rename_timeout(xsink, "SOCKET-TIMEOUT", "HTTP request timed out");
             if (!raw_resp || *xsink) {
-                // A request on an HTTP/3 connection whose peer sent nothing before the connection was closed, or
-                // that the server reset with a stateless reset (HTTP3-STATELESS-RESET: it has no state for the
-                // connection, qore#6931)
+                // A request on an HTTP/3 connection whose peer did not acknowledge it before the connection was
+                // closed, or that the server reset with a stateless reset (HTTP3-STATELESS-RESET: it has no state for
+                // the connection, qore#6931)
                 // (HTTP3-PEER-UNRESPONSIVE: within the connect timeout of the request; or HTTP3-IDLE-CLOSE: by the
                 // idle timer) went to a server whose connection state is gone (ex: it restarted).  The server may
                 // still have processed it before it went away, so only an idempotent request is repeated, once, on

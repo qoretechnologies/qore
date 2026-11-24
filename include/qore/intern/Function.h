@@ -178,6 +178,30 @@ public:
         return str.c_str();
     }
 
+    //! appends the key of the signature as an abstract variant (MethodVariantBase::getAbstractSignature())
+    /** The key is made from the parameter types (with the path of a class, hashdecl or other named type) and the
+        \c const qualifiers of the parameters only, without the parameter names and default values: a declaration has
+        the same key whether its class was parsed or loaded from an AOT image (qore#7331).  As the key made from the
+        parse types of a signature that is not resolved yet, it has neither the default arguments nor the varargs of
+        the signature.
+
+        @return true if the key is made from the resolved types, false if from the parse types of a signature that
+        is not resolved yet, in which case it is made again when the signature has been resolved
+        (AbstractMethodMap::parseResolveSignatures())
+    */
+    DLLLOCAL virtual bool addAbstractSignatureKey(std::string& str) const {
+        for (unsigned i = 0; i < typeList.size(); ++i) {
+            if (i) {
+                str.append(",");
+            }
+            if (isParamReadOnly(i)) {
+                str.append("const ");
+            }
+            str.append(QoreTypeInfo::getPath(typeList[i]));
+        }
+        return true;
+    }
+
     DLLLOCAL virtual void addAbstractParameterSignature(std::string& str) const {
         for (unsigned i = 0; i < typeList.size(); ++i) {
             if (isParamReadOnly(i)) {
@@ -646,13 +670,9 @@ public:
         std::vector<uint8_t>&& paramFlags = std::vector<uint8_t>(),
         QoreProgram* localOwnerPgm = nullptr);
 
-    DLLLOCAL virtual ~UserSignature() {
-        // type-parameter types are cached by signature address, which the next signature allocated can reuse
-        qore_purge_derived_types(this, nullptr, nullptr);
-        for (ptype_vec_t::iterator i = parseTypeList.begin(), e = parseTypeList.end(); i != e; ++i)
-            delete* i;
-        delete parseReturnTypeInfo;
-    }
+    // exported and defined in the library: it calls functions that are hidden there, so code built with the internal
+    // headers must not emit it
+    DLLEXPORT virtual ~UserSignature();
 
     DLLLOCAL void setFirstParamType(const QoreTypeInfo* typeInfo) {
         assert(!typeList.empty());
@@ -725,6 +745,28 @@ public:
     */
     DLLLOCAL int resolveTypes();
 
+    // documented in AbstractFunctionSignature
+    DLLLOCAL virtual bool addAbstractSignatureKey(std::string& str) const {
+        // a signature read from an AOT image has its parameter types and no parse types
+        if (types_resolved || parseTypeList.size() < typeList.size()) {
+            return AbstractFunctionSignature::addAbstractSignatureKey(str);
+        }
+        for (unsigned i = 0; i < parseTypeList.size(); ++i) {
+            if (i) {
+                str.append(",");
+            }
+            if (isParamReadOnly(i)) {
+                str.append("const ");
+            }
+            if (!parseTypeList[i] && typeList.size() > i && typeList[i]) {
+                str.append(QoreTypeInfo::getPath(typeList[i]));
+            } else {
+                str.append(QoreParseTypeInfo::getName(parseTypeList[i]));
+            }
+        }
+        return false;
+    }
+
     DLLLOCAL virtual void addAbstractParameterSignature(std::string& str) const {
         // a signature read from an AOT image has its parameter types and no parse types before it is resolved: its
         // abstract signature is made from its types, so that the variants of a method are told apart when they are
@@ -747,13 +789,9 @@ public:
         }
     }
 
-    // called at parse time to ensure types are resolved
-    DLLLOCAL virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const {
-        if (const_cast<UserSignature*>(this)->resolve() && !err) {
-            err = -1;
-        }
-        return returnTypeInfo;
-    }
+    // called at parse time to ensure types are resolved; exported and defined in the library, as it calls the hidden
+    // resolve(), so code built with the internal headers must not emit it
+    DLLEXPORT virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const;
 
     DLLLOCAL const QoreProgramLocation* getParseLocation() const {
         return loc;
@@ -2488,8 +2526,27 @@ struct INode {
 typedef std::vector<INode> ilist_t;
 
 struct IList : public ilist_t {
+    //! returns the function of the first ancestor from \a aqfi on that the class context can access
+    /** @param class_ctx the class context of the call
+        @param last_class the class of the function returned last, updated with that of the function returned
+        @param aqfi the position to search from, updated with the position of the function returned, or \a aqfe
+        @param aqfe the end of the list
+        @param internal_access set if the class of the function returned is the class context; then the ancestors
+        that it inherits with private:internal access are accessible
+
+        @return the function found, or nullptr if no ancestor after \a aqfi is accessible (\a aqfi is then \a aqfe)
+
+        An inaccessible ancestor does not end the search: the ancestors after it are searched (qore#7381).  An ancestor
+        that the list's class inherits with private:internal access is accessible only when no other one comes before
+        it, as when the search ended at the first one: the private:internal access of an ancestor in the list is
+        relative to the list's class, not to the class context, so that a class context reached after another
+        private:internal ancestor does not gain access to those after it
+    */
     DLLLOCAL QoreFunction* getFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
-        const_iterator aqfi, bool& internal_access, bool& stop) const;
+        const_iterator& aqfi, const_iterator aqfe, bool& internal_access) const;
+
+    //! returns true if an ancestor before \a aqfi (after the function itself) has private:internal access
+    DLLLOCAL bool hasInternalBefore(const_iterator aqfi) const;
 };
 
 //! variant filter of QoreFunction::runtimeFindVariant(): only user variants
@@ -2741,6 +2798,16 @@ public:
                 return;
             }
         }
+    }
+
+    //! removes the ancestors from the inheritance list, so that it can be built again
+    /** The list is built again when a parent class has created a method by resolving an abstract method after the
+        list was built (qore#7307)
+    */
+    DLLLOCAL void clearAncestors() {
+        assert(!ilist.empty());
+        assert(ilist.front().func == this);
+        ilist.erase(ilist.begin() + 1, ilist.end());
     }
 
     // resolves all types in signatures and return types in pending variants; called during the "parseInit" phase
@@ -3438,9 +3505,18 @@ protected:
 
     ClassAccess access;
 
+    //! the variants of parent classes that implement abstract variants of the method with an access more restrictive
+    //! than their own, which the abstract declaration gives them in this method: the variant objects are shared with
+    //! the methods of their classes (qore#7277)
+    std::vector<std::pair<const AbstractQoreFunctionVariant*, ClassAccess>> implemented_access;
+
     DLLLOCAL int checkFinalVariant(const MethodFunctionBase* m, const MethodVariantBase* v) const;
 
     DLLLOCAL void replaceAbstractVariantIntern(MethodVariantBase* variant);
+
+    //! returns the access of a variant of the method: the more restrictive of its own and of the abstract variant of
+    //! the method that it implements, if any (qore#7277)
+    DLLLOCAL ClassAccess getImplementedVariantAccess(const MethodVariantBase* v) const;
 
 public:
     DLLLOCAL MethodFunctionBase(const char* nme, const QoreClass* n_qc, bool n_is_static) : QoreFunction(nme),
@@ -3455,7 +3531,8 @@ public:
             has_final(old.has_final),
             is_abstract(old.is_abstract),
             has_private_internal_variants(old.has_private_internal_variants),
-            access(old.access) {
+            access(old.access),
+            implemented_access(old.implemented_access) {
         //printd(5, "MethodFunctionBase() copying old=%p -> new=%p %p %s::%s() %p %s::%s()\n",& old, this, old.qc, old.qc->getName(), old.getName(), qc, qc->getName(), old.getName());
 
         // set a pointer to the new function
@@ -3525,7 +3602,12 @@ public:
     // runtime version - assumes signatures are already resolved
     DLLLOCAL MethodVariantBase* runtimeHasVariantWithSignature(MethodVariantBase* v, bool relaxed_match = false) const;
 
-    DLLLOCAL void replaceAbstractVariant(MethodVariantBase* variant);
+    //! replaces the abstract variant that \a variant of a parent class implements
+    /** @param variant the concrete variant of a parent class
+        @param min_access the more restrictive of the access of the abstract variant and of the access of \a variant
+        in the method of its class: the variant has at least this access in this method (qore#7277)
+    */
+    DLLLOCAL void replaceAbstractVariant(MethodVariantBase* variant, ClassAccess min_access);
 
     DLLLOCAL void parseRollbackMethod();
 
@@ -3537,8 +3619,34 @@ public:
         return is_abstract;
     }
 
+    //! returns the abstract variants of the method that concrete variants of parent classes implement
+    /** they are no longer in the variant list (see replaceAbstractVariant()); the AOT image keeps them, so that its
+        loader resolves them again (qore#7277)
+    */
+    DLLLOCAL const VList& getReplacedAbstractVariants() const {
+        return pending_save;
+    }
+
     DLLLOCAL ClassAccess getAccess() const {
         return access;
+    }
+
+    //! returns true if a variant of a parent class has another access in this method (see getVariantAccess())
+    DLLLOCAL bool hasImplementedVariantAccess() const {
+        return !implemented_access.empty();
+    }
+
+    //! returns the access of the variant \a v in this method, whose own access is \a va: more restrictive for a
+    //! variant of a parent class that implements a more restrictive abstract variant of the method (qore#7277)
+    /** called only if hasImplementedVariantAccess() is true, so that ordinary calls do not search
+    */
+    DLLLOCAL ClassAccess getVariantAccess(const AbstractQoreFunctionVariant* v, ClassAccess va) const {
+        for (const std::pair<const AbstractQoreFunctionVariant*, ClassAccess>& i : implemented_access) {
+            if (i.first == v) {
+                return i.second;
+            }
+        }
+        return va;
     }
 
     //! returns true if the method inherits a public variant of an ancestor through a public path that none of its

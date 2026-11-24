@@ -52,6 +52,15 @@ struct qore_list_private {
     unsigned obj_count = 0;
     const QoreTypeInfo* complexTypeInfo = nullptr;
     QoreContainerWeakRefs weakRefs;
+#ifndef NDEBUG
+    //! the number of lvalue helpers changing the container through a weak reference that it is designated by, which
+    //! its other owners share (qore#7297): the assertions of uniqueness of its changes accept it then
+    std::atomic<int> weak_change{0};
+
+    DLLLOCAL bool weakChangeAllowed() const {
+        return weak_change.load(std::memory_order_relaxed) > 0;
+    }
+#endif
     std::unique_ptr<std::vector<size_t>> eval_pos_map;
     size_t eval_result_size = 0;
     //! the sandbox memory charge of entry (see design/sandbox-resource-limits.md); synced with allocated
@@ -589,7 +598,7 @@ struct qore_list_private {
     //! Replacement entry for source-bound AST operations; compiled callers use the canonical overload.
     DLLLOCAL static QoreListNode* replace(QoreListNode& list, ptrdiff_t offset, ptrdiff_t length, QoreValue value,
             bool extract, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
-        assert(list.reference_count() == 1);
+        assert(list.reference_count() == 1 || list.priv->weakChangeAllowed());
         size_t n_offset, n_length;
         list.priv->checkOffset(offset, length, n_offset, n_length);
         return list.priv->spliceIntern<true>(n_offset, n_length, value, extract, xsink, policy);
@@ -597,7 +606,7 @@ struct qore_list_private {
 
     DLLLOCAL static QoreListNode* replace(QoreListNode& list, ptrdiff_t offset, ptrdiff_t length, QoreValue value,
             bool extract, ExceptionSink* xsink) {
-        assert(list.reference_count() == 1);
+        assert(list.reference_count() == 1 || list.priv->weakChangeAllowed());
         size_t n_offset, n_length;
         list.priv->checkOffset(offset, length, n_offset, n_length);
         return list.priv->spliceIntern(n_offset, n_length, value, extract, xsink);

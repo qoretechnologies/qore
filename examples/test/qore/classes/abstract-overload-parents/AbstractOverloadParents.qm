@@ -1,0 +1,41 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# classes of abstract-overload-parents.qtest in a module, loaded from the source and as a qcc -m .qmod
+
+%modern
+
+module AbstractOverloadParents {
+    version = "1.0";
+    desc = "classes that inherit abstract overloads of one method from several parent classes";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AOP {
+public class Secret2 {
+    string m(int i) { return "Secret2::m(int)"; }
+    string m(string s) { return "Secret2::m(string)"; }
+}
+public class SInt { string m(int i) { return "SInt::m(int)"; } }
+public class A { string m() { return "A::m()"; } }
+public class Pub { string m() { return "Pub::m()"; } }
+public class IfaceInt { abstract string m(int i); }
+public class IfaceStr { abstract string m(string s); }
+public class IfaceBool { abstract string m(bool b); }
+public class Iface { abstract string m(); }
+public class IfaceC { abstract string m() const; }
+
+public class X12 inherits private Secret2, IfaceInt, IfaceStr {}
+public class X21 inherits private Secret2, IfaceStr, IfaceInt {}
+public class XPPS12 inherits private Secret2, IfaceInt, private IfaceStr {
+    string via(auto a) { return m(a); }
+}
+public class B inherits A, Iface {}
+public class C inherits B, IfaceInt {}
+public class C3 inherits B, IfaceInt, SInt {}
+public class Q inherits IfaceInt { abstract string m(string s); }
+public class R inherits Q { string m(string s) { return "R::m(string)"; } }
+public class H5 inherits Pub, Iface, IfaceC {}
+# abstract: a parent class implements one overload
+public class M2 inherits IfaceInt, IfaceStr, SInt {}
+}

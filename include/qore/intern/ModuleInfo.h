@@ -685,6 +685,22 @@ struct QoreAOTModuleFileInfo;
 //! The attributes of the module manager's mutex: an error-checking mutex in a debug build, the default otherwise
 DLLLOCAL const pthread_mutexattr_t* qore_module_manager_mutex_attr();
 
+//! Where the module search found a module: a directory of the module search path and the name it appended
+/** Whether the module is library code is decided by where it was found (see QoreModuleManager::isTrustedModulePath()),
+    whatever the form of the directory's path (qore#7319)
+*/
+struct QoreModuleFoundIn {
+    //! the directory of the module search path, as given (prepended, configured or appended; relative or not)
+    const char* dir;
+    //! the name that the search appended to it: \c "<name>.qm", \c "<name>[-api-X.Y].qmod",
+    //! \c "<name>/<name>[-api-X.Y].qmod" or \c "<name>" (a separated module's directory)
+    std::string rel;
+    //! true if \a dir is a directory of the process-wide module path (which only trusted code sets): a module that is
+    //! library code keeps the path that it was found by only then; otherwise it keeps the canonical path judged, so
+    //! that no later change of a link in a path that a Program chose can lead its reads elsewhere (qore#7319)
+    bool process_path = false;
+};
+
 class QoreModuleManager {
     friend class QoreAbstractModule;
     friend class ModuleLoadMapHelper;
@@ -914,7 +930,8 @@ public:
 
         Reads only data that is set once by init(), so it needs no lock.
     */
-    DLLLOCAL bool isTrustedModulePath(const char* path, std::string* load_path = nullptr) const;
+    DLLLOCAL bool isTrustedModulePath(const char* path, std::string* load_path = nullptr,
+            const QoreModuleFoundIn* found_in = nullptr) const;
 
     //! Gives the Program of an AOT module being initialized the sandbox that the Program of its source module gets
     /** As for a source module (see loadSeparatedModule()), a module that is not library code (see
@@ -1257,6 +1274,14 @@ public:
     */
     DLLLOCAL void getModuleDependencies(const char* name, strset_t& deps);
 
+    //! Gets the modules that the module requires for the order of the teardown at the end of the process (qore#7432)
+    /** As getModuleDependencies(), with the requirements that modules recorded at run time, which cleanup() also
+        orders by: the binary modules that an AOT module required at run time, the user modules applied to the
+        Program of an AOT module at run time, and the user modules applied at run time to the Program of a module that
+        they require (runtime_importer_map); not for the compile-time dependencies of a module
+    */
+    DLLLOCAL void getTeardownModuleDependencies(const char* name, strset_t& deps);
+
     //! Returns true if the module dependency map already has a path from \a from to \a to
     /** A path from \a from to \a to means that \a to must be deleted before \a from; adding the reverse edge
         would make a cycle, which module teardown (delUser()) cannot resolve.  The mutex must be held when
@@ -1537,7 +1562,8 @@ protected:
             const char* feature = nullptr, bool reexport = false, QoreProgram* mpgm = nullptr,
             QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
             qore_binary_module_desc_t mod_desc = nullptr, bool source_available = false,
-            ExceptionSink* wsink = nullptr, int warning_mask = 0, const char* found_path = nullptr);
+            ExceptionSink* wsink = nullptr, int warning_mask = 0, const char* found_path = nullptr,
+            const QoreModuleFoundIn* found_in = nullptr);
 
     //! Returns the first module request that can be loaded now, from the %try-module requests that failed
     /** Each module is loaded if possible, as a %try-module directive in the source module would; the module
@@ -1613,7 +1639,7 @@ protected:
     DLLLOCAL QoreAbstractModule* loadUserModuleFromPath(ExceptionSink& xsink, ExceptionSink& wsink, const char* path,
             const char* feature = nullptr, QoreProgram* tpgm = nullptr, bool reexport = false,
             QoreProgram* mpgm = nullptr, QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
-            int warning_mask = QP_WARN_MODULES);
+            int warning_mask = QP_WARN_MODULES, const QoreModuleFoundIn* found_in = nullptr);
 
     DLLLOCAL QoreAbstractModule* loadUserModuleFromSource(ExceptionSink& xsink, ExceptionSink& wsink,
             const char* path, const char* feature, QoreProgram* tpgm, const char* src, bool reexport,
@@ -1622,7 +1648,8 @@ protected:
     //! loads separated module. see #2966
     DLLLOCAL QoreAbstractModule* loadSeparatedModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* path,
             const char* feature, QoreProgram* tpgm, bool reexport = false, QoreProgram* mpgm = nullptr,
-            QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE, int warning_mask = QP_WARN_MODULES);
+            QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE, int warning_mask = QP_WARN_MODULES,
+            const QoreModuleFoundIn* found_in = nullptr);
 
     DLLLOCAL QoreAbstractModule* setupUserModule(ExceptionSink& xsink, std::unique_ptr<QoreUserModule>& mi,
             QoreUserModuleDefContextHelper& qmd, unsigned load_opt = QMLO_NONE, int warning_mask = QP_WARN_MODULES);
