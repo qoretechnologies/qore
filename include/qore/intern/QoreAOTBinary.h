@@ -248,6 +248,9 @@ bool qore_aot_resolve_runtime_constant_path(const RuntimeConstantRefNode* node,
 QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* path,
     bool defer_if_pending, bool wrap_top_level_if_ready = false, bool* resolved = nullptr);
 
+//! Resolves a date literal in the loading Program. A null Program permits only data zone names and offsets.
+DLLLOCAL const AbstractQoreZoneInfo* qore_aot_date_zone(const char* name, QoreProgram* pgm, ExceptionSink* xsink);
+
 //! Returns the canonical AOT-serializable type path for \a ti.
 std::string qore_get_aot_serializable_type_path(const QoreTypeInfo* ti, bool no_narrow = false);
 
@@ -685,6 +688,7 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      - the methods of a user class are in its signature in the order of their names (qore#7458), not in the
 //!        iteration order of its method map: the hashes of an earlier image of a class with several method names
 //!        depend on the hash map of the compiler's build
+//!      - native date literals use the checked zone constructor; recompile earlier native code (qore#7496)
 //! The shared format version for the changes of the AOT-identity batch (see v52 above).
 constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY_VERSION = 52;
 //! The shared format version for the changes of the second AOT-identity batch (see v53 above).
@@ -2348,7 +2352,8 @@ public:
     }
 
     //! Read a serialized QoreValue from a data pointer
-    /** @param ptr data pointer (advanced past the value)
+    /** @param loading_pgm Program whose restrictions apply to a date literal that names a zone file
+        @param ptr data pointer (advanced past the value)
         @param end pointer past the end of valid data
         @param error receives error message on failure
         @return the deserialized value, or NOTHING on failure
@@ -2356,7 +2361,8 @@ public:
         @note After an error, the read pointer is past the value, or at \a end if the value is malformed: a reader
         that reads on after the error must check it against \a end (qore#5848)
     */
-    QoreValue readValue(const uint8_t*& ptr, const uint8_t* end, std::string& error) const;
+    QoreValue readValue(const uint8_t*& ptr, const uint8_t* end, std::string& error,
+            QoreProgram* loading_pgm = nullptr) const;
 
     //! Skip a serialized QoreValue without reading it; returns false if it is malformed
     bool skipValue(const uint8_t*& ptr, const uint8_t* end, std::string& error) const;
@@ -2369,7 +2375,8 @@ public:
 
 private:
     //! Reads a value for readValue(), which places the read pointer after an error
-    QoreValue readValueIntern(const uint8_t*& ptr, const uint8_t* end, std::string& error) const;
+    QoreValue readValueIntern(const uint8_t*& ptr, const uint8_t* end, std::string& error,
+            QoreProgram* loading_pgm) const;
 };
 
 //! Serializes a source line number in the current wire format.

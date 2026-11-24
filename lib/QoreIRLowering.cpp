@@ -20,6 +20,7 @@
 #include <qore/intern/QorePluginRegistry.h>
 
 #include <qore/DateTimeNode.h>
+#include <qore/intern/QoreTimeZoneManager.h>
 #include <qore/QoreObject.h>
 #include <qore/QoreValue.h>
 #include <qore/QoreHashNode.h>
@@ -9710,6 +9711,14 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
     if (expr.getType() == NT_DATE && expr.isValue()) {
         const DateTimeNode* dt = expr.get<const DateTimeNode>();
         bool is_relative = dt->isRelative();
+        if (!is_relative) {
+            const char* region = AbstractQoreZoneInfo::getRegionName(dt->getZone());
+            if (region && QoreTimeZoneManager::isPathName(region)) {
+                // Resolve a file-backed literal once when loading the Program. Evaluating it should never reopen
+                // the file or change its value when the file changes.
+                return builder.createLoadConstant(nullptr, expr, nullptr)->result;
+            }
+        }
         int64_t micros = is_relative ? dt->getRelativeMicroseconds() : dt->getEpochMicrosecondsUTC();
         auto* inst = builder.createConstDate(micros, is_relative);
         if (!is_relative) {

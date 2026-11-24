@@ -1910,7 +1910,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
             QoreAOTValueLocalsHelper value_locals(ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals,
                 ctx.local_owner_pgm);
             std::string val_error;
-            defaults[p] = ctx.reader.readValue(ctx.ptr, ctx.end, val_error);
+            defaults[p] = ctx.reader.readValue(ctx.ptr, ctx.end, val_error, ctx.pgm);
             if (!val_error.empty() && default_error.empty()) {
                 // a closure without the default would run with another value
                 default_error = "closure parameter '" + param_names[p] + "' default: " + val_error;
@@ -4087,7 +4087,7 @@ static QoreValue read_expr_const_value(AOTExprReadCtx& ctx) {
     QoreValue rv;
     {
         QoreProgramContextHelper value_pch(ctx.pgm);
-        rv = ctx.reader.readValue(ctx.ptr, ctx.end, value_error);
+        rv = ctx.reader.readValue(ctx.ptr, ctx.end, value_error, ctx.pgm);
     }
     if (!value_error.empty()) {
         ctx.error = value_error;

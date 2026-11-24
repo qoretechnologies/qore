@@ -1173,9 +1173,9 @@ int64_t qore_rt_guard_type(uint64_t val, const QoreTypeInfo* type_info);
 uint64_t qore_rt_make_date(int64_t date_microseconds, int64_t is_relative);
 
 //! Create a DateTimeNode from complete date constant metadata; returns NaN-boxed
-uint64_t qore_rt_make_date_ex(int64_t date_microseconds, int64_t is_relative, const char* zone_name,
+uint64_t qore_rt_make_date_checked(int64_t date_microseconds, int64_t is_relative, const char* zone_name,
         int64_t rel_years, int64_t rel_months, int64_t rel_days, int64_t rel_hours,
-        int64_t rel_minutes, int64_t rel_seconds, int64_t rel_us);
+        int64_t rel_minutes, int64_t rel_seconds, int64_t rel_us, QoreAOTContext* ctx, ExceptionSink* xsink);
 
 // --- Enum construction helper ---
 

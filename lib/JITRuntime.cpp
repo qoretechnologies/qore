@@ -349,7 +349,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_context_destroy", reinterpret_cast<void*>(&qore_rt_context_destroy) },
     { "qore_rt_guard_type", reinterpret_cast<void*>(&qore_rt_guard_type) },
     { "qore_rt_make_date", reinterpret_cast<void*>(&qore_rt_make_date) },
-    { "qore_rt_make_date_ex", reinterpret_cast<void*>(&qore_rt_make_date_ex) },
+    { "qore_rt_make_date_checked", reinterpret_cast<void*>(&qore_rt_make_date_checked) },
     { "qore_rt_make_enum", reinterpret_cast<void*>(&qore_rt_make_enum) },
     { "qore_rt_hash_key_access", reinterpret_cast<void*>(&qore_rt_hash_key_access) },
     { "qore_rt_hash_key_access_for_call", reinterpret_cast<void*>(&qore_rt_hash_key_access_for_call) },
@@ -8046,25 +8046,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_date(int64_t date_microseconds, int64
     return toBits(QoreValue(dt));
 }
 
-static const AbstractQoreZoneInfo* qore_rt_resolve_date_zone(const char* zone_name) {
-    if (!zone_name || !*zone_name || !strcmp(zone_name, "UTC")) {
-        return nullptr;
-    }
-
-    ExceptionSink xsink;
-    const AbstractQoreZoneInfo* zone = (*zone_name == '+' || *zone_name == '-')
-        ? QTZM.findCreateOffsetZone(zone_name, &xsink)
-        : QTZM.findLoadRegion(zone_name, &xsink);
-    if (xsink) {
-        xsink.clear();
-        return nullptr;
-    }
-    return zone;
-}
-
-extern "C" DLLEXPORT uint64_t qore_rt_make_date_ex(int64_t date_microseconds, int64_t is_relative,
+extern "C" DLLEXPORT uint64_t qore_rt_make_date_checked(int64_t date_microseconds, int64_t is_relative,
         const char* zone_name, int64_t rel_years, int64_t rel_months, int64_t rel_days, int64_t rel_hours,
-        int64_t rel_minutes, int64_t rel_seconds, int64_t rel_us) {
+        int64_t rel_minutes, int64_t rel_seconds, int64_t rel_us, QoreAOTContext* ctx, ExceptionSink* xsink) {
     DateTimeNode* dt;
     if (is_relative) {
         dt = DateTimeNode::makeRelativeUnnormalized(
@@ -8082,7 +8066,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_date_ex(int64_t date_microseconds, in
             --epoch_seconds;
             us += 1000000;
         }
-        dt = DateTimeNode::makeAbsolute(qore_rt_resolve_date_zone(zone_name), epoch_seconds, us);
+        const AbstractQoreZoneInfo* zone = qore_aot_date_zone(zone_name, ctx ? ctx->pgm : getProgram(), xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+        dt = DateTimeNode::makeAbsolute(zone, epoch_seconds, us);
     }
     return toBits(QoreValue(dt));
 }

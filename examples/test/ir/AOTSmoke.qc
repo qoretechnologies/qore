@@ -389,6 +389,7 @@ class AOTSmokeBase inherits QUnit::Test {
         addPartCase(3, "AOT closure strip source date literal",
             \testClosureStripSourceDateLiteral());
         addPartCase(3, "AOT UTC date literal zone", \testUTCDateLiteralZone());
+        addPartCase(3, "date literals with a zone file path", \testPathDateLiteralZone());
         addPartCase(3, "AOT fixed-offset date literal zone", \testFixedOffsetDateLiteralZone());
         addPartCase(3, "AOT strip source class cast lvalue",
             \testStripSourceClassCastLValue());
@@ -11389,6 +11390,23 @@ exit(0);
             "UTC date literal strip-source output matches interpreter");
         assertEq("20150830T123600Z\n", result.run_out,
             "UTC date literal preserves the explicit UTC zone");
+    }
+
+    testPathDateLiteralZone() {
+        string path = realpath(get_script_dir() + "/../qore/vars/fixtures/tzif/rfc9636/b4-jerusalem.tzif");
+        string code = "%modern\n%set-time-zone " + path + "
+const Winter = 2038-01-15T12:00:00;
+date sub summer(date d = 2038-07-15T12:00:00) { return d; }
+date sub winter() { return 2038-01-15T12:00:00; }
+printf(\"%s %s %s\\n\", Winter.format(\"IF\"), summer().format(\"IF\"), winter().format(\"IF\"));
+";
+        string expected = "2038-01-15T12:00:00+02:00 2038-07-15T12:00:00+03:00 2038-01-15T12:00:00+02:00\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, runExecMode(code, mode), mode);
+        }
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled, result.compile_out);
+        assertEq(expected, result.run_out);
     }
 
     testFixedOffsetDateLiteralZone() {

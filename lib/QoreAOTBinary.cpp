@@ -1523,7 +1523,7 @@ static void qore_aot_bind_default_static_method_call_variant(StaticMethodCallNod
 // Returns true on success, false on malformed data.
 template <class Pending>
 static bool readDeferredMemberDefault(
-        const QoreAOTBinaryReader& reader,
+        const QoreAOTBinaryReader& reader, QoreProgram* pgm,
         const uint8_t*& ptr, const uint8_t* end,
         std::string& error,
         QoreValue& default_val,
@@ -1609,7 +1609,7 @@ static bool readDeferredMemberDefault(
         std::vector<QoreValue> args;
         args.reserve(std::min<size_t>(nargs, end - ptr));
         for (uint32_t i = 0; i < nargs; ++i) {
-            QoreValue arg = reader.readValue(ptr, end, error);
+            QoreValue arg = reader.readValue(ptr, end, error, pgm);
             if (!error.empty()) {
                 for (auto& v : args) {
                     v.discard(nullptr);
@@ -1688,7 +1688,7 @@ static bool readDeferredMemberDefault(
     }
     if (tag_byte != static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_OBJECT)) {
         // Normal case: use the standard reader
-        default_val = reader.readValue(ptr, end, error);
+        default_val = reader.readValue(ptr, end, error, pgm);
         return error.empty();
     }
     // VT_NEW_OBJECT: try resolving the class now, deferring to a pending
@@ -1717,7 +1717,7 @@ static bool readDeferredMemberDefault(
     std::vector<QoreValue> args;
     args.reserve(std::min<size_t>(nargs, end - ptr));
     for (uint32_t i = 0; i < nargs; ++i) {
-        QoreValue arg = reader.readValue(ptr, end, error);
+        QoreValue arg = reader.readValue(ptr, end, error, pgm);
         if (!error.empty()) {
             for (auto& v : args) v.discard(nullptr);
             return false;
@@ -1778,7 +1778,7 @@ static bool resolveDeferredConstRefDefault(std::string& path, QoreValue& default
 }
 
 template <class Pending>
-static bool materializeDeferredMemberDefault(const QoreAOTBinaryReader& reader,
+static bool materializeDeferredMemberDefault(const QoreAOTBinaryReader& reader, QoreProgram* pgm,
         Pending& pm, QoreValue& default_val, std::string& error,
         const char* kind, const char* owner_name, const char* member_name) {
     if (pm.value_blob.empty()) {
@@ -1797,7 +1797,7 @@ static bool materializeDeferredMemberDefault(const QoreAOTBinaryReader& reader,
         ~ConstRefDeferGuard() { r.defer_unresolved_const_refs = prev; }
     } defer_guard(reader, true);
 
-    if (!readDeferredMemberDefault(reader, vptr, vend, value_error,
+    if (!readDeferredMemberDefault(reader, pgm, vptr, vend, value_error,
             default_val, pm)) {
         error = "AOT cannot deserialize default for ";
         error += kind ? kind : "member";
@@ -2959,6 +2959,19 @@ QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* pat
         }
     }
     return rv;
+}
+
+const AbstractQoreZoneInfo* qore_aot_date_zone(const char* name, QoreProgram* pgm, ExceptionSink* xsink) {
+    if (!*name || !strcmp(name, "UTC")) {
+        return nullptr;
+    }
+    if (*name == '+' || *name == '-') {
+        return QTZM.findCreateOffsetZone(name, xsink);
+    }
+    if (pgm && QoreTimeZoneManager::isPathName(name) && !QTZM.findLocalZone(name)) {
+        return qore_program_private::get(*pgm)->findTimeZoneDirectiveZone(name, xsink);
+    }
+    return QTZM.findLoadRegion(name, xsink);
 }
 
 static std::string qoreAOTExceptionText(ExceptionSink& xsink) {
@@ -5379,10 +5392,10 @@ QoreAOTValueLocalsHelper::~QoreAOTValueLocalsHelper() {
 }
 
 QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end,
-        std::string& error) const {
+        std::string& error, QoreProgram* loading_pgm) const {
     LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     const uint8_t* start = ptr;
-    QoreValue rv = readValueIntern(ptr, end, error);
+    QoreValue rv = readValueIntern(ptr, end, error, loading_pgm);
     if (error.empty()) {
         return rv;
     }
@@ -5403,7 +5416,7 @@ bool QoreAOTBinaryReader::skipValue(const uint8_t*& ptr, const uint8_t* end, std
 }
 
 QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_t* end,
-        std::string& error) const {
+        std::string& error, QoreProgram* loading_pgm) const {
     if (ptr >= end) {
         error = "unexpected end of data reading value tag";
         return QoreValue();
@@ -5539,30 +5552,23 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
         }
 
         case QoreAOTValueTag::VT_ABS_DATE_REGION: {
-            if (ptr + 12 > end) {
+            if (end - ptr < 16) {
                 error = "unexpected end of data reading abs_date_region value";
                 return QoreValue();
             }
             int64_t epoch_us = readI64(ptr);
-            (void)readU32(ptr);  // the length of the string, which is found by its offset in the string pool
-            if (ptr + 4 > end) {
-                error = "unexpected end of data reading region name offset";
+            uint32_t len = readU32(ptr);
+            uint32_t offset = readU32(ptr);
+            const char* name = getString(offset, len);
+            if (!name || len >= getStringPoolSize() - offset || name[len] || memchr(name, 0, len)) {
+                error = "invalid region name in absolute date";
                 return QoreValue();
             }
-            // Read string pool offset (writeStringRef writes a pool offset)
-            uint32_t str_offset = readU32(ptr);
-            const char* region_name = getString(str_offset);
-            if (!region_name) {
-                error = "invalid string offset for region name";
-                return QoreValue();
-            }
-            // Look up region zone
             ExceptionSink xsink;
-            const AbstractQoreZoneInfo* zone = QTZM.findLoadRegion(region_name, &xsink);
-            if (!zone || xsink) {
-                // Fallback to UTC if region not found
-                xsink.clear();
-                zone = nullptr;
+            const AbstractQoreZoneInfo* zone = qore_aot_date_zone(name, loading_pgm, &xsink);
+            if (xsink) {
+                error = qoreAOTExceptionText(xsink);
+                return QoreValue();
             }
             // Convert epoch_us to seconds + microseconds
             int64_t epoch_s = epoch_us / 1000000;
@@ -5691,7 +5697,7 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
                     error = "AOT container value decoding cancelled";
                     return QoreValue();
                 }
-                QoreValue elem = readValueIntern(ptr, end, error);
+                QoreValue elem = readValueIntern(ptr, end, error, loading_pgm);
                 if (!error.empty()) {
                     elem.discard(nullptr);
                     return QoreValue();
@@ -5738,7 +5744,7 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
                     error = "invalid string offset for hash key";
                     return QoreValue();
                 }
-                QoreValue val = readValueIntern(ptr, end, error);
+                QoreValue val = readValueIntern(ptr, end, error, loading_pgm);
                 if (!error.empty()) {
                     val.discard(nullptr);
                     return QoreValue();
@@ -5823,7 +5829,7 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
             if (nargs > 0) {
                 parse_args = new QoreParseListNode(&loc_builtin);
                 for (uint32_t i = 0; i < nargs; ++i) {
-                    QoreValue arg = readValueIntern(ptr, end, error);
+                    QoreValue arg = readValueIntern(ptr, end, error, loading_pgm);
                     if (!error.empty()) {
                         delete parse_args;
                         return QoreValue();
@@ -5907,7 +5913,7 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
             // each argument has one byte at least: a malformed count allocates no more than the data has
             args.reserve(std::min<size_t>(nargs, end - ptr));
             for (uint32_t i = 0; i < nargs; ++i) {
-                QoreValue arg = readValueIntern(ptr, end, error);
+                QoreValue arg = readValueIntern(ptr, end, error, loading_pgm);
                 if (!error.empty()) {
                     for (auto& v : args) v.discard(nullptr);
                     return QoreValue();
@@ -18607,7 +18613,7 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
 
         qore_class_private* priv = qore_class_private::get(*qc);
         for (auto& pim : pending_instance_members[i]) {
-            if (!materializeDeferredMemberDefault(reader, pim, pim.default_val,
+            if (!materializeDeferredMemberDefault(reader, pgm, pim, pim.default_val,
                     error, "class", qc->getName(), pim.name.c_str())) {
                 return false;
             }
@@ -18817,7 +18823,7 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
 
         qore_class_private* priv = qore_class_private::get(*qc);
         for (auto& psm : pending_static_members[i]) {
-            if (!materializeDeferredMemberDefault(reader, psm, psm.default_val,
+            if (!materializeDeferredMemberDefault(reader, pgm, psm, psm.default_val,
                     error, "class static member", qc->getName(),
                     psm.name.c_str())) {
                 return false;
@@ -19077,7 +19083,7 @@ void QoreAOTBinaryDeserializer::attachAOTParseShellConstantValue(
         }
         ~ConstRefDeferGuard() { r.defer_unresolved_const_refs = prev; }
     } defer_guard(reader, true);
-    QoreValue parse_value = reader.readValue(vptr, vend, value_error);
+    QoreValue parse_value = reader.readValue(vptr, vend, value_error, pgm);
     blob.clear();
     if (!value_error.empty() || vptr != vend) {
         parse_value.discard(nullptr);
@@ -19205,7 +19211,7 @@ bool QoreAOTBinaryDeserializer::resolveClassConstantValues(std::string& error) {
                 }
                 ~ConstRefDeferGuard() { r.defer_unresolved_const_refs = prev; }
             } defer_guard(reader, true);
-            QoreValue resolved = reader.readValue(vptr, vend, value_error);
+            QoreValue resolved = reader.readValue(vptr, vend, value_error, pgm);
             if (!value_error.empty()) {
                 resolved.discard(nullptr);
                 error = "AOT cannot deserialize value for class constant '";
@@ -19314,7 +19320,7 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                 error = "AOT hashdecl member resolution cancelled";
                 return false;
             }
-            if (!materializeDeferredMemberDefault(reader, phm, phm.default_val,
+            if (!materializeDeferredMemberDefault(reader, pgm, phm, phm.default_val,
                     error, "hashdecl", hd->getName(), phm.name.c_str())) {
                 return false;
             }
@@ -19869,7 +19875,7 @@ bool QoreAOTBinaryDeserializer::deserializeEnums(std::string& error) {
         for (uint32_t j = 0; j < num_members; ++j) {
             EnumMemberInfo emi;
             emi.name = makeDeferredStringRef(reader.readStringRef(ptr));
-            emi.val = reader.readValue(ptr, end, error);
+            emi.val = reader.readValue(ptr, end, error, pgm);
             if (!error.empty()) {
                 error = "enum '" + std::string(name ? name : "(null)") + "' member '"
                     + emi.name.c_str() + "': " + error;
@@ -20218,7 +20224,7 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
             }
             ~ConstRefDeferGuard() { r.defer_unresolved_const_refs = prev; }
         } defer_guard(reader, true);
-        QoreValue val = reader.readValue(vptr, vend, value_error);
+        QoreValue val = reader.readValue(vptr, vend, value_error, pgm);
         if (!value_error.empty()) {
             val.discard(nullptr);
             error = "namespace constant '" + std::string(pc.name.c_str()) + "': " + value_error;
@@ -20700,7 +20706,7 @@ static bool readAndSetupVariantSignature(
             if (g_aot_pending_native_expr_defaults) {
                 reader.expr_native_capture = &ned_blob;
             }
-            param_defaults[j] = reader.readValue(ptr, end, error);
+            param_defaults[j] = reader.readValue(ptr, end, error, pgm);
             reader.expr_native_capture = nullptr;
             if (!error.empty()) {
                 // Clean up already-read defaults
@@ -20890,7 +20896,7 @@ static bool readAndSetupVariantSignature(
             uint8_t has_inner = QoreAOTBinaryReader::readU8(ptr);
             QoreValue inner;
             if (has_inner) {
-                inner = reader.readValue(ptr, end, error);
+                inner = reader.readValue(ptr, end, error, pgm);
                 if (!error.empty()) {
                     for (uint32_t k = 0; k < j; ++k) {
                         param_defaults[k].discard(nullptr);

@@ -1989,13 +1989,6 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // Date construction helper: (i64, i64) -> i64
     module.getOrInsertFunction("qore_rt_make_date",
             llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
-    // Zone-preserving date construction helper:
-    // (epoch_us, is_relative, zone_name, rel_y, rel_mo, rel_d, rel_h, rel_m, rel_s, rel_us) -> i64
-    module.getOrInsertFunction("qore_rt_make_date_ex",
-            llvm::FunctionType::get(i64_type,
-                {i64_type, i64_type, ptr_type, i64_type, i64_type, i64_type, i64_type, i64_type, i64_type, i64_type},
-                false));
-
     // Specialized access helpers (Phase 5b)
     // hash_key_access: (i64, ptr, ptr) -> i64
     module.getOrInsertFunction("qore_rt_hash_key_access",
@@ -31509,10 +31502,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ? getLLVMDateZoneName(cinst->constant.date_zone)
                 : "";
             llvm::Value* zone_ptr = qore_ir_create_global_string_ptr(builder, zone_name);
-            auto helper = module.getOrInsertFunction("qore_rt_make_date_ex",
+            auto helper = module.getOrInsertFunction("qore_rt_make_date_checked",
                     llvm::FunctionType::get(i64_type,
                         {i64_type, i64_type, ptr_type, i64_type, i64_type, i64_type, i64_type, i64_type, i64_type,
-                            i64_type},
+                            i64_type, ptr_type, ptr_type},
                         false));
             llvm::Value* result = builder->CreateCall(helper, {
                 us_val,
@@ -31525,10 +31518,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::ConstantInt::get(i64_type, cinst->constant.rel_minutes),
                 llvm::ConstantInt::get(i64_type, cinst->constant.rel_seconds),
                 llvm::ConstantInt::get(i64_type, cinst->constant.rel_us),
+                aot_ctx_arg ? aot_ctx_arg : llvm::Constant::getNullValue(ptr_type),
+                xsink_arg,
             });
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
 

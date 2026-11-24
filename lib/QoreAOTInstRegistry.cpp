@@ -649,22 +649,6 @@ static std::string getAOTDateZoneName(const AbstractQoreZoneInfo* zone) {
     return utc_offset ? formatAOTDateOffset(utc_offset) : "UTC";
 }
 
-static const AbstractQoreZoneInfo* readAOTDateZone(const char* zone_name) {
-    if (!zone_name || !*zone_name || !strcmp(zone_name, "UTC")) {
-        return nullptr;
-    }
-
-    ExceptionSink xsink;
-    const AbstractQoreZoneInfo* zone = (*zone_name == '+' || *zone_name == '-')
-        ? QTZM.findCreateOffsetZone(zone_name, &xsink)
-        : QTZM.findLoadRegion(zone_name, &xsink);
-    if (xsink) {
-        xsink.clear();
-        return nullptr;
-    }
-    return zone;
-}
-
 //! Returns the explicit type arguments of the call node of a call instruction read from serialized IR (qore#5865)
 static const QoreTypeParamInstantiation* instRegistryCallTypeArgs(const QoreValue& expr) {
     const auto* call = expr.hasNode() ? dynamic_cast<const FunctionCallBase*>(expr.getInternalNode()) : nullptr;
@@ -1050,8 +1034,19 @@ static std::unique_ptr<QoreIRInstruction> readConst(
                 ci->constant.rel_us = static_cast<int>(QoreAOTBinaryReader::readU32(ctx.ptr));
             } else {
                 const char* zone_name = ctx.reader.readStringRef(ctx.ptr);
-                if (zone_name && *zone_name) {
-                    ci->constant.date_zone = readAOTDateZone(zone_name);
+                if (!zone_name) {
+                    ctx.error = "invalid zone name in IR date literal";
+                    return nullptr;
+                }
+                if (*zone_name) {
+                    ExceptionSink xsink;
+                    ci->constant.date_zone = qore_aot_date_zone(zone_name, ctx.pgm, &xsink);
+                    if (xsink) {
+                        QoreStringValueHelper desc(xsink.getExceptionDesc());
+                        ctx.error = desc->c_str();
+                        xsink.clear();
+                        return nullptr;
+                    }
                     ci->constant.date_zone_set = true;
                 }
             }
