@@ -868,6 +868,14 @@ authenticate();
     only the code that runs inside the grant counts.  Credentials that the caller gives explicitly are the caller's
     own and are not affected.
 
+    The host's own code (a function, method or call reference of a %Program that is not a module's) that restricted
+    code calls answers for itself, as a policy barrier does: it is the nearest calling code that is not a module's,
+    so the restrictions of its caller do not count for the library code that it calls, and it resolves the host's
+    ambient data for itself.  A host must therefore not expose to restricted code functions, methods or objects of its
+    own that resolve the host's credentials unless it means to grant them.  Sandboxed callers are refused regardless
+    (the sandboxed code on the way counts), and a closure or call reference that the restricted code created remains
+    its code, also when the host's code calls it.
+
     The ambient credentials of the host are the host's secrets: the paths that resolve them ask
     @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "callerMayReceiveHostSecrets()", so neither code
     restricted from external information nor sandboxed code gets them (whatever its sandbox allows), unless the host
@@ -892,6 +900,10 @@ authenticate();
       restricted from the file system, as @ref Qore::SandboxManager::isLentToRestricted() "isLentToRestricted()"
       resolves it, and a sandbox's file system policy allows it): the other backends (KCM, KEYRING, API, MSLSA) hold
       the host's credentials
+    - \c SqlUtil restores no datasource with the credentials that the host's credential resolver
+      (@ref SqlUtil::sqlutil_register_ds_credential_resolver() "sqlutil_register_ds_credential_resolver()") gives
+      (\c PERMISSION-DENIED), and @ref DataProvider::DataProvider::getAutoConfig() "DataProvider::getAutoConfig()"
+      is @ref False, so data providers take no options (passwords and client secrets) from the environment
     - the proxy of the environment is given without its user name and password
       (@ref HttpClientIo::get_proxy_url_from_environment() "get_proxy_url_from_environment()", also for
       @ref UrlDownloader::UrlDownloader "UrlDownloader")
@@ -905,10 +917,6 @@ authenticate();
       its file names whatever code logs through it)
     - the proxy of the environment is not used at all, and neither are the AWS region and the GCP quota project of the
       environment; such code gives them explicitly
-    - the data providers that take missing options from the environment when
-      @ref DataProvider::DataProvider::setAutoConfig() "DataProvider::setAutoConfig()" is in effect (ServiceNow,
-      Salesforce, Dataverse and Business Central) do not:
-      @ref DataProvider::DataProvider::getAutoConfig() "DataProvider::getAutoConfig()" returns @ref False for it
 
     @since %Qore 3.0
 

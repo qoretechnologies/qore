@@ -1203,7 +1203,9 @@ DLLEXPORT bool qore_caller_lent_to_restricts_domain(int64 domain);
     code that the object was lent to counts, while the host's policy barriers (SandboxManager::callWithSystemPolicy())
     and system-policy capabilities (SandboxManager::createSystemPolicyCall()) still lend what they lend.  Library code
     that resolves ambient host data for its caller (environment variables, instance metadata, application default
-    credentials, the process's default credentials) asks it first; fails closed
+    credentials, the process's default credentials) asks it first; fails closed.  The host's own code (not a
+    module's) that restricted code calls answers for itself, as a policy barrier does, so a host must not expose code
+    of its own that resolves host credentials to restricted code unless it means to grant them
 
     @since %Qore 3.0
 */
@@ -1219,7 +1221,9 @@ DLLEXPORT bool qore_caller_may_read_external_info();
     cannot be resolved for lack of memory
 
     Library code that resolves a credential of the host for its caller (an ambient credential: from the environment,
-    an instance metadata service, the process's default Kerberos credential or a host credential store) asks it first
+    an instance metadata service, the process's default Kerberos credential or a host credential store) asks it first.
+    The host's own code (not a module's) that restricted code calls answers for itself, as for
+    qore_caller_may_read_external_info(); sandboxed callers are refused regardless
 
     @since %Qore 3.0
 */

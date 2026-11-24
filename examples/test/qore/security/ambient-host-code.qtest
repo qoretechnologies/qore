@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AwsRestClient
+%requires ./ambient-host/AmbientCallers.qm
+
+%exec-class AmbientHostCodeTest
+
+#! returns the key ID that the AWS credential chain resolves in the host's own code
+*string sub host_resolve() {
+    return AwsRestClientBase::applyEnvCredentials({}).aws_keyid;
+}
+
+#! calls code that the caller gives
+auto sub host_call(code c) {
+    return c();
+}
+
+#! a class of the host
+class HostService {
+    *string resolve() {
+        return AwsRestClientBase::applyEnvCredentials({}).aws_keyid;
+    }
+}
+
+#! Host code that code restricted from external information calls answers for itself, as a host grant does; sandboxed
+#! callers are refused whatever host code they call (qore#6844)
+/** A function, method or call reference of the host's own code (not a module's) is the nearest calling code that is
+    not a module's, so the restrictions of its caller do not count for it; the sandbox of a sandboxed caller does.  A
+    closure or call reference that the caller created is the caller's code, also when the host's code calls it
+*/
+class AmbientHostCodeTest inherits QUnit::Test {
+    public {
+        #! the code of the Programs: each function reports what it gets
+        const Source = "%modern
+%requires AwsRestClient
+*string sub via_ref(code host_ref) {
+    return host_ref();
+}
+*string sub via_method(object svc) {
+    return svc.resolve();
+}
+# a closure of the caller that the host's code calls: the caller's code
+*string sub own_closure(code host_call) {
+    return host_call(*string sub () { return AwsRestClient::AwsRestClientBase::applyEnvCredentials({}).aws_keyid; });
+}
+# a closure of the caller, returned for the host's code to call later
+code sub make_closure() {
+    return *string sub () { return AwsRestClient::AwsRestClientBase::applyEnvCredentials({}).aws_keyid; };
+}
+";
+    }
+
+    private {
+        hash<string, Program> pgms;
+    }
+
+    constructor() : Test("AmbientHostCode", "1.0", \ARGV) {
+        addTestCase("host code called by the caller", \hostCodeTest());
+        addTestCase("caller code called by the host", \callerCodeTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        pgms = AmbientCallers::make_programs(Source, "host-code");
+    }
+
+    #! code restricted from external information gets what the host's code resolves for itself (the host's grant);
+    #! sandboxed code does not
+    hostCodeTest() {
+        AmbientCallers::EnvHelper env({"AWS_ACCESS_KEY_ID": "HOSTKEYID", "AWS_SECRET_ACCESS_KEY": "host-secret"});
+        HostService svc();
+        foreach string kind in (keys pgms) {
+            bool sandboxed = AmbientCallers::KindInfo{AmbientCallers::kind(kind)}.sandboxed;
+            *string expected = sandboxed ? NOTHING : "HOSTKEYID";
+            assertEq(expected, pgms{kind}.callFunction("via_ref", \host_resolve()), kind + ": function");
+            assertEq(expected, pgms{kind}.callFunction("via_method", svc), kind + ": method");
+        }
+    }
+
+    #! a closure that the caller created is the caller's code, also when the host's code calls it
+    callerCodeTest() {
+        AmbientCallers::EnvHelper env({"AWS_ACCESS_KEY_ID": "HOSTKEYID", "AWS_SECRET_ACCESS_KEY": "host-secret"});
+        foreach string kind in (keys pgms) {
+            *string expected = AmbientCallers::may_receive(kind) ? "HOSTKEYID" : NOTHING;
+            assertEq(expected, pgms{kind}.callFunction("own_closure", \host_call()), kind + ": passed to the host");
+            code c = pgms{kind}.callFunction("make_closure");
+            assertEq(expected, host_call(c), kind + ": called by the host later");
+        }
+    }
+}
