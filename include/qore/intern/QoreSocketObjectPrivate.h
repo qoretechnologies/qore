@@ -270,6 +270,9 @@ public:
     //! Internal async-poll helper: True if the peer ended an HTTP/2 stream with END_STREAM
     DLLLOCAL bool isHttp2StreamEndStreamReceivedForAsyncPoll(int32_t stream_id) const;
 
+    //! True if this endpoint has not ended its side of an HTTP/2 stream (see Http2Session::isStreamLocalOpen())
+    DLLLOCAL bool isHttp2StreamLocalOpen(int32_t stream_id) const;
+
     //! Returns true if the HTTP/2 stream is known and was reset (issue #5859)
     DLLLOCAL bool isHttp2StreamResetForAsyncPoll(int32_t stream_id) const;
 
@@ -326,6 +329,9 @@ public:
         holds the lock of the socket.
     */
     DLLLOCAL void releaseQuicStream(int64_t session_id, int64_t stream_id);
+
+    //! True if the QUIC session still has the bidirectional stream open (see QuicSession::isBidiStreamOpen())
+    DLLLOCAL bool isQuicBidiStreamOpen(int64_t session_id, int64_t stream_id) const;
 
     //! Watches the response on an HTTP/2 server stream so that the result of its transmission is reported
     /** Must be called before the response is submitted; see Http2Session::watchResponseSend().  The result is

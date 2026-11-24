@@ -228,6 +228,8 @@ public class Http3ClientConnection inherits HttpClientConnection {
 
     #! Closes the connection (protocol-specific)
     closeImpl(*timeout close_timeout) {
+        # a close whose caller gave no reason (qore#7443)
+        setCloseReason("closed");
         self.setClosed();
         *AsyncSocketIoController ctl;
         {
@@ -321,6 +323,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         }
         Socket sock = poll_op.getSocket();
         if (sock.isQuicSessionClosed()) {
+            setCloseReason("its QUIC session is closed");
             self.setClosed();
             throw "HTTP3-CONNECTION-CLOSED",
                 "QUIC session closed; connection evicted from pool";
@@ -370,6 +373,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         Socket sock = poll_op.getSocket();
         # Check if the underlying QUIC session is dead before sending
         if (sock.isQuicSessionClosed()) {
+            setCloseReason("its QUIC session is closed");
             self.setClosed();
             throw "HTTP3-CONNECTION-CLOSED",
                 "QUIC session closed; connection evicted from pool";

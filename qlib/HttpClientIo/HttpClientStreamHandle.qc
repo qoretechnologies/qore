@@ -1307,15 +1307,25 @@ public class HttpClientStreamHandle {
         bool left_to_submitter;
         {
             AutoLock al(lock);
-            if (state == HttpClientStreamState::Complete
-                    || state == HttpClientStreamState::Cancelled
-                    || state == HttpClientStreamState::Error) {
+            if (state == HttpClientStreamState::Cancelled || state == HttpClientStreamState::Error) {
                 return;
             }
-            # a stream whose request is being submitted, and has no stream ID yet, is left to the submitting thread
-            left_to_submitter = submitting && !exists stream_id;
-            state = HttpClientStreamState::Cancelled;
-            sid = stream_id;
+            if (state == HttpClientStreamState::Complete) {
+                # a complete response whose request write side is still open (an extended CONNECT tunnel or a
+                # streamed request that the server answered whole) leaves the stream half-open: it is reset, as it
+                # would otherwise take one of the server's concurrent streams for the life of the connection
+                # (qore#7443); the response stays readable
+                if (!exists stream_id || !isRequestSideOpenLocked()) {
+                    return;
+                }
+                sid = stream_id;
+            } else {
+                # a stream whose request is being submitted, and has no stream ID yet, is left to the submitting
+                # thread
+                left_to_submitter = submitting && !exists stream_id;
+                state = HttpClientStreamState::Cancelled;
+                sid = stream_id;
+            }
         }
 
         if (left_to_submitter) {
@@ -1618,6 +1628,13 @@ data text = HttpClientStreamHandle::decodeResponseText(resp).body;
     auto readData(*timeout timeout_ms) {
         throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
             "streaming is not supported by " + conn.getProtocol();
+    }
+
+    #! True while the request write side of a streamed request is open (see cancel()); False by default
+    /** @note the caller must hold @ref lock
+    */
+    private bool isRequestSideOpenLocked() {
+        return False;
     }
 
     #! Sends data on a streaming connection

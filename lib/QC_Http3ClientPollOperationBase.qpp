@@ -1291,7 +1291,12 @@ bool Http3ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink
         if (old_completed_action) {
             old_completed_action->deref(xsink);
         }
-        return false;  // already completed
+        // the response completed, but the stream may still be open: the request of an extended CONNECT tunnel, or a
+        // streamed request whose response ended before its body did; the stream is then reset by the caller, as
+        // otherwise it stays open and takes one of the peer's streams for the life of the connection, until no new
+        // stream can be opened on it (qore#7443)
+        int64_t sid = session_id.load(std::memory_order_acquire);
+        return sock_obj && sid && qore_socket_object_private(sock_obj).isQuicBidiStreamOpen(sid, stream_id);
     }
 
     // Notify the action of cancellation, then release
@@ -2468,7 +2473,10 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) [flags=N
 
 //! Cancel a stream
 /** @param stream_id the stream to cancel
-    @return True if the stream was found and cancelled
+    @return True if the stream was found and cancelled, or if its response had completed while the stream is still
+    open (an extended CONNECT tunnel, or a streamed request answered before its body ended): the caller resets the
+    stream then (see @ref Qore::Socket::cancelQuicStream()), so that it does not take one of the peer's streams for the
+    life of the connection
 */
 bool Http3ClientPollOperationBase::cancelStream(int stream_id) [flags=NAMED_ARGS] {
     return priv->cancelStream(stream_id, xsink);

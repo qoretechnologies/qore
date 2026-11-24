@@ -422,6 +422,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     }
 
     private:internal {
+        #! The connections closed most recently, with why: see recordClose() and getStats() (qore#7443)
+        list<hash<auto>> recent_closes = ();
+
+        #! Protects @ref recent_closes
+        Mutex recent_closes_lock();
+
         #! The code called once when the first request is submitted on a connection (see setFirstConnectionCallback())
         *code<nothing()> first_connection_callback;
 
@@ -796,8 +802,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 conn.getProtocol(), conn.getConnectionId());
             *string key = conn.getPoolKey();
             if (key) {
+                recordClose(conn, "the leased connection was discarded");
                 evictConnections(key, (conn,));
             } else {
+                recordClose(conn, "the leased connection was discarded");
                 try { conn.close(); } catch (hash<ExceptionInfo> ex) {}
             }
         } else {
@@ -2002,6 +2010,8 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
           - \c active_streams (int): total active streams on those connections
           - \c draining (int): number of connections in GOAWAY/draining state
         - \c protocol (string): configured protocol selection ("auto", "h1", "h2", or "h3")
+        - \c recent_closes (list<hash<auto>>): the connections closed most recently, with why (see
+          @ref getRecentCloses(); qore#7443)
     */
     hash<auto> getStats() {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
@@ -2048,7 +2058,21 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
             "hosts": per_host.size(),
             "per_host": per_host,
             "protocol": opts.protocol,
+            # the connections closed most recently, with why and the streams active on them (qore#7443)
+            "recent_closes": getRecentCloses(),
         };
+    }
+
+    #! Returns the connections closed most recently, oldest first, with why (qore#7443)
+    /** @return a list of hashes with the keys \c connection_id, \c protocol, \c reason (why it was closed, see
+        @ref HttpClientConnection::setCloseReason()), \c active_streams (the streams active on it when it was closed)
+        and \c closed (when); at most the last 16 connections are kept
+
+        @since HttpClientIo 1.0
+    */
+    list<hash<auto>> getRecentCloses() {
+        AutoLock al(recent_closes_lock);
+        return recent_closes;
     }
 
     #! Returns per-connection info for currently-pooled connections, including the negotiated protocol
@@ -2218,6 +2242,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         }
         foreach string key in (keys pool_copy) {
             foreach HttpClientConnection conn in (pool_copy{key}) {
+                recordClose(conn, "the connections of the manager were closed");
                 try {
                     conn.close();
                 } catch (hash<ExceptionInfo> ex) {
@@ -2305,6 +2330,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                     if (!conn.isLeased() && conn.getOutstandingStreamCount() == 0
                             && (now_mono_us - conn.getLastActivityMonotonicUs()) > idle_limit_us) {
                         log(LoggerLevel::DEBUG, "closing idle connection to %s", key);
+                        recordClose(conn, "it was idle for longer than the idle timeout");
                         push to_close, conn;
                         continue;
                     }
@@ -2887,6 +2913,7 @@ printf("%d connection(s) migrated\n", migrated);
                 }
             }
             foreach HttpClientConnection conn in (checkout_evictions) {
+                recordClose(conn, "it was evicted at checkout (closed, failed, idle or too old)");
                 try {
                     conn.close();
                 } catch () {
@@ -2944,11 +2971,13 @@ printf("%d connection(s) migrated\n", migrated);
                     # Connection closed during probe (server rejected h2c)
                 }
                 if (!h2c_ok && deadline_bound && !conn.isClosed()) {
+                    recordClose(conn, "the HTTP/2 (h2c) probe of the server did not end in time");
                     try { conn.close(); } catch () {}
                     throwAcquireTimeout(key, "the HTTP/2 probe of the server did not end");
                 }
                 if (!h2c_ok) {
                     log(LoggerLevel::DEBUG, "h2c probe failed for %s, falling back to HTTP/1.1", key);
+                    recordClose(conn, "the server refused HTTP/2 (h2c probe)");
                     try { conn.close(); } catch () {}
                     {
                         AutoWriteLock al(pool_lock);
@@ -2963,6 +2992,7 @@ printf("%d connection(s) migrated\n", migrated);
             {
                 AutoWriteLock al(pool_lock);
                 if (shutdown) {
+                    recordClose(conn, "the manager is shutting down");
                     try { conn.close(); } catch () {}
                     throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
                 }
@@ -3245,6 +3275,7 @@ printf("%d connection(s) migrated\n", migrated);
         # candidate during the stagger phase, so there is no loser to close then.
         foreach *HttpClientConnection conn in ((h3conn, h2conn, h1conn)) {
             if (conn && conn !== winner) {
+                recordClose(conn, "it lost the protocol race (happy eyeballs)");
                 try { conn.close(); } catch () {}
             }
         }
@@ -3263,6 +3294,8 @@ printf("%d connection(s) migrated\n", migrated);
             *Http1ClientConnection h1conn) {
         foreach *HttpClientConnection conn in ((h3conn, h2conn, h1conn)) {
             if (conn) {
+                # a static method: the reason is the connection's own, not the manager's history
+                conn.setCloseReason("its protocol race (happy eyeballs) was abandoned");
                 try { conn.close(); } catch () {}
             }
         }
@@ -3342,6 +3375,7 @@ printf("%d connection(s) migrated\n", migrated);
             h1conn.setManagerContext(self, key);
             submitConnectionToController(key, h1conn);
         } catch (hash<ExceptionInfo> ex) {
+            recordClose(h1conn, sprintf("it could not be submitted to the I/O controller: %s: %s", ex.err, ex.desc));
             try { h1conn.close(); } catch () {}
             rethrow;
         }
@@ -4134,6 +4168,7 @@ printf("%d connection(s) migrated\n", migrated);
         {
             AutoWriteLock al(pool_lock);
             if (shutdown) {
+                recordClose(conn, "the manager is shutting down");
                 try { conn.close(); } catch () {}
                 throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
             }
@@ -4717,6 +4752,7 @@ printf("%d connection(s) migrated\n", migrated);
                 AutoWriteLock al(pool_lock);
                 cacheProtocol(key, "h1");
             }
+            recordClose(conn, sprintf("its I/O operation failed: %s: %s", result.ex.err, result.ex.desc));
             try {
                 conn.close();
             } catch (hash<ExceptionInfo> ex) {
@@ -4741,6 +4777,9 @@ printf("%d connection(s) migrated\n", migrated);
                 cacheProtocol(key, "h1");
             }
             log(LoggerLevel::DEBUG, "connection %d closed", conn.getConnectionId());
+            recordClose(conn, op_err
+                ? sprintf("its I/O operation closed: %s: %s", op_err.err, op_err.desc)
+                : "its I/O operation closed");
             # Close the connection to notify pending streams — their
             # Promises are rejected so threads in f.get() wake up
             # instead of waiting until request_timeout
@@ -4755,6 +4794,7 @@ printf("%d connection(s) migrated\n", migrated);
                 log(LoggerLevel::DEBUG,
                     "connection %d drained after GOAWAY; removing from pool",
                     conn.getConnectionId());
+                recordClose(conn, "the server sent GOAWAY, and its streams completed");
                 try { conn.close(); } catch () {}
                 removeConnectionFromPool(key, conn);
                 return;
@@ -4769,6 +4809,7 @@ printf("%d connection(s) migrated\n", migrated);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "connection %d continueReading error: %s: %s",
                 conn.getConnectionId(), ex.err, ex.desc);
+            recordClose(conn, sprintf("its I/O operation could not go on reading: %s: %s", ex.err, ex.desc));
             try { conn.close(); } catch () {}
             removeConnectionFromPool(key, conn);
             return;
@@ -5440,12 +5481,48 @@ printf("%d connection(s) migrated\n", migrated);
             reason);
     }
 
+    #! The number of closed connections kept for getStats() (see recordClose())
+    const RecentCloseMax = 16;
+
+    #! Internal: records why a connection is closed, before it is (qore#7443)
+    /** The connection keeps the first reason recorded (see HttpClientConnection::setCloseReason()); the manager keeps
+        the connections closed most recently, with their reasons and the streams that were active on them, for
+        @ref getStats(), as a closed connection leaves the pool.  Only called where a connection is closed.
+
+        @param conn the connection that is closed
+        @param reason why it is closed
+    */
+    private recordClose(HttpClientConnection conn, string reason) {
+        conn.setCloseReason(reason);
+        hash<auto> entry = {
+            "connection_id": conn.getConnectionId(),
+            "protocol": conn.getProtocol(),
+            "reason": conn.getCloseReason(),
+            "active_streams": conn.getActiveStreamCount(),
+            "closed": now_us(),
+        };
+        log(LoggerLevel::DEBUG, "closing %s connection %d with %d active stream(s): %s", entry.protocol,
+            entry.connection_id, entry.active_streams, entry.reason);
+        AutoLock al(recent_closes_lock);
+        # a connection is recorded once
+        foreach hash<auto> e in (recent_closes) {
+            if (e.connection_id == entry.connection_id) {
+                return;
+            }
+        }
+        push recent_closes, entry;
+        if (recent_closes.size() > RecentCloseMax) {
+            splice recent_closes, 0, 1;
+        }
+    }
+
     #! Internal: closes the stale connection of a request that timed out on it, before the request is sent again
     /** Only called for a reused connection on which the request was submitted, so the connection was ready
 
         @param conn the connection of the request that timed out
     */
-    private static closeTimedOutConnection(HttpClientConnection conn) {
+    private closeTimedOutConnection(HttpClientConnection conn) {
+        recordClose(conn, "a request timed out on the reused connection");
         try {
             conn.close();
         } catch () {
@@ -5503,6 +5580,7 @@ printf("%d connection(s) migrated\n", migrated);
         foreach HttpClientConnection conn in (conns) {
             log(LoggerLevel::DEBUG, "evicting dead %s connection %d",
                 conn.getProtocol(), conn.getConnectionId());
+            recordClose(conn, "it was evicted as dead (closed or failed)");
             try { conn.close(); } catch () {}
         }
     }
@@ -5557,6 +5635,7 @@ printf("%d connection(s) migrated\n", migrated);
         foreach HttpClientConnection conn in (to_close) {
             log(LoggerLevel::DEBUG, "evicting dead %s connection %d",
                 conn.getProtocol(), conn.getConnectionId());
+            recordClose(conn, "it was evicted as dead (closed or failed)");
             try { conn.close(); } catch () {}
         }
     }
