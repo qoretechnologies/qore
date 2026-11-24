@@ -177,7 +177,7 @@ our auto g_m3v = "5";
 # a debug build raises DBG-REFERENCE-BIND-HELD for a bind made with an lvalue write lock held, which a store path that
 # still binds a reference under its lock would make: the output of that store then shows the error (qore#7391); a
 # qcc executable has no debug functions
-if (function_exists("dbg_reference_bind_strict")) {
+if (exists_function("dbg_reference_bind_strict")) {
     call_function("dbg_reference_bind_strict", True);
 }
 
@@ -901,7 +901,7 @@ show("refused store with created containers", auto sub () {
 # bind a reference, which would be bound under that lock
 show("hashdecl initializer binding a reference under the lock of a store", auto sub () {
     M3Holder m();
-    hash<auto> src = {"s": (\m.v,)};
+    auto src = {"s": (\m.v,)};
     try {
         m.h = src;
     } catch (hash<ExceptionInfo> ex) {
@@ -912,7 +912,7 @@ show("hashdecl initializer binding a reference under the lock of a store", auto 
 
 show("hashdecl initializer binding a reference with no lock held", auto sub () {
     M3Holder m();
-    hash<auto> src = {"s": (\m.v,)};
+    auto src = {"s": (\m.v,)};
     *hash<M3> h = src;
     return (h.a, g_m3, g_m3v.type(), m.v.type(), m.v);
 });
