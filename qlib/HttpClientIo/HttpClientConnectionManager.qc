@@ -2498,7 +2498,8 @@ printf("%d connection(s) migrated\n", migrated);
         if (bound_proof) {
             return bound_proof;
         }
-        return lent_proof && SandboxManager::isCallerRestricted(DOM_NETWORK) ? lent_proof : NOTHING;
+        # a lent object's method lends nothing here: the code that the client was lent to is bound (qore#7052)
+        return lent_proof && SandboxManager::isLentToRestricted(DOM_NETWORK) ? lent_proof : NOTHING;
     }
 
     #! Refuses a request target that a manager bound to its client's target does not allow (qore#7262)
