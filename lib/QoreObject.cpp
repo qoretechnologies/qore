@@ -226,10 +226,10 @@ void qore_object_private::setCreatorOwnership() {
 
 // returns -1 and raises an exception if the current code is sandboxed code that cannot delete the object: its sandbox
 // does not own it (qore#6842)
-static QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_check_sandboxed_delete(const QoreObject& obj,
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_check_sandboxed_delete(const QoreObject& obj, const char* action,
         ExceptionSink* xsink) {
-    // the code that runs the delete operator: trusted code, also library code that serves sandboxed code, deletes
-    // objects through its own logic
+    // the code that runs the delete operator or the function that deletes the object: trusted code, also library code
+    // that serves sandboxed code, deletes objects through its own logic
     const QoreProgram* pgm = getProgram();
     const qore_class_private* class_ctx = runtime_get_class();
     if (!(pgm && qore_program_is_sandboxed(pgm)) && !(class_ctx && class_ctx->isSandboxedCode())) {
@@ -239,13 +239,17 @@ static QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_check_sandboxed_delete(con
     if (qore_sandbox_current_code_created(owner, owner)) {
         return 0;
     }
-    xsink->raiseException("SANDBOX-OBJECT-ACCESS-ERROR", "sandboxed code cannot delete an object of class '%s' that "
-        "its sandbox did not create", obj.getClassName());
+    xsink->raiseException("SANDBOX-OBJECT-ACCESS-ERROR", "sandboxed code cannot %s an object of class '%s' that its "
+        "sandbox did not create", action, obj.getClassName());
     return -1;
 }
 
+int qore_check_object_delete(const QoreObject& obj, const char* action, ExceptionSink* xsink) {
+    return qore_sandboxed_code_active() ? qore_check_sandboxed_delete(obj, action, xsink) : 0;
+}
+
 void qore_operator_delete_object(QoreObject* o, ExceptionSink* xsink) {
-    if (qore_sandboxed_code_active() && qore_check_sandboxed_delete(*o, xsink)) {
+    if (qore_sandboxed_code_active() && qore_check_sandboxed_delete(*o, "delete", xsink)) {
         return;
     }
     o->doDelete(xsink);
@@ -3083,8 +3087,9 @@ void QoreObject::deleteMemberValue(const char* key, ExceptionSink* xsink) {
         }
     }
 
+    // an object is deleted only if the current code may delete it, otherwise it is released (qore#6842)
     if (v.getType() == NT_OBJECT) {
-        v.get<QoreObject>()->doDelete(xsink);
+        qore_operator_delete_object(v.get<QoreObject>(), xsink);
     }
     v.discard(xsink);
 }

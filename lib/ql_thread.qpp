@@ -430,13 +430,16 @@ nothing save_thread_data() [dom=THREAD_CONTROL;flags=RUNTIME_NOOP,OWN_PROGRAM_ST
 delete_thread_data("key1", "key2");
     @endcode
 
-    @note Apart from \c HASH-KEY-ERROR, this function does not throw any exceptions, however if an object is deleted
-    from the thread-local data hash, then it could throw an exception in its destructor
+    @note Apart from \c HASH-KEY-ERROR and \c SANDBOX-OBJECT-ACCESS-ERROR, this function does not throw any
+    exceptions, however if an object is deleted from the thread-local data hash, then it could throw an exception in
+    its destructor
 
     @see remove_thread_data() for a similar function that does not explicitly destroy objects in the thread-local data
     hash
 
     @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot delete an object that its sandbox did not create (the key
+    and the keys after it are left as they are); see @ref sandbox_object_ownership
 */
 nothing delete_thread_data(...) [dom=THREAD_CONTROL;flags=OWN_PROGRAM_STATE] {
     if (num_args(args))
@@ -453,13 +456,16 @@ nothing delete_thread_data(...) [dom=THREAD_CONTROL;flags=OWN_PROGRAM_STATE] {
 delete_thread_data(list_of_keys);
     @endcode
 
-    @note Apart from \c HASH-KEY-ERROR, this function does not throw any exceptions, however if an object is deleted
-    from the thread-local data hash, then it could throw an exception in its destructor
+    @note Apart from \c HASH-KEY-ERROR and \c SANDBOX-OBJECT-ACCESS-ERROR, this function does not throw any
+    exceptions, however if an object is deleted from the thread-local data hash, then it could throw an exception in
+    its destructor
 
     @see remove_thread_data() for a similar function that does not explicitly destroy objects in the thread-local data
     hash
 
     @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot delete an object that its sandbox did not create (the key
+    and the keys after it are left as they are); see @ref sandbox_object_ownership
 */
 nothing delete_thread_data(list<softstring> key_list) [flags=NAMED_ARGS,OWN_PROGRAM_STATE;dom=THREAD_CONTROL] {
     delete_thread_data_intern(key_list, xsink);

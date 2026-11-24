@@ -374,6 +374,11 @@ public:
             return;
 
         qhlist_t::iterator li = i->second;
+        // an object is deleted only if the current code may delete it; otherwise the key is left as it is (qore#6842)
+        if ((*li)->val.getType() == NT_OBJECT
+            && qore_check_object_delete(*(*li)->val.get<const QoreObject>(), "delete", xsink)) {
+            return;
+        }
         hm.erase(i);
 
         // dereference node if present

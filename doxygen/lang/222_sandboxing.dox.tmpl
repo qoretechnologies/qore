@@ -592,8 +592,13 @@ authenticate();
 
     Sandboxed code (the code of a sandboxed %Program or of a class that sandboxed code declared) cannot delete an object
     that its sandbox did not create either: the \c delete operator, in each of its forms, raises
-    \c SANDBOX-OBJECT-ACCESS-ERROR and leaves the object as it is, in every execution mode, and so does a call of a
-    destructor with the reflection API by code that is sandboxed or acts for sandboxed code.  A value that goes out of
+    \c SANDBOX-OBJECT-ACCESS-ERROR and leaves the object as it is, in every execution mode, and so do a call of a
+    destructor with the reflection API by code that is sandboxed or acts for sandboxed code,
+    @ref Qore::delete_thread_data() "delete_thread_data()" (which leaves the key as it is), and the functions and
+    methods that take over or delete a @ref Qore::Program "Program" object, such as
+    @ref Qore::load_user_module_with_program() "load_user_module_with_program()",
+    @ref Qore::Program::loadUserModuleWithProgram() "Program::loadUserModuleWithProgram()" and
+    @ref Qore::Program::loadApplyToUserModule() "Program::loadApplyToUserModule()".  A value that goes out of
     scope or that the code removes (\c remove) is released as before, and code that only sandboxes at the enforcement
     level of code safety govern deletes objects as trusted code does.
 

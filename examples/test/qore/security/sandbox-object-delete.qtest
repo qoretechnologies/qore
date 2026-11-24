@@ -5,7 +5,8 @@
 
 # Sandboxed code at the enforcement level of tenant isolation can delete only an object that its sandbox owns (issue
 # #6842): the delete operator, in each of its forms, refuses an object that the host or another tenant created, and so
-# does a call of a destructor with the reflection API; the object stays as it is.  A value that goes out of scope is
+# do a call of a destructor with the reflection API, delete_thread_data(), which leaves the key as it is, and the
+# functions and methods that take over or delete a Program object; the object stays as it is.  A value that goes out of scope is
 # released as before, and code that only a sandbox at the enforcement level of code safety governs deletes as trusted
 # code does.
 
@@ -75,6 +76,23 @@ string sub del(string form, object o) {
                 m.call(o);
                 break;
             }
+            case \"thread-data\":
+            case \"thread-data-list\": {
+                save_thread_data(\"sandbox-object-delete\", o);
+                try {
+                    if (form == \"thread-data\") {
+                        delete_thread_data(\"sandbox-object-delete\");
+                    } else {
+                        delete_thread_data((\"sandbox-object-delete\",));
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    # a refused deletion leaves the key as it is
+                    string rv = get_thread_data(\"sandbox-object-delete\") === o ? ex.err : \"key removed\";
+                    remove_thread_data(\"sandbox-object-delete\");
+                    return rv;
+                }
+                break;
+            }
             case \"reflection-variant\": {
                 Reflection::Class cls = Reflection::Class::forName(\"HostItem\");
                 Reflection::DestructorMethodVariant v = cls.getDestructorVariant();
@@ -86,6 +104,41 @@ string sub del(string form, object o) {
     } catch (hash<ExceptionInfo> ex) {
         return ex.err;
     }
+}
+
+#! the module that the calls that take over or delete a Program object load: it does not exist
+const NoModule = \"sandbox-object-delete-no-such-module\";
+
+#! takes over or deletes the Program object with the given call; returns \"ok\" or the exception code
+string sub take(string form, Program p) {
+    try {
+        switch (form) {
+            case \"load_user_module_with_program\": load_user_module_with_program(NoModule, p); break;
+            case \"loadUserModuleWithProgram\": { Program t(); t.loadUserModuleWithProgram(NoModule, p); break; }
+            case \"loadUserModuleWithProgramWarn\": {
+                Program t();
+                t.loadUserModuleWithProgramWarn(NoModule, p);
+                break;
+            }
+            case \"loadApplyToUserModule\": p.loadApplyToUserModule(NoModule); break;
+            case \"loadApplyToUserModuleWarn\": p.loadApplyToUserModuleWarn(NoModule); break;
+            case \"loadApplyToPrivateUserModule\": p.loadApplyToPrivateUserModule(NoModule); break;
+            case \"loadApplyToPrivateUserModuleWarn\": p.loadApplyToPrivateUserModuleWarn(NoModule); break;
+        }
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! takes over or deletes a Program object of the tenant's own
+string sub take_own(string form) {
+    return take(form, new Program());
+}
+
+#! makes a Program object of the tenant's own
+Program sub make_program() {
+    return new Program();
 }
 
 #! makes an object of the tenant's own
@@ -118,7 +171,12 @@ class SandboxObjectDeleteTest inherits QUnit::Test {
         };
 
         #! the forms of an explicit deletion
-        const Forms = ("var", "hash", "list", "slice", "member");
+        const Forms = ("var", "hash", "list", "slice", "member", "thread-data", "thread-data-list");
+
+        #! the calls that take over or delete a Program object
+        const TakeForms = ("load_user_module_with_program", "loadUserModuleWithProgram",
+            "loadUserModuleWithProgramWarn", "loadApplyToUserModule", "loadApplyToUserModuleWarn",
+            "loadApplyToPrivateUserModule", "loadApplyToPrivateUserModuleWarn");
 
         #! the calls of a destructor with the reflection API
         const ReflectionForms = ("reflection", "reflection-variant");
@@ -130,6 +188,7 @@ class SandboxObjectDeleteTest inherits QUnit::Test {
     constructor() : QUnit::Test("sandbox object delete", "1.0", \ARGV) {
         foreach string mode in (keys ExecModes) {
             addTestCase("delete in " + mode, getTest(mode));
+            addTestCase("take over in " + mode, getTakeTest(mode));
         }
         set_return_value(main());
     }
@@ -138,15 +197,29 @@ class SandboxObjectDeleteTest inherits QUnit::Test {
         return sub () { deleteTest(mode); };
     }
 
+    private code getTakeTest(string mode) {
+        return sub () { takeTest(mode); };
+    }
+
     #! creates a tenant
     private static Program tenant(string mode, int level = QSEL_TENANT_ISOLATION) {
-        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_INJECTION);
         p.setExecMode(ExecModes{mode});
         SandboxManager sm();
         sm.setEnforcementLevel(level);
         p.setSandboxManager(sm);
         p.parse(TenantSource, "tenant");
         return p;
+    }
+
+    #! returns True if the Program object is not deleted
+    private static bool alive(Program p) {
+        try {
+            p.getProgramId();
+            return True;
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
     }
 
     #! returns True if the object is not deleted
@@ -214,5 +287,41 @@ class SandboxObjectDeleteTest inherits QUnit::Test {
         HostItem host_obj();
         assertEq("ok", a.callFunction("release", host_obj), mode + ": release");
         assertTrue(alive(host_obj), mode + ": the released object is not deleted");
+    }
+
+    #! a Program object taken over or deleted by a call: refused for the objects of another sandbox and of the host
+    takeTest(string mode) {
+        Program a = tenant(mode);
+        Program b = tenant(mode);
+        Program c = tenant(mode, QSEL_CODE_SAFETY);
+
+        hash<auto> take_results;
+        hash<auto> take_expected;
+        foreach string form in (TakeForms) {
+            Program host_pgm();
+            take_results{form}."A on the host's Program" = a.callFunction("take", form, host_pgm);
+            take_results{form}."the host's Program is alive" = alive(host_pgm);
+            Program b_pgm = b.callFunction("make_program");
+            take_results{form}."A on B's Program" = a.callFunction("take", form, b_pgm);
+            take_results{form}."B's Program is alive" = alive(b_pgm);
+            take_results{form}."B on its own Program" = b.callFunction("take", form, b_pgm);
+            take_results{form}."B's Program is alive after B" = alive(b_pgm);
+            take_results{form}."A on its own Program" = a.callFunction("take_own", form);
+            Program c_pgm();
+            take_results{form}."a code-safety Program on the host's Program" = c.callFunction("take", form, c_pgm);
+            take_results{form}."the host's Program is alive after it" = alive(c_pgm);
+            take_expected{form} = {
+                "A on the host's Program": Err,
+                "the host's Program is alive": True,
+                "A on B's Program": Err,
+                "B's Program is alive": True,
+                "B on its own Program": "LOAD-MODULE-ERROR",
+                "B's Program is alive after B": False,
+                "A on its own Program": "LOAD-MODULE-ERROR",
+                "a code-safety Program on the host's Program": "LOAD-MODULE-ERROR",
+                "the host's Program is alive after it": False,
+            };
+        }
+        assertEq(take_expected, take_results, mode + ": Program objects taken over or deleted");
     }
 }

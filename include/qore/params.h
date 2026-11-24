@@ -135,8 +135,21 @@ static QoreValue get_hard_value_param(const QoreListNode* n, size_t i) {
 //! sets up an object pointer
 #define HARD_QORE_VALUE_OBJ_DATA(vname, Type, list, i, cid, dname, cname, xsink) HARD_QORE_VALUE_PARAM(obj_##vname, const QoreObject, list, i); ReferenceHolder<Type> vname(reinterpret_cast<Type*>(obj_##vname->getReferencedPrivateData(cid, xsink)), xsink); if (!vname && !*xsink) xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot complete call setup to %s() because parameter %d (<class %s>) has already been deleted", cname, i + 1, dname)
 
+//! Returns 0 if the current code may delete the object, otherwise raises an exception and returns -1 (libqore only)
+/** Sandboxed code (the code of a sandboxed Program or of a class that sandboxed code declared) at the enforcement level
+    of tenant isolation may delete only an object that its sandbox owns; refused with \c SANDBOX-OBJECT-ACCESS-ERROR,
+    leaving the object as it is.  The caller has checked for a system object.
+
+    @param obj the object to delete
+    @param action the action for the error message, such as \c "delete"
+    @param xsink for the exception if the deletion is refused
+*/
+DLLLOCAL int qore_check_object_delete(const QoreObject& obj, const char* action, ExceptionSink* xsink);
+
 //! destructively sets up an object pointer; caller owns the pointer
-#define TAKE_HARD_QORE_VALUE_OBJ_DATA(vname, Type, list, i, cid, dname, cname, xsink) HARD_QORE_VALUE_PARAM(obj_##vname, const QoreObject, list, i); Type* vname = reinterpret_cast<Type*>(const_cast<QoreObject*>(obj_##vname)->getAndClearPrivateData(cid, xsink)); if (!vname && !*xsink) xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot complete call setup to %s() because parameter %d (<class %s>) has already been deleted", cname, i + 1, dname); else if (vname) const_cast<QoreObject*>(obj_##vname)->doDelete(xsink)
+/** The object is deleted; refused for an object that the current code may not delete (qore_check_object_delete())
+*/
+#define TAKE_HARD_QORE_VALUE_OBJ_DATA(vname, Type, list, i, cid, dname, cname, xsink) HARD_QORE_VALUE_PARAM(obj_##vname, const QoreObject, list, i); Type* vname = qore_check_object_delete(*obj_##vname, "take over", xsink) ? nullptr : reinterpret_cast<Type*>(const_cast<QoreObject*>(obj_##vname)->getAndClearPrivateData(cid, xsink)); if (!vname && !*xsink) xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot complete call setup to %s() because parameter %d (<class %s>) has already been deleted", cname, i + 1, dname); else if (vname) const_cast<QoreObject*>(obj_##vname)->doDelete(xsink)
 
 //! sets up an object pointer
 #define HARD_QORE_VALUE_OBJ_OR_NOTHING_DATA(vname, Type, list, i, cid, xsink) HARD_QORE_VALUE_OR_NOTHING_PARAM(obj_##vname, const QoreObject, list, i); ReferenceHolder<Type> vname(obj_##vname ? reinterpret_cast<Type*>(obj_##vname->getReferencedPrivateData(cid, xsink)) : nullptr, xsink);

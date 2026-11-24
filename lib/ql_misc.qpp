@@ -3788,6 +3788,7 @@ load_user_module_with_program("MyModule", p);
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, module defines symbols already defined in the target object, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw SANDBOX-OBJECT-ACCESS-ERROR sandboxed code cannot take over a @ref Qore::Program "Program" object that its sandbox did not create; see @ref sandbox_object_ownership
 
     @since %Qore 0.8.12
  */
