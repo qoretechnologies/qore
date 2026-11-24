@@ -104,6 +104,42 @@ class ProbeRestClass inherits AbstractRestClass {
     }
 }
 
+#! a REST stream method
+class ProbeRestStream inherits AbstractRestStreamRequestHandler {
+    private:internal {
+        bool sent;
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah) : AbstractRestStreamRequestHandler(cx, ah) {
+    }
+
+    private hash<auto> getResponseHeaderMessageImpl() {
+        return {"code": 200};
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+    }
+
+    private auto sendImpl() {
+        if (sent) {
+            return;
+        }
+        sent = True;
+        return "streamed";
+    }
+}
+
+#! a REST class with a stream method
+class ProbeRestStreamClass inherits AbstractRestClass {
+    string name() {
+        return "svc";
+    }
+
+    AbstractRestStreamRequestHandler streamPost(hash<auto> cx, *hash<auto> ah) {
+        return new ProbeRestStream(cx, ah);
+    }
+}
+
 #! trusted host code that dispatches requests to handlers itself, without an HTTP server
 class Host {
     private:internal {
@@ -272,6 +308,15 @@ class HttpServerDispatchCapabilityTest inherits QUnit::Test {
             "header-info": {}}, {"method": "POST"});
         assertEq(200, rv.code, "the stream request is served");
         assertEq({"user": "host-user", "id": 7}, stream_handler.raw, "the trusted code of the handler gets it");
+        # a REST stream method, as a host that serves the requests of a server in a process of its own dispatches it
+        RestHandler svc();
+        svc.addClass(new ProbeRestStreamClass());
+        hash<auto> rcx = {"id": 8, "orig_path": "svc", "raw_path": "/svc", "url": {"path": "svc"}, "method": "POST",
+            "header-info": {}};
+        hash<auto> rhdr = {"method": "POST", "accept": "application/json", "content-type": "application/json"};
+        assertEq(200, Host::dispatch(svc, rcx, rhdr).code, "the REST stream method is served");
+        # and refused without the capability
+        assertEq(409, svc.handleRequest(new TestListener(), new Socket(), rcx, rhdr, NOTHING).code);
         # the raw request is current only while the host dispatches
         assertThrows("HTTP-SERVER-ERROR", sub () { stream_handler.handleRequest(new TestListener(), new Socket(),
             {"id": 7, "orig_path": "/stream", "header-info": {}}, {"method": "POST"}, NOTHING); });
