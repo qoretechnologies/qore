@@ -1102,6 +1102,10 @@ void AsyncIoDeferredRelease::release(ExceptionSink* xsink) {
     // the release is work that the cleanup counts: its destructors can hand work over to another thread
     // (AsyncIoController::holdModuleCleanupWork(), qore#7239)
     QoreModuleCleanupCountedWorkScope counted_scope(static_cast<bool>(module_cleanup_delegate), nullptr);
+    // the release runs for the code that submitted the work, wherever it runs (the I/O thread's dispatcher, the thread
+    // of other code that drains or cancels it, the stop of the dispatcher, a release without a controller): its
+    // restrictions, and those that a lent object's method does not lend, are added to the thread's (qore#6844)
+    QoreSubmitterRestrictionsHelper submitter_restrictions(caller_restrictions, lent_to_restrictions);
     if (sock_obj) {
         sock_obj->deref(xsink);
         sock_obj = nullptr;
@@ -2894,6 +2898,12 @@ void QoreCallDispatcher::stop(ExceptionSink* xsink) {
         // (qore#7339)
         QoreModuleCleanupCountedWorkScope counted_scope(item.module_cleanup_work
             || (item.sandbox_ctx && item.sandbox_ctx->module_cleanup_work), &item.owner);
+        // and it runs for the code that submitted it, as in releaseWorkItem() (qore#6844)
+        QoreSubmitterRestrictionsHelper submitter_restrictions(item.sandbox_ctx
+            ? item.sandbox_ctx->caller_restrictions
+            : (item.release ? item.release->caller_restrictions : QoreParseOptions()),
+            item.sandbox_ctx ? item.sandbox_ctx->lent_to_restrictions
+            : (item.release ? item.release->lent_to_restrictions : QoreParseOptions()));
 #ifdef DEBUG
         if (dbg_release_hook) {
             dbg_release_hook();
