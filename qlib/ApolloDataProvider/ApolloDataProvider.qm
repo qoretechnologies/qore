@@ -726,6 +726,8 @@ module ApolloDataProvider {
             "short_desc": "Search Apollo's people database",
             "desc": "Search Apollo's global database of 210M+ people",
             "action_code": DPAT_API,
+            # People API Search is a query that consumes no credits and stores nothing (qore#7454)
+            "mutates_state": False,
             "output_type": AbstractDataProviderTypeMap."list",
             "options": {
                 "person_titles": <ActionOptionInfo>{

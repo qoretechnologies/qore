@@ -288,6 +288,15 @@ public class BgeM3FastApiDataProviderTest inherits QUnit::Test {
         # output_type is the response data type
         assertTrue(ce.output_type
             instanceof BgeM3FastApiDataProvider::BgeM3FastApiEmbeddingsResponseDataType);
+        # POST /embed computes embeddings and GET /health and /metrics only read: the actions declare that they are
+        # read-only (qore#7454)
+        foreach string name in ("create-embeddings", "health", "metrics") {
+            hash<DataProvider::DataProviderActionInfo> info =
+                (select DataProvider::DataProviderActionCatalog::getActionsEx("BgeM3FastApi"), $1.action == name)[0];
+            assertEq(NT_BOOLEAN, info.mutates_state.typeCode(), name);
+            assertFalse(info.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(info), name);
+        }
     }
 
     #! Test that the connection's ping cannot detect an unusable credential

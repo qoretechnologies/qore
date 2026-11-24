@@ -97,6 +97,7 @@ module ShippoDataProvider {
             "desc": "Retrieve detailed information about a specific shipment including addresses, "
                 "parcels, and available rates.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": ShippoGetShipmentDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () { return ShippoGetShipmentDataProvider::ResponseType; },
             "options": DataProviderActionCatalog::getActionOptionFromFields(ShippoGetShipmentRequestDataType::Fields),
@@ -147,6 +148,7 @@ module ShippoDataProvider {
             "desc": "Retrieve detailed information about a specific shipping label (transaction) including "
                 "tracking number, label URL, and status.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": ShippoGetTransactionDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () { return ShippoGetTransactionDataProvider::ResponseType; },
             "options": DataProviderActionCatalog::getActionOptionFromFields(ShippoGetTransactionRequestDataType::Fields),
@@ -228,6 +230,7 @@ module ShippoDataProvider {
             "desc": "Retrieve detailed information about a specific order including addresses, line items, "
                 "and fulfillment status.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": ShippoGetOrderDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () { return ShippoGetOrderDataProvider::ResponseType; },
             "options": DataProviderActionCatalog::getActionOptionFromFields(ShippoGetOrderRequestDataType::Fields),

@@ -80,6 +80,10 @@ module GrokDataProvider {
             "desc": "Chat with Grok by sending multiple messages at once and potentially getting multiple "
                 "replies",
             "action_code": DPAT_API,
+            "mutates_state": True,
+            "read_only_options": (
+                {"path": ("deferred",), "values": (False,)},
+            ),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GrokChatCompletionRequestType.getFields(){"model", "messages"}, {
                     "preselected": True,
@@ -99,6 +103,10 @@ module GrokDataProvider {
             "short_desc": "Chat with Grok by sending a single message and receiving a single reply",
             "desc": "Chat with Grok by sending a single message and receiving a single reply",
             "action_code": DPAT_API,
+            "mutates_state": True,
+            "read_only_options": (
+                {"path": ("deferred",), "values": (False,)},
+            ),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GrokSimpleChatCompletionRequestType.getFields(){"model", "role", "content"}, {
                     "preselected": True,
@@ -211,6 +219,7 @@ module GrokDataProvider {
             "short_desc": "Retrieve a previously stored response by ID",
             "desc": "Retrieve a previously stored response by its unique identifier",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "path_vars": {
                 "response": <DataProviderPathVarInfo>{
                     "display_name": "Response",

@@ -229,6 +229,12 @@
     @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" change it
     (<a href="https://github.com/qoretechnologies/qore/issues/6867">issue 6867</a>).
 
+    @par HTTP/1.x Messages With Ambiguous Framing Are Refused
+    A request with both \c Transfer-Encoding and \c Content-Length, with a transfer coding other than chunked alone,
+    with more than one \c Host, or with a header line that ends with a bare LF, and a header or trailer section with an
+    empty line before its end are refused (see @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()");
+    @ref httpserverintro "HttpServer" answers such a request with 400 or 501 and closes the connection.
+
     @par A Member of a System Class Cannot Be Combined With a User Member of the Same Name
     A class hierarchy that combines a member of a user class with a member of a system class of the same name is
     refused whatever the order of the parent classes (it was refused in only one order), and the parse error names the
@@ -4548,6 +4554,26 @@
       @ref Qore::QDF_STATIC_CLASS_VARS "QDF_STATIC_CLASS_VARS" replaces hash-valued static class variables instead of
       merging them, and a hash-valued static class variable no longer holds freed memory after deserialization, which
       could crash the process (<a href="https://github.com/qoretechnologies/qore/issues/7516">issue 7516</a>)
+    - the trailer section of a chunked HTTP/1.x body ends where every reader ends it: a section with a line that ends
+      with a bare LF or with an empty line before its end is refused, so that the bytes after it cannot be taken for
+      another message
+    - an HTTP/1.x header ends where every reader ends it: a header with an empty line before its end, or a request
+      line or request field line that ends with a bare LF, is refused (see @ref Qore::Socket::readHTTPHeader()
+      "Socket::readHTTPHeader()"), so that the bytes after it cannot be taken for another message
+    - the \c Transfer-Encoding of an HTTP/1.x message frames its body as RFC 9112 requires in every reader, the HTTP
+      client and @ref httpserverintro "HttpServer": the chunked coding is recognized without regard to case and
+      whitespace, a request whose framing is ambiguous or unsupported is refused, and a response whose final
+      transfer coding is not chunked is read until the connection closes
+    - the parse of a circular @ref inheritance "class hierarchy" whose code looks up a method or member of a class
+      of the cycle ends with the parse error of the circular hierarchy instead of never ending or exhausting the
+      stack (<a href="https://github.com/qoretechnologies/qore/issues/7464">issue 7464</a>)
+    - an HTTP/1.x client connection is not reused after a response, including one without a body, when more data
+      follows the response on it, nor after a \c 101 response that does not switch the connection over (see
+      @ref httpclient_persistence "HTTPClient connection persistence")
+    - the HTTP/1.x client skips every interim \c 1xx response, such as \c 102 and \c 103, and returns the final
+      response, and fails a request answered with a \c 101 response that it did not ask for (see
+      @ref httpclient_interim_responses "HTTPClient interim responses";
+      <a href="https://github.com/qoretechnologies/qore/issues/7483">issue 7483</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

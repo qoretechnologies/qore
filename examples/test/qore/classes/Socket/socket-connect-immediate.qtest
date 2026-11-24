@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-loopback: localhost - tests the fallback from a refused ::1 to 127.0.0.1; the port is held on ::1
 # test-platform: macos - non-blocking TCP connect completion (SO_ERROR and a zero-byte send) before the event loop waits
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -41,6 +42,35 @@ class SocketConnectImmediateTest inherits QUnit::Test {
         s.bindINET(addr, 0);
         s.listen();
         return s;
+    }
+
+    #! returns a listener on 127.0.0.1 whose port is held on ::1 by a connection, which leaves nothing listening there
+    /** The port is taken on ::1 by a listener that accepts one connection and is then closed: the accepted connection
+        keeps the address, so no other socket can listen on it, and a connect to it is refused.  A port that is taken
+        on ::1 already is replaced.
+
+        @return a hash: \c listener, the listener on 127.0.0.1, and \c a and \c b, the two ends of the connection
+    */
+    private hash<auto> holdLoopbackPort() {
+        for (int i = 0; i < 20; ++i) {
+            Socket l = listener();
+            int port = l.getPort();
+            Socket h();
+            try {
+                h.bindINET("::1", port);
+            } catch (hash<ExceptionInfo> ex) {
+                # the port is taken on ::1: another one is tried
+                l.close();
+                continue;
+            }
+            h.listen();
+            Socket b();
+            b.connect("[::1]:" + port, ConnectTimeout);
+            Socket a = h.accept(ConnectTimeout);
+            h.close();
+            return {"listener": l, "a": a, "b": b};
+        }
+        throw "TEST-ERROR", "no port could be held on ::1";
     }
 
     #! returns a port of the loopback interface that nothing listens on
@@ -95,8 +125,15 @@ class SocketConnectImmediateTest inherits QUnit::Test {
         if (!addrs || addrs[0].family != AF_INET6 || !(select addrs, $1.family == AF_INET)) {
             testSkip("\"localhost\" does not have an IPv6 address first and an IPv4 address");
         }
-        Socket l = listener();
-        on_exit l.close();
+        # the port is held on ::1 by a connection, so that no test running beside this one can listen there, while
+        # nothing listens there, so that ::1 refuses it (qore#7469)
+        hash<auto> held = holdLoopbackPort();
+        Socket l = held.listener;
+        on_exit {
+            l.close();
+            held.a.close();
+            held.b.close();
+        }
         int port = l.getPort();
         for (int i = 0; i < 20; ++i) {
             Socket c();

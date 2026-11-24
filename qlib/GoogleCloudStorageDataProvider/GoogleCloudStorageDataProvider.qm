@@ -127,6 +127,7 @@ module GoogleCloudStorageDataProvider {
                 "A listing is capped at `1000` buckets; when a `next_page_token` is returned, pass it "
                 "back in `page_token` to retrieve the following page.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Buckets",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GoogleCloudStorageListBucketsRequestDataType::Fields{"prefix",}, {
@@ -148,6 +149,7 @@ module GoogleCloudStorageDataProvider {
             "desc": "Retrieves a bucket's metadata: its location, storage class, versioning and "
                 "uniform bucket-level access settings, labels, and timestamps.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Buckets",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GoogleCloudStorageGetBucketRequestDataType::Fields{"bucket",}, {
@@ -175,6 +177,7 @@ module GoogleCloudStorageDataProvider {
                 "A listing is capped at `1000` objects; when a `next_page_token` is returned, pass it "
                 "back in `page_token` to retrieve the following page.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Objects",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GoogleCloudStorageListObjectsRequestDataType::Fields{"bucket",}, {
@@ -202,6 +205,7 @@ module GoogleCloudStorageDataProvider {
             "desc": "Retrieves an object's metadata — size, content type, checksums, storage class, "
                 "generation, and user-defined metadata — without transferring its content.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Objects",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GoogleCloudStorageGetObjectMetadataRequestDataType::Fields{"bucket", "object"}, {
@@ -292,6 +296,7 @@ module GoogleCloudStorageDataProvider {
                 "`object` is used verbatim. Set `generation` to download a specific version of an "
                 "object in a bucket with versioning enabled.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Objects",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GoogleCloudStorageDownloadObjectRequestDataType::Fields{"bucket", "object"}, {

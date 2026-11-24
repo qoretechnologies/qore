@@ -188,6 +188,11 @@ module GmailDataProvider {
             "desc": "React to new emails; when a new email arrives, all the message information including the "
                 "message body is returned as output data",
             "action_code": DPAT_EVENT,
+            # delete_messages deletes each reported message (qore#7454)
+            "mutates_state": True,
+            "read_only_options": (
+                {"path": ("delete_messages",), "values": (False,)},
+            ),
             "action_val": EVENT_EMAIL_MATCHED,
             "options": {
                 "q": <ActionOptionInfo>{
@@ -246,6 +251,11 @@ module GmailDataProvider {
             "short_desc": "React to new email attachments",
             "desc": "React to new email attachments",
             "action_code": DPAT_EVENT,
+            # delete_messages deletes each reported message (qore#7454)
+            "mutates_state": True,
+            "read_only_options": (
+                {"path": ("delete_messages",), "values": (False,)},
+            ),
             "action_val": EVENT_ATTACHMENT_MATCHED,
             "options": {
                 "q": <ActionOptionInfo>{

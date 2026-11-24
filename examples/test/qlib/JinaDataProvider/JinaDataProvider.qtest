@@ -104,6 +104,8 @@ public class JinaDataProviderTest inherits QUnit::Test {
     constructor() : Test("JinaDataProvider Test", "1.1", \ARGV, MyOpts) {
         conn_name = LiveProvider::get("jina", "JINA_CONNECTION", m_options.conn);
         addTestCase("registration and every action path", \registrationTest());
+        addTestCase("read-only operations declare that they change nothing", \readOnlyActionsTest());
+        addTestCase("read-only content actions declare that they change nothing", \readOnlyContentActionsTest());
         addTestCase("vendored schema provenance and drift", \schemaTest());
         addTestCase("constructor alternatives and child registration", \constructorTest());
         addTestCase("embedding model variants and encoding compatibility", \embeddingTest());
@@ -139,6 +141,43 @@ public class JinaDataProviderTest inherits QUnit::Test {
 
     private hash<JinaRecordedRequest> last() {
         return FakeJinaRestClientIo::Log.last();
+    }
+
+    #! the POST operations that the vendored API description documents as pure queries, validations,
+    #! estimates or stateless inference declare mutates_state False; the others keep the default (qore#7454)
+    private readOnlyActionsTest() {
+        foreach string name in (("create-embeddings", "rerank", "classify",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("JinaAi", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # operations that create, change or start something on the server still declare a change
+        foreach string name in (("train-classifier",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("JinaAi", name);
+            assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+    }
+
+    #! the hand-registered actions that only search, read, segment, answer or download declare mutates_state False
+    #! (qore#7454)
+    private readOnlyContentActionsTest() {
+        foreach string name in (("search-web", "segment-text", "chat", "deep-search", "download-batch-output",
+                "download-batch-errors")) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("JinaAi", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # read-url can run a page script (injectPageScript) in the browser that loads the page, so it keeps the
+        # default
+        hash<DataProvider::DataProviderActionInfo> action =
+            DataProvider::DataProviderActionCatalog::getAppActionEx("JinaAi", "read-url");
+        assertTrue(exists action.options.injectPageScript);
+        assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(action));
     }
 
     private registrationTest() {

@@ -442,13 +442,25 @@ public class SseStreamCloseNotifier {
 
 */
 public class Http1SseConnection inherits AbstractSseConnection {
-    private {
+    private:internal {
+        #! the poll operation of the stream, which holds the connection's socket; internal, so that a subclass (of
+        #! any code) cannot take it from an object that gives no poll operation (qore#7376)
         HttpSseStreamPollOperation poll_op;
+        #! True if the server keeps the poll operation, which the object then does not give (qore#7376)
+        bool server_held;
     }
 
     #! Creates wrapper around an HTTP/1.x SSE poll operation
-    constructor(HttpSseStreamPollOperation poll_op) {
+    /** @param poll_op the poll operation of the stream
+        @param server_held @ref True "True" if the server keeps the poll operation, which holds the connection's
+        socket: @ref getPollOperation() then returns no value, so that the code that gets the object (the handler of
+        a request that gets the socket of its request, and its event source; see
+        @ref HttpServer::AbstractHttpRequestHandler::needsHandlerSocketView()) cannot get the connection's socket
+        through it
+    */
+    constructor(HttpSseStreamPollOperation poll_op, bool server_held = False) {
         self.poll_op = poll_op;
+        self.server_held = server_held;
     }
 
     string getProtocol() {
@@ -513,8 +525,11 @@ public class Http1SseConnection inherits AbstractSseConnection {
     }
 
     #! Returns the underlying poll operation for direct access if needed
-    HttpSseStreamPollOperation getPollOperation() {
-        return poll_op;
+    /** @return the poll operation, or no value if the server keeps it (see the \a server_held argument of
+        @ref constructor())
+    */
+    *HttpSseStreamPollOperation getPollOperation() {
+        return server_held ? NOTHING : poll_op;
     }
 }
 
