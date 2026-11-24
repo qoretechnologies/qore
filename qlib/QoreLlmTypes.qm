@@ -24,6 +24,7 @@
 
 %requires qore >= 2.0
 %modern
+%allow-weak-references
 
 %requires reflection
 %requires json
@@ -2108,6 +2109,12 @@ startRequestAsync(op, opts, hash<LlmAsyncSubmission> sub (EventNotifier notifier
     Tasks may run in any order and in several threads at once: each operation runs its own tasks one at a time and in
     the order they were handed over.
 
+    An operation calls @ref execute() with the context (sandbox restrictions and provenance) of the code that created
+    the operation, whatever code posts its tasks, so that the tasks of a call run with the context of its caller.  An
+    implementation that is shared by code of different contexts must run each task with at least the restrictions of
+    the code that calls @ref execute(), as @ref Qore::Thread::ThreadPool::submit() "ThreadPool::submit()" and
+    @ref LlmThreadPoolExecutor do (qore#7497).
+
     @par Example
     @code{.py}
 # runs the tasks on an application's own worker pool
@@ -2131,8 +2138,11 @@ public class LlmAsyncExecutor {
 }
 
 #! A simple @ref LlmAsyncExecutor with a fixed number of worker threads
-/** The tasks run in the order they are handed over, each in the first free worker.  An exception raised by a task
-    is ignored, so that it cannot stop a worker; the tasks of an asynchronous operation handle their own errors.
+/** The tasks run in the order they are handed over, each in the first free worker.  The workers are threads of the
+    code that creates the executor, which count against the thread limit of its sandbox; each task also runs with the
+    sandbox of the code that hands it over (see @ref Qore::SandboxManager::bindCall() "SandboxManager::bindCall()"),
+    so that a task handed over by sandboxed code keeps that sandbox's restrictions.  An exception raised by a task is
+    ignored, so that it cannot stop a worker; the tasks of an asynchronous operation handle their own errors.
 
     @par Example
     @code{.py}
@@ -2251,9 +2261,25 @@ LlmAsyncOperation op = backend.chatCompletionsAsync(body, <LlmAsyncCallOptions>{
 # another thread may call stop.cancel() or op.cancel() at any time
     @endcode
 
+    @par The context of the tasks
+    The tasks of an operation run with the context (sandbox restrictions and provenance) of the code that created the
+    operation, whatever code posts them: the code that cancels a call, for example, may run with other restrictions
+    than its caller, and the caller's completion callback and the steps that the operation posts still run with the
+    caller's context; a step that a transport posts from a thread of other code (an event of a stream, for example)
+    keeps the restrictions of that code, as it is created there. A task keeps the restrictions of the code that
+    created it as any closure or call reference does, so a task created by more restricted code stays restricted
+    (qore#7497). The operation starts its tasks through a
+    watch of the async I/O controller registered by the code that created it, which therefore needs a running
+    controller: a task posted after the controller has dropped the watch (when it stops, or when the %Program that
+    created the operation ends) does not run, and the call does not end.  Work of the module cleanup at the end of
+    the process, which the controller does not serve the watch for, hands the drain of the tasks that it posts to the
+    executor itself.
+
     @par Implementing an asynchronous step
     The steps of an operation are tasks given to @ref post(): they run one at a time, in the order given, in threads
-    of the executor; an exception that a task raises ends the operation with that error.  A step that waits hands
+    of the executor; an exception that a task raises ends the operation with that error.  A task that code of another
+    context (a cancellation handler, for example) posts is made beforehand by code of the operation's context, so that
+    it does not take the restrictions of that code.  A step that waits hands
     the wait to the async I/O controller and posts the next step when the wait ends; the last step calls
     @ref complete() or @ref fail().
 
@@ -2297,8 +2323,18 @@ public class LlmAsyncOperation {
         */
         list<hash<auto>> pending = ();
 
-        #! True while a task of the executor runs the pending tasks
+        #! True while a drain of the pending tasks has been requested or runs
         bool draining = False;
+
+        #! True once the requested drain has been handed to the executor
+        bool drain_submitted = False;
+
+        #! Starts the drains with the context of the code that created the operation
+        Priv::LlmAsyncDrainStarter starter;
+
+        #! The task that runs the completion callback; made by the code that created the operation, so that it does not
+        #! take the restrictions of the code that ends the call
+        *code<nothing()> completion_task;
 
         #! Code run once when the result or the error is set, keyed by ID
         hash<string, code> finish_hooks = {};
@@ -2323,13 +2359,33 @@ public class LlmAsyncOperation {
         self.executor = executor;
         self.cancellation = cancellation ?? new LlmCancellation();
         self.on_complete = on_complete;
+        # the drains are started by a watch that this code registers, so that they run with its context whatever
+        # code posts a task (qore#7497); the watch holds the operation weakly
+        LlmAsyncOperation op := self;
+        starter = new Priv::LlmAsyncDrainStarter(sub (*hash<ExceptionInfo> arm_error) {
+            op.startDrain(arm_error);
+        });
+        # runs in a drain, which holds the operation
+        completion_task = sub () {
+            on_exit op.markDone();
+            if (op.on_complete) {
+                op.setCompleting(True);
+                on_exit op.setCompleting(False);
+                op.on_complete(op);
+            }
+        };
+        starter.arm();
     }
 
-    #! Releases the handles of work of the module cleanup of the tasks that did not run
+    #! Ends the watch that starts the drains, and releases the handles of work of the module cleanup of the tasks that
+    #! did not run
     /** Tasks are left only if the executor dropped the task that runs them (qore#7339): the cleanup at the end of the
         process does not then wait for them
     */
     destructor() {
+        if (starter) {
+            starter.close();
+        }
         foreach hash<auto> item in (pending) {
             AsyncIoController::releaseModuleCleanupWork(item.handle);
         }
@@ -2557,6 +2613,7 @@ public class LlmAsyncOperation {
                 AutoLock al(m);
                 if (!pending) {
                     draining = False;
+                    drain_submitted = False;
                     return;
                 }
                 item = shift pending;
@@ -2588,6 +2645,7 @@ public class LlmAsyncOperation {
 
     #! Queues a task and starts a drain if none is running
     private:internal postIntern(code<nothing()> task, bool is_final) {
+        int handle;
         {
             AutoLock al(m);
             if (done) {
@@ -2596,19 +2654,69 @@ public class LlmAsyncOperation {
             # work of the module cleanup at the end of the process that posts the task (an HTTP or SSE callback of a
             # canceled request, for example) hands itself over to the thread of the executor that runs it (0 outside
             # of such work) (qore#7339)
-            pending += {"task": task, "is_final": is_final, "handle": AsyncIoController::holdModuleCleanupWork()};
+            handle = AsyncIoController::holdModuleCleanupWork();
+            pending += {"task": task, "is_final": is_final, "handle": handle};
             if (draining) {
                 return;
             }
             draining = True;
         }
-        # the executor's task references the operation, which stays alive until its tasks have run
-        LlmAsyncOperation op = self;
-        try {
-            executor.execute(sub () { op.drain(); });
-        } catch (hash<ExceptionInfo> ex) {
+        # the drain is handed to the executor by the starter's watch, with the context of the code that created the
+        # operation, not by this thread, whose code may have another context (qore#7497)
+        if (handle) {
+            # work of the module cleanup at the end of the process, which waits for the task: the controller does not
+            # serve the starter's watch then, so the drain is handed over from this thread (qore#7339), and has the
+            # context of this work
+            submitDrain();
+            return;
+        }
+        if (*hash<ExceptionInfo> ex = starter.request(self)) {
+            # no watch can start the drain
             executorFailed(ex);
         }
+    }
+
+    #! Hands the requested drain to the executor; called by the starter's watch, with the context of the code that
+    #! created the operation
+    /** @param arm_error the error of the watch that could not be registered again: the operation cannot start
+        another drain, and the call ends with this error unless it has ended; its completion callback runs only if the
+        drain handed over here runs it
+    */
+    private:internal startDrain(*hash<ExceptionInfo> arm_error) {
+        if (!submitDrain()) {
+            return;
+        }
+        if (arm_error) {
+            fail(arm_error);
+        }
+    }
+
+    #! Hands the requested drain to the executor, if one is requested and has not been handed over
+    /** @return @ref False if the operation is done or the executor refused the drain, which ends the call
+    */
+    private:internal bool submitDrain() {
+        bool submit;
+        {
+            AutoLock al(m);
+            if (done) {
+                return False;
+            }
+            if (draining && !drain_submitted) {
+                drain_submitted = True;
+                submit = True;
+            }
+        }
+        if (submit) {
+            # the executor's task references the operation, which stays alive until its tasks have run
+            LlmAsyncOperation op = self;
+            try {
+                executor.execute(sub () { op.drain(); });
+            } catch (hash<ExceptionInfo> ex) {
+                executorFailed(ex);
+                return False;
+            }
+        }
+        return True;
     }
 
     #! Ends the call when the executor refuses its tasks; the completion callback, which needs a thread of the
@@ -2620,6 +2728,7 @@ public class LlmAsyncOperation {
             dropped = pending;
             pending = ();
             draining = False;
+            drain_submitted = False;
         }
         # the tasks do not run: the cleanup does not wait for them
         map AsyncIoController::releaseModuleCleanupWork($1.handle), dropped;
@@ -2652,15 +2761,13 @@ public class LlmAsyncOperation {
         if (!setFinished(value, ex)) {
             return False;
         }
-        LlmAsyncOperation op = self;
-        postIntern(sub () {
-            on_exit op.markDone();
-            if (op.on_complete) {
-                op.setCompleting(True);
-                on_exit op.setCompleting(False);
-                op.on_complete(op);
-            }
-        }, True);
+        # the task made by the code that created the operation: this code may run with other restrictions (qore#7497)
+        code<nothing()> task;
+        {
+            AutoLock al(m);
+            task = remove completion_task;
+        }
+        postIntern(task, True);
         return True;
     }
 
@@ -2672,12 +2779,16 @@ public class LlmAsyncOperation {
 
     #! Marks the operation done and wakes the waiting threads
     private:internal markDone() {
-        AutoLock al(m);
-        if (done) {
-            return;
+        {
+            AutoLock al(m);
+            if (done) {
+                return;
+            }
+            done = True;
+            cond.broadcast();
         }
-        done = True;
-        cond.broadcast();
+        # no task runs after the call is done
+        starter.close();
     }
 
     #! Runs a finish hook
@@ -2885,10 +2996,12 @@ public class LlmAsyncSseRequest {
         }
         LlmAsyncSseRequest req = self;
         LlmAsyncOperation o = op;
+        # made here, in a task of the operation: the code that stops the attempt may have another context (qore#7497)
+        code<nothing()> closed = sub () { req.handleClosed(attempt, ClosedEnd); };
         return sub () {
             req.stopTransport();
             # the attempt ends even if the transport reports nothing after it was stopped
-            o.post(sub () { req.handleClosed(attempt, ClosedEnd); });
+            o.post(closed);
         };
     }
 
@@ -2896,9 +3009,11 @@ public class LlmAsyncSseRequest {
     private:internal started() {
         LlmAsyncSseRequest req = self;
         LlmAsyncOperation o = op;
+        # made here, in a task of the operation: the handler runs in the thread of the code that cancels (qore#7497)
+        code<nothing()> cancelled = sub () { req.cancelled(); };
         int id = provider.addRequestCancelHandler(opts, sub () {
             req.stopTransport();
-            o.post(sub () { req.cancelled(); });
+            o.post(cancelled);
         });
         {
             AutoLock al(m);
@@ -3095,7 +3210,18 @@ public class LlmAsyncSseRequest {
         # transport (qore#7339); wrapped here, in this thread, as background evaluates its expression in the new
         # thread; the call is created by a static method, so that it does not refer to this object
         code<nothing()> c = AsyncIoController::wrapModuleCleanupWork(LlmAsyncSseRequest::getStop(s));
-        background c();
+        try {
+            background c();
+        } catch (hash<ExceptionInfo> ex) {
+            # no thread can be started (a thread limit of the caller's sandbox): the transport is not stopped in this
+            # thread, which may be a thread of the async I/O controller that stopping it waits for; it is put back for
+            # the task that the caller, a cancellation handler, still posts, which ends the request and stops it in a
+            # thread of the executor (qore#7497); the wrapped call, released unrun, releases its handle
+            AutoLock al(m);
+            if (!stop) {
+                stop = s;
+            }
+        }
     }
 
     #! Returns a call that stops a transport; static, so that it does not refer to an object
@@ -3153,7 +3279,9 @@ class LlmThreadPoolState {
         if (stopped) {
             throw "LLM-ASYNC-EXECUTOR-ERROR", "the executor has been shut down";
         }
-        tasks.push(task);
+        # the task runs with the sandbox of the code that hands it over, besides that of the worker, which is the
+        # sandbox of the code that created the executor (qore#7497)
+        tasks.push(SandboxManager::bindCall(task));
     }
 
     int getThreadCount() {
@@ -3205,6 +3333,126 @@ class LlmThreadPoolState {
             } catch (hash<ExceptionInfo> ex) {
                 # a task handles its own errors; one that does not cannot stop the worker
             }
+        }
+    }
+}
+
+#! Starts the drains of an LlmAsyncOperation with the context of the code that created the operation (qore#7497)
+/** A drain is handed to the executor by the callback of a watch of the async I/O controller, which runs with the
+    context of the code that registered the watch: the code that created the operation, then the callback itself,
+    which registers the next watch before it starts the drain.  Code of any context requests a drain by signaling the
+    watch, so that the drain does not take the context of that code.  The starter holds the operation while a drain
+    is requested, so that the operation stays alive until its tasks have run; otherwise only weakly, through the code
+    that starts a drain, which is called only while the operation is held.
+*/
+class LlmAsyncDrainStarter {
+    private:internal {
+        Mutex m();
+        #! The notifier of the current watch
+        *EventNotifier notifier;
+        #! True once the operation is done or released: no watch is registered any more
+        bool closed = False;
+        #! The error of the watch that could not be registered again
+        *hash<ExceptionInfo> arm_error;
+        #! The operation while a drain is requested: it stays alive until its tasks have run
+        *object held;
+        #! Hands the requested drain to the executor; holds the operation weakly
+        code<nothing(*hash<ExceptionInfo>)> start;
+    }
+
+    constructor(code<nothing(*hash<ExceptionInfo>)> start) {
+        self.start = start;
+    }
+
+    #! Registers a watch; called with the context of the code that created the operation
+    /** @throw any error of the registration; requests then fail with it
+    */
+    arm() {
+        {
+            AutoLock al(m);
+            if (closed) {
+                return;
+            }
+        }
+        LlmAsyncDrainStarter starter = self;
+        try {
+            EventNotifier n();
+            {
+                AutoLock al(m);
+                # closed meanwhile: no watch, as nothing would end it
+                if (closed) {
+                    return;
+                }
+                notifier = n;
+            }
+            LlmAsyncNotifierWatch::watch(n, sub () { starter.fired(); });
+        } catch (hash<ExceptionInfo> ex) {
+            # no watch serves a request any more: requests fail with this error
+            AutoLock al(m);
+            remove notifier;
+            arm_error = ex;
+            rethrow;
+        }
+    }
+
+    #! Requests a drain; called in any thread after the operation has recorded the request
+    /** @param op the operation, which is held until the watch has started the drain
+
+        @return the error of the watch that could not be registered, if no watch can start the drain; a request of an
+        operation that is done or released is ignored
+    */
+    *hash<ExceptionInfo> request(object op) {
+        AutoLock al(m);
+        if (closed) {
+            return;
+        }
+        if (!notifier) {
+            return arm_error ?? AbstractLlmProvider::makeException("LLM-ASYNC-ERROR", "the operation cannot start its "
+                "tasks: its watch of the async I/O controller is not registered", NOTHING);
+        }
+        held = op;
+        notifier.notify();
+    }
+
+    #! Ends the current watch; no drain is started after it
+    close() {
+        *EventNotifier n;
+        *object op;
+        {
+            AutoLock al(m);
+            if (closed) {
+                return;
+            }
+            closed = True;
+            n = remove notifier;
+            # released outside the lock: the operation may be destroyed with it
+            op = remove held;
+        }
+        if (n) {
+            n.notify();
+        }
+    }
+
+    #! The watch was signaled or has ended: registers the next watch, then starts a requested drain
+    private:internal fired() {
+        # the next watch is registered before the request is taken, so that a request made meanwhile is either taken
+        # here or signals the next watch
+        *hash<ExceptionInfo> arm_error;
+        try {
+            arm();
+        } catch (hash<ExceptionInfo> ex) {
+            # a later request fails with this error (see request())
+            arm_error = ex;
+        }
+        # the operation is called only while it is held for a request: a watch that ends without one (when the
+        # operation is closed, also by its destructor in another thread) does not call it
+        *object op;
+        {
+            AutoLock al(m);
+            op = remove held;
+        }
+        if (op) {
+            start(arm_error);
         }
     }
 }
@@ -3438,8 +3686,11 @@ class LlmAsyncRetry {
             wait_seq = ++seq;
             waiting = True;
         }
+        # made here, in a task of the operation: the cancellation handler runs in the thread of the code that cancels
+        # (qore#7497)
+        code<nothing()> wait_ended = sub () { retry.waitEnded(wait_seq); };
         int timer = Qore::AsyncIoController::addTimerDelay(delay, sub () {
-            o.post(sub () { retry.waitEnded(wait_seq); });
+            o.post(wait_ended);
         });
         {
             AutoLock al(m);
@@ -3454,7 +3705,7 @@ class LlmAsyncRetry {
             return;
         }
         setCancelHandler(provider.addRequestCancelHandler(opts, sub () {
-            o.post(sub () { retry.waitEnded(wait_seq); });
+            o.post(wait_ended);
         }));
     }
 
