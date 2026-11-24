@@ -1020,6 +1020,14 @@ private:
 
     // Response dispatch
     DLLLOCAL QoreHashNode* dispatchResponse(ExceptionSink* xsink);
+    //! Returns true if the connection is not used again after the complete response
+    /** It is not when data follows the response on it: bytes that the socket has already read past the end of the
+        response, or bytes that can be read now (RFC 9112 section 9.3: a connection is reused only if its data ends
+        where the response ends); a response with no body (to HEAD, 204, 304) is checked as any other.  Nor is it
+        after a 101 response, which ends HTTP/1.x on the connection, or when it failed or was closed locally.  Never
+        blocks.  I/O thread only.
+    */
+    DLLLOCAL bool connectionEndsWithResponse();
     //! Delivers the response headers to the stream; returns true if they were delivered (a stream is active, and no
     //! exception was raised)
     DLLLOCAL bool dispatchStreamingHeaders(ExceptionSink* xsink);

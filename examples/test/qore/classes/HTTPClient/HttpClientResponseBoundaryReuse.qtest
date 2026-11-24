@@ -1,0 +1,314 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.x keep-alive reuse decided by the bytes buffered or readable on TCP and TLS sockets
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# An HTTP/1.x connection is not reused after a response when more data follows the response on it: whether the
+# response has no body (a response to HEAD, 204, 304, or a Content-Length of 0) or a body that was read whole, the
+# client closes the connection, and its next request is answered on a new connection (qore#7471); also when the data
+# arrives in a write of its own after the response.  Nor is a connection reused after a 101 response to a request
+# that does not take the connection over, and a request after the server closed the connection (on a TLS connection,
+# with its close_notify) is answered on a new connection.  A connection whose data ends with the response is still
+# reused.  Both the HTTPClient class and the HttpClientIo connection manager are tested.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires HttpClientIo
+
+%exec-class HttpClientResponseBoundaryReuseTest
+
+#! a self-signed certificate for localhost, for the TLS server
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+#! the private key of the certificate
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+
+#! a hang guard only, never a timing assertion
+const Timeout = 20s;
+
+#! the timeout of a request; a request on a connection that the client should not have used waits for it
+const RequestTimeout = 10s;
+
+#! the data that follows the first response when the server sends more than the response
+const Extra = "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: keep-alive\r\n\r\nextra";
+
+#! the response to each request but the first one
+const Answer = "HTTP/1.1 200 OK\r\nContent-Length: 6\r\nConnection: keep-alive\r\n\r\nanswer";
+
+#! what the server does after the first response
+namespace After {
+    #! nothing: the connection stays open for the next request
+    const None = 0;
+    #! sends @ref Extra in the same write as the response
+    const ExtraSameWrite = 1;
+    #! sends @ref Extra in a write of its own after the response
+    const ExtraSeparateWrite = 2;
+    #! closes the connection (a TLS connection with its close_notify first)
+    const Close = 3;
+    #! sends the TLS close_notify and leaves the TCP connection open
+    const CloseNotify = 4;
+}
+
+#! An HTTP/1.1 server that answers the first request of its first connection with a given response, and every other
+#! request with @ref Answer
+class BoundaryServer {
+    public {
+        #! the number of the connection and the method and path of each request received
+        Queue requests();
+        #! decremented when the server has done what it does after the first response
+        Counter after_done(1);
+    }
+
+    private {
+        Socket listener();
+        int port;
+        bool tls;
+        Counter running();
+        int conn_count = 0;
+        bool stopped;
+        #! the data sent for the first request
+        string first_response;
+        #! what the server does after the first response
+        int after;
+    }
+
+    constructor(string first_response, int after, bool tls) {
+        self.first_response = first_response;
+        self.after = after;
+        self.tls = tls;
+        if (tls) {
+            listener.setCertificate(new SSLCertificate(CertPem));
+            listener.setPrivateKey(new SSLPrivateKey(KeyPem));
+        }
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background acceptLoop();
+    }
+
+    string getUrl() {
+        return sprintf("%s://127.0.0.1:%d", tls ? "https" : "http", port);
+    }
+
+    int getConnectionCount() {
+        return conn_count;
+    }
+
+    #! stops the server; the connections of the client must have been closed
+    stop() {
+        stopped = True;
+        listener.close();
+        running.waitForZero();
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (!stopped) {
+            *Socket s;
+            try {
+                s = tls ? listener.acceptSSL(Timeout) : listener.accept(Timeout);
+            } catch (hash<ExceptionInfo> ex) {
+                # the listener was closed by stop()
+                break;
+            }
+            if (!s) {
+                continue;
+            }
+            int n = ++conn_count;
+            running.inc();
+            background serve(s, n);
+        }
+    }
+
+    private serve(Socket s, int n) {
+        on_exit running.dec();
+        on_exit s.close();
+        bool first = n == 1;
+        while (True) {
+            hash<auto> h;
+            try {
+                h = s.readHTTPHeader(Timeout);
+            } catch () {
+                # the client closed the connection
+                return;
+            }
+            if (!h.method) {
+                return;
+            }
+            requests.push(sprintf("%d %s %s", n, h.method, h.path));
+            if (!first) {
+                s.send(Answer);
+                continue;
+            }
+            first = False;
+            on_exit after_done.dec();
+            switch (after) {
+                case After::ExtraSameWrite:
+                    # the response and the data after it are sent in one write
+                    s.send(first_response + Extra);
+                    break;
+                case After::ExtraSeparateWrite:
+                    s.send(first_response);
+                    s.send(Extra);
+                    break;
+                case After::Close:
+                    s.send(first_response);
+                    return;
+                case After::CloseNotify:
+                    s.send(first_response);
+                    s.shutdownSSL();
+                    # the connection is not read again; it is closed when the client has closed it
+                    try {
+                        s.recv(1, Timeout);
+                    } catch () {
+                    }
+                    return;
+                default:
+                    s.send(first_response);
+                    break;
+            }
+        }
+    }
+}
+
+class HttpClientResponseBoundaryReuseTest inherits QUnit::Test {
+    private {
+        #! the method of the first request and its response, without any data that follows it
+        const Cases = (
+            ("HEAD", "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n"),
+            ("GET", "HTTP/1.1 204 No Content\r\n\r\n"),
+            ("GET", "HTTP/1.1 304 Not Modified\r\n\r\n"),
+            ("GET", "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"),
+            ("GET", "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"),
+            ("GET", "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nok\r\n0\r\n\r\n"),
+        );
+
+        #! a 101 response to a request that does not take the connection over
+        const Switching = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: other\r\nConnection: Upgrade\r\n\r\n";
+
+        const Clients = ("HTTPClient", "HttpClientIo");
+    }
+
+    constructor() : QUnit::Test("HttpClientResponseBoundaryReuse", "1.0") {
+        foreach list<string> c in (Cases) {
+            string status = (c[1] =~ x/^HTTP\/1\.1 ([^\r]+)/)[0];
+            if (c[1] =~ /chunked/) {
+                status += " chunked";
+            }
+            foreach string client in (Clients) {
+                addTestCase(sprintf("%s: %s -> %s followed by more data: a new connection", client, c[0], status),
+                    \testReuse(), (client, c[0], c[1], After::ExtraSameWrite, False, False));
+                addTestCase(sprintf("%s: %s -> %s: the connection is reused", client, c[0], status),
+                    \testReuse(), (client, c[0], c[1], After::None, False, True));
+            }
+        }
+        foreach string client in (Clients) {
+            addTestCase(sprintf("%s: GET -> 200 OK, then more data in another write: a new connection", client),
+                \testReuse(), (client, "GET", Answer, After::ExtraSeparateWrite, False, False));
+            addTestCase(sprintf("%s: GET -> 101 followed by more data: a new connection", client),
+                \testReuse(), (client, "GET", Switching, After::ExtraSameWrite, False, False));
+            addTestCase(sprintf("%s: GET -> 101: a new connection", client),
+                \testReuse(), (client, "GET", Switching, After::None, False, False));
+            addTestCase(sprintf("%s: TLS: GET -> 200 OK: the connection is reused", client),
+                \testReuse(), (client, "GET", Answer, After::None, True, True));
+            addTestCase(sprintf("%s: TLS: HEAD -> 200 OK followed by more data: a new connection", client),
+                \testReuse(), (client, "HEAD", Cases[0][1], After::ExtraSameWrite, True, False));
+            addTestCase(sprintf("%s: TLS: GET -> 200 OK, then close_notify: a new connection", client),
+                \testReuse(), (client, "GET", Answer, After::CloseNotify, True, False));
+            addTestCase(sprintf("%s: TLS: GET -> 200 OK, then the server closes: a new connection", client),
+                \testReuse(), (client, "GET", Answer, After::Close, True, False));
+            addTestCase(sprintf("%s: GET -> 200 OK, then the server closes: a new connection", client),
+                \testReuse(), (client, "GET", Answer, After::Close, False, False));
+        }
+        set_return_value(main());
+    }
+
+    #! sends the two requests with the given client and checks the connections that they were sent on
+    testReuse(string client, string method, string response, int after, bool tls, bool reused) {
+        BoundaryServer server(response, after, tls);
+        on_exit server.stop();
+        string url = server.getUrl();
+
+        hash<auto> first;
+        hash<auto> second;
+        if (client == "HTTPClient") {
+            HTTPClient hc({"url": url, "error_passthru": True, "timeout": RequestTimeout, "ssl_verify_cert": False});
+            # the client's connections are closed before the server is stopped
+            on_exit delete hc;
+            first = hc.send(NOTHING, method, "/first");
+            # the server has done what it does after the first response before the next request
+            server.after_done.waitForZero(Timeout);
+            second = hc.send(NOTHING, "GET", "/second", NOTHING, True);
+        } else {
+            HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+            # the client's connections are closed before the server is stopped
+            on_exit delete mgr;
+            first = mgr.request(url, method, "/first", NOTHING, NOTHING, RequestTimeout);
+            # the server has done what it does after the first response before the next request
+            server.after_done.waitForZero(Timeout);
+            second = mgr.request(url, "GET", "/second", NOTHING, NOTHING, RequestTimeout);
+        }
+
+        assertEq((response =~ x/^HTTP\/1\.1 ([0-9]+)/)[0].toInt(), first.status_code, "the first response");
+        assertEq("1 " + method + " /first", server.requests.get(Timeout), "the first request");
+        assertEq(200, second.status_code, "the second response");
+        assertEq("answer", second.body, "the second response is the server's answer to the second request");
+        if (reused) {
+            assertEq("1 GET /second", server.requests.get(Timeout), "the connection is reused");
+            assertEq(1, server.getConnectionCount(), "no new connection was made");
+        } else {
+            assertEq("2 GET /second", server.requests.get(Timeout), "the second request is sent on a new connection");
+            assertEq(2, server.getConnectionCount(), "a new connection was made for the second request");
+        }
+        assertEq(0, server.requests.size(), "each request reached the server once");
+    }
+}

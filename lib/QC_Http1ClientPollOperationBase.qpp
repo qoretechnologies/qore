@@ -1266,16 +1266,19 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
         // Use the async-poll idle-data helper, which is TLS-aware: for TLS connections it uses SSL_peek
         // to drain TLS post-handshake records (e.g., TLS 1.3 NewSessionTicket) instead
         // of raw recv(MSG_PEEK) which would see the TLS record header byte (0x17) and
-        // never be able to consume it, causing a busy-loop.
+        // never be able to consume it, causing a busy-loop.  A socket that is already closed (with no descriptor,
+        // such as one that a TLS peer's close_notify closed) is reported by the check as closed, so that the request
+        // is sent on a new connection and never on it.  Bytes that the socket has already read count as data: a
+        // response ends the connection when data follows it (see dispatchResponse()), so none should be there.
         int fd = sock_obj->getPollableDescriptor();
-        if (fd >= 0) {
+        {
 #ifdef DEBUG
             if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
                 hook(QoreDbgHttp1SendEvent::BeforeIdleCheck, dbgHookFd(), nullptr);
             }
 #endif
             ExceptionSink idle_xsink;
-            int idle_rc = qore_socket_object_private(sock_obj).checkIdleDataForAsyncPoll(&idle_xsink);
+            int idle_rc = qore_socket_object_private(sock_obj).checkIdleDataForAsyncPoll(&idle_xsink, true);
             if (idle_rc < 0 || idle_xsink) {
                 // EOF or SSL error - preserve the underlying error category
                 // (e.g. SOCKET-SSL-ERROR when the TLS handshake or an
@@ -1385,7 +1388,8 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
     int fd = sock_obj->getPollableDescriptor();
     if (fd >= 0) {
         ExceptionSink idle_xsink;
-        int idle_rc = qore_socket_object_private(sock_obj).checkIdleDataForAsyncPoll(&idle_xsink);
+        // bytes that the socket has already read count as data, as before the send of a request
+        int idle_rc = qore_socket_object_private(sock_obj).checkIdleDataForAsyncPoll(&idle_xsink, true);
         if (idle_rc < 0 || idle_xsink) {
             ASYNC_IO_TRACE("H1 handleIdle: checkIdleData rc=%d, closing fd=%d (no pending req)\n",
                 idle_rc, fd);
@@ -1409,8 +1413,22 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
             // Unexpected application-layer data on an idle connection - close it.
             ASYNC_IO_TRACE("H1 handleIdle: unexpected app data on idle conn, closing fd=%d\n", fd);
             sock_obj->closeIo(xsink);
-            setError("HTTP1-UNEXPECTED-DATA",
-                "server sent unexpected data on idle keep-alive connection", xsink);
+            // as before the send of a request (see above): on a connection that carried a request (next_stream_id
+            // counts the requests submitted on it), the data is the end of the connection for a request that takes
+            // it now, which an idempotent request is repeated for on a new connection, such as data that followed a
+            // response after it was read (qore#7471)
+            bool reused;
+            {
+                AutoLocker al(stream_lock);
+                reused = next_stream_id > 0;
+            }
+            if (reused) {
+                setError("HTTP1-CONNECTION-CLOSED",
+                    "the server sent data on the idle keep-alive connection, which is closed", xsink);
+            } else {
+                setError("HTTP1-UNEXPECTED-DATA",
+                    "server sent unexpected data on idle keep-alive connection", xsink);
+            }
             return nullptr;
         }
         // idle_rc == 0: no application data (TLS post-handshake record drained if any)
@@ -2737,6 +2755,31 @@ QoreHashNode* Http1ClientPollOperationPriv::handleProtocolSwitched(ExceptionSink
 
 // --- Response dispatch ---
 
+bool Http1ClientPollOperationPriv::connectionEndsWithResponse() {
+    // a 101 response ends HTTP/1.x on the connection: what follows it is the data of another protocol, which a
+    // request that does not take the connection over (one that is not streamed) leaves unread
+    if (response_status_code == 101) {
+        return true;
+    }
+    if (!sock_obj) {
+        return false;
+    }
+    // bytes already read from the descriptor count as data; a TLS connection is checked for application data only
+    ExceptionSink peek_xsink;
+    int rc = qore_socket_object_private(sock_obj).checkIdleDataForAsyncPoll(&peek_xsink, true);
+    // a connection that the peer closed and that is still open is left to the check of the idle connection, which
+    // reports the close, and to the check before the send of the next request on it, as is a close that arrives later
+    if (peek_xsink || rc > 0 || (rc < 0 && sock_obj->getPollableDescriptor() < 0)) {
+        // data follows the response, or the connection failed or was closed locally (such as when the close_notify
+        // of a TLS peer was read): it is not used again
+        ASYNC_IO_TRACE("H1 connectionEndsWithResponse: rc=%d error=%d, the connection is not reused fd=%d\n", rc,
+            (int)(bool)peek_xsink, sock_obj->getPollableDescriptor());
+        peek_xsink.clear();
+        return true;
+    }
+    return false;
+}
+
 QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsink) {
     empty_read_count = 0;
     send_failure_pending = false;
@@ -2762,6 +2805,10 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
     // body is still open means the connection cannot be safely reused — force
     // close (see dispatchStreamingEnd() for the same rationale).
     if (send_state != SendState::INACTIVE && send_state != SendState::DONE) {
+        close = true;
+    }
+    // a connection whose data does not end with the response is not used again (qore#7471)
+    if (!close && connectionEndsWithResponse()) {
         close = true;
     }
     // A connection that this response ends accepts no further request from the moment its stream is released
@@ -2979,6 +3026,10 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
         ASYNC_IO_TRACE("H1 dispatchStreamingEnd: response ended with request body still "
             "open (send_state=%d) - forcing close fd=%d\n", (int)send_state,
             sock_obj ? sock_obj->getPollableDescriptor() : -1);
+        close = true;
+    }
+    // a connection whose data does not end with the response is not used again (qore#7471)
+    if (!close && connectionEndsWithResponse()) {
         close = true;
     }
     // see dispatchResponse(): the connection that this response ends accepts no further request before its stream

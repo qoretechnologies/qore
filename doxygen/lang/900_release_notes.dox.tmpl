@@ -4566,6 +4566,9 @@
     - the parse of a circular @ref inheritance "class hierarchy" whose code looks up a method or member of a class
       of the cycle ends with the parse error of the circular hierarchy instead of never ending or exhausting the
       stack (<a href="https://github.com/qoretechnologies/qore/issues/7464">issue 7464</a>)
+    - an HTTP/1.x client connection is not reused after a response, including one without a body, when more data
+      follows the response on it, nor after a \c 101 response that does not switch the connection over (see
+      @ref httpclient_persistence "HTTPClient connection persistence")
 
     @section qore_2_2_1 Qore 2.2.1
 

@@ -103,8 +103,8 @@ public:
 
         @param xsink exception sink; set on SSL error
         @param buffered_is_data if true, bytes that the socket has already read from the descriptor count as data
-        (a server whose client sent its next request before the response to the previous one, pipelining); a client
-        does not set it, as for it such bytes are not a new message
+        (a server whose client sent its next request before the response to the previous one, pipelining, or an HTTP
+        client that has bytes after the end of a response, which keep the connection from being reused)
 
         @return > 0  application-layer data is available
         @return   0  no application data; any TLS post-handshake record was drained
