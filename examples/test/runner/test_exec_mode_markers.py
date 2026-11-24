@@ -385,6 +385,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTModuleHeaderRequests.qtest",
                                  "examples/test/ir/AOTModuleBuiltinApiIdentity.qtest",
                                  "examples/test/qore/security/aot-cross-module-caller-mask.qtest",
+                                 "examples/test/qore/misc/alloc-failure/alloc-failure.qtest",
                                  "examples/test/qore/misc/aot-dependency-domains/aot-dependency-domains.qtest",
                                  "examples/test/ir/AOTFusedFoldVerify.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
