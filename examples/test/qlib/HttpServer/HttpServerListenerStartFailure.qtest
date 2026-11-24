@@ -48,17 +48,13 @@ class HttpServerListenerStartFailureTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    #! Returns the options of a listener on localhost on a random port, an HTTP/3 one if \a h3
-    private hash<HttpListenerOptionInfo> listenerOptions(bool h3) {
-        hash<HttpListenerOptionInfo> opts = <HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0};
-        if (h3) {
-            opts += <HttpListenerOptionInfo>{
-                "cert": new SSLCertificate(TestCertificates::CertPem),
-                "key": new SSLPrivateKey(TestCertificates::KeyPem),
-                "enable_h3": True,
-            };
-        }
-        return opts;
+    #! Returns the options that make a listener an HTTP/3 one
+    private hash<HttpListenerOptionInfo> h3Options() {
+        return <HttpListenerOptionInfo>{
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": True,
+        };
     }
 
     #! Stops \a srv in a thread of its own and waits for the stop; a count of running listeners that a failed start
@@ -81,8 +77,12 @@ class HttpServerListenerStartFailureTest inherits QUnit::Test {
         } else {
             srv.stopController();
         }
-        assertThrows("CONTROLLER-ADD-LISTENER-ERROR", \srv.addListener(), listenerOptions(h3),
-            "the start of the listener failed");
+        # a listener on localhost on a random port
+        hash<HttpListenerOptionInfo> opts = <HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0};
+        if (h3) {
+            opts += h3Options();
+        }
+        assertThrows("CONTROLLER-ADD-LISTENER-ERROR", \srv.addListener(), opts, "the start of the listener failed");
         # nothing of the listener is kept: neither the listener nor its paired QUIC listener
         assertEq({}, srv.getListeners(), "no listener is registered");
         assertEq(0, srv.getRunningListenerCount(), "no listener is counted");
@@ -92,10 +92,12 @@ class HttpServerListenerStartFailureTest inherits QUnit::Test {
     runningListenerTest() {
         StartFailingServer srv();
         on_exit delete srv;
-        srv.addListener(listenerOptions(False));
+        # listeners on localhost on random ports
+        hash<HttpListenerOptionInfo> opts = <HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0};
+        srv.addListener(opts);
         assertEq(1, srv.getRunningListenerCount());
         srv.stopController();
-        assertThrows("CONTROLLER-ADD-LISTENER-ERROR", \srv.addListener(), listenerOptions(False));
+        assertThrows("CONTROLLER-ADD-LISTENER-ERROR", \srv.addListener(), opts);
         assertEq(1, srv.getListeners().size(), "only the running listener is registered");
         assertEq(1, srv.getRunningListenerCount(), "the count of the running listener is unchanged");
         stopServer(srv);
