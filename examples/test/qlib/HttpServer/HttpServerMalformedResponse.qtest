@@ -164,6 +164,13 @@ class BadHandler inherits AbstractHttpRequestHandler {
                            : s.sendHttp2StreamData(sid, binary("refused: " + ex.err + ": " + ex.desc), True);
                     }
                     break;
+                case "body-read-error": {
+                    # The native decompressor runs on the I/O thread and cannot read this response body.
+                    InputStream response_body = new TransformInputStream(new BinaryInputStream(binary("invalid gzip")),
+                        get_decompressor(COMPRESSION_ALG_GZIP));
+                    s.submitHttp2StreamingResponseWithStream(sid, 200, {}, response_body);
+                    break;
+                }
                 case "withstream": {
                     # a streamed response that the handler submits itself, then reply_sent without "streaming"; with
                     # 1, the stream cannot be read on the I/O thread, and the response is submitted as a whole
@@ -261,6 +268,7 @@ class HttpServerMalformedResponseTest inherits QUnit::Test {
         addTestCase("content-length fields that do not match the body are refused", \contentLengthTest());
         addTestCase("a response without content sends no body", \noBodyTest());
         addTestCase("a streamed body of another length than declared resets its stream", \streamLengthTest());
+        addTestCase("HTTP/2 response body read errors reset only its stream", \bodyReadErrorTest());
         addTestCase("a compressed body is sent with its own length", \compressedTest());
         addTestCase("te is not sent in a response", \teTest());
         addTestCase("a CONNECT response is never malformed", \connectTest());
@@ -395,6 +403,11 @@ class HttpServerMalformedResponseTest inherits QUnit::Test {
                 assertRegex("RESET", rv.ex.desc, sprintf("%s %s: the stream is reset", protocol, c));
             }
         }
+    }
+
+    bodyReadErrorTest() {
+        hash<auto> rv = withHeldStream("h2", "body read error", "GET", "/bad/body-read-error");
+        assertRegex("RESET", rv.ex.desc, "the client receives a stream reset");
     }
 
     teTest() {
