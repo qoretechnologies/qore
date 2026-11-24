@@ -4417,16 +4417,33 @@ public class HttpServerTest inherits QUnit::Test {
         the assertion's own exception being caught as the expected failure.  The connection is refused at once, but
         the connect timeout is long, so that a client that does not see the refusal and waits gives a timeout error
         instead of the connect error: the error tells the two apart, not the time it took.
+
+        The UDP port of the TCP port's number is held as well, by a socket that never answers (see
+        @ref holdRefusingPorts()), so the case also checks that the \c https request does not depend on it (an
+        \c http request uses HTTP/1.1 over TCP only): with the \c "auto" protocol, an \c https request races HTTP/3
+        against TCP, and that race does not end on the refusal of TCP while the QUIC handshake can still complete; it
+        waits for the handshake up to \c connect_timeout (see
+        \c HttpClientConnectionManager::createConnectionHappyEyeballs()).  The \c https request therefore uses HTTP/2
+        only: TLS over the TCP connection that this case tests (qore#7525).
     */
     private checkConnectionRefused(string scheme) {
-        int closed_port = getUnusedPort();
+        list<Socket> held = holdRefusingPorts();
+        on_exit {
+            map $1.close(), held;
+        }
+        # the local port of the server end of the connection that holds the TCP port
+        int closed_port = held[1].getSocketInfo().port;
         *hash<ExceptionInfo> err;
         try {
-            RestClientIo rc({
+            hash<auto> opts = {
                 "url": sprintf("%s://127.0.0.1:%d", scheme, closed_port),
                 "connect_timeout": 60s,
                 "timeout": 60s,
-            });
+            };
+            if (scheme == "https") {
+                opts.protocol = "h2";
+            }
+            RestClientIo rc(opts);
             rc.restGet("/test");
         } catch (hash<ExceptionInfo> ex) {
             err = ex;
@@ -4438,16 +4455,56 @@ public class HttpServerTest inherits QUnit::Test {
         assertRegex("refused", err.desc ?? "", sprintf("%s connection refused error description", scheme));
     }
 
-    #! returns a port on 127.0.0.1 that no socket is bound to at the time of the call
-    /** binds a socket to port 0, so that the system assigns a free port, and closes it again; a fixed port can be in
-        use on the host, for example by a listener of another test run at the same time
+    #! Returns sockets that hold a TCP port of 127.0.0.1 that refuses connections and the UDP port of the same number
+    /** The TCP port is held by a connection to it: the port is bound without \c SO_REUSEADDR, a connection is made to
+        it and accepted, and the listening socket is closed, so a connection request to the port finds no listening
+        socket and is refused at once, on macOS as on Linux (a socket that is bound but does not listen is not enough:
+        macOS drops a connection request to it instead of refusing it, qore#6347).  The UDP port is held by a socket
+        that never reads, so a datagram sent to it gets no answer.  While the sockets are open, no socket of another
+        test running at the same time can bind the port in either protocol (qore#7525).  A port whose UDP port is taken
+        is not used.
+
+        @return the sockets, all of which the caller closes: the client and server ends of the connection that holds
+        the TCP port, then the UDP socket
     */
-    private static int getUnusedPort() {
-        Socket s();
-        s.bindINET("127.0.0.1", "0", False, AF_INET);
-        int port = s.getSocketInfo().port;
-        s.close();
-        return port;
+    private static list<Socket> holdRefusingPorts() {
+        for (int attempt = 1; True; ++attempt) {
+            list<Socket> held = ();
+            try {
+                Socket listener();
+                on_exit {
+                    listener.close();
+                }
+                listener.bindINET("127.0.0.1", "0", False, AF_INET);
+                int port = listener.getSocketInfo().port;
+                if (listener.listen(1)) {
+                    throw "LISTEN-ERROR", strerror();
+                }
+                Socket client();
+                held += client;
+                client.connect(sprintf("127.0.0.1:%d", port), 30s);
+                *Socket server_end = listener.accept(30s);
+                if (!server_end) {
+                    throw "ACCEPT-ERROR", "the connection that holds the TCP port was not accepted";
+                }
+                held += server_end;
+            } catch (hash<ExceptionInfo> ex) {
+                map $1.close(), held;
+                rethrow;
+            }
+            try {
+                Socket udp();
+                # the local port of the server end is the held port
+                udp.bindINET("127.0.0.1", held[1].getSocketInfo().port, False, AF_INET, SOCK_DGRAM);
+                return held + udp;
+            } catch (hash<ExceptionInfo> ex) {
+                # the UDP port is in use: another port is taken
+                map $1.close(), held;
+                if (attempt == 20) {
+                    rethrow;
+                }
+            }
+        }
     }
 }
 
