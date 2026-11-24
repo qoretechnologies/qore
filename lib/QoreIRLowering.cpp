@@ -11233,9 +11233,11 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     // - Binary: binary + string = string (not binary), needs in-place append
     // Using AddAssignLValue goes through QorePlusEqualsOperatorNode which does
     // proper in-place modification via lvalue semantics.
-    if (left_var && left_var->getTypeInfo()) {
+    if (left_var) {
         const QoreTypeInfo* ti = left_var->getTypeInfo();
-        if (QoreTypeInfo::getUniqueReturnClass(ti) != nullptr
+        // An untyped variable can also hold a list or hash. An extra reference to compute the sum
+        // would force a copy even when the variable owns the container (#7421).
+        if (!QoreTypeInfo::hasType(ti) || QoreTypeInfo::getUniqueReturnClass(ti) != nullptr
                 || QoreTypeInfo::isListType(ti)
                 || QoreTypeInfo::isHashType(ti)
                 || QoreTypeInfo::getBaseType(ti) == NT_BINARY
