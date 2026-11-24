@@ -179,11 +179,51 @@ static void copiesAndIteratorDeletes() {
     }
 }
 
+// HashIterator::deleteKey() deletes a member whose value's release runs code (an object's destructor that changes
+// a global variable), and the iteration continues with the next member (qore#7265)
+static void iteratorDeleteRunsCode() {
+    ExceptionSink xsink;
+    QoreProgram* pgm = new QoreProgram();
+    QoreString code("%new-style\n"
+        "our int destroyed = 0;\n"
+        "class X { destructor() { ++destroyed; } }\n"
+        "hash<auto> sub make() { return {\"a\": 1, \"b\": new X(), \"c\": 3, \"d\": new X(), \"e\": 5}; }\n"
+        "int sub count() { return destroyed; }\n");
+    QoreString label("hash-iterator-delete");
+    pgm->parse(&code, &label, &xsink);
+    require(!xsink, "cannot parse the iterator fixture");
+    // the top-level code initializes the global variable
+    pgm->run(&xsink).discard(&xsink);
+    require(!xsink, "cannot run the iterator fixture");
+    {
+        ValueHolder v(pgm->callFunction("make", nullptr, &xsink), &xsink);
+        require(!xsink && v->getType() == NT_HASH, "the iterator fixture did not give a hash");
+        QoreHashNode* h = v->get<QoreHashNode>();
+        std::string visited;
+        HashIterator i(*h);
+        while (i.next()) {
+            visited += i.getKey();
+            if (i.get().getType() == NT_OBJECT) {
+                int64 before = pgm->callFunction("count", nullptr, &xsink).getAsBigInt();
+                require(!xsink, "cannot read the iterator fixture's count");
+                i.deleteKey(&xsink);
+                require(!xsink, "deleting an object member through an iterator raised an exception");
+                int64 after = pgm->callFunction("count", nullptr, &xsink).getAsBigInt();
+                require(after == before + 1, "the destructor of the deleted member's object did not run");
+            }
+        }
+        require(visited == "abcde", "the iteration did not continue after the members were deleted");
+        require(keyList(*h) == "a,c,e", "the hash has the wrong keys after the deletes");
+    }
+    pgm->waitForTerminationAndDeref(&xsink);
+    require(!xsink, "the iterator fixture's program raised an exception");
+}
+
 int main(int argc, char** argv) {
     if (argc > 2 || (argc == 2 && std::strcmp(argv[1], "encoded")
             && std::strcmp(argv[1], "conversion") && std::strcmp(argv[1], "declaration")
-            && std::strcmp(argv[1], "copy"))) {
-        std::fprintf(stderr, "usage: hash-lookup-test [encoded|conversion|declaration|copy]\n");
+            && std::strcmp(argv[1], "copy") && std::strcmp(argv[1], "iterator"))) {
+        std::fprintf(stderr, "usage: hash-lookup-test [encoded|conversion|declaration|copy|iterator]\n");
         return 2;
     }
     qore_init(QL_MIT, "UTF-8", false, QLO_DISABLE_SIGNAL_HANDLING);
@@ -200,6 +240,9 @@ int main(int argc, char** argv) {
         }
         if (argc == 1 || !std::strcmp(argv[1], "copy")) {
             copiesAndIteratorDeletes();
+        }
+        if (argc == 1 || !std::strcmp(argv[1], "iterator")) {
+            iteratorDeleteRunsCode();
         }
     } catch (const std::exception& error) {
         std::fprintf(stderr, "FAIL after %u checks: %s\n", checks, error.what());
