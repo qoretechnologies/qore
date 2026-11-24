@@ -1033,6 +1033,7 @@ void SignatureHash::update(const QoreString& str) {
     }
 
 #ifdef DEBUG
+    dbg_parts.emplace_back(str.c_str(), str.size());
     //QoreString dbg;
     //toString(dbg);
     //printd(5, "class hash %p set to: %s\n", this, dbg.getBuffer());
@@ -2581,10 +2582,14 @@ int qore_class_private::initializeMembers() {
 }
 
 // process signature entries for base classes
+/** The type of a generic parent class is named with the namespace paths of its type arguments
+    (QoreTypeInfo::getPath()), so that subclasses of the same generic class with type arguments of the same name in
+    different namespaces have different signatures (qore#7457)
+*/
 static void do_sig(QoreString& csig, BCNode& n) {
     qore_class_private* qc = qore_class_private::get(*n.sclass);
     csig.sprintf("inherits %s %s ", privpub(n.getAccess()),
-        n.type_info ? QoreTypeInfo::getName(n.type_info) : qc->name.c_str());
+        n.type_info ? QoreTypeInfo::getPath(n.type_info) : qc->name.c_str());
     SignatureHash& h = qc->hash;
     if (h) {
         csig.concat('[');
@@ -2596,24 +2601,45 @@ static void do_sig(QoreString& csig, BCNode& n) {
 }
 
 // process signature entries for class members
+/** The type is the resolved declared type, with the namespace paths of the classes, hashdecls and enums that it names
+    (QoreTypeInfo::getPath(), as in the parameter types of method signatures): the same declaration has the same type
+    string in every Program, and declarations that differ in a member type have different signatures (qore#7457)
+*/
 static void do_sig(QoreString& csig, const QoreMemberMap::member_list_element_t& i) {
+    assert(i.second);
     if (!i.second->local()) {
         return;
     }
 
-    if (i.second) {
-        csig.sprintf("%s mem %s %s %s\n", privpub(i.second->access), QoreTypeInfo::getName(i.second->getTypeInfo()), i.first, i.second->exp.getTypeName());
-    } else {
-        csig.sprintf("%s mem %s\n", privpub(i.second->access), i.first);
-    }
+    csig.sprintf("%s mem %s %s %s\n", privpub(i.second->access), QoreTypeInfo::getPath(i.second->getTypeInfo()),
+        i.first, i.second->exp.getTypeName());
 }
 
 // process signature entries for class static vars
+/** The type is the resolved declared type with namespace paths, as for members (qore#7457)
+*/
 static void do_sig(QoreString& csig, const QoreVarMap::member_list_element_t& i) {
-    if (i.second) {
-        csig.sprintf("%s var %s %s %s\n", privpub(i.second->access), QoreTypeInfo::getName(i.second->getTypeInfo()), i.first, i.second->exp.getTypeName());
-    } else {
-        csig.sprintf("%s var %s\n", privpub(i.second->access), i.first);
+    assert(i.second);
+    csig.sprintf("%s var %s %s %s\n", privpub(i.second->access), QoreTypeInfo::getPath(i.second->getTypeInfo()),
+        i.first, i.second->exp.getTypeName());
+}
+
+// process signature entries for the methods of a method map
+/** The methods are added in the order of their names, and the variants of a method in the order of its variant list
+    (that of their declarations), so that the signature depends only on the declarations, not on the iteration order
+    of the method map (a hash map whose order depends on its hash function and bucket count) (qore#7458)
+*/
+static void do_method_sigs(QoreString& csig, const hm_method_t& m, const char* mod) {
+    std::vector<const hm_method_t::value_type*> v;
+    v.reserve(m.size());
+    for (auto& i : m) {
+        v.push_back(&i);
+    }
+    std::sort(v.begin(), v.end(), [](const hm_method_t::value_type* a, const hm_method_t::value_type* b) {
+        return a->first < b->first;
+    });
+    for (const hm_method_t::value_type* i : v) {
+        qore_method_private::get(*i->second)->getFunction()->parseSignatures(csig, mod);
     }
 }
 
@@ -2935,6 +2961,16 @@ int qore_class_private::initializeIntern() {
     // signature string - also processed in parseCommit()
     QoreString csig;
 
+    // the namespace path of the class is part of its signature, as for a builtin class (generateBuiltinSignature()),
+    // so that a class with the same name and declarations in another namespace is another type; a class is
+    // compatible with another class of the same signature only if it is the same declaration in another Program
+    // (qore#7397).  It is added once, with the first part of the signature
+    if (!hash && ns) {
+        std::string nspath;
+        ns->getPath(nspath, true, true);
+        csig.sprintf("class %s%s\n", nspath.c_str(), name.c_str());
+    }
+
     // initialize parent classes
     if (scl) {
         mergeAbstract();
@@ -2954,75 +2990,91 @@ int qore_class_private::initializeIntern() {
     if (has_sig_changes) {
         // add methods to class signature
         // pending "normal" (non-static) method variants
-        for (auto& i : hm)
-            i.second->priv->func->parseSignatures(csig, nullptr);
+        do_method_sigs(csig, hm, nullptr);
         // pending static method variants
-        for (auto& i : shm)
-            i.second->priv->func->parseSignatures(csig, "static");
+        do_method_sigs(csig, shm, "static");
+    }
+
+    // the declared types of the static variables and members are resolved before they are added to the signature,
+    // which includes them: classes of other Programs that differ only in such a type are different types; the
+    // initializers are initialized below, after the signature strings are made (qore#7457)
+    if (!sys) {
+        for (auto& i : vars.member_list) {
+            if (i.second && i.second->parseResolveDeclaredType() && !err) {
+                err = -1;
+            }
+        }
+        for (auto& i : members.getList()) {
+            if (i.second && i.second->local() && i.second->parseResolveDeclaredType() && !err) {
+                err = -1;
+            }
+        }
     }
 
     // add committed vars to signature first before members
-    if (!vars.empty()) {
-        for (auto& i : vars.member_list) {
-            do_sig(csig, i);
+    for (auto& i : vars.member_list) {
+        do_sig(csig, i);
+    }
+
+    // add committed members to signature
+    for (auto& i : members.getList()) {
+        do_sig(csig, i);
+    }
+
+    // the signature is complete and hashed before the initializers of the static variables and members are
+    // initialized: an initializer can initialize a subclass of this class (ex: static *Base b = new Sub()), whose
+    // signature includes the hash of this class; without it, it would include the class ID of this class, which
+    // differs in every Program (qore#7457)
+    if (has_sig_changes) {
+        // process constants for class signature, private first, then public
+        do_sig(csig, constlist);
+
+        if (!csig.empty()) {
+            printd(5, "qore_class_private::initializeIntern() this: %p '%s' sig:\n%s", this, name.c_str(),
+                csig.getBuffer());
+            hash.update(csig);
         }
 
-        if (!sys) {
-            VariableBlockHelper vbh;
+        has_sig_changes = false;
+    } else if (!csig.empty()) {
+        // only the namespace path of the class
+        hash.update(csig);
+    }
 
-            // initialize new static vars
-            for (auto& i : vars.member_list) {
-                if (i.second) {
-                    if (i.second->parseInit(i.first) && !err) {
-                        err = -1;
-                    }
+    if (!vars.empty() && !sys) {
+        VariableBlockHelper vbh;
+
+        // initialize new static vars
+        for (auto& i : vars.member_list) {
+            if (i.second) {
+                if (i.second->parseInit(i.first) && !err) {
+                    err = -1;
                 }
             }
         }
     }
 
-    if (!members.empty()) {
-        // add committed members to signature
+    if (!members.empty() && !sys) {
+        SelfLocalVarParseHelper slvph(&selfid);
+
         for (auto& i : members.getList()) {
-            do_sig(csig, i);
-        }
-
-        if (!sys) {
-            SelfLocalVarParseHelper slvph(&selfid);
-
-            // add committed members to signature
-            for (auto& i : members.getList()) {
-                // check new members for conflicts in base classes
-                if (parseCheckMemberInBaseClasses(i.first, i.second) && !err) {
-                    err = -1;
-                }
-            }
-
-            // initialize new members
-            //printd(5, "qore_class_private::initializeIntern() this: %p '%s' initialing members: %p\n", this, name.c_str(), &members);
-            if (members.parseInit(selfid) && !err) {
+            // check new members for conflicts in base classes
+            if (parseCheckMemberInBaseClasses(i.first, i.second) && !err) {
                 err = -1;
             }
+        }
+
+        // initialize new members
+        //printd(5, "qore_class_private::initializeIntern() this: %p '%s' initialing members: %p\n", this,
+        //    name.c_str(), &members);
+        if (members.parseInit(selfid) && !err) {
+            err = -1;
         }
     }
 
     // issue #3286: a constant and a member or static variable with the same name in the class hierarchy
     if (!sys) {
         parseCheckNameKindClashes(pgm);
-    }
-
-    if (has_sig_changes) {
-        // process constants for class signature, private first, then public
-        do_sig(csig, constlist);
-
-        if (!csig.empty()) {
-            printd(5, "qore_class_private::initializeIntern() this: %p '%s' sig:\n%s", this, name.c_str(), csig.getBuffer());
-            hash.update(csig);
-        }
-
-        has_sig_changes = false;
-    } else {
-        assert(csig.empty());
     }
 
     return err;
@@ -3136,10 +3188,8 @@ void qore_class_private::generateBuiltinSignature(const char* nspath) {
         }
     }
 
-    for (auto& i : hm)
-        i.second->priv->func->parseSignatures(csig, nullptr);
-    for (auto& i : shm)
-        i.second->priv->func->parseSignatures(csig, "static");
+    do_method_sigs(csig, hm, nullptr);
+    do_method_sigs(csig, shm, "static");
 
     // add committed vars to signature first before members
     for (auto& i : vars.member_list) {
@@ -3714,13 +3764,16 @@ void qore_class_private::parseCommit() {
                 }
             }
 
+            // add the pending method variants to the signature in the order of the method names (qore#7458)
+            if (has_sig_changes) {
+                do_method_sigs(csig, hm, nullptr);
+                do_method_sigs(csig, shm, "static");
+            }
+
             // commit pending "normal" (non-static) method variants
             for (auto& i : hm) {
                 bool is_new = i.second->priv->func->committedEmpty();
-                if (has_sig_changes)
-                    i.second->priv->func->parseCommitMethod(csig, 0);
-                else
-                    i.second->priv->func->parseCommitMethod();
+                i.second->priv->func->parseCommitMethod();
                 if (is_new) {
                     checkAssignSpecial(i.second);
                     ++num_methods;
@@ -3731,10 +3784,7 @@ void qore_class_private::parseCommit() {
             // commit pending static method variants
             for (auto& i : shm) {
                 bool is_new = i.second->priv->func->committedEmpty();
-                if (has_sig_changes)
-                    i.second->priv->func->parseCommitMethod(csig, "static");
-                else
-                    i.second->priv->func->parseCommitMethod();
+                i.second->priv->func->parseCommitMethod();
                 if (is_new) {
                     ++num_static_methods;
                     ++num_static_user_methods;
@@ -6102,10 +6152,14 @@ MethodVariantBase* BCList::matchNonAbstractVariant(const std::string& name, Meth
         const BCNode& n = *(*f.list)[f.next++];
         const QoreClass* nqc = n.sclass;
         // nqc may be 0 if there were a parse error with an unknown class earlier
-        // also if the original abstract variant comes from the class being searched, then skip it
         // a class that a parent class inherits with private:internal access is not in the hierarchy of the class:
         // its variants do not implement the class's abstract variants (qore#7316)
-        if (!nqc || v->getClass() == nqc || (f.list != this && n.access >= Internal)) {
+        // the class that declares the abstract variant is searched as any other: once it has implemented the variant
+        // itself, its method has the implementation, and otherwise its abstract variant is passed over and its parent
+        // classes are searched, so that the variant found does not depend on which of the declarations with the same
+        // signature in the parent classes the class has kept, i.e. on the order of the parent classes or on whether
+        // a parent class was parsed in the same program (qore#7382)
+        if (!nqc || (f.list != this && n.access >= Internal)) {
             continue;
         }
         QORE_CLASS_HIERARCHY_WALK_STEP();
@@ -6150,9 +6204,8 @@ MethodVariantBase* BCList::runtimeMatchNonAbstractVariant(const std::string& nam
         const BCNode& n = *(*f.list)[f.next++];
         const QoreClass* nqc = n.sclass;
         // nqc may be nullptr if there were errors earlier
-        // also if the original abstract variant comes from the class being searched, then skip it
-        // as in matchNonAbstractVariant() (qore#7316)
-        if (!nqc || v->getClass() == nqc || (f.list != this && n.access >= Internal)) {
+        // as in matchNonAbstractVariant() (qore#7316, qore#7382)
+        if (!nqc || (f.list != this && n.access >= Internal)) {
             continue;
         }
         QORE_CLASS_HIERARCHY_WALK_STEP();
@@ -12131,6 +12184,18 @@ static void do_variant_sig(QoreString& csig, const std::string& name, const Meth
     csig.concat('(');
     csig.concat(v->getSignature()->getSignatureText());
     csig.concat(')');
+    // the declared return type is part of the signature, with namespace paths like the parameter types: code typed
+    // with a class of one Program calls the methods of an object of the same class of another Program and takes the
+    // return types of its own declarations (qore#7457); a return type that is not declared but implied by the parse
+    // options (nothing under PO_REQUIRE_TYPES or PO_REQUIRE_PROTOTYPES) is left out, as is that of a constructor,
+    // destructor or copy method, which declares none: the same declaration parsed with and without these options is
+    // the same class
+    const AbstractFunctionSignature* sig = v->getSignature();
+    const QoreTypeInfo* rti = sig->getReturnTypeInfo();
+    if (rti && !sig->returnTypeIsImplied() && name != "constructor" && name != "destructor" && name != "copy") {
+        csig.concat(" -> ");
+        csig.concat(QoreTypeInfo::getPath(rti));
+    }
     csig.concat('\n');
 }
 
@@ -12139,11 +12204,6 @@ void MethodFunctionBase::parseSignatures(QoreString& csig, const char* mod) cons
         const MethodVariantBase* v = METHVB_const(*i);
         do_variant_sig(csig, name, v, mod);
     }
-}
-
-void MethodFunctionBase::parseCommitMethod(QoreString& csig, const char* mod) {
-    parseSignatures(csig, mod);
-    parseCommitMethod();
 }
 
 void MethodFunctionBase::parseCommitMethod() {
@@ -13839,6 +13899,16 @@ static bool qore_ancestor_member_initialized(const qore_class_private* cls, cons
         }
     }
     return false;
+}
+
+int QoreMemberInfoBase::parseResolveDeclaredType() {
+    if (typeInfo || !parseTypeInfo) {
+        return 0;
+    }
+    int err = 0;
+    typeInfo = QoreParseTypeInfo::resolveAndDelete(parseTypeInfo, loc, err);
+    parseTypeInfo = nullptr;
+    return err;
 }
 
 int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {

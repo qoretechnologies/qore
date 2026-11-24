@@ -2836,8 +2836,10 @@ UserSignature::UserSignature(int first_line, int last_line, QoreValue params, Re
     bool bare_refs = (bool)(po & PO_ALLOW_BARE_REFS);
 
     // assign no return type if return type declaration is missing and PO_REQUIRE_TYPES or PO_REQUIRE_PROTOTYPES is set
-    if (!retTypeInfo && needs_types)
+    if (!retTypeInfo && needs_types) {
         returnTypeInfo = nothingTypeInfo;
+        implied_return_type = true;
+    }
     delete retTypeInfo;
 
     if (!params) {

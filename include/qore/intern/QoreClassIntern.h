@@ -1449,6 +1449,14 @@ public:
         return typeInfo;
     }
 
+    //! resolves the declared type, if it is not resolved yet, without initializing the initializer
+    /** Called by qore_class_private::initializeIntern() before the class signature is made, which includes the
+        resolved type (qore#7457); parseInit() resolves the type itself if this was not called
+
+        @return 0 for OK, -1 if the type could not be resolved (a parse exception has been raised)
+    */
+    DLLLOCAL int parseResolveDeclaredType();
+
     DLLLOCAL const QoreTypeInfo* parseGetTypeInfo() const {
         // we cannot tell if the member has been initialized, so we return anyTypeInfo here for potential references
         return QoreTypeInfo::isReference(typeInfo) ? anyTypeInfo : typeInfo;
@@ -3117,6 +3125,13 @@ class SignatureHash {
 protected:
     unsigned char buf[SH_SIZE];
     bool is_set;
+#ifdef DEBUG
+    //! the strings hashed by update() in order, for the dbg_class_signature() debug hook only
+    /** The hash is the XOR of the SHA1 digests of these strings; an AOT-loaded hash (setRawHash()) has none
+        (examples/test/qore/classes/class-signature-golden.qtest)
+    */
+    std::vector<std::string> dbg_parts;
+#endif
 
     DLLLOCAL void set(const QoreString& str);
 
@@ -3136,6 +3151,9 @@ public:
     DLLLOCAL SignatureHash(const SignatureHash& old) : is_set(old.is_set) {
         if (is_set)
             copyHash(old);
+#ifdef DEBUG
+        dbg_parts = old.dbg_parts;
+#endif
     }
 
     DLLLOCAL void update(const QoreString& str);
@@ -3161,6 +3179,9 @@ public:
             if (!is_set)
                 is_set = true;
             copyHash(other);
+#ifdef DEBUG
+            dbg_parts = other.dbg_parts;
+#endif
         }
         return *this;
     }
@@ -3186,6 +3207,11 @@ public:
         }
         return str.c_str();
     }
+
+    //! returns the strings hashed by update() in order (for the dbg_class_signature() debug hook)
+    DLLLOCAL const std::vector<std::string>& dbgGetParts() const {
+        return dbg_parts;
+    }
 #endif
 
     DLLLOCAL char* getHash() const {
@@ -3196,6 +3222,9 @@ public:
     DLLLOCAL void setRawHash(const void* data) {
         memcpy(buf, data, SH_SIZE);
         is_set = true;
+#ifdef DEBUG
+        dbg_parts.clear();
+#endif
     }
 
     DLLLOCAL void clear() {
@@ -3203,6 +3232,9 @@ public:
             is_set = false;
             clearHash();
         }
+#ifdef DEBUG
+        dbg_parts.clear();
+#endif
     }
 };
 
@@ -6368,9 +6400,11 @@ public:
     //! Returns true if \a qc is this class, a copy of its declaration or a class with the same name and signature
     /** The type compatibility of classes (the class of a value for a declared type, casts and the calls of a base
         class's methods on an object): the same declaration loaded in two Programs (an included source parsed by each
-        of them, for example) is the same type.  Never used to give private access, which a class with the name and
-        the signature of another class (a look-alike, which any code that sees the declaration of the class can
-        declare) must not get: see sameClass() (qore#7036)
+        of them, for example) is the same type.  The signature of a user class includes the path of its namespace, so
+        that classes with the same name and declarations in different namespaces are different types (qore#7397).
+        Never used to give private access, which a class with the name and the signature of another class (a
+        look-alike, which any code that sees the declaration of the class can declare) must not get: see sameClass()
+        (qore#7036)
     */
     DLLLOCAL bool equal(const qore_class_private& qc) const {
         if (&qc == this) {

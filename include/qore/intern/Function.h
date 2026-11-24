@@ -149,6 +149,15 @@ public:
         return returnTypeInfo;
     }
 
+    //! returns true if the return type was not declared but implied by the parse options
+    /** A user function or method without a declared return type returns \c nothing under PO_REQUIRE_TYPES or
+        PO_REQUIRE_PROTOTYPES (UserSignature); the class signature leaves such a return type out, so that the same
+        declaration parsed with and without these options is the same class (qore#7457)
+    */
+    DLLLOCAL bool returnTypeIsImplied() const {
+        return implied_return_type;
+    }
+
     DLLLOCAL const arg_vec_t& getDefaultArgList() const {
         return defaultArgList;
     }
@@ -308,6 +317,9 @@ protected:
 
     // varargs flag
     bool varargs = false;
+
+    //! the return type was not declared but implied by the parse options (see returnTypeIsImplied())
+    bool implied_return_type = false;
 
     bool declares_type_parameters = false;
     mutable std::atomic<signed char> type_param_substitution_cache {-1};
@@ -3805,10 +3817,8 @@ public:
     DLLLOCAL void addBuiltinMethodVariant(MethodVariantBase* variant);
 
     // maintains access flag and commits user variants
-    DLLLOCAL void parseCommitMethod(QoreString& csig, const char* mod);
-
     DLLLOCAL void parseCommitMethod();
-    // processes method signatures
+    // processes method signatures (the variants in the order of the variant list)
     DLLLOCAL void parseSignatures(QoreString& csig, const char* mod) const;
 
     // if an identical signature is found to the passed variant, then it is removed from the abstract list
