@@ -1969,7 +1969,9 @@ static bool SandboxManager::callerMayReadExternalInfo() [flags=RET_VALUE_ONLY] {
     such code itself (getenv()), and the metadata endpoints of the clouds are protected only by the network policy of
     its sandbox; an embedder that runs untrusted code restricts its Programs from
     @ref Qore::DOM_EXTERNAL_INFO "DOM_EXTERNAL_INFO" to protect the environment (a sandbox does not by default); the
-    default Kerberos credentials and SqlUtil's resolved credentials are refused regardless (see
+    default Kerberos credential, cache and keytab, the non-file Kerberos credential stores and SqlUtil's resolved
+    credentials are refused regardless, while a file-backed Kerberos store that the caller names is protected only as
+    far as its file system policy is (see
     @ref sandbox_ambient_host_data).
 
     The host's own code (not a module's) that restricted code calls answers for itself, as a policy barrier does:

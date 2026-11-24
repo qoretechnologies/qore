@@ -1223,10 +1223,10 @@ DLLEXPORT bool qore_caller_may_read_external_info();
     Library code that resolves a credential of the host for its caller (an ambient credential: from the environment,
     an instance metadata service, the process's default Kerberos credential or a host credential store) asks it first.
     The host's own code (not a module's) that restricted code calls answers for itself, as for
-    qore_caller_may_read_external_info(); sandboxed callers are refused regardless
+    qore_caller_may_read_external_info(); sandboxed callers are refused regardless.
     For sandboxed code that is not restricted from external information, the refusal protects only what such code
-    cannot reach otherwise: it reads the host's environment itself, and reaches a metadata endpoint if its network
-    policy allows it
+    cannot reach otherwise: it reads the host's environment itself, reaches a metadata endpoint if its network policy
+    allows it, and reads a file-backed Kerberos store if its file system policy allows it
 
     @since %Qore 3.0
 */

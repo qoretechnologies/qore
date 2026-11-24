@@ -892,9 +892,13 @@ authenticate();
     - the metadata endpoints of the clouds (IMDS, the ECS task-role endpoint, the GCP metadata server, the Azure managed
       identity endpoint) are protected from sandboxed code only as far as the network policy of its sandbox blocks
       them, as such code can request them itself if it may connect to them
-    - the default Kerberos credentials, keytab and credential stores of the host and the credentials that the host's
-      SqlUtil credential resolver gives are refused regardless: they are a boundary also for sandboxed code that is
-      not restricted from external information, as such code reaches them only through the library
+    - the process's default Kerberos credential, the default credential cache and keytab and their names, the listing
+      of the host's credential caches, the credential stores that are not files (KCM, KEYRING, API, MSLSA) and the
+      credentials that the host's SqlUtil credential resolver gives are refused regardless: they are a boundary also
+      for sandboxed code that is not restricted from external information, as such code reaches them only through the
+      library; a file-backed credential cache or keytab that the caller names (\c FILE:, \c DIR:, for example
+      \c FILE:/tmp/krb5cc_<uid> or \c /etc/krb5.keytab) is protected only as far as the file system policy of its
+      sandboxes (and a restriction from the file system) is, as such code could read the file itself
 
     Each module has a function or method that answers for its credentials
     (@ref AwsRestClient::AwsRestClientBase::hostCredentialsAllowed() "AwsRestClientBase::hostCredentialsAllowed()",
