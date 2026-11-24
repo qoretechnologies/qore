@@ -492,9 +492,12 @@ public class GoogleDocumentAiRestConnection inherits RestClient::RestConnection 
     }
 
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # for restricted code that was lent the connection: its creator's file path options, and no data provider
+        # options that name files (qore#7327)
+        AbstractConnection src = getLentDataProviderSource(constructor_options);
         load_module("GoogleDocumentAiDataProvider");
         return create_object("GoogleDocumentAiDataProvider",
-            (constructor_options ?? {}) + getConnectionOptions(){"gcp_project_id", "gcp_region"}
+            (constructor_options ?? {}) + src.getConnectionOptions(){"gcp_project_id", "gcp_region"}
                 + {"restclient": getAsync()});
     }
 

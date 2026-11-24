@@ -390,6 +390,14 @@ public class MongoDbConnection inherits ConnectionProvider::AbstractConnectionWi
         return client;
     }
 
+    #! Returns @ref True: the URL of a MongoDB connection can name files that the driver reads
+    /** Its TLS options (\c tlsCAFile, \c tlsCertificateKeyFile and \c tlsCRLFile, for example); code restricted
+        from the \c FILESYSTEM domain that is lent the connection uses it only with its creator's URL (qore#7327)
+    */
+    private bool canUseFilePathsImpl() {
+        return True;
+    }
+
     #! Performs the connection ping with a client bounded by \c ping_timeout
     /** The base class implementation pings by calling @ref get(), which returns a client configured
         for data operations.  Those timeouts can legitimately be long - \c socket_timeout has to

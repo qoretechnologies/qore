@@ -509,7 +509,8 @@ public class LlamaParseRestConnection inherits RestClient::RestConnection {
             if (candidate == url) {
                 continue;
             }
-            LlamaParseRestClientIo probe(getConnectionOptions() + {
+            # for restricted code that was lent the connection, from its creator's file and location options (qore#7499)
+            LlamaParseRestClientIo probe(getLentTargetSource().getConnectionOptions() + {
                 "url": LlamaParseRestConnection::normalizeUrl(candidate),
             });
             try {

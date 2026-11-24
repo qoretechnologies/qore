@@ -19,6 +19,10 @@
 %requires ConnectDataProvider
 %requires WebSocketClient
 %requires DbDataProvider
+%requires RestClient
+%requires GoogleCloudStorageRestClient
+%requires GoogleDocumentAiRestClient
+%requires UnstructuredRestClient
 %requires ServerSentEventClient
 
 %exec-class LentNonHttpConnectionTargetTest
@@ -109,6 +113,36 @@ string sub call_fs(object conn, string what) {
         return why(ex);
     }
 }
+# sets a file path option and calls an entry point
+string sub call_file(object conn, string key, string method) {
+    try {
+        conn.opts{key} = \"/etc/hostname\";
+        switch (method) {
+            case \"async\": conn.getAsync(False); return \"CREATED\";
+            case \"startPollConnect\": conn.startPollConnect(); return \"STARTED\";
+            case \"token\": conn.getAccessToken(); return \"TOKEN\";
+        }
+        return \"UNKNOWN \" + method;
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+# sets an option in the copy of the options that the clients of an HTTP-based connection are created from
+string sub call_real(object conn, string key, string value, string method) {
+    try {
+        conn.real_opts{key} = value;
+        switch (method) {
+            case \"get0\": conn.get(False); return \"CREATED\";
+            case \"async\": conn.getAsync(False); return \"CREATED\";
+            case \"dp\": conn.getDataProvider(); return \"PROVIDER\";
+            case \"startPollConnect\": conn.startPollConnect(); return \"STARTED\";
+            case \"platform\": conn.getPlatformClient(); return \"CREATED\";
+        }
+        return \"UNKNOWN \" + method;
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
 # changes an option only
 string sub call_opts(object conn, string method) {
     conn.opts += {\"timeout\": 1234};
@@ -140,6 +174,15 @@ string sub call_opts(object conn, string method) {
         #! the refusal of a runtime option that can change the target
         const RtoptsDenied = "^PERMISSION-DENIED: connection .*may not give a connection that unrestricted code "
             "created and lent to it the runtime option";
+
+        #! the refusal of a lent connection whose file path options were changed
+        const FilesDenied = "^PERMISSION-DENIED: connection .*restricted from the .* functional domain and may use a "
+            "connection that unrestricted code created and lent to it only with the files and locations that its "
+            "creator gave it";
+
+        #! the refusal of options that name files
+        const FileOptsDenied = "^PERMISSION-DENIED: connection .*restricted from the .* functional domain and may not "
+            "give a connection that unrestricted code created and lent to it the .* which name files or locations";
 
         #! the refusal of a data provider option that can change the target
         const DpOptsDenied = "^PERMISSION-DENIED: connection .*may not give a connection that unrestricted code "
@@ -173,6 +216,8 @@ string sub call_opts(object conn, string method) {
                 \testFilesystem(), mode);
             addTestCase("a lent datasource connection is confined for code restricted from databases, " + mode,
                 \testDatasource(), mode);
+            addTestCase("the files of a lent connection are confined for code restricted from the filesystem, " + mode,
+                \testFilePaths(), mode);
         }
         addTestCase("code that is not restricted is not checked", \testUnrestricted());
         set_return_value(main());
@@ -272,6 +317,79 @@ string sub call_opts(object conn, string method) {
         # creator's target as normalized
         conn = new FilesystemConnection("fs", "fs", "file://" + dir.substr(1), {"monitor": False});
         assertEq(dir + DirSep + "x", p.callFunction("call_fs", conn, "redirect"), "a normalized path, " + mode);
+    }
+
+    #! code restricted from the FILESYSTEM domain that is lent a connection uses it only with the files that its creator
+    #! gave: the options and the URL options that name files that the connection's module code reads
+    testFilePaths(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        p.setExecMode(Modes{mode});
+        p.parse(Code, "restricted-files-" + mode);
+        string url = sprintf("127.0.0.1:%d", own_port);
+        # the clients of HTTP-based connections are bound to the creator's target; their files are the creator's
+        HttpConnection http("h", "h", "http://" + url, {"monitor": False});
+        assertRegex(FilesDenied, p.callFunction("call_file", http, "ssl_cert_path", "async"), "http, " + mode);
+        RestConnection rest("r", "r", "rest://" + url, {"monitor": False});
+        assertRegex(FilesDenied, p.callFunction("call_file", rest, "ssl_key_path", "async"), "rest, " + mode);
+        GoogleCloudStorageRestConnection gcs("g", "g", "https://" + url, {"monitor": False}, {"gcp_project_id": "x"});
+        assertRegex(FilesDenied, p.callFunction("call_file", gcs, "gcp_sa_json_path", "token"), "gcs token, " + mode);
+        gcs = new GoogleCloudStorageRestConnection("g", "g", "https://" + url, {"monitor": False},
+            {"gcp_project_id": "x"});
+        assertRegex(FileOptsDenied, p.callFunction("call_dp", gcs, NOTHING, {"gcp_sa_json_path": "/etc/hostname"}),
+            "gcs data provider, " + mode);
+        # the copy of the options that the clients of HTTP-based connections are created from
+        foreach string method in ("get0", "async") {
+            rest = new RestConnection("r", "r", "rest://" + url, {"monitor": False});
+            assertRegex(FilesDenied, p.callFunction("call_real", rest, "swagger", "file:///etc/hostname", method),
+                "rest swagger " + method + ", " + mode);
+        }
+        rest = new RestConnection("r", "r", "rest://" + url, {"monitor": False},
+            {"ping_method": "GET", "ping_path": "/"});
+        assertRegex(FilesDenied, p.callFunction("call_real", rest, "swagger", "file:///etc/hostname",
+            "startPollConnect"), "rest swagger ping, " + mode);
+        gcs = new GoogleCloudStorageRestConnection("g", "g", "https://" + url, {"monitor": False},
+            {"gcp_project_id": "x"});
+        assertRegex(FilesDenied, p.callFunction("call_real", gcs, "gcp_sa_json_path", "/etc/hostname", "dp"),
+            "gcs real_opts data provider, " + mode);
+        # also the file and location options that a connection's scheme does not declare, which its clients read
+        foreach string key in ("swagger", "openapi3", "negotiate_keytab") {
+            GoogleDocumentAiRestConnection docai("d", "d", "https://" + url, {"monitor": False},
+                {"gcp_project_id": "x"});
+            assertRegex(FilesDenied, p.callFunction("call_real", docai, key, "file:///etc/hostname", "async"),
+                "document ai " + key + ", " + mode);
+        }
+        # a public method of a connection class that creates a client of its own
+        UnstructuredRestConnection unstructured("u", "u", "https://" + url, {"monitor": False}, {"apikey": "x"});
+        assertRegex(FilesDenied, p.callFunction("call_real", unstructured, "swagger", "file:///etc/hostname",
+            "platform"), "unstructured platform client, " + mode);
+        # a location option can name a remote location as well: it is confined for code restricted from the network
+        Program pn = getProgram(mode);
+        rest = new RestConnection("r", "r", "rest://" + url, {"monitor": False});
+        assertRegex(FilesDenied, pn.callFunction("call_real", rest, "swagger",
+            sprintf("http://127.0.0.1:%d/schema.json", other_port), "async"), "rest remote swagger, " + mode);
+        assertFalse(other.isDataAvailable(0), "the other listener sees no connection, " + mode);
+        # the other connections are used only with their creator's members
+        foreach string scheme in ("sse", "ws") {
+            AbstractConnection conn = getConnection(getConnectionInfo(scheme), own_port);
+            assertRegex(Denied, p.callFunction("call_file", conn, "ssl_cert_path", "startPollConnect"),
+                scheme + ", " + mode);
+        }
+        try {
+            load_module("mongodb");
+            AbstractConnection mongo = getConnection(getConnectionInfo("mongodb"), own_port);
+            assertRegex(Denied, p.callFunction("call", mongo, sprintf("mongodb://%s/?tlsCAFile=/etc/hostname", url),
+                "get0"), "mongodb url, " + mode);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "LOAD-MODULE-ERROR") {
+                rethrow;
+            }
+        }
+        # the files that the creator gave are used
+        string cert = get_script_dir() + "/../../../qlib/ConnectionProvider/mycert.pem";
+        string key = get_script_dir() + "/../../../qlib/ConnectionProvider/mykey.pem";
+        http = new HttpConnection("h", "h", "https://" + url, {"monitor": False},
+            {"ssl_cert_path": cert, "ssl_key_path": key, "ssl_key_password": "password"});
+        assertEq("CREATED", p.callFunction("call", http, NOTHING, "async"), "the creator's files, " + mode);
     }
 
     #! a datasource connection lent to code restricted from the DATABASE domain is used only with its creator's

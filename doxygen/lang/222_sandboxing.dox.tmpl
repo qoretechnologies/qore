@@ -846,6 +846,16 @@ authenticate();
     client is created (from another thread) does not reach it.  Such code can still read the connection's options,
     including any credentials in them.
 
+    Code restricted from the \c FILESYSTEM domain that is lent a connection whose options or URL can name files that
+    the connection's module code reads (TLS certificate, key and CA files, Kerberos keytabs and credential caches,
+    service-account credential files; see
+    @ref ConnectionProvider::AbstractConnection::FilePathOptions "AbstractConnection::FilePathOptions") uses only the
+    files that the connection's creator gave: a connection whose clients are not HTTP clients is used by it only with
+    its creator's members as above, also when its clients use only the network (a MongoDB connection, for example),
+    and the clients of an HTTP-based connection use the creator's file options; a changed file option, or one given
+    as a runtime or data provider option, raises \c PERMISSION-DENIED
+    (<a href="https://github.com/qoretechnologies/qore/issues/7499">issue 7499</a>).
+
     @since %Qore 3.0
 
     @subsection sandbox_terminal_io The Terminal Is Not Lent

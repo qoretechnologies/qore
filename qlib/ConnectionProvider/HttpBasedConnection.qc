@@ -722,6 +722,14 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
         return False;
     }
 
+    #! Returns \c real_opts: the copy of the options that the clients of HTTP-based connections are created from
+    /** For code restricted from the \c FILESYSTEM or \c NETWORK domain that is lent the connection, its file and
+        location options are those that the connection's creator gave (qore#7327)
+    */
+    private *list<string> getLentOptionMembersImpl() {
+        return ("real_opts",);
+    }
+
     #! Returns @ref True: the clients of the connection are bound to its creator's target by its creator proof
     /** Restricted code that was lent the connection may change its members within that target (see
         checkLentClientTarget()), so AbstractConnection::checkLentTarget() does not confine it to the members that

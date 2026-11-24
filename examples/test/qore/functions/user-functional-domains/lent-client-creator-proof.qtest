@@ -81,9 +81,19 @@ class RedirectHandler inherits AbstractHttpRequestHandler {
 }
 
 #! a connection whose async client creation runs restricted code (as a callback can) in the window of the grant
-class CallbackConnection inherits HttpConnection {
+#! what the restricted callback of a CallbackConnection returned
+/** An object of its own, which a private copy of the connection shares: the client of code restricted from NETWORK
+    that was lent the connection is created from such a copy (qore#7499)
+*/
+class TakenRecord {
     public {
         *bool taken;
+    }
+}
+
+class CallbackConnection inherits HttpConnection {
+    public {
+        TakenRecord rec();
     }
     private {
         Program cb;
@@ -92,7 +102,7 @@ class CallbackConnection inherits HttpConnection {
         self.cb = cb;
     }
     private HttpClientIo::HttpClientConnectionManager getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
-        taken = cb.callFunction("take", url);
+        rec.taken = cb.callFunction("take", url);
         return HttpConnection::getAsyncImpl(connect, rtopts);
     }
 }
@@ -789,10 +799,10 @@ object sub lookalike() {
         Program p = getProgram(mode);
         CallbackConnection c(p, sprintf("http://127.0.0.1:%d/", closed_port));
         c.getAsync(False);
-        assertEq(False, c.taken, "restricted code inside a trusted call, " + mode);
-        c.taken = NOTHING;
+        assertEq(False, c.rec.taken, "restricted code inside a trusted call, " + mode);
+        c.rec.taken = NOTHING;
         p.callFunction("use_http_conn", c);
-        assertEq(True, c.taken, "restricted code inside a restricted caller's call, " + mode);
+        assertEq(True, c.rec.taken, "restricted code inside a restricted caller's call, " + mode);
     }
 
     #! the same host and port with TLS instead of plain HTTP is another origin
