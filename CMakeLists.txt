@@ -3252,6 +3252,13 @@ set_target_properties(qcc PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
 # .cpp files, but this custom command does not inherit compiler depfile
 # scanning from the libqore/qcc compilation rules.
 set(_qcc_format_sources
+    # the values of the functional domains and parse restrictions (QDOM_*, PO_*, and the extended options above bit 63
+    # with the positive and free option masks in QoreParseOptions.cpp) and how the domains map to the restrictions: an
+    # AOT module records the domains that its code uses, the domains its header declares, the parse options of its
+    # header and of its module commands and the restrictions of its dependencies as these bits, which the loader
+    # compares with the restrictions of the Program loading it (qore#7526)
+    ${CMAKE_SOURCE_DIR}/include/qore/Restrictions.h
+    ${CMAKE_SOURCE_DIR}/lib/QoreParseOptions.cpp
     # Lexical compatibility semantics change AST/native runtime boundaries without changing the AOT layout.
     ${CMAKE_SOURCE_DIR}/include/qore/intern/LexicalSemanticPolicy.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/ParseNode.h
