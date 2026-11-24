@@ -30599,6 +30599,20 @@ static QoreValue f_dbg_scan_wait_notify(const QoreListNode* params, RuntimeConfi
     return QoreValue();
 }
 
+//! Tests the weak-source fast path with or without a reader already holding the member lock (#7301).
+static QoreValue f_dbg_try_unique_weak_member(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    auto* obj = qore_object_private::get(*get_param_value(params, 0).get<QoreObject>());
+    DbgStringNodeHelper member(get_param_value(params, 1));
+    QoreValue result;
+    bool acquired;
+    {
+        QoreSafeVarRWReadLocker reader(obj->rml, get_param_value(params, 2).getAsBool());
+        acquired = obj->tryReadUniqueWeakMember((*member)->c_str(), result);
+    }
+    result.discard(xsink);
+    return acquired;
+}
+
 //! holds an object's write lock until a Counter reaches zero
 /** A recursive-reference scan that reaches the object meanwhile cannot take its rsection, so it waits for this
     thread; tests use this to create such a wait deterministically.
@@ -35767,6 +35781,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, anyTypeInfo, QORE_PARAM_NO_ARG, "v");
     qns.addBuiltinVariant("dbg_scan_wait_notify", f_dbg_scan_wait_notify, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "c");
+    qns.addBuiltinVariant("dbg_try_unique_weak_member", f_dbg_try_unique_weak_member, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 3, objectTypeInfo, QORE_PARAM_NO_ARG, "obj", stringTypeInfo, QORE_PARAM_NO_ARG, "member",
+        boolTypeInfo, QORE_PARAM_NO_ARG, "hold_read_lock");
     qns.addBuiltinVariant("dbg_hold_object_lock", f_dbg_hold_object_lock, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 3, objectTypeInfo, QORE_PARAM_NO_ARG, "obj", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
