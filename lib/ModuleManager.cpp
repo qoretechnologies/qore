@@ -3674,9 +3674,10 @@ public:
     @param desc the error description to append to
     @param search_paths the module directories that the feature was looked up in
     @param name the feature name
+    @param file_name_only name each file without its directory, for code restricted from external information
 */
 static void qore_append_unsupported_api_modules(QoreString& desc, const std::vector<const std::string*>& search_paths,
-        const char* name) {
+        const char* name, bool file_name_only = false) {
     std::string prefix = std::string(name) + "-api-";
     for (const std::string* dir : search_paths) {
         // the flat and split module forms, as searched by the loader
@@ -3729,8 +3730,8 @@ static void qore_append_unsupported_api_modules(QoreString& desc, const std::vec
                 if (supported) {
                     continue;
                 }
-                desc.sprintf("; found '%s' built for module API %u.%u: rebuild it for module API %d.%d", path, major,
-                    minor, QORE_MODULE_API_MAJOR, QORE_MODULE_API_MINOR);
+                desc.sprintf("; found '%s' built for module API %u.%u: rebuild it for module API %d.%d",
+                    file_name_only ? base : path, major, minor, QORE_MODULE_API_MAJOR, QORE_MODULE_API_MINOR);
             }
         }
     }
@@ -4559,6 +4560,14 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         *not_found = true;
     }
 
+    // the directories of the module path are external information: code restricted from it is not given them
+    if (ctx_pgm && (ctx_pgm->getParseOptions64() & PO_NO_EXTERNAL_INFO)) {
+        SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("feature '%s' is not builtin and no module "
+            "with this name could be found in the module path", name));
+        qore_append_unsupported_api_modules(**desc, search_paths, name, true);
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), desc.release());
+        return nullptr;
+    }
     SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("feature '%s' is not builtin and no module with "
         "this name could be found in the module path: ", name));
     if (!ctx_prepended.empty()) {

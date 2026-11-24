@@ -193,10 +193,10 @@
     code restricted with @ref PO_NO_NETWORK cannot call them, as a lookup sends queries over the network
     (<a href="https://github.com/qoretechnologies/qore/issues/7133">issue 7133</a>).
 
-    @par Library Installation and Build Information Requires the EXTERNAL_INFO Functional Domain
-    @ref Qore::get_qore_library_info() "get_qore_library_info()" is in the \c EXTERNAL_INFO
-    @ref function_domains "functional domain", and the module descriptions have no \c "path" key either, for code
-    restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" (see @ref no-external-info "%no-external-info";
+    @par Code Restricted From External Information Gets No Installation or Module Paths of the Host
+    @ref Qore::get_qore_library_info() "get_qore_library_info()" is external information, and module descriptions,
+    the module context path and the error for a module that is not found give no paths of the host to code restricted
+    with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" (see @ref no-external-info "%no-external-info";
     <a href="https://github.com/qoretechnologies/qore/issues/7502">issue 7502</a>).
 
     @par An HTTP Field Never Replaces a Key of the Message, and the Fields Have Keys of Their Own

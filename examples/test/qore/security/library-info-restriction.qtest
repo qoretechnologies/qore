@@ -2,17 +2,25 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 #
-# The functions that report the host's installation and build of the library are external information
-# (qoretechnologies/qore#7502)
+# The library's installation and build information, the module paths in module descriptions, the module context path
+# and the module path in the error for a module that is not found are external information (qoretechnologies/qore#7502)
 
 %modern
 %no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires FsUtil
 
 %exec-class LibraryInfoRestrictionTest
 
+#! Code restricted with PO_NO_EXTERNAL_INFO gets no installation or build information of the host
+/** get_qore_library_info() is refused at parse time and in calls resolved at run time; the module descriptions, the
+    error for a module that is not found and get_module_context_path() give no path of the host.  The messages and
+    locations of the other exceptions of module loads and of module code are not covered here.  Each check runs in
+    top-level code of a %modern Program in each execution mode, so that the JIT compiles it; the modules are written
+    for each mode and restriction, as a module that a Program has loaded is not loaded again
+*/
 class LibraryInfoRestrictionTest inherits QUnit::Test {
     private {
         #! the keys of get_qore_library_info() that describe the host's installation and build of the library
@@ -24,138 +32,296 @@ class LibraryInfoRestrictionTest inherits QUnit::Test {
             ("name": "PO_NO_EXTERNAL_INFO", "po": PO_NO_EXTERNAL_INFO),
             ("name": "PO_LOCKDOWN", "po": PO_LOCKDOWN),
         );
+
+        #! the execution modes
+        const Modes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+
+        #! the names by which code can call the function at run time
+        const DynamicNames = ("get_qore_library_info", "Qore::get_qore_library_info");
+
+        #! a module that no module directory has
+        const NoSuchModule = "LibInfoNoSuchModule7502";
+
+        #! the top-level code that calls the function at run time in every way
+        const DynamicCode = "our hash<auto> result;
+foreach string name in (DynamicNames) {
+    try {
+        call_function(name);
+        result{name} = \"returned\";
+    } catch (hash<ExceptionInfo> ex) {
+        result{name} = ex.err + \": \" + ex.desc;
+    }
+}
+try {
+    call_function_args(\"get_qore_library_info\");
+    result.args = \"returned\";
+} catch (hash<ExceptionInfo> ex) {
+    result.args = ex.err + \": \" + ex.desc;
+}
+try {
+    call_builtin_function(\"get_qore_library_info\");
+    result.builtin = \"returned\";
+} catch (hash<ExceptionInfo> ex) {
+    result.builtin = ex.err + \": \" + ex.desc;
+}
+try {
+    get_call_reference(\"get_qore_library_info\")();
+    result.ref = \"returned\";
+} catch (hash<ExceptionInfo> ex) {
+    result.ref = ex.err + \": \" + ex.desc;
+}
+";
+
+        #! the top-level code of the module checks; %s: the module directory, the name of the context module, the missing
+        #! module, the name of the context module (twice)
+        const ModuleCode = "%%append-module-path \"%s\"
+%%requires %s
+our hash<auto> result;
+try {
+    load_module(%y);
+} catch (hash<ExceptionInfo> ex) {
+    result.not_found = ex;
+}
+result.ctx = %s::ConstPath;
+result.ctx_ex = %s::ConstPathEx;
+result.mh = get_module_hash();
+result.ml = get_module_list();
+";
+
+        #! a module whose constants are the path of the module while it is loaded; %s: its name
+        const CtxModule = "%%modern
+module %s {
+    version = \"1.0\";
+    desc = \"module context path probe\";
+    author = \"Qore Technologies\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+public namespace %s {
+    public const ConstPath = get_module_context_path();
+    public const ConstPathEx = get_module_context_path_ex();
+}
+";
+    }
+
+    private {
+        #! the directory of the modules of the test
+        TmpDir tmp("qore-library-info-restriction-");
+
+        #! the paths of the host that restricted code must not see
+        list<string> host_dirs;
     }
 
     constructor() : QUnit::Test("library info restriction", "1.0") {
+        hash<auto> info = get_qore_library_info();
+        host_dirs = (tmp.path, info.UserModuleVerDir, info.UserModuleDir, info.BinaryModuleVerDir,
+            info.BinaryModuleDir, realpath(get_script_dir() + "/../../../../qlib"));
+        # trailing separators are not part of the directory in a path
+        host_dirs = map regex_subst($1, "/+$", ""), host_dirs;
+
         addTestCase("get_qore_library_info() is refused at parse time", \parseTest());
         addTestCase("get_qore_library_info() is refused in calls resolved at run time", \dynamicTest());
         addTestCase("get_qore_library_info() is unchanged without the restriction", \unrestrictedTest());
-        addTestCase("module lists carry no module paths with the restriction", \moduleHashTest());
+        addTestCase("module paths are left out with the restriction", \moduleTest());
+        addTestCase("module paths are unchanged without the restriction", \moduleUnrestrictedTest());
         addTestCase("the library option lists stay available", \optionTest());
         set_return_value(main());
     }
 
     parseTest() {
         foreach hash<auto> r in (Restrictions) {
-            Program p(PO_NEW_STYLE | r.po);
-            assertThrows("PARSE-EXCEPTION", "get_qore_library_info", \p.parse(),
-                ("hash<auto> sub t() { return get_qore_library_info(); }", "direct"), r.name + " direct call");
+            foreach hash<auto> m in (Modes.pairIterator()) {
+                string label = sprintf("%s %s", r.name, m.key);
+                Program p = newProgram(r.po, m.value);
+                assertThrows("PARSE-EXCEPTION", "get_qore_library_info", \p.parse(),
+                    ("hash<auto> h = get_qore_library_info();", "direct"), label + " direct call");
 
-            p = new Program(PO_NEW_STYLE | r.po);
-            assertThrows("PARSE-EXCEPTION", "get_qore_library_info", \p.parse(),
-                ("code sub t() { return \\get_qore_library_info(); }", "call-ref"), r.name + " call reference");
+                p = newProgram(r.po, m.value);
+                assertThrows("PARSE-EXCEPTION", "get_qore_library_info", \p.parse(),
+                    ("hash<auto> h = Qore::get_qore_library_info();", "qualified"), label + " qualified call");
 
-            p = new Program(PO_NEW_STYLE | r.po);
-            assertThrows("PARSE-EXCEPTION", "get_qore_library_info", \p.parse(),
-                ("const C = get_qore_library_info();", "constant"), r.name + " constant initializer");
+                p = newProgram(r.po, m.value);
+                assertThrows("PARSE-EXCEPTION", "get_qore_library_info", \p.parse(),
+                    ("code c = \\get_qore_library_info();", "call-ref"), label + " call reference");
+
+                p = newProgram(r.po, m.value);
+                assertThrows("PARSE-EXCEPTION", "get_qore_library_info", \p.parse(),
+                    ("const C = get_qore_library_info();", "constant"), label + " constant initializer");
+            }
         }
     }
 
     dynamicTest() {
         foreach hash<auto> r in (Restrictions) {
-            Program p(PO_NEW_STYLE | r.po);
-            p.parse("auto sub by_name() { return call_function(\"get_qore_library_info\"); }
-auto sub by_args() { return call_function_args(\"get_qore_library_info\"); }
-auto sub by_builtin() { return call_builtin_function(\"get_qore_library_info\"); }
-auto sub by_ref() { return get_call_reference(\"get_qore_library_info\")(); }
-auto sub by_untyped(auto name) { return call_function(name); }
-", "dynamic");
-            foreach string f in (("by_name", "by_args", "by_builtin", "by_ref")) {
-                *hash<ExceptionInfo> ex = callCatch(p, f);
-                assertEq(Type::Hash, ex.type(), sprintf("%s: %s() is refused", r.name, f));
-                assertRegex("get_qore_library_info", ex.desc ?? "", sprintf("%s: %s() names the function", r.name,
-                    f));
+            foreach hash<auto> m in (Modes.pairIterator()) {
+                string label = sprintf("%s %s", r.name, m.key);
+                hash<auto> result = runTopLevel(r.po, m.value, "const DynamicNames = (" + (foldl $1 + ", " + $2, (map sprintf("%y", $1), DynamicNames)) + ")"
+                    + ";\n" + DynamicCode);
+                assertEq(DynamicNames.size() + 3, result.size(), label + ": every call is made");
+                foreach hash<auto> i in (result.pairIterator()) {
+                    assertRegex("^INVALID-FUNCTION-ACCESS: .*get_qore_library_info.*PO_NO_EXTERNAL_INFO", i.value,
+                        sprintf("%s: %s is refused", label, i.key));
+                }
             }
-            *hash<ExceptionInfo> ex = callCatch(p, "by_untyped", "get_qore_library_info");
-            assertEq(Type::Hash, ex.type(), r.name + ": an untyped name is refused");
         }
     }
 
     unrestrictedTest() {
-        Program p(PO_NEW_STYLE);
-        p.parse("hash<auto> sub direct() { return get_qore_library_info(); }
-hash<auto> sub dynamic() { return call_function(\"get_qore_library_info\"); }
-", "unrestricted");
         hash<auto> local = get_qore_library_info();
-        foreach string f in (("direct", "dynamic")) {
-            hash<auto> h = p.callFunction(f);
-            assertEq(local, h, f + " returns the same info as the caller gets");
-            foreach string key in (HostKeys) {
-                assertTrue(h.hasKey(key), sprintf("%s: %s is present", f, key));
-            }
-            assertEq(Qore::VersionString, h.VersionString, f + ": the version");
-            assertEq(Qore::BuildHost, h.BuildHost, f + ": the build host");
-            assertEq(sprintf("%s:%s:%s:%s", h.UserModuleVerDir, h.UserModuleDir, h.BinaryModuleVerDir,
-                h.BinaryModuleDir), h.ModulePath, f + ": the module path");
-        }
-    }
-
-    moduleHashTest() {
-        # a module that this Program has loaded, whose filename and path the restricted Program must not see
-        string mod = "QUnit";
-        hash<auto> local = get_module_hash(){mod};
-        assertTrue(local.filename.val(), "the unrestricted caller sees the filename");
-        assertTrue(local.path.val(), "the unrestricted caller sees the path");
-
-        string code = sprintf("hash<auto> sub mh() { return get_module_hash(){'%s'}; }
-hash<auto> sub ml() { return (select get_module_list(), $1.name == '%s')[0]; }
-", mod, mod);
-
-        Program up(PO_NEW_STYLE);
-        up.parse(code, "unrestricted");
-        foreach string f in (("mh", "ml")) {
-            hash<auto> h = up.callFunction(f);
-            assertEq(local.filename, h.filename, "unrestricted " + f + ": filename");
-            assertEq(local.path, h.path, "unrestricted " + f + ": path");
-        }
-
-        foreach hash<auto> r in (Restrictions) {
-            Program p(PO_NEW_STYLE | r.po);
-            p.parse(code, "restricted");
-            foreach string f in (("mh", "ml")) {
-                hash<auto> h = p.callFunction(f);
-                assertEq(mod, h.name, sprintf("%s %s: the module is listed", r.name, f));
-                assertEq(local.version, h.version, sprintf("%s %s: its version", r.name, f));
-                assertFalse(h.hasKey("filename"), sprintf("%s %s: no filename", r.name, f));
-                assertFalse(h.hasKey("path"), sprintf("%s %s: no path", r.name, f));
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            hash<auto> result = runTopLevel(0, m.value, "our hash<auto> result;
+result.direct = get_qore_library_info();
+result.dynamic = call_function(\"Qore::get_qore_library_info\");
+");
+            foreach string f in (("direct", "dynamic")) {
+                hash<auto> h = result{f};
+                string label = sprintf("%s %s", m.key, f);
+                assertEq(local, h, label + " returns the same info as the caller gets");
+                foreach string key in (HostKeys) {
+                    assertTrue(h.hasKey(key), sprintf("%s: %s is present", label, key));
+                }
+                assertEq(Qore::BuildHost, h.BuildHost, label + ": the build host");
+                assertEq(sprintf("%s:%s:%s:%s", h.UserModuleVerDir, h.UserModuleDir, h.BinaryModuleVerDir,
+                    h.BinaryModuleDir), h.ModulePath, label + ": the module path");
             }
         }
     }
+
+    moduleTest() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            string ctx = writeModule("LibInfoCtxR_" + m.key, CtxModule);
+            string label = "restricted " + m.key;
+            hash<auto> result = runTopLevel(PO_NO_EXTERNAL_INFO, m.value, sprintf(ModuleCode, tmp.path, ctx,
+                NoSuchModule, ctx, ctx));
+
+            # a module that is not found: the module path is not listed
+            assertEq("LOAD-MODULE-ERROR", result.not_found.err, label + ": not found");
+            assertEq(NoSuchModule, result.not_found.arg, label + ": not found arg");
+            assertRegex("could be found in the module path$", result.not_found.desc, label + ": not found desc");
+            checkNoHostPath(result.not_found.desc, label + ": not found desc");
+
+            # the path of the module being loaded
+            assertEq(ctx + ".qm", result.ctx, label + ": get_module_context_path()");
+            assertEq(ctx + ".qm", result.ctx_ex, label + ": get_module_context_path_ex()");
+
+            # the module descriptions, key by key
+            assertTrue(result.mh{ctx}.val(), label + ": the context module is listed");
+            foreach hash<auto> mod in (result.mh.pairIterator()) {
+                assertFalse(mod.value.hasKey("filename"), sprintf("%s %s: no filename", label, mod.key));
+                assertFalse(mod.value.hasKey("path"), sprintf("%s %s: no path", label, mod.key));
+                checkNoHostPath(mod.value, sprintf("%s get_module_hash() %s", label, mod.key));
+            }
+            assertEq(result.mh.size(), result.ml.size(), label + ": get_module_list() size");
+            foreach hash<auto> mod in (result.ml) {
+                assertEq(result.mh{mod.name}, mod, sprintf("%s get_module_list() %s", label, mod.name));
+            }
+
+            # a module that is not found at parse time
+            Program p = newProgram(PO_NO_EXTERNAL_INFO, m.value);
+            *hash<ExceptionInfo> perr;
+            try {
+                p.parse("%requires " + NoSuchModule + "\n", "requires");
+            } catch (hash<ExceptionInfo> ex) {
+                perr = ex;
+            }
+            assertEq("LOAD-MODULE-ERROR", perr.err, label + ": %requires of a missing module fails");
+            assertRegex("could be found in the module path$", perr.desc ?? "", label + ": %requires desc");
+            checkNoHostPath(perr.desc, label + ": %requires desc");
+        }
+    }
+
+    moduleUnrestrictedTest() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            string ctx = writeModule("LibInfoCtxU_" + m.key, CtxModule);
+            string label = "unrestricted " + m.key;
+            hash<auto> result = runTopLevel(0, m.value, sprintf(ModuleCode, tmp.path, ctx, NoSuchModule, ctx, ctx));
+
+            assertRegex("could be found in the module path: .*" + tmp.path, result.not_found.desc,
+                label + ": not found lists the module path");
+            string path = tmp.path + DirSep + ctx + ".qm";
+            assertEq(path, result.ctx, label + ": get_module_context_path()");
+            assertEq(path, result.ctx_ex, label + ": get_module_context_path_ex()");
+            assertEq(path, result.mh{ctx}.filename, label + ": filename");
+            assertEq(path, result.mh{ctx}.path, label + ": path");
+        }
+    }
+
 
     optionTest() {
         # the option lists give only the library's compile-time features, nothing of the host
         foreach hash<auto> r in (Restrictions) {
-            Program p(PO_NEW_STYLE | r.po);
-            p.parse("hash<auto> sub oh() { return get_qore_option_hash(); }
-list<auto> sub ol() { return get_qore_option_list(); }
-", "options");
-            hash<auto> h = p.callFunction("oh");
-            assertEq(get_qore_option_hash(), h, r.name + ": the option hash");
-            assertEq(get_qore_option_list(), p.callFunction("ol"), r.name + ": the option list");
-            foreach hash<auto> opt in (h.iterator()) {
-                assertEq(("option", "constant", "type", "value"), keys opt, r.name + ": " + opt.constant);
-                assertEq(Type::Boolean, opt.value.type(), r.name + ": " + opt.constant + " value");
+            foreach hash<auto> m in (Modes.pairIterator()) {
+                string label = sprintf("%s %s", r.name, m.key);
+                hash<auto> result = runTopLevel(r.po, m.value, "our hash<auto> result;
+result.oh = get_qore_option_hash();
+result.ol = get_qore_option_list();
+");
+                assertEq(get_qore_option_hash(), result.oh, label + ": the option hash");
+                assertEq(get_qore_option_list(), result.ol, label + ": the option list");
+                foreach hash<auto> opt in (result.oh.iterator()) {
+                    assertEq(("option", "constant", "type", "value"), keys opt, label + ": " + opt.constant);
+                    assertEq(Type::Boolean, opt.value.type(), label + ": " + opt.constant + " value");
+                }
             }
         }
     }
 
-    #! calls the function in the Program and returns the exception that it raises, if any
-    private *hash<ExceptionInfo> callCatch(Program p, string f) {
-        try {
-            auto v = p.callFunction(f);
-            assertNothing(v, f + "() must not return a value");
-        } catch (hash<ExceptionInfo> ex) {
-            return ex;
-        }
+    #! returns a new %modern Program with the given restrictions and execution mode
+    private Program newProgram(int po, ExecMode mode) {
+        Program p(PO_MODERN | po);
+        p.setExecMode(mode);
+        return p;
     }
 
-    #! calls the function in the Program with an argument and returns the exception that it raises, if any
-    private *hash<ExceptionInfo> callCatch(Program p, string f, auto arg) {
-        try {
-            auto v = p.callFunction(f, arg);
-            assertNothing(v, f + "() must not return a value");
-        } catch (hash<ExceptionInfo> ex) {
-            return ex;
+    #! runs the code as top-level code of a new Program and returns its global variable \c result
+    private hash<auto> runTopLevel(int po, ExecMode mode, string code) {
+        Program p = newProgram(po, mode);
+        p.parse(code, "top-level");
+        p.run();
+        return p.getGlobalVariable("result");
+    }
+
+    #! writes a module to the module directory of the test and returns its name
+    private string writeModule(string name, string fmt) {
+        File f();
+        f.open2(tmp.path + DirSep + name + ".qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf(fmt, name, name));
+        f.close();
+        return name;
+    }
+
+    #! checks that no string in the value names a directory of the host or is an absolute path
+    private checkNoHostPath(auto v, string label) {
+        switch (v.typeCode()) {
+            case NT_STRING: {
+                foreach string dir in (host_dirs) {
+                    assertFalse(v.find(dir) >= 0, sprintf("%s: no %s", label, dir == tmp.path ? "module dir"
+                        : "library dir"));
+                }
+                assertFalse(v =~ /(^|[[:space:]'"(\[:=,])\/[A-Za-z0-9._-]/, label + ": no absolute path");
+                break;
+            }
+            case NT_HASH: {
+                foreach hash<auto> i in (v.pairIterator()) {
+                    # child module errors come from exceptions, whose contents are not covered here
+                    if (i.key == "child-modules") {
+                        continue;
+                    }
+                    checkNoHostPath(i.value, label + "." + i.key);
+                }
+                break;
+            }
+            case NT_LIST: {
+                foreach auto e in (v) {
+                    checkNoHostPath(e, label);
+                }
+                break;
+            }
         }
     }
 }
