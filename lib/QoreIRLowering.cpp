@@ -340,6 +340,11 @@ static bool qore_ir_type_is_iterator_class(const QoreTypeInfo* ti) {
     return qc && qore_class_private::parseCheckCompatibleClass(qc, QC_ABSTRACTITERATOR);
 }
 
+static bool qore_expr_is_call(const AbstractQoreNode* node) {
+    return dynamic_cast<const AbstractFunctionCallNode*>(node) || dynamic_cast<const QoreDotEvalOperatorNode*>(node)
+        || dynamic_cast<const CallReferenceCallNode*>(node);
+}
+
 //! Returns true if the expression gives a new value that the frame owns as a temporary
 /** a call (a function, method or static method call, a call through a call reference, \c new), a list or hash
     literal, a slice, and the value of a functional operator; not the value of a variable, of an implicit argument
@@ -348,9 +353,7 @@ static bool qore_ir_type_is_iterator_class(const QoreTypeInfo* ti) {
 */
 static bool qore_ir_expr_is_temporary(const QoreValue& expr) {
     const AbstractQoreNode* node = expr.getInternalNode();
-    return node && (dynamic_cast<const AbstractFunctionCallNode*>(node)
-        || dynamic_cast<const QoreDotEvalOperatorNode*>(node)
-        || dynamic_cast<const CallReferenceCallNode*>(node)
+    return node && (qore_expr_is_call(node)
         || dynamic_cast<const QoreParseListNode*>(node)
         || dynamic_cast<const QoreParseHashNode*>(node)
         || dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)
@@ -394,6 +397,11 @@ static bool qore_ir_expr_is_conditional_temporary(const QoreValue& expr, unsigne
         return operand_ok(vc->getLeft()) && operand_ok(vc->getRight());
     }
     return false;
+}
+
+bool qore_call_returns_argument_temp(const QoreValue& expr) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    return node && (qore_expr_is_call(node) || qore_ir_expr_is_conditional_temporary(expr));
 }
 
 //! returns true for a type whose values hold no object: a scalar, or a list or hash of such values (recursively)
@@ -17006,9 +17014,36 @@ bool QoreIRLowering::lowerCallArgs(const QoreParseListNode* parse_args, const Qo
     if (!parse_args && !args) {
         return true;  // zero-argument call — valid, no args to lower
     }
+    auto lowerArgument = [&](const QoreValue& expr) {
+        QoreIRValue value = lowerExpression(expr, error);
+        if (!value.isValid() || !expr.needsEval()) {
+            return value;
+        }
+        const QoreTypeInfo* type = getExprTypeInfo(expr);
+        if (QoreTypeInfo::parseReturns(type, NT_HASH) == QTI_NOT_EQUAL
+                && QoreTypeInfo::parseReturns(type, NT_LIST) == QTI_NOT_EQUAL) {
+            return value;
+        }
+        const bool call = qore_call_returns_argument_temp(expr);
+        const auto* node = expr.getInternalNode();
+        if (!call && !dynamic_cast<const QoreAssignmentOperatorNode*>(node)
+                && !dynamic_cast<const QorePlusEqualsOperatorNode*>(node)) {
+            return value;
+        }
+        // The AST argument list takes each argument before evaluating the next. Only the
+        // original of a copied call temporary stays in the caller's statement scope.
+        const auto* loc = static_cast<const ParseNode*>(node)->loc;
+        QoreIRValue arg = builder.createUnaryOp(QoreIROpcode::CopyCallArg, value, loc)->result;
+        auto* release = builder.createReleaseOwnedTemp(value, loc);
+        release->opcode = QoreIROpcode::ReleaseCallArgSource;
+        if (call) {
+            release->operands.push_back(arg);
+        }
+        return arg;
+    };
     if (parse_args) {
         for (size_t i = 0; i < parse_args->size(); ++i) {
-            QoreIRValue arg = lowerExpression(parse_args->get(i), error);
+            QoreIRValue arg = lowerArgument(parse_args->get(i));
             if (!arg.isValid()) {
                 return false;
             }
@@ -17027,7 +17062,7 @@ bool QoreIRLowering::lowerCallArgs(const QoreParseListNode* parse_args, const Qo
                 error = "IR named call argument lowering cancelled or interrupted";
                 return false;
             }
-            QoreIRValue arg = lowerExpression(args->retrieveEntry(i), error);
+            QoreIRValue arg = lowerArgument(args->retrieveEntry(i));
             if (!arg.isValid()) {
                 return false;
             }
@@ -17044,7 +17079,7 @@ bool QoreIRLowering::lowerCallArgs(const QoreParseListNode* parse_args, const Qo
         return true;
     }
     for (size_t i = 0; i < args->size(); ++i) {
-        QoreIRValue arg = lowerExpression(args->retrieveEntry(i), error);
+        QoreIRValue arg = lowerArgument(args->retrieveEntry(i));
         if (!arg.isValid()) {
             return false;
         }

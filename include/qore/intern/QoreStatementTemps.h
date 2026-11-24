@@ -260,6 +260,9 @@ DLLLOCAL inline bool qore_mutation_operand_has_own_scope(const QoreValue& lvalue
         || QoreTypeInfo::isType(type_info, NT_NOTHING) || QoreTypeInfo::isType(type_info, NT_NULL));
 }
 
+//! True for a call's result and conditional temporaries that an argument can take a copy of.
+DLLLOCAL bool qore_call_returns_argument_temp(const QoreValue& expr);
+
 //! Returns true if evaluating an expression can create a temporary besides its value whose release can be observed
 /** A value made by a call or a construction that the expression uses, and a value that can hold an object read from a
     variable that other code can change while the expression runs - a global, thread-local or closure-bound variable,

@@ -2854,6 +2854,85 @@ size_t qore_ir_fold_debug_statements(QoreIRFunction& func) {
     return count;
 }
 
+bool qore_ir_find_invoke_store_moves(const QoreIRFunction& func, std::unordered_set<uint32_t>& moves,
+        size_t* check_count) {
+    moves.clear();
+    // A store in an invoke's continuation can take its result just like a store following an ordinary call.
+    // Every entry into that block must execute the call, even on a loop back edge or a debugger flow request.
+    struct Candidate {
+        const QoreIRBasicBlock* block;
+        unsigned uses = 0;
+    };
+    std::unordered_map<uint32_t, Candidate> candidates;
+    std::unordered_map<const QoreIRBasicBlock*, unsigned> incoming;
+    for (const auto& block : func.blocks) {
+        if (check_count && qore_ir_analysis_cancelled(*check_count, "IR invoke store analysis")) {
+            return false;
+        }
+        if (block->instructions.empty()) {
+            continue;
+        }
+        const auto& call = *block->instructions.back();
+        if (!call.result.isValid() || (call.opcode != QoreIROpcode::Invoke
+                && call.opcode != QoreIROpcode::InvokeMethodDirect
+                && call.opcode != QoreIROpcode::InvokeDotEvalMethodDirect)) {
+            continue;
+        }
+        qore_ir_visit_successors(call, [&](QoreIRBasicBlock* target) {
+            if (target != block.get() && target != func.blocks.front().get()) {
+                candidates.emplace(call.result.id, Candidate{target});
+                incoming.emplace(target, 0);
+            }
+        });
+    }
+    if (candidates.empty()) {
+        return true;
+    }
+    auto edge = [&](const QoreIRBasicBlock* target) {
+        auto it = incoming.find(target);
+        if (it != incoming.end()) {
+            ++it->second;
+        }
+    };
+    for (const auto& block : func.blocks) {
+        if (!block->instructions.empty()) {
+            qore_ir_visit_successors(*block->instructions.back(), edge);
+        }
+        if (!qore_ir_visit_exception_targets(*block, edge, check_count, "IR invoke store analysis")) {
+            return false;
+        }
+        qore_ir_visit_debug_flow_targets(*block, [&](size_t, QoreIRBasicBlock* target) { edge(target); });
+        for (const auto& inst : block->instructions) {
+            if (!qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+                auto it = candidates.find(operand.id);
+                if (it == candidates.end()) {
+                    return;
+                }
+                ++it->second.uses;
+                if (it->second.block != block.get() || inst->operands.size() != 1
+                        || (inst->opcode != QoreIROpcode::LValuePathAssign
+                            && inst->opcode != QoreIROpcode::LValuePathCompound)) {
+                    return;
+                }
+                const auto& store = static_cast<const QoreIRLValuePathInstruction&>(*inst);
+                if (store.path.size() == 1 && store.path.front().kind == LVPathStepKind::LocalVar
+                        && (store.opcode == QoreIROpcode::LValuePathAssign ? store.mode == AssignmentMode::Normal
+                            : store.compound_op == LVCompoundOp::AddAssign)) {
+                    moves.insert(operand.id);
+                }
+            }, check_count, "IR invoke store analysis")) {
+                return false;
+            }
+        }
+    }
+    for (const auto& [id, candidate] : candidates) {
+        if (candidate.uses != 1 || incoming.at(candidate.block) != 1) {
+            moves.erase(id);
+        }
+    }
+    return true;
+}
+
 bool qore_ir_find_reused_call_args(const QoreIRFunction& func, std::vector<uint8_t>& reused, size_t* check_count) {
     static const char* const operation = "IR reused call argument analysis";
     auto cancelled = [&]() -> bool {

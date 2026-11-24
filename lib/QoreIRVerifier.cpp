@@ -3758,6 +3758,7 @@ static int qore_ir_opcode_forwarded_operand(QoreIROpcode op) {
         case QoreIROpcode::GuardType:
         case QoreIROpcode::GuardNotNothing:
         case QoreIROpcode::RefSelf:
+        case QoreIROpcode::CopyCallArg:
             return 0;
         case QoreIROpcode::AddAssignAny:
             return 1;

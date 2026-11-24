@@ -32,7 +32,7 @@ class WeakReferenceShareCopyTest inherits QUnit::Test {
         string dir = get_script_dir() + "/weak-reference-share-copy";
 
         const Modes = ("ast", "ir", "jit", "tiered");
-        const Programs = ("weak-reference-share-copy",);
+        const Programs = ("weak-reference-share-copy", "weak-call-arguments");
     }
 
     constructor() : QUnit::Test("WeakReferenceShareCopyTest", "1.0", \ARGV) {

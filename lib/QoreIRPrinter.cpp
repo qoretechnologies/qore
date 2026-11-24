@@ -479,6 +479,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::MakeHashConstKeys: return "make.hash.const.keys";
         case QoreIROpcode::ToString: return "to.string";
         case QoreIROpcode::Sprintf: return "sprintf";
+        case QoreIROpcode::CopyCallArg: return "copy.call.arg";
+        case QoreIROpcode::ReleaseCallArgSource: return "release.call.arg.source";
         case QoreIROpcode::RefSelf: return "ref.self";
         case QoreIROpcode::DebugBlock: return "debug.block";
         case QoreIROpcode::DebugStatement: return "debug.statement";

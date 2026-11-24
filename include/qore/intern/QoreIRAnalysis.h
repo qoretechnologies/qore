@@ -273,6 +273,10 @@ size_t qore_ir_prune_release_checks(QoreIRFunction& func);
 */
 bool qore_ir_find_reused_call_args(const QoreIRFunction& func, std::vector<uint8_t>& reused, size_t* check_count);
 
+//! Finds single-use invoke results stored into a direct local on the invoke's sole normal continuation edge.
+bool qore_ir_find_invoke_store_moves(const QoreIRFunction& func, std::unordered_set<uint32_t>& moves,
+    size_t* check_count);
+
 //! Marks each LoadLocal directly followed by the CheckCallTarget of its value (QoreIRInstruction::
 //! fused_call_target_check): the interpreter then makes the check in the load, without the dispatch of the check
 /** Run on the final IR of a function that the interpreter executes; the instructions themselves are unchanged, so

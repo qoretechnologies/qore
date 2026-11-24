@@ -51,7 +51,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 443,
+static_assert(QORE_IR_MAX_OPCODE == 445,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -17133,7 +17133,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         // no call releases them (see design/temporary-lifetime.md); a cancelled analysis fails the compilation, as
         // compiling with a partial answer would make it permanent
         size_t reuse_check_count = 0;
-        if (!qore_ir_find_reused_call_args(func, reused_call_args, &reuse_check_count)) {
+        if (!qore_ir_find_invoke_store_moves(func, invoke_store_moves, &reuse_check_count)
+                || !qore_ir_find_reused_call_args(func, reused_call_args, &reuse_check_count)) {
             error = "cancelled during LLVM reused call argument analysis";
             return false;
         }
@@ -17373,7 +17374,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             if (inst_ptr->result.isValid()) {
                 value_def_block[inst_ptr->result.id] = block.get();
                 value_def_temp_scope[inst_ptr->result.id] = inst_ptr->temp_scope_id;
-                if (qore_ir_call_arg_start(inst_ptr.get()) >= 0) {
+                if (qore_ir_call_arg_start(inst_ptr.get()) >= 0 || inst_ptr->opcode == QoreIROpcode::CopyCallArg) {
                     value_defined_by_call.insert(inst_ptr->result.id);
                 }
                 switch (inst_ptr->opcode) {
@@ -23013,6 +23014,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_incref",
                     llvm::FunctionType::get(void_type, {i64_type}, false));
             builder->CreateCall(helper, {boxed});
+            return true;
+        }
+        case QoreIROpcode::CopyCallArg: {
+            uint32_t id = inst->operands.front().id;
+            llvm::Value* value = getVal(id, error);
+            if (!value) {
+                return false;
+            }
+            llvm::Value* owned = emitHelperRef(module, boxValue(value, id));
+            llvm::Value* arg = emitWeakShareCheck(module, llvm_func, owned, xsink_arg);
+            values[inst->result.id] = arg;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(arg, inst->result.id, llvm_func);
             return true;
         }
         case QoreIROpcode::RefSelf: {
@@ -39558,6 +39572,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             return true;
         }
+        case QoreIROpcode::ReleaseCallArgSource:
         case QoreIROpcode::ReleasePlainLocalRead:
         case QoreIROpcode::ReleaseOwnedTemp: {
             // a return leaves a statement whose temporary the function owns, such as the list of a foreach
@@ -39607,6 +39622,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return true;
             } else {
                 auto alloca_it = invoke_alloca_map.find(value_id);
+                if (inst->opcode == QoreIROpcode::ReleaseCallArgSource && alloca_it != invoke_alloca_map.end()
+                        && !alloca_it->second) {
+                    promoteSsaEntryToAlloca(value_id, module, llvm_func);
+                    alloca_it = invoke_alloca_map.find(value_id);
+                }
                 if (alloca_it == invoke_alloca_map.end() || !alloca_it->second || !nanboxed_values.count(value_id)
                         || weak_load_result_ids.count(value_id)) {
                     return true;
@@ -39652,7 +39672,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::ConstantInt::get(i64_type, 0xFFD));
                 llvm::Value* needs_ref = builder->CreateOr(builder->CreateOr(is_pointer, is_enum), is_opaque);
                 if (kept) {
-                    needs_ref = builder->CreateAnd(needs_ref, builder->CreateICmpNE(old_val, kept));
+                    llvm::Value* release = inst->opcode == QoreIROpcode::ReleaseCallArgSource
+                        ? builder->CreateICmpEQ(old_val, kept) : builder->CreateICmpNE(old_val, kept);
+                    needs_ref = builder->CreateAnd(needs_ref, release);
                 }
                 llvm::BasicBlock* release_bb = llvm::BasicBlock::Create(ctx, "release_owned_temp", llvm_func);
                 llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(ctx, "release_owned_temp_cont", llvm_func);
@@ -40868,8 +40890,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result_val;
             // The value of the operand is handed over to the lvalue instead of borrowed when this function owns it
             // (it has a cleanup slot), this is its last use, it is not a weak-reference load, and it is defined in
-            // this block - the use counts are static, so a value defined before a loop and used once in it would
-            // otherwise be handed over on the first iteration.  The helper then owns the value in every case,
+            // this block or by the invoke that always enters this store's block (invoke_store_moves). Static
+            // use counts alone cannot distinguish a value defined before a loop and used once in its body.  The helper then owns the value in every case,
             // including when the operation fails, so the cleanup slot is cleared before the call.  See
             // qore_rt_lv_path_assign_consume().
             auto consume_rhs = [&](uint32_t rhs_id) -> bool {
@@ -40881,7 +40903,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         || (uses_it != operand_remaining_uses.end() && uses_it->second > 1)
                         || weak_load_result_ids.count(rhs_id)
                         || def_it == value_def_block.end()
-                        || def_it->second != current_lowering_block_) {
+                        || (def_it->second != current_lowering_block_ && !invoke_store_moves.count(rhs_id))) {
                     return false;
                 }
                 llvm::Value* ca = alloca_it->second;

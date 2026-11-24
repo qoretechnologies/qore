@@ -2588,7 +2588,8 @@ if (x || y)
       object member, a global or thread-local variable, a class static variable, and a local variable that a closure
       captures or that a @ref lvalue_references "reference" is made to anywhere in its scope, that are given it always
       take a copy of their own, also of one that nothing else holds (the weak reference then designates the temporary,
-      which the statement releases)</li>
+      which the statement releases). An argument captures the current value before the next argument is evaluated.
+      If a parameter takes a copy of a call result, the original lives until the end of the caller's statement</li>
     <li>a weak assignment from it designates it</li></ul>
     A container that only holds such a hash or list is shared as any other
     value, and so is the hash or list in it: after <tt>w := src[0]; b = src;</tt>, <tt>w[0] = 9</tt> changes

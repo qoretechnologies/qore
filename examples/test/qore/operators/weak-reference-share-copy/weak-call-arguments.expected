@@ -1,0 +1,36 @@
+pair {n: 1} 0
+try assign 2
+pair {n: 1} 0
+try add 3
+pair {n: 1} 4
+try nested write 4
+pair {n: 1} 5
+nested write 5
+pair {n: 1} 6
+typed nested write 6
+pair [1] 7
+list nested write [7]
+pair {n: 1} {other: 7}
+replaced local {other: 7}
+untyped inside 1
+pair {n: 1} 1
+after untyped null
+typed inside 1
+pair {n: 1} 1
+after typed null
+method inside 1
+pair {n: 1} 1
+after method null
+untyped inside 1
+pair {n: 1} 1
+after conditional null
+pair {n: 1} 0
+iteration 0 0
+pair {n: 1} 1
+iteration 1 1
+typed inside 1
+pair {n: 1} 1
+after try argument null
+ordinary 1 1
+before throw 1
+caught EXPECTED null
