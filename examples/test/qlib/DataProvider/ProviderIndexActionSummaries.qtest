@@ -931,9 +931,7 @@ public class ProviderIndexActionSummariesTest inherits QUnit::Test {
 
     #! Makes the given directory the index directory; returns code that restores the previous directory
     private static code useIndexDir(string dir) {
-        # live-provider-optin: saves and restores the provider index directory variable
         bool had_env = exists ENV{ProviderIndexEnvVar};
-        # live-provider-optin: saves and restores the provider index directory variable
         string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
         ProviderIndexUtil::setEnvironmentVariable(dir);
         resetIndexState();
@@ -942,7 +940,6 @@ public class ProviderIndexActionSummariesTest inherits QUnit::Test {
                 ProviderIndexUtil::setEnvironmentVariable(old_env);
             } else {
                 unsetenv(ProviderIndexEnvVar);
-                # live-provider-optin: saves and restores the provider index directory variable
                 remove ENV{ProviderIndexEnvVar};
             }
             # no later test case reads this index
