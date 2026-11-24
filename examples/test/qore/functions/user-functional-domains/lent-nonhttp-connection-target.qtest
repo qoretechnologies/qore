@@ -1,0 +1,368 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ConnectionProvider
+%requires TelnetClient
+%requires SmtpClient
+%requires Pop3Client
+%requires ImapClient
+%requires RedisDataProvider
+%requires MemcachedDataProvider
+%requires MllpUtil
+%requires MongoDbDataProvider
+%requires ConnectDataProvider
+%requires WebSocketClient
+%requires DbDataProvider
+%requires ServerSentEventClient
+
+%exec-class LentNonHttpConnectionTargetTest
+
+#! a connection whose client is not an HTTP client is used by restricted code that was lent it only with its creator's target
+/** Trusted code creates a connection and lends it to code restricted from the NETWORK domain (here by its parse
+    options only, which do not govern the I/O of the connection's module code).  The restricted code can change the
+    connection's public members (\c url, \c real_url, \c urlh, \c opts), from which the connection's client is
+    created, and so could make the module connect to a target of its choice with the creator's credentials: every
+    entry point that creates a client (\c get(), \c getAsync(), \c ping(), the poll operations of a protocol and the
+    data provider) refuses it with \c PERMISSION-DENIED before any client is created, as well as runtime options
+    that can change the target, and a listener on the restricted code's target sees no connection; a change of the
+    members after the check (from another thread) does not reach the client, which is created from a private copy with
+    the creator's target.  The creator's own target still works for the restricted code, and
+    code that is not restricted is not checked (qore#7327).
+*/
+class LentNonHttpConnectionTargetTest inherits QUnit::Test {
+    public {
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+        #! the refusal of a lent connection whose members were changed
+        const Denied = "^PERMISSION-DENIED: connection .*may use a connection that unrestricted code created and lent to "
+            "it only with the target that its creator gave it";
+
+        #! the code of the restricted Program: each function returns what the call did, or the error
+        const Code = "%modern
+string sub why(hash<ExceptionInfo> ex) {
+    return ex.err + \": \" + ex.desc;
+}
+# changes the members that the connection's client is created from
+nothing sub redirect(object conn, string url) {
+    conn.url = url;
+    conn.real_url = url;
+    conn.urlh = parse_url(url);
+}
+string sub call(object conn, *string url, string method) {
+    try {
+        if (url) {
+            redirect(conn, url);
+        }
+        switch (method) {
+            case \"get\": conn.get(True); return \"CONNECTED\";
+            case \"get0\": conn.get(False); return \"CREATED\";
+            case \"async\": conn.getAsync(False); return \"CREATED\";
+            case \"poll\": conn.getPollImpl(); return \"CREATED\";
+            case \"ping\": conn.ping(True); return \"PINGED\";
+            case \"startPollConnect\": conn.startPollConnect(); return \"STARTED\";
+            case \"dp\": conn.getDataProvider(); return \"PROVIDER\";
+        }
+        return \"UNKNOWN METHOD \" + method;
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+# gives runtime options
+string sub call_rtopts(object conn, hash<auto> rtopts) {
+    try {
+        conn.get(False, rtopts);
+        return \"CREATED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+# gives data provider options
+string sub call_dp(object conn, *string subtype, hash<auto> opts) {
+    try {
+        if (subtype) {
+            conn.getDataProvider(subtype, opts);
+        } else {
+            conn.getDataProvider(opts);
+        }
+        return \"PROVIDER\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+# a lent file connection: changes the path, or gets a redirect or a provider
+string sub call_fs(object conn, string what) {
+    try {
+        switch (what) {
+            case \"redirect\": return conn.getFileLocationRedirect(\"x\", False).location;
+            case \"moved\": conn.urlh.path = \"/etc\"; return conn.getFileLocationRedirect(\"passwd\", False).location;
+            case \"root\": conn.getDataProvider({\"root\": \"/etc\"}); return \"PROVIDER\";
+            case \"provider\": conn.getDataProvider(); return \"PROVIDER\";
+        }
+        return \"UNKNOWN \" + what;
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+# changes an option only
+string sub call_opts(object conn, string method) {
+    conn.opts += {\"timeout\": 1234};
+    return call(conn, NOTHING, method);
+}
+";
+
+        #! the connection classes, their schemes and the entry points that create a client
+        const Connections = (
+            ("class": "TelnetClient::TelnetConnection", "scheme": "telnet", "methods": ("get", "get0", "ping")),
+            ("class": "FtpConnection", "scheme": "ftp", "methods": ("get0", "async", "ping")),
+            ("class": "SmtpClient::SmtpConnection", "scheme": "esmtp",
+                "methods": ("get0", "async", "startPollConnect", "ping")),
+            ("class": "Pop3Client::Pop3Connection", "scheme": "pop3", "userinfo": "user:pass@",
+                "methods": ("get0", "startPollConnect", "ping")),
+            ("class": "ImapClient::ImapConnection", "scheme": "imap", "userinfo": "user:pass@",
+                "methods": ("get0", "startPollConnect", "ping")),
+            ("class": "RedisDataProvider::RedisConnection", "scheme": "redis", "methods": ("get0", "dp", "ping")),
+            ("class": "MemcachedDataProvider::MemcachedConnection", "scheme": "memcached", "methods": ("get0", "dp")),
+            ("class": "MllpUtil::MllpConnection", "scheme": "mllp", "methods": ("get0", "ping")),
+            ("class": "MongoDbDataProvider::MongoDbConnection", "scheme": "mongodb", "methods": ("get0", "ping")),
+            ("class": "ConnectDataProvider::ConnectConnection", "scheme": "connect", "methods": ("ping", "dp")),
+            ("class": "WebSocketClient::WebSocketConnectionObject", "scheme": "ws",
+                "methods": ("startPollConnect", "dp")),
+            ("class": "ServerSentEventClient::ServerSentEventConnection", "scheme": "sse",
+                "methods": ("startPollConnect", "dp")),
+        );
+
+        #! the refusal of a runtime option that can change the target
+        const RtoptsDenied = "^PERMISSION-DENIED: connection .*may not give a connection that unrestricted code "
+            "created and lent to it the runtime option";
+
+        #! the refusal of a data provider option that can change the target
+        const DpOptsDenied = "^PERMISSION-DENIED: connection .*may not give a connection that unrestricted code "
+            "created and lent to it the data provider option";
+    }
+
+    private {
+        #! the listener of the creator's target
+        Socket own();
+        #! the listener of the target that the restricted code chooses
+        Socket other();
+        int own_port;
+        int other_port;
+    }
+
+    constructor() : QUnit::Test("LentNonHttpConnectionTarget", "1.0", \ARGV) {
+        own_port = listen(own);
+        other_port = listen(other);
+        foreach string mode in (keys Modes) {
+            addTestCase("redirected lent connections are refused, " + mode, \testRedirected(), mode);
+            addTestCase("a changed option is refused, " + mode, \testChangedOption(), mode);
+            addTestCase("the creator's target works for the restricted code, " + mode, \testCreatorTarget(), mode);
+        }
+        foreach string mode in (keys Modes) {
+            addTestCase("runtime options that change the target are refused, " + mode, \testRuntimeOptions(), mode);
+            addTestCase("a change of the members while the client is created is ignored, " + mode, \testRace(),
+                mode);
+            addTestCase("data provider options that change the target are refused, " + mode,
+                \testDataProviderOptions(), mode);
+            addTestCase("a lent file connection is confined for code restricted from the filesystem, " + mode,
+                \testFilesystem(), mode);
+            addTestCase("a lent datasource connection is confined for code restricted from databases, " + mode,
+                \testDatasource(), mode);
+        }
+        addTestCase("code that is not restricted is not checked", \testUnrestricted());
+        set_return_value(main());
+    }
+
+    #! every entry point that creates a client refuses a connection that the restricted code redirected
+    testRedirected(string mode) {
+        Program p = getProgram(mode);
+        foreach hash<auto> c in (Connections) {
+            foreach string method in (c.methods) {
+                AbstractConnection conn = getConnection(c, own_port);
+                string label = sprintf("%s %s, %s", c.scheme, method, mode);
+                string rv = p.callFunction("call", conn, sprintf("%s://127.0.0.1:%d", c.scheme, other_port), method);
+                assertRegex(Denied, rv, label);
+                assertFalse(other.isDataAvailable(0), "the other listener sees no connection: " + label);
+            }
+        }
+    }
+
+    #! a change of an option alone is refused as well: the restricted code may not change any member
+    testChangedOption(string mode) {
+        Program p = getProgram(mode);
+        foreach hash<auto> c in (Connections) {
+            AbstractConnection conn = getConnection(c, own_port);
+            assertRegex(Denied, p.callFunction("call_opts", conn, c.methods[0]), sprintf("%s %s, %s", c.scheme,
+                c.methods[0], mode));
+        }
+    }
+
+    #! the connection that the creator lent is used with its own target
+    testCreatorTarget(string mode) {
+        Program p = getProgram(mode);
+        foreach hash<auto> c in (Connections) {
+            if (c.methods.contains("get0")) {
+                AbstractConnection conn = getConnection(c, own_port);
+                assertEq("CREATED", p.callFunction("call", conn, NOTHING, "get0"), sprintf("%s, %s", c.scheme, mode));
+            }
+        }
+        # a client that connects reaches the creator's target
+        AbstractConnection telnet = getConnection(Connections[0], own_port);
+        assertEq("CONNECTED", p.callFunction("call", telnet, NOTHING, "get"), "telnet get, " + mode);
+        Socket s = own.accept(5s);
+        assertTrue(s.isOpen(), "the creator's listener sees the connection, " + mode);
+        s.close();
+    }
+
+    #! runtime options that can change the target are refused; options that cannot are accepted
+    testRuntimeOptions(string mode) {
+        Program p = getProgram(mode);
+        hash<auto> memcached = getConnectionInfo("memcached");
+        AbstractConnection mc = getConnection(memcached, own_port);
+        assertRegex(RtoptsDenied, p.callFunction("call_rtopts", mc,
+            {"url": sprintf("memcached://127.0.0.1:%d", other_port)}), "memcached url, " + mode);
+        hash<auto> mllp = getConnectionInfo("mllp");
+        AbstractConnection ml = getConnection(mllp, own_port);
+        assertRegex(RtoptsDenied, p.callFunction("call_rtopts", ml, {"host": "127.0.0.1", "port": other_port}),
+            "mllp host/port, " + mode);
+        assertFalse(other.isDataAvailable(0), "the other listener sees no connection, " + mode);
+        # a timeout does not change the target
+        AbstractConnection mc2 = getConnection(memcached, own_port);
+        assertEq("CREATED", p.callFunction("call_rtopts", mc2, {"connect_timeout": 1000}), "memcached timeout, " + mode);
+    }
+
+    #! data provider constructor options that can change the target are refused, also with a subtype
+    testDataProviderOptions(string mode) {
+        Program p = getProgram(mode);
+        string other_url = sprintf("ftp://127.0.0.1:%d", other_port);
+        AbstractConnection ftp = getConnection(getConnectionInfo("ftp"), own_port);
+        assertRegex(DpOptsDenied, p.callFunction("call_dp", ftp, "ftppoller", {"url": other_url}),
+            "ftp ftppoller url, " + mode);
+        AbstractConnection redis = getConnection(getConnectionInfo("redis"), own_port);
+        assertRegex(DpOptsDenied, p.callFunction("call_dp", redis, NOTHING, {"redis": NOTHING,
+            "url": sprintf("redis://127.0.0.1:%d", other_port)}), "redis url, " + mode);
+        AbstractConnection mongo = getConnection(getConnectionInfo("mongodb"), own_port);
+        assertRegex(DpOptsDenied, p.callFunction("call_dp", mongo, NOTHING, {"client": NOTHING,
+            "url": sprintf("mongodb://127.0.0.1:%d", other_port)}), "mongodb url, " + mode);
+        AbstractConnection mc = getConnection(getConnectionInfo("memcached"), own_port);
+        assertRegex(DpOptsDenied, p.callFunction("call_dp", mc, NOTHING, {"memcached": NOTHING,
+            "url": sprintf("memcached://127.0.0.1:%d", other_port)}), "memcached url, " + mode);
+        # the refusal comes before any client is created
+        assertFalse(other.isDataAvailable(0), "the other listener sees no connection, " + mode);
+    }
+
+    #! a file connection lent to code restricted from the FILESYSTEM domain is used only with its creator's path
+    testFilesystem(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        p.setExecMode(Modes{mode});
+        p.parse(Code, "restricted-fs-" + mode);
+        string dir = tmp_location() + DirSep + get_random_string();
+        AbstractConnection conn = new FilesystemConnection("fs", "fs", "file://" + dir, {"monitor": False});
+        string rv = p.callFunction("call_fs", conn, "redirect");
+        assertEq(dir + DirSep + "x", rv, "the creator's path, " + mode);
+        assertRegex(Denied, p.callFunction("call_fs", conn, "moved"), "a moved path, " + mode);
+        conn = new FilesystemConnection("fs", "fs", "file://" + dir, {"monitor": False});
+        assertRegex(DpOptsDenied, p.callFunction("call_fs", conn, "root"), "another provider root, " + mode);
+        # a URL whose path the connection normalizes when it is created (here the host form of a path) is the
+        # creator's target as normalized
+        conn = new FilesystemConnection("fs", "fs", "file://" + dir.substr(1), {"monitor": False});
+        assertEq(dir + DirSep + "x", p.callFunction("call_fs", conn, "redirect"), "a normalized path, " + mode);
+    }
+
+    #! a datasource connection lent to code restricted from the DATABASE domain is used only with its creator's
+    #! target, also when the connection normalizes its options when it is created
+    testDatasource(string mode) {
+        try {
+            load_module("sqlite3");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("the sqlite3 module is not available: " + ex.desc);
+        }
+        Program p(PO_NEW_STYLE | PO_NO_DATABASE);
+        p.setExecMode(Modes{mode});
+        p.parse(Code, "restricted-db-" + mode);
+        string db = tmp_location() + DirSep + get_random_string() + ".db";
+        # the options from the URL and the pool sizes (given as strings) are normalized when it is created
+        DatasourceConnection conn("db", "db", "db://sqlite3:@" + db + "{min=1,max=2}", {"monitor": False},
+            {"min": "1", "max": "2"});
+        assertEq("CREATED", p.callFunction("call", conn, NOTHING, "get0"), "the creator's target, " + mode);
+        conn = new DatasourceConnection("db", "db", "db://sqlite3:@" + db, {"monitor": False});
+        assertRegex(Denied, p.callFunction("call_opts", conn, "get0"), "a changed option, " + mode);
+    }
+
+    #! a change of the connection's members after the check, as restricted code in another thread could make it, does
+    #! not reach the client: it is created from a private copy with the creator's target (qore#7327)
+    testRace(string mode) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the members are changed with a test hook of a debug build");
+        }
+        Program p = getProgram(mode);
+        string other_url = sprintf("telnet://127.0.0.1:%d", other_port);
+        code<nothing(AbstractConnection)> hook = nothing sub (AbstractConnection c) {
+            c.url = other_url;
+            c.real_url = other_url;
+            c.urlh = parse_url(other_url);
+        };
+        call_static_method("ConnectionProvider::AbstractConnection", "dbgSetLentTargetHook", hook);
+        on_exit call_static_method("ConnectionProvider::AbstractConnection", "dbgSetLentTargetHook");
+        AbstractConnection telnet = getConnection(Connections[0], own_port);
+        assertEq("CONNECTED", p.callFunction("call", telnet, NOTHING, "get"), "telnet get, " + mode);
+        Socket s = own.accept(5s);
+        assertTrue(s.isOpen(), "the creator's listener sees the connection, " + mode);
+        s.close();
+        assertFalse(other.isDataAvailable(0), "the other listener sees no connection, " + mode);
+    }
+
+    #! trusted code changes the members and creates the client as before
+    testUnrestricted() {
+        foreach hash<auto> c in (Connections) {
+            if (c.methods.contains("get0")) {
+                AbstractConnection conn = getConnection(c, own_port);
+                conn.url = getUrl(c, other_port);
+                conn.real_url = conn.url;
+                conn.urlh = parse_url(conn.url);
+                assertEq(True, exists conn.get(False), c.scheme);
+            }
+        }
+    }
+
+    #! returns the description of the connection class with the given scheme
+    private hash<auto> getConnectionInfo(string scheme) {
+        foreach hash<auto> c in (Connections) {
+            if (c.scheme == scheme) {
+                return c;
+            }
+        }
+        throw "TEST-ERROR", sprintf("no connection class with scheme %y", scheme);
+    }
+
+    #! returns a connection of the given class for the given port of the local host, created by this (trusted) code
+    private AbstractConnection getConnection(hash<auto> c, int port) {
+        return create_object(c."class", c.scheme, c.scheme, getUrl(c, port), {"monitor": False});
+    }
+
+    #! returns the URL of the given port of the local host for the given connection class
+    private string getUrl(hash<auto> c, int port) {
+        # a POP3 or IMAP connection needs a user in its URL
+        return sprintf("%s://%s127.0.0.1:%d", c.scheme, c.userinfo ?? "", port);
+    }
+
+    #! returns the restricted Program in the given mode
+    private Program getProgram(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.setExecMode(Modes{mode});
+        p.parse(Code, "restricted-" + mode);
+        return p;
+    }
+
+    #! binds and listens on a port of the local host; returns the port
+    private int listen(Socket s) {
+        s.bind("127.0.0.1:0");
+        s.listen();
+        return s.getSocketInfo().port;
+    }
+}

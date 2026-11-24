@@ -722,6 +722,15 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
         return False;
     }
 
+    #! Returns @ref True: the clients of the connection are bound to its creator's target by its creator proof
+    /** Restricted code that was lent the connection may change its members within that target (see
+        checkLentClientTarget()), so AbstractConnection::checkLentTarget() does not confine it to the members that
+        the connection's creator set (qore#7327)
+    */
+    private bool hasCreatorBoundClients() {
+        return True;
+    }
+
     #! Checks the client that get() or getPollImpl() creates for code restricted from NETWORK (qore#7262)
     /** A connection whose client is not bound to its creator (see hasBoundClient()) gives no synchronous client to
         restricted code (its async client is bound, if it is, see @ref sandbox_lent_connections); otherwise the

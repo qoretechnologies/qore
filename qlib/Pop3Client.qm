@@ -2722,7 +2722,9 @@ public class Pop3Connection inherits ConnectionProvider::AbstractConnectionWithI
         @since %Pop3Client 2.1
     */
     Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
-        return new Pop3PingPollOperation(getImpl(False));
+        # the client is created from the connection's members, which restricted code that was lent the connection can
+        # change: for such code, from a private copy with its creator's target (qore#7327)
+        return new Pop3PingPollOperation(cast<Pop3Connection>(getLentTargetSource()).getImpl(False));
     }
 
     #! Starts a non-blocking fetch operation to retrieve all messages
@@ -2735,7 +2737,9 @@ public class Pop3Connection inherits ConnectionProvider::AbstractConnectionWithI
         @since Pop3Client 2.1
     */
     Pop3FetchPollOperation startPollFetch(bool do_delete = False) {
-        return new Pop3FetchPollOperation(getImpl(False), do_delete);
+        # the client is created from the connection's members, which restricted code that was lent the connection can
+        # change: for such code, from a private copy with its creator's target (qore#7327)
+        return new Pop3FetchPollOperation(cast<Pop3Connection>(getLentTargetSource()).getImpl(False), do_delete);
     }
 
     #! Performs a blocking ping operation on the POP3 server
@@ -2745,7 +2749,9 @@ public class Pop3Connection inherits ConnectionProvider::AbstractConnectionWithI
         @since %Pop3Client 2.1
     */
     private pingImpl() {
-        Pop3PingPollOperation op(getImpl(False));
+        # for restricted code that was lent the connection, the client is created from a private copy with its
+        # creator's target (qore#7327)
+        Pop3PingPollOperation op(cast<Pop3Connection>(getLentTargetSource()).getImpl(False));
         execPollOperation(op, sprintf("pop3-ping:%s", name));
     }
 

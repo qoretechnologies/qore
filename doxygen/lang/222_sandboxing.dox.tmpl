@@ -830,13 +830,21 @@ authenticate();
     name and that is created for it then has no proof of the host (see @ref sandbox_caller_domains), so its clients
     are refused to it.
 
-    @warning The connections whose clients are not HTTP clients (for example Telnet, SMTP, POP3, IMAP, FTP, Redis,
-    Memcached, MLLP and MongoDB connections) are not yet bound to their creator's target: their module code connects for the code that they were lent to, to the
-    target in the connection's members, which that code can change, and sends the connection's credentials there.
-    The parse options of the restricted code do not stop it; a @ref Qore::SandboxManager "SandboxManager" that
-    governs the code does, as its network policy decides the connections of the module code that it runs (see
-    <a href="https://github.com/qoretechnologies/qore/issues/7327">issue 7327</a>).  Lend such connections only to
-    code governed by a sandbox whose network policy allows just their targets.
+    The connections whose clients are not HTTP clients (for example Telnet, SMTP, POP3, IMAP, FTP, Redis,
+    Memcached, MLLP, MongoDB, Connect, file and datasource connections, and the poll operations of WebSocket and
+    server-sent event connections) are used by code that was lent them and that is restricted from a functional domain
+    that their clients use (\c NETWORK, \c FILESYSTEM or \c DATABASE) only with the target that their creator gave
+    them: a connection keeps the members that its clients are created from (\c url, \c safe_url, \c real_url,
+    \c urlh, \c orig_opts and \c opts) as its creator set them, and for such code every method that creates a
+    client, a data provider or a file location (@ref ConnectionProvider::AbstractConnection::get() "get()",
+    @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()",
+    @ref ConnectionProvider::AbstractConnection::ping() "ping()", the poll operations,
+    @ref ConnectionProvider::AbstractConnection::getDataProvider() "getDataProvider()" and the file location methods)
+    raises \c PERMISSION-DENIED if the code changed them, also for runtime options and data provider options that can
+    change the target (any other than the options for logging, threads and timeouts), and creates the client from a
+    private copy of the connection with its creator's members, so that a change that the code makes while the
+    client is created (from another thread) does not reach it.  Such code can still read the connection's options,
+    including any credentials in them.
 
     @since %Qore 3.0
 

@@ -147,14 +147,17 @@ public class ConnectConnection inherits ConnectionProvider::AbstractConnectionWi
     /** @return a ConnectDataProvider configured for this connection
     */
     DataProvider::AbstractDataProvider getDataProvider() {
+        # the provider's client is created from the connection's members: for restricted code that was lent the
+        # connection, from a private copy with its creator's target (qore#7327)
+        ConnectConnection src = cast<ConnectConnection>(getLentDataProviderSource());
         return new ConnectDataProvider(<ConnectDataProviderOptions>{
-            "url": getHttpUrl(),
-            "codec": opts.codec ?? "yaml",
-            "encoding": opts.encoding,
-            "timeout_ms": opts.timeout_ms,
-            "accept_all_certs": opts.accept_all_certs ?? True,
-            "protocol": opts.protocol,
-            "use_discovery": opts.use_discovery,
+            "url": src.getHttpUrl(),
+            "codec": src.opts.codec ?? "yaml",
+            "encoding": src.opts.encoding,
+            "timeout_ms": src.opts.timeout_ms,
+            "accept_all_certs": src.opts.accept_all_certs ?? True,
+            "protocol": src.opts.protocol,
+            "use_discovery": src.opts.use_discovery,
         });
     }
 
@@ -181,7 +184,9 @@ public class ConnectConnection inherits ConnectionProvider::AbstractConnectionWi
         class catches this and sets \c ok to \c False in the ping result.
     */
     private pingImpl() {
-        HTTPClient client({"url": getHttpUrl(), "timeout": 5s});
+        # for restricted code that was lent the connection, the client is created from a private copy with its
+        # creator's target (qore#7327)
+        HTTPClient client({"url": cast<ConnectConnection>(getLentTargetSource()).getHttpUrl(), "timeout": 5s});
         client.connect();
     }
 

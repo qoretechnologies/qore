@@ -195,14 +195,18 @@ public class ImapConnection inherits ConnectionProvider::AbstractConnectionWithI
         @see supportsPollingApi()
     */
     Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
-        return new ImapPingPollOperation(getImpl(False));
+        # the client is created from the connection's members, which restricted code that was lent the connection can
+        # change: for such code, from a private copy with its creator's target (qore#7327)
+        return new ImapPingPollOperation(cast<ImapConnection>(getLentTargetSource()).getImpl(False));
     }
 
     #! Performs a blocking ping operation on the IMAP server
     /** Connects, authenticates, and sends a \c NOOP to verify the connection is working.
     */
     private pingImpl() {
-        ImapPingPollOperation op(getImpl(False));
+        # for restricted code that was lent the connection, the client is created from a private copy with its
+        # creator's target (qore#7327)
+        ImapPingPollOperation op(cast<ImapConnection>(getLentTargetSource()).getImpl(False));
         execPollOperation(op, sprintf("imap-ping:%s", name));
     }
 

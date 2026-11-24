@@ -121,6 +121,10 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
         @return a DbDataProvider object
     */
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # the data provider is created from the connection's members and its constructor options: for restricted code
+        # that was lent the connection, from its creator's members, and with options that cannot change the target
+        # (qore#7327)
+        getLentDataProviderSource(constructor_options);
         return new DbDataProvider(cast<Datasource>(get()));
     }
 
@@ -198,7 +202,9 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
 
     #! Performs the internal ping
     private pingImpl() {
-        Datasource ds = getImpl();
+        # for restricted code that was lent the connection, the client is created from a private copy with its
+        # creator's target (qore#7327)
+        Datasource ds = cast<DatasourceConnection>(getLentTargetSource()).getImpl();
         ds.getServerVersion();
     }
 
@@ -348,6 +354,8 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
         if (extra_opts) {
             ds_urlh = ds_urlh + {"options": (ds_urlh.options ?? {}) + extra_opts};
         }
+        # the options are normalized after the base class took its snapshot of them (qore#7327)
+        takeLentTargetSnapshot();
     }
 }
 }

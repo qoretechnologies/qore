@@ -6913,19 +6913,22 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
         @since WebSocketClient 2.4
     */
     Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
-        hash<auto> http_opts = opts{keys HttpConnection::ConnectionScheme.options};
-        http_opts.url = url;
+        # the ping is made from the connection's members, which restricted code that was lent the connection can
+        # change: for such code, from a private copy with its creator's target (qore#7327)
+        WebSocketConnectionObject src = cast<WebSocketConnectionObject>(getLentTargetSource());
+        hash<auto> http_opts = src.opts{keys HttpConnection::ConnectionScheme.options};
+        http_opts.url = src.url;
         hash<auto> headers;
-        headers += opts.headers;
+        headers += src.opts.headers;
         # add token-based auth if present (mirrors WebSocketClient constructor logic)
-        if (opts.token && !headers.Authorization) {
-            headers.Authorization = sprintf("%s %s", opts.token_type ?? "Bearer", opts.token);
+        if (src.opts.token && !headers.Authorization) {
+            headers.Authorization = sprintf("%s %s", src.opts.token_type ?? "Bearer", src.opts.token);
         }
         # add cookie header if present
-        if (opts.cookie && !headers.Cookie) {
-            headers.Cookie = opts.cookie;
+        if (src.opts.cookie && !headers.Cookie) {
+            headers.Cookie = src.opts.cookie;
         }
-        return WebSocketPingPollOperation::create(url, http_opts, headers, logger ?? self.logger);
+        return WebSocketPingPollOperation::create(src.url, http_opts, headers, logger ?? self.logger);
     }
 
     private hash<PingInfo> pingIntern(hash<PingInfo> rv) {
@@ -7007,9 +7010,12 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
         @see hasDataProvider()
     */
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # the provider's client is created from the connection's members: for restricted code that was lent the
+        # connection, from a private copy with its creator's target (qore#7327)
+        AbstractConnection src = getLentDataProviderSource(constructor_options);
         return new WebSocketClientDelayedDataProvider({
-            "url": url,
-        } + opts{"async_io", "connect_timeout", "data", "headers", "http_version", "max_redirects", "password", "proxy",
+            "url": src.url,
+        } + src.opts{"async_io", "connect_timeout", "data", "headers", "http_version", "max_redirects", "password", "proxy",
             "reconnect", "timeout", "token", "token_type", "username"});
     }
 
