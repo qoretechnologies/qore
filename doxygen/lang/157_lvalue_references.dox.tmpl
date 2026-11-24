@@ -72,6 +72,12 @@ printf("%y\n", h.fullType()); # "hash<string, int>"
     When the referenced value already satisfies the restriction, binding the reference leaves the lvalue
     untouched.
 
+    The @ref reference_complex_type "reference" elements of a value that is stored into a variable, a member or an
+    element of a container are bound before the value is stored, with no lock of the target held, so a reference
+    can refer to the target's own object or variable, and threads whose stores refer to each other's targets do not
+    wait for each other.  When an element cannot be bound, the store raises an exception and the target is not
+    changed; the variables of the elements bound before it keep their converted values.
+
     A local whose type names a type parameter keeps the concrete constraint of the invocation that created its
     storage.  Taking a reference to the local, or capturing it in a closure, preserves that constraint after the
     invocation returns, including when the reference or closure is used by another thread or another generic
