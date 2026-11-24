@@ -5199,8 +5199,11 @@ static QoreStringNode* qore_socket_exec_read_http_header_string(QoreSocket* s, i
 
     const size_t len = raw->size();
     SimpleRefHolder<QoreStringNode> hdr;
-    if (len >= 4 && !memcmp(raw->c_str() + len - 4, "\r\n\r\n", 4)) {
-        hdr = new QoreStringNode(raw->c_str(), len - 4, raw->getEncoding());
+    // the header is given without the empty line that ends it, whatever its line ends (qore#7491), and its last
+    // line ends with LF
+    size_t text_size = qore_socket_private::getHttpHeaderTextSize(raw->c_str(), len);
+    if (text_size < len) {
+        hdr = new QoreStringNode(raw->c_str(), text_size, raw->getEncoding());
         hdr->concat('\n');
     } else {
         hdr = raw->stringRefSelf();
@@ -11061,6 +11064,22 @@ int SocketRecvUntilBytesPollState::continuePollIntern(ExceptionSink* xsink) {
             }
             bin = new QoreStringNode;
             return -1;
+        }
+        if (http_header_end) {
+            // the end of a header section: an LF that ends an empty line, which a CR can precede; matched is 1 after
+            // an LF and 2 after an LF and a CR (qore#7491)
+            if (c == '\n') {
+                if (matched) {
+                    matched = size;
+                    break;
+                }
+                matched = 1;
+            } else if (c == '\r' && matched == 1) {
+                matched = 2;
+            } else {
+                matched = 0;
+            }
+            continue;
         }
         if (c == bytes[matched]) {
             ++matched;

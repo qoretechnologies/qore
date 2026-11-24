@@ -23,10 +23,11 @@
     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
     DEALINGS IN THE SOFTWARE.
 
-    A header ends where every reader ends it: the readers read a header up to the first empty line with CRLF line
-    ends, and the header is refused if it has an empty line before that, so that the text after it, which can be
-    another message, is never lost.  A line of a request header must end with CRLF; a line of a response header can
-    end with LF, which a recipient may accept (RFC 9112 section 2.2).
+    A header ends where every reader ends it: the readers read a header up to its first empty line, where a line ends
+    with LF, which a CR can precede (qore#7491), so that the text after it, which can be another message, is never
+    lost.  A line of a request header must end with CRLF; a line of a response header can end with LF, which a
+    recipient may accept (RFC 9112 section 2.2), and a response header that ends with an empty line with LF is read,
+    with the message after it.
 */
 
 %modern
@@ -107,16 +108,22 @@ class SocketHttpHeaderLineEndsTest inherits QUnit::Test {
             assertEq("2", hdr.headers."content-length", reader);
             assertEq("a", hdr.headers.x, reader);
         }
-        # a response header with an empty line before its end is refused, whatever its line ends
+        # a response header ends at its first empty line, whatever its line ends, and the response after it is read
+        # next (qore#7491)
         foreach string resp in (("HTTP/1.1 200 OK\nContent-Length: 0\n\n",
                 "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\n", "HTTP/1.1 200 OK\r\nContent-Length: 0\n\r\n")) {
             foreach Reader reader in (Readers) {
                 string label = sprintf("%s: %y", reader, resp);
-                hash<auto> client = startClient(resp + "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
+                hash<auto> client = startClient(resp + "HTTP/1.1 204 No Content\r\nX: b\r\n\r\n");
                 on_exit client.done.dec();
                 Socket conn = client.server.accept(5s);
                 on_exit conn.close();
-                assertThrows("SOCKET-HTTP-ERROR", \readHeader(), (conn, reader), label);
+                hash<auto> hdr = readHeader(conn, reader);
+                assertEq(200, hdr.status_code, label);
+                assertEq("0", hdr.headers."content-length", label);
+                hdr = readHeader(conn, reader);
+                assertEq(204, hdr.status_code, label);
+                assertEq("b", hdr.headers.x, label);
             }
         }
     }

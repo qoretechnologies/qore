@@ -288,7 +288,8 @@ log("started listener on %s", lh.desc);
     - an HTTP/1.x request whose framing is ambiguous is answered with 400 (Bad Request), or 501 (Not Implemented)
       for a transfer coding other than chunked, and the connection is closed: a request with both
       \c Transfer-Encoding and \c Content-Length, a \c Transfer-Encoding that does not end with the chunked coding
-      alone, more than one \c Host, or a header line that ends with a bare LF; a chunked body that cannot be framed,
+      alone, more than one \c Host, a header line that ends with a bare LF, or a header field line with a control
+      character other than tab; a chunked body that cannot be framed,
       such as one whose trailer section has a line that ends with a bare LF or an empty line before its end, is
       answered with 400 instead of 500; the chunked coding is recognized without regard to case and whitespace
     - an HTTP/2 or HTTP/3 request body that the server collects for a handler and whose memory cannot be allocated
