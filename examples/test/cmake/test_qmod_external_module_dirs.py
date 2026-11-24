@@ -66,7 +66,7 @@ class ExternalModuleDirsTest(unittest.TestCase):
         self.feature = self.external / "BuildFeature.qm"
         self.feature.write_text(FEATURE)
         self.prefix = self.root / "prefix"
-        self.poison = self.prefix / "lib/qore-modules"
+        self.poison = self.root / "ambient modules"
         self.poison.mkdir(parents=True)
         shutil.copyfile(native[0], self.poison / native[0].name)
         (self.poison / "BuildFeature.qm").write_text("malformed external module\n")
@@ -77,6 +77,10 @@ class ExternalModuleDirsTest(unittest.TestCase):
         (self.root / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
 project(ExternalDirs NONE)
 include("{ROOT}/cmake/QoreMacros.cmake")
+set(MODULE_DIR "${{CMAKE_INSTALL_PREFIX}}/lib/qore-modules")
+set(USER_MODULE_DIR "${{CMAKE_INSTALL_PREFIX}}/share/qore-modules")
+set(MODULE_VER_DIR "${{MODULE_DIR}}/3.0.0")
+set(USER_MODULE_VER_DIR "${{USER_MODULE_DIR}}/3.0.0")
 include("{ROOT}/cmake/QoreExternalModuleDirs.cmake")
 qore_build_module_env(QORE_QM_METADATA_ENV "${{CMAKE_SOURCE_DIR}}/qlib")
 set(QORE_BUILD_AOT_MODULES ON)
@@ -105,13 +109,31 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
     def compile(self, success=True):
         return self.invoke(CMAKE, "--build", self.build, "--target", "Probe-qmod", success=success)
 
-    def value(self):
+    def value(self, module_dirs=None):
         record = (self.build / "qore-external-module-dirs.txt").read_text().strip()
-        path = os.pathsep.join(filter(None, (str(self.qmod.parent), record)))
+        external = record if module_dirs is None else module_dirs
+        path = os.pathsep.join(filter(None, (str(self.qmod.parent), str(self.root / "qlib"), external)))
         env = dict(self.env, QORE_MODULE_DIR_ONLY="1", QORE_MODULE_DIR=path)
-        return self.invoke(QORE, "-l", "Probe", "-ne", 'printf("%s", probe_value());', env=env)
+        return self.invoke(QORE, "-W", "-l", "Probe", "-ne", 'printf("%s", probe_value());', env=env)
 
-    def test_default_and_empty_exclude_installed_and_ambient_modules(self):
+    def test_default_uses_optional_modules_in_install_prefix(self):
+        lib = self.prefix / "lib/qore-modules"
+        share = self.prefix / "share/qore-modules"
+        lib.mkdir(parents=True)
+        (share / "3.0.0").mkdir(parents=True)
+        shutil.copyfile(self.native, lib / self.native.name)
+        shutil.copyfile(self.feature, share / "3.0.0/BuildFeature.qm")
+        self.configure()
+        self.compile()
+        # Load with the installed modules visible, independently of the search path recorded by the build.
+        installed = os.pathsep.join(map(str, (lib / "3.0.0", share / "3.0.0", lib, share)))
+        self.assertEqual("selected", self.value(installed))
+        self.assertEqual(installed, (self.build / "qore-external-module-dirs.txt").read_text().strip())
+        self.configure("-DQORE_EXTERNAL_MODULE_DIRS=")
+        self.compile()
+        self.assertEqual("in-tree only", self.value())
+
+    def test_empty_and_disabled_exclude_external_modules(self):
         self.configure()
         self.compile()
         self.assertEqual("in-tree only", self.value())
