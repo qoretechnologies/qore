@@ -285,6 +285,14 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - an HTTP/1.x request whose framing is ambiguous is answered with 400 (Bad Request), or 501 (Not Implemented)
+      for a transfer coding other than chunked, and the connection is closed: a request with both
+      \c Transfer-Encoding and \c Content-Length, a \c Transfer-Encoding that does not end with the chunked coding
+      alone, or a header line that ends with a bare LF; a chunked body whose trailer section has a line that ends with
+      a bare LF or an empty line before its end fails the request; the chunked coding is recognized without regard to
+      case and whitespace (issue XXXX)
+    - an HTTP/2 or HTTP/3 request body that the server collects for a handler and whose memory cannot be allocated
+      fails the request, which is answered with an error; before, the handler was given the part collected
     - the connection of an HTTP/1.x request whose chunked body a handler stopped reading before its end is closed
       after the response, so that the rest of the body cannot be taken for another request
       (<a href="https://github.com/qoretechnologies/qore/issues/7417">issue 7417</a>)
