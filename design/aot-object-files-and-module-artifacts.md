@@ -358,6 +358,30 @@ automatically:
   built from the same sources. A change to a file that is not fingerprinted
   never changes the identity, so rebuilding libqore for unrelated fixes keeps
   every installed AOT module loadable.
+- **Builtin functional domains.** An AOT module records the functional domains
+  that its code used when it was compiled (`FUNCTIONAL_DOMAIN`), and loading it
+  into a restricted Program checks that record; the builtins that it calls are
+  not looked at again. The fingerprint therefore has an `@builtin-domains`
+  entry: `cmake/QoreWriteBuiltinDomainTable.cmake`, run by `qcc-format-version`
+  before the fingerprint, writes `qore-builtin-domains.txt` from the
+  qpp-generated sources of libqore that every configuration has (the
+  registration lines of the builtin functions, classes and methods that name a
+  domain other than `QDOM_DEFAULT`, and the parent classes of the builtin
+  classes, which give them their domains, also those with type arguments, each
+  with the name of its file). A
+  builtin that gains, loses or changes a functional domain changes the
+  identity, so a module compiled before is refused (and its source, which the
+  loader tries instead, is checked against the new domains), while a change of
+  the code or documentation of a builtin does not (qore#7508). A change of the
+  name or signature of a builtin that has a domain, or of the parent classes of
+  a builtin class, changes it too. These changes are made in `lib/*.qpp`, whose
+  paths are not in `qcc-format-source-labels.txt`: a check of whether a change
+  is fingerprinted counts a change of the `dom=` of a declaration, of a
+  declaration that has one, or of the `vparent` of a class as well. The
+  optional `lib/ql_alloc_tracking.qpp`, the builtins that libqore registers in
+  hand-written code (the debug hooks of `lib/ql_debug.cpp`, all
+  `QDOM_DEBUG_HOOK`, which only debug builds have) and those of binary modules
+  are not covered.
 - **Recording.** The generated module descriptor calls
   `qore_aot_fill_module_runtime_identity()` after `qore_aot_fill_module_desc()`
   with the identity of the compiling libqore (descriptor revision 2). Every

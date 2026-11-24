@@ -37,7 +37,7 @@ with the dependencies it found and their content.  An entry whose dependencies a
 and its **result key** (the base key, the dependency records and the optional module records) is the module's key.
 
 |!Part|!Inputs|!Where
-|Build context|The qcc format fingerprint `qcc-format.stamp`: the AOT runtime identity's sources (`_qcc_format_sources`) and `@build-config` (build type, compiler and its version, compiler flags, system, processor, pointer size, LLVM version)|`context`
+|Build context|The qcc format fingerprint `qcc-format.stamp`: the AOT runtime identity's sources (`_qcc_format_sources`, and `@builtin-domains`, the functional domains of the builtins) and `@build-config` (build type, compiler and its version, compiler flags, system, processor, pointer size, LLVM version)|`context`
 |Build context|The AOT runtime identity that qcc reports (`qcc --version`); the build fails before any qmod if it reports none|`context`
 |Build context|The content of every file in `lib/` and `include/`, of `qcc-main.cpp`, `CMakeLists.txt` and `cmake/third-party-sources.cmake`, of the generated headers in `<build>/include` (but `git-revision.h`), and the compile flags and link commands of libqore and qcc (`CMakeFiles/{libqore,qcc}.dir/{flags.make,link.txt}`)|`context`
 |Build context|The Qore options of the CMake cache, the build type, the C and C++ compilers, `LLVM_DIR` and the macOS deployment target, SDK and architectures|`context`

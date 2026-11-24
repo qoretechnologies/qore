@@ -1673,6 +1673,10 @@ option(QORE_DOX_TABLE_STRICT "treat malformed documentation tables as errors" ON
 # Allocation tracking adds ql_alloc_tracking.qpp when -DENABLE_ALLOC_TRACKING=ON.
 # (The corresponding AllocTracking.cpp and QORE_HAVE_ALLOC_TRACKING define are set
 # later — see the matching if-block in this file.)
+# The functional domains of the builtins of every configuration are covered by the AOT runtime identity (qore#7508); the
+# optional sources are left out of it, so that the identity does not depend on the configuration: a module that calls
+# their builtins records their domains itself, and a build without them cannot run it.
+set(_qore_builtin_domain_qpp_src ${LIBQORE_QPP_SRC} ${PSEUDO_QPP_SRC})
 if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
     set(LIBQORE_QPP_SRC ${LIBQORE_QPP_SRC} lib/ql_alloc_tracking.qpp)
 endif ()
@@ -3423,6 +3427,21 @@ foreach(_qcc_format_source IN LISTS _qcc_format_sources)
     file(RELATIVE_PATH _qcc_format_source_label "${CMAKE_SOURCE_DIR}" "${_qcc_format_source}")
     string(APPEND _qcc_format_sources_labels_content "${_qcc_format_source_label}\n")
 endforeach()
+# The functional domains of the builtins (qore#7508): an AOT module records the domains that its code used when it was
+# compiled, and loading it into a restricted Program checks that record, so the identity covers the domains of the
+# builtins that the qpp-generated sources declare, and a module compiled before a builtin gained a domain is refused
+# (see cmake/QoreWriteBuiltinDomainTable.cmake).  The table is written by qcc-format-version, before the fingerprint.
+set(_qore_builtin_domain_sources ${CMAKE_BINARY_DIR}/qore-builtin-domain-sources.txt)
+set(_qore_builtin_domain_table ${CMAKE_BINARY_DIR}/qore-builtin-domains.txt)
+set(_qore_builtin_domain_sources_content "")
+foreach(_qore_builtin_domain_qpp IN LISTS _qore_builtin_domain_qpp_src)
+    # the source that qore_wrap_qpp_value() generates for it
+    get_filename_component(_qore_builtin_domain_name "${_qore_builtin_domain_qpp}" NAME_WE)
+    string(APPEND _qore_builtin_domain_sources_content "${CMAKE_BINARY_DIR}/${_qore_builtin_domain_name}.cpp\n")
+endforeach()
+QORE_WRITE_IF_CHANGED("${_qore_builtin_domain_sources}" "${_qore_builtin_domain_sources_content}")
+string(APPEND _qcc_format_sources_manifest_content "${_qore_builtin_domain_table}\n")
+string(APPEND _qcc_format_sources_labels_content "@builtin-domains\n")
 string(APPEND _qcc_format_sources_manifest_content "${_qcc_format_config}\n")
 string(APPEND _qcc_format_sources_labels_content "@build-config\n")
 QORE_WRITE_IF_CHANGED("${_qcc_format_sources_labels}" "${_qcc_format_sources_labels_content}")
@@ -3453,7 +3472,11 @@ qore_aot_runtime_identity_targets(
     STAMP ${QCC_FORMAT_STAMP}
     INPUT_LIST ${_qcc_format_sources_manifest}
     INPUT_LABELS ${_qcc_format_sources_labels}
-    HEADER ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
+    HEADER ${QORE_AOT_RUNTIME_IDENTITY_HEADER}
+    DOMAIN_SOURCES ${_qore_builtin_domain_sources}
+    DOMAIN_TABLE ${_qore_builtin_domain_table})
+# the table is read from the qpp-generated sources
+add_dependencies(qcc-format-version QPP_GENERATED_FILES)
 add_dependencies(qcc qcc-format-version)
 set_source_files_properties(${CMAKE_SOURCE_DIR}/lib/qore_aot_runtime_identity.cpp
     PROPERTIES OBJECT_DEPENDS ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
