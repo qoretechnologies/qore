@@ -34197,6 +34197,48 @@ static QoreValue f_dbg_http2_release_stream_data(const QoreListNode* params, Run
 }
 
 namespace {
+//! the HTTP/2 stream whose RST_STREAM is held back, set by dbg_http2_hold_stream_reset(); -1: none
+std::atomic<int64_t> dbg_h2_hold_stream_reset{-1};
+}
+
+bool qore_dbg_h2_stream_reset_held(int32_t stream_id) {
+    return dbg_h2_hold_stream_reset.load(std::memory_order_acquire) == stream_id;
+}
+
+bool qore_dbg_h2_stream_reset_release(int32_t stream_id) {
+    int64_t expected = stream_id;
+    return dbg_h2_hold_stream_reset.compare_exchange_strong(expected, -1, std::memory_order_acq_rel);
+}
+
+//! holds the RST_STREAM of an HTTP/2 stream that the application resets back from the transport (qore#7532)
+/** As when the I/O thread has not run yet since the reset: a session with the stream reset by the application and its
+    RST_STREAM not yet sent collects no frames from nghttp2 until the hold ends, so that nghttp2 keeps the stream.  The
+    hold ends when the application reads the stream's progress count (Socket::getHttp2StreamTakenBytes()), which then
+    wakes the socket's I/O thread, or with dbg_http2_release_stream_reset().  Only one stream is held at a time, by
+    its ID in every session of the process that resets a stream with that ID (a test holds the stream of a connection
+    that its server resets; its client does not reset it).
+
+    @param stream_id the HTTP/2 stream ID
+*/
+static QoreValue f_dbg_http2_hold_stream_reset(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t stream_id = get_param_value(params, 0).getAsBigInt();
+    if (stream_id <= 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http2_hold_stream_reset(): invalid stream ID %lld",
+            (long long)stream_id);
+        return QoreValue();
+    }
+    dbg_h2_hold_stream_reset.store(stream_id, std::memory_order_release);
+    return QoreValue();
+}
+
+//! ends the hold of dbg_http2_hold_stream_reset(); the RST_STREAM is sent with the session's next write
+static QoreValue f_dbg_http2_release_stream_reset(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    dbg_h2_hold_stream_reset.store(-1, std::memory_order_release);
+    return QoreValue();
+}
+
+namespace {
 //! the stream whose acknowledged byte count dbg_quic_simulate_stream_progress() advances, the number of reads of the
 //! count that still advance it, and the progress added so far
 std::atomic<int64_t> dbg_quic_progress_stream{-1};
@@ -37380,6 +37422,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_http2_hold_stream_data", f_dbg_http2_hold_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id");
     qns.addBuiltinVariant("dbg_http2_release_stream_data", f_dbg_http2_release_stream_data, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http2_hold_stream_reset", f_dbg_http2_hold_stream_reset, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id");
+    qns.addBuiltinVariant("dbg_http2_release_stream_reset", f_dbg_http2_release_stream_reset, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_http2_simulate_stream_progress", f_dbg_quic_simulate_stream_progress,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id",

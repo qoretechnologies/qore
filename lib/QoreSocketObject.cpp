@@ -1948,6 +1948,11 @@ public:
                 if (output != 0) {
                     printd(2, "resetHttp2StreamAsync() submitRstStream failed for stream %d (rv=%d), "
                         "cleaning up local state anyway\n", stream_id, (int)output);
+                } else {
+                    // the RST_STREAM is sent with the session's next write, after the wake that follows; the
+                    // stream's send state is released now, so that the stream is gone when the reset returns
+                    // (qore#7532)
+                    h2->releaseResetStream(stream_id, h2_error_code);
                 }
                 h2->cleanupStream(stream_id);
                 break;
@@ -6251,6 +6256,9 @@ int qore_socket_object_private::resetHttp2StreamAsync(int32_t stream_id, uint32_
         if (rv != 0) {
             printd(2, "resetHttp2StreamAsync() submitRstStream failed for stream %d (rv=%d), "
                 "cleaning up local state anyway\n", stream_id, rv);
+        } else {
+            // the stream is gone when the reset returns, also if its RST_STREAM stays unsent (qore#7532)
+            h2->releaseResetStream(stream_id, error_code);
         }
         if (!rv && !*xsink) {
             if (on_io_thread) {
@@ -7197,7 +7205,17 @@ int64_t qore_socket_object_h2_stream_taken(QoreSocketObject* s, int64_t stream_i
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
         return -1;
     }
+#ifdef DEBUG
+    int64_t rv = h2->streamTakenBytes(static_cast<int32_t>(stream_id));
+    // the hold of dbg_http2_hold_stream_reset() ends once the count of the stream, reset and its RST_STREAM held, has
+    // been read: the I/O thread is woken to send the RST_STREAM (qore#7532)
+    if (h2->dbgStreamResetHeld() && qore_dbg_h2_stream_reset_release(static_cast<int32_t>(stream_id))) {
+        qore_socket_object_wake_async_controller(s, xsink);
+    }
+    return rv;
+#else
     return h2->streamTakenBytes(static_cast<int32_t>(stream_id));
+#endif
 }
 
 int64_t qore_socket_object_quic_client_stream_acked(QoreSocketObject* s, int64_t stream_id, ExceptionSink* xsink) {
