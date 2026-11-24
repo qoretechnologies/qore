@@ -198,6 +198,42 @@ string sub claim() {
     return attempt(sub () { AbstractHttpRequestHandler::claimServerDispatch(); });
 }
 
+#! a stream request whose code claims that the body is deserialized; it reports the flag of each part that it gets
+class FlagStream inherits AbstractStreamRequest {
+    private:internal {
+        list<auto> flags = ();
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, auto body) : AbstractStreamRequest(listener, handler, s, cx + {'deserialized': True}, hdr,
+            body) {
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+        if (exists v.data) {
+            flags += (v.deserialized ?? False);
+        }
+    }
+
+    private hash<auto> getResponseHeaderMessageImpl() {
+        return {'code': 200, 'body': sprintf('%y', flags)};
+    }
+}
+
+class FlagHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new FlagStream(listener, self, s, cx, hdr, body);
+    }
+}
+
+AbstractHttpRequestHandler sub flag_handler() {
+    return new FlagHandler();
+}
+
 string sub claim_host() {
     return attempt(sub () { AbstractHttpRequestHandler::claimHostDispatch(); });
 }
@@ -234,6 +270,8 @@ class HttpServerDispatchCapabilityTest inherits QUnit::Test {
         addTestCase("sandboxed code cannot reach the capability", \testReach());
         addTestCase("a module named HttpServer that sandboxed code loads by its path", \testByPath());
         addTestCase("a trusted host dispatches a stream request with its capability", \testHost());
+        addTestCase("the code that serves a stream request cannot mark the body that the server reads",
+            \testDeserializedFlag());
 
         rest.addClass(new ProbeRestClass());
         server = new HttpServer(<HttpServerOptionInfo>{
@@ -300,6 +338,25 @@ class HttpServerDispatchCapabilityTest inherits QUnit::Test {
             p.setSandboxManager(new SandboxManager());
             assertThrows("PARSE-EXCEPTION", \p.parse(), ("%requires HttpServer\n" + i.value, i.key), i.key);
         }
+    }
+
+    testDeserializedFlag() {
+        server.setHandler("flag", "^flag", NOTHING, tenant.callFunction("flag_handler"));
+        on_exit server.removeHandler("flag");
+        # a chunked body, which the server reads after the request is dispatched
+        Socket s();
+        s.connect("127.0.0.1:" + port);
+        on_exit s.close();
+        s.send("POST /flag HTTP/1.1\r\nHost: x\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n"
+            "5\r\nhello\r\n5\r\nworld\r\n0\r\n\r\n");
+        hash<auto> resp = s.readHTTPHeader(10s);
+        assertEq(200, resp.status_code);
+        string body = resp."transfer-encoding" == "chunked"
+            ? s.readHTTPChunkedBody(10s).body
+            : s.recv(resp."content-length".toInt(), 10s);
+        # no part that the server read is marked deserialized
+        assertEq(-1, body.find("True"), body);
+        assertRegex("False", body);
     }
 
     testHost() {
