@@ -1010,8 +1010,9 @@ The teardown handles each holder:
   (`getTeardownModuleDependencies()`, `qore_order_module_programs_dependents_first()`):
   the objects that a module's data holds can be objects of the classes of a module that
   it requires, whose destructors use the static variables of their own classes
-  (qore#7432). A cycle is broken at the first of its modules, by name, that no module
-  outside it requires, never at a module that it requires. The opaque targets are
+  (qore#7432). A cycle is broken only after all modules outside it that require it have been cleared.
+  As in `cleanup()`, the first choice is a module that the remaining modules require only at run time.
+  Module names decide ties. The opaque targets are
   broken in the same order.
 - **Phase 2** (`delUser()`): user modules and native binary modules are deleted in
   dependency order. A native binary module is deleted first, as soon as no module

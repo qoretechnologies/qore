@@ -1,0 +1,44 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - direct socket close wakes the event loop during c-ares resolution
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class Test
+
+class Test inherits QUnit::Test {
+    constructor() : QUnit::Test("close while resolving", "1.0", ARGV) {
+        addTestCase("direct close wakes resolving connect", \closeWhileResolving());
+        set_return_value(main());
+    }
+
+    closeWhileResolving() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("requires the debug DNS and native close hooks");
+        }
+        # The port receives the query but never answers. The resolver and operation timeouts
+        # are longer than the test's guard, so neither can complete the connection in its place.
+        Socket dns();
+        dns.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
+        on_exit dns.close();
+        string servers = call_function("dbg_cares_set_servers", "127.0.0.1:" + dns.getSocketInfo().port);
+        on_exit call_function("dbg_cares_set_servers", servers);
+        hash<auto> opts = call_function("dbg_cares_set_query_options", {"tries": 1, "timeout_ms": 60000});
+        on_exit call_function("dbg_cares_set_query_options", opts);
+
+        Socket s();
+        on_exit s.close();
+        Queue done = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": s,
+            "spop": s.startPollConnect("close.qore-test.:80"),
+            "owner": "close-while-resolving",
+            "to": 60s,
+        });
+        assertTrue(dns.isDataAvailable(10s), "the connect operation is waiting for DNS");
+        call_function("dbg_close_socket_directly", s);
+        hash<SocketPollResultInfo> result = done.get(5s);
+        assertEq("SOCKET-CLOSED", result.ex.err);
+    }
+}

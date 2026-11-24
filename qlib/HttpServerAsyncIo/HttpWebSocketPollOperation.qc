@@ -227,6 +227,9 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
         if (!cb) {
             return;
         }
+        # work of the module cleanup that ends the connection (the cancel of its operation) hands itself over to the
+        # thread that runs the end, on the handler pool or a thread of its own (qore#7339)
+        cb = AsyncIoController::wrapModuleCleanupWork(cb);
         if (c && t) {
             try {
                 c.submitToHandlerPool(t, cb);
@@ -446,12 +449,17 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
         }
         while (True) {
             *hash<auto> frame;
+            # a handle of work of the module cleanup left to this drainer, if any: the frame is processed as that work,
+            # so that its handler can hand work over in turn; the handles are released when the drainer releases its
+            # claim (qore#7339)
+            int counted_handle;
             {
                 AutoLock al(dispatch_mutex);
                 conn = wsc;
                 log_handler = handler;
                 if (!deleted && exists conn && hasReceivedFrames()) {
                     frame = getReceivedFrame();
+                    counted_handle = pending_cleanup_work[0] ?? 0;
                 }
                 if (!frame) {
                     dispatching = False;
@@ -464,7 +472,12 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
                 }
             }
             try {
-                processServerFrame(frame);
+                if (counted_handle) {
+                    AsyncIoController::runModuleCleanupWork(counted_handle, sub () { processServerFrame(frame); },
+                        False);
+                } else {
+                    processServerFrame(frame);
+                }
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "OBJECT-ALREADY-DELETED") {
                     # Connection torn down mid-dispatch; skip the remaining

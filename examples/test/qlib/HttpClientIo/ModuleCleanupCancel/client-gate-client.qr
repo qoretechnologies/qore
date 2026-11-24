@@ -1,0 +1,12 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the destructor of AbClientGate's data starts a WebSocketClient whose delivery task is blocked in its message callback
+# when the module cleanup cancels the client's connection: the completion of the canceled operation hands itself over
+# to the delivery task at its gate, and the cleanup waits for the task before it deletes the data of AbLater
+# (qore#7339)
+
+%requires AbClientGate
+%requires AbLater
+
+printf("started\n");
+flush();

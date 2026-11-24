@@ -353,6 +353,14 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - a request body that the server reads into memory is limited to
+      @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" (256 MiB) when no
+      \c max_request_body_size is set
+      (@ref HttpServer::HttpServerOptionInfo::max_request_body_size "HttpServerOptionInfo::max_request_body_size"),
+      and a larger body is answered with HTTP 413 (Content Too Large); a body that a handler reads as a stream is not
+      limited by the default, and an explicit \c 0 still means no limit; added
+      @ref HttpServer::HttpServer::getStreamMaxRequestBodySize() "HttpServer::getStreamMaxRequestBodySize()" and
+      @ref HttpServer::HttpListener::getStreamMaxRequestBodySize() "HttpListener::getStreamMaxRequestBodySize()"
     - the connection of an HTTP/1.x request whose chunked body a handler stopped reading before its end is closed
       after the response, so that the rest of the body cannot be taken for another request
       (<a href="https://github.com/qoretechnologies/qore/issues/7417">issue 7417</a>)
@@ -498,7 +506,7 @@ log("started listener on %s", lh.desc);
       (@ref HttpServer::HttpServer::setDefaultTextEncoding() "setDefaultTextEncoding()") is the assumed encoding for text without an encoding declaration, and no longer
       replaces the encoding of a JSON body or one declared in the body
     - every request handler receives the effective maximum request body size of the listener
-      (@ref HttpServer::HttpListener::getMaxRequestBodySize() "HttpListener::getMaxRequestBodySize()") in
+      (@ref HttpServer::HttpListener::getStreamMaxRequestBodySize() "HttpListener::getStreamMaxRequestBodySize()") in
       \c cx."header-info".max_request_body_size (\c 0 = no limit), including handlers on an automatically created
       HTTP/3 listener; a handler that reads the request body as a stream enforces the total with it, since the
       server limits only the data it buffers ahead of such a handler
@@ -950,7 +958,7 @@ public hashdecl HttpServerOptionInfo {
     */
     int max_idle_handler_threads = 0;
 
-    #! Maximum HTTP request body size in bytes (0 = unlimited)
+    #! Maximum HTTP request body size in bytes (0 = unlimited; not set = @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" for buffered bodies)
     /** Requests with Content-Length exceeding this value, or chunked, HTTP/2, or HTTP/3 bodies
         that grow beyond this value, receive HTTP 413 (Content Too Large).  An HTTP/1.x connection
         is closed after the response; on HTTP/2 and HTTP/3 only the request's stream ends, and the
@@ -963,9 +971,20 @@ public hashdecl HttpServerOptionInfo {
         the total body size itself; for such a handler, this value limits the data that the server buffers for it,
         and a read of a body that exceeded it fails with \c HTTP-BODY-TOO-LARGE after the buffered data.
 
-        @since HttpServer 1.6
+        - a positive value is the limit
+        - \c 0 means no limit
+        - if it is not set, a body that the server reads into memory for the handler (a body that it reads before
+          dispatching the request, a body that the handler reads with
+          @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "getMessageBody()", and the rest of a chunked
+          body that the handler left unread) is limited to
+          @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" (256 MiB); a body that a handler
+          reads as a stream is not limited then (see
+          @ref HttpServer::HttpServer::getStreamMaxRequestBodySize() "HttpServer::getStreamMaxRequestBodySize()")
+
+        @since HttpServer 1.6; HttpServer 1.7 applies
+        @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" to buffered bodies when it is not set
     */
-    int max_request_body_size = 0;
+    *int max_request_body_size;
 
     #! Maximum size in bytes of the header of an HTTP/1.x request and of the trailer section of a chunked request body
     /** The server answers a request whose header is larger than this limit with HTTP 431 (Request Header Fields Too
@@ -1092,7 +1111,8 @@ public hashdecl HttpServerOptionInfo {
 
     #! The time allowed for an I/O operation of a connection
     /** This is the time allowed to read a request header once a request has started to arrive, to read the first
-        request of a new connection, and to send a response.  An idle keep-alive connection is waited for the idle
+        request of a new connection, and for an HTTP/1 response send by the controller to make progress.  The send
+        timeout starts again as the peer takes data.  An idle keep-alive connection is waited for the idle
         time (\c ttl) plus this time, which covers reading the header of the next request: a connection that sends
         nothing for longer is closed.  A connection whose requests are answered by fast routes renews its timeout
         with each request.
@@ -1413,8 +1433,8 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         #! Idle disconnect (TTL) for connections
         date ttl = DefaultTtl;
 
-        #! Maximum HTTP request body size in bytes (0 = unlimited)
-        int max_request_body_size = 0;
+        #! Maximum HTTP request body size in bytes (0 = unlimited; @ref nothing = not set: the default applies)
+        *int max_request_body_size;
 
         #! Maximum size in bytes of a decompressed request body (0 = default, negative = unlimited)
         int max_decoded_body_size = 0;
@@ -1738,17 +1758,39 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         self.ttl = ttl;
     }
 
-    #! Returns the maximum request body size in bytes (0 = unlimited)
-    /** @return the maximum request body size in bytes; 0 means unlimited
+    #! Returns the maximum size in bytes of a request body that the server reads into memory (0 = unlimited)
+    /** @return the maximum request body size in bytes set with the \c max_request_body_size option
+        (@ref HttpServer::HttpServerOptionInfo::max_request_body_size "HttpServerOptionInfo::max_request_body_size")
+        or setMaxRequestBodySize(), or @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" if
+        none is set; 0 means unlimited
 
-        @since HttpServer 1.6
+        @see getStreamMaxRequestBodySize()
+
+        @since HttpServer 1.6; HttpServer 1.7 returns
+        @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" if no limit is set
     */
     int getMaxRequestBodySize() {
-        return max_request_body_size;
+        return max_request_body_size ?? DefaultMaxRequestBodySize;
+    }
+
+    #! Returns the maximum size in bytes of a request body that a handler reads as a stream (0 = unlimited)
+    /** @return the maximum request body size in bytes set with the \c max_request_body_size option
+        (@ref HttpServer::HttpServerOptionInfo::max_request_body_size "HttpServerOptionInfo::max_request_body_size")
+        or setMaxRequestBodySize(), or 0 (no limit) if none is set: the default limit
+        (@ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize") applies only to the bodies that the
+        server reads into memory
+
+        @see getMaxRequestBodySize()
+
+        @since HttpServer 1.7
+    */
+    int getStreamMaxRequestBodySize() {
+        return max_request_body_size ?? 0;
     }
 
     #! Sets the maximum request body size in bytes (0 = unlimited)
-    /** @param size the maximum request body size in bytes; 0 means unlimited
+    /** @param size the maximum request body size in bytes; 0 means unlimited, also for the bodies that the server
+        reads into memory
 
         @since HttpServer 1.6
     */
@@ -3994,7 +4036,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         if (effective_ttl) {
             setTtl(effective_ttl);
         }
-        max_request_body_size = opts.max_request_body_size ?? 0;
+        # not set: the default applies to the bodies that the server reads into memory
+        max_request_body_size = opts.max_request_body_size;
         if ((opts.max_header_size ?? 0) < 0) {
             throw "HTTP-SERVER-INIT-ERROR", sprintf("max_header_size (%d) must not be negative", opts.max_header_size);
         }
@@ -4458,23 +4501,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 # Tear down everything bound so far: a retry starts clean, and a listener whose paired QUIC listener
                 # could not be bound is not kept: the caller asked for HTTP/3 and has no way to observe that it did
                 # not take, and its clients would get no answer to their QUIC datagrams (qore#7420)
-                remove listeners{id};
-                remove smap{effective_sock};
-                remove nmap{info.name};
-                try { l.stop(); } catch () {}
-                # once the listener has stopped, l.stop() has called listenerStopped(), which decremented the count
-                # of running listeners for it; only a stop that failed before that leaves it to be done here
-                # (qore#7420: it was done in both cases, so each failed attempt decremented the count of another
-                # running listener, and stop() no longer waited for it)
-                if (!l.isStopped()) {
-                    try {
-                        c.done();
-                    } catch (hash<ExceptionInfo> ex) {
-                        if (ex.err != "WAITGROUP-ERROR") {
-                            rethrow;
-                        }
-                    }
-                }
+                removeFailedListener(l, id, effective_sock, info.name);
                 if (random_port && attempt < max_attempts && h3_errno == EADDRINUSE) {
                     # a random port: retry on a fresh port (the kernel-assigned TCP port can be taken on UDP by
                     # something else, such as the ephemeral UDP socket of a QUIC client)
@@ -4514,9 +4541,17 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # Add the TCP listener to the async I/O controller — start accepting.
             # Done AFTER QUIC + Alt-Svc setup so the first TCP response already
             # carries the Alt-Svc header (see comment above).
-            asyncIo.addListener(l, asyncTarget, l.isSsl(), l.getSslCertificateObject(),
-                l.getSslPrivateKeyObject(), l.getHttpVersion(), l.getSslVerifyFlags(),
-                l.getSslAcceptAllCerts(), l.getGetRemoteCerts(), l.getMaxRequestBodySize(), l);
+            try {
+                asyncIo.addListener(l, asyncTarget, l.isSsl(), l.getSslCertificateObject(),
+                    l.getSslPrivateKeyObject(), l.getHttpVersion(), l.getSslVerifyFlags(),
+                    l.getSslAcceptAllCerts(), l.getGetRemoteCerts(), l.getMaxRequestBodySize(), l);
+            } catch (hash<ExceptionInfo> ex) {
+                # the listener could not be started: it is not kept registered and counted, and its paired QUIC
+                # listener and Alt-Svc entry are removed with it (qore#7436)
+                log("ERROR: listener %d could not be started: %s: %s", id, ex.err, ex.desc);
+                removeFailedListener(l, id, effective_sock, info.name);
+                rethrow;
+            }
 
             # Notify that the listener is now accepting connections.  With the
             # event-driven async I/O model there are no per-listener threads, so
@@ -4543,6 +4578,40 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
         throw "HTTPSERVER-ADDLISTENER-ERROR",
             sprintf("internal error: retry loop exhausted without a decision");
+    }
+
+    #! Removes and stops a listener that addListenerIntern() created but could not set up or start; lm must be held
+    /** The listener's stop (listenerStopped()) removes its paired QUIC listener and its Alt-Svc entry and decrements
+        the count of running listeners for it; only a stop that failed before that leaves the count to be decremented
+        here (qore#7420: it was decremented in both cases, so each failure took one from the count of another running
+        listener; qore#7436: a listener whose start failed was not removed at all).  A stop that raises before the
+        listener stopped (an unexpected error of its removal from the controller) does not reach listenerStopped(): its
+        paired QUIC listener and Alt-Svc entry, if any, are then left as they are, and the error is logged
+
+        @param l the listener
+        @param id the listener's ID
+        @param sock the key of the listener in smap
+        @param name the listener's name
+    */
+    private:internal removeFailedListener(HttpListener l, int id, string sock, string name) {
+        remove listeners{id};
+        remove smap{sock};
+        remove nmap{name};
+        try {
+            l.stop();
+        } catch (hash<ExceptionInfo> ex) {
+            logError("could not stop listener %d after its setup failed: %s: %s: %s", id, get_ex_pos(ex), ex.err,
+                ex.desc);
+        }
+        if (!l.isStopped()) {
+            try {
+                c.done();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "WAITGROUP-ERROR") {
+                    rethrow;
+                }
+            }
+        }
     }
 
     private Future addListenerInternAsync(hash<HttpListenerOptionInfo> info) {
@@ -4805,9 +4874,12 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # request was dispatched too, as for a body given whole), and the handler gets the parts from a reader,
             # which gives the bytes read before the dispatch first, in the same parts as those read from the socket
             int content_length = http_parse_content_length(req_content_length);
-            if (max_body > 0 && content_length > max_body) {
+            # a body read as a stream has the limit set for the listener or the server, not the default limit of a
+            # buffered body
+            int stream_max_body = cx."header-info".max_request_body_size;
+            if (stream_max_body > 0 && content_length > stream_max_body) {
                 string etxt = sprintf("Content-Length %d exceeds maximum allowed body size %d",
-                    content_length, max_body);
+                    content_length, stream_max_body);
                 listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
                 cx.close = True;
                 sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
@@ -4820,7 +4892,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # handler's request, which gives no more than the rest of the body (qore#7305)
             request_helper.h1SetBodyLength(content_length - (buffered ? buffered.size() : 0));
             cx."header-info".body_reader = new Http1BodyReader(request_helper.handler_sock ?? s, content_length,
-                buffered, max_body);
+                buffered, stream_max_body);
             return {"body": NOTHING};
         }
         if (cx."header-info".body_streaming && !want_streaming) {
@@ -5254,10 +5326,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         cx."compression-levels" = compression_levels;
 
         # the effective maximum request body size of the listener, read once per request so a change made with
-        # setMaxRequestBodySize() applies to the next request; handlers that read the body as a stream enforce the
-        # total themselves with this value
+        # setMaxRequestBodySize() applies to the next request: max_body limits the bodies that the server reads into
+        # memory, including DefaultMaxRequestBodySize when no limit is set; handlers that read the body as a stream
+        # enforce the total themselves with the limit set for the listener or the server, which the context gives
         int max_body = listener.getMaxRequestBodySize();
-        cx."header-info".max_request_body_size = max_body;
+        cx."header-info".max_request_body_size = listener.getStreamMaxRequestBodySize();
         cx."header-info".stream_send_min_rate = listener.getStreamSendMinRate();
         cx."header-info".stream_send_min_rate_window = listener.getStreamSendMinRateWindow();
 
@@ -6591,7 +6664,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         refs.target @= asyncTarget;
         return sub (code<nothing()> c) {
             # work of the module cleanup that leaves the end to another thread hands itself over to it (qore#7239)
-            c = HttpAsyncSocketIoController::wrapCleanupHandover(c, "HttpServer handler pool submitter");
+            c = AsyncIoController::wrapModuleCleanupWork(c);
             *HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = refs.ctrl;
             *HttpServerAsyncIo::HttpAsyncTarget target = refs.target;
             if (ctrl && target) {
@@ -7879,10 +7952,14 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         return ssl;
     }
 
-    #! Returns the effective maximum request body size for this listener
-    /** Returns the listener-specific limit if set, otherwise the server-level default.
+    #! Returns the effective maximum size of a request body that the server reads into memory for this listener
+    /** Returns the listener-specific limit if set, otherwise the server-level limit
+        (@ref HttpServer::HttpServer::getMaxRequestBodySize() "HttpServer::getMaxRequestBodySize()"), which is
+        @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" if none is set.
 
         @return the maximum body size in bytes; 0 means unlimited
+
+        @see getStreamMaxRequestBodySize()
 
         @since HttpServer 1.6
     */
@@ -7890,6 +7967,24 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         int rv = opts.max_request_body_size ?? 0;
         if (!rv) {
             rv = serv.getMaxRequestBodySize();
+        }
+        return rv;
+    }
+
+    #! Returns the effective maximum size of a request body that a handler of this listener reads as a stream
+    /** Returns the listener-specific limit if set, otherwise the limit set for the server
+        (@ref HttpServer::HttpServer::getStreamMaxRequestBodySize() "HttpServer::getStreamMaxRequestBodySize()"); the
+        default limit (@ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize") applies only to the
+        bodies that the server reads into memory (see getMaxRequestBodySize())
+
+        @return the maximum body size in bytes; 0 means unlimited
+
+        @since HttpServer 1.7
+    */
+    int getStreamMaxRequestBodySize() {
+        int rv = opts.max_request_body_size ?? 0;
+        if (!rv) {
+            rv = serv.getStreamMaxRequestBodySize();
         }
         return rv;
     }
@@ -7971,7 +8066,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             rv = serv.getMaxDecodedBodySize();
         }
         if (!rv) {
-            rv = getMaxRequestBodySize();
+            # the limit set for the listener or the server, not the default limit of buffered bodies
+            rv = getStreamMaxRequestBodySize();
         }
         return rv ?: DefaultMaxDecodedBodySize;
     }
@@ -12754,11 +12850,25 @@ class ResponseAfterSendNotifier {
         }
         called = True;
         try {
-            background ResponseAfterSendNotifier::call(callback, cx, handler, listener, False);
+            # the release of the last reference in work of the module cleanup (the release of a canceled connection's
+            # references) hands itself over to the thread that calls the callback (qore#7339); the call is created by
+            # a static method, as a closure created here would refer to this object, which is being destroyed, and
+            # wrapped here, in this thread, as background evaluates its expression in the new thread
+            code<nothing()> c = AsyncIoController::wrapModuleCleanupWork(
+                ResponseAfterSendNotifier::getCall(callback, cx, handler, listener));
+            background c();
         } catch (hash<ExceptionInfo> ex) {
             listener.logError("cid %d: %s: cannot call the after_send callback: %s: %s", cx.id, cx.handler_name,
                 ex.err, ex.desc);
         }
+    }
+
+    #! Returns a call that reports that the response was not sent; static, so that it does not refer to an object
+    private:internal static code<nothing()> getCall(code<nothing(hash<auto>, bool)> callback, hash<auto> cx,
+            *HttpServer::AbstractHttpRequestHandler handler, HttpListener listener) {
+        return sub () {
+            ResponseAfterSendNotifier::call(callback, cx, handler, listener, False);
+        };
     }
 
     #! Reports the transmission result of the response; only the first call has any effect
