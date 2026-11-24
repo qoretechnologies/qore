@@ -2829,6 +2829,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a method called through a weak reference while another thread releases the last strong reference to its object
+      keeps the object, which is destroyed when the call releases it, instead of being destroyed while the call runs
+      (see @ref weak_assignment_operator; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue
+      7509</a>)
     - a pseudo-method call runs the method of the pseudo-class of the value's type at run time, also when the parser
       resolved the call from another type, and the code of a pseudo-class refuses a value of another type with an
       exception (see the note on pseudo-classes in @ref qore_classes;
