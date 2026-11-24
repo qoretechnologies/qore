@@ -141,8 +141,8 @@ public class Http3IoThreadConnectionTest inherits QUnit::Test {
 
     constructor() : Test("Http3IoThreadConnectionTest", "1.0") {
         addTestCase("an asynchronous request retries an HTTP/3 connection", \retryTest());
-        addTestCase("an asynchronous request tries another address family", \familyFallbackTest());
-        addTestCase("the retry tries another address family when it evicts the failed connection first",
+        addTestCase("an asynchronous request races the address families", \familyFallbackTest());
+        addTestCase("the race of the address families needs no retry when failed results are processed late",
             \familyFallbackEvictedTest());
         addTestCase("the family of a failed connection that a retry evicts is recorded", \evictedFamilyRecordedTest());
         addTestCase("a send error during the handshake records the family, after it does not",
@@ -207,8 +207,8 @@ public class Http3IoThreadConnectionTest inherits QUnit::Test {
         }
     }
 
-    #! A host name that resolves to IPv6 first: the connection in IPv6 does not reach the server, the next one is made
-    #! in IPv4
+    #! A host name that resolves to IPv6 first: the connection races both families (RFC 8305) and connects in IPv4,
+    #! where the server listens, without a retry of the request
     familyFallbackTest() {
         if (!checkDualStack()) {
             return;
@@ -219,17 +219,17 @@ public class Http3IoThreadConnectionTest inherits QUnit::Test {
             on_exit mgr.closeAll();
             assertEq("reached", get(mgr, url, api), api);
             list<HttpClientIo::HttpClientConnection> conns = mgr.getConnections();
-            assertEq((AF_INET6, AF_INET), map cast<HttpClientIo::Http3ClientConnection>($1).getAddressFamily(),
+            assertEq((AF_INET,), map cast<HttpClientIo::Http3ClientConnection>($1).getAddressFamily(),
                 conns, api);
         }
     }
 
-    #! The retry of a request tries another address family although it evicts the failed connection before the
-    #! failure is processed
+    #! A connection that races both address families needs no retry, also when failed results are processed late
     /** The failure of a connection is processed by handleConnectionResult() on the I/O thread, which can run after
         the retry of the request has evicted the connection from the pool; the eviction records the family, so that
-        the retry does not connect in it again.  handleConnectionResult() is skipped for the failed connections, which
-        forces that order: without the fix, the families were (v6, v6, v4)
+        the retry tries it last (without that fix, the families were (v6, v6, v4)).  handleConnectionResult() is
+        skipped for the failed connections, which forces that order; the connection races both families (RFC 8305),
+        so the request is not retried
     */
     familyFallbackEvictedTest() {
         if (!checkDualStack()) {
@@ -242,7 +242,7 @@ public class Http3IoThreadConnectionTest inherits QUnit::Test {
             mgr.skipFailedResults();
             assertEq("reached", get(mgr, url, api), api);
             list<HttpClientIo::HttpClientConnection> conns = mgr.getConnections();
-            assertEq((AF_INET6, AF_INET), map cast<HttpClientIo::Http3ClientConnection>($1).getAddressFamily(),
+            assertEq((AF_INET,), map cast<HttpClientIo::Http3ClientConnection>($1).getAddressFamily(),
                 conns, api);
         }
     }

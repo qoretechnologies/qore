@@ -164,6 +164,13 @@ class BadHandler inherits AbstractHttpRequestHandler {
                            : s.sendHttp2StreamData(sid, binary("refused: " + ex.err + ": " + ex.desc), True);
                     }
                     break;
+                case "body-read-error": {
+                    # The native decompressor runs on the I/O thread and cannot read this response body.
+                    InputStream response_body = new TransformInputStream(new BinaryInputStream(binary("invalid gzip")),
+                        get_decompressor(COMPRESSION_ALG_GZIP));
+                    s.submitHttp2StreamingResponseWithStream(sid, 200, {}, response_body);
+                    break;
+                }
                 case "withstream": {
                     # a streamed response that the handler submits itself, then reply_sent without "streaming"; with
                     # 1, the stream cannot be read on the I/O thread, and the response is submitted as a whole
@@ -228,22 +235,52 @@ class BadHandler inherits AbstractHttpRequestHandler {
     }
 }
 
-#! answers at once, or when released for /held
+#! answers at once, or for /held/<id> when the test released that id
+/** Each held request has an id of its own, and its release lets every handler of that id return: a held request that
+    the client sent again (on a new connection, when its connection died while the request was held) cannot leave
+    its handler waiting for a release that a handler of its first sending took.  Each entry is recorded with its
+    connection, so that a test can check that its held request was sent once
+*/
 class PlainHandler inherits AbstractHttpRequestHandler {
-    public {
-        Queue release();
+    private {
+        Mutex lck();
+        #! the release of each held id
+        hash<string, Counter> gates;
+        #! the entries of each held id: its connection, and when
+        hash<string, list<string>> entries;
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-        if (hdr.path =~ /^\/?held/) {
+        if (*string id = (hdr.path =~ x/^\/?held\/([0-9]+)/)[0]) {
+            Counter gate;
+            {
+                AutoLock al(lck);
+                gate = gates{id} ?? (gates{id} = new Counter(1));
+                entries{id} += sprintf("connection %y at %s", cx.id, format_date("HH:mm:SS.us", now_us()));
+            }
             # bounded, so that the server ends if a broken connection leaves the request unreleased
             try {
-                release.get(20s);
+                gate.waitForZero(20s);
             } catch () {
             }
             return <HttpResponseInfo>{"code": 200, "body": "held-ok"};
         }
         return <HttpResponseInfo>{"code": 200, "body": "ok"};
+    }
+
+    #! releases every handler of the held id, also one that has not started yet; a later call does nothing
+    release(string id) {
+        AutoLock al(lck);
+        Counter gate = gates{id} ?? (gates{id} = new Counter(1));
+        if (gate.getCount()) {
+            gate.dec();
+        }
+    }
+
+    #! returns the entries of the held id
+    list<string> getEntries(string id) {
+        AutoLock al(lck);
+        return entries{id} ?? ();
     }
 }
 
@@ -252,6 +289,8 @@ class HttpServerMalformedResponseTest inherits QUnit::Test {
         HttpServer server;
         PlainHandler plain();
         string url;
+        #! the id of the last held request
+        int held_seq = 0;
 
         #! statuses that do not fit in an int; the first two become 200 and 101 when narrowed
         const OverflowCodes = (4294967496, 4294967397, -4294967096);
@@ -261,6 +300,7 @@ class HttpServerMalformedResponseTest inherits QUnit::Test {
         addTestCase("content-length fields that do not match the body are refused", \contentLengthTest());
         addTestCase("a response without content sends no body", \noBodyTest());
         addTestCase("a streamed body of another length than declared resets its stream", \streamLengthTest());
+        addTestCase("HTTP/2 response body read errors reset only its stream", \bodyReadErrorTest());
         addTestCase("a compressed body is sent with its own length", \compressedTest());
         addTestCase("te is not sent in a response", \teTest());
         addTestCase("a CONNECT response is never malformed", \connectTest());
@@ -307,11 +347,9 @@ class HttpServerMalformedResponseTest inherits QUnit::Test {
     private hash<auto> withHeldStream(string protocol, string what, string method, string path, *hash<auto> hdr) {
         HttpClientConnectionManager mgr = manager(protocol);
         on_exit delete mgr;
-        auto held = mgr.requestAsync(url, "GET", "/held");
-        bool released;
-        on_exit if (!released) {
-            plain.release.push(1);
-        }
+        string held_id = string(++held_seq);
+        auto held = mgr.requestAsync(url, "GET", "/held/" + held_id);
+        on_exit plain.release(held_id);
         string msg = sprintf("%s %s", protocol, what);
         assertEq(200, mgr.request(url, "GET", "/").status_code, msg + ": the connection is up");
         hash<auto> rv;
@@ -321,10 +359,33 @@ class HttpServerMalformedResponseTest inherits QUnit::Test {
             rv.ex = ex;
         }
         assertEq(200, mgr.request(url, "GET", "/").status_code, msg + ": the connection goes on");
-        plain.release.push(1);
-        released = True;
-        assertEq(200, held.get(10s).status_code, msg + ": the held stream of another handler completes");
+        checkHeld(msg, mgr, held_id, held);
         return rv;
+    }
+
+    #! releases a held request and checks that it completes, on its first connection
+    /** A held request that its handler entered more than once was sent again by the client on a new connection: its
+        first connection died while it was held, while the test's other requests were answered; the test fails then,
+        with the entries of the held request and what the client knows of its connections
+    */
+    private checkHeld(string msg, HttpClientConnectionManager mgr, string held_id, auto held) {
+        plain.release(held_id);
+        *hash<ExceptionInfo> err;
+        *int status;
+        try {
+            status = held.get(10s).status_code;
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        list<string> entries = plain.getEntries(held_id);
+        string diag = sprintf("held request %y: %s; server entries: %y; client connections: %y; client stats: %y",
+            held_id, err ? sprintf("%s: %s", err.err, err.desc) : sprintf("status %y", status), entries,
+            mgr.getConnectionInfo(), mgr.getStats());
+        if (err || entries.size() != 1) {
+            printf("%s: %s\n", msg, diag);
+        }
+        assertEq(200, status, msg + ": the held stream of another handler completes: " + diag);
+        assertEq(1, entries.size(), msg + ": the held request completed on its first connection: " + diag);
     }
 
     #! checks that the handler socket refused the response of a case with the given message
@@ -397,6 +458,11 @@ class HttpServerMalformedResponseTest inherits QUnit::Test {
         }
     }
 
+    bodyReadErrorTest() {
+        hash<auto> rv = withHeldStream("h2", "body read error", "GET", "/bad/body-read-error");
+        assertRegex("RESET", rv.ex.desc, "the client receives a stream reset");
+    }
+
     teTest() {
         foreach string protocol in ("h2", "h3") {
             foreach string c in ("ret-te", "sock-te") {
@@ -417,11 +483,9 @@ class HttpServerMalformedResponseTest inherits QUnit::Test {
                 string msg = protocol + " " + c;
                 HttpClientConnectionManager mgr = manager(protocol);
                 on_exit delete mgr;
-                auto held = mgr.requestAsync(url, "GET", "/held");
-                bool released;
-                on_exit if (!released) {
-                    plain.release.push(1);
-                }
+                string held_id = string(++held_seq);
+                auto held = mgr.requestAsync(url, "GET", "/held/" + held_id);
+                on_exit plain.release(held_id);
                 assertEq(200, mgr.request(url, "GET", "/").status_code, msg + ": the connection is up");
                 HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url + "/bad/" + c);
                 stream.startStreaming("CONNECT", "/bad/" + c, {
@@ -436,9 +500,7 @@ class HttpServerMalformedResponseTest inherits QUnit::Test {
                 }
                 stream.cancel();
                 assertEq(200, mgr.request(url, "GET", "/").status_code, msg + ": the connection goes on");
-                plain.release.push(1);
-                released = True;
-                assertEq(200, held.get(10s).status_code, msg + ": the held stream of another handler completes");
+                checkHeld(msg, mgr, held_id, held);
             }
         }
     }

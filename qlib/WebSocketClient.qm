@@ -1488,6 +1488,17 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         *HttpClientIo::HttpClientConnectionManager hcio_mgr;
     }
 
+    private:internal {
+        #! the handles of work of the module cleanup that left its messages to the running delivery task of a
+        #! connection, by the connection's sequence number; protected by the delivery mutex
+        /** Released by the delivery task once it has delivered the messages that arrived up to then, so that the
+            cleanup at the end of the process waits for it as for the work itself (see
+            @ref Qore::AsyncIoController::holdModuleCleanupWork() "AsyncIoController::holdModuleCleanupWork()",
+            qore#7339); kept here, out of reach of other code, which must not release them
+        */
+        hash<string, list<int>> pending_cleanup_work = {};
+    }
+
     private {
         Mutex m();
         Condition sleep_cond();
@@ -1911,6 +1922,19 @@ WebSocketClient ws(\event(), {
 
     #! disconnects the connection and stops the event thread if connected
     destructor() {
+        # the handles of work of the module cleanup that no delivery task took are released when the destructor
+        # ends, also on its early return (qore#7339)
+        on_exit {
+            hash<string, list<int>> left;
+            {
+                AutoLock al(delivery_mutex);
+                left = pending_cleanup_work;
+                pending_cleanup_work = {};
+            }
+            foreach list<int> handles in (left.iterator()) {
+                map AsyncIoController::releaseModuleCleanupWork($1), handles;
+            }
+        }
         # no thread of the client is started from here on, and a handshake in progress on another thread (which
         # holds the client's lock) is canceled
         lib_threads.close();
@@ -4712,6 +4736,12 @@ ws.setEventQueue();
             }
             ++c.delivery_pending;
             if (c.delivery_active) {
+                # work of the module cleanup at the end of the process that leaves its messages to the running
+                # delivery task hands itself over to it (0 outside of such work) (qore#7339)
+                int handle = AsyncIoController::holdModuleCleanupWork();
+                if (handle) {
+                    push pending_cleanup_work{c.seq}, handle;
+                }
                 return;
             }
             c.delivery_active = True;
@@ -4750,10 +4780,14 @@ ws.setEventQueue();
         } catch (hash<ExceptionInfo> ex) {
             # Controller may be stopped during shutdown; the flag set above is this connection's own
             delivery_thread_counter.dec();
+            list<int> left;
             {
                 AutoLock al(delivery_mutex);
                 c.delivery_active = False;
+                # the work handed over to the task that does not run: the cleanup does not wait for it
+                left = remove pending_cleanup_work{c.seq} ?? ();
             }
+            map AsyncIoController::releaseModuleCleanupWork($1), left;
         }
     }
 
@@ -4794,6 +4828,11 @@ ws.setEventQueue();
         @since WebSocketClient 2.5 takes the connection
     */
     private deliverPendingMessages(WscConnection c) {
+        # the handles of the work of the module cleanup left to this task that it takes when it ends its delivery, in
+        # the section that clears the connection's delivery flag, so that it never takes the handles left to the next
+        # task; released when it returns (qore#7339)
+        list<int> ended_handles;
+        on_exit map AsyncIoController::releaseModuleCleanupWork($1), ended_handles;
         # Track this thread's TID so the destructor can detect the self-deadlock case
         # (destructor called from a user callback on this thread)
         string t = gettid().toString();
@@ -4801,6 +4840,7 @@ ws.setEventQueue();
             AutoLock al(delivery_mutex);
             if (c.claimed) {
                 c.delivery_active = False;
+                ended_handles += remove pending_cleanup_work{c.seq} ?? ();
                 return;
             }
             ++delivery_tids{t};
@@ -4830,14 +4870,20 @@ ws.setEventQueue();
 
             # Snapshot the counter to detect new callbacks
             int last_seen;
+            # the handles of the work of the module cleanup that this round delivers the messages for, released after
+            # it; the round runs as that work, so that a callback can hand work over in turn (qore#7339)
+            list<int> handed;
             {
                 AutoLock al(delivery_mutex);
                 if (c.claimed) {
                     c.delivery_active = False;
+                    ended_handles += remove pending_cleanup_work{c.seq} ?? ();
                     return;
                 }
                 last_seen = c.delivery_pending;
+                handed = remove pending_cleanup_work{c.seq} ?? ();
             }
+            on_exit map AsyncIoController::releaseModuleCleanupWork($1), handed;
 
             # Drain all available messages
             while (True) {
@@ -4849,6 +4895,7 @@ ws.setEventQueue();
                     AutoLock al(delivery_mutex);
                     if (c.claimed) {
                         c.delivery_active = False;
+                        ended_handles += remove pending_cleanup_work{c.seq} ?? ();
                         return;
                     }
                     # the connection is reported open before its first message; when no thread did it yet, this task
@@ -4857,6 +4904,10 @@ ws.setEventQueue();
                         c.connected_issued = True;
                         c.delivery_active = False;
                         open_here = True;
+                        # the task that this one starts below delivers the messages: the work of the module cleanup
+                        # left to this task goes to it (qore#7339)
+                        pending_cleanup_work{c.seq} = handed + (pending_cleanup_work{c.seq} ?? ());
+                        handed = ();
                     }
                 }
                 if (open_here) {
@@ -4875,7 +4926,13 @@ ws.setEventQueue();
                     pushEventConnectionId(c.cid);
                     on_exit popEventConnectionId();
                     try {
-                        disp = processAsyncMessage(msg);
+                        if (handed) {
+                            AsyncIoController::runModuleCleanupWork(handed[0], sub () {
+                                disp = processAsyncMessage(msg);
+                            }, False);
+                        } else {
+                            disp = processAsyncMessage(msg);
+                        }
                     } catch (hash<ExceptionInfo> ex) {
                         # Log callback exceptions and continue — don't shut down the
                         # connection for user callback errors (matching the old sync
@@ -4897,6 +4954,7 @@ ws.setEventQueue();
                     if (self) {
                         AutoLock al(delivery_mutex);
                         c.delivery_active = False;
+                        ended_handles += remove pending_cleanup_work{c.seq} ?? ();
                     }
                     return;
                 }
@@ -4911,6 +4969,7 @@ ws.setEventQueue();
                 if (c.claimed || c.delivery_pending == last_seen) {
                     # No new callbacks since we started; safe to stop
                     c.delivery_active = False;
+                    ended_handles += remove pending_cleanup_work{c.seq} ?? ();
                     return;
                 }
                 # New callbacks arrived; loop and drain again

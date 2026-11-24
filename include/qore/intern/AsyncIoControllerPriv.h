@@ -79,6 +79,9 @@ extern qore_classid_t CID_ASYNCIOCONTROLLER;
 */
 class AsyncIoRoutedPollable : public AbstractPollableIoObjectBase {
 public:
+    //! The native socket whose descriptor this wrapper polls.
+    DLLLOCAL virtual struct qore_socket_private* getPollSocket() const = 0;
+
     //! Returns the route key that selects the I/O thread of every operation on this object
     DLLLOCAL virtual const std::string& getAsyncIoRouteKey() const = 0;
 
@@ -887,6 +890,19 @@ private:
 // hashdecl pointers
 DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollOperationInfo;
 DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollResultInfo;
+
+#ifdef DEBUG
+//! Debug builds: if true, the close wakes of registration holds cannot record their socket, as when there is no
+//! memory (see AsyncIoControllerPriv::makeCloseWake()); for the C++ unit tests of the fallback that wakes all of the
+//! I/O thread's operations
+DLLLOCAL extern std::atomic<bool> qore_dbg_close_wake_push_fails;
+//! Debug builds: if true, the I/O thread cannot move the sockets of its close wake queue to its wake set, as when
+//! there is no memory; for the C++ unit tests of the fallback that wakes all of the I/O thread's operations
+DLLLOCAL extern std::atomic<bool> qore_dbg_close_wake_drain_fails;
+//! Debug builds: the number of times that the I/O thread's fallback that wakes all of its operations fails, as when
+//! there is no memory, before it runs; for the C++ unit tests of its retry
+DLLLOCAL extern std::atomic<int> qore_dbg_close_wake_all_fails;
+#endif
 
 //! C++ async I/O controller - direct translation of AsyncSocketIoController.qc
 /** This class implements the core async I/O event loop used by HTTP/2 server,
@@ -2165,6 +2181,58 @@ private:
         uint64_t last_id = 0;
     };
 
+    //! The sockets of an I/O thread that closes made by other threads woke (qore#7003)
+    /** A close of a socket that bypasses the controller (ex: an HTTP/2 abort, the destructor of an HTTP client) can
+        replace the registered descriptor with an inert one, which the event loop drops without an event; the close
+        adds the socket here and notifies the thread, which runs the socket's operations again (see
+        wake_socket_hashes), and they see the close.
+
+        The queue has a lock of its own, which is a leaf: nothing is called and no other lock is taken with it held
+        (the close adds the socket with it held and notifies the thread after releasing it; the I/O thread moves the
+        sockets to its wake set with it held), so a close can be made by a thread that holds the controller's lock or
+        another socket's lock.  The queue is shared by the wakes of the thread's registration holds and keeps a
+        reference of the thread's notifier: a close that comes after the thread stopped, or after the controller was
+        destroyed, adds the socket to a queue that nothing drains any more and notifies a notifier that does nothing
+        once it is closed; only the thread's event loop drains the queue.
+    */
+    struct CloseWakeQueue {
+        QoreThreadLock l;
+        std::vector<std::string> hashes;
+        //! set when a socket could not be added (no memory): the thread wakes all of its sockets
+        bool all = false;
+        //! the thread's notifier, referenced; none for a context without one (a context that a test makes)
+        QoreEventNotifier* notifier;
+
+        DLLLOCAL explicit CloseWakeQueue(QoreEventNotifier* notifier) : notifier(notifier) {
+            if (notifier) {
+                notifier->ref();
+            }
+        }
+
+        DLLLOCAL ~CloseWakeQueue() {
+            if (notifier) {
+                ExceptionSink xsink;
+                notifier->deref(&xsink);
+                xsink.clear();
+            }
+        }
+
+        CloseWakeQueue(const CloseWakeQueue&) = delete;
+        CloseWakeQueue& operator=(const CloseWakeQueue&) = delete;
+    };
+
+    //! Returns the wake of a registration hold of a socket's descriptor that the I/O thread has registered: it adds
+    //! the socket to the thread's close wakes and notifies the thread (see CloseWakeQueue)
+    DLLLOCAL static std::function<void()> makeCloseWake(IoThreadContext& t, const std::string& sock_hash);
+
+    //! Returns the socket hash that wakes the operation (see pollsSocket())
+    DLLLOCAL static std::string closeWakeKey(const PollInfo& pinfo) {
+        if (!pinfo.cached_sock_hash.empty()) {
+            return pinfo.cached_sock_hash;
+        }
+        return pinfo.sock ? pinfo.sock->getIoIdentityHash() : std::string();
+    }
+
     struct IoThreadContext {
         //! Release the event loop and notifier on resize, failed setup, or destruction
         DLLLOCAL ~IoThreadContext();
@@ -2284,6 +2352,9 @@ private:
 
         //! Socket hashes that need re-polling
         std::unordered_set<std::string> wake_socket_hashes;
+        //! The sockets that closes made by other threads woke (see makeCloseWake()); made by the thread when it first
+        //! needs it
+        std::shared_ptr<CloseWakeQueue> close_wakes;
 
         //! IDs of the operations needing their first continuePoll (empty cached_sock_hash)
         std::vector<uint64_t> new_entry_ids;
@@ -2304,6 +2375,8 @@ private:
         // Registered socket tracking; operations are identified by their ID (see OpCache), sockets by their hash
         //! The socket each operation is registered for, by operation ID (referenced)
         std::unordered_map<uint64_t, QoreObject*> registered_sockets;
+        //! Descriptorless waits on native sockets, indexed by operation ID (qore#7371).
+        std::unordered_map<uint64_t, std::shared_ptr<void>> generation_holds;
         //! The hash each operation in @ref registered_sockets is registered under
         /** Recorded with the registration, because the object cannot be asked when the registration is removed: a
             deleted object has no private data, and without the hash the registration of its descriptor would stay
@@ -2498,6 +2571,7 @@ private:
     */
     mutable QoreThreadLock sock_route_lock;
     std::unordered_map<std::string, int> sock_to_thread;  //!< sock_hash → thread index
+
     std::unordered_map<QoreObject*, std::string> obj_to_sock_hash;  //!< QoreObject* → sock_hash for wakeSocketByObject
     std::unordered_map<std::string, unsigned> provisional_sock_routes; //!< submit-time route refcounts
 

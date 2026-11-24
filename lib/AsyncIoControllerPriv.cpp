@@ -373,8 +373,7 @@ static thread_local const AsyncIoControllerPriv* current_io_controller = nullptr
 //! next entry.  @ref cancelByKey's I/O-thread direct path checks this flag and
 //! defers via cmdq when set so the erase+cleanup runs safely after the batch
 //! has been discarded.  This makes cancel-from-within-continuePoll safe for any
-//! caller (currently @ref Http3ClientConnection's happy-eyeballs loser
-//! teardown, but any future caller benefits).
+//! caller.
 static thread_local bool inside_continue_poll_batch = false;
 
 //! Owner of the poll op whose continuePoll() is currently executing on this
@@ -7276,6 +7275,41 @@ size_t AsyncIoControllerPriv::dbgWakeAllSockets() {
 }
 #endif
 
+#ifdef DEBUG
+std::atomic<bool> qore_dbg_close_wake_push_fails{false};
+std::atomic<bool> qore_dbg_close_wake_drain_fails{false};
+std::atomic<int> qore_dbg_close_wake_all_fails{0};
+#endif
+
+std::function<void()> AsyncIoControllerPriv::makeCloseWake(IoThreadContext& t, const std::string& sock_hash) {
+    if (!t.close_wakes) {
+        t.close_wakes = std::make_shared<CloseWakeQueue>(t.notifier);
+    }
+    std::shared_ptr<CloseWakeQueue> q = t.close_wakes;
+    // a close in a forked child notifies the notifier that it inherited from the parent: the parent's thread wakes
+    // and finds nothing to do (harmless)
+    return [q, sock_hash]() {
+        {
+            // a leaf lock (see CloseWakeQueue)
+            AutoLocker al(q->l);
+            try {
+#ifdef DEBUG
+                if (qore_dbg_close_wake_push_fails.load(std::memory_order_relaxed)) {
+                    throw std::bad_alloc();
+                }
+#endif
+                q->hashes.push_back(sock_hash);
+            } catch (...) {
+                // no memory: the thread wakes all of its sockets (nothing may leave a close)
+                q->all = true;
+            }
+        }
+        if (q->notifier) {
+            q->notifier->notify();
+        }
+    };
+}
+
 void AsyncIoControllerPriv::wakeSocket(const std::string& sock_hash) {
     if (forked()) {
         return;
@@ -8382,6 +8416,64 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
     // the events of each poll; kept from one iteration to the next, so that a poll does not allocate them
     std::vector<QoreEventInfo> poll_events;
 
+#if defined(__linux__) && defined(HAVE_IO_URING)
+    // delivers the io_uring file reads that completed to their HTTP/2 sessions, and marks the sockets of those
+    // sessions ready, so that their operations run in the next Phase 1 and send the data that was read: a session
+    // whose streams wait only for a read in flight asks for no other event (Http2Session::needsInputStreamPass()),
+    // so a completion delivered without this mark would leave the data unsent (qore#7435); called for the
+    // io_uring event of a poll and at the end of each iteration, which can take a completion that arrives after the
+    // poll returned
+    auto deliver_uring_completions = [&](QoreIoUring& uring) {
+        std::vector<QoreIoUring::CompletedRead> completions;
+        uring.processCompletions(completions);
+        if (completions.empty()) {
+            return;
+        }
+        // the descriptors are taken before the completions are delivered, as a delivery can end the session's
+        // connection
+        std::unordered_set<int> affected_fds;
+        for (auto& cr : completions) {
+            if (cr.session) {
+                int fd = cr.session->getSocketFd();
+                if (fd >= 0) {
+                    affected_fds.insert(fd);
+                }
+            }
+        }
+        for (auto& cr : completions) {
+            if (!cr.session) {
+                continue;
+            }
+            ExceptionSink uring_xsink;
+            // the data pointer is taken before the buffer is moved: cr.data points into it, and the order in which
+            // the arguments are evaluated is unspecified
+            const char* data = cr.data;
+            cr.session->handleAsyncReadCompletion(cr.stream_id, data, cr.length, cr.error, std::move(cr.buffer),
+                &uring_xsink);
+            if (uring_xsink) {
+                // logged and cleared: one stream's error does not end the loop
+                QoreStringValueHelper err(uring_xsink.getExceptionErr());
+                QoreStringValueHelper desc(uring_xsink.getExceptionDesc());
+                log(QORE_LOG_LEVEL_ERROR, "io_uring completion error (stream %d): %s: %s", cr.stream_id,
+                    *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
+                uring_xsink.clear();
+            }
+        }
+        for (int afd : affected_fds) {
+            // the sockets registered for the descriptor
+            t.loop->forEachRegistration(afd, [&](uint64_t key, int) {
+                if (key & ExtraRegKeyBit) {
+                    return;
+                }
+                auto hit = t.key_hashes.find(key);
+                if (hit != t.key_hashes.end()) {
+                    ready_socket_events[hit->second] |= QORE_EV_READ;
+                }
+            });
+        }
+    };
+#endif
+
     while (true) {
         // Process commands
         if (processCommands(t, xsink)) {
@@ -8440,6 +8532,31 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         if (!ssl_deferred_hashes.empty()) {
             ready_socket_hashes.insert(ssl_deferred_hashes.begin(), ssl_deferred_hashes.end());
             ssl_deferred_hashes.clear();
+        }
+
+        // the sockets that closes made by other threads woke (see CloseWakeQueue)
+        // set when a close wake could not record its socket, or its socket could not be moved to the wake set (no
+        // memory): every operation of the thread runs again, without an allocation (see below)
+        bool wake_all = false;
+        if (t.close_wakes) {
+            AutoLocker al(t.close_wakes->l);
+            try {
+#ifdef DEBUG
+                if (!t.close_wakes->hashes.empty() && qore_dbg_close_wake_drain_fails.load(std::memory_order_relaxed)) {
+                    throw std::bad_alloc();
+                }
+#endif
+                for (std::string& h : t.close_wakes->hashes) {
+                    t.wake_socket_hashes.insert(std::move(h));
+                }
+            } catch (...) {
+                wake_all = true;
+            }
+            t.close_wakes->hashes.clear();
+            if (t.close_wakes->all) {
+                t.close_wakes->all = false;
+                wake_all = true;
+            }
         }
 
         // Consume wake_socket_hashes (I/O-thread-only, no lock needed)
@@ -8586,6 +8703,35 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             expand_ready_events(ready_socket_events);
             expand_hashes(ready_socket_hashes, true);
             expand_hashes(woken_hashes, true);
+            if (wake_all) {
+                // every operation of the thread runs again, as for a wake of its socket, also one whose own socket has
+                // no registered descriptor (one that waits only for extra descriptors, such as another Socket's): the
+                // walk records nothing; the list of the operations to run is reserved for all of them first, so that
+                // queuing one cannot fail, and if the reservation fails, the fallback runs again at the next iteration
+                // (nothing may leave the I/O thread)
+                try {
+#ifdef DEBUG
+                    if (qore_dbg_close_wake_all_fails.load(std::memory_order_relaxed) > 0) {
+                        qore_dbg_close_wake_all_fails.fetch_sub(1, std::memory_order_relaxed);
+                        throw std::bad_alloc();
+                    }
+#endif
+                    ops_to_poll.reserve(ops_to_poll.size() + t.cache.size());
+                    for (auto& [key, pinfo] : t.cache) {
+                        try_queue(pinfo, false, true);
+                    }
+                } catch (...) {
+                    std::shared_ptr<CloseWakeQueue>& q = t.close_wakes;
+                    assert(q);
+                    {
+                        AutoLocker al(q->l);
+                        q->all = true;
+                    }
+                    if (q->notifier) {
+                        q->notifier->notify();
+                    }
+                }
+            }
             // the events of the last poll have now been reported to their operations; they must not be reported
             // again when the loop goes round without polling (when a command arrives before the poll, or the poll
             // fails): an operation continued for an event may have consumed it, and would be continued again for an
@@ -8753,7 +8899,6 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 
         // Mark the I/O thread as inside the continuePoll batch so that
         // any cancelByKey() invoked from within a poll op's continuePoll
-        // (e.g., Http3ClientConnection's happy-eyeballs loser teardown)
         // is deferred via cmdq rather than taking the direct cache-erase
         // path — the direct path would invalidate the raw spop_base /
         // spop_obj pointers that ops_to_poll still holds for remaining
@@ -9682,40 +9827,15 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 } else if (poll_events[i].events & QORE_EV_IOURING) {
                     // io_uring completions — I/O thread only
                     QoreIoUring* uring = t.loop->getIoUring();
+#ifdef DEBUG
+                    // a test leaves the completions to the drain at the end of the iteration, as when they arrive
+                    // after the poll returned (qore#7435)
+                    if (qore_dbg_io_uring_completions_deferred()) {
+                        uring = nullptr;
+                    }
+#endif
                     if (uring) {
-                        std::vector<QoreIoUring::CompletedRead> completions;
-                        uring->processCompletions(completions);
-                        std::unordered_set<int> affected_fds;
-                        for (auto& cr : completions) {
-                            if (cr.session) {
-                                int fd = cr.session->getSocketFd();
-                                if (fd >= 0) {
-                                    affected_fds.insert(fd);
-                                }
-                            }
-                        }
-                        for (auto& cr : completions) {
-                            if (cr.session) {
-                                cr.session->handleAsyncReadCompletion(
-                                    cr.stream_id, cr.data, cr.length, cr.error,
-                                    std::move(cr.buffer), xsink);
-                                if (*xsink) {
-                                    xsink->clear();
-                                }
-                            }
-                        }
-                        for (int afd : affected_fds) {
-                            // the sockets registered for the descriptor
-                            t.loop->forEachRegistration(afd, [&](uint64_t key, int) {
-                                if (key & ExtraRegKeyBit) {
-                                    return;
-                                }
-                                auto hit = t.key_hashes.find(key);
-                                if (hit != t.key_hashes.end()) {
-                                    ready_socket_events[hit->second] |= QORE_EV_READ;
-                                }
-                            });
-                        }
+                        deliver_uring_completions(*uring);
                     }
 #endif
                 } else if (poll_events[i].fd >= 0) {
@@ -9886,29 +10006,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         // processCompletions() sees the CQE.  Cancel SQEs and expired-session CQEs
         // still fire the eventfd.  If we skip draining the eventfd, epoll_wait returns
         // immediately on every iteration, causing a busy loop.
-        QoreIoUring* uring = t.loop->getIoUring();
-        if (uring) {
-            std::vector<QoreIoUring::CompletedRead> completions;
-            uring->processCompletions(completions);
-            for (auto& c : completions) {
-                ExceptionSink uring_xsink;
-                // Save data pointer before moving buffer — c.data points into
-                // c.buffer and C++ does not guarantee argument evaluation order
-                const char* data = c.data;
-                c.session->handleAsyncReadCompletion(
-                    c.stream_id, data, c.length, c.error,
-                    std::move(c.buffer), &uring_xsink);
-                if (uring_xsink) {
-                    // Log and clear — don't let one stream's error kill the loop
-                    QoreStringValueHelper err(uring_xsink.getExceptionErr());
-                    QoreStringValueHelper desc(uring_xsink.getExceptionDesc());
-                    log(QORE_LOG_LEVEL_ERROR,
-                        "io_uring completion error (stream %d): %s: %s",
-                        c.stream_id, *err ? err->c_str() : "?",
-                        *desc ? desc->c_str() : "?");
-                    uring_xsink.clear();
-                }
-            }
+        if (QoreIoUring* uring = t.loop->getIoUring()) {
+            deliver_uring_completions(*uring);
         }
 #endif
     }
@@ -9931,6 +10030,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
     std::vector<AsyncIoDeferredRelease> exit_timer_refs;
     // the options of the remaining timers, released after the lock with their references (qore#6208)
     std::vector<AsyncIoRuntimeOptions> exit_timer_pos;
+    decltype(t.generation_holds) exit_generation_holds;
     std::unordered_map<std::string, std::shared_ptr<void>> exit_holds;
     // sockets that waited for a barrier and the completions waiting for them: closed and signaled after the lock is
     // released, as closing a socket can run its destructor and other code that must not run under the controller lock
@@ -9998,6 +10098,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         t.key_hashes.clear();
         // no descriptor is registered any more: the holds are released after the lock below (the last reference to a
         // socket can go with its hold), which closes the descriptors that other threads closed meanwhile
+        exit_generation_holds.swap(t.generation_holds);
         exit_holds.swap(t.fd_holds);
         exit_extra_holds.swap(t.extra_fd_holds);
         t.key_events.clear();
@@ -10289,6 +10390,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             completion->deref();
         }
     }
+    exit_generation_holds.clear();
     exit_holds.clear();
     exit_extra_holds.clear();
 
@@ -12327,6 +12429,30 @@ bool AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint
 
     updateEventLoopRegistrationIntern(t, op_id, ev_flags, socket, sock_hash, force_fd_reregister, xsink);
 
+    // While resolving, the operation waits only on the resolver. Its socket has no descriptor
+    // to carry the usual close wake. Subscribe to the socket itself for the duration of this wait.
+    if (!ev_flags && !t.registered_fds.count(sock_hash)) {
+        if (!t.generation_holds.count(op_id)) {
+            ReferenceHolder<AbstractPollableIoObjectBase> pollable(static_cast<AbstractPollableIoObjectBase*>(
+                socket->getReferencedPrivateDataIfExists(CID_ABSTRACTPOLLABLEIOOBJECTBASE)), xsink);
+            qore_socket_private* priv = nullptr;
+            if (auto* so = dynamic_cast<QoreSocketObject*>(*pollable)) {
+                priv = qore_socket_private::get(*so->priv->socket);
+            } else if (auto* wrapper = dynamic_cast<AsyncIoRoutedPollable*>(*pollable)) {
+                priv = wrapper->getPollSocket();
+            }
+            if (priv && priv->sock == QORE_INVALID_SOCKET) {
+                if (auto hold = priv->holdGenerationWake(makeCloseWake(t, sock_hash))) {
+                    t.generation_holds.emplace(op_id, std::move(hold));
+                }
+                // A close between the poll step and registration must also be observed.
+                t.wake_socket_hashes.insert(sock_hash);
+            }
+        }
+    } else {
+        t.generation_holds.erase(op_id);
+    }
+
     // the descriptor of an object whose operations wait for its events is registered, unless the object has none
     if (!computeEventUnion(t, sock_hash) || t.registered_fds.count(sock_hash)) {
         return false;
@@ -12446,6 +12572,7 @@ void AsyncIoControllerPriv::updateEventLoopRegistrationIntern(IoThreadContext& t
 
     // Different socket (or new registration)
     if (prev_sock) {
+        t.generation_holds.erase(op_id);
         // Remove key from previous socket's reverse index
         auto sit = t.sock_hash_to_ops.find(prev_sock_hash);
         if (sit != t.sock_hash_to_ops.end()) {
@@ -12530,6 +12657,7 @@ void AsyncIoControllerPriv::updateEventLoopRegistrationIntern(IoThreadContext& t
 }
 
 void AsyncIoControllerPriv::unregisterFromEventLoop(IoThreadContext& t, uint64_t op_id, ExceptionSink* xsink) {
+    t.generation_holds.erase(op_id);
     t.key_events.erase(op_id);
 
     auto prev_it = t.registered_sockets.find(op_id);
@@ -12936,6 +13064,12 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, uint64_t op_id,
                     continue;
                 }
                 if (hold) {
+                    // a close of the object that bypasses the controller wakes the operation, also one made since the
+                    // hold was taken (qore#7003)
+                    OpCache::node_t* node = t.cache.findId(op_id);
+                    if (node) {
+                        qore_descriptor_hold_set_close_wake(hold, makeCloseWake(t, closeWakeKey(node->second)));
+                    }
                     t.extra_fd_holds[{op_id, fd}] = std::move(hold);
                 }
             } else {
@@ -13142,6 +13276,11 @@ int AsyncIoControllerPriv::addSocketFd(IoThreadContext& t, AbstractPollableIoObj
     }
     ASYNC_IO_TRACE("addSocketFd[%d]: add fd=%d sock='%s' hold=%d\n", t.thread_idx, fd, sock_hash.c_str(),
         hold ? 1 : 0);
+    if (hold) {
+        // a close of the socket that bypasses the controller wakes its operations, also one made since the hold was
+        // taken (qore#7003)
+        qore_descriptor_hold_set_close_wake(hold, makeCloseWake(t, sock_hash));
+    }
     t.loop->addRegistration(fd, regKey(t, sock_hash), events, socket, xsink);
     t.registered_fds[sock_hash] = fd;
     // the registration's own hold; an object that takes no hold (a pollable that Socket::poll() polls by number, a

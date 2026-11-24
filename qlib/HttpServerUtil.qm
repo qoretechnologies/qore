@@ -164,6 +164,14 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - added @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "AbstractHttpRequestHandler::setHandlerSocketView()"
+      and @ref HttpServer::AbstractHttpRequestHandler::needsHandlerSocketView() "needsHandlerSocketView()": the handler
+      of an HTTP/1.x request that is declared by sandboxed code, or that asks for it, gets a socket of its request
+      (see @ref httpserver_handler_socket; <a href="https://github.com/qoretechnologies/qore/issues/7305">issue 7305</a>),
+      as does one that runs the code of objects of classes of a sandboxed Program
+      (@ref HttpServer::AbstractHttpRequestHandler::hostsSandboxedCode() "hostsSandboxedCode()")
+    - added @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize", the default maximum size of a
+      request body that the server reads into memory (256 MiB)
     - added @ref HttpServer::Http1BodyReader "Http1BodyReader",
       @ref HttpServer::DefaultBodyStreamThreshold "DefaultBodyStreamThreshold" and
       @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize": a stream request
@@ -446,6 +454,26 @@ public const date<relative> ReadTimeout = DefaultTimeout;
     @since HttpServerUtil 1.6
 */
 public const int DefaultMaxDecodedBodySize = 128 * 1024 * 1024;
+
+#! default maximum size in bytes of a request body that the server reads into memory (256 MiB)
+/** Applies when \c max_request_body_size is set neither for the server
+    (@ref HttpServer::HttpServerOptionInfo::max_request_body_size "HttpServerOptionInfo::max_request_body_size",
+    @ref HttpServer::HttpServer::setMaxRequestBodySize() "HttpServer::setMaxRequestBodySize()") nor for the listener
+    (@ref HttpServer::HttpListenerOptionInfo::max_request_body_size "HttpListenerOptionInfo::max_request_body_size"),
+    to a body that the server reads into memory for the handler: a body that it reads before dispatching the request
+    or for a handler that does not read it as a stream (HTTP/1.x with a \c Content-Length or chunked, HTTP/2 and
+    HTTP/3), one that a handler reads with
+    @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()", and
+    the rest of a chunked body that the handler left unread.  A larger body is answered with HTTP 413 (Content Too
+    Large), and an HTTP/1.x connection is closed.  A body that a handler reads as a stream (see
+    @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "AbstractHttpRequestHandler::wantsBodyStreaming()"
+    and @ref HttpServer::AbstractStreamRequest "AbstractStreamRequest") is not limited by this default.
+
+    Set \c max_request_body_size to \c 0 explicitly for no limit.
+
+    @since HttpServerUtil 1.6
+*/
+public const int DefaultMaxRequestBodySize = 256 * 1024 * 1024;
 
 #! the largest HTTP/1.x request body with a \c Content-Length that the server reads before the request is dispatched (1 MiB)
 /** A body of this size or smaller is read by the server's I/O thread before the handler is called, so that a small
@@ -1043,10 +1071,15 @@ public hashdecl HttpListenerOptionInfo {
     */
     bool sync = True;
 
-    #! Maximum HTTP request body size in bytes (0 = unlimited)
+    #! Maximum HTTP request body size in bytes (0 = the server's limit)
     /** Requests with Content-Length exceeding this value, or chunked, HTTP/2, or HTTP/3 bodies
         that grow beyond this value, receive HTTP 413 (Content Too Large).  An HTTP/1.x connection
         is closed after the response; on HTTP/2 and HTTP/3 only the request's stream ends.
+
+        \c 0 (the default) uses the limit of the server
+        (@ref HttpServer::HttpServerOptionInfo::max_request_body_size "HttpServerOptionInfo::max_request_body_size"),
+        which is @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" for the bodies that the
+        server reads into memory if none is set.
 
         A handler that reads the request body as a stream (see
         @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()") enforces the limit on
@@ -1092,13 +1125,14 @@ public hashdecl HttpListenerOptionInfo {
     */
     int sse_max_buffer_size = 1048576;
 
-    #! The minimum rate in bytes per second at which a client must take a streamed HTTP/2 or HTTP/3 response
+    #! The minimum rate in bytes per second at which a client must take an HTTP/1 controller response or a streamed HTTP/2 or HTTP/3 response
     /** A stream that the client takes less of while the server waits for it is ended, so that the client cannot hold
         a handler thread by taking very little data; 0 disables the check.  The rate applies to each stream, so a
         client with many concurrent streams on one slow connection shares that connection's rate among them; a listener
         that serves such clients may need a lower value.  The default is
         @ref HttpServer::DefaultStreamSendMinRate "DefaultStreamSendMinRate" (1 KiB/s).  It applies to a response
-        body that a handler thread sends; a body from an @ref Qore::InputStream "InputStream" that the I/O thread
+        body that the HTTP/1 controller sends. On HTTP/2 and HTTP/3 it applies to a body that a handler thread
+        sends; a body from an @ref Qore::InputStream "InputStream" that the I/O thread
         pumps directly holds no thread and is not checked.
 
         @since HttpServerUtil 1.6
@@ -3032,6 +3066,18 @@ public class AbstractStreamRequest {
                 : s.getHttp2StreamTrailers(sid)});
         } else {
             if (http_get_field(hdr, "transfer-encoding") == "chunked") {
+                # a body read as a stream has the limit set for the listener or the server, not the default limit of
+                # a body that the server reads into memory (DefaultMaxRequestBodySize), which applies again after
+                # the read, as to the rest of a body that the handler leaves unread
+                *int stream_max_body = cx."header-info".max_request_body_size;
+                int buffered_max_body = s.getMaxChunkedBodySize();
+                bool set_stream_max_body = exists stream_max_body && stream_max_body != buffered_max_body;
+                if (set_stream_max_body) {
+                    s.setMaxChunkedBodySize(stream_max_body);
+                }
+                on_exit if (set_stream_max_body) {
+                    s.setMaxChunkedBodySize(buffered_max_body);
+                }
                 # HTTP/1.1 chunked reading: the native socket library controls
                 # the chunk loop via readHTTPChunkedBody*WithCallback(), so
                 # unlike HTTP/2/3 (which have explicit loops with
@@ -3612,7 +3658,7 @@ public class CallbackInputStream inherits InputStream {
 #! The time without progress from the peer after which the send of a streamed HTTP/2 or HTTP/3 response fails
 public const StreamStallTimeout = 30m;
 
-#! The default minimum rate in bytes per second at which a client must take a streamed HTTP/2 or HTTP/3 response
+#! The default minimum rate in bytes per second at which a client must take an HTTP/1 controller response or a streamed HTTP/2 or HTTP/3 response
 /** @since HttpServerUtil 1.6
 */
 public const DefaultStreamSendMinRate = 1024;
@@ -4068,6 +4114,11 @@ public class AbstractHttpRequestHandler {
     private:internal {
         #! the thread-local key of the handlers that set persistence on the thread (a PersistentThreadHandlers object)
         const PersistentThreadHandlersKey = "_AHRH_pth";
+
+        #! set by setHostsCode(): the handler runs the code of objects of other code (see hostedObjects(); qore#7305)
+        bool host_code = False;
+        #! set by setHandlerSocketView(): the handler's code gets the socket of its HTTP/1.x request (qore#7305)
+        bool handler_socket_view = False;
     }
 
     #! create the object optionally with the given AbstractAuthenticator
@@ -4079,6 +4130,104 @@ public class AbstractHttpRequestHandler {
     constructor(*AbstractAuthenticator n_auth, softbool n_stream = False) {
         auth = n_auth;
         stream = n_stream;
+    }
+
+    #! Makes the handler's code get the socket of its HTTP/1.x request instead of the connection's socket (qore#7305)
+    /** The server gives the handler of an HTTP/1.x request a socket that acts on the connection for the request only
+        (see @ref httpserver_handler_socket) when the handler object is declared by sandboxed code, which needs no call
+        of this method, or when this method was called before the handler was registered with the server; other
+        handlers get the connection's socket.  A handler that passes the socket of a request to code that is not
+        trusted calls it in its constructor (a trusted @ref RestHandler::RestHandler "RestHandler" whose REST classes
+        are such code, for example, which does not call it itself).  It cannot be undone.
+
+        @warning A trusted handler that hands the socket of its HTTP/1.x request to code that is not trusted (such as
+        code of a tenant) <b>must</b> call this method in its constructor: without it, that code gets the
+        connection's socket, with which it can read the next request on the connection (with its \c Authorization
+        header) and write responses to other requests; see @ref httpserver_handler_socket and
+        <a href="https://github.com/qoretechnologies/qore/issues/7338">issue 7338</a>
+
+        @since HttpServerUtil 1.6
+    */
+    final setHandlerSocketView() {
+        handler_socket_view = True;
+    }
+
+    #! Returns @ref True "True" if the handler's code gets the socket of its HTTP/1.x request (qore#7305)
+    /** True if the handler object is declared by sandboxed code (the call of this method on the object is sandboxed:
+        see @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()", or a sandbox governs the Program
+        that created the object: see
+        @ref Qore::SandboxManager::isFromSandboxedProgram() "SandboxManager::isFromSandboxedProgram()"), or if
+        setHandlerSocketView() was called; also True if this cannot be decided.  The method is final, so that a subclass cannot change the
+        decision; the server calls it when the handler is registered
+
+        @since HttpServerUtil 1.6
+    */
+    final bool needsHandlerSocketView() {
+        try {
+            return handler_socket_view || SandboxManager::isSandboxed() || SandboxManager::isFromSandboxedProgram(self)
+                || hostsSandboxedCode();
+        } catch (hash<ExceptionInfo> ex) {
+            # the decision fails closed
+            return True;
+        }
+    }
+
+    #! Returns @ref True "True" if the handler runs the code of other objects (see setHostsCode()) (qore#7305)
+    /** The server asks for each request whether one of them is of a class of a sandboxed Program
+        (hostsSandboxedCode()) only for a handler that runs the code of other objects
+
+        @since HttpServerUtil 1.6
+    */
+    final bool hostsCode() {
+        return host_code;
+    }
+
+    #! Returns @ref True "True" if an object whose code the handler runs (see hostedObjects()) is of a class of a
+    #! sandboxed Program (qore#7305)
+    /** Also True if this cannot be decided
+
+        @see @ref Qore::SandboxManager::isFromSandboxedProgram() "SandboxManager::isFromSandboxedProgram()"
+
+        @since HttpServerUtil 1.6
+    */
+    final bool hostsSandboxedCode() {
+        try {
+            if (!host_code) {
+                return False;
+            }
+            foreach object obj in (hostedObjects()) {
+                if (SandboxManager::isFromSandboxedProgram(obj)) {
+                    return True;
+                }
+            }
+            return False;
+        } catch (hash<ExceptionInfo> ex) {
+            # the decision fails closed
+            return True;
+        }
+    }
+
+    #! Makes the handler run the code of other objects, which can be of classes of sandboxed Programs (qore#7305)
+    /** A handler that calls the code of objects that other code gives it (as
+        @ref RestHandler::RestHandler "RestHandler" does with its REST classes) calls it in its constructor and
+        returns them from hostedObjects(); the server then asks for each request whether one of them is of a class of a
+        sandboxed Program, and if so, the handler's code gets the socket of its HTTP/1.x request (see
+        @ref httpserver_handler_socket).  It cannot be undone
+
+        @since HttpServerUtil 1.6
+    */
+    final private setHostsCode() {
+        host_code = True;
+    }
+
+    #! Returns the objects whose code the handler runs, for a handler that called setHostsCode() (qore#7305)
+    /** The objects of classes of sandboxed Programs make the handler's code get the socket of its HTTP/1.x request;
+        a subclass that runs the code of other objects returns them
+
+        @since HttpServerUtil 1.6
+    */
+    private list<object> hostedObjects() {
+        return ();
     }
 
     #! Returns @ref True "True" if this handler wants to receive streaming requests without waiting for the full
@@ -4125,9 +4274,11 @@ public class AbstractHttpRequestHandler {
         - \c http2 (\c bool): \c True for HTTP/2 requests
         - \c max_request_body_size (\c int): the effective maximum request body size of the listener in bytes
           (the listener's \c max_request_body_size, or the server's if the listener sets none); \c 0 means no
-          limit.  The server does not limit the total size of a body read as a stream; the handler must stop
-          reading and reject the request (for example with HTTP 413 Content Too Large) when the total exceeds this
-          value.  The key is also set for requests with a buffered body
+          limit, also when none is set (the default limit,
+          @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize", applies only to the bodies that
+          the server reads into memory).  The server does not limit the total size of a body read as a stream; the
+          handler must stop reading and reject the request (for example with HTTP 413 Content Too Large) when the
+          total exceeds this value.  The key is also set for requests with a buffered body
 
         @par Complete Streaming Handler Example
         @code{.py}

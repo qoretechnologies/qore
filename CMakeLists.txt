@@ -102,8 +102,6 @@ option(QORE_REQUIRE_SYSTEM_DEPENDENCIES
        "Require installed dependencies instead of downloading and bundling fallback sources"
        OFF)
 
-include(cmake/QoreExternalModuleDirs.cmake)
-
 option(QORE_STACK_USAGE_REPORT
        "Compile libqore with -fstack-usage for tools/check-stack-usage.py (frame sizes of the per-call path)"
        OFF)
@@ -180,7 +178,6 @@ foreach(mod_dir ${QORE_BINARY_MODULE_SOURCE_DIRS})
         list(APPEND QORE_BINARY_MODULE_DIRS "${CMAKE_BINARY_DIR}/modules/${mod_name}")
     endif ()
 endforeach ()
-qore_build_module_path(QORE_MODULE_DIR_FOR_DOCS "${CMAKE_SOURCE_DIR}/qlib" ${QORE_BINARY_MODULE_DIRS})
 set(QORE_QDX_COMMAND ${QORE_INTERPRETER} ${QORE_QDX_EXECUTABLE})
 set(QORE_QJAR_COMMAND ${QORE_INTERPRETER} ${QORE_QJAR_EXECUTABLE})
 # simulate QoreConfig
@@ -224,6 +221,9 @@ else (WIN32 OR MSYS or MINGW)
     set(USER_MODULE_DIR ${CMAKE_INSTALL_FULL_DATADIR}/qore-modules/)
     set(USER_MODULE_VER_DIR ${USER_MODULE_DIR}${VERSION})
 endif (WIN32 OR MSYS OR MINGW)
+
+include(cmake/QoreExternalModuleDirs.cmake)
+qore_build_module_path(QORE_MODULE_DIR_FOR_DOCS "${CMAKE_SOURCE_DIR}/qlib" ${QORE_BINARY_MODULE_DIRS})
 
 # Install directory for native Qore i18n catalogs.
 #

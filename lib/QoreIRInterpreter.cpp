@@ -232,6 +232,33 @@ static bool qore_ir_try_string_arg_pseudo_fast_path(bool pseudo, bool base_known
     return false;
 }
 
+//! the type of the target of a weak reference of type \a t, or \a t for a value of any other type
+static QORE_INTERN_ALWAYS_INLINE qore_type_t qore_ir_pseudo_weak_target_type(qore_type_t t) {
+    switch (t) {
+        case NT_WEAKREF:
+            return NT_OBJECT;
+        case NT_WEAKREF_HASH:
+            return NT_HASH;
+        case NT_WEAKREF_LIST:
+            return NT_LIST;
+        default:
+            return t;
+    }
+}
+
+//! the type name of the target of a weak reference of type \a t
+static const char* qore_ir_pseudo_weak_target_type_name(qore_type_t t) {
+    switch (t) {
+        case NT_WEAKREF:
+            return "object";
+        case NT_WEAKREF_HASH:
+            return "hash";
+        default:
+            assert(t == NT_WEAKREF_LIST);
+            return "list";
+    }
+}
+
 static bool qore_ir_try_common_no_arg_pseudo_fast_path(QoreIRIntrinsic intrinsic,
         const QoreValue& base, int nargs, QoreValue& res) {
     if (nargs) {
@@ -240,10 +267,16 @@ static bool qore_ir_try_common_no_arg_pseudo_fast_path(QoreIRIntrinsic intrinsic
 
     qore_type_t base_type = base.getType();
     switch (intrinsic) {
+        // the pseudo-methods of a weak reference are those of its target, as the call gives them the target
+        // (qore#7363): its type is the type of the target
         case QoreIRIntrinsic::TypeCode:
-            res = QoreValue(static_cast<int64_t>(base_type));
+            res = QoreValue(static_cast<int64_t>(qore_ir_pseudo_weak_target_type(base_type)));
             return true;
         case QoreIRIntrinsic::Type:
+            if (base_type != qore_ir_pseudo_weak_target_type(base_type)) [[unlikely]] {
+                res = QoreValue::makeStringValue(qore_ir_pseudo_weak_target_type_name(base_type));
+                return true;
+            }
             res = QoreValue::makeStringValue(base.getTypeName());
             return true;
         case QoreIRIntrinsic::Size:
@@ -387,7 +420,7 @@ static QoreHashNode* makeImplicitHashForLValueType(const QoreTypeInfo* typeInfo,
         return new QoreHashNode(sti);
     }
 
-    const TypedHashDecl* thd = QoreTypeInfo::getUniqueReturnHashDecl(typeInfo);
+    const TypedHashDecl* thd = QoreTypeInfo::getUniqueReturnHashDecl(qore_get_value_type(typeInfo));
     if (thd) {
         QoreStringNode* desc = new QoreStringNodeMaker("Cannot implicitly create typed hash '%s' "
             "with an assignment; to address this error, declare the typed hash before the assignment",
@@ -20845,6 +20878,10 @@ load_local_done:
                             || path_inst->unary_op == LVUnaryOp::Trim
                             || path_inst->unary_op == LVUnaryOp::Chomp
                             || path_inst->unary_op == LVUnaryOp::EnsureUnique);
+                        if (path_inst->unary_op == LVUnaryOp::EnsureUnique
+                                && qore_try_read_unique_weak_path(path_copy.data(), path_copy.size(), res)) {
+                            return 0;
+                        }
                         LValueHelper lvh(xsink);
                         // the source of a weak assignment is read as an rvalue reads it (qore#7242)
                         if (path_inst->unary_op == LVUnaryOp::EnsureUnique) {
@@ -24780,33 +24817,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreValue();
         }
         case QoreIROpcode::ListIndexDynamic: {
-            // Dynamic list/container index: container[index]
-            qore_type_t bt = left.getType();
-            if (bt == NT_LIST || bt == NT_STRING || bt == NT_BINARY || bt == NT_BUFFER
-                    || right.getType() == NT_LIST) {
-                QoreValue out = QoreSquareBracketsOperatorNode::doSquareBrackets(left, right, true, true,
-                    qore_compiled_code_negative_offsets(), xsink);
-                if (bt == NT_LIST && !(xsink && *xsink)) {
-                    evaluateOwnedListElement(out, xsink);
-                }
-                return out;
+            QoreValue out = QoreSquareBracketsOperatorNode::doSquareBrackets(left, right, true, true,
+                qore_compiled_code_negative_offsets(), xsink);
+            if (left.getType() == NT_LIST && !(xsink && *xsink)) {
+                evaluateOwnedListElement(out, xsink);
             }
-            if (bt == NT_HASH) {
-                // hash[key] is equivalent to hash{key}
-                const QoreHashNode* h = left.get<const QoreHashNode>();
-                QoreHashKeyHelper kstr(right, xsink);
-                if (*xsink) {
-                    return QoreValue();
-                }
-                QoreValue result = h->getKeyValue(kstr.c_str(), xsink);
-                if (xsink && *xsink) {
-                    return QoreValue();
-                }
-                QoreValue out = result.refSelf();
-                evaluateOwnedWeakReferenceResult(out, xsink);
-                return out;
-            }
-            return QoreValue();
+            return out;
         }
         default:
             break;
