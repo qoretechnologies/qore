@@ -4119,7 +4119,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             if (q_check_path(**path, "HTTP-CLIENT-OPTION-ERROR", xsink)) {
                 return -1;
             }
-            if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_restricts_domain(QDOM_FILESYSTEM)) {
+            // a method of a lent object (a capability frame, qore#7052) lends nothing here: the file is opened for
+            // the code that the object was lent to, which can be restricted (qore#7052 follow-up)
+            if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_lent_to_restricts_domain(QDOM_FILESYSTEM)) {
                 xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the ssl_cert_path option requires filesystem access "
                     "in the current Program and its caller");
                 return -1;
@@ -4195,7 +4197,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             if (q_check_path(**path, "HTTP-CLIENT-OPTION-ERROR", xsink)) {
                 return -1;
             }
-            if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_restricts_domain(QDOM_FILESYSTEM)) {
+            // a method of a lent object (a capability frame, qore#7052) lends nothing here: the file is opened for
+            // the code that the object was lent to, which can be restricted (qore#7052 follow-up)
+            if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_lent_to_restricts_domain(QDOM_FILESYSTEM)) {
                 xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the ssl_key_path option requires filesystem access "
                     "in the current Program and its caller");
                 return -1;
