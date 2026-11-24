@@ -8299,7 +8299,7 @@ public:
             QoreValue ex = result->get<QoreHashNode>()->getKeyValue("ex");
             const QoreHashNode* exh = ex.getType() == NT_HASH ? ex.get<const QoreHashNode>() : nullptr;
             QoreValue err = exh ? exh->getKeyValue("err") : QoreValue();
-            std::string what = err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : "no error";
+            std::string what = err.getType() == NT_STRING ? QoreStringDataHelper(err).c_str() : "no error";
             // not EVENT-LOOP-ERROR: the removal of the inert descriptor's registration does not fail
             UT_ASSERT(c, what == "SOCKET-CLOSED", ("the closed connection fails as closed: " + what + when).c_str());
         }
@@ -9102,7 +9102,7 @@ public:
             QoreValue ex = result->get<QoreHashNode>()->getKeyValue("ex");
             const QoreHashNode* exh = ex.getType() == NT_HASH ? ex.get<const QoreHashNode>() : nullptr;
             QoreValue err = exh ? exh->getKeyValue("err") : QoreValue();
-            std::string what = err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : "no error";
+            std::string what = err.getType() == NT_STRING ? QoreStringDataHelper(err).c_str() : "no error";
             UT_ASSERT(c, exh != nullptr, ("the receive fails: " + what + when).c_str());
         }
         xsink.clear();
@@ -9405,7 +9405,7 @@ public:
             QoreValue ex = result->get<QoreHashNode>()->getKeyValue("ex");
             const QoreHashNode* exh = ex.getType() == NT_HASH ? ex.get<const QoreHashNode>() : nullptr;
             QoreValue err = exh ? exh->getKeyValue("err") : QoreValue();
-            std::string what = err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : "no error";
+            std::string what = err.getType() == NT_STRING ? QoreStringDataHelper(err).c_str() : "no error";
             UT_ASSERT(c, what == "SOCKET-CLOSED", ("the operation fails as closed: " + what + when).c_str());
         }
         if (fallback) {
@@ -9775,17 +9775,21 @@ public:
         if (!ok) {
             return -1;
         }
-        // the answer arrives asynchronously; poll() reports the pending error without reading it
-        struct pollfd pfd = {ufd, 0, 0};
-        ok = ::poll(&pfd, 1, 5000) == 1 && (pfd.revents & POLLERR);
+        // the answer (an ICMP port unreachable message) arrives asynchronously: poll() reports the pending error
+        // without reading it, as an error on Linux and as readable on macOS (nothing else can make the socket ready:
+        // nothing sends to it); the limit only guards against a hang
+        struct pollfd pfd = {ufd, POLLIN, 0};
+        ok = ::poll(&pfd, 1, 5000) == 1 && (pfd.revents & (POLLIN | POLLERR));
         UT_ASSERT(c, ok, "pending error: the UDP socket has a pending error");
         return ok ? ufd : -1;
     }
 
     //! Returns the pending error of a descriptor, which reading it clears; -1 if the descriptor has none or is closed
     static int readPendingError(int fd) {
-        struct pollfd pfd = {fd, 0, 0};
-        if (::poll(&pfd, 1, 0) != 1 || !(pfd.revents & POLLERR)) {
+        // a pending error makes the socket ready, as an error on Linux and as readable on macOS (see
+        // makePendingErrorSocket()); one that was read makes it neither
+        struct pollfd pfd = {fd, POLLIN, 0};
+        if (::poll(&pfd, 1, 0) != 1 || !(pfd.revents & (POLLIN | POLLERR))) {
             return -1;
         }
         int err = 0;
