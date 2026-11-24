@@ -2864,6 +2864,8 @@
       loaded with code that the same module in a single file is refused for, and its parse-time warnings were errors
       also for @ref Qore::load_module_warn() "load_module_warn()" (see @ref user_modules;
       <a href="https://github.com/qoretechnologies/qore/issues/7324">issue 7324</a>)
+    - @ref Qore::SQL::Datasource::getPort() "Datasource::getPort()" returns the port configured for the next
+      connection, including after a port change on an open datasource.
     - a pseudo-method call runs the method of the pseudo-class of the value's type at run time, also when the parser
       resolved the call from another type, and the code of a pseudo-class refuses a value of another type with an
       exception (see the note on pseudo-classes in @ref qore_classes;
