@@ -1327,6 +1327,10 @@ static QoreHashNode* socket_exec_read_http_header(QoreObject* self, QoreSocketOb
 
 static QoreStringNode* socket_exec_read_http_header_string(QoreObject* self, QoreSocketObject* s,
         int timeout_ms, ExceptionSink* xsink) {
+    // the rest of a chunked body that was not read to its end would be taken for the header (issue 7417)
+    if (my_socket_priv::getPriv(*s)->checkHttpChunkedBodyFinished(xsink)) {
+        return nullptr;
+    }
     SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n\r\n"));
     s->ref();
     ValueHolder result(socket_exec_recv_poll(self, s,
@@ -1570,15 +1574,8 @@ static bool socket_exec_is_data_available(QoreObject* self, QoreSocketObject* s,
 }
 
 static size_t socket_exec_http_line_payload_size(const QoreStringNode& line) {
-    size_t len = line.size();
-    const char* str = line.c_str();
-    if (len >= 2 && str[len - 2] == '\r' && str[len - 1] == '\n') {
-        return len - 2;
-    }
-    if (len && str[len - 1] == '\n') {
-        return len - 1;
-    }
-    return len;
+    // the line is taken as every reader of a chunked body takes it (issue 7417)
+    return my_socket_priv::httpLinePayloadSize(line.c_str(), line.size());
 }
 
 static bool socket_exec_http_blank_line(const QoreStringNode& line) {
@@ -1709,7 +1706,8 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
         return nullptr;
     }
 
-    priv->clearHttpExpectChunkedBody();
+    // the body is unfinished until the read reaches its end (issue 7417)
+    priv->startHttpChunkedBodyRead();
 
     SimpleRefHolder<BinaryNode> body_bin(binary_body && !os && !recv_callback ? new BinaryNode : nullptr);
     SimpleRefHolder<QoreStringNode> body_str(binary_body || recv_callback ? nullptr : new QoreStringNode(s->getEncoding()));
@@ -1730,13 +1728,9 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
         }
 
         size_t line_len = socket_exec_http_line_payload_size(**line);
-        const char* line_str = line->c_str();
-        const char* semi = static_cast<const char*>(memchr(line_str, ';', line_len));
-        size_t hex_len = semi ? static_cast<size_t>(semi - line_str) : line_len;
-        std::string hex(line_str, hex_len);
-        long chunk_size = strtol(hex.c_str(), nullptr, 16);
-        if (chunk_size < 0) {
-            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "negative value given for chunk size (%ld)", chunk_size);
+        // the size is parsed as the other readers of a chunked body parse it (issue 7417)
+        int64_t chunk_size = 0;
+        if (my_socket_priv::parseHttpChunkSize(line->c_str(), line_len, chunk_size, xsink)) {
             return nullptr;
         }
 
@@ -1758,6 +1752,8 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
                     *info, &has_trailers)) {
                 return nullptr;
             }
+            // the whole body has been read
+            priv->finishHttpChunkedBodyRead();
             if (recv_callback) {
                 if (socket_exec_run_http_recv_header_callback(self, recv_callback,
                         has_trailers ? *output : nullptr, info.release(), xsink)) {
@@ -1766,12 +1762,6 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
                 return nullptr;
             }
             return output.release();
-        }
-
-        if (static_cast<unsigned long>(chunk_size) > static_cast<unsigned long>(std::numeric_limits<ssize_t>::max())) {
-            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "chunk size %ld exceeds the maximum supported size",
-                chunk_size);
-            return nullptr;
         }
 
         // apply the limit before the chunk is read, so no data over the limit is read, written, or delivered
@@ -1795,14 +1785,19 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
             if (write_rc == -1 || *xsink) {
                 return nullptr;
             }
-        } else if (!recv_callback && binary_body) {
-            body_bin->append(chunk->getPtr(), chunk->size());
-        } else if (!recv_callback) {
-            body_str->concat(static_cast<const char*>(chunk->getPtr()), chunk->size());
+        } else if (!recv_callback && qore_socket_append_http_body(xsink, *body_bin,
+                binary_body ? nullptr : *body_str, chunk->getPtr(), chunk->size())) {
+            return nullptr;
         }
 
         SimpleRefHolder<BinaryNode> crlf(socket_exec_recv_bytes(self, s, 2, timeout_ms, xsink));
         if (*xsink) {
+            return nullptr;
+        }
+        // the chunk data ends with a line end (RFC 9112 section 7.1)
+        if (crlf->size() != 2 || memcmp(crlf->getPtr(), "\r\n", 2)) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "the data of a chunk of " QLLD " bytes is not followed by "
+                "a line end", static_cast<int64>(chunk_size));
             return nullptr;
         }
         priv->doChunkedReadEvent(QORE_EVENT_HTTP_CHUNKED_DATA_RECEIVED, static_cast<size_t>(chunk_size),
@@ -3446,6 +3441,10 @@ AbstractPollOperation<auto> Socket::startPollLingeringClose(int max_discard = 0)
     \c getOutput() returns the accumulated body as a binary value
 
     @throw SOCKET-STARTPOLLREADHTTPBODY-ERROR invalid parameter combination
+    @throw READ-HTTP-CHUNK-ERROR (raised by the operation) a chunked body with an invalid chunk size (not
+    hexadecimal digits), chunk data not followed by a line end, or data that ended before the end of the body; a
+    chunked body that is not read to its end leaves the socket unable to read an HTTP header (see
+    unfinishedHttpChunkedBody())
 
     @since %Qore 3.0
 */
@@ -4704,7 +4703,9 @@ string data = sock.recv(-1); # read all data available
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-CLOSED the remote end has closed the connection.
-    @throw SOCKET-RECV-ERROR there was an error receiving the data.
+    @throw SOCKET-RECV-ERROR there was an error receiving the data, or the memory for the data could not be
+    allocated; the memory grows as the data arrives, and a read whose memory cannot grow shuts the connection down, as
+    the rest of the data cannot be told apart from what follows it
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR there was an SSL error while reading data from the socket
 
@@ -4734,7 +4735,9 @@ binary data = sock.recvBinary(-1); # read all data available
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-CLOSED the remote end has closed the connection.
-    @throw SOCKET-RECV-ERROR there was an error receiving the data.
+    @throw SOCKET-RECV-ERROR there was an error receiving the data, or the memory for the data could not be
+    allocated; the memory grows as the data arrives, and a read whose memory cannot grow shuts the connection down, as
+    the rest of the data cannot be told apart from what follows it
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR there was an SSL error while reading data from the socket
 
@@ -5853,6 +5856,9 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     the name and the colon), a line without a colon or with an empty field name, a whitespace line before the first
     field line, or, in a request, an obsolete line folding (a line that starts with whitespace); in a response, an
     obsolete line folding is replaced with spaces
+    @throw SOCKET-HTTP-ERROR the read of a chunked message body on the socket stopped before the end of the body (see
+    unfinishedHttpChunkedBody()), whose rest cannot be told apart from the next message; the connection must be
+    closed
 
     @note
     - if the header claims a certain character encoding via a \c charset declaration in the \c "Content-Type" header, the Socket's @ref character_encoding "character encoding" is automatically set accordingly
@@ -5892,6 +5898,9 @@ string str = sock.readHTTPHeaderString(10s);
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw HTTP-HEADER-TOO-LARGE the header is larger than the limit set with setMaxHeaderSize() (65536 bytes by default)
+    @throw SOCKET-HTTP-ERROR the read of a chunked message body on the socket stopped before the end of the body (see
+    unfinishedHttpChunkedBody()), whose rest cannot be told apart from the next message; the connection must be
+    closed
 
     @since %Qore 0.8.8
 */
@@ -5920,10 +5929,11 @@ hash<auto> ans = sock.readHTTPChunkedBody(20s);
 
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-CLOSED The remote end has closed the connection
-    @throw SOCKET-RECV-ERROR There was an error receiving the data
+    @throw SOCKET-RECV-ERROR There was an error receiving the data, or the memory for the body could not be allocated
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server, or a trailer with a NUL character
+    @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
+    end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
     replaced with spaces)
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize()
@@ -5953,10 +5963,11 @@ hash<auto> ans = sock.readHTTPChunkedBodyBinary(20s);
 
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-CLOSED The remote end has closed the connection
-    @throw SOCKET-RECV-ERROR There was an error receiving the data
+    @throw SOCKET-RECV-ERROR There was an error receiving the data, or the memory for the body could not be allocated
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server, or a trailer with a NUL character
+    @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
+    end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
     replaced with spaces)
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize()
@@ -5994,7 +6005,8 @@ hash<auto> ans = sock.readHTTPChunk(20s);
     @throw SOCKET-RECV-ERROR There was an error receiving the data
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server, or a trailer with a NUL character
+    @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
+    end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
     replaced with spaces)
     @throw HTTP-BODY-TOO-LARGE the chunk exceeds the limit set with setMaxChunkedBodySize()
@@ -6025,7 +6037,8 @@ hash<auto> ans = sock.readHTTPChunkedBodyToOutputStream(outputStream, 20s);
     @throw SOCKET-RECV-ERROR There was an error receiving the data
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server, or a trailer with a NUL character
+    @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
+    end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
     replaced with spaces)
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
@@ -6064,7 +6077,8 @@ sock.readHTTPChunkedBodyWithCallback(recv_callback, 20s);
     @throw SOCKET-RECV-ERROR There was an error receiving the data
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server, or a trailer with a NUL character
+    @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
+    end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
     replaced with spaces)
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
@@ -6107,7 +6121,8 @@ sock.readHTTPChunkedBodyBinaryWithCallback(recv_callback, 20s);
     @throw SOCKET-RECV-ERROR There was an error receiving the data
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server, or a trailer with a NUL character
+    @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
+    end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
     replaced with spaces)
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
@@ -7288,6 +7303,29 @@ bool b = sock.pendingHttpChunkedBody();
 */
 bool Socket::pendingHttpChunkedBody() {
     return s->pendingHttpChunkedBody();
+}
+
+//! Returns @ref True if the socket is still connected, and the read of a chunked message body started on it and stopped before the end of the body
+/** A read of a chunked body stops before its end when its receive callback or output stream raises an exception,
+    when it times out, when the body is larger than the maximum set with setMaxChunkedBodySize(), or when the body
+    is not valid; the rest of the body cannot then be told apart from the next message, so the connection must be
+    closed: no HTTP header can be read on it (readHTTPHeader(), readHTTPHeaderString() and the operations that read
+    a header raise a \c SOCKET-HTTP-ERROR exception).  A body read in chunks with readHTTPChunk() is unfinished
+    until its last chunk and trailer section have been read.
+
+    @par Example:
+    @code{.py}
+bool b = sock.unfinishedHttpChunkedBody();
+    @endcode
+
+    @return @ref True if the read of a chunked body started on the socket and stopped before the end of the body
+
+    @since %Qore 3.0
+
+    @see pendingHttpChunkedBody()
+*/
+bool Socket::unfinishedHttpChunkedBody() [flags=CONSTANT] {
+    return my_socket_priv::getPriv(*s)->unfinishedHttpChunkedBody();
 }
 
 //! sets the SSL verification mode

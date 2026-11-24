@@ -130,5 +130,7 @@ QoreValue QoreShiftOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
     // therefore no need to reference again
     QoreValue rv = l->shift();
     val.changedScannedValue(rv);
+    // a value taken out of a list reached through a weak reference (qore#7373)
+    val.removedValueThroughWeak(rv);
     return rv;
 }

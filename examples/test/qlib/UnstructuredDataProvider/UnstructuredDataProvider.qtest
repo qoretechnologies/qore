@@ -171,6 +171,12 @@ public class UnstructuredDataProviderTest inherits QUnit::Test {
         assertEq(("partition-file", "partition-text"),
             sort((map $1.action, partition_actions)));
         map assertEq(DPAT_API, $1.action_code, $1.action), partition_actions;
+        # partitioning returns the elements and stores nothing: the actions declare that they are read-only, which
+        # the catalogue reports as such (qore#7454)
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), partition_actions;
+        map assertFalse($1.mutates_state, $1.action), partition_actions;
+        map assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState($1), $1.action),
+            partition_actions;
         assertTrue(actions.size() > partition_actions.size(),
             "the platform actions are registered for the same app");
 
@@ -658,6 +664,10 @@ public class UnstructuredDataProviderTest inherits QUnit::Test {
             DataProvider::DataProviderActionCatalog::getActions("UnstructuredIo"),
             $1.action == "get-connector-fields")[0];
         assertEq(all_types.size(), action.options.connector_type.allowed_values.size());
+        # answered from the vendored API description: read-only (qore#7454)
+        assertEq(NT_BOOLEAN, action.mutates_state.typeCode());
+        assertFalse(action.mutates_state);
+        assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action));
     }
 
     private liveConnectionTest() {

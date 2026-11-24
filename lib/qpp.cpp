@@ -7121,6 +7121,8 @@ class Method : public CodeBase {
 protected:
     std::string pseudo_arg;
     std::string pseudo_var;
+    //! true if the receiver of the pseudo-method is a pointer, which is null if it is not of the class's type
+    bool pseudo_ptr = false;
     bool const_method;
 
     void serializeCppConstructor(FILE* fp, const char* cname) const {
@@ -7311,6 +7313,7 @@ public:
                 }
 
                 pseudo_var = pseudo_arg.substr(i, end - i);
+                pseudo_ptr = pseudo_arg.find('*') < i;
                 //log(LL_DEBUG, "Method::Method() %s:%d '%s' pseudo_arg: '%s' pseudo_var: '%s'\n", fn.c_str(), line, name.c_str(), pseudo_arg.c_str(), pseudo_var.c_str());
             }
         }
@@ -7537,8 +7540,14 @@ public:
                 if (i == code.size())
                     break;
             }
-            if (found)
+            if (found) {
                 fprintf(fp, "    %s;\n", pseudo_arg.c_str());
+                // the accessor of a receiver that is not of the class's type raises an exception and gives no
+                // receiver (qore#7363)
+                if (pseudo_ptr) {
+                    fprintf(fp, "    if (!%s) {\n        return QoreValue();\n    }\n", pseudo_var.c_str());
+                }
+            }
         }
         fprintf(fp, "# %d \"%s\"\n    ", line, fileName.c_str());
         output_file(fp, code);

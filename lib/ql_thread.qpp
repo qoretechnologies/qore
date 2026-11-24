@@ -132,6 +132,11 @@ extern QoreClass* QC_TIMEZONE;
 // keeps the hash valid if the family's root frees the family's data meanwhile, so the hash is changed through
 // qore_hash_private, as QoreHashNode's own changing methods require a unique reference
 static QoreHashNode* get_thread_data_ref(bool create) {
+    // the data that a destructor saves while the thread's data is released for the last time would survive into the
+    // next task of the thread (qore#7398): it is not saved
+    if (create && thread_data_saves_refused()) {
+        return nullptr;
+    }
     return qore_program_private::get(*getProgram())->getThreadDataRef(create);
 }
 
@@ -243,7 +248,11 @@ hashdecl CallStackInfo {
     //! the language of the source code; normally \c "Qore"
     string lang;
 
-    //! related program id (since 0.8.13.7)
+    //! the ID of the Program of the code that made the call (since 0.8.13.7)
+    /** For a call that the initialization of a module makes (also the init closure of its module declaration), the
+        module's Program, however the module is loaded
+        (since %Qore 3.0; issue #7289)
+    */
     *int programid;
 
     //! related statement id (since 0.8.13.7)
@@ -386,6 +395,9 @@ save_thread_data(h);
 */
 nothing save_thread_data(hash<auto> data) [flags=NAMED_ARGS,OWN_PROGRAM_STATE;dom=THREAD_CONTROL] {
     ReferenceHolder<QoreHashNode> thread_data(get_thread_data_ref(true), xsink);
+    if (!*thread_data) {
+        return QoreValue();
+    }
     qore_hash_private::get(**thread_data)->merge(*qore_hash_private::get(*data), xsink);
 }
 
@@ -411,6 +423,9 @@ nothing save_thread_data(string key, auto value) [flags=NAMED_ARGS,OWN_PROGRAM_S
         return QoreValue();
     }
     ReferenceHolder<QoreHashNode> data(get_thread_data_ref(true), xsink);
+    if (!*data) {
+        return QoreValue();
+    }
     qore_hash_private::get(**data)->setKeyValue(tmp.c_str(), value.refSelf(), xsink);
 }
 

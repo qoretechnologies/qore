@@ -7129,9 +7129,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             // at this boundary so the documented error reaches the caller
             q_future_rename_timeout(xsink, "SOCKET-TIMEOUT", "HTTP request timed out");
             if (!raw_resp || *xsink) {
-                // A request on an HTTP/3 connection whose peer sent nothing before the connection was closed, or
-                // that the server reset with a stateless reset (HTTP3-STATELESS-RESET: it has no state for the
-                // connection, qore#6931)
+                // A request on an HTTP/3 connection whose peer did not acknowledge it before the connection was
+                // closed, or that the server reset with a stateless reset (HTTP3-STATELESS-RESET: it has no state for
+                // the connection, qore#6931)
                 // (HTTP3-PEER-UNRESPONSIVE: within the connect timeout of the request; or HTTP3-IDLE-CLOSE: by the
                 // idle timer) went to a server whose connection state is gone (ex: it restarted).  The server may
                 // still have processed it before it went away, so only an idempotent request is repeated, once, on

@@ -1637,6 +1637,36 @@ static bool SandboxManager::isSandboxed() [flags=RET_VALUE_ONLY] {
     return static_cast<bool>(governing);
 }
 
+//! Returns @ref True if a sandbox governs the Program of the class of the given object
+/** The object keeps the Program of its class (the Program whose code declares the class, or into which the class was
+    imported), not the Program of the code that created it: an object of a class of a module or of the application,
+    created by sandboxed code, gives @ref False.  The Program is governed by a sandbox: its own (see
+    @ref Qore::Program::setSandboxManager() "Program::setSandboxManager()"), now, whenever it was set, or that of
+    the code that created the Program.  Library code that gives an object of an application a more restricted
+    service when the application's code is sandboxed uses it, as an HTTP server decides which handlers get a socket
+    of their request (qore#7305), for the objects of classes that the sandboxed code declares; unlike isSandboxed(), it
+    does not depend on the code that is running, and it sees a sandbox that was set on the Program after the object
+    was created.
+
+    It reveals only whether the Program of the object's class is sandboxed, so it is not restricted.
+
+    @param obj the object
+
+    @return @ref True if a sandbox governs the Program of the class of the object
+
+    @par Example:
+    @code{.py}
+bool restricted = SandboxManager::isFromSandboxedProgram(handler);
+    @endcode
+
+    @see isSandboxed()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isFromSandboxedProgram(object obj) [flags=RET_VALUE_ONLY] {
+    return qore_object_program_is_sandboxed(obj);
+}
+
 //! Returns the @ref sandbox_isolation_domains "isolation domain" (the tenant) of the code that calls the library
 /** Library code that keeps process-wide state for its callers (a registry, a cache) uses it to keep the entries of
     each tenant apart: the domain of the sandbox that governs the calling code, also when that code calls the library

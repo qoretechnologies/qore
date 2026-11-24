@@ -236,6 +236,10 @@ QoreValue QoreExtractOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* 
                     rv = qore_list_private::replace(*vl, offset, length, *exp, true, xsink);
                 }
         }
+        // the elements taken out of a list reached through a weak reference (qore#7373)
+        if (rv) {
+            val.removedValueThroughWeak(QoreValue(*rv));
+        }
     }
     else if (vt == NT_STRING) {
         // note: safe; val.ensureUnique() above makes a node of an inline short string

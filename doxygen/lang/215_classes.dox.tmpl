@@ -7,7 +7,7 @@
 
     A class can have any valid identifier name except \c "auto" but may not have the same name as a child namespace of the namespace parent object.
 
-    @note Each %Qore type has a "pseudo-class" associated with it (the default is @ref Qore::zzz8valuezzz9); methods from the data type's "pseudo-class" can be run on any value of that type; see @ref Qore::zzz8valuezzz9 and <b>"Pseudo Class for Type"</b> headings in @ref basic_data_types for more information.
+    @note Each %Qore type has a "pseudo-class" associated with it (the default is @ref Qore::zzz8valuezzz9); methods from the data type's "pseudo-class" can be run on any value of that type; see @ref Qore::zzz8valuezzz9 and <b>"Pseudo Class for Type"</b> headings in @ref basic_data_types for more information.  A pseudo-method call runs the method of the pseudo-class of the value's type at run time, also when the parser resolved the call from another type; the code of a pseudo-class is never given a value of another type.
 
     @par In-Line Class Declaration Syntax
     <tt><b>[@ref mod_public "public"] [@ref final_classes "final"] class</b> [</tt><em>@ref namespace_paths "namespace_path"</em><tt>::...]</tt><em>class_identifier</em><tt>] [<b>inherits</b> [<b>@ref private_inheritance "private[:internal|hierarchy]"</b>|<b>@ref public_inheritance "public"</b>] [</tt><em>@ref namespace_paths "namespace_path"</em><tt>::...]</tt><em>parent_class_identifier</em><tt>[, ...]] {</tt>\n

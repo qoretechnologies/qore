@@ -21,6 +21,7 @@
 class RestClientNarrowedCallerHashTest inherits QUnit::Test {
     constructor() : Test("RestClientNarrowedCallerHashTest", "1.0", \ARGV) {
         addTestCase("RestClient adds Accept-Encoding to integer headers", \restClientContentEncoding());
+        addTestCase("RestConnection adds skip_login to typed runtime options", \restConnectionAsyncOptions());
         addTestCase("RestClientIo normalizes string options", \restClientIoStringOptions());
         addTestCase("RestClientDataProvider adds binary certificate data", \processRestOptionsBinary());
         addTestCase("RestClient constructor options accept added values", \restClientConstructorOptions());
@@ -41,6 +42,19 @@ class RestClientNarrowedCallerHashTest inherits QUnit::Test {
         hash<auto> hdr = rest.getDefaultHeaders();
         assertEq("gzip", hdr."Accept-Encoding");
         assertEq(1, hdr."X-Count");
+    }
+
+    restConnectionAsyncOptions() {
+        RestConnection conn("test", "test", "http://127.0.0.1:1", {"monitor": False});
+        hash<string, string> opts = {"ssl_cert_path": "unused.pem"};
+        RestClientIo client = conn.getAsync(False, opts);
+        on_exit client.close();
+        assertEq(True, client.getConstructorOptions().skip_login);
+        assertEq({"ssl_cert_path": "unused.pem"}, opts);
+
+        RestClientIo explicit_login = conn.getAsync(False, {"skip_login": False});
+        on_exit explicit_login.close();
+        assertFalse(explicit_login.getConstructorOptions().skip_login ?? False);
     }
 
     restClientIoStringOptions() {

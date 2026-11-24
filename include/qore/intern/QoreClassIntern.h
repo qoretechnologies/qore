@@ -284,7 +284,12 @@ struct AbstractMethodMap : amap_t {
             i.second->parseRollback();
     }
 
-    DLLLOCAL void parseInit(qore_class_private& qc, BCList* scl);
+    //! installs the concrete variants of the parent classes for the class's abstract variants
+    /** Sets qore_class_private::abstract_method_created if it creates a method in the class (qore#7307).
+
+        @return true if concrete variants were installed on a method of the class, created or existing (qore#7425)
+    */
+    DLLLOCAL bool parseInit(qore_class_private& qc, BCList* scl);
 
     //! drops the abstract variants inherited from the parent classes that none of them has pending any more
     /** Called when the abstract variants of the parent classes have been resolved (qore_class_private::
@@ -2960,7 +2965,8 @@ public:
     DLLLOCAL void parseAddAncestors(QoreMethod* m);
     DLLLOCAL void parseAddStaticAncestors(QoreMethod* m);
 
-    DLLLOCAL void parseResolveAbstract();
+    //! Returns true if resolution changed method dispatch in this uncommitted hierarchy.
+    DLLLOCAL bool parseResolveAbstract();
 
     DLLLOCAL QoreValue parseFindConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool& found,
             const qore_class_private* class_ctx, bool allow_internal,
@@ -3461,9 +3467,20 @@ public:
         hierarchy_initialized : 1 = false,
         //! set when the class or one of its ancestors has created a method by resolving an abstract method
         /** The inheritance lists of the methods of its subclasses are built again then (see
-            parseUpdateAbstractAncestors(); qore#7307)
+            parseUpdateAbstractAncestors(); qore#7307).  It is kept when the class is committed, as a class created at
+            runtime checks it in its committed parent classes (runtimeUpdateAbstractAncestors()).  A variant installed in an existing method does not set it: the method
+            is in the subclasses' lists already.  See also abstract_dispatch_changed.
         */
-        abstract_method_created : 1 = false
+        abstract_method_created : 1 = false,
+        //! set when abstract resolution installed concrete variants in this class or an uncommitted ancestor
+        /** In an existing or a created method (AbstractMethodMap::parseInit()): the return types of the class's
+            hierarchy are checked again then, as the installed variant is selected before the inherited ones checked
+            when the class was initialized (parseResolveAbstract(); qore#7425).  Only a parsed hierarchy is rechecked:
+            a committed ancestor was resolved before the class was initialized, and code loaded from compiled code or
+            created at runtime is not checked.  Unlike abstract_method_created, a committed class does not propagate
+            it (parseResolveAbstract() returns false for one).
+        */
+        abstract_dispatch_changed : 1 = false
         ;
 
     std::vector<QoreGenericTypeParam> type_params;
@@ -5981,7 +5998,15 @@ public:
     DLLLOCAL int parseCheckReturnTypeHierarchy() const;
     DLLLOCAL int parseResolveHierarchy();
     DLLLOCAL void parseResolveClassMembers();
-    DLLLOCAL void parseResolveAbstract();
+    //! resolves the abstract methods of the class and of its parent classes
+    /** Builds the inheritance lists of the methods again if a parent class created a method by resolving an abstract
+        method (parseUpdateAbstractAncestors()), then checks the return types of the hierarchy again if variants were
+        installed here or in an uncommitted parent class (abstract_dispatch_changed; qore#7425).
+
+        @return true if resolution changed method dispatch in this uncommitted hierarchy (abstract_dispatch_changed
+        for an uncommitted class)
+    */
+    DLLLOCAL bool parseResolveAbstract();
     //! builds the inheritance lists of the class's methods again if a parent class has created a method by resolving
     //! an abstract method since they were built (qore#7307)
     /** Called when the abstract methods of the parent classes have been resolved, before the class's own: the lists

@@ -3,7 +3,8 @@
 
 %modern
 
-#! a library module for asyncio_cancel_ownership.qtest whose initialization submits an async I/O operation
+#! a library module for asyncio_cancel_ownership.qtest whose initialization submits an async I/O operation and
+#! adds a timer
 module AioCancelInitLib {
     version = "1.0";
     desc = "test library module whose initialization submits an async I/O operation";
@@ -46,6 +47,13 @@ public class Lib {
         static *EventNotifier notifier;
         #! the operation object: an operation whose object is deleted is canceled
         static *WaitingOperation op;
+        #! the timer that the module's initialization adds
+        static int timer_id;
+    }
+
+    #! the ID of the timer that the module's initialization adds
+    static int getTimerId() {
+        return timer_id;
     }
 
     #! the key of the operation that the module's initialization submits
@@ -62,6 +70,7 @@ public class Lib {
             "key": getKey(),
             "to": -1s,
         });
+        timer_id = AsyncIoController::addTimerDelay(1D, True);
     }
 
     static bool cancelByKey(string key) {

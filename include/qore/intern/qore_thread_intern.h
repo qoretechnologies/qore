@@ -944,6 +944,13 @@ DLLLOCAL void qore_module_init_set_program(const QoreProgram* pgm);
 */
 DLLLOCAL void qore_module_init_unset_program(const QoreProgram* pgm);
 
+//! returns true while the initialization of a compiled module whose own load is not library code runs in this thread
+/** Its load is the innermost one (a module that it loads has a load of its own): no library code is initialized
+    then, so its Program does not take the library mark nor is it recorded as the Program of an enclosing library
+    module's initialization (see QoreModuleManager::loadBinaryModuleFromDesc(), qore#7361)
+*/
+DLLLOCAL bool qore_module_load_untrusted_aot_init();
+
 //! returns true if a closure of \a pgm created now is created by the initialization of its library module
 /** That is, the innermost module initialization barrier is the one of the library module whose Program is \a pgm;
     such a closure can be run later as deferred module initialization (call_module_init_closure(), qore#6337)
@@ -1245,6 +1252,22 @@ public:
         //! an operation that the cleanup canceled: its work cannot start new asynchronous work (qore#7027)
         Canceled,
     };
+
+    //! Selects the constructor that copies only the module cleanup flags of a context
+    enum class ModuleCleanupFlagsOnly {
+        Flags,
+    };
+
+    //! Creates a context that governs as no sandbox does and carries only the given module cleanup flags: that it is
+    //! work that the module cleanup handed over (@ref module_cleanup_delegate), and that its operation was canceled
+    //! (@ref module_cleanup_canceled); it is not counted by the cleanup (@ref module_cleanup_work)
+    /** For code of the host that runs for work of other code that the module cleanup handed over (the timer callback
+        of the host for a timer of that work, qore#7010): the code is part of the cleanup, but runs in the context of
+        the host, without the sandbox, budgets, restrictions or work generation of the other code.  Allocates nothing
+    */
+    DLLLOCAL QoreSandboxContext(bool delegate, bool canceled, ModuleCleanupFlagsOnly)
+            : module_cleanup_delegate(delegate), module_cleanup_canceled(canceled) {
+    }
 
     //! Creates a context that governs as \a src does (or as no sandbox does, if \a src is nullptr) and is work that
     //! the module cleanup hands over (@ref module_cleanup_delegate) and waits for (@ref module_cleanup_work)
@@ -2727,6 +2750,10 @@ DLLLOCAL int qore_cancellable_sleep(int64 usecs, ExceptionSink* xsink, const cha
     the values assigned while the other data is cleared are released afterwards.
 */
 DLLLOCAL void clear_all_program_thread_local_data();
+
+//! Returns true while the thread's thread-local data of the Programs is released for the last time between two tasks
+//! of a pool worker: save_thread_data() saves nothing then (qore#7398)
+DLLLOCAL bool thread_data_saves_refused();
 DLLLOCAL void parse_cond_push(bool mark = false);
 DLLLOCAL bool parse_cond_else();
 DLLLOCAL bool parse_cond_can_else(const QoreProgramLocation* loc);
@@ -3980,12 +4007,52 @@ private:
     DLLLOCAL void enterSandboxBudgets(ThreadData* td, qore_program_private* pp);
 };
 
+//! The initialization of a module's Program that a runtime parse or commit runs (qore#7289)
+/** A module that is loaded at run time (Program::loadModule(), load_module()) is parsed and committed, and so
+    initialized, while the call of the code that loads it runs: the thread's call Program context (see
+    qore_get_call_program_context()) is still that of the loading code, which stays the caller of the initialization
+    for the sandbox and the parse options of the calls that the initialization makes.  The frames of these calls name
+    the Program of the code that makes them, the module's: a call made while the call context is the one that the
+    loading code set is made by the code that runs in the current Program (see qore_module_init_frame_caller()).
+*/
+struct QoreModuleInitFrames {
+    //! the module's Program being initialized, or nullptr
+    const QoreProgram* pgm = nullptr;
+    //! the call Program context when its initialization started
+    const QoreProgram* call_ctx = nullptr;
+};
+
+
+//! Sets the initialization of a module's Program that the thread runs while a runtime parse or commit has switched
+//! the thread to the Program (qore#7289); restores the previous setting when it goes out of scope
+class QoreModuleInitFramesHelper {
+public:
+    DLLLOCAL QoreModuleInitFramesHelper() {
+    }
+
+    //! Sets the initialization of \a pgm if it is a module's Program; the call context is the thread's current one
+    DLLLOCAL void set(QoreProgram* pgm);
+
+    //! Restores the previous setting, if set() changed it
+    DLLLOCAL void reset();
+
+    DLLLOCAL ~QoreModuleInitFramesHelper() {
+        reset();
+    }
+
+private:
+    QoreModuleInitFrames old;
+    bool active = false;
+};
+
 class ProgramRuntimeParseContextHelper {
 protected:
     QoreProgram* old_pgm;
     //! the thread's local data before the switch, which the destructor restores
     ThreadLocalProgramData* old_tlpd;
     bool restore;
+    //! the initialization of a module's Program that the switch starts (qore#7289)
+    QoreModuleInitFramesHelper init_frames;
 
     //! switches the thread to the Program locked for parsing: the current Program and its thread-local data
     /** The thread's local data is switched with the current Program, as code of the Program can run under the parse
@@ -4022,6 +4089,8 @@ protected:
     //! the Program whose parse lock the helper took for code that runs in it, without changing the thread's
     //! Program (issue #6568), or nullptr
     QoreProgram* locked_pgm = nullptr;
+    //! the initialization of a module's Program that the switch starts (qore#7289)
+    QoreModuleInitFramesHelper init_frames;
 
 public:
     DLLLOCAL ProgramRuntimeParseCommitContextHelper(ExceptionSink* xsink, QoreProgram* pgm);

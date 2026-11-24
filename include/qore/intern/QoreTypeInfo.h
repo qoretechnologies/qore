@@ -3603,8 +3603,11 @@ public:
 
 protected:
     // returns true if this type could contain an object or a closure
+    /** a reference leads to the closure-bound variable that it refers to, which can hold a reference back (qore#7329):
+        a variable of this type is not a leaf of the graph that the cycle collector walks
+    */
     DLLLOCAL virtual bool needsScanImpl() const {
-        return false;
+        return true;
     }
 };
 
@@ -3615,8 +3618,9 @@ public:
 
 protected:
     // returns true if this type could contain an object or a closure
+    // (a reference leads to the closure-bound variable that it refers to, see QoreReferenceTypeInfo)
     DLLLOCAL virtual bool needsScanImpl() const {
-        return false;
+        return true;
     }
 };
 

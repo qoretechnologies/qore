@@ -1243,16 +1243,10 @@ QoreValue RunTimePseudoMethodReferenceNode::dispatchNamed(const QoreListNode* ar
     }
     // the pseudo-method with its variants bound to the arguments by name, as a direct named call does
     // (MethodCallNode::execPseudoNamed())
-    const qore_class_private* pseudo_cls = qore_class_private::get(*qore_pseudo_get_class(val.getType()));
-    const QoreMethod* w = pseudo_cls->runtimeFindPseudoMethod(val, method.c_str(), xsink);
-    if (!w) {
-        assert(*xsink);
-        return QoreValue();
-    }
     // with no class context: a pseudo-method has no private variants, and the reference keeps no class, which could
     // belong to a Program that is deleted before the reference is called
-    return NMETHF(qore_method_private::get(*w)->func)->evalPseudoMethodNamed(xsink, rc, val, args, false,
-        qore_no_class_ctx(), arg_names, policy);
+    return pseudo_classes_eval_named(val, method.c_str(), args, false, qore_no_class_ctx(), arg_names, policy, rc,
+        xsink);
 }
 
 bool RunTimePseudoMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {

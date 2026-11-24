@@ -2546,7 +2546,14 @@ if (x || y)
     object raises \c OBJECT-ALREADY-DELETED, including pseudo-methods such as <tt>val()</tt> and calls from
     closures that capture the weak reference.  A weak reference held by a hash, a list or an object member reads as
     its target, also when the target is an object that has been destroyed: \c exists returns @ref True for the
-    destroyed object, and calling a method on it raises \c OBJECT-ALREADY-DELETED.\n<br>
+    destroyed object, and calling a method on it raises \c OBJECT-ALREADY-DELETED.  A variable that holds a weak
+    reference can be given to a @ref lvalue_references "reference" parameter of the type of its target (ex:
+    <tt>reference<object></tt>, <tt>reference<hash></tt>): the variable keeps the weak reference, and a change
+    through the reference changes the target (a destroyed object is bound as for a variable that holds it, and a hash
+    or a list freed under the weak reference cannot be changed, as for an assignment through the weak reference); a
+    target that the parameter's type would convert to another value (ex: an untyped hash for a
+    <tt>reference<hash<string, int>></tt>) is refused with \c RUNTIME-TYPE-ERROR, as the weak reference would not
+    designate the converted value.\n<br>
     The operators that change the list or the hash that an lvalue holds (an element or key assignment, the
     @ref plus_equals_operator "+=" operator, a \c -= on a hash, @ref push "push", @ref unshift "unshift",
     @ref pop "pop", @ref shift "shift", @ref splice "splice", @ref extract "extract", @ref delete "delete",
