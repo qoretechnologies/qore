@@ -924,6 +924,7 @@ class AsyncIoControllerPriv : public AbstractPrivateData {
     friend class AsyncIoRegistrationCloseTest;
     friend class AsyncIoClosedPollableTest;
     friend class AsyncIoStaleReadinessTest;
+    friend class AsyncIoDeadlineReadyTest;
     friend class AsyncIoStoppingThreadTest;
     friend class AsyncIoDispatcherCancelTest;
     friend class AsyncIoReleaseCountedScopeTest;
@@ -1789,6 +1790,9 @@ private:
         */
         QoreObject* cached_sock_obj = nullptr;
         uint64_t last_queued_gen = 0;   //!< Phase 1 generation when last queued (duplicate prevention)
+        //! Phase 1 generation in which a wake (a WakeSocket command, a close wake, an SSL-deferred recheck) last
+        //! queued the operation, which then gets no last attempt at its deadline (qore#7480)
+        uint64_t last_woken_gen = 0;
         //! The number of the operation's last waits in a row for events of an object that has no descriptor
         /** The object was closed before its descriptor could be registered; see updateEventLoopRegistration() and
             makeDescriptorlessWaitException()
@@ -2315,6 +2319,11 @@ private:
         //! Test hook: called by the thread with the controller's lock held just before it checks its command queue
         //! for the last time before it polls its event loop; it may push a command to the queue
         std::function<void(IoThreadContext&)> dbg_before_poll;
+        //! Test hook: called by the thread with the controller's lock held when it starts the snapshot of an
+        //! iteration (Phase 1), with whether the iteration has operations that are ready or woken; returns the
+        //! microseconds added to the time with which the iteration compares the operations' deadlines, so that a
+        //! test can make a deadline pass without waiting for it (qore#7480)
+        std::function<int64(IoThreadContext&, bool)> dbg_phase1_time_offset;
         //! Test hook: when set, the thread waits on \c dbg_cond before it drains its command queue until it is
         //! cleared, running the actions of \c dbg_actions meanwhile (see dbgHoldIoCommands())
         bool dbg_hold_commands = false;
@@ -3353,6 +3362,10 @@ private:
         (see updateEventLoopRegistration()); one that waits for the object again would only run again and again.
     */
     DLLLOCAL static QoreHashNode* makeDescriptorlessWaitException(PollInfo& pinfo, ExceptionSink* xsink);
+
+    //! Returns the SOCKET-TIMEOUT exception hash of an operation whose deadline has passed, or nullptr on error
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD static QoreHashNode* makeOperationTimeoutException(
+        ExceptionSink* xsink);
 
     //! Unregister an operation from the EventLoop
     /** @param op_id the operation's ID; see OpCache

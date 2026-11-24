@@ -146,6 +146,29 @@ public:
         return false;
     }
 
+    //! Returns true if the operation gets a last step when its deadline has passed
+    /** The async I/O controller ends an operation whose deadline has passed with a timeout, also when its descriptor
+        was reported ready in the same iteration of its I/O thread.  An operation that returns true here gets one last
+        step instead, whether or not its descriptor was reported ready in that iteration, unless something else woke
+        it in that iteration or its descriptor was reported with an error or hang-up: a step that completes it (with a
+        result or an error) is delivered, and a step that asks to wait again ends it with the timeout.  This makes a
+        result that is available at the deadline available to the caller (ex: a connection in a listener's backlog
+        when the I/O thread gets to the listener only after the deadline) (qore#7480).
+
+        Return true only if the step of the operation, ready or not, either completes it or asks to wait again
+        without starting anything (no other phase, no data consumed and dropped, no other I/O started), and only for
+        an operation whose continuePoll() runs on the I/O thread (see needsWorkerDispatch()); an accept that
+        negotiates TLS, for example, must not, as its step can accept a connection and start the TLS handshake, which
+        the timeout would then discard.
+
+        @return false by default (the timeout ends the operation)
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT virtual bool completesInLastAttempt() const {
+        return false;
+    }
+
     //! Returns the output of the operation (default: nothing)
     DLLEXPORT virtual QoreValue getOutput() const {
         return QoreValue();
