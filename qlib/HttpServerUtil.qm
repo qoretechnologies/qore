@@ -2790,39 +2790,6 @@ public class Http1BodyReader {
     }
 }
 
-#! abstract class for streaming HTTP chunked requests/responses
-/** This class is the base class for handling HTTP stream requests; i.e. with chunked data
-
-    The calling order is as follows:
-    - constructor(): this is called when the request is received
-    - recv(): this is called once for each HTTP chunk (if data is sent chunked), and then once with any trailer fields
-      sent after the body (also for HTTP/2 and HTTP/3).  If data is sent non-chunked, then this method is called with
-      the monolithic message body and then again with @ref nothing to signify the end of the transfer and to simulate
-      a chunked transfer.  The simulation of a chunked transfer or the actual chunked receive with the callbacks is
-      made by the handleRequest() method. Subclasses should re-implement recvImpl() which is called by this method
-
-    @par Request Bodies With a Content-Length
-    How the body of a request with a \c Content-Length reaches the object depends on whether the handler wants it as
-    a stream (see
-    @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "AbstractHttpRequestHandler::wantsBodyStreaming()"):
-    - <b>as a stream</b>: the \c body argument of the constructor is @ref nothing, and recv() is called once for each
-      part of the body, with @ref binary data (also for a text content type) and each byte once, then once with the
-      end of the body.  Over HTTP/1.x, each part has at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize"
-      bytes, whatever the size of the body: a body of at most
-      @ref HttpServer::DefaultBodyStreamThreshold "DefaultBodyStreamThreshold" bytes, which the server reads before
-      the request is dispatched, is given in the same parts as a larger one, which is read from the socket as the
-      parts are given (see @ref HttpServer::Http1BodyReader "Http1BodyReader")
-    - <b>whole</b> (the default): the complete body is the \c body argument of the constructor, decoded as text for a
-      text content type (a REST handler gives it deserialized), and the same body is also given in a single call of
-      recv() before the end of the body; a handler that reads the body in recv() must then ignore the constructor's
-      argument, or the reverse
-    - getResponseHeaderMessage(): this is called after the message body has been received to get the response headers
-      and optionally a message body.  Subclasses should reimplement getResponseHeaderMessageImpl() which is called by
-      this method
-    - send(): this is called if no message body is returned by getResponseHeaderMessage(); each time this method
-      returns data, the data is sent in a response chunk; when this method returns @ref nothing, then no more data is
-      sent.  Subclasses should re-implement sendImpl() which is called by this method
-*/
 #! The raw requests being served on the thread, the innermost last (qore#6843); see HttpRawRequestScope
 thread_local *list<hash<auto>> http_raw_requests;
 
@@ -2937,6 +2904,39 @@ public hashdecl HttpFilteredRequestInfo {
     list<string> withheld = ();
 }
 
+#! abstract class for streaming HTTP chunked requests/responses
+/** This class is the base class for handling HTTP stream requests; i.e. with chunked data
+
+    The calling order is as follows:
+    - constructor(): this is called when the request is received
+    - recv(): this is called once for each HTTP chunk (if data is sent chunked), and then once with any trailer fields
+      sent after the body (also for HTTP/2 and HTTP/3).  If data is sent non-chunked, then this method is called with
+      the monolithic message body and then again with @ref nothing to signify the end of the transfer and to simulate
+      a chunked transfer.  The simulation of a chunked transfer or the actual chunked receive with the callbacks is
+      made by the handleRequest() method. Subclasses should re-implement recvImpl() which is called by this method
+
+    @par Request Bodies With a Content-Length
+    How the body of a request with a \c Content-Length reaches the object depends on whether the handler wants it as
+    a stream (see
+    @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "AbstractHttpRequestHandler::wantsBodyStreaming()"):
+    - <b>as a stream</b>: the \c body argument of the constructor is @ref nothing, and recv() is called once for each
+      part of the body, with @ref binary data (also for a text content type) and each byte once, then once with the
+      end of the body.  Over HTTP/1.x, each part has at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize"
+      bytes, whatever the size of the body: a body of at most
+      @ref HttpServer::DefaultBodyStreamThreshold "DefaultBodyStreamThreshold" bytes, which the server reads before
+      the request is dispatched, is given in the same parts as a larger one, which is read from the socket as the
+      parts are given (see @ref HttpServer::Http1BodyReader "Http1BodyReader")
+    - <b>whole</b> (the default): the complete body is the \c body argument of the constructor, decoded as text for a
+      text content type (a REST handler gives it deserialized), and the same body is also given in a single call of
+      recv() before the end of the body; a handler that reads the body in recv() must then ignore the constructor's
+      argument, or the reverse
+    - getResponseHeaderMessage(): this is called after the message body has been received to get the response headers
+      and optionally a message body.  Subclasses should reimplement getResponseHeaderMessageImpl() which is called by
+      this method
+    - send(): this is called if no message body is returned by getResponseHeaderMessage(); each time this method
+      returns data, the data is sent in a response chunk; when this method returns @ref nothing, then no more data is
+      sent.  Subclasses should re-implement sendImpl() which is called by this method
+*/
 public class AbstractStreamRequest {
     public {
         #! The keys of the request context that getContext() and filterContext() give
