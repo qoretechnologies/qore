@@ -1,0 +1,185 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 keep-alive connections with chunked request bodies over local sockets
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The trailer section of a chunked request body ends where every reader ends it: a trailer section with a line that
+    ends with a bare LF, with an empty line before its end, or with a line that is not a field line, fails the request
+    and the connection is closed after the response, so that the bytes after it are never served as another request,
+    whether the handler reads the body or the server reads it after the handler.  A valid trailer section leaves the
+    connection open, and its fields are given to the handler.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpServerChunkedTrailerSectionTest
+
+#! a handler that reads the chunked request body as the path says
+class TrailerSectionHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the paths of the requests served
+        list<string> served = ();
+    }
+
+    private {
+        Mutex m();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        m.lock();
+        served += hdr.path;
+        m.unlock();
+
+        *hash<auto> trailers;
+        switch ((hdr.path =~ x/^([^-]+)/)[0]) {
+            case "read":
+                getMessageBody(s, hdr, body, True, NOTHING, \trailers);
+                break;
+            case "callback":
+                s.readHTTPChunkedBodyWithCallback(sub (hash<auto> v) {
+                    if (v.hdr) {
+                        trailers = v.hdr;
+                    }
+                }, 5s);
+                break;
+            # "noread" and the other requests do not read a body
+        }
+        return makeResponse(200, sprintf("served %s %y", hdr.path, trailers."x-trailer"),
+            {"Content-Type": "text/plain"});
+    }
+}
+
+class HttpServerChunkedTrailerSectionTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        TrailerSectionHandler handler();
+        int port;
+
+        #! the paths of the requests, by how the body is read
+        const Paths = ("read", "callback", "noread");
+
+        #! the ends of a body after its first chunk that are refused: the last chunk and a trailer section; a
+        #! request in them is never served
+        const InvalidEnds = {
+            "bare-lf-empty-line": "0\r\n\nGET /smuggled HTTP/1.1\r\nHost: localhost\r\n\r\n",
+            "bare-lf-field-line": "0\r\nX-Trailer: a\n\r\nGET /smuggled HTTP/1.1\r\nHost: localhost\r\n\r\n",
+            "bare-lf-after-field": "0\r\nX-Trailer: a\r\n\nGET /smuggled HTTP/1.1\r\nHost: localhost\r\n\r\n",
+            "not-a-field-line": "0\r\nX-Trailer: a\r\nnot a field line\r\n\r\n",
+        };
+    }
+
+    constructor() : Test("HttpServerChunkedTrailerSectionTest", "1.0") {
+        addTestCase("a valid trailer section", \validTest());
+        addTestCase("a trailer section that is refused", \invalidTest());
+
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelFatal()),
+        });
+        on_exit delete server;
+        server.setDefaultHandler("trailers", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"service": 0, "node": "127.0.0.1"}).port;
+        server.waitForAsyncIo();
+        set_return_value(main());
+    }
+
+    validTest() {
+        foreach string path in (Paths) {
+            # the request after the body is served on the same connection
+            Socket c = connect();
+            on_exit c.close();
+            c.send(header(path + "-valid") + "5\r\nhello\r\n0\r\nX-Trailer: a\r\n\r\n"
+                + "GET /after-valid HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            hash<auto> resp = readResponse(c);
+            assertEq(200, resp.status_code, path);
+            assertNeq("close", resp.connection, path);
+            if (path != "noread") {
+                assertEq(sprintf("served %s-valid \"a\"", path), resp.body, path);
+            }
+            resp = readResponse(c);
+            assertEq(200, resp.status_code, path);
+            assertEq("served after-valid null", resp.body, path);
+        }
+    }
+
+    invalidTest() {
+        foreach hash<auto> i in (InvalidEnds.pairIterator()) {
+            foreach string path in (Paths) {
+                string label = sprintf("%s %s", path, i.key);
+                string req = sprintf("%s-%s", path, i.key);
+                Socket c = connect();
+                on_exit c.close();
+                c.send(header(req) + "5\r\nhello\r\n" + i.value
+                    + "GET /after-invalid HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                hash<auto> resp = readResponse(c);
+                assertEq("close", resp.connection, label);
+                # the connection is closed: the bytes after the body are not answered as another request
+                *hash<auto> next;
+                try {
+                    next = readResponse(c);
+                } catch (hash<ExceptionInfo> ex) {
+                }
+                assertNothing(next, label);
+                assertFalse(inlist("smuggled", handler.served), label);
+                assertFalse(inlist("after-invalid", handler.served), label);
+                checkServed(label);
+            }
+        }
+    }
+
+    #! checks that the server answers a request on another connection
+    private checkServed(string label) {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /other HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> resp = readResponse(c);
+        assertEq(200, resp.status_code, label);
+        assertEq("served other null", resp.body, label);
+    }
+
+    #! returns the header of a chunked request for the given path
+    private static string header(string path) {
+        return sprintf("POST /%s HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n", path);
+    }
+
+    private Socket connect() {
+        Socket c();
+        c.connect("127.0.0.1:" + port, 10s);
+        return c;
+    }
+
+    #! reads a response with a Content-Length body
+    private static hash<auto> readResponse(Socket c) {
+        hash<auto> resp = c.readHTTPHeader(5s);
+        int len = resp."content-length".toInt();
+        resp.body = len ? c.recv(len, 5s) : "";
+        return resp;
+    }
+}

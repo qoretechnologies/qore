@@ -5512,9 +5512,10 @@ private:
                     return -1;
                 }
                 // the trailer fields are field lines, checked as RFC 9112 requires; an obsolete line folding is
-                // replaced with spaces
+                // replaced with spaces; the lines of a trailer section are read up to CRLF, so a bare LF line end or
+                // an empty line in it is refused: the text after it would be lost
                 if (qore_socket_private::checkHttpFieldLines(xsink, const_cast<char*>(trailers.c_str()), false,
-                        false, "READ-HTTP-CHUNK-ERROR", "chunked body trailer")) {
+                        false, "READ-HTTP-CHUNK-ERROR", "chunked body trailer", true, true)) {
                     return -1;
                 }
                 // the trailer fields are given under "trailers", and at the top level as the socket's field
@@ -6690,9 +6691,10 @@ int my_socket_priv::convertHeaderToHash(QoreHashNode& h, QoreString& hdr, Except
         return -1;
     }
     // the trailer fields are field lines, checked as RFC 9112 requires; an obsolete line folding is replaced with
-    // spaces
+    // spaces; the lines of a trailer section are read up to CRLF, so a bare LF line end or an empty line in it is
+    // refused: the text after it would be lost
     if (qore_socket_private::checkHttpFieldLines(xsink, const_cast<char*>(hdr.c_str()), false, false,
-            "READ-HTTP-CHUNK-ERROR", "chunked body trailer")) {
+            "READ-HTTP-CHUNK-ERROR", "chunked body trailer", true, true)) {
         return -1;
     }
     QoreHashNode* fields = nullptr;
@@ -21033,7 +21035,25 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkCrlf(ExceptionSink
             body_state = BodyState::DONE;
             return nullptr;
         }
-        // Trailer line — read next line; the lines of the section count together against the limit
+        // Trailer line — checked as the other readers of a chunked body check the trailer section, so that the
+        // section ends where they end it: a field line, or an obsolete line folding after one, that ends with CRLF;
+        // a bare LF line end or an empty line in the section is refused, as the text after it would be lost
+        // (the fields are not given by this reader)
+        if (!remaining || (*line->c_str() != ' ' && *line->c_str() != '\t')) {
+            std::string text(line->c_str(), line->size());
+            if (qore_socket_private::checkHttpFieldLines(xsink, &text[0], false, false, "READ-HTTP-CHUNK-ERROR",
+                    "chunked body trailer", true, true)) {
+                body_state = BodyState::DONE;
+                return nullptr;
+            }
+        } else if (line->size() < 2 || memchr(line->c_str(), '\n', line->size() - 1)
+                || memchr(line->c_str(), '\r', line->size() - 2)) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "invalid HTTP chunked body trailer received with a "
+                "bare CR or LF character in an obsolete line folding");
+            body_state = BodyState::DONE;
+            return nullptr;
+        }
+        // read the next line; the lines of the section count together against the limit
         printd(5, "SocketReadHttpBodyPollOperation::handleRecvChunkCrlf() trailer line\n");
         remaining += static_cast<int64_t>(line->size());
         sock_obj->ref();

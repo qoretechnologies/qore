@@ -5935,7 +5935,8 @@ hash<auto> ans = sock.readHTTPChunkedBody(20s);
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
     end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize()
     @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
 */
@@ -5969,7 +5970,8 @@ hash<auto> ans = sock.readHTTPChunkedBodyBinary(20s);
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
     end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize()
     @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
 */
@@ -6008,7 +6010,8 @@ hash<auto> ans = sock.readHTTPChunk(20s);
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
     end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the chunk exceeds the limit set with setMaxChunkedBodySize()
     @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
 */
@@ -6040,7 +6043,8 @@ hash<auto> ans = sock.readHTTPChunkedBodyToOutputStream(outputStream, 20s);
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
     end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
     @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
     no data over the limit is written to the stream
@@ -6080,7 +6084,8 @@ sock.readHTTPChunkedBodyWithCallback(recv_callback, 20s);
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
     end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
     @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
     no data over the limit is passed to the callback
@@ -6124,7 +6129,8 @@ sock.readHTTPChunkedBodyBinaryWithCallback(recv_callback, 20s);
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
     end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
     @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
     no data over the limit is passed to the callback

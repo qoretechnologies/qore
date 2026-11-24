@@ -4371,14 +4371,17 @@ public:
 
     //! checks the lines of an HTTP header or trailer section as RFC 9112 requires
     /** - a CR is allowed only before the LF that ends a line; a bare CR is invalid (RFC 9112 section 2.2)
-        - a line may end with LF instead of CRLF (section 2.2)
+        - a line may end with LF instead of CRLF (section 2.2), unless \a reject_bare_lf is true
         - a field line has a colon, the field name before it is not empty and has no whitespace, as between the name
           and the colon (sections 5 and 5.1)
         - a line that starts with whitespace is an obsolete line folding (section 5.2); it is refused if
           \a reject_obs_fold is true (a request), and is otherwise replaced in place with spaces; a whitespace line
           before the first field line is refused (section 2.2)
 
-        The check ends at the first empty line, which ends the section.
+        The check ends at the first empty line, which ends the section; if \a end_at_empty_line is true, text after
+        it is refused: the readers find the end of a section where its line ends are CRLF, and a parser that ended it
+        at an earlier empty line would lose the text after it, which the sender meant as something else (the next
+        message, or the rest of the section)
 
         @param xsink for the exception
         @param str the text received, NUL-terminated; obsolete line foldings are replaced with spaces in it
@@ -4386,11 +4389,13 @@ public:
         @param reject_obs_fold true to refuse an obsolete line folding, false to replace it with spaces
         @param err the error code of the exception
         @param what what the text is: \c "header" or \c "chunked body trailer"
+        @param reject_bare_lf true to refuse a line that ends with LF alone
+        @param end_at_empty_line true to refuse text after the first empty line
 
         @return 0 if the text is valid, -1 if an exception was raised
     */
     DLLLOCAL static int checkHttpFieldLines(ExceptionSink* xsink, char* str, bool skip_start_line, bool reject_obs_fold,
-            const char* err, const char* what) {
+            const char* err, const char* what, bool reject_bare_lf = false, bool end_at_empty_line = false) {
         assert(str);
         bool first_field = true;
         bool start_line = skip_start_line;
@@ -4412,8 +4417,18 @@ public:
                 ++e;
             }
             char* le = (e > line && e[-1] == '\r') ? e - 1 : e;
+            if (reject_bare_lf && *e == '\n' && le == e) {
+                xsink->raiseException(err, "invalid HTTP %s received with a line that ends with a bare LF character "
+                    "at byte offset %zu; a line must end with CRLF", what, static_cast<size_t>(e - str));
+                return -1;
+            }
             // an empty line ends the section
             if (le == line) {
+                if (end_at_empty_line && *e && e[1]) {
+                    xsink->raiseException(err, "invalid HTTP %s received with text after the empty line at byte "
+                        "offset %zu that ends it", what, static_cast<size_t>(line - str));
+                    return -1;
+                }
                 break;
             }
             if (start_line) {
