@@ -5576,6 +5576,10 @@ public class AbstractHttpSocketHandlerInterface {
         connection registry should override this method and remove \a cid from
         their registry.
 
+        The server also calls it for an HTTP/1.x event stream whose setup failed, which may have failed before the
+        handler registered the connection: an implementation does nothing for a \a cid that it has not registered
+        (qore#7376).
+
         @param cid the SSE connection ID
     */
     deregisterConnection(softstring cid) {
