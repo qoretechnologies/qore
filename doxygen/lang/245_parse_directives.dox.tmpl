@@ -1929,22 +1929,40 @@ ArrayList l();
     - the directories of the module path, which the error for a module that is not found does not list
     - the directories of the sources of code (since %Qore 3.0): the locations that code with this option is given, in
       the @ref Qore::ExceptionInfo "ExceptionInfo" hashes of the exceptions that it catches (\c file, \c source, each
-      \c callstack entry and the chained exceptions in \c next) and in the call stacks that
+      \c callstack entry and the chained exceptions in \c next), in the call stacks that
       @ref Qore::get_thread_call_stack() "get_thread_call_stack()",
       @ref Qore::get_all_thread_call_stacks() "get_all_thread_call_stacks()" and
-      @ref Qore::get_parent_caller_location() "get_parent_caller_location()" return, name each file without its
-      directory, whether the code is that of modules, of the Program itself or of the host, while the code of the
-      host gets the same exceptions with their full paths
+      @ref Qore::get_parent_caller_location() "get_parent_caller_location()" return, and in the
+      @ref Qore::SourceLocationInfo "SourceLocationInfo" hashes of the reflection API (\c getSourceLocation()), name
+      each file without its directory, whether the code is that of modules, of the Program itself or of the host;
+      the code of the host gets the same exceptions with their full paths.  The code that receives a location decides:
+      the code of a Program with this option, and code that runs for it (module code that it calls, threads and
+      asynchronous work that it starts)
     - the directories of the files of modules in the messages of module loads (since %Qore 3.0): the exceptions and
-      warnings of a load that code with this option requests, and of the loads of the modules that it requires, name
-      each file without its directory, and leave out the details that the dynamic loader and the readers of module
-      files give in text of their own; the \c desc of a child module in the \c "child-modules" of a module
+      warnings of a load that code with this option requests, and of the loads that it makes (dependencies, child
+      modules, the initialization of AOT modules), name each file without its directory, and leave out the details
+      that the dynamic loader and the readers of module files give in text of their own; so do the errors of
+      \c %%include in the code that it parses; the \c desc of a child module in the \c "child-modules" of a module
       description is replaced by a note when the error was built for code without this option
 
     @par Known Limitation:
-    The text of an exception that module code raises itself (its \c desc and \c arg) is that of the module's choosing,
-    and is given unchanged; so is an exception hash that other code made and passed on, which has the form that the
-    code that caught it was given.
+    The following still give paths of the host to code with this option:
+    - the text of an exception that module code raises itself (its \c desc and \c arg), which is that of the module's
+      choosing
+    - get_script_path() and get_script_dir() of the Program itself, which return the path that the host set for it
+      with @ref Qore::Program::setScriptPath() "Program::setScriptPath()" or by parsing it from a file, unchanged
+    - an exception hash that other code made and passed on, which has the form that the code that caught it was given;
+      for example one that trusted code caught under a host grant (@ref Qore::SandboxManager::callWithSystemPolicy()
+      "SandboxManager::callWithSystemPolicy()") and returned
+    .
+    A debugger (@ref Qore::DebugProgram "DebugProgram", which needs the \c DEBUGGER functional domain) has full
+    access to the code that it debugs, and is given the locations of its exceptions with their full paths.
+
+    The code of the host is given shortened locations in a few cases where the location was made for code with this
+    option: the \c error of the thread events (@ref Qore::Program::subscribeThreadEvents()
+    "Program::subscribeThreadEvents()") of the threads of a Program with this option, which are made in the thread,
+    and the messages of a module load that the host makes while a load for such code is in progress, or of a module
+    that such code loaded first (the \c desc of its child modules).
 
     <hr>
     @section no-external-process %no-external-process

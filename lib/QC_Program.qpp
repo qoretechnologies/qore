@@ -77,8 +77,14 @@ static void program_set_independent_creator(QoreProgram& pgm, bool independent, 
 #endif
 
 //! source location information
-/**
+/** Code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" is given the \c file and \c source with
+    the file names of the sources only, as their directories are external information; see
+    @ref no-external-info "%no-external-info"
+
     @since %Qore 0.9
+
+    @since %Qore 3.0 the files are named without their directories for code restricted with
+    @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"
 */
 hashdecl SourceLocationInfo {
     //! if @ref True then the code is builtin and there is no user source location

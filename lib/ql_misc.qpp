@@ -4116,6 +4116,10 @@ string encode_uri_request(string url) [flags=CONSTANT,NAMED_ARGS] {
     @code{.py}
 *string str = get_script_path();
     @endcode
+
+    @note for code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", this function returns the
+    path that the host set for the Program, unchanged, while the locations of code that such code is given name the
+    files without their directories (see @ref no-external-info "%no-external-info")
 */
 *string get_script_path() {
    return q_get_runtime_call_program(runtime_cfg)->getScriptPath();
@@ -4128,6 +4132,10 @@ string encode_uri_request(string url) [flags=CONSTANT,NAMED_ARGS] {
     @code{.py}
 *string str = get_script_dir();
     @endcode
+
+    @note for code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", this function returns the
+    directory that the host set for the Program, unchanged, while the locations of code that such code is given name
+    the files without their directories (see @ref no-external-info "%no-external-info")
 */
 *string get_script_dir() {
    return q_get_runtime_call_program(runtime_cfg)->getScriptDir();

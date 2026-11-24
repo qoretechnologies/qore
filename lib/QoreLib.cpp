@@ -5770,6 +5770,11 @@ QoreHashNode* get_source_location(const QoreProgramLocation* loc) {
 
     ph->setKeyValueIntern("offset", loc->offset);
 
+    // the directories of the sources are external information: code restricted from it gets the file names (qore#7507)
+    if (runtime_no_external_info()) {
+        qore_restrict_location_paths(**h);
+    }
+
     return h.release();
 }
 

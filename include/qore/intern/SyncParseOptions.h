@@ -54,6 +54,22 @@
 */
 DLLLOCAL extern std::mutex qore_parse_options_values_mutex;
 
+//! True once any Program has had options with @ref PO_NO_EXTERNAL_INFO (qore#7507)
+/** Set when such options are stored (SyncParseOptions) and never cleared: every restriction from external information
+    that code runs with comes from the options of a Program (its own, those recorded from it for its callers, threads
+    and work, see qore_get_calling_code_restrictions()), so code in a process that never had them is not restricted,
+    and the check of the code that receives a location (runtime_no_external_info()) needs no lookup of the thread's
+    data then
+*/
+DLLLOCAL extern std::atomic<bool> qore_no_external_info_used;
+
+//! Records that options with @ref PO_NO_EXTERNAL_INFO are stored (see qore_no_external_info_used)
+DLLLOCAL inline void qore_note_parse_options_stored(const QoreParseOptions& po) {
+    if ((po & PO_NO_EXTERNAL_INFO) && !qore_no_external_info_used.load(std::memory_order_relaxed)) {
+        qore_no_external_info_used.store(true);
+    }
+}
+
 class SyncParseOptions;
 
 //! Parse options of a Program that are in effect in the parsing thread only, for a part of a parse (issue #6207)
@@ -240,6 +256,7 @@ public:
     }
 
     DLLLOCAL SyncParseOptions(const QoreParseOptions& po) : cur(&*values.insert(po).first) {
+        qore_note_parse_options_stored(po);
     }
 
     SyncParseOptions(const SyncParseOptions&) = delete;
@@ -387,6 +404,7 @@ private:
             || !q_parse_overlay_find(this));
 #endif
         // the insertion is never under way when the process is copied by fork() (issue #6177)
+        qore_note_parse_options_stored(po);
         std::lock_guard<std::mutex> lg(qore_parse_options_values_mutex);
         cur.store(&*values.insert(po).first, std::memory_order_release);
     }

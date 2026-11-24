@@ -10724,7 +10724,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                             if (!xsink.isException()) {
                                 xsink.raiseException("AOT-ERROR", "the initialization of module '%s', which "
                                     "the AOT-compiled program (%s) requires, failed", dep.c_str(),
-                                    (label && *label) ? label : "<unknown path>");
+                                    label && *label ? qore_caller_msg_path(label).c_str() : "<unknown path>");
                             }
                             xsink.handleExceptions();
                             // the other dependencies are loaded, and their initialization runs, before the program
@@ -10738,7 +10738,8 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                                 "the AOT-compiled program (%s) requires module '%s', which could not "
                                 "be loaded; the program was AOT-compiled against '%s' (its compiled "
                                 "code references that module's symbols) and cannot be loaded without it",
-                                (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
+                                label && *label ? qore_caller_msg_path(label).c_str() : "<unknown path>",
+                                dep.c_str(), dep.c_str());
                             xsink.handleExceptions();
                             // the other dependencies are loaded, and their initialization runs, before the program
                             // fails, as in the interpreter, which loads the other modules of the program
@@ -12684,7 +12685,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                             if (!xsink.isException()) {
                                 xsink.raiseException("AOT-ERROR", "the initialization of module '%s', which "
                                     "the AOT-compiled program (%s) requires, failed", dep.c_str(),
-                                    (label && *label) ? label : "<unknown path>");
+                                    label && *label ? qore_caller_msg_path(label).c_str() : "<unknown path>");
                             }
                             xsink.handleExceptions();
                             // the other dependencies are loaded, and their initialization runs, before the program
@@ -12698,7 +12699,8 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                                 "the AOT-compiled program (%s) requires module '%s', which could not "
                                 "be loaded; the program was AOT-compiled against '%s' (its compiled "
                                 "code references that module's symbols) and cannot be loaded without it",
-                                (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
+                                label && *label ? qore_caller_msg_path(label).c_str() : "<unknown path>",
+                                dep.c_str(), dep.c_str());
                             xsink.handleExceptions();
                             // the other dependencies are loaded, and their initialization runs, before the program
                             // fails, as in the interpreter, which loads the other modules of the program
@@ -15821,11 +15823,14 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     std::string runtime_module_path = std::move(aot_module_init_context_path);
     aot_module_init_context_path.clear();
     const char* module_context_path = runtime_module_path.empty() ? label : runtime_module_path.c_str();
-    std::string module_context_desc =
-        (module_context_path && *module_context_path) ? module_context_path : "<unknown module path>";
+    // the messages of the initialization are built for the code that loads the module: they name files without their
+    // directories for code restricted from external information (qore#7507)
+    QoreRestrictedMessageScopeHelper msg_scope(qore_caller_no_external_info(aot_module_init_loader_pgm));
+    std::string module_context_desc = (module_context_path && *module_context_path)
+        ? qore_msg_path(module_context_path) : std::string("<unknown module path>");
     if (label && *label && (!module_context_path || strcmp(label, module_context_path))) {
         module_context_desc += "; source label: ";
-        module_context_desc += label;
+        module_context_desc += qore_msg_path(label);
     }
 
     // Phase 1.5 load-time profiling (temporary): QORE_AOT_LOAD_TRACE=1
@@ -15958,7 +15963,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         std::string dom_error;
         if (!readModuleDomains(metadata_reader, own_dom, dom_error)) {
             QoreStringNode* err = new QoreStringNodeMaker("AOT module metadata read error for module '%s' (%s): %s",
-                mod_name ? mod_name : "<unknown>", module_context_desc.c_str(), dom_error.c_str());
+                mod_name ? mod_name : "<unknown>", module_context_desc.c_str(),
+                qore_msg_detail(dom_error.c_str()));
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }
@@ -15994,7 +16000,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         std::string dom_error;
         if (!readFunctionalDomain(metadata_reader, used_dom, dom_error)) {
             QoreStringNode* err = new QoreStringNodeMaker("AOT module metadata read error for module '%s' (%s): %s",
-                mod_name ? mod_name : "<unknown>", module_context_desc.c_str(), dom_error.c_str());
+                mod_name ? mod_name : "<unknown>", module_context_desc.c_str(),
+                qore_msg_detail(dom_error.c_str()));
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }
@@ -16414,8 +16421,9 @@ extern "C" DLLEXPORT void qore_aot_register_into_program_v2(QoreProgram* tpgm,
     std::string error;
     if (!record || qoreAOTDecodeModuleInfo(record, static_cast<size_t>(record_len), info, error)
             != QoreAOTModuleInfoStatus::FOUND) {
-        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "the AOT module metadata linked "
-            "with a statically registered module is invalid: %s", record ? error.c_str() : "it is missing");
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(qore_caller_msg_path(path, tpgm)),
+            "the AOT module metadata linked with a statically registered module is invalid: %s",
+            record ? qore_msg_detail(error.c_str()) : "it is missing");
     } else {
         QMM.registerAOTStaticModuleIntern(xsink, tpgm, reinterpret_cast<qore_binary_module_desc_t>(desc_fn), path,
             info);
@@ -16718,7 +16726,7 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                         if (!xsink.isException()) {
                             xsink.raiseException("AOT-ERROR", "the initialization of module '%s', which the "
                                 "AOT-compiled script (%s) requires, failed", dep.c_str(),
-                                label ? label : "<script>");
+                                label ? qore_caller_msg_path(label).c_str() : "<script>");
                         }
                         xsink.handleExceptions();
                         dep_failed = true;
@@ -16731,7 +16739,8 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                             "the AOT-compiled script (%s) requires module '%s', which could not be "
                             "loaded; the script was AOT-compiled against '%s' (its compiled code "
                             "references that module's symbols) and cannot be loaded without it",
-                            label ? label : "<script>", dep.c_str(), dep.c_str());
+                            label ? qore_caller_msg_path(label).c_str() : "<script>", dep.c_str(),
+                            dep.c_str());
                         xsink.handleExceptions();
                         dep_failed = true;
                         ++dep_cancel_i;
@@ -17071,7 +17080,7 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                             if (!xsink.isException()) {
                                 xsink.raiseException("AOT-ERROR", "the initialization of module '%s', which "
                                     "the AOT-compiled script (%s) requires, failed", dep.c_str(),
-                                    d.label.c_str());
+                                    qore_caller_msg_path(d.label.c_str()).c_str());
                             }
                             xsink.handleExceptions();
                             dep_failed = true;
@@ -17084,7 +17093,7 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                                 "the AOT-compiled script (%s) requires module '%s', which could not be "
                                 "loaded; the script was AOT-compiled against '%s' (its compiled code "
                                 "references that module's symbols) and cannot be loaded without it",
-                                d.label.c_str(), dep.c_str(), dep.c_str());
+                                qore_caller_msg_path(d.label.c_str()).c_str(), dep.c_str(), dep.c_str());
                             xsink.handleExceptions();
                             dep_failed = true;
                             ++dep_load_i;

@@ -161,6 +161,9 @@ public:
         @param level the level of the exception in the chain
     */
     DLLLOCAL QoreHashNode* makeExceptionObjectFor(bool no_external_info, int level = 0) const;
+    //! Returns a hash<ExceptionInfo> of this exception, for code restricted from external information or not
+    template <bool no_external_info>
+    DLLLOCAL QoreHashNode* makeExceptionObjectImpl(int level) const;
     //! Returns a hash<ExceptionInfo> of this exception without the exceptions chained to it
     DLLLOCAL QoreHashNode* makeExceptionObjectWithoutChain() const;
 

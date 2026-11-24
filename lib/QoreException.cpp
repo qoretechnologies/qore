@@ -222,10 +222,17 @@ void qore_restrict_call_stack_paths_in_place(QoreListNode& stack) {
 
 QoreHashNode* QoreException::makeExceptionObject(int level) const {
     // the code running on the thread is the code that receives the exception (a catch block, for example)
-    return makeExceptionObjectFor(runtime_no_external_info(), level);
+    return runtime_no_external_info() ? makeExceptionObjectImpl<true>(level) : makeExceptionObjectImpl<false>(level);
 }
 
 QoreHashNode* QoreException::makeExceptionObjectFor(bool no_external_info, int level) const {
+    return no_external_info ? makeExceptionObjectImpl<true>(level) : makeExceptionObjectImpl<false>(level);
+}
+
+// instantiated separately for code restricted from external information, so that the unrestricted case is the code it
+// was before (qore#7507)
+template <bool no_external_info>
+QoreHashNode* QoreException::makeExceptionObjectImpl(int level) const {
     QORE_TRACE("makeExceptionObject()");
 
     QoreHashNode* h = new QoreHashNode(hashdeclExceptionInfo, nullptr);
@@ -235,18 +242,27 @@ QoreHashNode* QoreException::makeExceptionObjectFor(bool no_external_info, int l
     getLocation(loc);
 
     ph->setKeyValueIntern("type", new QoreStringNode(type == CT_USER ? "User" : "System"));
-    ph->setKeyValueIntern("file", no_external_info ? q_restricted_location_path(loc.file)
-        : new QoreStringNode(loc.file));
+    if constexpr (no_external_info) {
+        ph->setKeyValueIntern("file", q_restricted_location_path(loc.file));
+    } else {
+        ph->setKeyValueIntern("file", new QoreStringNode(loc.file));
+    }
     ph->setKeyValueIntern("line", loc.start_line);
     ph->setKeyValueIntern("endline", loc.end_line);
-    ph->setKeyValueIntern("source", no_external_info ? q_restricted_location_path(loc.source)
-        : new QoreStringNode(loc.source));
+    if constexpr (no_external_info) {
+        ph->setKeyValueIntern("source", q_restricted_location_path(loc.source));
+    } else {
+        ph->setKeyValueIntern("source", new QoreStringNode(loc.source));
+    }
     ph->setKeyValueIntern("offset", loc.offset);
     ph->setKeyValueIntern("lang", new QoreStringNode(loc.lang));
     // the call stack is shared with the exception, except for code restricted from external information, which is
     // given a copy with the file names of the sources only
-    ph->setKeyValueIntern("callstack", no_external_info ? qore_restrict_call_stack_paths(*callStack)
-        : callStack->refSelf());
+    if constexpr (no_external_info) {
+        ph->setKeyValueIntern("callstack", qore_restrict_call_stack_paths(*callStack));
+    } else {
+        ph->setKeyValueIntern("callstack", callStack->refSelf());
+    }
     if (err) {
         ph->setKeyValueIntern("err", err.refSelf());
     }
@@ -260,7 +276,7 @@ QoreHashNode* QoreException::makeExceptionObjectFor(bool no_external_info, int l
     // add chained exceptions with this "chain reaction" call
     if (next) {
          if (level < QORE_MAX_EXCEPTIONS) {
-             ph->setKeyValueIntern("next", next->makeExceptionObjectFor(no_external_info, level + 1));
+             ph->setKeyValueIntern("next", next->makeExceptionObjectImpl<no_external_info>(level + 1));
          }
     }
 

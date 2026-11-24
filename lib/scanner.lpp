@@ -2743,20 +2743,25 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                  int err = errno;
                                                  QoreString errstr;
                                                  q_strerror(errstr, err);
-                                                 parse_error(*get_loc(yylloc), "cannot include \"%s\"; stat() failed: %s", fn,
-                                                    errstr.c_str());
+                                                 // the path is named as the code being parsed may see it (qore#7507)
+                                                 parse_error(*get_loc(yylloc),
+                                                    "cannot include \"%s\"; stat() failed: %s",
+                                                    qore_caller_msg_path(fn).c_str(), errstr.c_str());
                                                  BEGIN(INITIAL);
                                               } else {
                                                  //printd(5, "%s: mode=%o, s_ifmt=%o, &=%o, reg=%o comp=%s\n", fname->c_str(), sbuf.st_mode, S_IFMT, sbuf.st_mode & S_IFMT, S_IFREG, (sbuf.st_mode & S_IFMT) != S_IFREG ? "true" : "false");
                                                  if ((sbuf.st_mode & S_IFMT) != S_IFREG) {
-                                                    parse_error(*get_loc(yylloc), "cannot include \"%s\"; is not a regular file", fn);
+                                                    parse_error(*get_loc(yylloc),
+                                                       "cannot include \"%s\"; is not a regular file",
+                                                       qore_caller_msg_path(fn).c_str());
                                                     BEGIN(INITIAL);
                                                  } else {
                                                     FILE *save_yyin = yyin;
                                                     yyin = fopen(fn, "r");
 
                                                     if (!yyin) {
-                                                       parse_error(*get_loc(yylloc), "cannot open include file \"%s\"", fn);
+                                                       parse_error(*get_loc(yylloc), "cannot open include file \"%s\"",
+                                                          qore_caller_msg_path(fn).c_str());
                                                        yyin = save_yyin;
                                                        BEGIN(INITIAL);
                                                     } else {

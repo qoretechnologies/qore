@@ -9826,25 +9826,24 @@ QoreParseOptions runtime_get_parse_options() {
 }
 
 bool runtime_no_external_info() {
+    // no Program has had the restriction: no code is restricted, and the thread's data is not looked up
+    if (!qore_no_external_info_used.load(std::memory_order_relaxed)) {
+        return false;
+    }
     ThreadData* td = thread_data.get();
     if (!td) {
         return false;
     }
-    // the code running has the restriction itself
-    if (td->runtime_po_state.po & PO_NO_EXTERNAL_INFO) {
-        return true;
-    }
-    // the code of a Program that is not a module's, without the restriction, with no restrictions of a sandboxed
-    // caller and no provenance of restricted code: the rule below decides on the Program's options alone, without
-    // walking further (see qore_get_caller_domain_restrictions()), so the common case of an exception that code without
-    // the restriction catches costs no walk
+    // the code of a Program that is not a module's, with no restrictions of a sandboxed caller and no provenance of
+    // restricted code: the rule below decides on the Program's options alone, without walking further (see
+    // qore_get_caller_domain_restrictions())
     const QoreProgram* pgm = td->current_pgm;
     if (pgm && !td->runtime_po_state.caller_restrictions && !td->sandbox_provenance
             && !qore_program_is_module_inline(pgm)) {
         return !!(qore_program_private::getParseOptions(*pgm) & PO_NO_EXTERNAL_INFO);
     }
-    // or it runs for code with it: library module code called by it, a thread or a continuation of work that it
-    // started; the rule of every check of the caller's domains
+    // the rule of every check of the caller's domains: the code runs for code with the restriction (library module
+    // code called by it, a thread or a continuation of work that it started)
     return qore_get_calling_code_restrictions(td).hasAny(QoreParseOptions(PO_NO_EXTERNAL_INFO));
 }
 
@@ -9877,6 +9876,25 @@ QoreRestrictedMessageScopeHelper::~QoreRestrictedMessageScopeHelper() {
 
 bool qore_msg_restricted() {
     return qore_msg_restricted_scope;
+}
+
+std::string qore_caller_msg_path(const char* path, const QoreProgram* pgm) {
+    if (!path) {
+        return std::string();
+    }
+    return qore_msg_restricted_scope || qore_caller_no_external_info(pgm) ? qore_path_file_name(path)
+        : std::string(path);
+}
+
+bool qore_caller_no_external_info(const QoreProgram* pgm) {
+    if (runtime_no_external_info()) {
+        return true;
+    }
+    if (pgm && (qore_program_private::getParseOptions(*pgm) & PO_NO_EXTERNAL_INFO)) {
+        return true;
+    }
+    const QoreProgram* cpgm = qore_thread_current_program_if_any();
+    return cpgm && (qore_program_private::getParseOptions(*cpgm) & PO_NO_EXTERNAL_INFO);
 }
 
 std::string qore_msg_path(const char* path) {

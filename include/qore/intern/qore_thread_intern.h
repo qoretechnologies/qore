@@ -1644,6 +1644,16 @@ private:
 //! Returns true if the messages built on this thread are for code restricted from external information
 DLLLOCAL bool qore_msg_restricted();
 
+//! Returns true if the code that a module load, module command or module initialization is made for is restricted
+//! from external information: the code running on the thread (see runtime_no_external_info()), the Program \a pgm
+//! that the load is made for, if any, or the current Program, whose code is being parsed for a parse directive
+DLLLOCAL bool qore_caller_no_external_info(const QoreProgram* pgm = nullptr);
+
+//! Returns \a path for a message built for the code running on the thread, outside of a module load: its file name
+//! only if the messages are restricted (qore_msg_restricted()) or that code is restricted from external information
+//! (qore_caller_no_external_info())
+DLLLOCAL std::string qore_caller_msg_path(const char* path, const QoreProgram* pgm = nullptr);
+
 //! Returns \a path for a message: its file name only for code restricted from external information
 /** @see QoreRestrictedMessageScopeHelper
 */

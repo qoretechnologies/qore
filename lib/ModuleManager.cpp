@@ -490,24 +490,6 @@ static void qore_report_module_load_warning(ExceptionSink& xsink, ExceptionSink*
     }
 }
 
-//! Returns true if the code that a module load or command is made for is restricted from external information
-/** That is the code running on the thread (its runtime parse options), or the Program whose code is being parsed, for
-    a parse directive; the messages of the module loader are then built for it (see
-    QoreRestrictedMessageScopeHelper, qore#7507)
-
-    @param pgm the Program that the load or command is made for, if any
-*/
-static bool qore_caller_no_external_info(const QoreProgram* pgm = nullptr) {
-    if (runtime_no_external_info()) {
-        return true;
-    }
-    if (pgm && (pgm->getParseOptions64() & PO_NO_EXTERNAL_INFO)) {
-        return true;
-    }
-    const QoreProgram* cpgm = qore_thread_current_program_if_any();
-    return cpgm && (cpgm->getParseOptions64() & PO_NO_EXTERNAL_INFO);
-}
-
 //! Returns the module whose absence made the binary module \a name fail to load, or an empty string
 /** The module is missing if it cannot be found (the \c LOAD-MODULE-ERROR of loadModuleIntern() for a feature that is
     not builtin and that no module provides) or if an AOT module that was compiled against it could not load it (the
@@ -4859,14 +4841,14 @@ int QoreModuleManager::checkShadowingLoad(ExceptionSink& xsink, const char* path
             "Program container: code that a sandbox governs or whose functional domains are restricted cannot load "
             "a module into a Program container of its own under the name of module '%s' in the module path, which it "
             "would replace for every later user; load it into a private container instead", feature,
-            library.c_str());
+            qore_msg_path(library.c_str()).c_str());
         return -1;
     }
     if (!library.empty()) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(feature), "cannot load module '%s' from "
             "path '%s': code that a sandbox governs or whose functional domains are restricted cannot load a module "
             "outside the module path under the name of module '%s' in the module path, which it would replace for "
-            "every later user", feature, qore_msg_path(path).c_str(), library.c_str());
+            "every later user", feature, qore_msg_path(path).c_str(), qore_msg_path(library.c_str()).c_str());
         return -1;
     }
     tenant_chosen = true;
@@ -7177,7 +7159,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
                 "runtime (libqore %s) has AOT runtime identity '%s'; the module's native code was generated for a "
                 "different Qore library and cannot be run with this one; rebuild the module with the qcc of this "
                 "Qore installation",
-                path, name,
+                qore_msg_path(path).c_str(), name,
                 mod_info.aot_runtime_identity.empty() ? "<none>" : mod_info.aot_runtime_identity.c_str(),
                 qore_version_string, qore_aot_runtime_identity);
             return nullptr;

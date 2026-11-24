@@ -11,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../TestInterpreter.qm
 
 %exec-class ModulePathsInExceptionsTest
 
@@ -243,6 +244,8 @@ sub run_t() {
         addTestCase("restricted code gets no directories of the host", \restrictedTest());
         addTestCase("unrestricted code gets the full paths", \unrestrictedTest());
         addTestCase("the host gets the full paths of the exceptions of restricted code", \hostTest());
+        addTestCase("AOT modules, shadowing loads and reflection give restricted code no directories",
+            \aotShadowReflectionTest());
         set_return_value(main());
     }
 
@@ -354,6 +357,111 @@ sub run_t() {
                 assertEq(dir + mods.bad2 + ".qm", ex.next.file, label + ": %requires chained file");
             }
         }
+    }
+
+    aotShadowReflectionTest() {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string src_dir = tmp.path + DirSep + "aot src 7507";
+        string aot_dir = tmp.path + DirSep + "aot dir 7507";
+        string shadow_dir = tmp.path + DirSep + "shadow dir 7507";
+        map mkdir($1), (src_dir, aot_dir, shadow_dir);
+        host_dirs += (src_dir, aot_dir, shadow_dir);
+
+        # an AOT module whose code uses external information, which a restricted loader refuses it
+        File f();
+        f.open2(src_dir + DirSep + "MpAotExt.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf(ExternalInfoModule, "MpAotExt", "MpAotExt"));
+        f.close();
+        # an AOT module compiled for another AOT runtime identity
+        f.open2(src_dir + DirSep + "MpAotId.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf(Header + "public namespace %s {\n}\n", "MpAotId", "MpAotId"));
+        f.close();
+        string out = backquote(sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+            shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(qore_bin),
+            shellQuote(aot_dir + DirSep + "MpAotExt.qmod"), shellQuote(src_dir + DirSep + "MpAotExt.qm")));
+        assertTrue(is_file(aot_dir + DirSep + "MpAotExt.qmod"), "compiled the AOT module: " + out);
+        out = backquote(sprintf("QORE_AOT_TEST_RUNTIME_IDENTITY=%s QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b "
+            "--compile-module --output %s %s 2>&1", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(qore_bin),
+            shellQuote(aot_dir + DirSep + "MpAotId.qmod"), shellQuote(src_dir + DirSep + "MpAotId.qm")));
+        assertTrue(is_file(aot_dir + DirSep + "MpAotId.qmod"), "compiled the foreign-identity AOT module: " + out);
+        # a module outside the module path named like a module in the module path that is not loaded
+        string shadowed = "WebSocketUtil";
+        assertFalse(get_module_hash().hasKey(shadowed), "the shadowed module is not loaded");
+        File sf();
+        sf.open2(shadow_dir + DirSep + shadowed + ".qm", O_CREAT | O_WRONLY | O_TRUNC);
+        sf.write(sprintf(Header + "public namespace %s {\n}\n", shadowed, shadowed));
+        sf.close();
+
+        string thrower = writeModules("A").throw;
+        string code = sprintf("%%append-module-path %y
+%%append-module-path %y
+%%requires reflection
+%%requires %s
+our hash<auto> result;
+try {
+    load_module(\"MpAotExt\");
+} catch (hash<ExceptionInfo> ex) {
+    result.aot_ext = ex;
+}
+try {
+    load_module(\"MpAotId\");
+} catch (hash<ExceptionInfo> ex) {
+    result.aot_id = ex;
+}
+try {
+    load_module(%y);
+} catch (hash<ExceptionInfo> ex) {
+    result.shadow = ex;
+}
+result.loc = Function::forName(\"%s::t\").getVariants()[0].getSourceLocation();
+result.cls_loc = Class::forName(\"%s::Thrower\").getMethod(\"throwIt\").getVariants()[0].getSourceLocation();
+", mod_dir, aot_dir, thrower, shadow_dir + DirSep + shadowed + ".qm", thrower, thrower);
+
+        string dir = mod_dir + DirSep;
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            string label = "restricted " + m.key;
+            Program p = newProgram(PO_NO_EXTERNAL_INFO, m.value);
+            p.parse(code, "top-level");
+            p.run();
+            hash<auto> result = p.getGlobalVariable("result");
+            checkNoHostPath(result, label);
+            assertEq("AOT-MODULE-RESTRICTED", result.aot_ext.err, label + ": AOT module refused");
+            assertContains("MpAotExt.qmod", result.aot_ext.desc, label + ": AOT module refusal names the file");
+            assertEq("LOAD-MODULE-ERROR", result.aot_id.err, label + ": AOT runtime identity");
+            assertContains("AOT module 'MpAotId.qmod': feature 'MpAotId': the module was compiled for AOT runtime "
+                "identity", result.aot_id.desc, label + ": AOT runtime identity desc");
+            assertEq("LOAD-MODULE-ERROR", result.shadow.err, label + ": shadowing load");
+            assertContains("from path '" + shadowed + ".qm'", result.shadow.desc, label + ": shadowing load desc");
+            assertRegex("under the name of module '" + shadowed + "\\.qm(od)?' in the module path",
+                result.shadow.desc, label + ": shadowing load names the module path's module by its file name");
+            assertEq(thrower + ".qm", result.loc.file, label + ": function variant location");
+            assertEq(thrower + ".qm", result.cls_loc.file, label + ": method variant location");
+        }
+
+        # restricted in another domain only: the paths are given in full (after the restricted checks, as a module
+        # that such a Program loads is not checked again for the restricted Programs)
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            string label = "other restriction " + m.key;
+            Program p = newProgram(PO_NO_PROCESS_CONTROL, m.value);
+            p.parse(code, "top-level");
+            p.run();
+            hash<auto> result = p.getGlobalVariable("result");
+            assertContains("AOT module '" + aot_dir + DirSep + "MpAotId.qmod': feature 'MpAotId'", result.aot_id.desc,
+                label + ": AOT runtime identity desc");
+            assertContains("from path '" + shadow_dir + DirSep + shadowed + ".qm'", result.shadow.desc,
+                label + ": shadowing load desc");
+            assertRegex("under the name of module '/[^']+/" + shadowed + "\\.qm(od)?' in the module path",
+                result.shadow.desc, label + ": shadowing load names the module path's module with its directory");
+            assertEq(dir + thrower + ".qm", result.loc.file, label + ": function variant location");
+            assertEq(dir + thrower + ".qm", result.cls_loc.file, label + ": method variant location");
+        }
+    }
+
+    #! returns the string quoted for the shell
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
     }
 
     #! checks the errors and values that restricted and unrestricted code get alike
