@@ -1,0 +1,370 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - QUIC connection attempts over IPv4 and IPv6 UDP sockets, ICMP port unreachable handling
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+%requires ../../DnsTestServer.qm
+%requires ../../RefusedQuicPort.qm
+
+%exec-class HttpClientIoH3FamilyRaceTest
+
+#! Makes an HTTP/3 request for a sandboxed Program as module code does: this function runs in an unsandboxed Program
+string sub sandbox_h3_family_request(string url) {
+    HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+        "protocol": "h3",
+        "accept_all_certs": True,
+        "connect_timeout": 120s,
+        "max_request_retries": 0,
+    });
+    on_exit mgr.closeAll();
+    return mgr.request(url, "GET", "/").body;
+}
+
+#! Answers with the address family of the client's address
+class FamilyHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, cx."peer-info".family.toString(), {"Content-Type": MimeTypeText});
+    }
+}
+
+#! Records the connections that a connection manager makes
+class CountingManager inherits HttpClientIo::HttpClientConnectionManager {
+    private {
+        Mutex m();
+        list<HttpClientIo::HttpClientConnection> conns();
+        hash<string, bool> ids();
+    }
+
+    constructor(hash<HttpClientIo::HttpClientConnectionManagerOptions> opts)
+            : HttpClientIo::HttpClientConnectionManager(opts) {
+    }
+
+    #! Returns the connections made, in the order they were started
+    list<HttpClientIo::HttpClientConnection> getConnections() {
+        AutoLock al(m);
+        return conns;
+    }
+
+    private submitConnectionToController(string key, HttpClientIo::HttpClientConnection conn, bool initial = True) {
+        {
+            AutoLock al(m);
+            string id = conn.getConnectionId().toString();
+            if (!ids{id}) {
+                ids{id} = True;
+                conns += conn;
+            }
+        }
+        HttpClientIo::HttpClientConnectionManager::submitConnectionToController(key, conn, initial);
+    }
+}
+
+#! HTTP/3 connections race the address families of the host (RFC 8305)
+/** The host name \c dual.h3race.test resolves to \c ::1 and \c 127.0.0.1 with a DNS server of the test
+    (dbg_cares_set_servers()); the HTTP/3 server listens in one family only, and the same port in the other family
+    refuses the datagrams (ICMP port unreachable) or drops them.  One connection must race both families and connect
+    in the server's family: before, the connection was made to the first address only, so it failed after the grace
+    period of the ICMP refusal (made long here) or the connect timeout, and only a retry of the request connected in
+    the other family.
+*/
+public class HttpClientIoH3FamilyRaceTest inherits QUnit::Test {
+    public {
+        #! the grace period of an ICMP refusal for a debug build: a connection that waits for it is too slow
+        const GraceMs = 60000;
+        #! the upper bound of a connection that does not wait for the grace period or the connect timeout (generous,
+        #! for a slow host such as under valgrind)
+        const FastMs = 30000;
+        #! the connect timeout
+        const ConnectTimeout = 120s;
+        #! the name, whose first label makes the DNS server answer with both addresses
+        const Host = "dual.h3race.test";
+        #! the number of ports tried for a server on a port held in the other family
+        const MaxPortTries = 20;
+    }
+
+    private {
+        *DnsTestServer dns;
+        string old_servers;
+        *string old_grace;
+        bool have_ipv6;
+    }
+
+    constructor() : Test("HttpClientIoH3FamilyRaceTest", "1.0") {
+        addTestCase("an IPv4 server, IPv6 refused", \refusedTest(), (AF_INET,));
+        addTestCase("an IPv6 server, IPv4 refused", \refusedTest(), (AF_INET6,));
+        addTestCase("an IPv4 server, IPv6 dropped", \droppedTest(), (AF_INET,));
+        addTestCase("an IPv6 server, IPv4 dropped", \droppedTest(), (AF_INET6,));
+        addTestCase("HTTPClient: an IPv4 server, IPv6 refused", \httpClientTest(), (AF_INET,));
+        addTestCase("HTTPClient: an IPv6 server, IPv4 refused", \httpClientTest(), (AF_INET6,));
+        addTestCase("every attempt fails", \allFailTest());
+        addTestCase("a family denied by the sandbox", \sandboxTest());
+        addTestCase("the socket closed while the attempts race", \closeTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        dns = new DnsTestServer();
+        old_servers = call_function("dbg_cares_set_servers", dns.getServer());
+        old_grace = getenv("QORE_QUIC_TEST_ECONNREFUSED_GRACE_MS");
+        setenv("QORE_QUIC_TEST_ECONNREFUSED_GRACE_MS", GraceMs.toString());
+        try {
+            Socket s();
+            s.bindINET("::1", "0", False, AF_INET6, SOCK_DGRAM);
+            s.close();
+            have_ipv6 = True;
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    globalTearDown() {
+        if (dns) {
+            if (exists old_grace) {
+                setenv("QORE_QUIC_TEST_ECONNREFUSED_GRACE_MS", old_grace);
+            } else {
+                unsetenv("QORE_QUIC_TEST_ECONNREFUSED_GRACE_MS");
+            }
+            call_function("dbg_cares_set_servers", old_servers);
+            dns.stop();
+        }
+    }
+
+    refusedTest(int family) {
+        if (!check()) {
+            return;
+        }
+        # the port is refused in the other family while the test holds it
+        hash<auto> h = startServerOnHeldPort(family, \holdRefused());
+        on_exit h.server.stop();
+        checkRequest(family, h.port, FastMs);
+    }
+
+    droppedTest(int family) {
+        if (!check()) {
+            return;
+        }
+        # a socket that never reads its datagrams holds the port in the other family
+        hash<auto> h = startServerOnHeldPort(family, \holdDropping());
+        on_exit h.server.stop();
+        # well under the connect timeout
+        checkRequest(family, h.port, ConnectTimeout.durationMilliseconds() / 2);
+    }
+
+    #! HTTPClient makes its HTTP/3 connections with the C++ connection
+    httpClientTest(int family) {
+        if (!check()) {
+            return;
+        }
+        hash<auto> h = startServerOnHeldPort(family, \holdRefused());
+        on_exit h.server.stop();
+        HTTPClient hc({"url": sprintf("https://%s:%d", Host, h.port), "http_version": "3.0",
+            "timeout": 240s, "connect_timeout": ConnectTimeout});
+        hc.acceptAllCertificates();
+        date start = now_us();
+        assertEq(family.toString(), hc.get("/"));
+        assertLt(FastMs, get_duration_milliseconds(now_us() - start));
+    }
+
+    #! Every attempt fails: the error of a failed attempt is reported, and the family of the connection is known
+    allFailTest() {
+        if (!check()) {
+            return;
+        }
+        # every QUIC connection attempt is answered with a Version Negotiation packet in both families, on a port
+        # number that the object holds in both
+        QuicVersionRefuser refuser();
+        on_exit refuser.stop();
+        if (!refuser.hasIpv6()) {
+            testSkip("the port number cannot be held on ::1");
+            return;
+        }
+        CountingManager mgr = getManager();
+        on_exit mgr.closeAll();
+        date start = now_us();
+        try {
+            mgr.request(sprintf("https://%s:%d", Host, refuser.port), "GET", "/");
+            fail("no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err, ex.desc);
+            assertRegex("^QUIC-", ex.arg.err, ex.desc);
+        }
+        # no attempt waits for a timeout
+        assertLt(FastMs, get_duration_milliseconds(now_us() - start));
+        list<HttpClientIo::HttpClientConnection> conns = mgr.getConnections();
+        assertEq(1, conns.size(), "one connection");
+        assertTrue(inlist(cast<HttpClientIo::Http3ClientConnection>(conns[0]).getAddressFamily(),
+            (AF_INET, AF_INET6)), "the family of the reported attempt");
+    }
+
+    #! An attempt that the sandbox denies counts as failed, and the next one is made at once
+    sandboxTest() {
+        if (!check()) {
+            return;
+        }
+        hash<auto> h = startServerOnHeldPort(AF_INET, \holdRefused());
+        on_exit h.server.stop();
+        string url = sprintf("https://%s:%d", Host, h.port);
+
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.addNetworkDeniedIPRange("::1/128");
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.importFunction("sandbox_h3_family_request");
+        p.parse("%modern\nstring sub run(string url) { return sandbox_h3_family_request(url); }", "h3-family-race");
+        date start = now_us();
+        assertEq(AF_INET.toString(), p.callFunction("run", url));
+        assertLt(FastMs, get_duration_milliseconds(now_us() - start));
+
+        # with both families denied, the denial is reported, not the error of an attempt that reached no server
+        sm.addNetworkDeniedIPRange("127.0.0.1/32");
+        try {
+            p.callFunction("run", url);
+            fail("no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("NETWORK-ACCESS-DENIED", ex.err, ex.err + ": " + ex.desc);
+        }
+    }
+
+    #! A socket closed while the attempts race is not given the descriptor of the attempt that wins
+    /** A close of a socket without a descriptor only records the close; the operation is held when it has found the
+        winner, the client's socket is closed directly, as a C++ owner closes it (Socket::close() would wait for the
+        held I/O thread, as it cancels the operation first), and the operation is released: it must fail, and the
+        socket stay closed
+    */
+    closeTest() {
+        if (!check()) {
+            return;
+        }
+        hash<auto> h = startServerOnHeldPort(AF_INET, \holdRefused());
+        on_exit h.server.stop();
+        CountingManager mgr = getManager();
+        on_exit mgr.closeAll();
+
+        Counter reached(1);
+        Counter release(1);
+        call_function("dbg_http_hold_at", "h3-race-winner", reached, release);
+        on_exit {
+            if (release.getCount()) {
+                release.dec();
+            }
+            call_function("dbg_http_hold_clear");
+        }
+        auto future = mgr.requestAsync(sprintf("https://%s:%d", Host, h.port), "GET", "/");
+        assertEq(0, reached.waitForZero(60s), "the race found its winner");
+        list<HttpClientIo::HttpClientConnection> conns = mgr.getConnections();
+        assertEq(1, conns.size(), "one connection");
+        Socket sock = cast<HttpClientIo::Http3ClientConnection>(conns[0]).getSocket();
+        assertFalse(sock.isOpen(), "the socket has no descriptor while the attempts race");
+        call_function("dbg_socket_close_io", sock);
+        release.dec();
+        try {
+            future.get(240s);
+            fail("no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err, ex.desc);
+            assertEq("QUIC-POLL-ERROR", ex.arg.err, ex.desc);
+        }
+        assertFalse(sock.isOpen(), "the socket stays closed");
+    }
+
+    #! Starts the server in the given family on a port that the given code holds in the other family
+    /** The port is the one the holder gets assigned in the other family; another socket can use it in the server's
+        family, so another port is tried then
+
+        @return {"server": HttpServer, "port": int, "holder": object}
+    */
+    private hash<auto> startServerOnHeldPort(int family, code holder) {
+        for (int i = 1; ; ++i) {
+            hash<auto> held = holder(otherFamily(family));
+            try {
+                return {"server": startServer(family, held.port), "port": held.port, "holder": held.obj};
+            } catch (hash<ExceptionInfo> ex) {
+                if (i == MaxPortTries || ex.desc !~ /in use/i) {
+                    rethrow;
+                }
+            }
+        }
+    }
+
+    #! holds a port where the system refuses the datagrams (ICMP port unreachable)
+    private static hash<auto> holdRefused(int family) {
+        RefusedUdpPort refused(family == AF_INET6 ? "::1" : "127.0.0.1", family);
+        return {"port": refused.port, "obj": refused};
+    }
+
+    #! holds a port with a socket that never reads its datagrams
+    private static hash<auto> holdDropping(int family) {
+        Socket hole();
+        hole.bindINET(family == AF_INET6 ? "::1" : "127.0.0.1", "0", False, family, SOCK_DGRAM);
+        return {"port": hole.getSocketInfo().port, "obj": hole};
+    }
+
+    private checkRequest(int family, int port, int max_ms) {
+        CountingManager mgr = getManager();
+        on_exit mgr.closeAll();
+        date start = now_us();
+        hash<auto> resp = mgr.request(sprintf("https://%s:%d", Host, port), "GET", "/");
+        int ms = get_duration_milliseconds(now_us() - start);
+        assertEq(200, resp.status_code);
+        assertEq(family.toString(), resp.body, "the connection is made in the server's family");
+        assertLt(max_ms, ms, "the connection does not wait for the failure of the other family");
+        list<HttpClientIo::HttpClientConnection> conns = mgr.getConnections();
+        assertEq(1, conns.size(), "one connection");
+        assertEq(family, cast<HttpClientIo::Http3ClientConnection>(conns[0]).getAddressFamily());
+    }
+
+    private bool check() {
+        if (!dns) {
+            testSkip("requires a debug build (dbg_cares_set_servers())");
+            return False;
+        }
+        if (!have_ipv6) {
+            testSkip("no IPv6 on the loopback interface");
+            return False;
+        }
+        return True;
+    }
+
+    private HttpServer startServer(int family, int port) {
+        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("h3-family-race",
+            LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("family", new FamilyHandler());
+        server.waitForAsyncIo();
+        on_error server.stop();
+        server.addQuicListener(<HttpListenerOptionInfo>{
+            "node": family == AF_INET6 ? "::1" : "127.0.0.1",
+            "service": port,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        });
+        server.waitForAsyncIo();
+        return server;
+    }
+
+    private CountingManager getManager() {
+        return new CountingManager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "connect_timeout": ConnectTimeout,
+            "request_timeout": 240s,
+            "max_request_retries": 0,
+        });
+    }
+
+    private static int otherFamily(int family) {
+        return family == AF_INET6 ? AF_INET : AF_INET6;
+    }
+}

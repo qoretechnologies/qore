@@ -104,38 +104,12 @@ public:
             AutoLocker al(stream_lock);
             cp = connection_priv;
             connection_priv = nullptr;
-            h3_owner_ = nullptr;
         }
         if (cp) {
             ExceptionSink xs;
             cp->deref(&xs);
             xs.clear();
         }
-    }
-
-    //! Arms a handshake-phase observer for happy-eyeballs coordination.
-    /** When set, @c fireReadyCallback and @c setError route the CONNECTING
-        → outcome transition through the @ref Http3ClientConnection hooks
-        (@ref Http3ClientConnection::onInnerHandshakeReady /
-        @ref Http3ClientConnection::onInnerHandshakeFailed) instead of
-        directly calling the base-class @c onConnectionReady / @c setClosed.
-        The owner then decides whether to commit this attempt, cancel it
-        (it lost the race), or keep the connection CONNECTING (other
-        attempts are still pending).
-
-        Must be called while @c h3_state is @c CONNECTING and before the
-        operation is submitted to the controller.  Cleared automatically
-        after the first handshake outcome is reported (setError /
-        fireReadyCallback) so post-handshake errors (read-side closure)
-        go through the base-class setClosed path as before.
-
-        @param owner non-null raw back-pointer; lifetime must outlive
-            this poll op
-        @since %Qore 3.0
-    */
-    DLLLOCAL void armHappyEyeballsOwner(Http3ClientConnection* owner) {
-        AutoLocker al(stream_lock);
-        h3_owner_ = owner;
     }
 
     // --- SocketPollOperationBase overrides ---
@@ -649,22 +623,6 @@ private:
     */
     AbstractHttpPollConnectionPriv* connection_priv = nullptr;
 
-    //! Optional happy-eyeballs coordinator for the CONNECTING phase.
-    /** When non-null, the first handshake outcome (success or failure) is
-        reported to this owner instead of directly signalling the base-class
-        condition variable on @c connection_priv.  Armed by
-        @ref armHappyEyeballsOwner from @ref Http3ClientConnection when the
-        enclosing connection is racing multiple address families.  Cleared
-        on the first outcome report and on @c disarmConnectionPriv so that
-        subsequent post-handshake events (read errors, remote close) fall
-        back to the normal @c setClosed path.
-
-        Raw pointer only while armed.  Before invoking it outside
-        @ref stream_lock, the callback path takes a temporary ref on
-        @ref connection_priv, which is the same underlying connection
-        object and prevents a concurrent disarm from destroying the owner.
-    */
-    Http3ClientConnection* h3_owner_ = nullptr;
 
     static constexpr int MAX_DRAIN_ITERATIONS = 100;
     static constexpr int MAX_EMPTY_READS = 100;

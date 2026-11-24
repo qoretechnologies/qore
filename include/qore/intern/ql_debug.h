@@ -408,6 +408,9 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! an HTTP/3 client poll operation received the response of a request that is not registered yet and kept it for
     //! the registration (the I/O thread; armed with a release Counter of 0, the point only reports it)
     Http3ResponseBuffered,
+    //! the address family race of an HTTP/3 client connection found the connection attempt that wins, before the
+    //! operation's socket takes it over (the I/O thread)
+    Http3RaceWinner,
     //! the number of hold points
     Count,
 };
