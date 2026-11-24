@@ -229,6 +229,12 @@
     @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" change it
     (<a href="https://github.com/qoretechnologies/qore/issues/6867">issue 6867</a>).
 
+    @par HTTP/1.x Messages With Ambiguous Framing Are Refused
+    A request with both \c Transfer-Encoding and \c Content-Length, with a transfer coding other than chunked alone,
+    with more than one \c Host, or with a header line that ends with a bare LF, and a header or trailer section with an
+    empty line before its end are refused (see @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()");
+    @ref httpserverintro "HttpServer" answers such a request with 400 or 501 and closes the connection.
+
     @par A Member of a System Class Cannot Be Combined With a User Member of the Same Name
     A class hierarchy that combines a member of a user class with a member of a system class of the same name is
     refused whatever the order of the parent classes (it was refused in only one order), and the parse error names the
@@ -4544,6 +4550,16 @@
       (@ref Qore::Socket::unfinishedHttpChunkedBody() "unfinishedHttpChunkedBody()"), chunk sizes are checked alike,
       and a body read allocates memory as its data arrives, so that a body can neither be taken for another message
       nor end the process (<a href="https://github.com/qoretechnologies/qore/issues/7417">issue 7417</a>)
+    - the trailer section of a chunked HTTP/1.x body ends where every reader ends it: a section with a line that ends
+      with a bare LF or with an empty line before its end is refused, so that the bytes after it cannot be taken for
+      another message
+    - an HTTP/1.x header ends where every reader ends it: a header with an empty line before its end, or a request
+      line or request field line that ends with a bare LF, is refused (see @ref Qore::Socket::readHTTPHeader()
+      "Socket::readHTTPHeader()"), so that the bytes after it cannot be taken for another message
+    - the \c Transfer-Encoding of an HTTP/1.x message frames its body as RFC 9112 requires in every reader, the HTTP
+      client and @ref httpserverintro "HttpServer": the chunked coding is recognized without regard to case and
+      whitespace, a request whose framing is ambiguous or unsupported is refused, and a response whose final
+      transfer coding is not chunked is read until the connection closes
 
     @section qore_2_2_1 Qore 2.2.1
 

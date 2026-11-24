@@ -22845,6 +22845,71 @@ static QoreValue f_dbg_http1_header_read_op_failure_site(const QoreListNode* par
     return f.failed_at.empty() ? QoreValue() : new QoreStringNode(f.failed_at);
 }
 
+namespace {
+//! the state of the dbg_fail_http_header_text_alloc() hook
+struct DbgHeaderTextAllocFailure {
+    QoreThreadLock m;
+    //! the site where the allocation fails; empty: the hook is not armed
+    std::string target;
+    //! true once the allocation has failed
+    bool failed = false;
+};
+
+DbgHeaderTextAllocFailure dbg_header_text_alloc_failure;
+}
+
+bool qore_dbg_http_header_text_alloc_must_fail(const char* site) {
+    DbgHeaderTextAllocFailure& f = dbg_header_text_alloc_failure;
+    AutoLocker al(f.m);
+    if (f.target.empty() || f.target != site) {
+        return false;
+    }
+    f.target.clear();
+    f.failed = true;
+    return true;
+}
+
+//! Debug-only: the next allocation of the text of an HTTP header received at the given site fails (one-shot)
+/** @param site \c "read-header" (the blocking header reader of the C++ API), \c "send-and-read-header" or
+    \c "send-stream-and-read-header" (the operations that send a response and read the next request header)
+*/
+static QoreValue f_dbg_fail_http_header_text_alloc(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    // note: the argument can be an inline short string, which the helper reads
+    DbgStringNodeHelper site(get_param_value(params, 0));
+    DbgHeaderTextAllocFailure& f = dbg_header_text_alloc_failure;
+    AutoLocker al(f.m);
+    f.target = (*site)->c_str();
+    f.failed = false;
+    return QoreValue();
+}
+
+//! Debug-only: returns True if the allocation armed by dbg_fail_http_header_text_alloc() has failed, and disarms it
+static QoreValue f_dbg_http_header_text_alloc_failed(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    DbgHeaderTextAllocFailure& f = dbg_header_text_alloc_failure;
+    AutoLocker al(f.m);
+    bool rv = f.failed;
+    f.target.clear();
+    f.failed = false;
+    return rv;
+}
+
+//! the size over which the buffer of a binary value cannot grow; 0: no limit (dbg_fail_binary_reserve_over())
+static std::atomic<int64> dbg_binary_reserve_limit{0};
+
+bool qore_dbg_binary_reserve_must_fail(size_t size) {
+    int64 limit = dbg_binary_reserve_limit.load(std::memory_order_relaxed);
+    return limit > 0 && size > static_cast<size_t>(limit);
+}
+
+//! Debug-only: the buffer of a binary value cannot grow over the given size in the process, as if the memory could not
+//! be allocated; 0 removes the limit
+static QoreValue f_dbg_fail_binary_reserve_over(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    dbg_binary_reserve_limit.store(get_param_value(params, 0).getAsBigInt(), std::memory_order_relaxed);
+    return QoreValue();
+}
+
 //! Debug-only: returns the number of records that a session of a socket keeps for its streams, by kind
 /** The QUIC session with the given ID, or the HTTP/2 session of the socket if no ID is given.  Tests use it to show
     that a long-lived session does not keep records for the streams it has finished.  DEBUG builds only.
@@ -35507,6 +35572,12 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringOrNothingTypeInfo, QORE_PARAM_NO_ARG, "site");
     qns.addBuiltinVariant("dbg_http1_header_read_op_failure_site", f_dbg_http1_header_read_op_failure_site,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, stringOrNothingTypeInfo);
+    qns.addBuiltinVariant("dbg_fail_http_header_text_alloc", f_dbg_fail_http_header_text_alloc, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "site");
+    qns.addBuiltinVariant("dbg_http_header_text_alloc_failed", f_dbg_http_header_text_alloc_failed, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_fail_binary_reserve_over", f_dbg_fail_binary_reserve_over, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "size");
     qns.addBuiltinVariant("dbg_clear_http1_header_read_op_failure", f_dbg_clear_http1_header_read_op_failure,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_socket_stream_records", f_dbg_socket_stream_records,

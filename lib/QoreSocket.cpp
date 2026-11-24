@@ -894,6 +894,21 @@ static void qore_socket_raise_recv_string_memory_error(ExceptionSink* xsink, siz
         "be allocated", (int64)len);
 }
 
+//! reallocates the buffer of the text of a header received for its NUL terminator, as q_realloc() does: the buffer
+//! is freed if the memory cannot be allocated
+/** @param site where the header is read, for the dbg_fail_http_header_text_alloc() test hook
+*/
+static void* qore_socket_header_text_realloc(void* buf, size_t size, const char* site) {
+#ifdef DEBUG
+    // test hook: the allocation fails
+    if (qore_dbg_http_header_text_alloc_must_fail(site)) {
+        free(buf);
+        return nullptr;
+    }
+#endif
+    return q_realloc(buf, size);
+}
+
 int qore_socket_append_http_body(ExceptionSink* xsink, BinaryNode* body_bin, QoreString* body_str,
         const void* data, size_t size) {
     if (!size) {
@@ -5063,9 +5078,10 @@ public:
         }
 
         char* buf = reinterpret_cast<char*>(bin->giveBuffer());
-        char* nbuf = reinterpret_cast<char*>(q_realloc(buf, raw_size + 1));
+        char* nbuf = reinterpret_cast<char*>(qore_socket_header_text_realloc(buf, raw_size + 1, "read-header"));
         if (!nbuf) {
-            xsink->outOfMemory();
+            // the buffer has been freed
+            qore_socket_raise_recv_string_memory_error(xsink, raw_size);
             done = true;
             return nullptr;
         }
@@ -5517,9 +5533,10 @@ private:
                     return -1;
                 }
                 // the trailer fields are field lines, checked as RFC 9112 requires; an obsolete line folding is
-                // replaced with spaces
+                // replaced with spaces; the lines of a trailer section are read up to CRLF, so a bare LF line end or
+                // an empty line in it is refused: the text after it would be lost
                 if (qore_socket_private::checkHttpFieldLines(xsink, const_cast<char*>(trailers.c_str()), false,
-                        false, "READ-HTTP-CHUNK-ERROR", "chunked body trailer")) {
+                        false, "READ-HTTP-CHUNK-ERROR", "chunked body trailer", true, true)) {
                     return -1;
                 }
                 // the trailer fields are given under "trailers", and at the top level as the socket's field
@@ -6759,9 +6776,10 @@ int my_socket_priv::convertHeaderToHash(QoreHashNode& h, QoreString& hdr, Except
         return -1;
     }
     // the trailer fields are field lines, checked as RFC 9112 requires; an obsolete line folding is replaced with
-    // spaces
+    // spaces; the lines of a trailer section are read up to CRLF, so a bare LF line end or an empty line in it is
+    // refused: the text after it would be lost
     if (qore_socket_private::checkHttpFieldLines(xsink, const_cast<char*>(hdr.c_str()), false, false,
-            "READ-HTTP-CHUNK-ERROR", "chunked body trailer")) {
+            "READ-HTTP-CHUNK-ERROR", "chunked body trailer", true, true)) {
         return -1;
     }
     QoreHashNode* fields = nullptr;
@@ -6800,6 +6818,10 @@ int my_socket_priv::checkHttpChunkedBodyFinished(ExceptionSink* xsink) const {
 
 size_t my_socket_priv::httpLinePayloadSize(const char* str, size_t len) {
     return qore_socket_private::httpLinePayloadSize(str, len);
+}
+
+bool my_socket_priv::isHttpResponseBodyChunked(QoreValue te) {
+    return qore_socket_private::isHttpResponseBodyChunked(te);
 }
 
 int my_socket_priv::parseHttpChunkSize(const char* line, size_t len, int64_t& chunk_size, ExceptionSink* xsink) {
@@ -21369,7 +21391,25 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkCrlf(ExceptionSink
             body_state = BodyState::DONE;
             return nullptr;
         }
-        // Trailer line — read next line; the lines of the section count together against the limit
+        // Trailer line — checked as the other readers of a chunked body check the trailer section, so that the
+        // section ends where they end it: a field line, or an obsolete line folding after one, that ends with CRLF;
+        // a bare LF line end or an empty line in the section is refused, as the text after it would be lost
+        // (the fields are not given by this reader)
+        if (!remaining || (*line->c_str() != ' ' && *line->c_str() != '\t')) {
+            std::string text(line->c_str(), line->size());
+            if (qore_socket_private::checkHttpFieldLines(xsink, &text[0], false, false, "READ-HTTP-CHUNK-ERROR",
+                    "chunked body trailer", true, true)) {
+                body_state = BodyState::DONE;
+                return nullptr;
+            }
+        } else if (line->size() < 2 || memchr(line->c_str(), '\n', line->size() - 1)
+                || memchr(line->c_str(), '\r', line->size() - 2)) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "invalid HTTP chunked body trailer received with a "
+                "bare CR or LF character in an obsolete line folding");
+            body_state = BodyState::DONE;
+            return nullptr;
+        }
+        // read the next line; the lines of the section count together against the limit
         printd(5, "SocketReadHttpBodyPollOperation::handleRecvChunkCrlf() trailer line\n");
         remaining += static_cast<int64_t>(line->size());
         sock_obj->ref();
@@ -21649,10 +21689,11 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
             // Convert binary to string for HTTP header parsing
             size_t len = raw->size();
             char* buf = reinterpret_cast<char*>(raw->giveBuffer());
-            char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
+            char* nbuf = reinterpret_cast<char*>(qore_socket_header_text_realloc(buf, len + 1,
+                "send-and-read-header"));
             if (!nbuf) {
-                free(buf);
-                xsink->outOfMemory();
+                // the buffer has been freed; the exception can be handled, and the connection is not used again
+                qore_socket_raise_recv_string_memory_error(xsink, len);
                 phase = Phase::Error;
                 sock->priv->clearNonBlock();
                 set_non_block = false;
@@ -22307,10 +22348,11 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
                 // Convert binary to string for HTTP header parsing
                 size_t len = raw->size();
                 char* buf = reinterpret_cast<char*>(raw->giveBuffer());
-                char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
+                char* nbuf = reinterpret_cast<char*>(qore_socket_header_text_realloc(buf, len + 1,
+                    "send-stream-and-read-header"));
                 if (!nbuf) {
-                    free(buf);
-                    xsink->outOfMemory();
+                    // the buffer has been freed; the exception can be handled, and the connection is not used again
+                    qore_socket_raise_recv_string_memory_error(xsink, len);
                     phase = Phase::Error;
                     sock->priv->clearNonBlock();
                     set_non_block = false;

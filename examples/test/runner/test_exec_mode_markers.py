@@ -362,10 +362,10 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   execution modes and as a qcc executable, as a module is initialized once in a process
         # - reflection-module-init-barrier-oom: its script runs in child processes that set their own execution
         #   modes and as a qcc executable, which arm a debug hook and whose failed module load ends the process
-        # - module-init-frames (#7289): its probes run in child processes that set their own --exec-mode, with the
-        #   modules loaded from source and compiled with qcc, as a module is initialized once in a process
         # - HttpServerRecvGrowFailure (#7417): the server whose read fails runs in a child process of the qore
         #   interpreter in the default mode, under a limit of its address space
+        # - module-init-frames (#7289): its probes run in child processes that set their own --exec-mode, with the
+        #   modules loaded from source and compiled with qcc, as a module is initialized once in a process
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",

@@ -353,6 +353,14 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - an HTTP/1.x request whose framing is ambiguous is answered with 400 (Bad Request), or 501 (Not Implemented)
+      for a transfer coding other than chunked, and the connection is closed: a request with both
+      \c Transfer-Encoding and \c Content-Length, a \c Transfer-Encoding that does not end with the chunked coding
+      alone, more than one \c Host, or a header line that ends with a bare LF; a chunked body that cannot be framed,
+      such as one whose trailer section has a line that ends with a bare LF or an empty line before its end, is
+      answered with 400 instead of 500; the chunked coding is recognized without regard to case and whitespace
+    - an HTTP/2 or HTTP/3 request body that the server collects for a handler and whose memory cannot be allocated
+      fails the request, which is answered with an error; before, the handler was given the part collected
     - a request body that the server reads into memory is limited to
       @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" (256 MiB) when no
       \c max_request_body_size is set
@@ -4855,6 +4863,19 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     }
 
     #! @cond nodoc
+    #! Appends a part of a request body that the server collects
+    /** @throw SOCKET-RECV-ERROR the memory for the body could not be allocated: the body is not given incomplete
+        to the handler, as an HTTP/1.x body is not
+    */
+    private static appendRequestBodyPart(reference<binary> body_data, binary chunk) {
+        int size = body_data.size();
+        body_data += chunk;
+        if (body_data.size() != size + chunk.size()) {
+            throw "SOCKET-RECV-ERROR", sprintf("the memory for an HTTP message body of %d bytes could not be "
+                "allocated", size + chunk.size());
+        }
+    }
+
     #! Reads the body of a request for handleRequest()
     /** @return a hash with the body in its \c body key, or @ref nothing if the request has been answered (an error
         response was sent or captured)
@@ -4923,7 +4944,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         if (!chunk) {
                             break;
                         }
-                        body_data += chunk;
+                        appendRequestBodyPart(\body_data, chunk);
                         # Incremental size check: reject early instead of buffering the full body
                         if (max_body > 0 && body_data.size() > max_body) {
                             break;
@@ -4998,7 +5019,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         h2_complete = True;
                         break;
                     }
-                    body_data += chunk;
+                    appendRequestBodyPart(\body_data, chunk);
                     # Incremental size check: reject early instead of buffering the full body
                     if (max_body > 0 && body_data.size() > max_body) {
                         hit_max_body = True;
@@ -5842,6 +5863,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 # the trailer section of a chunked request body is larger than the limit of the socket (qore#6867)
                 case "HTTP-HEADER-TOO-LARGE": err_code = 431; break;
                 case "HTTP-BODY-ENCODING-ERROR": err_code = 400; break;
+                # a chunked request body that cannot be framed: an invalid chunk size or line end, or a trailer
+                # section that is not valid; the connection is closed
+                case "READ-HTTP-CHUNK-ERROR": err_code = 400; break;
                 default: err_code = 500; break;
             }
             # the response gives the client the error and its description; the location of the exception in the

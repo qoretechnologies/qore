@@ -1820,32 +1820,24 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             response_body = nullptr;
         }
 
-        // Check transfer-encoding - handles both string and list (duplicate headers)
+        // the framing of the body (RFC 9112 section 6.3): a Transfer-Encoding overrides any Content-Length; the body
+        // is chunked if the final transfer coding is chunked, and is delimited by the end of the connection if not
+        // (such a connection is not used again); a response with no body (HEAD, 1xx, 204, 304) is handled below
         QoreValue te_val = response_headers->getKeyValue("transfer-encoding");
-        if (te_val.getType() == NT_STRING) {
-            QoreStringValueHelper te_str(te_val);
-            if (strcasestr(te_str->c_str(), "chunked")) {
+        bool close_delimited = false;
+        if (!te_val.isNothing()) {
+            if (my_socket_priv::isHttpResponseBodyChunked(te_val)) {
                 response_chunked = true;
-            }
-        } else if (te_val.getType() == NT_LIST) {
-            // Duplicate Transfer-Encoding headers (e.g., CDN adds its own on top of origin's)
-            // are stored as a list; scan each element for "chunked"
-            ConstListIterator li(te_val.get<const QoreListNode>());
-            while (li.next()) {
-                QoreValue item = li.getValue();
-                if (item.getType() == NT_STRING) {
-                    QoreStringValueHelper item_str(item);
-                    if (!strcasestr(item_str->c_str(), "chunked")) {
-                        continue;
-                    }
-                    response_chunked = true;
-                    break;
-                }
+            } else {
+                close_delimited = true;
             }
         }
 
         // Check content-length
-        if (!response_chunked) {
+        bool content_length_ignored = false;
+        if (close_delimited) {
+            content_length_ignored = true;
+        } else if (!response_chunked) {
             QoreValue cl_val = response_headers->getKeyValue("content-length");
             if (!cl_val.isNullOrNothing()) {
                 if (cl_val.getType() == NT_STRING) {
@@ -1855,6 +1847,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
                     response_content_length = cl_val.getAsBigInt();
                 }
             }
+        } else {
+            // a response with both is not reused: it may have been framed otherwise by an intermediary
+            content_length_ignored = !response_headers->getKeyValue("content-length").isNullOrNothing();
         }
 
         // RFC 9112 section 9.3: HTTP/1.0 is persistent only with keep-alive;
@@ -1910,6 +1905,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             }
         }
         if (response_http_version && !strcmp(response_http_version->c_str(), "1.0") && !keep_alive) {
+            connection_close = true;
+        }
+        if (content_length_ignored) {
             connection_close = true;
         }
 
@@ -2620,6 +2618,15 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkCrlf(ExceptionSink* x
             // Trailer line - kept, then the next line is read; the lines of the section count together against the
             // maximum header size of the socket (issue #6867)
             printd(5, "Http1ClientPollOperationPriv::handleRecvChunkCrlf() trailer line\n");
+            // the lines of a trailer section end with CRLF: a line with a bare LF or CR in it is refused at once, as
+            // the other readers of a chunked body refuse it, instead of waiting for the rest of a section that the
+            // server may never send (the connection is not used again)
+            if (line->size() < 2 || memchr(line->c_str(), '\n', line->size() - 1)
+                    || memchr(line->c_str(), '\r', line->size() - 2)) {
+                setError("READ-HTTP-CHUNK-ERROR", "invalid HTTP chunked body trailer received with a line that "
+                    "ends with a bare LF or has a bare CR or LF character in it", xsink);
+                return nullptr;
+            }
             response_trailer_text.append(line->c_str(), line->size());
             trailer_bytes += line->size();
             releaseCurrentOp(xsink);
