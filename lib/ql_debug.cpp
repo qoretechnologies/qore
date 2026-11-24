@@ -392,6 +392,17 @@ static QoreValue f_dbg_environment_lookups(const QoreListNode* params, RuntimeCo
     return static_cast<int64>(qore_env_lookup_count.load(std::memory_order_relaxed));
 }
 
+//! Returns the number of resolutions of the type of an AOT instanceof so far (qore#7416)
+static QoreValue f_dbg_aot_instanceof_resolves(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64>(qore_aot_instanceof_resolve_count.load(std::memory_order_relaxed));
+}
+
+//! Maps every type path to one set of the AOT instanceof type cache (or not); returns the previous setting (qore#7416)
+static QoreValue f_dbg_aot_instanceof_one_set(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_aot_instanceof_one_set.exchange(get_param_value(params, 0).getAsBool(), std::memory_order_relaxed);
+}
+
 static QoreValue f_dbg_generic_cache_counts(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
     h->setKeyValue("specializations", qore_live_generic_specializations.load(std::memory_order_relaxed), xsink);
@@ -25502,7 +25513,8 @@ static void ut_quic_send_batch_take_back(UnitTestCounters& c) {
             batch.addPacket(data, sizeof(data));
         }
     };
-    // the send system call of the sender's socket to fail (1 = the first), counted from 0 for each case
+    // the datagram of the sender's socket whose send fails (1 = the first), counted from 0 for each case: the test
+    // hook is called once for each datagram, on every platform
     int calls = 0;
     int fail_call = 0;
     // called when the send fails, before sendQuicPacketsBatch() returns
@@ -25540,15 +25552,14 @@ static void ut_quic_send_batch_take_back(UnitTestCounters& c) {
     UT_ASSERT_EQ(c, 0LL, static_cast<long long>(qore_quic_test_undelivered_to(to)),
         "QUIC send take-back: a failed send leaves no datagram to wait for");
 
-    // a send that fails after some datagrams were sent takes back the others; one system call sends up to
-    // QUIC_COMMON_MAX_SEND_BATCH datagrams with sendmmsg(), and one datagram with sendmsg() or sendto()
+    // a send that fails after some datagrams were sent takes back the others; the second datagram fails, also in a
+    // batch larger than one sendmmsg() call
     QuicPacketBatch many;
     make_batch(many, QUIC_COMMON_MAX_SEND_BATCH + 1);
     calls = 0;
     fail_call = 2;
     int sent = sendQuicPacketsBatch(sfd, many, to, rlen);
-    UT_ASSERT(c, sent > 0 && sent <= QUIC_COMMON_MAX_SEND_BATCH,
-        "QUIC send take-back: a send that fails after the first sends part of the batch");
+    UT_ASSERT_EQ(c, 1, sent, "QUIC send take-back: a send that fails after the first sends part of the batch");
     UT_ASSERT_EQ(c, static_cast<long long>(sent), static_cast<long long>(qore_quic_test_undelivered_to(to)),
         "QUIC send take-back: only the datagrams sent are waited for after a partial send");
     UT_ASSERT_EQ(c, sent, receive(sent), "QUIC send take-back: the datagrams of the partial send are read");
@@ -25563,8 +25574,7 @@ static void ut_quic_send_batch_take_back(UnitTestCounters& c) {
         qore_quic_test_set_counting(true);
     };
     sent = sendQuicPacketsBatch(sfd, many, to, rlen);
-    UT_ASSERT(c, sent > 0 && sent <= QUIC_COMMON_MAX_SEND_BATCH,
-        "QUIC send take-back: a send fails after counting started");
+    UT_ASSERT_EQ(c, 1, sent, "QUIC send take-back: a send fails after counting started");
     UT_ASSERT_EQ(c, 0LL, static_cast<long long>(qore_quic_test_undelivered_to(to)),
         "QUIC send take-back: datagrams not counted are not taken back");
     // the datagrams sent are read without counting them, as they were not counted as sent
@@ -25609,6 +25619,191 @@ static void ut_quic_send_batch_take_back(UnitTestCounters& c) {
     UT_ASSERT(c, woken, "QUIC send take-back: the datagrams taken back woke the wait");
     UT_ASSERT_EQ(c, 0LL, static_cast<long long>(qore_quic_test_undelivered_to(to)),
         "QUIC send take-back: no datagram is waited for after the wait");
+}
+#endif
+
+#ifdef DEBUG
+//! The datagrams that a QUIC send does not send are kept and sent again, and ENOBUFS waits with a backoff (qore#7414)
+/** ngtcp2 counts each datagram that it writes as sent, so one that a send dropped was lost to the connection, which
+    recovered it only with its loss recovery (PTO).  A send that failed with ENOBUFS raised QUIC-SEND-ERROR, and a
+    datagram whose send failed after others were sent was dropped by the server's timer flush.
+*/
+static void ut_quic_send_keeping_unsent(UnitTestCounters& c) {
+    int rfd = socket(AF_INET, SOCK_DGRAM, 0);
+    int sfd = socket(AF_INET, SOCK_DGRAM, 0);
+    ON_BLOCK_EXIT([rfd, sfd] () {
+        qore_quic_test_set_send_hook({});
+        if (rfd >= 0) {
+            ::close(rfd);
+        }
+        if (sfd >= 0) {
+            ::close(sfd);
+        }
+    });
+    struct sockaddr_in raddr = {};
+    raddr.sin_family = AF_INET;
+    raddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    socklen_t rlen = sizeof(raddr);
+    // a datagram that is not delivered fails the test instead of blocking it
+    struct timeval tv = {30, 0};
+    if (rfd < 0 || sfd < 0 || ::bind(rfd, reinterpret_cast<struct sockaddr*>(&raddr), sizeof(raddr))
+            || getsockname(rfd, reinterpret_cast<struct sockaddr*>(&raddr), &rlen)
+            || setsockopt(rfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv))) {
+        UT_ASSERT(c, false, "QUIC send keeping unsent: the UDP sockets are made");
+        return;
+    }
+    const struct sockaddr* to = reinterpret_cast<const struct sockaddr*>(&raddr);
+
+    // a batch of n datagrams, each with its number as its content
+    auto make_batch = [](QuicPacketBatch& batch, int n) {
+        batch.clear();
+        for (int i = 0; i < n; ++i) {
+            uint8_t data[4] = {'q', 'u', static_cast<uint8_t>(i >> 8), static_cast<uint8_t>(i)};
+            batch.addPacket(data, sizeof(data));
+        }
+    };
+    // reads n datagrams and checks that they are the datagrams [first, first + n) in order
+    auto receive = [rfd](int first, int n) -> bool {
+        for (int i = first; i < first + n; ++i) {
+            uint8_t buf[16];
+            ssize_t len = recv(rfd, buf, sizeof(buf), 0);
+            if (len != 4 || buf[2] != static_cast<uint8_t>(i >> 8) || buf[3] != static_cast<uint8_t>(i)) {
+                return false;
+            }
+        }
+        return true;
+    };
+    // returns true if the receiver has no datagram waiting
+    auto none_waiting = [rfd]() -> bool {
+        uint8_t buf[16];
+        return recv(rfd, buf, sizeof(buf), MSG_DONTWAIT) < 0 && (errno == EAGAIN || errno == EWOULDBLOCK);
+    };
+
+    // the datagrams of the sender's socket whose sends fail, counted from 1 for each case, and their error
+    int calls = 0;
+    std::set<int> fail;
+    int fail_error = ENOBUFS;
+    qore_quic_test_set_send_hook([sfd, &calls, &fail, &fail_error] (int fd) -> int {
+        if (fd != sfd) {
+            return 0;
+        }
+        return fail.count(++calls) ? fail_error : 0;
+    });
+
+    const uint64_t now = QuicSession::timestamp();
+    QuicPacketBatch batch;
+    QuicSendBackoff backoff;
+
+    // all datagrams are sent
+    make_batch(batch, 3);
+    calls = 0;
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, now, to, rlen) == QuicSendResult::Sent,
+        "QUIC send keeping unsent: a batch is sent");
+    UT_ASSERT(c, batch.empty(), "QUIC send keeping unsent: the datagrams sent are removed");
+    UT_ASSERT(c, receive(0, 3), "QUIC send keeping unsent: the datagrams are received");
+
+    // ENOBUFS on a middle datagram keeps it and those after it, and sends them after the delay
+    const int n = QUIC_COMMON_MAX_SEND_BATCH + 4;
+    make_batch(batch, n);
+    calls = 0;
+    fail = {3};
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, now, to, rlen) == QuicSendResult::Backoff,
+        "QUIC send keeping unsent: ENOBUFS on a middle datagram waits with a backoff");
+    UT_ASSERT_EQ(c, n - 2, batch.size(), "QUIC send keeping unsent: the datagrams not sent are kept");
+    UT_ASSERT_EQ(c, (long long)QuicSendBackoff::FirstDelayNs, (long long)backoff.delay(),
+        "QUIC send keeping unsent: the first delay");
+    UT_ASSERT_EQ(c, (long long)(now + QuicSendBackoff::FirstDelayNs), (long long)backoff.retryAt(),
+        "QUIC send keeping unsent: the time to send again");
+    UT_ASSERT(c, receive(0, 2), "QUIC send keeping unsent: the datagrams before the failed one are received");
+    // nothing is sent before the time to send again
+    int calls_before = calls;
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, now + QuicSendBackoff::FirstDelayNs - 1, to,
+        rlen) == QuicSendResult::Backoff, "QUIC send keeping unsent: the send waits for its time");
+    UT_ASSERT_EQ(c, calls_before, calls, "QUIC send keeping unsent: nothing is sent before the time");
+    UT_ASSERT_EQ(c, n - 2, batch.size(), "QUIC send keeping unsent: the datagrams are still kept");
+    UT_ASSERT(c, none_waiting(), "QUIC send keeping unsent: no datagram is sent before the time");
+    // at its time, the datagrams kept are sent, in order, once each
+    fail.clear();
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, backoff.retryAt(), to, rlen)
+        == QuicSendResult::Sent, "QUIC send keeping unsent: the datagrams kept are sent at their time");
+    UT_ASSERT(c, batch.empty(), "QUIC send keeping unsent: no datagram is kept after they are sent");
+    UT_ASSERT_EQ(c, 0LL, (long long)backoff.retryAt(), "QUIC send keeping unsent: a send resets the backoff");
+    UT_ASSERT(c, receive(2, n - 2), "QUIC send keeping unsent: the datagrams kept are received in order");
+    UT_ASSERT(c, none_waiting(), "QUIC send keeping unsent: each datagram is received once");
+
+    // ENOBUFS on the first datagram keeps them all; the delay doubles with each failure in a row, up to its maximum
+    make_batch(batch, 2);
+    calls = 0;
+    fail = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    uint64_t t = now;
+    uint64_t expected = QuicSendBackoff::FirstDelayNs;
+    for (int i = 0; i < 10; ++i) {
+        UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, t, to, rlen) == QuicSendResult::Backoff,
+            "QUIC send keeping unsent: ENOBUFS on the first datagram waits with a backoff");
+        UT_ASSERT_EQ(c, (long long)expected, (long long)backoff.delay(),
+            "QUIC send keeping unsent: the delay doubles up to its maximum");
+        t = backoff.retryAt();
+        expected = std::min(expected * 2, QuicSendBackoff::MaxDelayNs);
+    }
+    UT_ASSERT_EQ(c, (long long)QuicSendBackoff::MaxDelayNs, (long long)backoff.delay(),
+        "QUIC send keeping unsent: the delay stops at its maximum");
+    UT_ASSERT_EQ(c, 2, batch.size(), "QUIC send keeping unsent: no datagram is dropped while the sends fail");
+    fail.clear();
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, t, to, rlen) == QuicSendResult::Sent,
+        "QUIC send keeping unsent: the datagrams are sent once the queue drains");
+    UT_ASSERT(c, receive(0, 2), "QUIC send keeping unsent: the datagrams are received after the backoff");
+    // the backoff starts again after a send
+    make_batch(batch, 1);
+    calls = 0;
+    fail = {1};
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, t, to, rlen) == QuicSendResult::Backoff,
+        "QUIC send keeping unsent: a later ENOBUFS waits with a backoff");
+    UT_ASSERT_EQ(c, (long long)QuicSendBackoff::FirstDelayNs, (long long)backoff.delay(),
+        "QUIC send keeping unsent: the backoff starts again after a send");
+    fail.clear();
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, backoff.retryAt(), to, rlen)
+        == QuicSendResult::Sent, "QUIC send keeping unsent: the datagram is sent");
+    UT_ASSERT(c, receive(0, 1), "QUIC send keeping unsent: the datagram is received");
+
+    // a full socket buffer (EAGAIN) waits for POLLOUT, with no backoff
+    fail_error = EAGAIN;
+    make_batch(batch, 3);
+    calls = 0;
+    fail = {1};
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, now, to, rlen) == QuicSendResult::WaitWritable,
+        "QUIC send keeping unsent: EAGAIN waits until the socket is writable");
+    UT_ASSERT_EQ(c, 3, batch.size(), "QUIC send keeping unsent: EAGAIN keeps the datagrams");
+    UT_ASSERT_EQ(c, 0LL, (long long)backoff.retryAt(), "QUIC send keeping unsent: EAGAIN has no backoff");
+    calls = 0;
+    fail = {2};
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, now, to, rlen) == QuicSendResult::WaitWritable,
+        "QUIC send keeping unsent: EAGAIN on a middle datagram waits until the socket is writable");
+    UT_ASSERT_EQ(c, 2, batch.size(), "QUIC send keeping unsent: EAGAIN on a middle datagram keeps the others");
+    fail.clear();
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, now, to, rlen) == QuicSendResult::Sent,
+        "QUIC send keeping unsent: the datagrams kept after EAGAIN are sent");
+    UT_ASSERT(c, receive(0, 3), "QUIC send keeping unsent: the datagrams kept after EAGAIN are received in order");
+
+    // another error is reported: at once on the first datagram, with the batch unchanged; after some datagrams were
+    // sent, by the send of the others
+    fail_error = EPERM;
+    make_batch(batch, 3);
+    calls = 0;
+    fail = {1};
+    errno = 0;
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, now, to, rlen) == QuicSendResult::Error,
+        "QUIC send keeping unsent: another error is reported");
+    UT_ASSERT_EQ(c, EPERM, errno, "QUIC send keeping unsent: errno is the error of the send");
+    UT_ASSERT_EQ(c, 3, batch.size(), "QUIC send keeping unsent: the batch is unchanged after an error");
+    calls = 0;
+    fail = {2, 3};
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, now, to, rlen) == QuicSendResult::WaitWritable,
+        "QUIC send keeping unsent: an error after a datagram was sent keeps the others");
+    UT_ASSERT_EQ(c, 2, batch.size(), "QUIC send keeping unsent: the datagrams after the error are kept");
+    UT_ASSERT(c, receive(0, 1), "QUIC send keeping unsent: the datagram before the error is received");
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, now, to, rlen) == QuicSendResult::Error,
+        "QUIC send keeping unsent: the next send reports the error");
+    UT_ASSERT(c, none_waiting(), "QUIC send keeping unsent: no datagram is sent after the error");
 }
 #endif
 
@@ -26058,6 +26253,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     QuicPacketPacingTest::run(c);
     QuicStatelessResetTest::run(c);
     ut_quic_send_batch_take_back(c);
+    ut_quic_send_keeping_unsent(c);
 #ifndef _Q_WINDOWS
     HappyEyeballsLayeredConnectTest::run(c);
 #endif
@@ -29605,6 +29801,8 @@ namespace {
 //! the HTTP/3 stream whose staged response data is held, set by dbg_quic_hold_stream_data(); session 0: none
 std::atomic<int64_t> dbg_quic_hold_session{0};
 std::atomic<int64_t> dbg_quic_hold_stream{-1};
+//! true: the held stream is released by the next Socket::flushQuicPendingData() of its session
+std::atomic<bool> dbg_quic_hold_until_flush{false};
 }
 
 std::atomic<int> qore_dbg_quic_idle_waiters{0};
@@ -29689,10 +29887,13 @@ bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id) {
 
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID of a streaming response
+    @param until_flush if True, the next Socket::flushQuicPendingData() of the session releases the stream on the I/O
+    thread of its socket before it writes, so that the flush writes the data held (qore#7414)
 */
 static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     int64_t session_id = get_param_value(params, 0).getAsBigInt();
     int64_t stream_id = get_param_value(params, 1).getAsBigInt();
+    bool until_flush = get_param_value(params, 2).getAsBool();
     if (session_id <= 0 || stream_id < 0) {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_hold_stream_data(): invalid session ID %lld or stream "
             "ID %lld", (long long)session_id, (long long)stream_id);
@@ -29701,8 +29902,20 @@ static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, Runtime
     // the stream is set first, so that no other stream of the session matches meanwhile
     dbg_quic_hold_session.store(0, std::memory_order_release);
     dbg_quic_hold_stream.store(stream_id, std::memory_order_release);
+    dbg_quic_hold_until_flush.store(until_flush, std::memory_order_release);
     dbg_quic_hold_session.store(session_id, std::memory_order_release);
     return QoreValue();
+}
+
+void qore_dbg_quic_flush_releases_held(int64_t session_id) {
+    if (!dbg_quic_hold_until_flush.load(std::memory_order_acquire)
+            || dbg_quic_hold_session.load(std::memory_order_acquire) != session_id) {
+        return;
+    }
+    dbg_quic_hold_until_flush.store(false, std::memory_order_release);
+    dbg_quic_hold_session.store(0, std::memory_order_release);
+    dbg_quic_hold_stream.store(-1, std::memory_order_release);
+    QuicSession::dbgResumeHeldStreams();
 }
 
 //! waits until a QUIC session has no data in flight: its peer has acknowledged everything that it sent
@@ -29758,6 +29971,143 @@ static QoreValue f_dbg_quic_stateless_reset_counts(const QoreListNode* params, R
     h->setKeyValue("sent", qore_dbg_quic_stateless_resets_sent.load(std::memory_order_relaxed), xsink);
     h->setKeyValue("received", qore_dbg_quic_stateless_resets_received.load(std::memory_order_relaxed), xsink);
     return h.release();
+}
+
+namespace {
+//! the datagrams that dbg_quic_fail_sends() makes fail (qore#7414)
+struct DbgQuicFailSends {
+    //! the port of the sockets whose datagrams are counted
+    int port = 0;
+    //! true: the port is the peer's (a connected client socket); false: the socket's own (a listener)
+    bool by_peer = false;
+    //! true: only the datagrams sent by Socket::flushQuicPendingData() are counted
+    bool flush_only = false;
+    //! the numbers of the datagrams that fail, counted from 1
+    std::set<int64_t> fail;
+    //! the error that they fail with
+    int err = 0;
+    //! the datagrams counted
+    int64_t seen = 0;
+    //! the datagrams that failed
+    int64_t failed = 0;
+};
+std::mutex dbg_quic_fail_sends_m;
+DbgQuicFailSends dbg_quic_fail_sends_state;
+}
+
+//! returns the port of a socket or of its peer, or -1 if it has none
+static int dbg_socket_port(int fd, bool peer) {
+    struct sockaddr_storage addr;
+    socklen_t len = sizeof(addr);
+    int rc = peer ? getpeername(fd, reinterpret_cast<struct sockaddr*>(&addr), &len)
+        : getsockname(fd, reinterpret_cast<struct sockaddr*>(&addr), &len);
+    if (rc) {
+        return -1;
+    }
+    if (addr.ss_family == AF_INET) {
+        return ntohs(reinterpret_cast<struct sockaddr_in*>(&addr)->sin_port);
+    }
+    if (addr.ss_family == AF_INET6) {
+        return ntohs(reinterpret_cast<struct sockaddr_in6*>(&addr)->sin6_port);
+    }
+    return -1;
+}
+
+//! makes the listed QUIC datagrams sent on the sockets of a port fail with an error, until dbg_quic_fail_sends_end()
+/** The datagrams are counted from 1 in the order in which they are sent; each failed datagram fails the send of it
+    and of the datagrams after it in the same send call, as a system call that fails does.  With \c flush_only, only
+    the datagrams sent by Socket::flushQuicPendingData() are counted (qore#7414)
+*/
+static QoreValue f_dbg_quic_fail_sends(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t port = get_param_value(params, 0).getAsBigInt();
+    bool by_peer = get_param_value(params, 1).getAsBool();
+    const QoreListNode* l = get_param_value(params, 2).get<const QoreListNode>();
+    int64_t err = get_param_value(params, 3).getAsBigInt();
+    bool flush_only = get_param_value(params, 4).getAsBool();
+    if (port <= 0 || port > 65535 || err <= 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_fail_sends(): invalid port %lld or error %lld",
+            (long long)port, (long long)err);
+        return QoreValue();
+    }
+    std::set<int64_t> fail;
+    ConstListIterator li(l);
+    while (li.next()) {
+        int64_t n = li.getValue().getAsBigInt();
+        if (n <= 0) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_fail_sends(): invalid datagram number %lld "
+                "(datagrams are counted from 1)", (long long)n);
+            return QoreValue();
+        }
+        fail.insert(n);
+    }
+    {
+        std::lock_guard<std::mutex> g(dbg_quic_fail_sends_m);
+        dbg_quic_fail_sends_state = DbgQuicFailSends();
+        dbg_quic_fail_sends_state.port = static_cast<int>(port);
+        dbg_quic_fail_sends_state.by_peer = by_peer;
+        dbg_quic_fail_sends_state.flush_only = flush_only;
+        dbg_quic_fail_sends_state.fail = std::move(fail);
+        dbg_quic_fail_sends_state.err = static_cast<int>(err);
+    }
+    qore_quic_test_set_send_hook([] (int fd) -> int {
+        std::lock_guard<std::mutex> g(dbg_quic_fail_sends_m);
+        DbgQuicFailSends& st = dbg_quic_fail_sends_state;
+        if (!st.port || (st.flush_only && !qore_quic_test_flush_sending())
+                || dbg_socket_port(fd, st.by_peer) != st.port) {
+            return 0;
+        }
+        if (st.fail.count(++st.seen)) {
+            ++st.failed;
+            return st.err;
+        }
+        return 0;
+    });
+    return QoreValue();
+}
+
+//! ends dbg_quic_fail_sends(); returns a hash with the datagrams counted (\c datagrams) and failed (\c failed)
+static QoreValue f_dbg_quic_fail_sends_end(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    qore_quic_test_set_send_hook({});
+    int64_t seen, failed;
+    {
+        std::lock_guard<std::mutex> g(dbg_quic_fail_sends_m);
+        seen = dbg_quic_fail_sends_state.seen;
+        failed = dbg_quic_fail_sends_state.failed;
+        dbg_quic_fail_sends_state = DbgQuicFailSends();
+    }
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), xsink);
+    h->setKeyValue("datagrams", seen, xsink);
+    h->setKeyValue("failed", failed, xsink);
+    return h.release();
+}
+
+//! returns the packets sent and lost of the QUIC server sessions of the process that are open
+/** As a hash of hashes with the keys \c sent and \c lost, keyed by session ID (qore#7414)
+*/
+static QoreValue f_dbg_quic_server_session_packets(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    std::vector<std::shared_ptr<QuicSession>> sessions;
+    {
+        std::lock_guard<std::mutex> lk(dbg_quic_sessions_m);
+        for (auto& i : dbg_quic_sessions) {
+            if (std::shared_ptr<QuicSession> session = i.second.lock()) {
+                sessions.push_back(std::move(session));
+            }
+        }
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    for (auto& session : sessions) {
+        uint64_t sent, lost;
+        if (session->isClosed() || !session->getPacketCounts(sent, lost)) {
+            continue;
+        }
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), xsink);
+        h->setKeyValue("sent", static_cast<int64_t>(sent), xsink);
+        h->setKeyValue("lost", static_cast<int64_t>(lost), xsink);
+        QoreStringMaker key("%lld", (long long)session->getSessionId());
+        rv->setKeyValue(key.c_str(), h.release(), xsink);
+    }
+    return rv.release();
 }
 
 namespace {
@@ -29956,6 +30306,7 @@ static QoreValue f_dbg_quic_release_stream_data(const QoreListNode* params, Runt
         ExceptionSink* xsink) {
     dbg_quic_hold_session.store(0, std::memory_order_release);
     dbg_quic_hold_stream.store(-1, std::memory_order_release);
+    dbg_quic_hold_until_flush.store(false, std::memory_order_release);
     // a held stream is deferred until it is resumed: without this, its data stayed held after the release
     QuicSession::dbgResumeHeldStreams();
     return QoreValue();
@@ -32143,6 +32494,10 @@ void init_debug_functions(QoreNamespace& qns) {
         "found_dir", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG, "found_rel");
     qns.addBuiltinVariant("dbg_environment_lookups", f_dbg_environment_lookups, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_aot_instanceof_resolves", f_dbg_aot_instanceof_resolves, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_aot_instanceof_one_set", f_dbg_aot_instanceof_one_set, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, softBoolTypeInfo, QORE_PARAM_NO_ARG, "on");
     qns.addBuiltinVariant("dbg_retired_type_declarations", f_dbg_retired_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_type_declaration_groups", f_dbg_type_declaration_groups, QCF_NO_FLAGS,
@@ -32841,11 +33196,19 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_http2_connection_window_updates", f_dbg_http2_connection_window_updates, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_quic_hold_stream_data", f_dbg_quic_hold_stream_data, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
-        nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", bigIntTypeInfo, QORE_PARAM_NO_ARG,
-        "stream_id");
+        nothingTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", bigIntTypeInfo, QORE_PARAM_NO_ARG,
+        "stream_id", boolTypeInfo, QoreValue(false), "until_flush");
     qns.addBuiltinVariant("dbg_quic_release_stream_data", f_dbg_quic_release_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_quic_stateless_reset_counts", f_dbg_quic_stateless_reset_counts, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_fail_sends", f_dbg_quic_fail_sends, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 5, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", boolTypeInfo, QORE_PARAM_NO_ARG, "by_peer",
+        listTypeInfo, QORE_PARAM_NO_ARG, "datagrams", bigIntTypeInfo, QORE_PARAM_NO_ARG, "err", boolTypeInfo,
+        QoreValue(false), "flush_only");
+    qns.addBuiltinVariant("dbg_quic_fail_sends_end", f_dbg_quic_fail_sends_end, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_server_session_packets", f_dbg_quic_server_session_packets, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_quic_wait_idle", f_dbg_quic_wait_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");

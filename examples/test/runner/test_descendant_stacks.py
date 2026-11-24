@@ -33,6 +33,13 @@ from test_watchdog import HAVE_TIMEOUT, ROOT, RunnerTree, end_session, start_in_
 # the root helper of the CI jobs (see examples/test/docker_test/ci-stack-capture.sh)
 HELPER = ROOT / "examples/test/docker_test/ci-stack-capture.sh"
 LINUX = os.path.isdir("/proc/self")
+# a Python built without its _ctypes extension has no ctypes: the test of a process whose main thread has ended calls
+# prctl() and pthread_exit() through it, in a child run with this Python
+try:
+    import ctypes  # noqa: F401
+    HAVE_CTYPES = True
+except ImportError:
+    HAVE_CTYPES = False
 
 
 # the tools that run_tests.sh tries by default
@@ -709,6 +716,7 @@ class LinuxScanAndHelperTest(StacksCase):
             self.assertNotIn("ptrace restricted", output)
             self.assertEqual(["attached to %d" % child], (tree.root / "calls").read_text().splitlines())
 
+    @unittest.skipUnless(HAVE_CTYPES, "the child ends its main thread with pthread_exit() through ctypes")
     def test_a_process_whose_main_thread_has_ended_is_captured(self):
         # A process whose main thread has ended (pthread_exit()) while another thread runs shows that thread as a
         # zombie (state Z): it was reported as ended, without its stacks.  The child ends its main thread once a

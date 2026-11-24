@@ -890,6 +890,32 @@ LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadA
     }
 }
 
+LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadAccess, ReferenceBind)
+        : vl(xsink), read_access(RA_VAR), track_write_protection(true) {
+    startRemovalPath();
+    QoreReferenceBindScope bind_scope(&vl, this);
+    RuntimeReferenceHelper rh(ref, xsink);
+    if (!*xsink) {
+        doLValue(lvalue_ref::get(&ref)->vexp, true);
+    }
+}
+
+LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReferenceBind)
+        : vl(xsink) {
+    startRemovalPath();
+    QoreReferenceBindScope bind_scope(&vl, this);
+    try {
+        RuntimeReferenceHelper rh(ref, xsink);
+        if (!*xsink && !doLValue(lvalue_ref::get(&ref)->vexp, true)) {
+            // see LValueHelper(const ReferenceNode&, ExceptionSink*, bool, bool)
+            adoptReferenceProgram(rh.takeProgramEntry());
+        }
+    } catch (...) {
+        ref_pgms.release(nullptr);
+        throw;
+    }
+}
+
 LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
@@ -2372,8 +2398,20 @@ int LValueHelper::setBufferElementLValue(QoreBufferNode* b, size_t index) {
     return 0;
 }
 
+void qore_raise_reference_bind_user_code(QoreObject* object, const char* member, ExceptionSink* xsink) {
+    xsink->raiseException("REFERENCE-BIND-ERROR", "cannot bind a reference to member '%s' of class '%s' while assigning "
+        "to a member of the same object: the class runs code for the member, which cannot run under the object's lock",
+        member, object->getClassName());
+}
+
 int LValueHelper::setMemberWriteGateLValue(QoreObject* object, const char* member,
         const QoreMemberInfo* accessor_info) {
+    // a gate is Qore code, which cannot run under the lock of the assignment being checked (qore#7380, qore#7391)
+    QoreVarRWLock& object_lock = qore_object_private::get(*object)->rml;
+    if (qore_auto_vlock_ops(vl).getRWL() != &object_lock && qore_var_rwlock_ops(object_lock).heldForBind(&vl)) {
+        qore_raise_reference_bind_user_code(object, member, vl.xsink);
+        return -1;
+    }
     auto entry = std::make_unique<MemberLValue>(object, member, accessor_info, vl.xsink);
     // Keep the receiver before unlocking the parent lvalue; a gate can call external or Qore code.
     vl.del();
@@ -3002,9 +3040,18 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
     return 0;
 }
 
+thread_local const void* qore_reference_bind_vl = nullptr;
+thread_local void* qore_reference_bind_helper = nullptr;
+
+void qore_reference_bind_note_reused_lock() {
+    static_cast<LValueHelper*>(qore_reference_bind_helper)->noteReusedBindLock();
+}
+
 void LValueHelper::setAndLock(QoreVarRWLock& rwl) {
-    qore_var_rwlock_ops(rwl).wrlock();
-    qore_auto_vlock_ops(vl).set(&rwl);
+    // a lock that the assignment of this thread holds while it binds a reference stays with that assignment (qore#7380)
+    if (qore_var_rwlock_ops(rwl).wrlockUnlessHeldForBind(&vl)) {
+        qore_auto_vlock_ops(vl).set(&rwl);
+    }
 }
 
 void LValueHelper::set(QoreVarRWLock& rwl) {
@@ -5924,7 +5971,9 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_
     // a variable that only its frame can use is changed like a plain local variable: without the lock, and with
     // no recursive-reference scan, since nothing refers to it that a cycle could run through
     bool exclusive = frameExclusive();
-    QoreSafeVarRWWriteLocker sl(rml, !exclusive);
+    QoreSafeVarRWWriteLocker sl(rml, false);
+    // a lock that the assignment of this thread holds while it binds a reference stays with that assignment (qore#7380)
+    bool locked = !exclusive && sl.lockUnlessHeldForBind(&lvh.vl);
     if (!exclusive && QoreTypeInfo::needsScan(typeInfo)) {
         lvh.setClosure(const_cast<ClosureVarValue*>(this));
     }
@@ -5953,7 +6002,7 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_
         return 0;
     }
 
-    if (!exclusive) {
+    if (locked) {
         lvh.set(rml);
         sl.stay_locked();
     }

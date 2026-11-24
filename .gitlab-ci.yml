@@ -194,6 +194,8 @@ check-build-separate-units:
     - . test/docker_test/tree-tested-skip.sh
     - test/docker_test/build-separate-units.sh
 
+# The Linux qmod builds pass the pinned image's native module directory to CMake. On macOS the job uses its
+# package-manager prefixes. A job can override either with QORE_EXTERNAL_MODULE_DIRS (a semicolon-separated list).
 # The qmod build cache (design/qmod-build-cache.md): every job that builds Qore reuses the AOT modules that earlier
 # jobs compiled, from a directory of the host that its runner mounts into the job and names in QORE_QMOD_CACHE_DIR (the
 # runner sets it; without it, or when the directory is not mounted, the build runs without the cache).  A module is

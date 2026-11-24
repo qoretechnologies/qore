@@ -102,9 +102,7 @@ option(QORE_REQUIRE_SYSTEM_DEPENDENCIES
        "Require installed dependencies instead of downloading and bundling fallback sources"
        OFF)
 
-option(QORE_BUILD_WITH_EXTERNAL_MODULES
-       "Allow installed Qore modules to provide optional features in build outputs"
-       ON)
+include(cmake/QoreExternalModuleDirs.cmake)
 
 option(QORE_STACK_USAGE_REPORT
        "Compile libqore with -fstack-usage for tools/check-stack-usage.py (frame sizes of the per-call path)"
@@ -182,15 +180,7 @@ foreach(mod_dir ${QORE_BINARY_MODULE_SOURCE_DIRS})
         list(APPEND QORE_BINARY_MODULE_DIRS "${CMAKE_BINARY_DIR}/modules/${mod_name}")
     endif ()
 endforeach ()
-if (WIN32 OR MSYS OR MINGW)
-    set(QORE_MODULE_DIR_FOR_DOCS "${CMAKE_SOURCE_DIR}/qlib")
-    list(APPEND QORE_MODULE_DIR_FOR_DOCS ${QORE_BINARY_MODULE_DIRS})
-    string(REPLACE ";" "\\;" QORE_MODULE_DIR_FOR_DOCS "${QORE_MODULE_DIR_FOR_DOCS}")
-else (WIN32 OR MSYS OR MINGW)
-    set(QORE_MODULE_DIR_FOR_DOCS "${CMAKE_SOURCE_DIR}/qlib")
-    list(APPEND QORE_MODULE_DIR_FOR_DOCS ${QORE_BINARY_MODULE_DIRS})
-    string(REPLACE ";" ":" QORE_MODULE_DIR_FOR_DOCS "${QORE_MODULE_DIR_FOR_DOCS}")
-endif (WIN32 OR MSYS OR MINGW)
+qore_build_module_path(QORE_MODULE_DIR_FOR_DOCS "${CMAKE_SOURCE_DIR}/qlib" ${QORE_BINARY_MODULE_DIRS})
 set(QORE_QDX_COMMAND ${QORE_INTERPRETER} ${QORE_QDX_EXECUTABLE})
 set(QORE_QJAR_COMMAND ${QORE_INTERPRETER} ${QORE_QJAR_EXECUTABLE})
 # simulate QoreConfig
@@ -1529,10 +1519,8 @@ if (DEFINED ENV{QORE_DOC_DEFINES})
         set(QORE_DOC_DEFINES "${_QORE_DOC_DEFINES_ENV}")
     endif ()
 endif ()
-set(QORE_DOCS_ENV QORE_MODULE_DIR=${QORE_MODULE_DIR_FOR_DOCS} QORE_DOC_DEFINES=${QORE_DOC_DEFINES})
-if (NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
-    list(APPEND QORE_DOCS_ENV "QORE_MODULE_DIR_ONLY=1")
-endif()
+set(QORE_DOCS_ENV "QORE_MODULE_DIR=${QORE_MODULE_DIR_FOR_DOCS}" "QORE_MODULE_DIR_ONLY=1"
+    "QORE_DOC_DEFINES=${QORE_DOC_DEFINES}")
 
 check_cxx_source_compiles("#include <sys/stat.h>
 int main() {
@@ -3813,55 +3801,8 @@ set(QORE_QM_METADATA_SUBDIR core-qlib)
 # the build directories of the in-tree binary modules, which QORE_BINARY_MODULE_QORE() records as the modules are
 # declared above, so that a new module is on the module path of the metadata extraction without a list to keep in sync
 get_property(QORE_QM_METADATA_MODULE_DIRS GLOBAL PROPERTY QORE_INTREE_BINARY_MODULE_DIRS)
-string(REPLACE ";" ":" QORE_QM_METADATA_MODULE_DIRS_STR "${QORE_QM_METADATA_MODULE_DIRS}")
-set(QORE_BUILD_EXTERNAL_MODULE_DIRS)
-if (QORE_BUILD_WITH_EXTERNAL_MODULES)
-    set(QORE_BUILD_EXTERNAL_MODULE_DIRS
-        ${CMAKE_INSTALL_FULL_DATADIR}/qore-modules
-        ${CMAKE_INSTALL_FULL_LIBDIR}/qore-modules
-        /usr/local/share/qore-modules
-        /usr/local/lib/qore-modules
-        /usr/share/qore-modules
-        /usr/lib/qore-modules)
-    if(CMAKE_LIBRARY_ARCHITECTURE)
-        list(APPEND QORE_BUILD_EXTERNAL_MODULE_DIRS
-            /usr/local/lib/${CMAKE_LIBRARY_ARCHITECTURE}/qore-modules
-            /usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}/qore-modules)
-    endif()
-    if(APPLE)
-        list(APPEND QORE_BUILD_EXTERNAL_MODULE_DIRS
-            /opt/local/share/qore-modules
-            /opt/local/lib/qore-modules
-            /opt/homebrew/share/qore-modules
-            /opt/homebrew/lib/qore-modules)
-    endif()
-    list(REMOVE_DUPLICATES QORE_BUILD_EXTERNAL_MODULE_DIRS)
-endif()
-string(REPLACE ";" ":" QORE_BUILD_EXTERNAL_MODULE_DIRS_STR "${QORE_BUILD_EXTERNAL_MODULE_DIRS}")
-# The directories of the installed (external) modules that the qlib qmods are compiled against: run_tests.sh appends
-# them to QORE_MODULE_DIR, so that the tests find the modules that the qmods of this build require.  Otherwise a qmod
-# compiled against a module installed outside this build's prefix cannot load it at test time and falls back to its
-# source (BINARY-MODULE-SOURCE-FALLBACK).  Empty when QORE_BUILD_WITH_EXTERNAL_MODULES is OFF.
-file(WRITE ${CMAKE_BINARY_DIR}/qore-external-module-dirs.txt.in "${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}\n")
-configure_file(
-    ${CMAKE_BINARY_DIR}/qore-external-module-dirs.txt.in
-    ${CMAKE_BINARY_DIR}/qore-external-module-dirs.txt
-    COPYONLY)
-set(QORE_BUILD_MODULE_DIRS_STR
-    "${QORE_QM_METADATA_MODULE_DIRS_STR}:${CMAKE_SOURCE_DIR}/qlib")
-if (QORE_BUILD_EXTERNAL_MODULE_DIRS_STR)
-    string(APPEND QORE_BUILD_MODULE_DIRS_STR ":${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}")
-endif()
-set(QORE_QM_METADATA_ENV
-    "QORE_MODULE_DIR=${QORE_BUILD_MODULE_DIRS_STR}"
-    "QORE_INCLUDE_DIR="
-    "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
-if (NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
-    # QORE_MODULE_DIR normally augments the runtime's installed search paths.
-    # Package builds must also omit those defaults: a successful %try-module
-    # becomes a hard dependency of the resulting AOT artifact.
-    list(APPEND QORE_QM_METADATA_ENV "QORE_MODULE_DIR_ONLY=1")
-endif()
+qore_build_module_env(QORE_QM_METADATA_ENV ${QORE_QM_METADATA_MODULE_DIRS} "${CMAKE_SOURCE_DIR}/qlib")
+list(APPEND QORE_QM_METADATA_ENV "QORE_INCLUDE_DIR=" "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
 # every in-tree binary module (QORE_BINARY_MODULE_QORE()) installs its qmod with the qore-bootstrap component, so the
 # qore-bootstrap target builds each of them; the list is recorded as the modules are declared above, so a new module
 # cannot be left out (a module missing from a list kept by hand failed only at install time: "file INSTALL cannot find
@@ -3893,16 +3834,17 @@ find_program(_qore_exe NAMES qore HINTS ${CMAKE_INSTALL_FULL_BINDIR})
 # when the probe set actually changes.
 set(_qore_aot_probe_modules xml uuid msgpack process imagemagick sysconf oracle)
 set(_qore_aot_probe_content "")
-if(NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
+if(NOT QORE_BUILD_EXTERNAL_MODULE_DIRS)
     foreach(_pm ${_qore_aot_probe_modules})
         string(APPEND _qore_aot_probe_content "${_pm}=disabled\n")
     endforeach()
 elseif(_qore_exe)
+    qore_build_module_env(_qore_probe_env)
     foreach(_pm ${_qore_aot_probe_modules})
         # The probe searches the external module directories that the AOT compile searches (QORE_QM_METADATA_ENV)
         # and not those of the environment cmake runs in, so that it records the modules the qmods are compiled with.
         execute_process(
-            COMMAND ${CMAKE_COMMAND} -E env "QORE_MODULE_DIR=${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}"
+            COMMAND ${CMAKE_COMMAND} -E env ${_qore_probe_env}
                 ${_qore_exe} -l ${_pm} -ne
                 "printf(\"%d.%d\", get_module_hash().${_pm}.api_major, get_module_hash().${_pm}.api_minor);"
             RESULT_VARIABLE _pm_rc

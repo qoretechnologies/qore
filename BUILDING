@@ -19,6 +19,20 @@ Keep .git-archive-revision when repacking an exported archive. An unversioned
 source copy reports "unknown"; an invalid archive marker or broken Git checkout
 fails instead of silently retaining a stale revision.
 
+External Qore modules
+---------------------
+The build searches the in-tree modules by default. To compile qmods against additional
+modules, pass CMake an ordered, semicolon-separated list of directories. Relative paths start
+at the source root. An example configure option is
+'-DQORE_EXTERNAL_MODULE_DIRS=/opt/qore/lib/qore-modules;/opt/qore/share/qore-modules'.
+An empty list selects only in-tree modules. QORE_BUILD_WITH_EXTERNAL_MODULES=OFF disables
+the list. Reconfigure to change it. The next build refreshes qmods when the list changes
+or a dependency recorded by qcc changes.
+
+run_tests.sh searches the build and source modules followed by the configured directories.
+Set QORE_MODULE_DIR_ONLY=1 to supply your own external test paths via QORE_MODULE_DIR.
+In both cases the runner omits the runtime's implicit installation paths.
+
 Build Requirements
 ------------------
 *) a C++ compiler with C++17 support

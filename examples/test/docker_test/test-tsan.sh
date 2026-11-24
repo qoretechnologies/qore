@@ -124,7 +124,10 @@ fi
 
 BUILD_START=$(date +%s)
 echo "=== TSan build start: $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
-cmake -S "${QORE_SRC_DIR}" -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE=debug -DQORE_QCC_TEST_HOOKS=ON \
+# Compile against the native module directory of this CI image.
+QORE_EXTERNAL_MODULE_DIRS=${QORE_EXTERNAL_MODULE_DIRS-$(qore --module-dir)}
+cmake -S "${QORE_SRC_DIR}" -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE=debug \
+    "-DQORE_EXTERNAL_MODULE_DIRS=${QORE_EXTERNAL_MODULE_DIRS}" -DQORE_QCC_TEST_HOOKS=ON \
     -DSINGLE_COMPILATION_UNIT=1 -DSINGLE_COMPILATION_UNIT_CHUNKS=${TSAN_SCU_CHUNKS} \
     -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX:-/usr} \
     -DCMAKE_C_FLAGS="${TSAN_FLAGS}" -DCMAKE_CXX_FLAGS="${TSAN_FLAGS}" \
