@@ -917,22 +917,7 @@ LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, Refer
 }
 
 LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove,
-        bool for_assignment)
-        : vl(xsink), assignment_only(for_assignment) {
-    if (for_remove) {
-        startRemovalPath();
-    }
-    // exp can be 0 when called from LValueRefHelper if the attach to the Program fails, for example
-    //printd(5, "LValueHelper::LValueHelper() exp: %p (%s %d)\n", exp, get_type_name(exp), get_node_type(exp));
-    if (!exp.isNothing() && exp.hasNode()) {
-        try {
-            doLValue(exp, for_remove);
-        } catch (...) {
-            // the lvalue can be reached through references, whose Programs the destructor leaves; it does not run
-            ref_pgms.release(nullptr);
-            throw;
-        }
-    }
+        bool for_assignment) : LValueHelper(InlineExpression{}, exp, xsink, for_remove, for_assignment) {
 }
 
 LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, WeakSourceAccess)
@@ -4362,24 +4347,7 @@ int64 LValueHelper::shiftRightEqualsBigInt(int64 va, const char* desc) {
 }
 
 int64 LValueHelper::preIncrementBigInt(const char* desc) {
-    if (intResultNeedsConversion()) {
-        return storeIntResult(getAsBigInt() + 1, desc);
-    }
-    if (val) {
-        if (makeIntVal(desc)) {
-            return 0;
-        }
-        return val->preIncrementBigInt();
-    }
-    if (makeIntQv(desc)) {
-        return 0;
-    }
-    // computed from the old value, as in postIncrementBigInt(): the compiler keeps one register less than for a new
-    // value that is both stored and returned
-    int64 oldVal = qv->getAsBigInt();
-    saveTemp(*qv);
-    qv->set(oldVal + 1);
-    return oldVal + 1;
+    return preIncrementBigIntInline(desc);
 }
 
 int64 LValueHelper::preDecrementBigInt(const char* desc) {
