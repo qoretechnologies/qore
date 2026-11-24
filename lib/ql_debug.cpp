@@ -14173,6 +14173,862 @@ public:
     }
 };
 
+#ifndef _Q_WINDOWS
+//! Returns a new P-256 key, or nullptr (defined below)
+static EVP_PKEY* ut_tls_make_key();
+//! Returns a new self-signed certificate for the key, or nullptr (defined below)
+static X509* ut_tls_make_cert(EVP_PKEY* key);
+
+//! An operation whose descriptor is ready when its deadline has passed times out, unless it opted in to a last
+//! attempt (qore#7480)
+/** When the I/O thread gets to an operation's readiness only after the operation's deadline has passed (a stalled
+    I/O thread), the timeout wins: the operation ends with SOCKET-TIMEOUT without a step.  Only an operation that
+    opted in to a last attempt (SocketPollOperationBase::completesInLastAttempt(): a plain TCP accept), whose step
+    completes it or asks to wait again without starting anything, gets one more step at its deadline, also when the
+    iteration did not report its descriptor ready: a step that completes it delivers its result, and a step that
+    asks to wait again ends it with SOCKET-TIMEOUT.  Without it, Socket::accept(timeout) returned NOTHING while a
+    connection waited in the listener's backlog (SocketUnfinishedChunkedBody.qtest under load).  Every other
+    operation keeps the timeout: a receive does not consume data that it would then drop, a TLS accept does not
+    accept a connection whose handshake the timeout would then discard, and a woken operation, or one whose
+    descriptor is reported with a hang-up, reports the timeout.
+
+    The test hook dbg_phase1_time_offset moves the time of the first iteration that has a ready operation past the
+    operation's deadline, as a stall of the I/O thread would, without any real time passing: the iteration finds the
+    operation ready and its deadline passed at once.
+*/
+class AsyncIoDeadlineReadyTest {
+    typedef AsyncIoControllerPriv Ctrl;
+
+    //! the time that the hook adds to the iteration: far past the deadline of every operation of the test
+    static constexpr int64 TIME_OFFSET_US = 3600LL * 1000000LL;
+    //! the time limit of the operations of the test, in milliseconds; it never passes in real time
+    static constexpr int OP_TIMEOUT_MS = 600000;
+    //! the hang guard of the test's waits for a descriptor, in milliseconds
+    static constexpr int HANG_GUARD_MS = 30000;
+
+    //! Waits for the readability of a pollable object that it never reads (a notifier that it never acknowledges, a
+    //! socket whose peer has closed), which is ready again at each poll, and asks to wait again each time it is
+    //! continued; opts in to a last attempt at its deadline if so made
+    class LevelReadyOp : public SocketPollOperationBase {
+    public:
+        DLLLOCAL LevelReadyOp(QoreObject* poll_obj, bool opt_in) : poll_obj(poll_obj), opt_in(opt_in) {
+        }
+
+        DLLLOCAL virtual bool goalReached() const override {
+            return false;
+        }
+
+        DLLLOCAL virtual void abort(ExceptionSink*) override {
+        }
+
+        DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+            info->setKeyValue("events", SOCK_POLLIN, xsink);
+            info->setKeyValue("socket", poll_obj->objectRefSelf(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            {
+                std::lock_guard<std::mutex> g(l);
+                ++calls;
+            }
+            cond.notify_all();
+            return info.release();
+        }
+
+        DLLLOCAL virtual bool completesInLastAttempt() const override {
+            return opt_in;
+        }
+
+        DLLLOCAL virtual QoreValue getOutput() const override {
+            return calls.load();
+        }
+
+        DLLLOCAL virtual const char* getStateImpl() const override {
+            return "waiting";
+        }
+
+        //! Waits until the operation has been continued \a n times; returns false if it is not within the hang guard
+        DLLLOCAL bool waitForCalls(int n) {
+            std::unique_lock<std::mutex> g(l);
+            return cond.wait_for(g, std::chrono::milliseconds(HANG_GUARD_MS), [&]() { return calls.load() >= n; });
+        }
+
+        //! the number of continuePoll() calls
+        std::atomic<int> calls{0};
+
+    private:
+        QoreObject* poll_obj;
+        bool opt_in;
+        std::mutex l;
+        std::condition_variable cond;
+    };
+
+    //! The state of the test hook; guarded by the controller's lock
+    struct HookState {
+        //! the operation whose steps are counted, or nullptr
+        LevelReadyOp* op = nullptr;
+        //! the hook fires only once the operation has been continued this many times
+        int min_calls = 0;
+        //! if true, the hook also wakes the operations of the thread as a close of their sockets does, so that the
+        //! iteration finds them ready and woken
+        bool close_wake = false;
+        //! true once the hook has moved the time of an iteration
+        bool fired = false;
+        //! true once the hook has made a close wake
+        bool close_wake_made = false;
+        //! the number of steps of the operation when the hook fired
+        int calls_at_fire = -1;
+        //! if not 0, the hook connects to this port, after the poll that started its iteration, and waits until the
+        //! connection is in the backlog of the listener with the descriptor listen_fd
+        int connect_port = 0;
+        //! the descriptor of the listener that the hook connects to
+        int listen_fd = -1;
+        //! the descriptor of the connection that the hook made, or -1; closed with the state
+        int client_fd = -1;
+        //! true once the connection that the hook made is in the listener's backlog
+        bool backlog_ready = false;
+
+        DLLLOCAL ~HookState() {
+            if (client_fd >= 0) {
+                ::close(client_fd);
+            }
+        }
+    };
+
+    //! Removes the hook on every exit path, before its state goes out of scope
+    struct HookGuard {
+        Ctrl* ctrl;
+
+        ~HookGuard() {
+            AutoLocker al(ctrl->m);
+            ctrl->io_threads[0]->dbg_phase1_time_offset = nullptr;
+        }
+    };
+
+    //! Stops the controller on every exit path
+    struct Cleanup {
+        Ctrl* ctrl;
+        ExceptionSink& xsink;
+
+        ~Cleanup() {
+            xsink.clear();
+            ctrl->stopClear(&xsink);
+            xsink.clear();
+        }
+    };
+
+    //! Closes descriptors on every exit path
+    struct FdCloser {
+        std::vector<int> fds;
+
+        ~FdCloser() {
+            for (int fd : fds) {
+                ::close(fd);
+            }
+        }
+    };
+
+    //! Starts a controller with one I/O thread; returns false if it cannot be started
+    static bool startCtrl(UnitTestCounters& c, Ctrl* ctrl, const std::string& when, ExceptionSink& xsink) {
+        ctrl->setMaxIoThreads(1, &xsink);
+        ctrl->start(&xsink);
+        bool ready = !xsink && ctrl->waitReady(5000, &xsink);
+        UT_ASSERT(c, ready && !xsink, ("the controller starts" + when).c_str());
+        return ready && !xsink;
+    }
+
+    //! Arms the hook: the first iteration that has a ready operation (once \a op, if any, has been continued
+    //! \a min_calls times) gets its time moved past the deadlines of the test's operations
+    static void armHook(Ctrl* ctrl, HookState& hs) {
+        AutoLocker al(ctrl->m);
+        ctrl->io_threads[0]->dbg_phase1_time_offset = [&hs](Ctrl::IoThreadContext& t, bool has_ready) -> int64 {
+            if (hs.fired || !has_ready || (hs.op && hs.op->calls.load() < hs.min_calls)) {
+                return 0;
+            }
+            hs.fired = true;
+            hs.calls_at_fire = hs.op ? hs.op->calls.load() : -1;
+            if (hs.connect_port) {
+                // the connection arrives after the poll that started this iteration, whose batch of events
+                // therefore cannot have the listener; the wait makes sure that the listener has it in its backlog
+                hs.client_fd = connectTo(hs.connect_port);
+                hs.backlog_ready = hs.client_fd >= 0 && waitReadable(hs.listen_fd);
+            }
+            if (hs.close_wake) {
+                // the wake that a close of the socket makes (see Ctrl::makeCloseWake()), which this iteration
+                // drains after the hook
+                try {
+                    for (auto& [key, pinfo] : t.cache) {
+                        if (!pinfo.cached_sock_hash.empty()) {
+                            Ctrl::makeCloseWake(t, pinfo.cached_sock_hash)();
+                            hs.close_wake_made = true;
+                        }
+                    }
+                } catch (...) {
+                    // no memory: close_wake_made stays false, which the test reports
+                }
+            }
+            return TIME_OFFSET_US;
+        };
+    }
+
+    //! Returns true if the hook fired
+    static bool hookFired(Ctrl* ctrl, HookState& hs) {
+        AutoLocker al(ctrl->m);
+        return hs.fired;
+    }
+
+    //! Submits the operation of \a op_obj on \a sock_obj with the test's time limit; returns its result Queue
+    static QoreObject* submit(Ctrl* ctrl, QoreObject* sock_obj, QoreObject* op_obj, const char* goal,
+            const char* owner, ExceptionSink& xsink) {
+        qore_poll_op_set_member(op_obj, "sock", sock_obj->objectRefSelf(), &xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode(goal), &xsink);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode(owner), &xsink);
+        info->setKeyValue("to", OP_TIMEOUT_MS, &xsink);
+        if (xsink) {
+            return nullptr;
+        }
+        return ctrl->submit(nullptr, info.release(), false, &xsink);
+    }
+
+    //! Waits until the I/O thread has registered the descriptor of the operation submitted last
+    /** The I/O thread registers it in the iteration whose snapshot has the operation; a getInfo() round trip is
+        processed after that iteration.
+    */
+    static bool waitRegistered(Ctrl* ctrl, ExceptionSink& xsink) {
+        if (!ctrl->waitForProcessing(HANG_GUARD_MS, &xsink) || xsink) {
+            return false;
+        }
+        ReferenceHolder<QoreHashNode> io_info(ctrl->getInfo(&xsink), &xsink);
+        return !xsink;
+    }
+
+    //! Waits for the operation's result; returns the error of the result (an empty string if it has none) or
+    //! "no result" if there is none within the hang guard
+    static std::string waitResult(Queue* queue, ExceptionSink& xsink) {
+        bool timed_out = false;
+        ValueHolder result(queue->shift(&xsink, HANG_GUARD_MS, &timed_out), &xsink);
+        if (timed_out || xsink || result->getType() != NT_HASH) {
+            xsink.clear();
+            return "no result";
+        }
+        QoreValue ex = result->get<QoreHashNode>()->getKeyValue("ex");
+        const QoreHashNode* exh = ex.getType() == NT_HASH ? ex.get<const QoreHashNode>() : nullptr;
+        if (!exh) {
+            return "";
+        }
+        QoreValue err = exh->getKeyValue("err");
+        return err.getType() == NT_STRING ? QoreStringDataHelper(err).c_str() : "unknown error";
+    }
+
+    //! Returns the result Queue of the Queue object
+    static Queue* getQueue(QoreObject* queue_obj, ExceptionSink& xsink) {
+        return static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink));
+    }
+
+    //! Makes a listening TCP socket on the loopback address; returns its descriptor or -1, and its port in \a port
+    static int makeListener(int& port) {
+        int lfd = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (lfd < 0) {
+            return -1;
+        }
+        struct sockaddr_in sa = {};
+        sa.sin_family = AF_INET;
+        sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        socklen_t salen = sizeof(sa);
+        if (::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen)
+                || ::getsockname(lfd, reinterpret_cast<struct sockaddr*>(&sa), &salen) || ::listen(lfd, 5)) {
+            ::close(lfd);
+            return -1;
+        }
+        port = ntohs(sa.sin_port);
+        return lfd;
+    }
+
+    //! Connects a TCP socket to the port on the loopback address; returns its descriptor or -1
+    /** The return of connect() does not strictly guarantee that the listener's side has queued the connection: a
+        test that needs it in the listener's backlog waits until the listener is readable (see waitReadable()); an
+        accept that waits for it is woken by the listener's readiness.
+    */
+    static int connectTo(int port) {
+        int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (fd < 0) {
+            return -1;
+        }
+        struct sockaddr_in sa = {};
+        sa.sin_family = AF_INET;
+        sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        sa.sin_port = htons(port);
+        if (::connect(fd, reinterpret_cast<struct sockaddr*>(&sa), sizeof(sa))) {
+            ::close(fd);
+            return -1;
+        }
+        return fd;
+    }
+
+    //! Waits until the descriptor is readable; returns false if it is not within the hang guard
+    static bool waitReadable(int fd) {
+        if (fd < 0) {
+            return false;
+        }
+        struct pollfd pfd = {fd, POLLIN, 0};
+        int rc;
+        while ((rc = ::poll(&pfd, 1, HANG_GUARD_MS)) < 0 && errno == EINTR) {
+        }
+        return rc == 1 && (pfd.revents & POLLIN);
+    }
+
+    //! The variants of the accept test
+    enum class AcceptMode {
+        //! a plain TCP accept: it opts in to a last attempt
+        Plain,
+        //! an accept that negotiates TLS: no last attempt
+        Tls,
+        //! a plain TCP accept that a close wake wakes in the iteration that also finds its listener ready: no last
+        //! attempt
+        CloseWake,
+    };
+
+    //! Returns the name of the variant for the test's messages
+    static const char* acceptModeName(AcceptMode mode) {
+        switch (mode) {
+            case AcceptMode::Plain:
+                return " (accept)";
+            case AcceptMode::Tls:
+                return " (TLS accept)";
+            case AcceptMode::CloseWake:
+                return " (accept woken by a close)";
+        }
+        return "";
+    }
+
+public:
+    //! An accept whose listener is ready when its deadline has passed
+    /** A plain TCP accept takes the connection in the backlog.  An accept that negotiates TLS, and a plain accept that
+        a close wake also woke in the iteration, time out without a step, as an accept did before qore#7480:
+        Socket::accept(timeout) and Socket::acceptSSL(timeout) return NOTHING for a timeout before the accept
+        (SocketAcceptPollOperation::timeoutBeforeAccept()), and the connection stays in the listener's backlog for
+        the next accept.
+    */
+    static void runAccept(UnitTestCounters& c, AcceptMode mode) {
+        const std::string when = acceptModeName(mode);
+        const bool tls = mode == AcceptMode::Tls;
+        ExceptionSink xsink;
+        ReferenceHolder<Ctrl> ctrl(new Ctrl(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, ("the controller is created" + when).c_str());
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        Cleanup cleanup{*ctrl, xsink};
+        if (!startCtrl(c, *ctrl, when, xsink)) {
+            return;
+        }
+        FdCloser fd_closer;
+
+        QoreSocketObject* listener = new QoreSocketObject;
+        ReferenceHolder<QoreObject> listener_obj(new QoreObject(QC_SOCKET, getProgram(), listener), &xsink);
+        if (tls) {
+            EVP_PKEY* key = ut_tls_make_key();
+            X509* cert = key ? ut_tls_make_cert(key) : nullptr;
+            UT_ASSERT(c, key && cert, ("a certificate is made" + when).c_str());
+            if (!key || !cert) {
+                if (key) {
+                    EVP_PKEY_free(key);
+                }
+                return;
+            }
+            listener->setCertificateAndPrivateKey(new QoreSSLCertificate(cert), new QoreSSLPrivateKey(key));
+        }
+        int rc = listener->bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink);
+        if (!rc && !xsink) {
+            rc = listener->listen(5);
+        }
+        UT_ASSERT(c, !rc && !xsink, ("the listener listens" + when).c_str());
+        if (rc || xsink) {
+            return;
+        }
+        int port = listener->getPort();
+
+        listener->ref();
+        SocketAcceptPollOperation* accept = new SocketAcceptPollOperation(&xsink, listener, tls, true);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), accept), &xsink);
+        UT_ASSERT(c, !xsink, ("the accept is created" + when).c_str());
+        if (xsink) {
+            return;
+        }
+        accept->setSelf(*op_obj);
+        UT_ASSERT(c, accept->completesInLastAttempt() == !tls,
+            ("only an accept without TLS opts in to a last attempt" + when).c_str());
+        ReferenceHolder<QoreObject> queue_obj(submit(*ctrl, *listener_obj, *op_obj, tls ? "accept-ssl" : "accept",
+            "deadline-ready-accept-unit-test", xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, ("the accept is submitted" + when).c_str());
+        if (xsink || !queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(getQueue(*queue_obj, xsink), &xsink);
+        if (!queue || xsink) {
+            return;
+        }
+        // the accept waits for the listener with its descriptor registered
+        bool registered = waitRegistered(*ctrl, xsink);
+        UT_ASSERT(c, registered, ("the I/O thread registers the listener" + when).c_str());
+        if (!registered) {
+            return;
+        }
+        UT_ASSERT_EQ(c, 0, (int)queue->size(), ("the accept waits for a connection" + when).c_str());
+
+        HookState hs;
+        hs.close_wake = mode == AcceptMode::CloseWake;
+        HookGuard hook_guard{*ctrl};
+        armHook(*ctrl, hs);
+
+        // a connection is in the backlog: the I/O thread sees the listener ready in the iteration whose time is past
+        // the accept's deadline
+        int cfd = connectTo(port);
+        UT_ASSERT(c, cfd >= 0, ("the client connects" + when).c_str());
+        if (cfd < 0) {
+            return;
+        }
+        fd_closer.fds.push_back(cfd);
+
+        std::string err = waitResult(*queue, xsink);
+        UT_ASSERT(c, hookFired(*ctrl, hs),
+            ("the iteration with the ready listener is past the deadline" + when).c_str());
+        if (mode == AcceptMode::Plain) {
+            UT_ASSERT(c, err.empty(), ("the accept takes the connection in the backlog at its deadline: " + err
+                + when).c_str());
+            ValueHolder output(accept->getOutput(), &xsink);
+            UT_ASSERT(c, output->getType() == NT_OBJECT
+                && output->get<QoreObject>()->getClass()->getClass(CID_SOCKET),
+                ("the accept returns the accepted socket" + when).c_str());
+            xsink.clear();
+            return;
+        }
+        if (mode == AcceptMode::CloseWake) {
+            bool made;
+            {
+                AutoLocker al(ctrl->m);
+                made = hs.close_wake_made;
+            }
+            UT_ASSERT(c, made, ("the iteration has a close wake of the listener" + when).c_str());
+        }
+        UT_ASSERT(c, err == "SOCKET-TIMEOUT", ("the accept times out at its deadline: " + err + when).c_str());
+        UT_ASSERT(c, accept->timeoutBeforeAccept(),
+            ("the timeout is before the accept, for which the Socket methods return NOTHING" + when).c_str());
+        {
+            ValueHolder output(accept->getOutput(), &xsink);
+            UT_ASSERT(c, output->isNothing(), ("the accept accepted no connection" + when).c_str());
+            xsink.clear();
+        }
+        // the connection is still in the listener's backlog: the next accept gets it
+        int lfd = listener->getPollableDescriptor();
+        bool readable = waitReadable(lfd);
+        UT_ASSERT(c, readable, ("the listener still has the connection in its backlog" + when).c_str());
+        if (!readable) {
+            return;
+        }
+        int afd = ::accept(lfd, nullptr, nullptr);
+        UT_ASSERT(c, afd >= 0, ("the next accept gets the connection" + when).c_str());
+        if (afd >= 0) {
+            fd_closer.fds.push_back(afd);
+        }
+    }
+
+    //! A receive whose socket is ready when its deadline has passed times out without reading the data (\a partial:
+    //! the data are not enough for it), which stay for the next receive
+    static void runRecv(UnitTestCounters& c, bool partial) {
+        const std::string when = partial ? " (partial receive)" : " (receive)";
+        ExceptionSink xsink;
+        ReferenceHolder<Ctrl> ctrl(new Ctrl(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, ("the controller is created" + when).c_str());
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        Cleanup cleanup{*ctrl, xsink};
+        if (!startCtrl(c, *ctrl, when, xsink)) {
+            return;
+        }
+        FdCloser fd_closer;
+
+        int port = 0;
+        int lfd = makeListener(port);
+        UT_ASSERT(c, lfd >= 0, ("the peer's listener listens" + when).c_str());
+        if (lfd < 0) {
+            return;
+        }
+        fd_closer.fds.push_back(lfd);
+        QoreSocketObject* client = new QoreSocketObject;
+        ReferenceHolder<QoreObject> client_obj(new QoreObject(QC_SOCKET, getProgram(), client), &xsink);
+        int rc = client->connectINET("127.0.0.1", port, 5000, &xsink);
+        UT_ASSERT(c, !rc && !xsink, ("the client connects" + when).c_str());
+        if (rc || xsink) {
+            return;
+        }
+        // the connection is in the backlog
+        int pfd = ::accept(lfd, nullptr, nullptr);
+        UT_ASSERT(c, pfd >= 0, ("the peer accepts the connection" + when).c_str());
+        if (pfd < 0) {
+            return;
+        }
+        fd_closer.fds.push_back(pfd);
+
+        // the receive wants 5 bytes, or 10 when the peer sends only 5
+        client->ref();
+        SocketRecvPollOperation* recv = new SocketRecvPollOperation(&xsink, partial ? 10 : 5, client, false, true);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), recv), &xsink);
+        UT_ASSERT(c, !xsink, ("the receive is created" + when).c_str());
+        if (xsink) {
+            return;
+        }
+        recv->setSelf(*op_obj);
+        UT_ASSERT(c, !recv->completesInLastAttempt(), ("a receive does not opt in to a last attempt" + when).c_str());
+        ReferenceHolder<QoreObject> queue_obj(submit(*ctrl, *client_obj, *op_obj, "recv",
+            "deadline-ready-recv-unit-test", xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, ("the receive is submitted" + when).c_str());
+        if (xsink || !queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(getQueue(*queue_obj, xsink), &xsink);
+        if (!queue || xsink) {
+            return;
+        }
+        bool registered = waitRegistered(*ctrl, xsink);
+        UT_ASSERT(c, registered, ("the I/O thread registers the client socket" + when).c_str());
+        if (!registered) {
+            return;
+        }
+        UT_ASSERT_EQ(c, 0, (int)queue->size(), ("the receive waits for data" + when).c_str());
+
+        HookState hs;
+        HookGuard hook_guard{*ctrl};
+        armHook(*ctrl, hs);
+
+        // the data arrive: the I/O thread sees the socket ready in the iteration whose time is past the receive's
+        // deadline
+        UT_ASSERT_EQ(c, (ssize_t)5, ::send(pfd, "hello", 5, 0), ("the peer sends the data" + when).c_str());
+
+        std::string err = waitResult(*queue, xsink);
+        UT_ASSERT(c, hookFired(*ctrl, hs),
+            ("the iteration with the ready socket is past the deadline" + when).c_str());
+        // the timeout wins: the receive reads nothing (a receive that read data and then timed out would drop them)
+        UT_ASSERT(c, err == "SOCKET-TIMEOUT", ("the receive times out at its deadline: " + err + when).c_str());
+
+        // the data stay in the socket: the next receive gets all of them
+        int cfd = client->getPollableDescriptor();
+        UT_ASSERT(c, cfd >= 0, ("the timeout leaves the socket open" + when).c_str());
+        bool readable = waitReadable(cfd);
+        UT_ASSERT(c, readable, ("the socket still has the data" + when).c_str());
+        if (!readable) {
+            return;
+        }
+        char buf[16];
+        ssize_t n = ::recv(cfd, buf, sizeof(buf), MSG_DONTWAIT);
+        UT_ASSERT(c, n == 5 && !memcmp(buf, "hello", 5), ("the next receive gets all of the data" + when).c_str());
+    }
+
+    //! An operation that is ready at each poll and asks to wait again each time it is continued times out at its
+    //! deadline: without a step if it did not opt in to a last attempt, and after exactly one last attempt if it did
+    static void runLevelReady(UnitTestCounters& c, bool opt_in) {
+        const std::string when = opt_in ? " (level-triggered readiness, last attempt)"
+            : " (level-triggered readiness)";
+        ExceptionSink xsink;
+        ReferenceHolder<Ctrl> ctrl(new Ctrl(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, ("the controller is created" + when).c_str());
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        Cleanup cleanup{*ctrl, xsink};
+        if (!startCtrl(c, *ctrl, when, xsink)) {
+            return;
+        }
+
+        ReferenceHolder<QoreEventNotifier> notifier(new QoreEventNotifier(&xsink), &xsink);
+        UT_ASSERT(c, !xsink && notifier->isValid(), ("the notifier is created" + when).c_str());
+        if (xsink || !notifier->isValid()) {
+            return;
+        }
+        notifier->ref();
+        ReferenceHolder<QoreObject> notifier_obj(new QoreObject(QC_EVENTNOTIFIER, getProgram(), *notifier), &xsink);
+
+        LevelReadyOp* op = new LevelReadyOp(*notifier_obj, opt_in);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+        op->setSelf(*op_obj);
+        ReferenceHolder<QoreObject> queue_obj(submit(*ctrl, *notifier_obj, *op_obj, "level-ready",
+            "deadline-level-ready-unit-test", xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, ("the operation is submitted" + when).c_str());
+        if (xsink || !queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(getQueue(*queue_obj, xsink), &xsink);
+        if (!queue || xsink) {
+            return;
+        }
+        UT_ASSERT(c, op->waitForCalls(1), ("the operation makes its first step" + when).c_str());
+
+        // the hook fires once the readiness has continued the operation at least once
+        HookState hs;
+        hs.op = op;
+        hs.min_calls = 2;
+        HookGuard hook_guard{*ctrl};
+        armHook(*ctrl, hs);
+
+        // the notifier is ready at each poll from now on
+        notifier->notify();
+
+        std::string err = waitResult(*queue, xsink);
+        bool fired;
+        int calls_at_fire;
+        {
+            AutoLocker al(ctrl->m);
+            fired = hs.fired;
+            calls_at_fire = hs.calls_at_fire;
+        }
+        UT_ASSERT(c, fired, ("the iteration with the ready operation is past the deadline" + when).c_str());
+        UT_ASSERT(c, err == "SOCKET-TIMEOUT", ("readiness does not keep the operation alive past its deadline: "
+            + err + when).c_str());
+        if (opt_in) {
+            UT_ASSERT_EQ(c, calls_at_fire + 1, op->calls.load(),
+                ("the operation has exactly one last attempt after its deadline" + when).c_str());
+        } else {
+            UT_ASSERT_EQ(c, calls_at_fire, op->calls.load(),
+                ("the operation has no step after its deadline" + when).c_str());
+        }
+        xsink.clear();
+    }
+
+    //! An accept whose deadline passes in an iteration that did not report its listener ready, although a
+    //! connection is in the listener's backlog, takes the connection
+    /** The I/O thread can go round without polling (when a command arrives before the poll), and a capped batch of
+        events can leave the listener out: the accept still gets its last attempt at its deadline (qore#7480).  The
+        iteration is one that the readiness of another operation starts; the hook connects to the listener after the
+        poll that started the iteration, so that the poll's batch of events cannot have the listener, and waits until
+        the connection is in the listener's backlog.
+    */
+    static void runAcceptNotReported(UnitTestCounters& c) {
+        const std::string when = " (accept, listener not reported ready)";
+        ExceptionSink xsink;
+        ReferenceHolder<Ctrl> ctrl(new Ctrl(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, ("the controller is created" + when).c_str());
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        Cleanup cleanup{*ctrl, xsink};
+        if (!startCtrl(c, *ctrl, when, xsink)) {
+            return;
+        }
+
+        QoreSocketObject* listener = new QoreSocketObject;
+        ReferenceHolder<QoreObject> listener_obj(new QoreObject(QC_SOCKET, getProgram(), listener), &xsink);
+        int rc = listener->bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink);
+        if (!rc && !xsink) {
+            rc = listener->listen(5);
+        }
+        UT_ASSERT(c, !rc && !xsink, ("the listener listens" + when).c_str());
+        if (rc || xsink) {
+            return;
+        }
+        int port = listener->getPort();
+
+        listener->ref();
+        SocketAcceptPollOperation* accept = new SocketAcceptPollOperation(&xsink, listener, false, true);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), accept), &xsink);
+        UT_ASSERT(c, !xsink, ("the accept is created" + when).c_str());
+        if (xsink) {
+            return;
+        }
+        accept->setSelf(*op_obj);
+        UT_ASSERT(c, accept->completesInLastAttempt(), ("a plain TCP accept opts in to a last attempt" + when).c_str());
+        ReferenceHolder<QoreObject> queue_obj(submit(*ctrl, *listener_obj, *op_obj, "accept",
+            "deadline-not-reported-accept-unit-test", xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, ("the accept is submitted" + when).c_str());
+        if (xsink || !queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(getQueue(*queue_obj, xsink), &xsink);
+        if (!queue || xsink) {
+            return;
+        }
+        bool registered = waitRegistered(*ctrl, xsink);
+        UT_ASSERT(c, registered, ("the I/O thread registers the listener" + when).c_str());
+        if (!registered) {
+            return;
+        }
+        UT_ASSERT_EQ(c, 0, (int)queue->size(), ("the accept waits for a connection" + when).c_str());
+
+        // the operation whose readiness starts the iteration; it does not opt in to a last attempt
+        ReferenceHolder<QoreEventNotifier> notifier(new QoreEventNotifier(&xsink), &xsink);
+        UT_ASSERT(c, !xsink && notifier->isValid(), ("the notifier is created" + when).c_str());
+        if (xsink || !notifier->isValid()) {
+            return;
+        }
+        notifier->ref();
+        ReferenceHolder<QoreObject> notifier_obj(new QoreObject(QC_EVENTNOTIFIER, getProgram(), *notifier), &xsink);
+        LevelReadyOp* other = new LevelReadyOp(*notifier_obj, false);
+        ReferenceHolder<QoreObject> other_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), other), &xsink);
+        other->setSelf(*other_obj);
+        ReferenceHolder<QoreObject> other_queue_obj(submit(*ctrl, *notifier_obj, *other_obj, "level-ready",
+            "deadline-not-reported-other-unit-test", xsink), &xsink);
+        UT_ASSERT(c, !xsink && other_queue_obj, ("the other operation is submitted" + when).c_str());
+        if (xsink || !other_queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> other_queue(getQueue(*other_queue_obj, xsink), &xsink);
+        if (!other_queue || xsink) {
+            return;
+        }
+        bool other_waits = other->waitForCalls(1);
+        UT_ASSERT(c, other_waits, ("the other operation makes its first step" + when).c_str());
+        if (!other_waits) {
+            return;
+        }
+
+        HookState hs;
+        hs.op = other;
+        hs.min_calls = 1;
+        hs.connect_port = port;
+        hs.listen_fd = listener->getPollableDescriptor();
+        HookGuard hook_guard{*ctrl};
+        armHook(*ctrl, hs);
+
+        // the notifier is ready: the iteration that the poll starts with it is past the deadlines
+        notifier->notify();
+
+        std::string err = waitResult(*queue, xsink);
+        std::string other_err = waitResult(*other_queue, xsink);
+        bool fired;
+        bool backlog_ready;
+        int calls_at_fire;
+        {
+            AutoLocker al(ctrl->m);
+            fired = hs.fired;
+            backlog_ready = hs.backlog_ready;
+            calls_at_fire = hs.calls_at_fire;
+        }
+        UT_ASSERT(c, fired, ("the iteration that the other operation's readiness starts is past the deadline"
+            + when).c_str());
+        UT_ASSERT(c, backlog_ready, ("the connection is in the listener's backlog in that iteration" + when).c_str());
+        UT_ASSERT(c, err.empty(), ("the accept takes the connection in the backlog at its deadline: " + err
+            + when).c_str());
+        {
+            ValueHolder output(accept->getOutput(), &xsink);
+            UT_ASSERT(c, output->getType() == NT_OBJECT
+                && output->get<QoreObject>()->getClass()->getClass(CID_SOCKET),
+                ("the accept returns the accepted socket" + when).c_str());
+            xsink.clear();
+        }
+        UT_ASSERT(c, other_err == "SOCKET-TIMEOUT", ("the other operation times out at its deadline: " + other_err
+            + when).c_str());
+        UT_ASSERT_EQ(c, calls_at_fire, other->calls.load(),
+            ("the other operation has no step after its deadline" + when).c_str());
+    }
+
+    //! An operation that opted in to a last attempt and whose descriptor is reported with a hang-up when its
+    //! deadline has passed times out without a step
+    /** The peer of one end of a socket pair closes: the event loop reports the end readable with a hang-up (epoll:
+        EPOLLIN | EPOLLHUP, kqueue: EV_EOF), and a descriptor that hangs up is not usable for a clean step
+        (qore#7480).
+    */
+    static void runHangUp(UnitTestCounters& c) {
+        const std::string when = " (hang-up, last attempt)";
+        ExceptionSink xsink;
+        ReferenceHolder<Ctrl> ctrl(new Ctrl(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, ("the controller is created" + when).c_str());
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        Cleanup cleanup{*ctrl, xsink};
+        if (!startCtrl(c, *ctrl, when, xsink)) {
+            return;
+        }
+        FdCloser fd_closer;
+
+        int sv[2];
+        bool paired = !::socketpair(AF_UNIX, SOCK_STREAM, 0, sv);
+        UT_ASSERT(c, paired, ("a socket pair is made" + when).c_str());
+        if (!paired) {
+            return;
+        }
+        // the peer is closed by the test; sv[0] belongs to the socket made from it once it is made
+        fd_closer.fds.push_back(sv[1]);
+        fd_closer.fds.push_back(sv[0]);
+        ReferenceHolder<QoreSocketObject> tmpl(new QoreSocketObject, &xsink);
+        QoreSocketObject* sock = new QoreSocketObject(**tmpl, sv[0]);
+        fd_closer.fds.pop_back();
+        ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+
+        LevelReadyOp* op = new LevelReadyOp(*sock_obj, true);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+        op->setSelf(*op_obj);
+        ReferenceHolder<QoreObject> queue_obj(submit(*ctrl, *sock_obj, *op_obj, "hang-up",
+            "deadline-hang-up-unit-test", xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, ("the operation is submitted" + when).c_str());
+        if (xsink || !queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(getQueue(*queue_obj, xsink), &xsink);
+        if (!queue || xsink) {
+            return;
+        }
+        bool first_step = op->waitForCalls(1);
+        UT_ASSERT(c, first_step, ("the operation makes its first step" + when).c_str());
+        if (!first_step) {
+            return;
+        }
+        bool registered = waitRegistered(*ctrl, xsink);
+        UT_ASSERT(c, registered, ("the I/O thread registers the socket" + when).c_str());
+        if (!registered) {
+            return;
+        }
+        UT_ASSERT_EQ(c, 0, (int)queue->size(), ("the operation waits for its socket" + when).c_str());
+
+        HookState hs;
+        hs.op = op;
+        hs.min_calls = 1;
+        HookGuard hook_guard{*ctrl};
+        armHook(*ctrl, hs);
+
+        // the peer closes: the iteration that the hang-up starts is past the deadline
+        assert(fd_closer.fds.size() == 1 && fd_closer.fds[0] == sv[1]);
+        fd_closer.fds.pop_back();
+        ::close(sv[1]);
+
+        std::string err = waitResult(*queue, xsink);
+        bool fired;
+        int calls_at_fire;
+        {
+            AutoLocker al(ctrl->m);
+            fired = hs.fired;
+            calls_at_fire = hs.calls_at_fire;
+        }
+        UT_ASSERT(c, fired, ("the iteration with the hang-up is past the deadline" + when).c_str());
+        UT_ASSERT(c, err == "SOCKET-TIMEOUT", ("the operation times out at its deadline: " + err + when).c_str());
+        UT_ASSERT_EQ(c, calls_at_fire, op->calls.load(),
+            ("the operation has no last attempt with a hang-up" + when).c_str());
+        xsink.clear();
+    }
+
+    static void run(UnitTestCounters& c) {
+        runAccept(c, AcceptMode::Plain);
+        runAccept(c, AcceptMode::Tls);
+        runAccept(c, AcceptMode::CloseWake);
+        runAcceptNotReported(c);
+        runRecv(c, false);
+        runRecv(c, true);
+        runLevelReady(c, false);
+        runLevelReady(c, true);
+        runHangUp(c);
+    }
+};
+#endif
+
 // set when the unit tests are built with ThreadSanitizer, which reports the misuse of a mutex itself
 #if defined(__SANITIZE_THREAD__)
 #define QORE_UT_TSAN 1
@@ -28607,6 +29463,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoClosedPollableTest::run(c);
     AsyncIoZeroPollHintTest::run(c);
     AsyncIoStaleReadinessTest::run(c);
+#ifndef _Q_WINDOWS
+    AsyncIoDeadlineReadyTest::run(c);
+#endif
     AsyncIoAbandonedCommandLockTest::run(c);
     AsyncIoErrorCheckLockTest::run(c);
     AsyncIoStoppingThreadTest::run(c);

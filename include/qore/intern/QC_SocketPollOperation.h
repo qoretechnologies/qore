@@ -561,6 +561,14 @@ public:
 
     DLLLOCAL virtual QoreValue getOutput() const override;
 
+    //! A plain TCP accept completes in one step: its step accepts a connection in the backlog or asks to wait again
+    /** An accept that negotiates TLS does not opt in: its step would accept the connection and start the TLS
+        handshake, and the timeout would then discard the accepted connection (qore#7480)
+    */
+    DLLLOCAL virtual bool completesInLastAttempt() const override {
+        return sgoal == SPG_ACCEPT;
+    }
+
     DLLLOCAL bool timeoutBeforeAccept() const {
         return aborted_before_accept || state == SPS_ACCEPTING;
     }
