@@ -4570,6 +4570,10 @@
       response, and fails a request answered with a \c 101 response that it did not ask for (see
       @ref httpclient_interim_responses "HTTPClient interim responses";
       <a href="https://github.com/qoretechnologies/qore/issues/7483">issue 7483</a>)
+    - a call that takes over a @ref Qore::Program "Program" object, such as
+      @ref Qore::load_user_module_with_program(), raises \c OBJECT-ALREADY-DELETED for an object that was taken over
+      or deleted already, also while another thread deletes it, instead of using freed memory
+      (<a href="https://github.com/qoretechnologies/qore/issues/7528">issue 7528</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

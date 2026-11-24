@@ -793,7 +793,8 @@ public:
         }
     }
 
-    DLLLOCAL void cleanup(ExceptionSink* xsink, QoreHashNode* td, cdmap_t* cdm);
+    //! releases the private data and members that a deletion detached from the object under its lock
+    DLLLOCAL static void cleanup(ExceptionSink* xsink, KeyList* pd, QoreHashNode* td, cdmap_t* cdm);
 
     //! Invalidate an incomplete object while its owner keeps its reference alive.
     /** Clears member and native storage without calling user destructors or
@@ -927,7 +928,11 @@ public:
 
     DLLLOCAL AbstractPrivateData* getAndRemovePrivateData(qore_classid_t key, ExceptionSink* xsink) {
         QoreSafeVarRWWriteLocker sl(rml);
-        return privateData ? privateData->getAndRemovePtr(key) : nullptr;
+        // the private data of a deleted object is released by the deletion
+        if (status == OS_DELETED || !privateData) {
+            return nullptr;
+        }
+        return privateData->getAndRemovePtr(key);
     }
 
     DLLLOCAL AbstractPrivateData* getReferencedPrivateData(qore_classid_t key, ExceptionSink* xsink) const;

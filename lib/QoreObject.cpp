@@ -250,20 +250,20 @@ void qore_object_private::obliterateMembers(ExceptionSink* xsink) {
     cdmap = nullptr;
     QoreHashNode* td = data;
     data = nullptr;
+    // detached under the lock, so that no other thread finds the private data while it is released
+    KeyList* pd = privateData;
+    privateData = nullptr;
     removeInvalidateRSetIntern();
     sl.unlock();
 
-    cleanup(xsink, td, cdm);
+    cleanup(xsink, pd, td, cdm);
 }
 
-void qore_object_private::cleanup(ExceptionSink* xsink, QoreHashNode* td, cdmap_t* cdm) {
-    if (privateData) {
-        printd(5, "qore_object_private::cleanup() this: %p privateData: %p\n", this, privateData);
-        privateData->derefAll(xsink);
-        delete privateData;
-#ifdef DEBUG
-        privateData = nullptr;
-#endif
+void qore_object_private::cleanup(ExceptionSink* xsink, KeyList* pd, QoreHashNode* td, cdmap_t* cdm) {
+    if (pd) {
+        printd(5, "qore_object_private::cleanup() privateData: %p\n", pd);
+        pd->derefAll(xsink);
+        delete pd;
     }
 
     if (td) {
@@ -2339,6 +2339,7 @@ void qore_object_private::doDeleteIntern(ExceptionSink* xsink, bool ref_taken) {
 
     cdmap_t* cdm;
     QoreHashNode* td;
+    KeyList* pd;
     {
         QoreAutoVarRWWriteLocker al(rml);
         assert(status != OS_DELETED);
@@ -2351,10 +2352,15 @@ void qore_object_private::doDeleteIntern(ExceptionSink* xsink, bool ref_taken) {
         td = data;
         data = nullptr;
 
+        // detached under the lock, so that no other thread finds the private data while it is released (the private
+        // data of a deleted object is looked up later as well, for example when the object is taken over again)
+        pd = privateData;
+        privateData = nullptr;
+
         removeInvalidateRSetIntern();
     }
 
-    cleanup(xsink, td, cdm);
+    cleanup(xsink, pd, td, cdm);
 
     obj->deref(xsink);
 }
@@ -3502,10 +3508,11 @@ AbstractPrivateData* QoreObject::getAndClearPrivateData(qore_classid_t key, Exce
     QoreSafeVarRWWriteLocker sl(priv->rml);
 
     //printd(5, "QoreObject::getAndClearPrivateData this: %p, privateData: %p, key: %d, getkey: %p\n", this, priv->privateData, key, priv->privateData ? priv->privateData->getAndClearPtr(key): nullptr);
-    if (priv->privateData)
-        return priv->privateData->getAndClearPtr(key);
-
-    return 0;
+    // the private data of a deleted object is released by the deletion
+    if (priv->status == OS_DELETED || !priv->privateData) {
+        return nullptr;
+    }
+    return priv->privateData->getAndClearPtr(key);
 }
 
 // called only during constructor execution, therefore no need for locking
