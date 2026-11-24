@@ -39,6 +39,21 @@ public class MistralManifest {
             conversation, shows the same labels; an overlay labels one location only.
         */
         const hash<string, hash<string, string>> EnumDisplayNames = {
+            "#/components/schemas/ListSortDirection": {
+                "list_sort_direction_unspecified": "Default", "list_sort_direction_asc": "Ascending",
+                "list_sort_direction_desc": "Descending",
+            },
+            "#/components/schemas/ListSortField": {
+                "list_sort_field_unspecified": "Default", "list_sort_field_created_at": "Created At",
+                "list_sort_field_last_modified_at": "Last Modified", "list_sort_field_name": "Name",
+                "list_sort_field_title": "Title",
+            },
+            "#/components/schemas/ShareRelation": {
+                "share_relation_unspecified": "Default", "reader": "Reader", "writer": "Writer",
+            },
+            "#/components/schemas/RegistrySharingScope": {
+                "sharing_scope_unspecified": "Default", "private": "Private", "workspace": "Workspace",
+            },
             # the type of a tool call, in every message of a conversation
             "#/components/schemas/ToolTypes": {
                 "function": "Function",
@@ -58,6 +73,40 @@ public class MistralManifest {
 
         #! Account and parent-scoped resource dropdowns
         const hash<string, hash<RestSchemaReferenceDataInfo>> ReferenceData = {
+            "prompts": <RestSchemaReferenceDataInfo>{
+                "name": "prompts",
+                "action": "list-prompts",
+                "value_field": "id",
+                "display_field": "name",
+                "desc": "Choose an existing prompt.",
+                "records_path": ("data",),
+            },
+            "prompt-versions": <RestSchemaReferenceDataInfo>{
+                "name": "prompt-versions",
+                "action": "list-prompt-versions",
+                "value_field": "version",
+                "display_field": "version",
+                "desc": "Choose an existing prompt version.",
+                "records_path": ("data",),
+                "options_from": {"prompt_id": "prompt_id"},
+            },
+            "skills": <RestSchemaReferenceDataInfo>{
+                "name": "skills",
+                "action": "list-skills",
+                "value_field": "id",
+                "display_field": "name",
+                "desc": "Choose an existing skill.",
+                "records_path": ("data",),
+            },
+            "skill-versions": <RestSchemaReferenceDataInfo>{
+                "name": "skill-versions",
+                "action": "list-skill-versions",
+                "value_field": "version",
+                "display_field": "version",
+                "desc": "Choose an existing skill version.",
+                "records_path": ("data",),
+                "options_from": {"skill_id": "skill_id"},
+            },
             "models": <RestSchemaReferenceDataInfo>{
                 "name": "models",
                 "action": "list-models",
@@ -6483,6 +6532,504 @@ public class MistralManifest {
                         "ref_data": "datasets",
                         "supports_custom_values": True,
                         "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "delete-batch-job",
+                "method": "DELETE",
+                "path": "/v1/batch/jobs/{job_id}",
+                "operation_id": "jobs_api_routes_batch_delete_batch_job",
+                "display_name": "Delete Batch Job",
+                "short_desc": "Delete Batch Job",
+                "desc": "Delete the selected batch job.",
+                "groups": ("Batch",),
+                "fields": {
+                    "job_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "batch-jobs",
+                        "supports_custom_values": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "agent-completion",
+                "method": "POST",
+                "path": "/v1/agents/completions",
+                "operation_id": "agents_completion_v1_agents_completions_post",
+                "display_name": "Agent Completion",
+                "short_desc": "Agent Completion",
+                "desc": "Generate a completed reply from an agent and a list of messages.",
+                "groups": ("Agents",),
+                "mutates_state": False,
+                "response_content_type": "application/json",
+                "fields": {
+                    "stream": <RestSchemaFieldOverlayInfo>{
+                        "ignore": True,
+                    },
+                    "messages": <RestSchemaFieldOverlayInfo>{
+                        "preselected": True,
+                    },
+                    "agent_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "agents",
+                        "supports_custom_values": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "patch-library",
+                "method": "PATCH",
+                "path": "/v1/libraries/{library_id}",
+                "operation_id": "libraries_patch_v1",
+                "display_name": "Patch Library",
+                "short_desc": "Patch Library",
+                "desc": "Change the name or description of a document library.",
+                "groups": ("Libraries",),
+                "fields": {
+                    "library_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "libraries",
+                        "supports_custom_values": True,
+                    },
+                    "name": <RestSchemaFieldOverlayInfo>{
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "patch-library-document",
+                "method": "PATCH",
+                "path": "/v1/libraries/{library_id}/documents/{document_id}",
+                "operation_id": "libraries_documents_patch_v1",
+                "display_name": "Patch Library Document",
+                "short_desc": "Patch Library Document",
+                "desc": "Update a library document’s name, attributes, or expiration date.",
+                "groups": ("Libraries",),
+                "fields": {
+                    "library_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "libraries",
+                        "supports_custom_values": True,
+                    },
+                    "document_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "library-documents",
+                        "supports_custom_values": True,
+                    },
+                    "name": <RestSchemaFieldOverlayInfo>{
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "create-response",
+                "method": "POST",
+                "path": "/v1/responses",
+                "operation_id": "create_response_v1_responses_post",
+                "display_name": "Create Response",
+                "short_desc": "Create Response",
+                "desc": "Generate a completed model response from the supplied input.",
+                "groups": ("Responses",),
+                "mutates_state": False,
+                "response_content_type": "application/json",
+                "fields": {
+                    "model": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "models",
+                        "supports_custom_values": True,
+                    },
+                    "input": <RestSchemaFieldOverlayInfo>{
+                        "preselected": True,
+                    },
+                    "stream": <RestSchemaFieldOverlayInfo>{
+                        "ignore": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "count-response-input-tokens",
+                "method": "POST",
+                "path": "/v1/responses/input_tokens",
+                "operation_id": "count_input_tokens_v1_responses_input_tokens_post",
+                "display_name": "Count Response Input Tokens",
+                "short_desc": "Count Response Input Tokens",
+                "desc": "Count the input tokens for a response without generating it.",
+                "groups": ("Responses",),
+                "mutates_state": False,
+                "fields": {
+                    "model": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "models",
+                        "supports_custom_values": True,
+                    },
+                    "input": <RestSchemaFieldOverlayInfo>{
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-voices-v2",
+                "method": "GET",
+                "path": "/v2/audio/voices",
+                "operation_id": "audio_v2_voices_list",
+                "display_name": "List Voices (v2)",
+                "short_desc": "List Voices (v2)",
+                "desc": "List voices using filters and cursor pagination.",
+                "groups": ("Audio",),
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-prompts",
+                "method": "GET",
+                "path": "/v2/prompts",
+                "operation_id": "prompts_list",
+                "display_name": "List Prompts",
+                "short_desc": "List Prompts",
+                "desc": "List prompts with pagination and optional filters.",
+                "groups": ("Prompts",),
+                "fields": {
+                    "pageSize": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Page Size",
+                    },
+                    "pageToken": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Page Token",
+                    },
+                    "sort.field": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Sort Field",
+                    },
+                    "sort.direction": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Sort Direction",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "create-prompt",
+                "method": "POST",
+                "path": "/v2/prompts",
+                "operation_id": "prompts_create",
+                "display_name": "Create Prompt",
+                "short_desc": "Create Prompt",
+                "desc": "Create a prompt with its first version.",
+                "groups": ("Prompts",),
+                "fields": {
+                    "name": <RestSchemaFieldOverlayInfo>{
+                        "preselected": True,
+                    },
+                    "definition": <RestSchemaFieldOverlayInfo>{
+                        "preselected": True,
+                    },
+                    "sharingScope": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Sharing Scope",
+                    },
+                    "workspaceRelation": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Workspace Relation",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "get-prompt",
+                "method": "GET",
+                "path": "/v2/prompts/{prompt_id}",
+                "operation_id": "prompts_get",
+                "display_name": "Get Prompt",
+                "short_desc": "Get Prompt",
+                "desc": "Retrieve a prompt by ID and optional version or alias.",
+                "groups": ("Prompts",),
+                "fields": {
+                    "version": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "prompt-versions",
+                        "supports_custom_values": True,
+                    },
+                    "prompt_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "prompts",
+                        "supports_custom_values": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "delete-prompt",
+                "method": "DELETE",
+                "path": "/v2/prompts/{prompt_id}",
+                "operation_id": "prompts_delete",
+                "display_name": "Delete Prompt",
+                "short_desc": "Delete Prompt",
+                "desc": "Delete the selected prompt.",
+                "groups": ("Prompts",),
+                "fields": {
+                    "prompt_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "prompts",
+                        "supports_custom_values": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "update-prompt",
+                "method": "PATCH",
+                "path": "/v2/prompts/{prompt_id}",
+                "operation_id": "prompts_update",
+                "display_name": "Update Prompt",
+                "short_desc": "Update Prompt",
+                "desc": "Update the metadata of an existing prompt.",
+                "groups": ("Prompts",),
+                "fields": {
+                    "prompt_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "prompts",
+                        "supports_custom_values": True,
+                    },
+                    "sharingScope": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Sharing Scope",
+                    },
+                    "workspaceRelation": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Workspace Relation",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-prompt-versions",
+                "method": "GET",
+                "path": "/v2/prompts/{prompt_id}/versions",
+                "operation_id": "prompts_list_versions",
+                "display_name": "List Prompt Versions",
+                "short_desc": "List Prompt Versions",
+                "desc": "List the saved versions of a prompt.",
+                "groups": ("Prompts",),
+                "fields": {
+                    "prompt_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "prompts",
+                        "supports_custom_values": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "create-prompt-version",
+                "method": "POST",
+                "path": "/v2/prompts/{prompt_id}/versions",
+                "operation_id": "prompts_create_version",
+                "display_name": "Create Prompt Version",
+                "short_desc": "Create Prompt Version",
+                "desc": "Save a new version of a prompt definition.",
+                "groups": ("Prompts",),
+                "fields": {
+                    "prompt_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "prompts",
+                        "supports_custom_values": True,
+                    },
+                    "definition": <RestSchemaFieldOverlayInfo>{
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "get-prompt-version",
+                "method": "GET",
+                "path": "/v2/prompts/{prompt_id}/versions/{version}",
+                "operation_id": "prompts_get_version",
+                "display_name": "Get Prompt Version",
+                "short_desc": "Get Prompt Version",
+                "desc": "Retrieve a specific version of a prompt.",
+                "groups": ("Prompts",),
+                "fields": {
+                    "prompt_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "prompts",
+                        "supports_custom_values": True,
+                    },
+                    "version": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "prompt-versions",
+                        "supports_custom_values": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "update-prompt-version",
+                "method": "PATCH",
+                "path": "/v2/prompts/{prompt_id}/versions/{version}",
+                "operation_id": "prompts_update_version_metadata",
+                "display_name": "Update Prompt Version",
+                "short_desc": "Update Prompt Version",
+                "desc": "Update the notes or aliases of a prompt version.",
+                "groups": ("Prompts",),
+                "fields": {
+                    "prompt_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "prompts",
+                        "supports_custom_values": True,
+                    },
+                    "version": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "prompt-versions",
+                        "supports_custom_values": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-skills",
+                "method": "GET",
+                "path": "/v2/skills",
+                "operation_id": "skills_list",
+                "display_name": "List Skills",
+                "short_desc": "List Skills",
+                "desc": "List skills with pagination and optional filters.",
+                "groups": ("Skills",),
+                "fields": {
+                    "pageSize": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Page Size",
+                    },
+                    "pageToken": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Page Token",
+                    },
+                    "sort.field": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Sort Field",
+                    },
+                    "sort.direction": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Sort Direction",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "create-skill",
+                "method": "POST",
+                "path": "/v2/skills",
+                "operation_id": "skills_create",
+                "display_name": "Create Skill",
+                "short_desc": "Create Skill",
+                "desc": "Create a skill with its first version.",
+                "groups": ("Skills",),
+                "fields": {
+                    "name": <RestSchemaFieldOverlayInfo>{
+                        "preselected": True,
+                    },
+                    "definition": <RestSchemaFieldOverlayInfo>{
+                        "preselected": True,
+                    },
+                    "sharingScope": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Sharing Scope",
+                    },
+                    "workspaceRelation": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Workspace Relation",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "get-skill",
+                "method": "GET",
+                "path": "/v2/skills/{skill_id}",
+                "operation_id": "skills_get",
+                "display_name": "Get Skill",
+                "short_desc": "Get Skill",
+                "desc": "Retrieve a skill by ID and optional version or alias.",
+                "groups": ("Skills",),
+                "fields": {
+                    "version": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "skill-versions",
+                        "supports_custom_values": True,
+                    },
+                    "skill_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "skills",
+                        "supports_custom_values": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "delete-skill",
+                "method": "DELETE",
+                "path": "/v2/skills/{skill_id}",
+                "operation_id": "skills_delete",
+                "display_name": "Delete Skill",
+                "short_desc": "Delete Skill",
+                "desc": "Delete the selected skill.",
+                "groups": ("Skills",),
+                "fields": {
+                    "skill_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "skills",
+                        "supports_custom_values": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "update-skill",
+                "method": "PATCH",
+                "path": "/v2/skills/{skill_id}",
+                "operation_id": "skills_update",
+                "display_name": "Update Skill",
+                "short_desc": "Update Skill",
+                "desc": "Update the metadata of an existing skill.",
+                "groups": ("Skills",),
+                "fields": {
+                    "skill_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "skills",
+                        "supports_custom_values": True,
+                    },
+                    "sharingScope": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Sharing Scope",
+                    },
+                    "workspaceRelation": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Workspace Relation",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-skill-versions",
+                "method": "GET",
+                "path": "/v2/skills/{skill_id}/versions",
+                "operation_id": "skills_list_versions",
+                "display_name": "List Skill Versions",
+                "short_desc": "List Skill Versions",
+                "desc": "List the saved versions of a skill.",
+                "groups": ("Skills",),
+                "fields": {
+                    "skill_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "skills",
+                        "supports_custom_values": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "create-skill-version",
+                "method": "POST",
+                "path": "/v2/skills/{skill_id}/versions",
+                "operation_id": "skills_create_version",
+                "display_name": "Create Skill Version",
+                "short_desc": "Create Skill Version",
+                "desc": "Save a new version of a skill definition.",
+                "groups": ("Skills",),
+                "fields": {
+                    "skill_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "skills",
+                        "supports_custom_values": True,
+                    },
+                    "definition": <RestSchemaFieldOverlayInfo>{
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "get-skill-version",
+                "method": "GET",
+                "path": "/v2/skills/{skill_id}/versions/{version}",
+                "operation_id": "skills_get_version",
+                "display_name": "Get Skill Version",
+                "short_desc": "Get Skill Version",
+                "desc": "Retrieve a specific version of a skill.",
+                "groups": ("Skills",),
+                "fields": {
+                    "skill_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "skills",
+                        "supports_custom_values": True,
+                    },
+                    "version": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "skill-versions",
+                        "supports_custom_values": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "update-skill-version",
+                "method": "PATCH",
+                "path": "/v2/skills/{skill_id}/versions/{version}",
+                "operation_id": "skills_update_version_metadata",
+                "display_name": "Update Skill Version",
+                "short_desc": "Update Skill Version",
+                "desc": "Update the notes or aliases of a skill version.",
+                "groups": ("Skills",),
+                "fields": {
+                    "skill_id": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "skills",
+                        "supports_custom_values": True,
+                    },
+                    "version": <RestSchemaFieldOverlayInfo>{
+                        "ref_data": "skill-versions",
+                        "supports_custom_values": True,
                     },
                 },
             },

@@ -6,6 +6,1074 @@
     "description": "Our Chat Completion and Embeddings APIs specification. Create your account on [La Plateforme](https://console.mistral.ai) to get access and read the [docs](https://docs.mistral.ai) to learn how to use it."
   },
   "paths": {
+    "/v2/prompts": {
+      "get": {
+        "tags": [
+          "beta.prompts"
+        ],
+        "summary": "ListPrompts",
+        "operationId": "prompts_list",
+        "parameters": [
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "title": "page_size",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageToken",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "title": "page_token"
+            }
+          },
+          {
+            "name": "alias",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "title": "alias"
+            }
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "title": "fields"
+            }
+          },
+          {
+            "name": "sort.field",
+            "in": "query",
+            "description": "Defaults to created_at when omitted.",
+            "schema": {
+              "title": "field",
+              "description": "Defaults to created_at when omitted.",
+              "$ref": "#/components/schemas/ListSortField"
+            }
+          },
+          {
+            "name": "sort.direction",
+            "in": "query",
+            "description": "Defaults to descending for timestamp fields and ascending for text fields.",
+            "schema": {
+              "title": "direction",
+              "description": "Defaults to descending for timestamp fields and ascending for text fields.",
+              "$ref": "#/components/schemas/ListSortDirection"
+            }
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "REST-friendly alias for sort.field. Supported values: created_at, last_modified_at, name, title.",
+            "schema": {
+              "type": "string",
+              "title": "sort_by",
+              "description": "REST-friendly alias for sort.field. Supported values: created_at, last_modified_at, name, title."
+            }
+          },
+          {
+            "name": "sort_direction",
+            "in": "query",
+            "description": "REST-friendly alias for sort.direction. Supported values: asc, desc.",
+            "schema": {
+              "type": "string",
+              "title": "sort_direction",
+              "description": "REST-friendly alias for sort.direction. Supported values: asc, desc."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListPromptsResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-speakeasy-pagination": {
+          "type": "cursor",
+          "inputs": [
+            {
+              "name": "pageToken",
+              "in": "parameters",
+              "type": "cursor"
+            },
+            {
+              "name": "pageSize",
+              "in": "parameters",
+              "type": "limit"
+            }
+          ],
+          "outputs": {
+            "results": "$.data",
+            "nextCursor": "$.nextPageToken"
+          }
+        },
+        "description": "ListPrompts",
+        "x-speakeasy-max-method-params": 8
+      },
+      "post": {
+        "tags": [
+          "beta.prompts"
+        ],
+        "summary": "CreatePrompt",
+        "operationId": "prompts_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePromptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Prompt"
+                }
+              }
+            }
+          }
+        },
+        "description": "CreatePrompt"
+      }
+    },
+    "/v2/prompts/{prompt_id}": {
+      "get": {
+        "tags": [
+          "beta.prompts"
+        ],
+        "summary": "GetPrompt",
+        "operationId": "prompts_get",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "prompt_id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "title": "version",
+              "format": "int32",
+              "example": 1
+            },
+            "example": 1
+          },
+          {
+            "name": "alias",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "title": "alias"
+            }
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "title": "fields"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Prompt"
+                }
+              }
+            }
+          }
+        },
+        "description": "GetPrompt"
+      },
+      "delete": {
+        "tags": [
+          "beta.prompts"
+        ],
+        "summary": "DeletePrompt",
+        "operationId": "prompts_delete",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "prompt_id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletePromptResponse"
+                }
+              }
+            }
+          }
+        },
+        "description": "DeletePrompt"
+      },
+      "patch": {
+        "tags": [
+          "beta.prompts"
+        ],
+        "summary": "UpdatePrompt",
+        "operationId": "prompts_update",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "prompt_id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "title": "title",
+                    "nullable": true,
+                    "description": "Display title."
+                  },
+                  "description": {
+                    "type": "string",
+                    "title": "description",
+                    "nullable": true,
+                    "description": "Display description."
+                  },
+                  "sharingScope": {
+                    "title": "sharing_scope",
+                    "nullable": true,
+                    "$ref": "#/components/schemas/RegistrySharingScope",
+                    "description": "Registry sharing scope."
+                  },
+                  "workspaceRelation": {
+                    "title": "workspace_relation",
+                    "description": "Access every workspace member gets when sharing_scope is `workspace`. Defaults to `writer`, which is what a workspace publish granted before this field existed, so omitting it preserves today's behaviour exactly. Rejected unless sharing_scope is `workspace`.",
+                    "nullable": true,
+                    "$ref": "#/components/schemas/ShareRelation"
+                  }
+                },
+                "title": "UpdatePromptRequest",
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Prompt"
+                }
+              }
+            }
+          }
+        },
+        "x-speakeasy-max-method-params": 2,
+        "description": "UpdatePrompt"
+      }
+    },
+    "/v2/prompts/{prompt_id}/versions": {
+      "get": {
+        "tags": [
+          "beta.prompts"
+        ],
+        "summary": "ListPromptVersions",
+        "operationId": "prompts_list_versions",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "prompt_id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListPromptVersionsResponse"
+                }
+              }
+            }
+          }
+        },
+        "description": "ListPromptVersions"
+      },
+      "post": {
+        "tags": [
+          "beta.prompts"
+        ],
+        "summary": "CreatePromptVersion",
+        "operationId": "prompts_create_version",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "prompt_id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "definition": {
+                    "title": "definition",
+                    "$ref": "#/components/schemas/PromptDefinition"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "title": "notes",
+                    "nullable": true,
+                    "description": "Notes for this version."
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "title": "aliases",
+                    "description": "Aliases pointing to this version."
+                  }
+                },
+                "title": "CreatePromptVersionRequest",
+                "additionalProperties": false,
+                "required": [
+                  "definition"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatePromptVersionResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-speakeasy-max-method-params": 2,
+        "description": "CreatePromptVersion"
+      }
+    },
+    "/v2/prompts/{prompt_id}/versions/{version}": {
+      "get": {
+        "tags": [
+          "beta.prompts"
+        ],
+        "summary": "GetPromptVersion",
+        "operationId": "prompts_get_version",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "prompt_id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "version",
+              "format": "int32",
+              "example": 1
+            },
+            "example": 1
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "title": "fields"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Prompt"
+                }
+              }
+            }
+          }
+        },
+        "description": "GetPromptVersion"
+      },
+      "patch": {
+        "tags": [
+          "beta.prompts"
+        ],
+        "summary": "UpdatePromptVersionMetadata",
+        "operationId": "prompts_update_version_metadata",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "prompt_id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "version",
+              "format": "int32",
+              "example": 1
+            },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notes": {
+                    "type": "string",
+                    "title": "notes",
+                    "nullable": true,
+                    "description": "Notes for this version."
+                  },
+                  "aliases": {
+                    "title": "aliases",
+                    "description": "Aliases pointing to this version.",
+                    "$ref": "#/components/schemas/AliasList"
+                  }
+                },
+                "title": "UpdatePromptVersionRequest",
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Prompt"
+                }
+              }
+            }
+          }
+        },
+        "x-speakeasy-max-method-params": 3,
+        "description": "UpdatePromptVersionMetadata"
+      }
+    },
+    "/v2/skills": {
+      "get": {
+        "tags": [
+          "beta.skills"
+        ],
+        "summary": "ListSkills",
+        "operationId": "skills_list",
+        "parameters": [
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "title": "page_size",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageToken",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "title": "page_token"
+            }
+          },
+          {
+            "name": "alias",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "title": "alias"
+            }
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "description": "Projection over each listed Skill. definition.description is the only definition path a list accepts; body and assets are read one skill at a time with GetSkill.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "title": "fields",
+              "description": "Projection over each listed Skill. definition.description is the only definition path a list accepts; body and assets are read one skill at a time with GetSkill."
+            }
+          },
+          {
+            "name": "sort.field",
+            "in": "query",
+            "description": "Defaults to created_at when omitted.",
+            "schema": {
+              "title": "field",
+              "description": "Defaults to created_at when omitted.",
+              "$ref": "#/components/schemas/ListSortField"
+            }
+          },
+          {
+            "name": "sort.direction",
+            "in": "query",
+            "description": "Defaults to descending for timestamp fields and ascending for text fields.",
+            "schema": {
+              "title": "direction",
+              "description": "Defaults to descending for timestamp fields and ascending for text fields.",
+              "$ref": "#/components/schemas/ListSortDirection"
+            }
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "REST-friendly alias for sort.field. Supported values: created_at, last_modified_at, name, title.",
+            "schema": {
+              "type": "string",
+              "title": "sort_by",
+              "description": "REST-friendly alias for sort.field. Supported values: created_at, last_modified_at, name, title."
+            }
+          },
+          {
+            "name": "sort_direction",
+            "in": "query",
+            "description": "REST-friendly alias for sort.direction. Supported values: asc, desc.",
+            "schema": {
+              "type": "string",
+              "title": "sort_direction",
+              "description": "REST-friendly alias for sort.direction. Supported values: asc, desc."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListSkillsResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-speakeasy-pagination": {
+          "type": "cursor",
+          "inputs": [
+            {
+              "name": "pageToken",
+              "in": "parameters",
+              "type": "cursor"
+            },
+            {
+              "name": "pageSize",
+              "in": "parameters",
+              "type": "limit"
+            }
+          ],
+          "outputs": {
+            "results": "$.data",
+            "nextCursor": "$.nextPageToken"
+          }
+        },
+        "description": "ListSkills",
+        "x-speakeasy-max-method-params": 8
+      },
+      "post": {
+        "tags": [
+          "beta.skills"
+        ],
+        "summary": "CreateSkill",
+        "operationId": "skills_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSkillRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Skill"
+                }
+              }
+            }
+          }
+        },
+        "description": "CreateSkill"
+      }
+    },
+    "/v2/skills/{skill_id}": {
+      "get": {
+        "tags": [
+          "beta.skills"
+        ],
+        "summary": "GetSkill",
+        "operationId": "skills_get",
+        "parameters": [
+          {
+            "name": "skill_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "skill_id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "title": "version",
+              "format": "int32",
+              "example": 1
+            },
+            "example": 1
+          },
+          {
+            "name": "alias",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "title": "alias"
+            }
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "title": "fields"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Skill"
+                }
+              }
+            }
+          }
+        },
+        "description": "GetSkill"
+      },
+      "delete": {
+        "tags": [
+          "beta.skills"
+        ],
+        "summary": "DeleteSkill",
+        "operationId": "skills_delete",
+        "parameters": [
+          {
+            "name": "skill_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "skill_id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteSkillResponse"
+                }
+              }
+            }
+          }
+        },
+        "description": "DeleteSkill"
+      },
+      "patch": {
+        "tags": [
+          "beta.skills"
+        ],
+        "summary": "UpdateSkill",
+        "operationId": "skills_update",
+        "parameters": [
+          {
+            "name": "skill_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "skill_id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sharingScope": {
+                    "title": "sharing_scope",
+                    "nullable": true,
+                    "$ref": "#/components/schemas/RegistrySharingScope",
+                    "description": "Registry sharing scope."
+                  },
+                  "workspaceRelation": {
+                    "title": "workspace_relation",
+                    "description": "Access every workspace member gets when sharing_scope is `workspace`. Defaults to `writer`, which is what a workspace publish granted before this field existed, so omitting it preserves today's behaviour exactly. Rejected unless sharing_scope is `workspace`.",
+                    "nullable": true,
+                    "$ref": "#/components/schemas/ShareRelation"
+                  }
+                },
+                "title": "UpdateSkillRequest",
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Skill"
+                }
+              }
+            }
+          }
+        },
+        "x-speakeasy-max-method-params": 2,
+        "description": "UpdateSkill"
+      }
+    },
+    "/v2/skills/{skill_id}/versions": {
+      "get": {
+        "tags": [
+          "beta.skills"
+        ],
+        "summary": "ListSkillVersions",
+        "operationId": "skills_list_versions",
+        "parameters": [
+          {
+            "name": "skill_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "skill_id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListSkillVersionsResponse"
+                }
+              }
+            }
+          }
+        },
+        "description": "ListSkillVersions"
+      },
+      "post": {
+        "tags": [
+          "beta.skills"
+        ],
+        "summary": "CreateSkillVersion",
+        "operationId": "skills_create_version",
+        "parameters": [
+          {
+            "name": "skill_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "skill_id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "definition": {
+                    "title": "definition",
+                    "$ref": "#/components/schemas/SkillDefinition"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "title": "notes",
+                    "nullable": true,
+                    "description": "Notes for this version."
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "title": "aliases",
+                    "description": "Aliases pointing to this version."
+                  }
+                },
+                "title": "CreateSkillVersionRequest",
+                "additionalProperties": false,
+                "required": [
+                  "definition"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSkillVersionResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-speakeasy-max-method-params": 2,
+        "description": "CreateSkillVersion"
+      }
+    },
+    "/v2/skills/{skill_id}/versions/{version}": {
+      "get": {
+        "tags": [
+          "beta.skills"
+        ],
+        "summary": "GetSkillVersion",
+        "operationId": "skills_get_version",
+        "parameters": [
+          {
+            "name": "skill_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "skill_id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "version",
+              "format": "int32",
+              "example": 1
+            },
+            "example": 1
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "title": "fields"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Skill"
+                }
+              }
+            }
+          }
+        },
+        "description": "GetSkillVersion"
+      },
+      "patch": {
+        "tags": [
+          "beta.skills"
+        ],
+        "summary": "UpdateSkillVersionMetadata",
+        "operationId": "skills_update_version_metadata",
+        "parameters": [
+          {
+            "name": "skill_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "skill_id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "version",
+              "format": "int32",
+              "example": 1
+            },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notes": {
+                    "type": "string",
+                    "title": "notes",
+                    "nullable": true,
+                    "description": "Notes for this version."
+                  },
+                  "aliases": {
+                    "title": "aliases",
+                    "description": "Aliases pointing to this version.",
+                    "$ref": "#/components/schemas/AliasList"
+                  }
+                },
+                "title": "UpdateSkillVersionRequest",
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Skill"
+                }
+              }
+            }
+          }
+        },
+        "x-speakeasy-max-method-params": 3,
+        "description": "UpdateSkillVersionMetadata"
+      }
+    },
     "/v1/audio/speech": {
       "post": {
         "operationId": "speech_v1_audio_speech_post",
@@ -287,6 +1355,70 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/responses": {
+      "post": {
+        "operationId": "create_response_v1_responses_post",
+        "summary": "Create Response",
+        "description": "Create a response.\n\nGenerate a model response from text, image, or file inputs. The response can\ninclude text, reasoning, and function calls. Set stream to true to\nreceive Server-Sent Events.\n\nFor multi-turn conversations, send the full history in input, including\nprior output items and function results. Responses are not stored. Only\nclient-executed function tools are supported.",
+        "tags": [
+          "responses"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateResponseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateResponseResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/responses/input_tokens": {
+      "post": {
+        "operationId": "count_input_tokens_v1_responses_input_tokens_post",
+        "summary": "Count Input Tokens",
+        "description": "Count response input tokens.\n\nCount the input tokens for a Responses request without generating a\nresponse. The count includes the supplied conversation, instructions,\nand tool definitions.\n\nUse the same input, instructions, and tools that you plan to send when\ncreating a response. For multi-turn conversations, include prior output\nitems and function results in input.",
+        "tags": [
+          "responses"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CountResponseInputTokensRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountResponseInputTokensResponse"
                 }
               }
             }
@@ -2409,6 +3541,38 @@
             }
           }
         }
+      },
+      "delete": {
+        "operationId": "jobs_api_routes_batch_delete_batch_job",
+        "summary": "Delete Batch Job",
+        "description": "Request the deletion of a batch job.",
+        "tags": [
+          "batch"
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteBatchJobResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/batch/jobs/{job_id}/cancel": {
@@ -2564,6 +3728,76 @@
             }
           }
         }
+      }
+    },
+    "/v1/agents/completions": {
+      "post": {
+        "operationId": "agents_completion_v1_agents_completions_post",
+        "summary": "Agents Completion",
+        "tags": [
+          "agents"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentsCompletionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCompletionResponse"
+                },
+                "examples": {
+                  "userExample": {
+                    "value": {
+                      "id": "cf79f7daaee244b1a0ae5c7b1444424a",
+                      "object": "chat.completion",
+                      "model": "mistral-medium-latest",
+                      "usage": {
+                        "prompt_tokens": 24,
+                        "completion_tokens": 27,
+                        "total_tokens": 51,
+                        "prompt_audio_seconds": {}
+                      },
+                      "created": 1759500534,
+                      "choices": [
+                        {
+                          "index": 0,
+                          "message": {
+                            "content": "Arrr, the scallywag Claude Monet be the finest French painter to ever splash colors on a canvas, savvy?",
+                            "tool_calls": null,
+                            "prefix": false,
+                            "role": "assistant"
+                          },
+                          "finish_reason": "stop"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Agents Completion"
       }
     },
     "/v1/embeddings": {
@@ -3328,6 +4562,58 @@
           }
         }
       },
+      "patch": {
+        "operationId": "libraries_patch_v1",
+        "summary": "Update a library.",
+        "description": "Given a library id, you can update the name and description.",
+        "tags": [
+          "beta.libraries"
+        ],
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Library Id",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateLibraryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Library"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "put": {
         "operationId": "libraries_update_v1",
         "summary": "Update a library.",
@@ -3608,6 +4894,68 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Document"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "libraries_documents_patch_v1",
+        "summary": "Update the metadata of a specific document.",
+        "description": "Given a library and a document in that library, update the name and/or attributes of that document.",
+        "tags": [
+          "beta.libraries.documents"
+        ],
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Library Id",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Document Id",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDocumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -10065,6 +11413,191 @@
         }
       }
     },
+    "/v2/audio/voices": {
+      "get": {
+        "operationId": "audio_v2_voices_list",
+        "summary": "List voices, cursor-paginated",
+        "tags": [
+          "audio.voices"
+        ],
+        "parameters": [
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Maximum number of voices to return",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "title": "Page Size",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Maximum number of voices to return",
+              "default": 10
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "description": "Cursor returned as next_page_token by the previous page",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page Token",
+              "description": "Cursor returned as next_page_token by the previous page"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Filter the voices between customs and presets",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Type",
+              "enum": [
+                "all",
+                "custom",
+                "preset"
+              ],
+              "description": "Filter the voices between customs and presets",
+              "default": "all"
+            }
+          },
+          {
+            "name": "gender",
+            "in": "query",
+            "description": "Keep voices matching any of these genders",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VoiceGender"
+                  },
+                  "maxItems": 3
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gender",
+              "description": "Keep voices matching any of these genders"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "description": "Keep voices supporting any of these languages",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 12
+                  },
+                  "maxItems": 16
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Language",
+              "description": "Keep voices supporting any of these languages"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Case-insensitive match on voice name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Query",
+              "description": "Case-insensitive match on voice name"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "description": "Keep voices cloned with this technology",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/VoiceKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind",
+              "description": "Keep voices cloned with this technology"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceListPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-speakeasy-pagination": {
+          "type": "cursor",
+          "inputs": [
+            {
+              "name": "page_token",
+              "in": "parameters",
+              "type": "cursor"
+            },
+            {
+              "name": "page_size",
+              "in": "parameters",
+              "type": "limit"
+            }
+          ],
+          "outputs": {
+            "results": "$.data",
+            "nextCursor": "$.next_page_token"
+          }
+        },
+        "description": "List voices, cursor-paginated",
+        "x-speakeasy-max-method-params": 7
+      }
+    },
     "/v1/workflows/executions/{execution_id}": {
       "get": {
         "operationId": "get_workflow_execution_v1_workflows_executions__execution_id__get",
@@ -12746,6 +14279,595 @@
   },
   "components": {
     "schemas": {
+      "ListSortDirection": {
+        "type": "string",
+        "title": "ListSortDirection",
+        "enum": [
+          "list_sort_direction_unspecified",
+          "list_sort_direction_asc",
+          "list_sort_direction_desc"
+        ]
+      },
+      "ListSortField": {
+        "type": "string",
+        "title": "ListSortField",
+        "enum": [
+          "list_sort_field_unspecified",
+          "list_sort_field_created_at",
+          "list_sort_field_last_modified_at",
+          "list_sort_field_name",
+          "list_sort_field_title"
+        ]
+      },
+      "ShareRelation": {
+        "type": "string",
+        "title": "ShareRelation",
+        "enum": [
+          "share_relation_unspecified",
+          "reader",
+          "writer"
+        ],
+        "description": "Relation a subject holds on a shared registry object."
+      },
+      "RegistrySharingScope": {
+        "type": "string",
+        "title": "RegistrySharingScope",
+        "enum": [
+          "sharing_scope_unspecified",
+          "private",
+          "workspace"
+        ]
+      },
+      "AliasList": {
+        "type": "object",
+        "properties": {
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "values"
+          }
+        },
+        "title": "AliasList",
+        "additionalProperties": false,
+        "description": "Presence wrapper for a set of alias labels on update RPCs. As a message field it carries presence, so callers can distinguish \"leave aliases unchanged\" (field omitted) from \"clear all aliases\" (field set, empty ``values``)."
+      },
+      "CreatePromptRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "name",
+            "description": "Stable object name."
+          },
+          "definition": {
+            "title": "definition",
+            "$ref": "#/components/schemas/PromptDefinition"
+          },
+          "title": {
+            "type": "string",
+            "title": "title",
+            "nullable": true,
+            "description": "Display title."
+          },
+          "description": {
+            "type": "string",
+            "title": "description",
+            "nullable": true,
+            "description": "Display description."
+          },
+          "notes": {
+            "type": "string",
+            "title": "notes",
+            "nullable": true,
+            "description": "Notes for this version."
+          },
+          "sharingScope": {
+            "title": "sharing_scope",
+            "nullable": true,
+            "$ref": "#/components/schemas/RegistrySharingScope",
+            "description": "Registry sharing scope."
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "aliases",
+            "description": "Aliases pointing to this version."
+          },
+          "workspaceRelation": {
+            "title": "workspace_relation",
+            "description": "Access every workspace member gets when sharing_scope is `workspace`. Defaults to `writer`, which is what a workspace publish granted before this field existed, so omitting it preserves today's behaviour exactly. Rejected unless sharing_scope is `workspace`.",
+            "nullable": true,
+            "$ref": "#/components/schemas/ShareRelation"
+          }
+        },
+        "title": "CreatePromptRequest",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "definition"
+        ]
+      },
+      "CreatePromptVersionResponse": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "version",
+            "format": "int32",
+            "example": 1
+          },
+          "deduplicated": {
+            "type": "boolean",
+            "title": "deduplicated",
+            "example": false
+          }
+        },
+        "title": "CreatePromptVersionResponse",
+        "additionalProperties": false
+      },
+      "DeletePromptResponse": {
+        "type": "object",
+        "title": "DeletePromptResponse",
+        "additionalProperties": false
+      },
+      "ListPromptVersionsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PromptVersion"
+            },
+            "title": "data"
+          }
+        },
+        "title": "ListPromptVersionsResponse",
+        "additionalProperties": false
+      },
+      "ListPromptsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Prompt"
+            },
+            "title": "data"
+          },
+          "nextPageToken": {
+            "type": "string",
+            "title": "next_page_token"
+          }
+        },
+        "title": "ListPromptsResponse",
+        "additionalProperties": false
+      },
+      "Prompt": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "id"
+          },
+          "name": {
+            "type": "string",
+            "title": "name",
+            "description": "Stable object name."
+          },
+          "definition": {
+            "title": "definition",
+            "$ref": "#/components/schemas/PromptDefinition"
+          },
+          "version": {
+            "type": "integer",
+            "title": "version",
+            "format": "int32",
+            "example": 1
+          },
+          "notes": {
+            "type": "string",
+            "title": "notes",
+            "description": "Notes for this version."
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "aliases",
+            "description": "Aliases pointing to this version."
+          },
+          "sharingScope": {
+            "title": "sharing_scope",
+            "$ref": "#/components/schemas/RegistrySharingScope",
+            "description": "Registry sharing scope."
+          },
+          "createdAt": {
+            "title": "created_at",
+            "$ref": "#/components/schemas/Timestamp",
+            "description": "Creation time."
+          },
+          "updatedAt": {
+            "title": "updated_at",
+            "$ref": "#/components/schemas/Timestamp",
+            "description": "Last update time."
+          },
+          "latestVersion": {
+            "type": "integer",
+            "title": "latest_version",
+            "format": "int32",
+            "description": "Latest version number.",
+            "example": 1
+          },
+          "title": {
+            "type": "string",
+            "title": "title",
+            "description": "Display title."
+          },
+          "description": {
+            "type": "string",
+            "title": "description",
+            "description": "Display description."
+          },
+          "createdBy": {
+            "type": "string",
+            "title": "created_by"
+          },
+          "versionCreatedAt": {
+            "title": "version_created_at",
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "title": "Prompt",
+        "additionalProperties": false
+      },
+      "PromptDefinition": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "title": "content",
+            "description": "Prompt template content."
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PromptVariable"
+            },
+            "title": "variables",
+            "description": "Variables used by the prompt."
+          }
+        },
+        "title": "PromptDefinition",
+        "additionalProperties": false,
+        "description": "Versioned prompt content.",
+        "required": [
+          "content"
+        ]
+      },
+      "PromptVariable": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "name",
+            "description": "Stable object name."
+          }
+        },
+        "title": "PromptVariable",
+        "additionalProperties": false
+      },
+      "PromptVersion": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "version",
+            "format": "int32",
+            "example": 1
+          },
+          "definition": {
+            "title": "definition",
+            "$ref": "#/components/schemas/PromptDefinition"
+          },
+          "notes": {
+            "type": "string",
+            "title": "notes",
+            "description": "Notes for this version."
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "aliases",
+            "description": "Aliases pointing to this version."
+          },
+          "createdAt": {
+            "title": "created_at",
+            "$ref": "#/components/schemas/Timestamp",
+            "description": "Creation time."
+          }
+        },
+        "title": "PromptVersion",
+        "additionalProperties": false
+      },
+      "Timestamp": {
+        "type": "string",
+        "examples": [
+          "1s",
+          "1.000340012s"
+        ],
+        "format": "date-time",
+        "description": "RFC 3339 timestamp.",
+        "title": "Timestamp"
+      },
+      "SkillAssetContent": {
+        "type": "object",
+        "oneOf": [
+          {
+            "properties": {
+              "rawContent": {
+                "type": "string",
+                "title": "raw_content",
+                "format": "byte"
+              }
+            },
+            "title": "raw_content",
+            "required": [
+              "rawContent"
+            ]
+          },
+          {
+            "properties": {
+              "textContent": {
+                "type": "string",
+                "title": "text_content"
+              }
+            },
+            "title": "text_content",
+            "required": [
+              "textContent"
+            ]
+          }
+        ],
+        "properties": {
+          "isExecutable": {
+            "type": "boolean",
+            "title": "is_executable"
+          }
+        },
+        "title": "SkillAssetContent",
+        "additionalProperties": false
+      },
+      "CreateSkillRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "name",
+            "description": "Stable object name."
+          },
+          "definition": {
+            "title": "definition",
+            "$ref": "#/components/schemas/SkillDefinition"
+          },
+          "notes": {
+            "type": "string",
+            "title": "notes",
+            "nullable": true,
+            "description": "Notes for this version."
+          },
+          "sharingScope": {
+            "title": "sharing_scope",
+            "nullable": true,
+            "$ref": "#/components/schemas/RegistrySharingScope",
+            "description": "Registry sharing scope."
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "aliases",
+            "description": "Aliases pointing to this version."
+          },
+          "workspaceRelation": {
+            "title": "workspace_relation",
+            "description": "Access every workspace member gets when sharing_scope is `workspace`. Defaults to `writer`, which is what a workspace publish granted before this field existed, so omitting it preserves today's behaviour exactly. Rejected unless sharing_scope is `workspace`.",
+            "nullable": true,
+            "$ref": "#/components/schemas/ShareRelation"
+          }
+        },
+        "title": "CreateSkillRequest",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "definition"
+        ]
+      },
+      "CreateSkillVersionResponse": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "version",
+            "format": "int32",
+            "example": 1
+          },
+          "deduplicated": {
+            "type": "boolean",
+            "title": "deduplicated",
+            "example": false
+          }
+        },
+        "title": "CreateSkillVersionResponse",
+        "additionalProperties": false
+      },
+      "DeleteSkillResponse": {
+        "type": "object",
+        "title": "DeleteSkillResponse",
+        "additionalProperties": false
+      },
+      "ListSkillVersionsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkillVersion"
+            },
+            "title": "data"
+          }
+        },
+        "title": "ListSkillVersionsResponse",
+        "additionalProperties": false
+      },
+      "ListSkillsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Skill"
+            },
+            "title": "data"
+          },
+          "nextPageToken": {
+            "type": "string",
+            "title": "next_page_token"
+          }
+        },
+        "title": "ListSkillsResponse",
+        "additionalProperties": false
+      },
+      "Skill": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "id"
+          },
+          "name": {
+            "type": "string",
+            "title": "name",
+            "description": "Stable object name."
+          },
+          "definition": {
+            "title": "definition",
+            "$ref": "#/components/schemas/SkillDefinition"
+          },
+          "version": {
+            "type": "integer",
+            "title": "version",
+            "format": "int32",
+            "example": 1
+          },
+          "notes": {
+            "type": "string",
+            "title": "notes",
+            "description": "Notes for this version."
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "aliases",
+            "description": "Aliases pointing to this version."
+          },
+          "sharingScope": {
+            "title": "sharing_scope",
+            "$ref": "#/components/schemas/RegistrySharingScope",
+            "description": "Registry sharing scope."
+          },
+          "createdAt": {
+            "title": "created_at",
+            "$ref": "#/components/schemas/Timestamp",
+            "description": "Creation time."
+          },
+          "updatedAt": {
+            "title": "updated_at",
+            "$ref": "#/components/schemas/Timestamp",
+            "description": "Last update time."
+          },
+          "latestVersion": {
+            "type": "integer",
+            "title": "latest_version",
+            "format": "int32",
+            "description": "Latest version number.",
+            "example": 1
+          }
+        },
+        "title": "Skill",
+        "additionalProperties": false
+      },
+      "SkillDefinition": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "title": "description",
+            "description": "Model-facing trigger and usage description."
+          },
+          "body": {
+            "type": "string",
+            "title": "body",
+            "description": "Skill body content."
+          },
+          "assets": {
+            "type": "object",
+            "title": "assets",
+            "additionalProperties": {
+              "title": "value",
+              "$ref": "#/components/schemas/SkillAssetContent"
+            },
+            "description": "Additional files available to the skill."
+          }
+        },
+        "title": "SkillDefinition",
+        "additionalProperties": false,
+        "description": "Versioned skill content."
+      },
+      "SkillVersion": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "version",
+            "format": "int32",
+            "example": 1
+          },
+          "definition": {
+            "title": "definition",
+            "$ref": "#/components/schemas/SkillDefinition"
+          },
+          "notes": {
+            "type": "string",
+            "title": "notes",
+            "description": "Notes for this version."
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "aliases",
+            "description": "Aliases pointing to this version."
+          },
+          "createdAt": {
+            "title": "created_at",
+            "$ref": "#/components/schemas/Timestamp",
+            "description": "Creation time."
+          }
+        },
+        "title": "SkillVersion",
+        "additionalProperties": false
+      },
       "AudioSpeechCapabilities": {
         "type": "object",
         "properties": {
@@ -13681,6 +15803,3425 @@
           "msg",
           "type"
         ]
+      },
+      "ResponsesAnnotationContainerFileCitation": {
+        "type": "object",
+        "properties": {
+          "container_id": {
+            "type": "string",
+            "title": "Container Id",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "end_index": {
+            "type": "integer",
+            "title": "End Index",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "file_id": {
+            "type": "string",
+            "title": "File Id",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "start_index": {
+            "type": "integer",
+            "title": "Start Index",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "container_file_citation",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesAnnotationContainerFileCitation",
+        "required": [
+          "container_id",
+          "end_index",
+          "file_id",
+          "filename",
+          "start_index",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesAnnotationFileCitation": {
+        "type": "object",
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "title": "File Id",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "index": {
+            "type": "integer",
+            "title": "Index",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "file_citation",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesAnnotationFileCitation",
+        "required": [
+          "file_id",
+          "filename",
+          "index",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesAnnotationFilePath": {
+        "type": "object",
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "title": "File Id",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "index": {
+            "type": "integer",
+            "title": "Index",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "file_path",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesAnnotationFilePath",
+        "required": [
+          "file_id",
+          "index",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesAnnotationURLCitation": {
+        "type": "object",
+        "properties": {
+          "end_index": {
+            "type": "integer",
+            "title": "End Index",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "start_index": {
+            "type": "integer",
+            "title": "Start Index",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "url_citation",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesAnnotationURLCitation",
+        "required": [
+          "end_index",
+          "start_index",
+          "title",
+          "type",
+          "url"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesCallerDirect": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "direct",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesCallerDirect",
+        "required": [
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesCallerProgram": {
+        "type": "object",
+        "properties": {
+          "caller_id": {
+            "type": "string",
+            "title": "Caller Id",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "program",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesCallerProgram",
+        "required": [
+          "caller_id",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesContent": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "reasoning_text",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesContent",
+        "required": [
+          "text",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesCustomTool": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "custom",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "allowed_callers": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "direct",
+                    "programmatic"
+                  ],
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Allowed Callers",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "async": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Async",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "defer_loading": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Defer Loading",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Description",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesText",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "$ref": "#/components/schemas/ResponsesGrammar",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Format",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesCustomTool",
+        "required": [
+          "name",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesEasyInputMessage": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ResponsesInputText",
+                      "x-speakeasy-unknown-values": "disallow"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ResponsesInputImage",
+                      "x-speakeasy-unknown-values": "disallow"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ResponsesInputFile",
+                      "x-speakeasy-unknown-values": "disallow"
+                    }
+                  ],
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Content",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "enum": [
+              "user",
+              "assistant",
+              "system",
+              "developer"
+            ],
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "commentary",
+                  "final_answer"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Phase",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "message",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Type",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesEasyInputMessage",
+        "required": [
+          "content",
+          "role"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesFunctionCallOutputCallerDirect": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "direct",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesFunctionCallOutputCallerDirect",
+        "required": [
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesFunctionCallOutputCallerProgram": {
+        "type": "object",
+        "properties": {
+          "caller_id": {
+            "type": "string",
+            "title": "Caller Id",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "program",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesFunctionCallOutputCallerProgram",
+        "required": [
+          "caller_id",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesFunctionTool": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "parameters": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": true,
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Parameters",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "strict": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Strict",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "function",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "allowed_callers": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "direct",
+                    "programmatic"
+                  ],
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Allowed Callers",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "async": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Async",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "defer_loading": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Defer Loading",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Description",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "output_schema": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": true,
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Output Schema",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesFunctionTool",
+        "required": [
+          "name",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesGrammar": {
+        "type": "object",
+        "properties": {
+          "definition": {
+            "type": "string",
+            "title": "Definition",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "syntax": {
+            "type": "string",
+            "title": "Syntax",
+            "enum": [
+              "lark",
+              "regex"
+            ],
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "grammar",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesGrammar",
+        "required": [
+          "definition",
+          "syntax",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesIncompleteDetails": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "max_output_tokens",
+                  "max_messages",
+                  "content_filter",
+                  "steered"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Reason",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesIncompleteDetails",
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "CountResponseInputTokensResponse": {
+        "type": "object",
+        "properties": {
+          "input_tokens": {
+            "type": "integer",
+            "title": "Input Tokens",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "object": {
+            "type": "string",
+            "title": "Object",
+            "const": "response.input_tokens",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "CountResponseInputTokensResponse",
+        "required": [
+          "input_tokens",
+          "object"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesInputTokensDetails": {
+        "type": "object",
+        "properties": {
+          "cache_write_tokens": {
+            "type": "integer",
+            "title": "Cache Write Tokens",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "cached_tokens": {
+            "type": "integer",
+            "title": "Cached Tokens",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesInputTokensDetails",
+        "required": [
+          "cache_write_tokens",
+          "cached_tokens"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesMessage": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ResponsesInputText",
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                {
+                  "$ref": "#/components/schemas/ResponsesInputImage",
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                {
+                  "$ref": "#/components/schemas/ResponsesInputFile",
+                  "x-speakeasy-unknown-values": "disallow"
+                }
+              ],
+              "x-speakeasy-unknown-values": "disallow"
+            },
+            "title": "Content",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "enum": [
+              "user",
+              "system",
+              "developer"
+            ],
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "in_progress",
+                  "completed",
+                  "incomplete"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Status",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "message",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Type",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesMessage",
+        "required": [
+          "content",
+          "role"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesMisalignment": {
+        "type": "object",
+        "properties": {
+          "detailed_explanation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Detailed Explanation",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "error_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Error Type",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "review_target": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Review Target",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "steer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesMisalignmentSteer",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesMisalignment",
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesMisalignmentSteer": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesMisalignmentSteer",
+        "required": [
+          "message"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "CreateResponseResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "created_at": {
+            "type": "number",
+            "title": "Created At",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesError",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "incomplete_details": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesIncompleteDetails",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "instructions": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Instructions",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string",
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Metadata",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "object": {
+            "type": "string",
+            "title": "Object",
+            "const": "response",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "output": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ResponsesOutputMessage",
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                {
+                  "$ref": "#/components/schemas/ResponsesFunctionToolCall",
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                {
+                  "$ref": "#/components/schemas/ResponsesReasoningItem",
+                  "x-speakeasy-unknown-values": "disallow"
+                }
+              ],
+              "x-speakeasy-unknown-values": "disallow"
+            },
+            "title": "Output",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "parallel_tool_calls": {
+            "type": "boolean",
+            "title": "Parallel Tool Calls",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Temperature",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "tool_choice": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "auto",
+                  "required"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "$ref": "#/components/schemas/ResponsesToolChoiceFunction",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Tool Choice",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ResponsesFunctionTool",
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                {
+                  "$ref": "#/components/schemas/ResponsesNamespaceTool",
+                  "x-speakeasy-unknown-values": "disallow"
+                }
+              ],
+              "x-speakeasy-unknown-values": "disallow"
+            },
+            "title": "Tools",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "top_p": {
+            "anyOf": [
+              {
+                "type": "number",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Top P",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "background": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Background",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "number",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Completed At",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "max_output_tokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Max Output Tokens",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "max_tool_calls": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Max Tool Calls",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "previous_response_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Previous Response Id",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "prompt_cache_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Prompt Cache Key",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "prompt_cache_retention": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "in_memory",
+                  "24h"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Prompt Cache Retention",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "reasoning": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesSupportedReasoning",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "safety_identifier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Safety Identifier",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "service_tier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "default",
+                  "flex",
+                  "scale",
+                  "priority",
+                  "fast",
+                  "ultrafast"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Service Tier",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "completed",
+                  "failed",
+                  "in_progress",
+                  "cancelled",
+                  "queued",
+                  "incomplete"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Status",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesTextConfig",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "top_logprobs": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Top Logprobs",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "truncation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "disabled"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Truncation",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesUsage",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "user": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "User",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "CreateResponseResponse",
+        "required": [
+          "id",
+          "created_at",
+          "model",
+          "object",
+          "output",
+          "parallel_tool_calls",
+          "tool_choice",
+          "tools"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesNamespaceTool": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ResponsesToolFunction",
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                {
+                  "$ref": "#/components/schemas/ResponsesCustomTool",
+                  "x-speakeasy-unknown-values": "disallow"
+                }
+              ],
+              "x-speakeasy-unknown-values": "disallow"
+            },
+            "title": "Tools",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "namespace",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesNamespaceTool",
+        "required": [
+          "description",
+          "name",
+          "tools",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesOutputTokensDetails": {
+        "type": "object",
+        "properties": {
+          "reasoning_tokens": {
+            "type": "integer",
+            "title": "Reasoning Tokens",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesOutputTokensDetails",
+        "required": [
+          "reasoning_tokens"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesPromptCacheBreakpoint": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "title": "Mode",
+            "const": "explicit",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "ttl": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "30m",
+                  "12h"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Ttl",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesPromptCacheBreakpoint",
+        "required": [
+          "mode"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesFormatJSONObject": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "json_object",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesFormatJSONObject",
+        "required": [
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesFormatText": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "text",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesFormatText",
+        "required": [
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesFormatTextJSONSchemaConfig": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "schema": {
+            "type": "object",
+            "title": "Schema",
+            "additionalProperties": true,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "json_schema",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Description",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "strict": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Strict",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesFormatTextJSONSchemaConfig",
+        "required": [
+          "name",
+          "schema",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesFunctionToolCall": {
+        "type": "object",
+        "properties": {
+          "arguments": {
+            "type": "string",
+            "title": "Arguments",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "call_id": {
+            "type": "string",
+            "title": "Call Id",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "function_call",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Id",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "async": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Async",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "caller": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesCallerDirect",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "$ref": "#/components/schemas/ResponsesCallerProgram",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Caller",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "namespace": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Namespace",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "in_progress",
+                  "completed",
+                  "incomplete"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Status",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesFunctionToolCall",
+        "required": [
+          "arguments",
+          "call_id",
+          "name",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesInputFile": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "input_file",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "low",
+                  "high"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Detail",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "file_data": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "File Data",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "File Id",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "file_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "File Url",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Filename",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "prompt_cache_breakpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesPromptCacheBreakpoint",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesInputFile",
+        "required": [
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesInputFileContent": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "input_file",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "low",
+                  "high"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Detail",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "file_data": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "File Data",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "File Id",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "file_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "File Url",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Filename",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "prompt_cache_breakpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesPromptCacheBreakpoint",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesInputFileContent",
+        "required": [
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesInputImage": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "enum": [
+              "low",
+              "high",
+              "auto",
+              "original"
+            ],
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "input_image",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "File Id",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Image Url",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "prompt_cache_breakpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesPromptCacheBreakpoint",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesInputImage",
+        "required": [
+          "detail",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesInputImageContent": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "input_image",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "high",
+                  "auto",
+                  "original"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Detail",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "file_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "File Id",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Image Url",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "prompt_cache_breakpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesPromptCacheBreakpoint",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesInputImageContent",
+        "required": [
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesInputText": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "input_text",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "prompt_cache_breakpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesPromptCacheBreakpoint",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesInputText",
+        "required": [
+          "text",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesInputTextContent": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "input_text",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "prompt_cache_breakpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesPromptCacheBreakpoint",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesInputTextContent",
+        "required": [
+          "text",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesOutputMessage": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "content": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ResponsesOutputText",
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                {
+                  "$ref": "#/components/schemas/ResponsesOutputRefusal",
+                  "x-speakeasy-unknown-values": "disallow"
+                }
+              ],
+              "x-speakeasy-unknown-values": "disallow"
+            },
+            "title": "Content",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "const": "assistant",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "enum": [
+              "in_progress",
+              "completed",
+              "incomplete"
+            ],
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "message",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "commentary",
+                  "final_answer"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Phase",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesOutputMessage",
+        "required": [
+          "id",
+          "content",
+          "role",
+          "status",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesOutputRefusal": {
+        "type": "object",
+        "properties": {
+          "refusal": {
+            "type": "string",
+            "title": "Refusal",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "refusal",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesOutputRefusal",
+        "required": [
+          "refusal",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesOutputText": {
+        "type": "object",
+        "properties": {
+          "annotations": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ResponsesAnnotationFileCitation",
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                {
+                  "$ref": "#/components/schemas/ResponsesAnnotationURLCitation",
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                {
+                  "$ref": "#/components/schemas/ResponsesAnnotationContainerFileCitation",
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                {
+                  "$ref": "#/components/schemas/ResponsesAnnotationFilePath",
+                  "x-speakeasy-unknown-values": "disallow"
+                }
+              ],
+              "x-speakeasy-unknown-values": "disallow"
+            },
+            "title": "Annotations",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "output_text",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "logprobs": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ResponsesOutputTextLogprob",
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Logprobs",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesOutputText",
+        "required": [
+          "annotations",
+          "text",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesReasoningItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "summary": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponsesSummary",
+              "x-speakeasy-unknown-values": "disallow"
+            },
+            "title": "Summary",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "reasoning",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ResponsesContent",
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Content",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "encrypted_content": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Encrypted Content",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "in_progress",
+                  "completed",
+                  "incomplete"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Status",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesReasoningItem",
+        "required": [
+          "id",
+          "summary",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesTextConfig": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesFormatText",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "$ref": "#/components/schemas/ResponsesFormatTextJSONSchemaConfig",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "$ref": "#/components/schemas/ResponsesFormatJSONObject",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Format",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "verbosity": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Verbosity",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesTextConfig",
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesUsage": {
+        "type": "object",
+        "properties": {
+          "input_tokens": {
+            "type": "integer",
+            "title": "Input Tokens",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "input_tokens_details": {
+            "$ref": "#/components/schemas/ResponsesInputTokensDetails",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "output_tokens": {
+            "type": "integer",
+            "title": "Output Tokens",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "output_tokens_details": {
+            "$ref": "#/components/schemas/ResponsesOutputTokensDetails",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "total_tokens": {
+            "type": "integer",
+            "title": "Total Tokens",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesUsage",
+        "required": [
+          "input_tokens",
+          "input_tokens_details",
+          "output_tokens",
+          "output_tokens_details",
+          "total_tokens"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "enum": [
+              "server_error",
+              "rate_limit_exceeded",
+              "invalid_prompt",
+              "data_residency_mismatch",
+              "bio_policy",
+              "misalignment_policy_violation",
+              "vector_store_timeout",
+              "invalid_image",
+              "invalid_image_format",
+              "invalid_base64_image",
+              "invalid_image_url",
+              "image_too_large",
+              "image_too_small",
+              "image_parse_error",
+              "image_content_policy_violation",
+              "invalid_image_mode",
+              "image_file_too_large",
+              "unsupported_image_media_type",
+              "empty_image_file",
+              "failed_to_download_image",
+              "image_file_not_found"
+            ],
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "misalignment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesMisalignment",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "param": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Param",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Type",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "enum": [
+              "invalid_output_format",
+              "generation_failed",
+              "missing_finish_reason"
+            ],
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesError",
+        "required": [
+          "code",
+          "message",
+          "reason"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "CountResponseInputTokensRequest": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "minLength": 1,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "input": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ResponsesEasyInputMessage",
+                      "x-speakeasy-unknown-values": "disallow"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ResponsesMessage",
+                      "x-speakeasy-unknown-values": "disallow"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ResponsesOutputMessage",
+                      "x-speakeasy-unknown-values": "disallow"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ResponsesFunctionToolCall",
+                      "x-speakeasy-unknown-values": "disallow"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ResponsesFunctionCallOutput",
+                      "x-speakeasy-unknown-values": "disallow"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ResponsesReasoningItem",
+                      "x-speakeasy-unknown-values": "disallow"
+                    }
+                  ],
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Input",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "instructions": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Instructions",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "parallel_tool_calls": {
+            "type": "boolean",
+            "title": "Parallel Tool Calls",
+            "default": true,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "previous_response_id": {
+            "type": "null",
+            "title": "Previous Response Id",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "truncation": {
+            "type": "string",
+            "title": "Truncation",
+            "default": "disabled",
+            "const": "disabled",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ResponsesFunctionTool",
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                {
+                  "$ref": "#/components/schemas/ResponsesNamespaceTool",
+                  "x-speakeasy-unknown-values": "disallow"
+                }
+              ],
+              "x-speakeasy-unknown-values": "disallow"
+            },
+            "title": "Tools",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "tool_choice": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "auto",
+                  "required"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "$ref": "#/components/schemas/ResponsesToolChoiceFunction",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Tool Choice",
+            "default": "auto",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "reasoning": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesSupportedReasoning",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "conversation": {
+            "type": "null",
+            "title": "Conversation",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "prompt": {
+            "type": "null",
+            "title": "Prompt",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesTextConfig",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "CountResponseInputTokensRequest",
+        "required": [
+          "model",
+          "input"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "CreateResponseRequest": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "minLength": 1,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "input": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ResponsesEasyInputMessage",
+                      "x-speakeasy-unknown-values": "disallow"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ResponsesMessage",
+                      "x-speakeasy-unknown-values": "disallow"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ResponsesOutputMessage",
+                      "x-speakeasy-unknown-values": "disallow"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ResponsesFunctionToolCall",
+                      "x-speakeasy-unknown-values": "disallow"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ResponsesFunctionCallOutput",
+                      "x-speakeasy-unknown-values": "disallow"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ResponsesReasoningItem",
+                      "x-speakeasy-unknown-values": "disallow"
+                    }
+                  ],
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Input",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "instructions": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Instructions",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "parallel_tool_calls": {
+            "type": "boolean",
+            "title": "Parallel Tool Calls",
+            "default": true,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "previous_response_id": {
+            "type": "null",
+            "title": "Previous Response Id",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "truncation": {
+            "type": "string",
+            "title": "Truncation",
+            "default": "disabled",
+            "const": "disabled",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ResponsesFunctionTool",
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                {
+                  "$ref": "#/components/schemas/ResponsesNamespaceTool",
+                  "x-speakeasy-unknown-values": "disallow"
+                }
+              ],
+              "x-speakeasy-unknown-values": "disallow"
+            },
+            "title": "Tools",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "tool_choice": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "auto",
+                  "required"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "$ref": "#/components/schemas/ResponsesToolChoiceFunction",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Tool Choice",
+            "default": "auto",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "reasoning": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesSupportedReasoning",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "conversation": {
+            "type": "null",
+            "title": "Conversation",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "prompt": {
+            "type": "null",
+            "title": "Prompt",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesTextConfig",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "background": {
+            "type": "boolean",
+            "title": "Background",
+            "default": false,
+            "const": false,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "stream": {
+            "type": "boolean",
+            "title": "Stream",
+            "default": false,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "store": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "const": false,
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Store",
+            "default": false,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "max_output_tokens": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "integer",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Max Output Tokens",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.5,
+                "minimum": 0,
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Temperature",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "top_p": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "number",
+                "maximum": 1,
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Top P",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string",
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Metadata",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "prompt_cache_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Prompt Cache Key",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "max_tool_calls": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Max Tool Calls",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "moderation": {
+            "type": "null",
+            "title": "Moderation",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "top_logprobs": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "const": 0,
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Top Logprobs",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "CreateResponseRequest",
+        "required": [
+          "model",
+          "input"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesSummary": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "summary_text",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesSummary",
+        "required": [
+          "text",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesSupportedReasoning": {
+        "type": "object",
+        "properties": {
+          "effort": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "minimal",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Effort",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesSupportedReasoning",
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesText": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "text",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesText",
+        "required": [
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesToolChoiceFunction": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "function",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesToolChoiceFunction",
+        "required": [
+          "name",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesToolFunction": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "function",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "allowed_callers": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "direct",
+                    "programmatic"
+                  ],
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Allowed Callers",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "async": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Async",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "defer_loading": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Defer Loading",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Description",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "output_schema": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": true,
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Output Schema",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "parameters": {
+            "anyOf": [
+              {
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Parameters",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "strict": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Strict",
+            "default": null,
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesToolFunction",
+        "required": [
+          "name",
+          "type"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesOutputTextLogprob": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "bytes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "x-speakeasy-unknown-values": "disallow"
+            },
+            "title": "Bytes",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "logprob": {
+            "type": "number",
+            "title": "Logprob",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "top_logprobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponsesOutputTextLogprobTopLogprob",
+              "x-speakeasy-unknown-values": "disallow"
+            },
+            "title": "Top Logprobs",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesOutputTextLogprob",
+        "required": [
+          "token",
+          "bytes",
+          "logprob",
+          "top_logprobs"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesOutputTextLogprobTopLogprob": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "bytes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "x-speakeasy-unknown-values": "disallow"
+            },
+            "title": "Bytes",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "logprob": {
+            "type": "number",
+            "title": "Logprob",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesOutputTextLogprobTopLogprob",
+        "required": [
+          "token",
+          "bytes",
+          "logprob"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
+      },
+      "ResponsesFunctionCallOutput": {
+        "type": "object",
+        "properties": {
+          "output": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ResponsesInputTextContent",
+                      "x-speakeasy-unknown-values": "disallow"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ResponsesInputImageContent",
+                      "x-speakeasy-unknown-values": "disallow"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ResponsesInputFileContent",
+                      "x-speakeasy-unknown-values": "disallow"
+                    }
+                  ],
+                  "x-speakeasy-unknown-values": "disallow"
+                },
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Output",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "const": "function_call_output",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Id",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "call_id": {
+            "type": "string",
+            "title": "Call Id",
+            "minLength": 1,
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "caller": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResponsesFunctionCallOutputCallerDirect",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "$ref": "#/components/schemas/ResponsesFunctionCallOutputCallerProgram",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Caller",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Name",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "namespace": {
+            "anyOf": [
+              {
+                "type": "string",
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Namespace",
+            "x-speakeasy-unknown-values": "disallow"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "in_progress",
+                  "completed",
+                  "incomplete"
+                ],
+                "x-speakeasy-unknown-values": "disallow"
+              },
+              {
+                "type": "null",
+                "x-speakeasy-unknown-values": "disallow"
+              }
+            ],
+            "title": "Status",
+            "x-speakeasy-unknown-values": "disallow"
+          }
+        },
+        "title": "ResponsesFunctionCallOutput",
+        "required": [
+          "output",
+          "type",
+          "call_id"
+        ],
+        "additionalProperties": true,
+        "x-speakeasy-unknown-values": "disallow"
       },
       "APIKeyAuth": {
         "type": "object",
@@ -19715,6 +25256,364 @@
           "auto",
           "standard_only"
         ]
+      },
+      "AgentsCompletionRequest": {
+        "type": "object",
+        "properties": {
+          "max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens",
+            "description": "The maximum number of tokens to generate in the completion. The token count of your prompt plus `max_tokens` cannot exceed the model's context length."
+          },
+          "stream": {
+            "type": "boolean",
+            "title": "Stream",
+            "description": "Whether to stream back partial progress. If set, tokens will be sent as data-only server-side events as they become available, with the stream terminated by a data: [DONE] message. Otherwise, the server will hold the request open until the timeout or until completion, with the response containing the full result as JSON.",
+            "default": false
+          },
+          "stop": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop",
+            "description": "Stop generation if this token is detected. Or if one of these tokens is detected when providing an array"
+          },
+          "random_seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Random Seed",
+            "description": "The seed to use for random sampling. If set, different calls will generate deterministic results."
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
+          },
+          "messages": {
+            "type": "array",
+            "examples": [
+              [
+                {
+                  "role": "user",
+                  "content": "Who is the best French painter? Answer in one short sentence."
+                }
+              ]
+            ],
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SystemMessage"
+                },
+                {
+                  "$ref": "#/components/schemas/UserMessage"
+                },
+                {
+                  "$ref": "#/components/schemas/AssistantMessage"
+                },
+                {
+                  "$ref": "#/components/schemas/ToolMessage"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "role",
+                "mapping": {
+                  "assistant": "#/components/schemas/AssistantMessage",
+                  "system": "#/components/schemas/SystemMessage",
+                  "tool": "#/components/schemas/ToolMessage",
+                  "user": "#/components/schemas/UserMessage"
+                }
+              }
+            },
+            "title": "Messages",
+            "description": "The prompt(s) to generate completions for, encoded as a list of dict with role and content."
+          },
+          "response_format": {
+            "$ref": "#/components/schemas/ResponseFormat"
+          },
+          "tools": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Tool"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ImageGenerationTool"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DocumentLibraryTool"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CustomConnector"
+                    }
+                  ],
+                  "discriminator": {
+                    "propertyName": "type",
+                    "mapping": {
+                      "function": "#/components/schemas/Tool",
+                      "image_generation": "#/components/schemas/ImageGenerationTool",
+                      "document_library": "#/components/schemas/DocumentLibraryTool",
+                      "connector": "#/components/schemas/CustomConnector"
+                    }
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tools"
+          },
+          "tool_choice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ToolChoice"
+              },
+              {
+                "$ref": "#/components/schemas/ToolChoiceEnum"
+              }
+            ],
+            "title": "Tool Choice",
+            "default": "auto"
+          },
+          "presence_penalty": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 2,
+                "minimum": -2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presence Penalty",
+            "description": "The `presence_penalty` determines how much the model penalizes the repetition of words or phrases. A higher presence penalty encourages the model to use a wider variety of words and phrases, making the output more diverse and creative."
+          },
+          "frequency_penalty": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 2,
+                "minimum": -2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Penalty",
+            "description": "The `frequency_penalty` penalizes the repetition of words based on their frequency in the generated text. A higher frequency penalty discourages the model from repeating words that have already appeared frequently in the output, promoting diversity and reducing repetition."
+          },
+          "min_tokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Tokens"
+          },
+          "repetition_penalty": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "number",
+                "maximum": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repetition Penalty"
+          },
+          "top_k": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top K"
+          },
+          "logprobs": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logprobs"
+          },
+          "top_logprobs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Logprobs"
+          },
+          "prompt_logprobs": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Logprobs"
+          },
+          "top_prompt_logprobs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Prompt Logprobs"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N",
+            "description": "Number of completions to return for each request, input tokens are only billed once."
+          },
+          "prediction": {
+            "$ref": "#/components/schemas/Prediction",
+            "description": "Enable users to specify expected results, optimizing response times by leveraging known or predictable content. This approach is especially effective for updating text documents or code files with minimal changes, reducing latency while maintaining high-quality results.",
+            "default": {
+              "type": "content",
+              "content": ""
+            }
+          },
+          "parallel_tool_calls": {
+            "type": "boolean",
+            "title": "Parallel Tool Calls",
+            "default": true
+          },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReasoningEffort"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prompt_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MistralPromptMode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Allows toggling between the reasoning mode and no system prompt. When set to `reasoning` the system prompt for reasoning models will be used."
+          },
+          "guardrails": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/GuardrailConfig"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guardrails"
+          },
+          "prompt_cache_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Cache Key"
+          },
+          "service_tier": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RequestedServiceTier"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Determines whether to serve the request using priority or standard capacity."
+          },
+          "agent_id": {
+            "type": "string",
+            "description": "The ID of the agent to use for this completion."
+          }
+        },
+        "title": "AgentsCompletionRequest",
+        "required": [
+          "messages",
+          "agent_id"
+        ],
+        "additionalProperties": false
       },
       "ChatClassificationRequest": {
         "type": "object",
@@ -27729,6 +33628,34 @@
         "enum": [
           "ivc",
           "pvc"
+        ]
+      },
+      "VoiceListPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VoiceResponse"
+            },
+            "title": "Data"
+          },
+          "next_page_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Page Token",
+            "description": "Cursor for the next page, null on the last page"
+          }
+        },
+        "title": "VoiceListPage",
+        "required": [
+          "data"
         ]
       },
       "VoiceListResponse": {
@@ -37210,6 +43137,30 @@
           "endpoint"
         ]
       },
+      "DeleteBatchJobResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "object": {
+            "type": "string",
+            "title": "Object",
+            "default": "batch",
+            "const": "batch"
+          },
+          "deleted": {
+            "type": "boolean",
+            "title": "Deleted",
+            "default": true
+          }
+        },
+        "title": "DeleteBatchJobResponse",
+        "required": [
+          "id"
+        ]
+      },
       "Document": {
         "type": "object",
         "properties": {
@@ -40045,6 +45996,39 @@
                   "audio_data"
                 ],
                 "additionalProperties": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "reason": "The Responses streaming frame references event types missing from the upstream components. The create-response action returns completed JSON. Keep the documented JSON response (qore#6503).",
+      "operations": [],
+      "add_parameters": [],
+      "replace_parameters": [],
+      "relax_oneof": [],
+      "replace_required": [],
+      "rename_paths": {},
+      "replace_values": [
+        {
+          "pointer": "#/paths/~1v1~1responses/post/responses/200/content",
+          "expected": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateResponseResponse"
+              }
+            },
+            "text/event-stream": {
+              "schema": {
+                "$ref": "#/components/schemas/ResponsesStreamFrame"
+              }
+            }
+          },
+          "replacement": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateResponseResponse"
               }
             }
           }

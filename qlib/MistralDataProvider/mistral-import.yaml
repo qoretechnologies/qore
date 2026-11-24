@@ -220,3 +220,18 @@ documents:
             required:
             - audio_data
             additionalProperties: false
+  - reason: 'The Responses streaming frame references event types missing from the upstream components. The
+      create-response action returns completed JSON. Keep the documented JSON response (qore#6503).'
+    replace_values:
+    - pointer: '#/paths/~1v1~1responses/post/responses/200/content'
+      expected:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateResponseResponse'
+        text/event-stream:
+          schema:
+            $ref: '#/components/schemas/ResponsesStreamFrame'
+      replacement:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateResponseResponse'

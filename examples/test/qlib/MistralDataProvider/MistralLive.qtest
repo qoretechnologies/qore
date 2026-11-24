@@ -20,6 +20,7 @@ class MistralLiveTest inherits QUnit::Test {
             root = new MistralDataProvider::MistralDataProvider({"apikey":
                 LiveProvider::get("mistral", "MISTRALAI_APIKEY")});
             addTestCase("models and chat", \inferenceTest());
+            addTestCase("Responses input token count", \responseTokensTest());
             addTestCase("code completion", \codeTest());
             addTestCase("embeddings", \embeddingTest());
             foreach string action in ("moderate-text", "moderate-chat") {
@@ -32,7 +33,7 @@ class MistralLiveTest inherits QUnit::Test {
             addTestCase("batch creation, retrieval and cancellation", \batchTest());
             addTestCase("document OCR and audio transcription", \mediaTest());
             addTestCase("speech generation", \speechTest());
-            foreach string action in ("list-conversations", "list-connectors",
+            foreach string action in ("list-prompts", "list-skills", "list-voices-v2", "list-conversations", "list-connectors",
                     "list-datasets", "list-workflow-runs", "list-workflow-schedules", "list-workflow-deployments",
                     "list-workflow-registrations", "list-log-fields", "list-trace-fields", "list-span-fields",
                     "list-span-evaluation-fields", "list-pipelines", "search-logs", "search-traces", "search-spans",
@@ -66,6 +67,10 @@ class MistralLiveTest inherits QUnit::Test {
             "messages": ({"role": "user", "content": "Say hello in one word."},), "max_tokens": 16});
         assertTrue(chat.choices[0].message.content.val());
         assertEq(NT_DATE, chat.created.typeCode());
+    }
+    private responseTokensTest() {
+        auto response = call("count-response-input-tokens", {"model": "mistral-small-latest", "input": "Hello"});
+        assertTrue(response.input_tokens > 0);
     }
     private codeTest() {
         auto code = call("complete-code", {"model": "codestral-latest", "prompt": "def add(a, b):\n    return",
@@ -146,6 +151,8 @@ class MistralLiveTest inherits QUnit::Test {
         assertEq(id, call("get-library", {"library_id": id}).id);
         assertEq(name + " updated", call("update-library", {"library_id": id, "name": name + " updated"}).name);
         assertEq(name + " updated", call("get-library", {"library_id": id}).name);
+        call("patch-library", {"library_id": id, "description": "Invoice archive"});
+        assertEq("Invoice archive", call("get-library", {"library_id": id}).description);
         assertTrue(call("list-libraries").data.size() > 0);
         auto documents = call("list-library-documents", {"library_id": id});
         assertEq(0, documents.data.size());
@@ -155,6 +162,8 @@ class MistralLiveTest inherits QUnit::Test {
                     "content": File::readBinaryFile(LiveProvider::get("mistral", "MISTRAL_TEST_PDF"))}});
             assertTrue(document.id.val());
             assertEq(document.id, call("get-library-document", {"library_id": id, "document_id": document.id}).id);
+            call("patch-library-document", {"library_id": id, "document_id": document.id, "name": "April invoice"});
+            assertEq("April invoice", call("get-library-document", {"library_id": id, "document_id": document.id}).name);
             call("delete-library-document", {"library_id": id, "document_id": document.id});
             assertGone("get-library-document", {"library_id": id, "document_id": document.id});
         }
