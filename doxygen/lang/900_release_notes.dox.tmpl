@@ -2905,6 +2905,10 @@
       a @ref weak_assignment_operator "weak reference" from the list or hash that it designates, instead of removing
       the weak reference itself or nothing
       (<a href="https://github.com/qoretechnologies/qore/issues/7306">issue 7306</a>)
+    - a variable that holds a @ref weak_assignment_operator "weak reference" can be given to a reference parameter of
+      the plain type of its target (which raised \c RUNTIME-TYPE-ERROR) and keeps it; a target that the parameter's
+      type would convert is refused instead of being replaced by a copy
+      (<a href="https://github.com/qoretechnologies/qore/issues/7433">issue 7433</a>)
     - the @ref remove "remove" and @ref delete "delete" operators remove a member of an object reached through a
       @ref weak_assignment_operator "weak reference" in the AST interpreter, as in the other execution modes, and no
       longer let an object that is still referenced be collected after such a removal in any mode
