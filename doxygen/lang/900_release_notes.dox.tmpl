@@ -4544,6 +4544,10 @@
       (@ref Qore::Socket::unfinishedHttpChunkedBody() "unfinishedHttpChunkedBody()"), chunk sizes are checked alike,
       and a body read allocates memory as its data arrives, so that a body can neither be taken for another message
       nor end the process (<a href="https://github.com/qoretechnologies/qore/issues/7417">issue 7417</a>)
+    - @ref Qore::Serializable::deserialize() "Serializable::deserialize()" with
+      @ref Qore::QDF_STATIC_CLASS_VARS "QDF_STATIC_CLASS_VARS" replaces hash-valued static class variables instead of
+      merging them, and a hash-valued static class variable no longer holds freed memory after deserialization, which
+      could crash the process (<a href="https://github.com/qoretechnologies/qore/issues/7516">issue 7516</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 
