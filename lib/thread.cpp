@@ -786,7 +786,7 @@ static size_t get_stack_size() {
 static int initial_thread = -1;
 
 // this structure holds all thread-specific data
-class ThreadData {
+class DLLLOCAL ThreadData {
 public:
     //! the run-time parse options of the thread and the override that they were computed with; a struct declared in
     //! qore_thread_intern.h, so that RuntimeParseOptionsOverrideHelper restores it inline (qore#6446)
