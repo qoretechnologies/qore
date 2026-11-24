@@ -2541,12 +2541,26 @@ struct IList : public ilist_t {
         it, as when the search ended at the first one: the private:internal access of an ancestor in the list is
         relative to the list's class, not to the class context, so that a class context reached after another
         private:internal ancestor does not gain access to those after it
+
+        Defined inline in Function.cpp, its only user: the run-time variant search calls it for every call whose
+        variant was not resolved at parse time; an entry that the context can access without the search is taken
+        without a call, and the search past inaccessible ancestors is getNextFunction()
     */
-    DLLLOCAL QoreFunction* getFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
-        const_iterator& aqfi, const_iterator aqfe, bool& internal_access) const;
+    DLLLOCAL inline QoreFunction* getFunction(const qore_class_private* class_ctx,
+        const qore_class_private*& last_class, const_iterator& aqfi, const_iterator aqfe, bool& internal_access) const;
 
     //! returns true if an ancestor before \a aqfi (after the function itself) has private:internal access
     DLLLOCAL bool hasInternalBefore(const_iterator aqfi) const;
+
+private:
+    //! returns the function at \a aqfi, which the class context can access; updates \a last_class and
+    //! \a internal_access
+    DLLLOCAL QoreFunction* getFunctionAt(const qore_class_private* class_ctx, const qore_class_private*& last_class,
+        const_iterator aqfi, bool& internal_access) const;
+
+    //! getFunction() for an ancestor at \a aqfi that the class context cannot access without the search
+    DLLLOCAL QoreFunction* getNextFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
+        const_iterator& aqfi, const_iterator aqfe, bool& internal_access) const;
 };
 
 //! variant filter of QoreFunction::runtimeFindVariant(): only user variants
