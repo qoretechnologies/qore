@@ -241,10 +241,10 @@ class RestHandlerNarrowedCallerHashTest inherits QUnit::Test {
             "path": path,
             "accept": "application/json",
             "http_version": "1.1",
-            "host": "localhost",
+            "host": "127.0.0.1",
         };
         hash<auto> cx = {
-            "url": parse_url("http://localhost/" + path),
+            "url": parse_url("http://127.0.0.1/" + path),
             "hdr": hdr,
             "id": 1,
         };
