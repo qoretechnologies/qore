@@ -1888,7 +1888,11 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     callbacks.encrypt = ngtcp2_crypto_encrypt_cb;
     callbacks.decrypt = ngtcp2_crypto_decrypt_cb;
     callbacks.hp_mask = ngtcp2_crypto_hp_mask_cb;
+#ifdef DEBUG
+    callbacks.recv_retry = recvRetryCallback;
+#else
     callbacks.recv_retry = ngtcp2_crypto_recv_retry_cb;
+#endif
     callbacks.recv_stateless_reset = recvStatelessResetCallback;
     callbacks.update_key = ngtcp2_crypto_update_key_cb;
     callbacks.delete_crypto_aead_ctx = ngtcp2_crypto_delete_crypto_aead_ctx_cb;
@@ -5205,6 +5209,13 @@ QuicSession::CloseReason QuicSession::getCloseReason() const {
     }
     return CloseReason::Open;
 }
+
+#ifdef DEBUG
+int QuicSession::recvRetryCallback(ngtcp2_conn* conn, const ngtcp2_pkt_hd* hd, void* user_data) {
+    qore_dbg_quic_retries_received.fetch_add(1, std::memory_order_relaxed);
+    return ngtcp2_crypto_recv_retry_cb(conn, hd, user_data);
+}
+#endif
 
 int QuicSession::recvStatelessResetCallback(ngtcp2_conn* /* conn */, const ngtcp2_pkt_stateless_reset* /* sr */,
         void* user_data) {

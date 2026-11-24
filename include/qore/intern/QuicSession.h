@@ -1774,6 +1774,11 @@ private:
     */
     DLLLOCAL uint64_t processedPacketsLocked() const;
 
+#ifdef DEBUG
+    //! a Retry taken by a client connection: counted for dbg_quic_retries_received() before ngtcp2's callback takes it
+    DLLLOCAL static int recvRetryCallback(ngtcp2_conn* conn, const ngtcp2_pkt_hd* hd, void* user_data);
+#endif
+
     //! a stateless reset that ends a client connection (qore#6931): its close reason is then StatelessReset
     DLLLOCAL static int recvStatelessResetCallback(ngtcp2_conn* conn, const ngtcp2_pkt_stateless_reset* sr,
         void* user_data);
