@@ -300,3 +300,40 @@ foreach hash<auto> i in ({"TR": pcr, "TS": pcs}.pairIterator()) {
         }
     }
 }
+
+# 6) a sandboxed Program present only through what it created: an object of a host class or of a library class whose
+# method the host calls, a call reference to a library function or static method that the host calls directly, through
+# a builtin, in a thread and in a thread pool: the checks of library code see it
+class HostChecker {
+    string m() { return FcxLib::libcheck(); }
+}
+Program tso(PO_NEW_STYLE);
+tso.setSandboxManager(new SandboxManager());
+tso.parse("%modern
+%requires FcxLib
+object sub make_host(string cls) { return create_object(cls); }
+object sub make_lib() { return new FcxLib::Checker(); }
+code sub ref_lib() { return \\FcxLib::libcheck(); }
+code sub ref_lib_static() { return \\FcxLib::Lib::checks(); }
+", "TS-only");
+tso.importClass("HostChecker");
+string sub sandboxed(string checks) {
+    return (checks =~ x/sandboxed=(\w+)/)[0] ?? checks;
+}
+object only_host = tso.callFunction("make_host", "HostChecker");
+printf("TS-only-host-object: sandboxed=%s\n", sandboxed(only_host.m()));
+object only_lib = tso.callFunction("make_lib");
+printf("TS-only-library-object: sandboxed=%s\n", sandboxed(only_lib.m()));
+code only_ref = tso.callFunction("ref_lib");
+printf("TS-only-call-reference: sandboxed=%s\n", sandboxed(only_ref()));
+code only_ref_static = tso.callFunction("ref_lib_static");
+printf("TS-only-call-reference-static: sandboxed=%s\n", sandboxed(only_ref_static()));
+printf("TS-only-builtin: sandboxed=%s\n", sandboxed(call_function(only_ref)));
+Queue only_q();
+background only_q.push(only_ref());
+printf("TS-only-thread: sandboxed=%s\n", sandboxed(only_q.get()));
+ThreadPool only_tp(1);
+Queue only_q2();
+only_tp.submit(sub () { only_q2.push(only_ref()); });
+printf("TS-only-thread-pool: sandboxed=%s\n", sandboxed(only_q2.get()));
+only_tp.stop();

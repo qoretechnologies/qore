@@ -119,7 +119,14 @@ class FunctionCallContextTest inherits QUnit::Test {
             "TS-pc-eager-library-static: SANDBOX-REGISTRATION-ERROR / warm SANDBOX-REGISTRATION-ERROR",
             "TS-pc-retry-direct: SANDBOX-REGISTRATION-ERROR / warm SANDBOX-REGISTRATION-ERROR",
             "TS-pc-retry-library-function: SANDBOX-REGISTRATION-ERROR / warm SANDBOX-REGISTRATION-ERROR",
-            "TS-pc-retry-library-static: SANDBOX-REGISTRATION-ERROR / warm SANDBOX-REGISTRATION-ERROR"
+            "TS-pc-retry-library-static: SANDBOX-REGISTRATION-ERROR / warm SANDBOX-REGISTRATION-ERROR",
+            "TS-only-host-object: sandboxed=True",
+            "TS-only-library-object: sandboxed=True",
+            "TS-only-call-reference: sandboxed=True",
+            "TS-only-call-reference-static: sandboxed=True",
+            "TS-only-builtin: sandboxed=True",
+            "TS-only-thread: sandboxed=True",
+            "TS-only-thread-pool: sandboxed=True"
         );
     }
 
