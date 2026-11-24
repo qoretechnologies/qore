@@ -8364,11 +8364,13 @@ static uint64_t qore_rt_hashdecl_member_access_slot_impl(uint64_t hash_val,
     const QoreHashNode* hash = hash_value.get<const QoreHashNode>();
     const qore_hash_private* hp = qore_hash_private::get(*hash);
     if (hp->hashdecl && slot >= 0
-            && static_cast<size_t>(slot) < hp->member_list.size()) {
-        auto member = hp->member_list.begin();
-        std::advance(member, slot);
-        if ((*member)->key == key) {
-            QoreValue result = (*member)->val.refSelf();
+            && static_cast<size_t>(slot) < hp->size()) {
+        const HashMember* member = hp->member_list.front();
+        for (int32_t i = 0; i < slot; ++i) {
+            member = member->next;
+        }
+        if (member->key == key) {
+            QoreValue result = member->val.refSelf();
             qore_rt_evaluate_owned_weak_reference_result(result, xsink);
             return *xsink ? toBits(QoreValue()) : toBits(result);
         }
@@ -19169,7 +19171,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                         HashIterator hi(h);
                         while (hi.next()) {
                             if (hi.get().getType() == NT_STRING) {
-                                QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+                                QoreValue& v = qhi_priv::get(hi)->i->val;
                                 ensure_unique(v, xsink);
                                 if (*xsink || v.get<QoreStringNode>()->trim(xsink)) {
                                     return toBits(QoreValue());
@@ -19223,7 +19225,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                         HashIterator hi(h);
                         while (hi.next()) {
                             if (hi.get().getType() == NT_STRING) {
-                                QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+                                QoreValue& v = qhi_priv::get(hi)->i->val;
                                 ensure_unique(v, xsink);
                                 if (*xsink) {
                                     return toBits(QoreValue());
