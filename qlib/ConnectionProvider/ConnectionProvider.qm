@@ -126,6 +126,37 @@ public ConnectionProvider::AbstractConnection sub get_mod_connection(string str)
 public *hash sub get_mod_connections() {}
     @endcode
 
+    @subsubsection connectionprovider_caller_scoped Connection Provider Modules and Restricted Callers
+
+    The connections of a connection provider module belong to the host that configures the module, so code that may
+    not receive the host's secrets (see
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()": code that
+    a sandbox governs, or code restricted from external information with
+    @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") gets no connection from it by
+    @ref ConnectionProvider::get_connection() "get_connection()",
+    @ref ConnectionProvider::get_connection_url() "get_connection_url()",
+    @ref ConnectionProvider::get_connections() "get_connections()" or
+    @ref ConnectionProvider::get_connection_hash() "get_connection_hash()".
+
+    A connection provider module that resolves names for the calling code itself, and returns to every caller only
+    the connections that the caller may use and read (its own, for example), declares it with a public function
+    named as given by @ref ConnectionProvider::CallerScopedProviderFunction "CallerScopedProviderFunction" that
+    returns @ref True "True", as in this example:
+    @code{.py}
+# declares that every connection that the module returns is one that the calling code may use and read
+public bool sub get_mod_caller_scoped() {
+    return True;
+}
+    @endcode
+
+    Only such a module is used for code that may not receive the host's secrets; its connections are returned to that
+    code as to any other code, with their credentials.  Trusted code can use the connections of every module for
+    restricted code: with a policy barrier
+    (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()") or a capability
+    (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") it gets them,
+    and it can lend a connection to restricted code (see @ref ConnectionProvider::AbstractConnection
+    "AbstractConnection").
+
     Connection provider modules declared in the \c "QORE_CONNECTION_PROVIDERS" environment variable must
     be separated by the platform-specific @ref Qore::PathSep "PathSep" character as in the following
     examples:
@@ -184,6 +215,11 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
 
 
     @section connectionprovider_3_1 ConnectionProvider 3.1
+    - code that may not receive the host's secrets (code that a sandbox governs, or code restricted from external
+      information) gets the connections of only the connection provider modules that resolve names for the calling
+      code themselves (see @ref connectionprovider_caller_scoped): a lookup of a connection that it may not use
+      fails as for an unknown name, and the lists leave such connections out
+      (<a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>)
     - a connection is a capability of the code that creates it: code restricted from the functional domain of a
       connection's clients (\c NETWORK, \c FILESYSTEM or \c DATABASE) cannot create the connection, by a constructor
       or by deserialization (\c PERMISSION-DENIED), while a connection that unrestricted code created and lends to it
@@ -803,6 +839,15 @@ public hashdecl PingInfo {
     *hash<ExceptionInfo> ex;
 }
 
+#! The name of the function that declares that a connection provider module resolves names for the calling code
+/** A connection provider module that returns to every caller only the connections that the caller may use and read
+    declares it with a public function of this name that takes no argument and returns @ref True; only such a module
+    is used for code that may not receive the host's secrets (see @ref connectionprovider_caller_scoped)
+
+    @since ConnectionProvider 3.1
+*/
+public const CallerScopedProviderFunction = "get_mod_caller_scoped";
+
 #! returns a URL string for the given identifier if the identifier is known to a registered connection provider or returns the URL itself if the identifier is a valid URL
 /** @par Example:
     @code{.py}
@@ -815,7 +860,11 @@ string connstr = get_connection_url(str);
 
     @throw CONNECTION-ERROR the connection string cannot be matched as an external url identifier by a connection provider module and there is no scheme (i.e. protocol) specification in the string followed by at least one character (ex: \c "scheme://x...")
 
-    @note connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
+    @note
+    - connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
+    - code that may not receive the host's secrets gets the URL of a connection only from a connection provider module
+      that resolves names for the calling code (see @ref connectionprovider_caller_scoped); a URL string given is
+      returned as it is
 
     @see @ref connectionprovider_modules
 */
@@ -837,26 +886,46 @@ string connstr = get_connection(str);
 
     @throw CONNECTION-ERROR the connection string cannot be matched as an external url identifier by a connection provider module
 
-    @note connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
+    @note
+    - connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
+    - code that may not receive the host's secrets (see
+      @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()") gets
+      a connection only from a connection provider module that resolves names for the calling code (see
+      @ref connectionprovider_caller_scoped); for any other name, \c CONNECTION-ERROR is raised as for an unknown
+      name, without the modules or their errors
 
     @see @ref connectionprovider_modules
 */
 public AbstractConnection sub get_connection(string conn) {
+    # decided here, where the code that calls the module is the caller (qore#6844)
+    bool host = SandboxManager::callerMayReceiveHostSecrets();
     # process connection provider modules in declaration order
     if (ENV.QORE_CONNECTION_PROVIDERS) {
         list<string> el = ();
         list<string> pl = ENV.QORE_CONNECTION_PROVIDERS.split(PathSep);
         foreach string mod in (pl) {
             try {
-                return priv_try_get_connection(mod, conn);
+                *AbstractConnection rv = priv_try_get_connection(mod, conn, host);
+                if (rv) {
+                    return rv;
+                }
             } catch (hash<ExceptionInfo> ex) {
-                el += sprintf("%s: %s: %s\n", get_ex_pos(ex), ex.err, ex.desc);
+                # the positions of the errors are in the host's files
+                el += host
+                    ? sprintf("%s: %s: %s\n", get_ex_pos(ex), ex.err, ex.desc)
+                    : sprintf("%s: %s\n", ex.err, ex.desc);
             }
         }
-        throw "CONNECTION-ERROR", sprintf("connection identifier %y could not be matched to a known connection; "
-            "tried the following connection provider modules: %y; errors: %y", conn, pl, el);
+        if (host) {
+            throw "CONNECTION-ERROR", sprintf("connection identifier %y could not be matched to a known connection; "
+                "tried the following connection provider modules: %y; errors: %y", conn, pl, el);
+        }
+        priv_throw_unknown_connection(conn, el);
     }
 
+    if (!host) {
+        priv_throw_unknown_connection(conn);
+    }
     throw "CONNECTION-ERROR", sprintf("connection identifier %y could not be matched to a known connection; no "
         "connection provider modules are set in the QORE_CONNECTION_PROVIDERS environment variable", conn);
 }
@@ -874,20 +943,25 @@ public AbstractConnection sub get_connection(string conn) {
 
     @return a hash keyed by connection identifier; values are AbstractConnection objects; @ref nothing is returned if no connections are known
 
-    @note connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
+    @note
+    - connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
+    - code that may not receive the host's secrets gets only the connections of the connection provider modules that
+      resolve names for the calling code (see @ref connectionprovider_caller_scoped)
 
     @see
     - get_connection_hash()
     - @ref connectionprovider_modules
 */
 public *hash<string, AbstractConnection> sub get_connections(*bool verbose) {
+    # decided here, where the code that calls the module is the caller (qore#6844)
+    bool host = SandboxManager::callerMayReceiveHostSecrets();
     hash<string, AbstractConnection> h();
     # process connection provider modules in declaration order
     if (ENV.QORE_CONNECTION_PROVIDERS) {
         list pl = ENV.QORE_CONNECTION_PROVIDERS.split(PathSep);
         foreach string mod in (pl) {
             try {
-                map h.($1.key) = $1.value, priv_try_get_connections(mod).pairIterator(), !exists h.($1.key);
+                map h.($1.key) = $1.value, priv_try_get_connections(mod, host).pairIterator(), !exists h.($1.key);
             } catch (hash<ExceptionInfo> ex) {
                 # the stdout constant needs terminal I/O only when it is written, so that the module can be loaded
                 # by code without it; such code gets no output (qore#6438)
@@ -913,7 +987,10 @@ public *hash<string, AbstractConnection> sub get_connections(*bool verbose) {
 
     @return a hash keyed by connection identifier; values are @ref ConnectionInfo hashes as returned by @ref AbstractConnection::getInfo() (with passwords included); @ref nothing is returned if no connections are known
 
-    @note connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
+    @note
+    - connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
+    - code that may not receive the host's secrets gets only the connections of the connection provider modules that
+      resolve names for the calling code, which it may read (see @ref connectionprovider_caller_scoped)
 
     @see
     - get_connections()
@@ -928,19 +1005,61 @@ public *hash<string, hash<ConnectionInfo>> sub get_connection_hash(*bool verbose
 
 # private, non-exported namespace
 namespace Priv {
-*hash sub priv_try_get_connections(string mod) {
-    Program p();
-    p.loadModule(mod);
-    # we cannot make the following call before the Program::loadModule() call or it will break loading modules from relative paths
-    p.setScriptPath(sprintf("Qore::ConnectionProvider(%s)", mod));
-    return p.callFunction("get_mod_connections");
+# returns True if the module loaded in the Program declares that it resolves names for the calling code (qore#6844)
+# fails closed: a module without the declaration, or whose declaration fails or returns anything else, does not
+bool sub priv_is_caller_scoped(Program p) {
+    if (!p.existsFunction(ConnectionProvider::CallerScopedProviderFunction)) {
+        return False;
+    }
+    try {
+        return p.callFunction(ConnectionProvider::CallerScopedProviderFunction) === True;
+    } catch (hash<ExceptionInfo> ex) {
+        return False;
+    }
 }
 
-ConnectionProvider::AbstractConnection sub priv_try_get_connection(string mod, string conn) {
+# the error that code that may not receive the host's secrets gets for a connection that it may not use: the same as
+# for an unknown name, without the host's modules; only the errors of the modules that resolve names for the calling
+# code are given (qore#6844)
+sub priv_throw_unknown_connection(string conn, *list<string> el) {
+    throw "CONNECTION-ERROR", sprintf("connection identifier %y could not be matched to a known connection%s", conn,
+        el ? sprintf("; errors: %y", el) : "");
+}
+
+# loads the module in a Program of its own; for code that may not receive the host's secrets, returns the Program
+# only for a module that resolves names for the calling code, and gives no error of the other modules, which are the
+# host's (qore#6844)
+*Program sub priv_load_provider(string mod, string script_path, bool host) {
     Program p();
-    p.loadModule(mod);
-    # we cannot make the following call before the Program::loadModule() call or it will break loading modules from relative paths
-    p.setScriptPath(sprintf("Qore::ConnectionProvider(%s,%s)", mod, conn));
-    return p.callFunction("get_mod_connection", conn);
+    if (host) {
+        p.loadModule(mod);
+        # we cannot make the following call before the Program::loadModule() call or it will break loading modules
+        # from relative paths
+        p.setScriptPath(script_path);
+        return p;
+    }
+    try {
+        p.loadModule(mod);
+        p.setScriptPath(script_path);
+        if (priv_is_caller_scoped(p)) {
+            return p;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        # the error of a module that the calling code may not use is the host's
+    }
+}
+
+# returns the connections of the module; for code that may not receive the host's secrets, only those of a module
+# that resolves names for the calling code
+*hash sub priv_try_get_connections(string mod, bool host) {
+    *Program p = priv_load_provider(mod, sprintf("Qore::ConnectionProvider(%s)", mod), host);
+    return p ? p.callFunction("get_mod_connections") : NOTHING;
+}
+
+# returns the connection from the module; for code that may not receive the host's secrets, only from a module that
+# resolves names for the calling code, otherwise NOTHING
+*ConnectionProvider::AbstractConnection sub priv_try_get_connection(string mod, string conn, bool host) {
+    *Program p = priv_load_provider(mod, sprintf("Qore::ConnectionProvider(%s,%s)", mod, conn), host);
+    return p ? p.callFunction("get_mod_connection", conn) : NOTHING;
 }
 } # Priv nsmrspace

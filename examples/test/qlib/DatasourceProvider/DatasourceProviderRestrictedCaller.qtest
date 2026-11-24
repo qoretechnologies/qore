@@ -1,0 +1,127 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class DatasourceProviderRestrictedCallerTest
+
+#! Code that may not receive the host's secrets gets no datasource of the host from the datasource provider modules
+/** Sandboxed code and code restricted from external information get, from the DatasourceProvider functions, only
+    the datasources of a datasource provider module that declares that it resolves names for the calling code; a
+    lookup of any other datasource fails as for an unknown name, get_ds_hash() leaves such datasources out, and a
+    datasource string with a driver is returned as it is given.  Trusted code gets every datasource, also for
+    restricted code with a capability, while restricted code that the capability calls back does not.
+
+    The provider modules read the environment that the process started with, so the checks are in
+    restricted-caller/restricted-caller-worker.qr, which is run in each execution mode in an environment that names
+    the test's provider modules
+*/
+public class DatasourceProviderRestrictedCallerTest inherits QUnit::Test {
+    #! the environment variables passed on to the worker
+    const PassedEnv = ("PATH", "HOME", "QORE_INCLUDE_DIR");
+
+    #! the host's datasource, with its password
+    const HostDs = "pgsql:hostuser/host-secret@hostdb";
+
+    public {
+        #! the result of every lookup of every caller
+        const Expected = {
+            "trusted.ds-host": HostDs,
+            "trusted.ds-scoped": "pgsql:none/secret-none@nonedb",
+            "trusted.ds-unknown": "DATASOURCE-ERROR",
+            "trusted.ds-literal": "pgsql:u/p@db",
+            "trusted.hash": "rc-host-ds,rc-scoped-ds",
+            "trusted.hash-scoped": "pgsql:none/secret-none@nonedb",
+            # trusted code gets the host's datasource, so its lookup does not fail
+            "trusted.oracle": "differs",
+            "trusted.leak": "none",
+            "trusted.grant-cap": HostDs,
+            "trusted.grant-callback": HostDs,
+        } + DatasourceProviderRestrictedCallerTest::restricted("sbx-a", "tenant-a")
+          + DatasourceProviderRestrictedCallerTest::restricted("sbx-b", "tenant-b")
+          + DatasourceProviderRestrictedCallerTest::restricted("noext", "none");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : Test("DatasourceProviderRestrictedCaller", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("datasource lookups of restricted code in each execution mode", \testExecModes());
+        set_return_value(main());
+    }
+
+    #! the results of a caller that may not receive the host's secrets, whose own datasources are the owner's
+    static hash<auto> restricted(string caller, string owner) {
+        string own = sprintf("pgsql:%s/secret-%s@%sdb", owner, owner, owner);
+        return {
+            caller + ".ds-host": "DATASOURCE-ERROR",
+            caller + ".ds-scoped": own,
+            caller + ".ds-unknown": "DATASOURCE-ERROR",
+            caller + ".ds-literal": "pgsql:u/p@db",
+            caller + ".hash": "rc-scoped-ds",
+            caller + ".hash-scoped": own,
+            caller + ".oracle": "same",
+            caller + ".leak": "none",
+            # a capability of trusted code lends it
+            caller + ".grant-cap": HostDs,
+            # restricted code that a grant calls back gets nothing
+            caller + ".grant-callback": "DATASOURCE-ERROR",
+        };
+    }
+
+    testExecModes() {
+        string dir = get_script_dir() + DirSep + "restricted-caller";
+        # the provider modules are found by name, with the test's own modules first
+        string module_dir = dir + PathSep + (ENV.QORE_MODULE_DIR ?? (get_script_dir() + "/../../../../qlib"));
+        # only the variables needed to run qore are passed on, and the module path; no other QORE_* variable is
+        # passed on: they can hold credentials or name other provider modules
+        list<string> pass = (
+            sprintf("QORE_MODULE_DIR=%s", quote(module_dir)),
+            "QORE_DATASOURCE_PROVIDERS=RcHostDatasourceProvider" + PathSep + "RcScopedDatasourceProvider",
+        );
+        foreach string var in (PassedEnv) {
+            # live-provider-optin: PassedEnv names the search path and qore's own directories, no credentials
+            if (exists ENV{var}) {
+                # live-provider-optin: PassedEnv names the search path and qore's own directories, no credentials
+                pass += sprintf("%s=%s", var, quote(ENV{var}));
+            }
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("env -i %s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b "
+                "--enable-debug --exec-mode=%s %s", pass.join(" "), quote(libqore_dir), quote(libqore_dir),
+                quote(qore_bin), mode, quote(dir + DirSep + "restricted-caller-worker.qr")),
+                ExecModeHarness::NativeCheck::None);
+            hash<string, string> results = {};
+            foreach string line in (out.split("\n")) {
+                *list<*string> parts = (line =~ x/^([-a-z]+\.[-a-z]+)=(.*)$/);
+                if (parts) {
+                    results{parts[0]} = parts[1];
+                } else if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", mode, out));
+                }
+            }
+            foreach hash<auto> i in (Expected.pairIterator()) {
+                assertEq(i.value, results{i.key}, sprintf("%s: %s", mode, i.key));
+            }
+            assertEq(Expected.size(), results.size(), mode + ": result count");
+        }
+    }
+
+    #! quotes a value for the shell
+    private static string quote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}

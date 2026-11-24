@@ -2813,6 +2813,11 @@
 
     - @ref RestClient::AbstractRestConnection::getAsync() "RestConnection::getAsync(False, rtopts)" accepts
       string-valued runtime options when it adds the default \c skip_login flag (issue #7408).
+    - code that may not receive the host's secrets (sandboxed code, or code restricted from external information) no
+      longer gets the host's connections and datasources from the provider modules of the
+      @ref connectionprovider_caller_scoped "ConnectionProvider" and
+      @ref datasourceprovider_caller_scoped "DatasourceProvider" modules, only from provider modules that resolve names
+      for the calling code (<a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>)
     - the frames of the calls that the initialization of a module makes name the module's
       @ref Qore::Program "Program" (@ref Qore::CallStackInfo "CallStackInfo" \c programid) also when the module is
       loaded at run time (@ref Qore::Program::loadModule() "Program::loadModule()",

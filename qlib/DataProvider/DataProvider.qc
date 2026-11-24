@@ -1796,6 +1796,13 @@ if (errors) {
     }
 
     #! Tries to load a data provider from the environment from the connection name
+    /** @note the connection or datasource is resolved with the ConnectionProvider and DatasourceProvider modules, so
+        code that may not receive the host's secrets
+        (@ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()")
+        gets a data provider only for a connection or datasource of a provider module that declares that it resolves
+        names for the calling code (see the documentation of the provider modules in the ConnectionProvider and
+        DatasourceProvider modules); for any other name, @ref nothing is returned as for an unknown name
+    */
     static *AbstractDataProvider tryLoadProviderForConnectionFromEnv(string name, *string subtype,
             *LoggerInterface logger) {
         load_module("ConnectionProvider");

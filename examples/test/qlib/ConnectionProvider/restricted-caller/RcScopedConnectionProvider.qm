@@ -1,0 +1,108 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file RcScopedConnectionProvider.qm a connection provider module that resolves names for the calling code
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ConnectionProvider
+
+module RcScopedConnectionProvider {
+    version = "1.0";
+    desc = "a connection provider module that resolves names for the calling code, for the restricted-caller tests";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+#! the data provider of a test connection; its name is the connection's
+class RcScopedDataProvider inherits AbstractDataProvider {
+    private {
+        string name;
+    }
+
+    constructor(string name) {
+        self.name = name;
+    }
+
+    string getName() {
+        return name;
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"type": "RcScopedDataProvider"};
+    }
+}
+
+#! the connection of the calling code's owner: the isolation domain of its sandbox, or "none"
+class RcScopedConnection inherits AbstractConnection {
+    constructor(string owner) : AbstractConnection({
+        "name": "rc-scoped",
+        "desc": "the connection of the calling code",
+        "url": sprintf("rcscoped://%s:secret-%s@%s.invalid", owner, owner, owner),
+    }) {
+    }
+
+    string getType() {
+        return "rcscoped";
+    }
+
+    bool hasDataProvider() {
+        return True;
+    }
+
+    AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        return new RcScopedDataProvider(name);
+    }
+
+    final private int getConnectionDomainsImpl() {
+        return 0;
+    }
+
+    private object getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new Mutex();
+    }
+}
+
+#! the functions of a connection provider module that returns only the calling code's own connection
+public namespace RcScopedConnectionProvider {
+    #! declares that every connection that the module returns is one that the calling code may use and read
+    public bool sub get_mod_caller_scoped() {
+        return True;
+    }
+
+    public ConnectionProvider::AbstractConnection sub get_mod_connection(string str) {
+        if (str != "rc-scoped") {
+            throw "RC-UNKNOWN", sprintf("unknown connection %y", str);
+        }
+        return new RcScopedConnection(RcScopedConnectionProvider::owner());
+    }
+
+    public *hash<string, ConnectionProvider::AbstractConnection> sub get_mod_connections() {
+        return {"rc-scoped": new RcScopedConnection(RcScopedConnectionProvider::owner())};
+    }
+
+    #! the owner of the calling code
+    string sub owner() {
+        return SandboxManager::getCallerIsolationDomain() ?? "none";
+    }
+}
