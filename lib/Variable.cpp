@@ -976,7 +976,7 @@ LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink
 
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
         ref_pgms(std::move(o.ref_pgms)), ocvec(std::move(o.ocvec)), path_has_weak_step(o.path_has_weak_step),
-        holds_weak_locks(o.holds_weak_locks), before(o.before),
+        holds_weak_locks(o.holds_weak_locks), before(o.before), weak_lock_count(o.weak_lock_count),
         removal_objects(std::move(o.removal_objects)), removed_objects(std::move(o.removed_objects)), rdt(o.rdt),
         vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
         assignment_only(o.assignment_only), read_access(o.read_access),
@@ -1202,7 +1202,9 @@ LValueHelper::~LValueHelper() {
         // see if we have any object count changes
         if (!ocvec.empty()) {
             // v && qv could be nullptr if the constructor taking QoreObject& was used (to scan objects after initialization)
-            if (qv) {
+            // the storage of an lvalue that the operation did not change is not read: its scan state is unchanged
+            // (qore#7402)
+            if (qv && !unchanged_lvalue) {
                 if (rdt) {
                     assert(qv && !qv->isNothing());
                     if (!obj_chg) {
@@ -1227,7 +1229,9 @@ LValueHelper::~LValueHelper() {
             // write changes to container hierarchy
             if (path_has_weak_step) [[unlikely]] {
                 // a path that crosses a weak reference can reach containers that are already on it (qore#7321)
-                writeWeakPathChanges(qv ? qv->getInternalNode() : nullptr);
+                // the storage of an lvalue left unchanged is not read (it can have been freed, qore#7402), and its
+                // change was not written to the last container of the path
+                writeWeakPathChanges(qv && !unchanged_lvalue ? qv->getInternalNode() : nullptr);
             } else if (ocvec.size() > 1) {
                 for (int i = ocvec.size() - 2; i >= 0; --i) {
                     int dt = ocvec[i + 1].getDifference();
@@ -1241,7 +1245,7 @@ LValueHelper::~LValueHelper() {
             }
         }
 
-        if (!obj_chg && (val ? val->needsScan() : needs_scan(*qv))) {
+        if (!obj_chg && !unchanged_lvalue && (val ? val->needsScan() : needs_scan(*qv))) {
             obj_chg = true;
         } else if (obj_chg && removalKeptGraph()) {
             // the removal took out no value that can take part in a recursive graph
@@ -1258,7 +1262,7 @@ LValueHelper::~LValueHelper() {
 
 #ifdef DEBUG
     // a test can hold the thread here, after it has assigned an lvalue reached through a reference
-    if (lvid_set && !*vl.xsink && (val || qv) && getType() == NT_INT) {
+    if (lvid_set && !*vl.xsink && (val || qv) && !unchanged_lvalue && getType() == NT_INT) {
         if (qore_dbg_reference_lvalue_hook_t hook = qore_dbg_reference_lvalue_hook.load()) {
             hook(getValue().getAsBigInt());
         }
@@ -1309,6 +1313,8 @@ LValueHelper::~LValueHelper() {
 
     delete lvid_set;
 
+    // set if the scan of the root scanned the objects of the values removed and replaced
+    bool removals_scanned = false;
     if (robj) {
         // recalculate recursive references for objects if necessary
         // a member removed from an object that the lvalue holds through a weak reference changes the object's graph
@@ -1349,6 +1355,7 @@ LValueHelper::~LValueHelper() {
             // edge, so that a cycle that it is part of is never collected (#6335).  An object in no recursive set
             // has no set to repair, so the scan costs nothing for an ordinary removal.
             if (root_in_set) {
+                removals_scanned = true;
                 if (!removed_objects.empty()) {
                     removed_objects.forEach([this] (RObject* o) {
                         if (qore_removed_object_needs_scan(o, robj)) {
@@ -1384,6 +1391,11 @@ LValueHelper::~LValueHelper() {
             robj->tDeref();
         }
     }
+    if (holds_weak_locks && !removals_scanned && (!insertion_only || !removed_objects.empty())) [[unlikely]] {
+        // a value removed or replaced in a list or a hash reached through a weak reference, whose holders are not
+        // known here: the root of the lvalue, if any, is not the holder of the container (qore#7373)
+        scanWeakContainerRemovals();
+    }
 
     // Release the values the write replaced or removed only now, after the scan: the recursive sets they were in
     // still count the edges that pointed at them until that scan has repaired them, so releasing one before it
@@ -1397,6 +1409,46 @@ LValueHelper::~LValueHelper() {
 
     for (RObject* o : removal_objects) {
         o->tDeref();
+    }
+}
+
+void LValueHelper::keepRemovedThroughWeak(const QoreValue& v) noexcept {
+    // only a value that can hold an object is scanned
+    if (!needs_scan(v)) {
+        return;
+    }
+    AbstractQoreNode* n = const_cast<AbstractQoreNode*>(v.getInternalNode());
+    assert(n);
+    n->ref();
+    // no exception leaves here: the caller holds the value taken out of the list in a plain QoreValue; if the entry
+    // cannot be allocated, the value is not kept, and its objects are not scanned
+    try {
+        tvec.push_back(n);
+    } catch (...) {
+        n->deref(nullptr);
+    }
+}
+
+__attribute__((cold, noinline)) void LValueHelper::scanWeakContainerRemovals() {
+    // the objects removed: each one that is in a recursive set and referenced elsewhere is scanned, as the scan of
+    // the holder of the container would have repaired its set, which still counts the removed edge, so that the
+    // object would be collected while it is still referenced
+    removed_objects.forEach([this] (RObject* o) {
+        if (qore_removed_object_needs_scan(o, nullptr)) {
+#ifdef DEBUG
+            ++lvalue_scan_count;
+#endif
+            RSetHelper rsh(*o, vl.xsink, &removed_objects);
+        }
+    });
+    // the values that an assignment replaced, after the helper's own locks of the containers of weak references at
+    // the start of tvec (holdWeakLock()), which are changed in place and lost no edge; a replaced list or hash lost
+    // its edge from the holder also when another holder still shares it
+    for (size_t i = weak_lock_count, e = tvec.size(); i < e; ++i) {
+        AbstractQoreNode* n = tvec[i];
+        if (n && needs_scan(n)) {
+            qore_scan_removed_value_objects(QoreValue(n), nullptr, vl.xsink);
+        }
     }
 }
 
@@ -1574,8 +1626,9 @@ void LValueHelper::startContainerRemoval() {
 
 bool LValueHelper::removalKeptGraph() const {
     // a container copied by ensureUnique() is a new node that the recursive sets do not know yet; the node it
-    // replaced is still held in tvec here, so its address cannot have been reused
-    if (removal_no_skip || !removal_container || getInternalNode() != removal_container) {
+    // replaced is still held in tvec here, so its address cannot have been reused; the storage of an lvalue left
+    // unchanged is not read: it can have been freed (qore#7402)
+    if (removal_no_skip || !removal_container || unchanged_lvalue || getInternalNode() != removal_container) {
         return false;
     }
     switch (removal_container->getType()) {
@@ -1720,9 +1773,16 @@ QoreHashNode* LValueHelper::lockWeakHash() {
 }
 
 void LValueHelper::holdWeakLock(AbstractQoreNode* n) {
-    // the reference is released with the helper's other temporaries
+    // the reference is released with the helper's other temporaries; the helper's own locks are kept at the start of
+    // tvec, so that scanWeakContainerRemovals() can tell them from the values that the change replaced (qore#7373)
     try {
-        tvec.push_back(n);
+        if (weak_lock_count < UINT8_MAX) {
+            tvec.insert(tvec.begin() + weak_lock_count, n);
+            ++weak_lock_count;
+        } else {
+            // more locks than the count holds: walked by the scan, which only costs time
+            tvec.push_back(n);
+        }
     } catch (...) {
         n->deref(nullptr);
         throw;
@@ -1748,6 +1808,10 @@ bool LValueHelper::releaseOwnWeakLocks(AbstractQoreNode* n) {
     for (size_t i = tvec.size(); i-- > 0;) {
         if (tvec[i] == n) {
             tvec.erase(tvec.begin() + i);
+            // one of the helper's own locks, which are at the start of tvec (holdWeakLock())
+            if (i < weak_lock_count) {
+                --weak_lock_count;
+            }
             // not the last reference: the lvalue holds the node
             n->deref(nullptr);
         }
@@ -1761,6 +1825,9 @@ QoreListNode* LValueHelper::getWeakRemovalList() {
     ensureUnique();
     // held by the helper while the change through the weak reference is made (qore#7198)
     QoreListNode* l = lockWeakList();
+    // the lvalue keeps the weak reference, and its storage can be an entry of the list, which the removal frees or
+    // moves: it is not read again (qore#7402)
+    leaveUnchangedLValue();
     // a list freed under the weak reference cannot be changed (qore#7163)
     if (qore_list_private::get(*l)->checkValid(vl.xsink)) {
         return nullptr;
@@ -1772,6 +1839,8 @@ QoreHashNode* LValueHelper::getWeakRemovalHash() {
     assert(getType() == NT_WEAKREF_HASH);
     ensureUnique();
     QoreHashNode* h = lockWeakHash();
+    // as for a list: the lvalue's storage can be a key of the hash (qore#7402)
+    leaveUnchangedLValue();
     if (qore_hash_private::get(*h)->checkValid(vl.xsink)) {
         return nullptr;
     }

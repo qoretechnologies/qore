@@ -1,0 +1,35 @@
+premature strong: collected early False name "peer"
+premature strong: collected after True
+premature hash-remove: collected early False name "peer"
+premature hash-remove: collected after True
+premature hash-assign: collected early False name "peer"
+premature hash-assign: collected after True
+premature hash-held-by-member: collected early False name "peer"
+premature hash-held-by-member: collected after True
+premature list-remove: collected early False name "peer"
+premature list-remove: collected after True
+premature list-assign: collected early False name "peer"
+premature list-assign: collected after True
+premature nested-remove: collected early False name "peer"
+premature nested-remove: collected after True
+list op strong-shift: collected early False name "peer"
+list op strong-shift: collected after True
+list op shift: collected early False name "peer"
+list op shift: collected after True
+list op pop: collected early False name "peer"
+list op pop: collected after True
+list op splice: collected early False name "peer"
+list op splice: collected after True
+list op extract: collected early False name "peer"
+list op extract: collected after True
+list op extract-value: collected early False name "peer"
+list op extract-value: collected after True
+list op shared-replaced: collected early False name "peer"
+list op shared-replaced: collected after True
+list op foreach-reference: collected early False name "peer"
+list op foreach-reference: collected after True
+list range: collected early False name "peer"
+list range: collected after True
+cycle hash: collected True
+cycle list: collected True
+cycle both: collected True

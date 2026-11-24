@@ -400,6 +400,58 @@ static QoreValue f_dbg_generic_cache_counts(const QoreListNode* params, RuntimeC
     return h.release();
 }
 
+//! Returns whether the module manager judges a module path to be library code, and the path that it then loads
+/** For tests of every path form, also those that the loaders normalize before the check (qore#7319): \a path as the
+    loaders give it, and the directory of the module search path and the name appended to it if the search found the
+    module there; the appended name must be one that the search makes (relative, with no empty, \c "." or \c ".."
+    component)
+*/
+static QoreValue f_dbg_module_path_trust(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    // the string values can be inline short strings (issue #7038)
+    QoreStringDataHelper path(get_param_value(params, 0));
+    QoreValue dir_val = get_param_value(params, 1);
+    QoreValue rel_val = get_param_value(params, 2);
+    if ((dir_val.getType() == NT_STRING) != (rel_val.getType() == NT_STRING)) {
+        xsink->raiseException("DBG-MODULE-PATH-ERROR", "the directory and the appended name are given together");
+        return QoreValue();
+    }
+    std::string load_path;
+    bool trusted;
+    if (dir_val.getType() == NT_STRING) {
+        QoreStringDataHelper rel_str(rel_val);
+        QoreStringDataHelper dir_str(dir_val);
+        std::string rel(rel_str.c_str(), rel_str.size());
+        // only names that the module search makes: the module manager asserts it
+        bool clean = !rel.empty() && rel[0] != '/';
+        for (size_t start = 0; clean;) {
+            size_t end = rel.find('/', start);
+            std::string c = rel.substr(start, end == std::string::npos ? std::string::npos : end - start);
+            if (c.empty() || c == "." || c == "..") {
+                clean = false;
+            }
+            if (end == std::string::npos) {
+                break;
+            }
+            start = end + 1;
+        }
+        if (!clean) {
+            xsink->raiseException("DBG-MODULE-PATH-ERROR", "'%s' is not a name that the module search appends",
+                rel.c_str());
+            return QoreValue();
+        }
+        QoreModuleFoundIn found_in{dir_str.c_str(), rel};
+        trusted = QMM.isTrustedModulePath(path.c_str(), &load_path, &found_in);
+    } else {
+        trusted = QMM.isTrustedModulePath(path.c_str(), &load_path);
+    }
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("trusted", trusted, xsink);
+    if (trusted) {
+        h->setKeyValue("load_path", new QoreStringNode(load_path), xsink);
+    }
+    return h.release();
+}
+
 //! Returns true if the current thread uses the cache of its local data of Programs with module lifetime (qore#7025)
 static QoreValue f_dbg_module_program_cache_enabled(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -9793,6 +9845,8 @@ public:
         runCase(c, true);
         runCase(c, false);
         drainedCancelCase(c);
+        drainedRestrictedOwnerCancelCase(c);
+        idleThreadRestrictedOwnerCancelCase(c);
         failedRestartCase(c);
         for (CancelBy by : {CancelBy::Key, CancelBy::KeyOnAllThreads, CancelBy::Owner, CancelBy::ModuleCleanup}) {
             keptCancelCase(c, by, false);
@@ -10057,6 +10111,148 @@ private:
         xsink.clear();
         UT_ASSERT_EQ(c, 0, ctrl->getCacheSize(),
             "no operation of the canceled Program is admitted after a cancellation found by the last drain");
+    }
+
+    //! a restricted cancel by owner (of sandboxed code, for its application) queued to the stopping thread before its
+    //! last drain, with the submissions of the owner of two applications: the drain records the owner as canceled for
+    //! that application only, so the restarted thread refuses its submission and admits the other one (qore#7010)
+    static void drainedRestrictedOwnerCancelCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        Ctrl* ctrl = startCtrl(c, xsink);
+        CtrlStop cs{ctrl, xsink};
+        if (xsink) {
+            return;
+        }
+        // two applications that no Program has: the submissions run for them as in the callback of an operation of
+        // each (see AsyncIoControllerPriv::callerAppId())
+        const qore_program_id_t app_a = 2000000001;
+        const qore_program_id_t app_b = 2000000002;
+        ReferenceHolder<QoreObject> sock_a(&xsink);
+        ReferenceHolder<QoreObject> queue_a(&xsink);
+        ReferenceHolder<QoreObject> sock_b(&xsink);
+        ReferenceHolder<QoreObject> queue_b(&xsink);
+        holdStopping(*ctrl, true, true);
+        int idx_a;
+        {
+            AioCallbackAppScope app_scope(app_a);
+            idx_a = submitRunning(*ctrl, sock_a, queue_a, xsink);
+        }
+        int idx_b;
+        {
+            AioCallbackAppScope app_scope(app_b);
+            idx_b = submitRunning(*ctrl, sock_b, queue_b, xsink);
+        }
+        UT_ASSERT(c, idx_a == 0 && idx_b == 0 && !xsink,
+            "the submissions of the owner of two applications are queued to the stopping thread");
+        if (idx_a != 0 || idx_b != 0 || xsink) {
+            return;
+        }
+        AioAppRestriction restrict_a;
+        restrict_a.restricted = true;
+        restrict_a.app_id = app_a;
+        {
+            AutoLocker al(ctrl->m);
+            Ctrl::IoThreadContext& t = *ctrl->io_threads[0];
+            // application a's cancel of the owner, queued after the submissions, as cancelByOwner() queues it
+            Ctrl::Command cmd;
+            cmd.cmd = Ctrl::IoCommand::CancelOwner;
+            cmd.owner = "preserved";
+            cmd.restrict_app = restrict_a;
+            ++ctrl->submit_seq;
+            cmd.seq_at_push = ++t.submit_seq;
+            t.cmdq.push(std::move(cmd));
+            // the last drain runs and finds them all; the thread is held after it
+            t.dbg_hold_before_drain = false;
+            t.dbg_cond.broadcast();
+            waitHeldLocked(*ctrl, t, t.dbg_held);
+            UT_ASSERT(c, t.preserved_submits.size() == 2, "the last drain keeps both submissions");
+            UT_ASSERT(c, !t.cancelled_owners.count("preserved"),
+                "a restricted cancel found by the last drain does not record the owner for every application");
+            UT_ASSERT(c, t.cancelled_owners.count(QoreCallDispatcher::ownerMarkKey("preserved", restrict_a)) == 1,
+                "a restricted cancel found by the last drain records the owner for its application");
+            t.dbg_hold_after_drain = false;
+            t.dbg_cond.broadcast();
+        }
+        ctrl->start(&xsink);
+        bool processed = !xsink && ctrl->waitForProcessing(5000, &xsink);
+        UT_ASSERT(c, processed && !xsink, "the restarted thread processes its commands (restricted cancel)");
+        xsink.clear();
+        UT_ASSERT(c, canceledResult(*queue_a, xsink),
+            "the kept submission of the canceling application is refused");
+        xsink.clear();
+        UT_ASSERT_EQ(c, 1, ctrl->getCacheSize(), "the kept submission of the other application is admitted");
+    }
+
+    //! a restricted cancel by owner (of sandboxed code, for its application) made while the I/O thread is past its
+    //! last drain and keeps the submissions of the owner of two applications: the cancel walks the thread directly
+    //! (cancel_on_idle_thread in cancelByOwnerIntern()), cancels its application's kept submission and records the
+    //! owner as canceled for that application only, so the restarted thread admits the other one (qore#7010)
+    static void idleThreadRestrictedOwnerCancelCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        Ctrl* ctrl = startCtrl(c, xsink);
+        CtrlStop cs{ctrl, xsink};
+        if (xsink) {
+            return;
+        }
+        const qore_program_id_t app_a = 2000000011;
+        const qore_program_id_t app_b = 2000000012;
+        ReferenceHolder<QoreObject> sock_a(&xsink);
+        ReferenceHolder<QoreObject> queue_a(&xsink);
+        ReferenceHolder<QoreObject> sock_b(&xsink);
+        ReferenceHolder<QoreObject> queue_b(&xsink);
+        holdStopping(*ctrl, true, true);
+        int idx_a;
+        {
+            AioCallbackAppScope app_scope(app_a);
+            idx_a = submitRunning(*ctrl, sock_a, queue_a, xsink);
+        }
+        int idx_b;
+        {
+            AioCallbackAppScope app_scope(app_b);
+            idx_b = submitRunning(*ctrl, sock_b, queue_b, xsink);
+        }
+        UT_ASSERT(c, idx_a == 0 && idx_b == 0 && !xsink,
+            "the submissions of the owner of two applications are queued to the stopping thread (idle thread)");
+        if (idx_a != 0 || idx_b != 0 || xsink) {
+            return;
+        }
+        {
+            // the last drain keeps both submissions; the thread is held after it, reading no commands
+            AutoLocker al(ctrl->m);
+            Ctrl::IoThreadContext& t = *ctrl->io_threads[0];
+            t.dbg_hold_before_drain = false;
+            t.dbg_cond.broadcast();
+            waitHeldLocked(*ctrl, t, t.dbg_held);
+            UT_ASSERT(c, t.preserved_submits.size() == 2 && !ctrl->readsCommands(t),
+                "the thread past its last drain keeps both submissions and reads no commands");
+        }
+        AioAppRestriction restrict_a;
+        restrict_a.restricted = true;
+        restrict_a.app_id = app_a;
+        // application a's cancel of the owner walks the idle thread directly
+        int canceled = ctrl->cancelByOwnerIntern("preserved", restrict_a, &xsink);
+        UT_ASSERT(c, !xsink, "the restricted cancel on the idle thread succeeds");
+        xsink.clear();
+        UT_ASSERT_EQ(c, 1, canceled, "the restricted cancel cancels its application's kept submission only");
+        {
+            AutoLocker al(ctrl->m);
+            Ctrl::IoThreadContext& t = *ctrl->io_threads[0];
+            UT_ASSERT(c, t.preserved_submits.size() == 1, "the other application's submission is still kept");
+            UT_ASSERT(c, !t.cancelled_owners.count("preserved"),
+                "a restricted cancel on an idle thread does not record the owner for every application");
+            UT_ASSERT(c, t.cancelled_owners.count(QoreCallDispatcher::ownerMarkKey("preserved", restrict_a)) == 1,
+                "a restricted cancel on an idle thread records the owner for its application");
+            t.dbg_hold_after_drain = false;
+            t.dbg_cond.broadcast();
+        }
+        ctrl->start(&xsink);
+        bool processed = !xsink && ctrl->waitForProcessing(5000, &xsink);
+        UT_ASSERT(c, processed && !xsink, "the restarted thread processes its commands (idle thread)");
+        xsink.clear();
+        UT_ASSERT(c, canceledResult(*queue_a, xsink), "the canceling application's kept submission is canceled");
+        xsink.clear();
+        UT_ASSERT_EQ(c, 1, ctrl->getCacheSize(),
+            "the other application's kept submission is admitted after a restricted cancel on the idle thread");
     }
 
     //! the thread cannot be started again: the kept submission stays where a cancellation finds it
@@ -16316,16 +16512,19 @@ static void ut_manager_streaming_repeats_on_closed_reused_connection(UnitTestCou
     xsink.clear();
 }
 
-// The repeat is limited as in request(): a request that is not idempotent, or whose closed connection had not
-// served a request, fails with the connection's refusal, and the closed connection is evicted.
-static void ut_manager_streaming_does_not_repeat_unsafe_requests(UnitTestCounters& c) {
+// The repeat is limited as in request(): a request refused at its submit was not sent, so it is repeated whatever its
+// method (RFC 9110 section 9.2.2, qore#7385), but only when its closed connection had served a request; a request on
+// a connection that served none fails with the connection's refusal.  The closed connection is evicted either way.
+static void ut_manager_streaming_repeat_limits(UnitTestCounters& c) {
     struct {
         const char* method;
         bool served;
+        bool repeated;
         const char* label;
     } cases[] = {
-        {"POST", true, "a POST request"},
-        {"GET", false, "a request on a connection that served none"},
+        {"POST", true, true, "a POST request refused at its submit"},
+        {"GET", false, false, "a request on a connection that served none"},
+        {"POST", false, false, "a POST request on a connection that served none"},
     };
     for (auto& tc : cases) {
         ExceptionSink xsink;
@@ -16350,21 +16549,38 @@ static void ut_manager_streaming_does_not_repeat_unsafe_requests(UnitTestCounter
         mgr->addPooledForOrigin(*conn, "127.0.0.1", server.port, false);
 
         QoreChannel* channel_raw = nullptr;
+        bool reused = true;
         int64_t stream_id = mgr->requestStreaming(tc.method, "http", "127.0.0.1", server.port, "/", nullptr,
-            nullptr, 0, channel_raw, &xsink, nullptr, nullptr);
+            nullptr, 0, channel_raw, &xsink, nullptr, &reused);
         ReferenceHolder<QoreChannel> channel(channel_raw, &xsink);
         std::string label = tc.label;
-        UT_ASSERT(c, stream_id < 0 && !channel_raw, (label + " fails").c_str());
-        UT_ASSERT(c, xsink.isException(), (label + ": the refusal reaches the caller").c_str());
-        if (xsink.isException()) {
-            QoreStringValueHelper err(xsink.getExceptionErr());
-            UT_ASSERT(c, !strcmp(err->c_str(), "HTTPCLIENT-STATE-ERROR"),
-                (label + ": the error of the closed connection").c_str());
+        if (tc.repeated) {
+            UT_ASSERT(c, !xsink, (label + ": the request is repeated instead of failing").c_str());
+            UT_ASSERT(c, stream_id >= 0 && channel_raw, (label + ": the repeated request is submitted").c_str());
+            if (channel_raw) {
+                UT_ASSERT_EQ(c, (int64)200, ut_read_streaming_status(channel_raw, &xsink),
+                    (label + ": the repeated request is answered on a new connection").c_str());
+                channel_raw->close();
+            }
+            UT_ASSERT(c, !reused, (label + ": a repeated request is not reported as submitted on a reused "
+                "connection").c_str());
+        } else {
+            UT_ASSERT(c, stream_id < 0 && !channel_raw, (label + " fails").c_str());
+            UT_ASSERT(c, xsink.isException(), (label + ": the refusal reaches the caller").c_str());
+            if (xsink.isException()) {
+                QoreStringValueHelper err(xsink.getExceptionErr());
+                UT_ASSERT(c, !strcmp(err->c_str(), "HTTPCLIENT-STATE-ERROR"),
+                    (label + ": the error of the closed connection").c_str());
+            }
         }
         xsink.clear();
         UT_ASSERT_EQ(c, 1, conn->getSubmitCalls(), (label + ": the closed connection was used once").c_str());
-        UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), (label + ": the closed connection is evicted").c_str());
-        UT_ASSERT_EQ(c, 0, server.accepted.load(), (label + ": the request is not repeated").c_str());
+        // the closed connection is evicted; a repeated request leaves the new connection that served it in the pool
+        UT_ASSERT_EQ(c, tc.repeated ? 1 : 0, mgr->getPoolSize(),
+            (label + ": the closed connection is evicted").c_str());
+        UT_ASSERT_EQ(c, tc.repeated ? 1 : 0, server.accepted.load(),
+            (label + (tc.repeated ? ": the request was repeated on one new connection"
+                : ": the request is not repeated")).c_str());
         server.wakeUnused();
         mgr->closeAll(&xsink);
         xsink.clear();
@@ -20562,6 +20778,84 @@ static QoreValue f_dbg_async_io_wait_owner_flush_blocked(const QoreListNode* par
         return QoreValue();
     }
     return ctrl->dbgWaitOwnerFlushBlocked(static_cast<int>(timeout_ms));
+}
+
+//! Returns the global async I/O controller (referenced) for a debug hook, or nullptr with an exception raised
+static AsyncIoControllerPriv* dbg_async_io_ctrl(ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-ERROR", "no async I/O controller");
+        }
+        return nullptr;
+    }
+    return static_cast<AsyncIoControllerPriv*>(ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink));
+}
+
+//! Debug-only: holds the I/O threads of the global async I/O controller before they drain their command queues
+//! (True), or releases them (False); clear it in an on_exit block, as a held thread processes no command (qore#7010)
+static QoreValue f_dbg_async_io_hold_io_commands(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(dbg_async_io_ctrl(xsink), xsink);
+    if (ctrl) {
+        ctrl->dbgHoldIoCommands(get_param_value(params, 0).getAsBool());
+    }
+    return QoreValue();
+}
+
+//! Debug-only: waits until the first I/O thread is held before its command queue; False if the wait timed out
+static QoreValue f_dbg_async_io_wait_io_commands_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(dbg_async_io_ctrl(xsink), xsink);
+    if (!ctrl) {
+        return QoreValue();
+    }
+    return ctrl->dbgWaitIoCommandsHeld(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+}
+
+//! Debug-only: cancels the operations of the owner on the held first I/O thread, as code there that runs for the
+//! given application (-1 none, 0 trusted code), before the thread processes its queued commands; returns the count
+static QoreValue f_dbg_async_io_cancel_owner_on_io_thread(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(dbg_async_io_ctrl(xsink), xsink);
+    if (!ctrl) {
+        return QoreValue();
+    }
+    QoreStringValueHelper owner(get_param_value(params, 0));
+    int rc_count = ctrl->dbgCancelOwnerOnIoThread(owner->c_str(), get_param_value(params, 1).getAsBigInt(),
+        static_cast<int>(get_param_value(params, 2).getAsBigInt()), xsink);
+    return *xsink ? QoreValue() : QoreValue(static_cast<int64>(rc_count));
+}
+
+//! Debug-only: queues a cancel of the operations of the owner, as code that runs for the given application (-1
+//! none, 0 trusted code) requests it on another I/O thread, to the held first I/O thread, which processes it when it
+//! is released, before the commands queued after it
+static QoreValue f_dbg_async_io_queue_cancel_owner(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(dbg_async_io_ctrl(xsink), xsink);
+    if (ctrl) {
+        QoreStringValueHelper owner(get_param_value(params, 0));
+        ctrl->dbgQueueCancelOwner(owner->c_str(), get_param_value(params, 1).getAsBigInt(), xsink);
+    }
+    return QoreValue();
+}
+
+//! Debug-only: returns the generation of the work that added the timer of the global async I/O controller with the
+//! given ID (0 for a timer that no sandboxed code may cancel by its generation), or -1 if there is no such timer
+//! (qore#7010)
+static QoreValue f_dbg_async_io_timer_adder_gen(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 id = get_param_value(params, 0).getAsBigInt();
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    return ctrl->dbgTimerAdderGen(id);
 }
 
 //! Debug-only: the number of operation objects that the async I/O controllers have registered (qore#6531)
@@ -25830,7 +26124,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_request_evicts_connection_closed_on_submit(c);
     ut_manager_request_keeps_open_connection_that_refuses(c);
     ut_manager_streaming_repeats_on_closed_reused_connection(c);
-    ut_manager_streaming_does_not_repeat_unsafe_requests(c);
+    ut_manager_streaming_repeat_limits(c);
     ut_manager_streaming_abandon_releases_connection(c);
     ut_manager_new_connection_closed_before_reservation(c);
     ut_manager_closed_new_connection_detached(c);
@@ -28075,6 +28369,45 @@ static QoreValue f_dbg_hold_deref_last(const QoreListNode* params, RuntimeConfig
         xsink);
 }
 
+//! returns the reads of the size of the list or hash of the weak reference in the first entry of a list, given as
+//! it is held (qore#7375)
+/** The language reads a weak reference that it evaluates through its target; native code can give the weak reference
+    itself to the boolean conversion and to the complex type match, which read the size of its container.
+
+    @param holder a list whose first entry is a weak reference to a list or a hash
+
+    @return a hash: \c bool: the non-strict boolean conversion; \c "list<int>", \c "list<string>",
+    \c "hash<string, int>", \c "hash<string, string>": whether the value matches the type (an empty container with
+    no type matches any complex type of its kind)
+
+    @throw DBG-ARGUMENT-ERROR the first entry is not a weak reference to a list or a hash
+    @throw DEBUG-ERROR the build is not a debug build
+*/
+static QoreValue f_dbg_weak_reference_reads(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    const QoreListNode* holder = get_hard_value_param(params, 0).get<const QoreListNode>();
+    QoreValue v = holder->retrieveEntry(0);
+    if (v.getType() != NT_WEAKREF_LIST && v.getType() != NT_WEAKREF_HASH) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the first entry is a value of type '%s', not a weak reference to "
+            "a list or a hash", v.getFullTypeName());
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("bool", LexicalSemanticPolicy::getAsBoolDefault(v), xsink);
+    auto matches = [&](const char* name, const QoreTypeInfo* ti) {
+        rv->setKeyValue(name, QoreTypeInfo::runtimeAcceptsValue(ti, v) != QTI_NOT_EQUAL, xsink);
+    };
+    matches("list<int>", qore_get_complex_list_type(bigIntTypeInfo));
+    matches("list<string>", qore_get_complex_list_type(stringTypeInfo));
+    matches("hash<string, int>", qore_get_complex_hash_type(bigIntTypeInfo));
+    matches("hash<string, string>", qore_get_complex_hash_type(stringTypeInfo));
+    return rv.release();
+#else
+    xsink->raiseException("DEBUG-ERROR", "dbg_weak_reference_reads() is available in debug builds only");
+    return QoreValue();
+#endif
+}
+
 //! holds the next thread that starts to free a list or hash that has weak holders (qore#7198)
 /** The hold is taken once, in QoreListNode::derefImpl() or QoreHashNode::derefImpl(), when the last reference to a
     list or hash that weak references (":=") hold has been released and before its entries are freed; a reference
@@ -29543,6 +29876,54 @@ int64_t qore_dbg_quic_simulated_stream_progress(int64_t stream_id) {
         }
     }
     return dbg_quic_progress_added.load(std::memory_order_acquire);
+}
+
+namespace {
+//! the rate in bytes per second, the length of a step in ms and the start (monotonic ms) of the progress that
+//! dbg_http_ws_simulate_send_progress() simulates
+std::atomic<int64_t> dbg_ws_sim_rate{0};
+std::atomic<int64_t> dbg_ws_sim_step_ms{0};
+std::atomic<int64_t> dbg_ws_sim_start_ms{0};
+}
+
+int64_t qore_dbg_ws_simulated_send_progress(int64_t now_ms) {
+    int64_t rate = dbg_ws_sim_rate.load(std::memory_order_acquire);
+    if (rate <= 0) {
+        return -1;
+    }
+    int64_t step_ms = dbg_ws_sim_step_ms.load(std::memory_order_acquire);
+    int64_t steps = (now_ms - dbg_ws_sim_start_ms.load(std::memory_order_acquire)) / step_ms;
+    return steps > 0 ? steps * (rate * step_ms / 1000) : 0;
+}
+
+//! simulates a peer of the HTTP/1.1 WebSocket server connections that takes their data steadily, seen in steps
+/** While it is set, the progress that the send of an HTTP/1.1 WebSocket server connection measures while it waits
+    (the bytes that the peer acknowledged; see HttpWebSocketPollOperationPriv::checkSendProgress()) is the progress of
+    a peer that takes \a rate bytes per second since this call, seen once per \a step_ms: one step of
+    rate * step_ms / 1000 bytes at the end of each step.  The progress is derived from the monotonic clock that the
+    checks read, so that it does not depend on when the threads of the process run.
+
+    @param rate the rate of the simulated peer in bytes per second; zero or less ends the simulation
+    @param step_ms the length of a step in milliseconds; must be positive when \a rate is
+*/
+static QoreValue f_dbg_http_ws_simulate_send_progress(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64_t rate = get_param_value(params, 0).getAsBigInt();
+    int64_t step_ms = get_param_value(params, 1).getAsBigInt();
+    if (rate <= 0) {
+        dbg_ws_sim_rate.store(0, std::memory_order_release);
+        return QoreValue();
+    }
+    if (step_ms <= 0) {
+        xsink->raiseException("DBG-HTTP-WS-SIMULATE-ERROR", "the step must be positive; got " QLLD " ms", step_ms);
+        return QoreValue();
+    }
+    dbg_ws_sim_rate.store(0, std::memory_order_release);
+    dbg_ws_sim_step_ms.store(step_ms, std::memory_order_release);
+    int64_t now_ms = q_clock_getmicros_monotonic() / 1000;
+    dbg_ws_sim_start_ms.store(now_ms > 0 ? now_ms : 1, std::memory_order_release);
+    dbg_ws_sim_rate.store(rate, std::memory_order_release);
+    return QoreValue();
 }
 
 //! simulates a peer that takes the data of an HTTP/2 or HTTP/3 client stream a little at a time
@@ -31757,6 +32138,9 @@ void init_debug_functions(QoreNamespace& qns) {
         hashTypeInfo);
     qns.addBuiltinVariant("dbg_module_program_cache_enabled", f_dbg_module_program_cache_enabled, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_module_path_trust", f_dbg_module_path_trust, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "path", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG,
+        "found_dir", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG, "found_rel");
     qns.addBuiltinVariant("dbg_environment_lookups", f_dbg_environment_lookups, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_retired_type_declarations", f_dbg_retired_type_declarations, QCF_NO_FLAGS,
@@ -32021,6 +32405,18 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_async_io_wait_owner_flush_blocked", f_dbg_async_io_wait_owner_flush_blocked,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_hold_io_commands", f_dbg_async_io_hold_io_commands,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_async_io_wait_io_commands_held", f_dbg_async_io_wait_io_commands_held,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_cancel_owner_on_io_thread", f_dbg_async_io_cancel_owner_on_io_thread,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntOrNothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "owner",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "app_id", timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_queue_cancel_owner", f_dbg_async_io_queue_cancel_owner,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "owner",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "app_id");
+    qns.addBuiltinVariant("dbg_async_io_timer_adder_gen", f_dbg_async_io_timer_adder_gen,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntOrNothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id");
     qns.addBuiltinVariant("dbg_async_io_qop_registered_count", f_dbg_async_io_qop_registered_count,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_async_io_submit_takes_key_of_other", f_dbg_async_io_submit_takes_key_of_other,
@@ -32380,6 +32776,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
+    qns.addBuiltinVariant("dbg_weak_reference_reads", f_dbg_weak_reference_reads, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 1, listTypeInfo, QORE_PARAM_NO_ARG, "holder");
     qns.addBuiltinVariant("dbg_hold_container_free", f_dbg_hold_container_free,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "type_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
@@ -32466,6 +32864,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_http2_simulate_stream_progress", f_dbg_quic_simulate_stream_progress,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "reads");
+    qns.addBuiltinVariant("dbg_http_ws_simulate_send_progress", f_dbg_http_ws_simulate_send_progress,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "rate",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "step_ms");
     qns.addBuiltinVariant("dbg_quic_simulate_stream_progress", f_dbg_quic_simulate_stream_progress,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "reads");

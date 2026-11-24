@@ -8267,11 +8267,20 @@ bool qore_module_init_untrusted_loader() {
 }
 
 bool qore_module_init_library() {
+    // the initialization of a compiled module whose own load is not library code is not that of library code, also
+    // when library code that loads it is initialized (qore#7361)
+    if (qore_module_load_untrusted_aot_init()) {
+        return false;
+    }
     ThreadData* td = thread_data.get();
     return td && !td->module_init_barriers.empty() && !td->module_init_barriers.back().lift;
 }
 
 void qore_module_init_set_program(const QoreProgram* pgm) {
+    // nor is its Program that of the library module whose initialization the thread is in (qore#7361)
+    if (qore_module_load_untrusted_aot_init()) {
+        return;
+    }
     ThreadData* td = thread_data.get();
     if (!td || td->module_init_barriers.empty()) {
         return;
