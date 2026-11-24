@@ -879,7 +879,10 @@ void qore_ir_find_open_implicit_contexts(const QoreIRFunction& func,
                 state.push_back(inst);
                 continue;
             }
-            if ((inst->opcode == QoreIROpcode::PopImplicitArg || inst->opcode == QoreIROpcode::PopImplicitElement)
+            // a PopImplicitElement with a second operand sets the next element of a foreach statement: its push
+            // stays open (qore#7379)
+            if ((inst->opcode == QoreIROpcode::PopImplicitArg
+                        || (inst->opcode == QoreIROpcode::PopImplicitElement && inst->operands.size() == 1))
                     && !inst->operands.empty()) {
                 uint32_t id = inst->operands[0].id;
                 for (size_t i = state.size(); i > 0; --i) {

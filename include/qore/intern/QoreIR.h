@@ -510,7 +510,10 @@ enum class QoreIROpcode : uint16_t {
     SetImplicitArgv     = 275,  // Set list directly as implicit args (for foldl $1/$2)
     PopImplicitArg      = 276,  // Restore previous $1 context (operand = old context)
     PushImplicitElement = 277,  // Push index as $#, result = old element for restoration
-    PopImplicitElement  = 278,  // Restore previous $# context (operand = old element)
+    // Restore previous $# context (operand = old element); with a second operand, the result of the
+    // PushImplicitElement before a foreach statement's loop, it sets the index of the loop's next element
+    // (operands[0]) and leaves the push open: the loop saves the enclosing element once (qore#7379)
+    PopImplicitElement  = 278,
 
     // Direct access opcodes (279-282)
     HashKeyAccess       = 279,  // Load hash.key - direct hash member access
@@ -1162,11 +1165,6 @@ enum class QoreIROpcode : uint16_t {
     ReleaseHandedOverReturn = 442,
     //! Release an operator source loaded from a local unless the load read through a reference.
     ReleasePlainLocalRead = 443,
-    //! Set the thread's implicit element ($#) to operands[0], the index of the next element of a foreach statement;
-    //! no result.  The statement's PushImplicitElement before the loop saves the enclosing element once, which its
-    //! PopImplicitElement restores when the loop ends, so the saved element is the same for every element and the
-    //! element is set once per element (qore#7379).  Not a push: the verifier does not pair it with a pop.
-    SetImplicitElement = 444,
 
     // NOTE: When adding new opcodes, assign the next sequential ID (444, 445, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
@@ -1177,8 +1175,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::SetImplicitElement);
-static_assert(QORE_IR_MAX_OPCODE == 444, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::ReleasePlainLocalRead);
+static_assert(QORE_IR_MAX_OPCODE == 443, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns the Any comparison of a plugin comparison opcode (QoreIROpcode::EqPlugin...GePlugin), or \a op itself

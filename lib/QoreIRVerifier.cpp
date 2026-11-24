@@ -462,7 +462,14 @@ QoreIRVerifyStackEffect qore_ir_verify_stack_effect(const QoreIRInstruction& ins
             break;
         case QoreIROpcode::PopImplicitElement:
             e.stack = QORE_IR_VERIFY_ELEMENTS;
-            e.id = inst.operands.empty() ? 0 : inst.operands[0].id;
+            // with a second operand, the set of the next element of a foreach statement (qore#7379): the push that
+            // saved the enclosing element (the operand) stays open, and must be the innermost element
+            if (inst.operands.size() > 1) {
+                e.id = inst.operands[1].id;
+                e.keep = true;
+            } else {
+                e.id = inst.operands.empty() ? 0 : inst.operands[0].id;
+            }
             break;
         case QoreIROpcode::Context:
             e.stack = QORE_IR_VERIFY_CONTEXTS;

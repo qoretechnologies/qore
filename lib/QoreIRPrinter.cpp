@@ -381,7 +381,6 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::PopImplicitArg: return "pop.implicit.arg";
         case QoreIROpcode::PushImplicitElement: return "push.implicit.element";
         case QoreIROpcode::PopImplicitElement: return "pop.implicit.element";
-        case QoreIROpcode::SetImplicitElement: return "set.implicit.element";
         case QoreIROpcode::HashKeyAccess: return "hash.key.access";
         case QoreIROpcode::HashKeyAccessInt: return "hash.key.access.int";
         case QoreIROpcode::HashKeyAccessHash: return "hash.key.access.hash";

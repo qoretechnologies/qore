@@ -51,7 +51,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 444,
+static_assert(QORE_IR_MAX_OPCODE == 443,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -32440,20 +32440,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::PopImplicitElement: {
             auto* old_elem = getVal(inst->operands[0].id, error);
             if (!old_elem) { return false; }
-            // Old element is raw int64
+            // Old element is raw int64; with a second operand (the saved element, which needs no value here), the
+            // index of the next element of a foreach statement, which the loop keeps as an int (qore#7379)
+            if (inst->operands.size() > 1) {
+                old_elem = ensureIntTypeInline(old_elem, inst->operands[0].id);
+            }
             auto helper = module.getOrInsertFunction("qore_rt_pop_implicit_element",
                     llvm::FunctionType::get(void_type, {i64_type}, false));
             builder->CreateCall(helper, {old_elem});
-            return true;
-        }
-        case QoreIROpcode::SetImplicitElement: {
-            // the index of the next element of a foreach statement (qore#7379): set as a pop sets the element
-            auto* idx = getVal(inst->operands[0].id, error);
-            if (!idx) { return false; }
-            llvm::Value* idx_unboxed = ensureIntTypeInline(idx, inst->operands[0].id);
-            auto helper = module.getOrInsertFunction("qore_rt_pop_implicit_element",
-                    llvm::FunctionType::get(void_type, {i64_type}, false));
-            builder->CreateCall(helper, {idx_unboxed});
             return true;
         }
         case QoreIROpcode::CreateEmptyList: {

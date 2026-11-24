@@ -362,6 +362,14 @@ int main() {
         false, false, QORE_AOT_BATCH_AO_VERSION);
     run("AOT-identity v52 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 52 ",
         false, false, QORE_AOT_BATCH_AOT_IDENTITY_VERSION);
+    // the restoration of an implicit element, and the set of a foreach statement's next element with the saved
+    // element as its second operand (qore#7379): both are read, and the verifier refuses them without the push of
+    // the element, which the set leaves open; a third operand is refused when it is read
+    run("implicit element restored", O::PopImplicitElement, G::Base, {1}, empty,
+        "restores an implicit element that is not open on every path to it");
+    run("next implicit element set", O::PopImplicitElement, G::Base, {1, 2}, empty,
+        "closes an entry of the implicit elements that is not the innermost one open on every path to it");
+    run("implicit element with three operands", O::PopImplicitElement, G::Base, {1, 2, 3}, empty, arity);
     // the exit restorations of the instructions (qore#7379): (block, instruction, kind) entries; the instruction under
     // test is the second of the block, after the constant of its operand
     auto exitRestore = [](uint16_t inst, uint32_t kind) -> Payload {
@@ -679,8 +687,8 @@ int main() {
         callee("helper callee below the markers", QORE_AOT_BINARY_VERSION, -3, 1, 0,
             "invalid background helper callee -3");
     }
-    // the v52 refusal and the eight exit restoration cases of v53 (qore#7379)
-    constexpr unsigned expected_count = QORE_AOT_BINARY_VERSION >= QORE_AOT_EXIT_RESTORE_VERSION ? 187
+    // the v52 refusal, the three implicit element cases and the eight exit restoration cases of v53 (qore#7379)
+    constexpr unsigned expected_count = QORE_AOT_BINARY_VERSION >= QORE_AOT_EXIT_RESTORE_VERSION ? 190
         : (QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION ? 178 : 168);
     if (count != expected_count) {
         fprintf(stderr, "ran %u of %u expected checks for AOT format %u\n", count, expected_count,

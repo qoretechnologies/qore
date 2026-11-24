@@ -2084,7 +2084,8 @@ public:
     @param old_element the result of the statement's PushImplicitElement: the instruction is removed with every
     PopImplicitElement that restores it (a value loop's end, the latch of a reference loop, a break, a return through
     the statement's cleanup entry, and the exception restoration of the loop); a value loop that keeps the setting
-    sets the index of each next element with a SetImplicitElement, which it does not emit otherwise (qore#7379)
+    sets the index of each next element with a PopImplicitElement whose second operand is the saved element, which it
+    does not emit otherwise (qore#7379)
 */
 static void qore_ir_elide_foreach_implicit_element(QoreIRFunction* fn, QoreIRValue old_element) {
     assert(old_element.isValid());
@@ -2097,7 +2098,9 @@ static void qore_ir_elide_foreach_implicit_element(QoreIRFunction* fn, QoreIRVal
                         && inst->result.id == old_element.id)
                     || (inst->opcode == QoreIROpcode::PopImplicitElement
                         && !inst->operands.empty()
-                        && inst->operands[0].id == old_element.id);
+                        && (inst->operands[0].id == old_element.id
+                            // the set of the next element (see QoreIRBuilder::createSetImplicitElement())
+                            || (inst->operands.size() > 1 && inst->operands[1].id == old_element.id)));
             }), instructions.end());
     }
 }
@@ -3402,13 +3405,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // (qore#7270), and the loop does not set it; the code below decides for a body with one whether the index
         // only has virtual reads, and then removes the setting.  A loop that sets it saves the enclosing element once,
         // before the loop, with the PushImplicitElement that sets the index of the first element, and sets the index
-        // of each next element at the latch (SetImplicitElement): the saved element is the same for the whole loop,
-        // which the restorations use (qore#7379).  The element is thus set before the next element is assigned to
-        // the variable, which nothing reads (the variable is a variable reference, and the iterator's next() and the
-        // destructors that the assignment runs are functions, which do not see it); an exception that the iteration
-        // raises restores the enclosing element before the handlers of the function run, in the loop's element
-        // exception block, or at the frame's exit after the handlers of the frame, as the AST interpreter's foreach
-        // statement restores it when the exception unwinds it (qore#6432).
+        // of each next element at the latch (QoreIRBuilder::createSetImplicitElement()): the saved element is the
+        // same for the whole loop, which the restorations use (qore#7379).  The element is thus set before the next
+        // element is assigned to the variable, which nothing reads (the variable is a variable reference, and the
+        // iterator's next() and the destructors that the assignment runs are functions, which do not see it); an
+        // exception that the iteration raises restores the enclosing element before the handlers of the function
+        // run, in the loop's element exception block, or at the frame's exit after the handlers of the frame, as the
+        // AST interpreter's foreach statement restores it when the exception unwinds it (qore#6432).
         bool analyze_implicit_element =
             !QORE_ENV_IS_SET("QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT");
         bool body_reads_implicit_element = !qore_ir_foreach_elides_implicit_element(foreach_stmt);
@@ -3722,7 +3725,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one,
             stmt->loc)->result;
         if (!elide_implicit_element) {
-            builder.createSetImplicitElement(next_index, stmt->loc);
+            builder.createSetImplicitElement(next_index, old_element, stmt->loc);
         }
         {
             auto* br = builder.createBranch(header_block, stmt->loc);
@@ -3745,7 +3748,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createBranch(exit_block, stmt->loc);
         }
         // a body whose $# has only virtual reads: the loop does not set the element (qore#7270), and the
-        // PushImplicitElement before the loop is removed with its restorations (SetImplicitElement is not emitted)
+        // PushImplicitElement before the loop is removed with its restorations (the set of the next element is not
+        // emitted)
         if (elide_implicit_element && old_element.isValid()) {
             qore_ir_elide_foreach_implicit_element(builder.getFunction(), old_element);
         }
@@ -26425,8 +26429,9 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     // The implicit element ($#): a body without a $# of the statement reads its index nowhere, whatever it calls
     // (qore#7270), and the loop does not set it.  A loop that sets it saves the enclosing element once, after the
     // limits of its stages, which are evaluated with the enclosing element, with the PushImplicitElement that sets
-    // the index of the first element, and sets the index of each next element at the latch (SetImplicitElement): the
-    // saved element is the same for the whole loop, which the restorations use (qore#7379).  The element of the loop
+    // the index of the first element, and sets the index of each next element at the latch
+    // (QoreIRBuilder::createSetImplicitElement()): the saved element is the same for the whole loop, which the
+    // restorations use (qore#7379).  The element of the loop
     // is thus set while the stages evaluate the next element, which have implicit contexts of their own, and while
     // the element is assigned to the variable, which nothing reads (see the value foreach statement in
     // lowerStatement()); an exception that leaves the loop restores the enclosing element before the handlers of the
@@ -26837,7 +26842,7 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         loc)->result;
     // the index of the next element (see the save before the loop)
     if (old_element.isValid()) {
-        builder.createSetImplicitElement(next_foreach_index, loc);
+        builder.createSetImplicitElement(next_foreach_index, old_element, loc);
     }
     FusedForeachState next_state = state;
     next_state.foreach_index = next_foreach_index;
@@ -26852,8 +26857,9 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         }
         again_block->loop_cancel = QoreIRLoopCancel::Foreach;
         auto* br = builder.createBranch(again_block, loc);
-        // after the SetImplicitElement of the next element: without an iteration cleanup, the check goes to the
-        // element exception block, which restores the saved element, as the exception scopes of the loop have ended
+        // after the set of the next element (QoreIRBuilder::createSetImplicitElement()): without an iteration
+        // cleanup, the check goes to the element exception block, which restores the saved element, as the exception
+        // scopes of the loop have ended
         // (qore#7379); without a handler of this function, the frame's exit restores it
         setLoopCheckpointExceptionTarget(br, again_block, foreach_exception_cleanup_block
             ? foreach_exception_cleanup_block : element_exception_block);

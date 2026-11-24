@@ -680,8 +680,9 @@ constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY_VERSION = 52;
 //!        the frame's handlers: the implicit arguments, element and iterator of an operator; 2 after them: the
 //!        element of a foreach statement), so that the IR interpreter that runs a module's debug IR restores them as
 //!        the IR that it was made from (qore#7379)
-//!      - debug IR can encode SetImplicitElement (opcode 444, Base group, one operand), which sets the index of the
-//!        next element of a foreach statement (qore#7379); the maximum opcode in the AOT header is 444
+//!      - PopImplicitElement (opcode 278, Base group) can have a second operand, the element that a foreach statement
+//!        saved before its loop, with which it sets the index of the loop's next element (its first operand) and
+//!        leaves the push open (qore#7379)
 //! The shared format version for the changes of the second AOT batch (see v53 above); the batch's assembly can
 //! renumber it when another change of the batch bumps the format, as the changes of the batch refer to it by name.
 constexpr uint16_t QORE_AOT_BATCH_AOT2_VERSION = 53;

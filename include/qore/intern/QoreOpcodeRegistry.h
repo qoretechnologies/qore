@@ -347,7 +347,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::SetImplicitArgv, "SetImplicitArgv"               , false, false, false,  1, "SetImplicitArgv", false, true , "ParseNode", true , false, false, false, false }, // 275
     { QoreIROpcode::PopImplicitArg, "PopImplicitArg"                , false, false, false,  1, "PopImplicitArg", false, true , "ParseNode", false, false, false, false, false }, // 276
     { QoreIROpcode::PushImplicitElement, "PushImplicitElement"           , false, false, false,  1, "PushImplicitElement", false, true , "ParseNode", true , false, false, false, false }, // 277
-    { QoreIROpcode::PopImplicitElement, "PopImplicitElement"            , false, false, false,  1, "PopImplicitElement", false, true , "ParseNode", false, false, false, false, false }, // 278
+    { QoreIROpcode::PopImplicitElement, "PopImplicitElement"            , false, false, false, OPCODE_MIN_OPERANDS(1), "PopImplicitElement", false, true , "ParseNode", false, false, false, false, false }, // 278
     { QoreIROpcode::HashKeyAccess, "HashKeyAccess"                 , true , false, false,  1, "HashKeyAccess", false, true , "ParseNode", true , false, true , false, false }, // 279
     { QoreIROpcode::HashKeyAccessInt, "HashKeyAccessInt"              , true , false, false,  1, "HashKeyAccessInt", false, true , "ParseNode", true , false, true , false, false }, // 280
     { QoreIROpcode::LoadSelfMember, "LoadSelfMember"                , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false, false }, // 281
@@ -513,7 +513,6 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::TakeHandedOverReturn, "TakeHandedOverReturn"     , true , false, false, OPCODE_MIN_OPERANDS(0), "Give a return the value that handlers run out of line past the inline cap handed over, if any", true , false, "ReturnStatement", true , false, false, false, false }, // 441
     { QoreIROpcode::ReleaseHandedOverReturn, "ReleaseHandedOverReturn"  , false, false, false, OPCODE_MIN_OPERANDS(0), "Release the value that handlers run out of line past the inline cap handed over, if any", true , true , "ReturnStatement", false, false, false, false, false }, // 442
     { QoreIROpcode::ReleasePlainLocalRead, "ReleasePlainLocalRead"  , false, false, false,  1, "Release an operator source read from a plain local", true , true , "ParseNode", false, false, false, false, false }, // 443
-    { QoreIROpcode::SetImplicitElement, "SetImplicitElement"        , false, false, false,  1, "Set the implicit element ($#) to the index of the next element of a foreach statement", false, true , "ParseNode", false, false, false, false, false }, // 444
 };
 
 //! Returns true if row i of OPCODE_REGISTRY is the opcode with value i, for every row
