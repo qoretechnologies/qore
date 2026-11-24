@@ -20410,10 +20410,6 @@ void SocketReadHttpHeaderPollOperation::init(ExceptionSink* xsink, bool defer_in
     initPollState(xsink);
 }
 
-void SocketReadHttpHeaderPollOperation::expectResponse() {
-    expect_response = true;
-}
-
 int SocketReadHttpHeaderPollOperation::initPollState(ExceptionSink* xsink) {
     assert(sock->priv->m.trylock());
     if (initialized) {
@@ -20474,6 +20470,9 @@ QoreHashNode* SocketReadHttpHeaderPollOperation::continuePoll(ExceptionSink* xsi
     assert(data->getType() == NT_STRING);
     // note: safe; the header data read from the socket is a string node made here
     SimpleRefHolder<QoreStringNode> hdrstr(reinterpret_cast<QoreStringNode*>(data.release()));
+    // the header of a response read by an HTTP client must start with a valid status line, whatever it starts with
+    // (qore#7485); the subclass that reads it is its mark, as the layout of this public class cannot change
+    bool expect_response = dynamic_cast<const SocketReadHttpResponseHeaderPollOperation*>(this) != nullptr;
     ReferenceHolder<QoreHashNode> hdr(sock->priv->socket->priv->processHttpHeaderString(xsink, hdrstr, *info,
         QORE_SOURCE_SOCKET, "headers-raw", expect_response), xsink);
     if (*xsink) {

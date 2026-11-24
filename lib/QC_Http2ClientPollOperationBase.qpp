@@ -453,9 +453,8 @@ QoreHashNode* Http2ClientPollOperationPriv::handleProxyConnectSend(ExceptionSink
     if (goal_reached) {
         printd(5, "Http2ClientPollOperationPriv::handleProxyConnectSend() CONNECT sent, reading response\n");
         sock_obj->ref();
-        SocketReadHttpHeaderPollOperation* recv_op = new SocketReadHttpHeaderPollOperation(xsink, sock_obj);
         // the proxy's response, whose status line is checked (qore#7485)
-        recv_op->expectResponse();
+        SocketPollOperationBase* recv_op = new SocketReadHttpResponseHeaderPollOperation(xsink, sock_obj);
         if (*xsink) {
             recv_op->deref(xsink);
             return nullptr;

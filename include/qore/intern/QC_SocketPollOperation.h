@@ -63,6 +63,22 @@ DLLLOCAL SocketUpgradeClientSslPollOperation* qore_http_client_ssl_upgrade(Excep
         QoreSocketObject* sock, SslUpgradeMode mode, QoreSSLCertificate* certificate, QoreSSLPrivateKey* private_key,
         int64 credential_connection_id);
 
+//! Non-blocking reader of the HTTP header of a response, as an HTTP client reads it (qore#7485)
+/** The first line of the header must be a valid status line (RFC 9112 section 4), whatever it starts with
+    (qore_socket_private::checkHttpStatusLine()); SocketReadHttpHeaderPollOperation reads a header as a response only if
+    it starts with \c "HTTP/", and as a request if not.
+
+    The class is the mark of a response read: SocketReadHttpHeaderPollOperation::continuePoll() checks for it, so that
+    the layout of the public class does not change (design/module-api-version.md).
+*/
+class DLLLOCAL SocketReadHttpResponseHeaderPollOperation final : public SocketReadHttpHeaderPollOperation {
+public:
+    //! Creates the operation; see SocketReadHttpHeaderPollOperation
+    DLLLOCAL SocketReadHttpResponseHeaderPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
+            : SocketReadHttpHeaderPollOperation(xsink, sock) {
+    }
+};
+
 class SocketUpgradeServerSslPollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketUpgradeServerSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
