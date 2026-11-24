@@ -105,6 +105,12 @@ class MistralWireHandler inherits AbstractHttpRequestHandler {
             return makeResponse(200, "{\"object\":\"response.input_tokens\",\"input_tokens\":7}",
                 {"Content-Type": "application/json"});
         }
+        if (hdr.path == "v1/rag/ingestion_pipeline_configurations" && hdr.method == "GET") {
+            return makeResponse(200, "[{\"name\":\"invoices\"}]", {"Content-Type": "application/json"});
+        }
+        if (hdr.path =~ /^v1\/audio\/sessions\// && hdr.method == "DELETE") {
+            return makeResponse(204, NOTHING);
+        }
         return makeResponse(200, "{}", {"Content-Type": "application/json"});
     }
     hash<auto> getRequest() {
@@ -170,9 +176,9 @@ public class MistralDataProviderTest inherits QUnit::Test {
     constructor() : Test("MistralDataProvider Test", "1.0", \ARGV, MyOpts) {
         conn_name = LiveProvider::get("mistral", "MISTRAL_CONNECTION", m_options.conn);
 
-        addTestCase("factory + app + 189 actions registered", \registrationTest());
+        addTestCase("factory + app + 264 actions registered", \registrationTest());
         addTestCase("read-only operations declare that they change nothing", \readOnlyActionsTest());
-        addTestCase("root provider lists 189 children",       \rootProviderTest());
+        addTestCase("root provider lists 264 children",       \rootProviderTest());
         addTestCase("chat-completion converts created date", \chatRequestTest());
         addTestCase("create-embeddings forwards body unchanged",
             \embeddingRequestTest());
@@ -200,7 +206,7 @@ public class MistralDataProviderTest inherits QUnit::Test {
         }
         addTestCase("a tool's type names exactly one kind of tool", \toolTypeNegativeTest());
         addTestCase("HTTP authentication, paths and named multipart files", \wireTest());
-        addTestCase("content actions on the wire", \contentWireTest());
+        addTestCase("completed responses and requests on the wire", \completedResponseWireTest());
         addTestCase("invalid requests and transport failures", \negativeTest());
         hash<auto> fixtures = parse_json(File::readTextFile(get_script_dir() + "/requests.json"));
         foreach hash<RestSchemaActionInfo> info in (MistralManifest::Manifest) {
@@ -222,7 +228,9 @@ public class MistralDataProviderTest inherits QUnit::Test {
     #! the POST operations that the vendored API description documents as pure queries, validations,
     #! estimates or stateless inference declare mutates_state False; the others keep the default (qore#7454)
     private readOnlyActionsTest() {
-        foreach string name in (("agent-completion", "create-response", "count-response-input-tokens", "chat-completion", "complete-code", "create-embeddings", "moderate-text", "moderate-chat", "ocr", "classify-text", "classify-chat", "transcribe-audio", "generate-speech", "query-workflow-execution", "search-logs", "search-traces", "aggregate-traces", "search-spans", "aggregate-spans", "search-span-evaluations", "search-latest-span-evaluations", "aggregate-span-evaluations", "search-pipeline-results",)) {
+        foreach string name in (("agent-completion", "create-response", "count-response-input-tokens", "chat-completion", "complete-code", "create-embeddings", "moderate-text", "moderate-chat", "ocr", "classify-text", "classify-chat", "transcribe-audio", "generate-speech", "query-workflow-execution", "search-logs", "search-traces", "aggregate-traces", "search-spans", "aggregate-spans", "search-span-evaluations", "search-latest-span-evaluations", "aggregate-span-evaluations", "search-pipeline-results",
+                "search-evaluation-runs", "search-all-evaluation-runs", "compute-evaluation-run-statistics", "search-evaluation-run-records",
+                "search-index-chunks", "navigate-search-index-chunks", "read-search-index-chunks", "find-text-in-search-index",)) {
             hash<DataProvider::DataProviderActionInfo> action =
                 DataProvider::DataProviderActionCatalog::getAppActionEx("MistralAi", name);
             assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
@@ -254,7 +262,7 @@ public class MistralDataProviderTest inherits QUnit::Test {
         list<hash<DataProviderActionInfo>> actions = select
             DataProvider::DataProviderActionCatalog::getActions("MistralAi"),
             $1.action != AbstractDataProvider::GenericApiCallActionName;
-        assertEq(189, actions.size());
+        assertEq(264, actions.size());
         list<string> action_names = sort(map $1.action, actions);
         assertEq(sort(map $1.action, MistralManifest::Manifest), action_names);
     }
@@ -460,8 +468,12 @@ public class MistralDataProviderTest inherits QUnit::Test {
             }
             fake.response_body = response;
             if (decl.options_reference) {
-                fake.responses = ({"datasets": {"results": ({"id": "00000000-0000-4000-8000-000000000002"},)}},
-                    response);
+                hash<RestSchemaReferenceDataInfo> parent = MistralManifest::ReferenceData{decl.options_reference};
+                auto parents = ({parent.value_field: "00000000-0000-4000-8000-000000000002"},);
+                for (int i = parent.records_path.size() - 1; i >= 0; --i) {
+                    parents = {parent.records_path[i]: parents};
+                }
+                fake.responses = (parents, response);
             }
             hash<auto> scope;
             foreach string key in (decl.options_from.iterator()) {
@@ -475,7 +487,7 @@ public class MistralDataProviderTest inherits QUnit::Test {
             auto choices = providers{decl.name}.getReferenceData(decl.name, scope);
             assertEq(row{decl.value_field}, choices[0].value, decl.name);
             assertEq(row{decl.display_field}.toString(), choices[0].display_name, decl.name);
-            assertEq("GET", fake.last_method);
+            assertEq(decl.name == "evaluation-runs" ? "POST" : "GET", fake.last_method);
             assertEq(before + (decl.options_reference ? 2 : 1), fake.requests);
         }
 
@@ -676,7 +688,7 @@ public class MistralDataProviderTest inherits QUnit::Test {
         assertEq(NOTHING, parts.model.filename);
     }
 
-    private contentWireTest() {
+    private completedResponseWireTest() {
         HttpServer server(<HttpServerOptionInfo>{});
         on_exit delete server;
         MistralWireHandler handler();
@@ -713,6 +725,81 @@ public class MistralDataProviderTest inherits QUnit::Test {
             ("create-skill-version", "POST", "/v2/skills/{skill_id}/versions"),
             ("get-skill-version", "GET", "/v2/skills/{skill_id}/versions/{version}"),
             ("update-skill-version", "PATCH", "/v2/skills/{skill_id}/versions/{version}"),
+            ("list-observability-projects", "GET", "/v1/observability/projects"),
+            ("get-observability-project", "GET", "/v1/observability/projects/{project_slug}"),
+            ("list-project-evaluations", "GET", "/v1/observability/projects/{project_slug}/evaluations_v2"),
+            ("get-evaluation", "GET", "/v1/observability/evaluations_v2/{evaluation_slug}"),
+            ("search-evaluation-runs", "POST", "/v1/observability/evaluations_v2/{evaluation_slug}/runs/search", "page_size"),
+            ("search-all-evaluation-runs", "POST", "/v1/observability/evaluation-runs_v2/search", "page_size"),
+            ("get-evaluation-run", "GET", "/v1/observability/evaluation-runs_v2/{run_id}"),
+            ("get-evaluation-run-statistics", "GET", "/v1/observability/evaluation-runs_v2/{run_id}/statistics"),
+            ("compute-evaluation-run-statistics", "POST", "/v1/observability/evaluation-runs_v2/{run_id}/statistics/compute"),
+            ("get-evaluation-run-record", "GET", "/v1/observability/evaluation-runs_v2/{run_id}/records/{record_id}"),
+            ("search-evaluation-run-records", "POST", "/v1/observability/evaluation-runs_v2/{run_id}/records/search", "page_size"),
+            ("list-optimizations", "GET", "/v1/observability/optimizations"),
+            ("get-optimization", "GET", "/v1/observability/optimizations/{optimization_id}"),
+            ("list-optimization-trials", "GET", "/v1/observability/optimizations/{optimization_id}/trials"),
+            ("list-scorers", "GET", "/v1/observability/scorers"),
+            ("create-scorer", "POST", "/v1/observability/scorers"),
+            ("get-scorer", "GET", "/v1/observability/scorers/{scorer_slug}"),
+            ("update-scorer", "PATCH", "/v1/observability/scorers/{scorer_slug}"),
+            ("create-audio-session", "POST", "/v1/audio/sessions"),
+            ("get-audio-session", "GET", "/v1/audio/sessions/{session_id}"),
+            ("update-audio-session", "PATCH", "/v1/audio/sessions/{session_id}"),
+            ("stop-audio-session", "DELETE", "/v1/audio/sessions/{session_id}"),
+            ("list-audio-agents", "GET", "/v1/audio/agents"),
+            ("create-audio-agent", "POST", "/v1/audio/agents"),
+            ("get-audio-agent", "GET", "/v1/audio/agents/{agent_id}"),
+            ("update-audio-agent", "PUT", "/v1/audio/agents/{agent_id}"),
+            ("delete-audio-agent", "DELETE", "/v1/audio/agents/{agent_id}"),
+            ("list-audio-agent-versions", "GET", "/v1/audio/agents/{agent_id}/versions"),
+            ("list-audio-agent-sessions", "GET", "/v1/audio/agents/{agent_id}/sessions"),
+            ("get-workflow-execution-trace", "GET", "/v1/workflows/executions/{execution_id}/trace/info"),
+            ("get-workflow-execution-logs", "GET", "/v1/workflows/executions/{execution_id}/logs"),
+            ("get-workflow-schedule", "GET", "/v1/workflows/schedules/{schedule_id}"),
+            ("update-workflow-schedule", "PATCH", "/v1/workflows/schedules/{schedule_id}"),
+            ("pause-workflow-schedule", "POST", "/v1/workflows/schedules/{schedule_id}/pause"),
+            ("resume-workflow-schedule", "POST", "/v1/workflows/schedules/{schedule_id}/resume"),
+            ("trigger-workflow-schedule", "POST", "/v1/workflows/schedules/{schedule_id}/trigger"),
+            ("create-workflow-deployment", "POST", "/v1/workflows/deployments"),
+            ("update-workflow-deployment", "PATCH", "/v1/workflows/deployments/{name}"),
+            ("delete-workflow-deployment", "DELETE", "/v1/workflows/deployments/{name}"),
+            ("stop-workflow-deployment", "POST", "/v1/workflows/deployments/{name}/stop"),
+            ("start-workflow-deployment", "POST", "/v1/workflows/deployments/{name}/start"),
+            ("restart-workflow-deployment", "POST", "/v1/workflows/deployments/{name}/restart"),
+            ("list-workflow-deployment-workers", "GET", "/v1/workflows/deployments/{name}/workers"),
+            ("get-workflow-deployment-archive", "GET", "/v1/workflows/deployments/{name}/archive"),
+            ("get-workflow-deployment-logs", "GET", "/v1/workflows/deployments/{name}/logs"),
+            ("list-workflows", "GET", "/v1/workflows"),
+            ("archive-workflows", "PUT", "/v1/workflows/archive"),
+            ("unarchive-workflows", "PUT", "/v1/workflows/unarchive"),
+            ("add-workflow-tags", "POST", "/v1/workflows/{workflow_identifier}/tags"),
+            ("list-ingestion-pipeline-configurations", "GET", "/v1/rag/ingestion_pipeline_configurations"),
+            ("register-ingestion-pipeline-configuration", "PUT", "/v1/rag/ingestion_pipeline_configurations"),
+            ("update-ingestion-pipeline-run", "PUT", "/v1/rag/ingestion_pipeline_configurations/{id}/run_info"),
+            ("list-rag-deployments", "GET", "/v1/rag/deployments"),
+            ("register-rag-deployment", "PUT", "/v1/rag/deployments"),
+            ("unregister-rag-deployment", "DELETE", "/v1/rag/deployments/{deployment_id}"),
+            ("update-rag-deployment-metrics", "PUT", "/v1/rag/deployments/{deployment_id}/metrics"),
+            ("create-search-index", "POST", "/v1/context/search-indexes"),
+            ("list-search-indexes", "GET", "/v1/context/search-indexes"),
+            ("get-search-index", "GET", "/v1/context/search-indexes/{index_name}"),
+            ("update-search-index-schema", "PUT", "/v1/context/search-indexes/{index_name}"),
+            ("delete-search-index", "DELETE", "/v1/context/search-indexes/{index_name}"),
+            ("ingest-search-index-documents", "POST", "/v1/context/search-indexes/{index_name}/documents"),
+            ("delete-search-index-documents", "DELETE", "/v1/context/search-indexes/{index_name}/documents"),
+            ("search-index-chunks", "POST", "/v1/context/search-indexes/{index_name}/search"),
+            ("navigate-search-index-chunks", "POST", "/v1/context/search-indexes/{index_name}/navigate"),
+            ("read-search-index-chunks", "POST", "/v1/context/search-indexes/{index_name}/read"),
+            ("find-text-in-search-index", "POST", "/v1/context/search-indexes/{index_name}/grep"),
+            ("get-search-index-chunk", "GET", "/v1/context/search-indexes/{index_name}/chunks/{chunk_id}"),
+            ("get-search-index-summary", "GET", "/v1/context/search-indexes/{index_name}/summary_field/{language}"),
+            ("set-search-index-summary", "PUT", "/v1/context/search-indexes/{index_name}/summary_field/{language}"),
+            ("create-trigger", "POST", "/v1/triggers"),
+            ("list-triggers", "GET", "/v1/triggers"),
+            ("get-trigger", "GET", "/v1/triggers/{trigger_id}"),
+            ("delete-trigger", "DELETE", "/v1/triggers/{trigger_id}"),
+            ("list-trigger-events", "GET", "/v1/triggers/{trigger_id}/events"),
         ) {
             string action = route[0];
             hash<auto> options = fixtures{action};
@@ -727,6 +814,12 @@ public class MistralDataProviderTest inherits QUnit::Test {
             }
             hash<UriQueryInfo> target = parse_uri_query(hdr.raw_path);
             assertEq(path, target.method, action);
+            # Extra route entries are query options on operations that also accept a body.
+            for (int i = 3; i < route.size(); ++i) {
+                string key = route[i];
+                assertEq(options{key}.toString(), target.params{key}.toString(), action + " " + key);
+                remove options{key};
+            }
             if (route[1] == "GET") {
                 foreach hash<auto> entry in (options.pairIterator()) {
                     assertEq(entry.value.toString(), target.params{entry.key}.toString(), action + " " + entry.key);
@@ -743,6 +836,10 @@ public class MistralDataProviderTest inherits QUnit::Test {
             }
             if (action == "count-response-input-tokens") {
                 assertEq(7, result.input_tokens);
+            } else if (action == "list-ingestion-pipeline-configurations") {
+                assertEq("invoices", result[0].name);
+            } else if (action == "stop-audio-session") {
+                assertNothing(result);
             }
         }
     }
@@ -757,6 +854,9 @@ public class MistralDataProviderTest inherits QUnit::Test {
                 {"action": "ocr", "request": {}},
                 {"action": "transcribe-audio", "request": {}},
                 {"action": "get-model", "request": {}},
+                {"action": "create-audio-agent", "request": {"name": "Invoices"}},
+                {"action": "get-search-index", "request": {}},
+                {"action": "delete-search-index-documents", "request": {"index_name": "invoices"}},
                 {"action": "chat-completion", "request": {"messages": ({"role": "invalid", "content": "Hello"},)}},
                 {"action": "chat-completion", "request": {"messages": ({"role": "user", "content": "Hello"},), "temperature": -1}},
                 # a credentials action manages the credentials of its own scope only
