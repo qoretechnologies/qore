@@ -112,8 +112,10 @@ void qore_hash_private::clear(ExceptionSink* xsink) {
     // deleteKey() does, before it is freed, so that no member or iterator is held while code runs; their
     // destructors can read the values not freed yet and save values, which are added at the end.  The number of
     // values freed here is that of the members when it starts, so that it ends
+    // the nodes of the member list of the members released (see takeFreeMemberForClear())
+    ReleasedNodes released;
     for (size_t n = member_list.size(); n && !member_list.empty(); --n) {
-        takeFreeMemberForClear(xsink);
+        takeFreeMemberForClear(released, xsink);
     }
 
     // the second phase: the values saved in the first are freed in the same way, while nothing can be saved, so
@@ -132,13 +134,15 @@ void qore_hash_private::clear(ExceptionSink* xsink) {
             }
         } rsh(*this);
         while (!member_list.empty()) {
-            takeFreeMemberForClear(xsink);
+            takeFreeMemberForClear(released, xsink);
         }
     }
 
     // no member is left; this resets the accounting of the hash
     freeMembersOutOfLine(xsink);
+    released.free();
 }
+
 
 void qore_hash_private::freeMembersOutOfLine(ExceptionSink* xsink) {
     freeMembers(xsink);
@@ -163,19 +167,20 @@ bool qore_hash_private::freeRunsNoCode(const QoreValue& v) {
     return false;
 }
 
-void qore_hash_private::deleteMemberForClear(qhlist_t::iterator li) {
-    hm.erase(*li);
-    internDeleteKey(li);
-}
-
-void qore_hash_private::takeFreeMemberForClear(ExceptionSink* xsink) {
+void qore_hash_private::takeFreeMemberForClear(ReleasedNodes& released, ExceptionSink* xsink) {
     assert(!member_list.empty());
     qhlist_t::iterator li = member_list.begin();
-    QoreValue v = (*li)->val;
-    deleteMemberForClear(li);
+    HashMember* m = *li;
+    QoreValue v = m->val;
+    hm.erase(m);
+    // the node of the member list is kept until the end of the release, as the release of a hash frees it after the
+    // values (see ReleasedNodes)
+    released.add(member_list, li);
+    sbRemove(m);
+    delete m;
     // the scan count is not decreased: it is reset when the release ends (freeMembers()), and a count that is too
     // high only makes the collector look at the hash
-    // code can run now: no member or iterator is held
+    // code can run now: the member is gone from the key map and the member list, and no iterator is held
     v.discard(xsink);
 }
 

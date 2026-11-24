@@ -1082,12 +1082,42 @@ public:
 #endif
     DLLLOCAL void freeMembersOutOfLine(ExceptionSink* xsink);
 
-    //! deletes the member at \a li from the key map and the member list (see clear())
-    DLLLOCAL void deleteMemberForClear(qhlist_t::iterator li);
+
+    //! The nodes of the member list of the members that clear() released, freed at its end in a scattered order
+    /** The release of a hash frees the nodes of its member list after the values, and those of its key map in the
+        order of its buckets: the node of a member is between the memory of its value and that of the next member.
+        clear() deletes each member, and frees the node of its key map, before its value is freed, so its list nodes
+        are what is left between the values; freeing them in their order merged the memory freed before into one
+        chunk that grew with each node, which made glibc consolidate and trim the heap at almost every node
+        (qore#7265).  The nodes are dealt into lists that are freed one after the other, so that the chunks that all
+        but the last list merge span at most that many members.  Nothing is allocated.
+    */
+    class ReleasedNodes {
+    public:
+        //! moves the node at \a li of \a l to the nodes released
+        DLLLOCAL void add(qhlist_t& l, qhlist_t::iterator li) {
+            lists[next].splice(lists[next].end(), l, li);
+            if (++next == ways) {
+                next = 0;
+            }
+        }
+
+        //! frees the nodes, one list after the other
+        DLLLOCAL void free() {
+            for (qhlist_t& l : lists) {
+                l.clear();
+            }
+        }
+
+    private:
+        static constexpr unsigned ways = 61;
+        qhlist_t lists[ways];
+        unsigned next = 0;
+    };
 
     //! takes the value of the first member, deletes the member and frees the value, which can run code that changes
-    //! the hash (see clear())
-    DLLLOCAL void takeFreeMemberForClear(ExceptionSink* xsink);
+    //! the hash; the node of the member in the member list is moved to \a released (see clear())
+    DLLLOCAL void takeFreeMemberForClear(ReleasedNodes& released, ExceptionSink* xsink);
 
     DLLLOCAL size_t size() const {
         return member_list.size();
