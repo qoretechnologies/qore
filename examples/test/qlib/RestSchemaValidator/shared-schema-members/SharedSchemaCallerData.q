@@ -79,9 +79,15 @@ class TenantType inherits DataProvider::HashDataType {
     }
 }
 
-# a schema object of the tenant's own class, which reports when the schema releases its caches
-class TenantSchemaObject inherits OpenApi3::SchemaObject {
-    constructor(OpenApi3Schema own) : OpenApi3::SchemaObject(\"tenant\", {\"type\": \"string\"}, own) {
+# a schema object of the tenant's own class, which reports when the schema releases its caches; it inherits the
+# abstract schema object class, whose constructor is public (a sandboxed class cannot call the private constructor of
+# a schema object class of a library module)
+class TenantSchemaObject inherits RestSchemaValidator::AbstractRestSchemaObject {
+    DataProvider::AbstractDataProviderType getSchemaType(string path, string typestr, *string format,
+            *RestSchemaValidator::AbstractSchemaObject arrayItems, bool required) {
+        throw \"UNSUPPORTED\", \"not used\";
+    }
+    check(bool serialize, bool request, string path, string method, string name, reference value) {
     }
     releaseTypeCaches() {
         events += \"the schema ran the tenant's releaseTypeCaches()\";
@@ -111,7 +117,7 @@ class TenantRest {
         }
         OpenApi3Schema own = OpenApi3Loader::fromString(make_json({\"openapi\": \"3.0.0\", \"info\": {\"title\": \"x\",
             \"version\": \"1\"}, \"paths\": {}}), True);
-        TenantSchemaObject so(own);
+        TenantSchemaObject so();
         keep += (own, so);
         events += sprintf(\"the schema holds the tenant's object in its caches: %y\", shared.holdTypeCacheOpaquely(so));
         return {\"token\": \"tenant-token\"};
