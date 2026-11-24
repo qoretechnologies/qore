@@ -107,6 +107,7 @@ public class HttpClientIoH3FamilyRaceTest inherits QUnit::Test {
         addTestCase("HTTPClient: an IPv4 server, IPv6 refused", \httpClientTest(), (AF_INET,));
         addTestCase("HTTPClient: an IPv6 server, IPv4 refused", \httpClientTest(), (AF_INET6,));
         addTestCase("every attempt fails", \allFailTest());
+        addTestCase("a refused server certificate is not retried", \certificateRefusedTest());
         addTestCase("a family denied by the sandbox", \sandboxTest());
         addTestCase("the socket closed while the attempts race", \closeTest());
         set_return_value(main());
@@ -206,6 +207,39 @@ public class HttpClientIoH3FamilyRaceTest inherits QUnit::Test {
         assertEq(1, conns.size(), "one connection");
         assertTrue(inlist(cast<HttpClientIo::Http3ClientConnection>(conns[0]).getAddressFamily(),
             (AF_INET, AF_INET6)), "the family of the reported attempt");
+    }
+
+    #! A server certificate refused in the race is reported as it is over TCP, and the request is not retried
+    /** The error of the attempt keeps its exception argument: \c ssl_verify_error tells the refusal apart from a
+        failed connection, which would be retried
+    */
+    certificateRefusedTest() {
+        if (!check()) {
+            return;
+        }
+        hash<auto> h = startServerOnHeldPort(AF_INET, \holdRefused());
+        on_exit h.server.stop();
+        # the certificate of the test server is not trusted by the default CAs
+        CountingManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "ssl_verify_mode": SSL_VERIFY_PEER,
+            "connect_timeout": ConnectTimeout,
+            "request_timeout": 240s,
+            "max_request_retries": 2,
+        });
+        on_exit mgr.closeAll();
+        try {
+            mgr.request(sprintf("https://%s:%d", Host, h.port), "GET", "/");
+            fail("no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SOCKET-SSL-ERROR", ex.err, ex.err + ": " + ex.desc);
+            assertRegex("certificate verify failed", ex.desc);
+            # the error of the connection is the argument, as for a refused certificate over TCP
+            assertEq("SOCKET-SSL-ERROR", ex.arg.err);
+            assertEq(NT_INT, ex.arg.arg.ssl_verify_error.typeCode());
+            assertGt(0, ex.arg.arg.ssl_verify_error);
+        }
+        assertEq(1, mgr.getConnections().size(), "the request is not retried");
     }
 
     #! An attempt that the sandbox denies counts as failed, and the next one is made at once

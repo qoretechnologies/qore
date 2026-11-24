@@ -2238,6 +2238,9 @@ private:
     //! sandbox) is preferred to one of an attempt that reached no server (see quic_is_unreached_error())
     std::string race_err_;
     std::string race_desc_;
+    //! the exception argument of that error (owned); a refused server certificate carries \c ssl_verify_error in it,
+    //! which tells callers that the error is terminal (see http_is_terminal_connection_error())
+    QoreValue race_arg_;
     bool race_err_unreached_ = false;
     int race_err_family_ = AF_UNSPEC;
     //! the address family of the remote address once resolved; read from other threads
