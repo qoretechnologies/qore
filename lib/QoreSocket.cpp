@@ -886,6 +886,40 @@ static int qore_socket_check_sse_event_size(const QoreString& event_data, int64 
     return 0;
 }
 
+//! Raises the exception of a read whose data could not be made a string, as the memory could not be allocated
+/** The size of the data read can come from the peer, so the read fails without ending the process (issue 7417)
+*/
+static void qore_socket_raise_recv_string_memory_error(ExceptionSink* xsink, size_t len) {
+    xsink->raiseException("SOCKET-RECV-ERROR", "the memory for a string of the " QLLD " bytes received could not "
+        "be allocated", (int64)len);
+}
+
+int qore_socket_append_http_body(ExceptionSink* xsink, BinaryNode* body_bin, QoreString* body_str,
+        const void* data, size_t size) {
+    if (!size) {
+        return 0;
+    }
+    if (body_bin) {
+        size_t old_size = body_bin->size();
+        // the body is unchanged if the memory cannot be allocated
+        body_bin->append(data, size);
+        if (body_bin->size() == old_size + size) {
+            return 0;
+        }
+    } else {
+        // the memory for the data and the terminator is allocated first, so that the concatenation does not grow the
+        // string
+        if (size <= SIZE_MAX - body_str->size() - 1
+            && !qore_string_private::get(*body_str)->tryGrow(body_str->size() + size + 1)) {
+            body_str->concat(static_cast<const char*>(data), size);
+            return 0;
+        }
+    }
+    xsink->raiseException("SOCKET-RECV-ERROR", "the memory for an HTTP message body of " QLLD " bytes could not be "
+        "allocated", (int64)((body_bin ? body_bin->size() : body_str->size()) + size));
+    return -1;
+}
+
 static int qore_socket_close_private_from_controller(qore_socket_private* priv) {
     priv->prepareForClose();
     return priv->close();
@@ -2024,7 +2058,8 @@ public:
                 char* buf = reinterpret_cast<char*>(bin->giveBuffer());
                 char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
                 if (!nbuf) {
-                    xsink->outOfMemory();
+                    // the size read can come from the peer (issue 7417)
+                    qore_socket_raise_recv_string_memory_error(xsink, len);
                 } else {
                     nbuf[len] = '\0';
                     data = new QoreStringNode(nbuf, len, len + 1, enc);
@@ -4978,6 +5013,11 @@ public:
         }
 
         if (!poll_state) {
+            // the rest of a chunked body that was not read to its end would be taken for the header (issue 7417)
+            if (qore_socket_private::get(*sock)->checkHttpChunkedBodyFinished(xsink)) {
+                done = true;
+                return nullptr;
+            }
             poll_state.reset(sock->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
             if (!*xsink && poll_state) {
                 qore_socket_private::limitHttpRead(xsink, poll_state.get(), sock->getMaxHeaderSize(), 0, "header");
@@ -5131,6 +5171,10 @@ static QoreHashNode* qore_socket_exec_read_http_header(QoreSocket* s, QoreHashNo
 
 static QoreStringNode* qore_socket_exec_read_http_header_string(QoreSocket* s, int timeout_ms, int source,
         ExceptionSink* xsink) {
+    // the rest of a chunked body that was not read to its end would be taken for the header (issue 7417)
+    if (qore_socket_private::get(*s)->checkHttpChunkedBodyFinished(xsink)) {
+        return nullptr;
+    }
     SimpleRefHolder<QoreStringNode> raw(qore_socket_exec_recv_until_string(s, "\r\n\r\n", 4, timeout_ms,
         "readHTTPHeaderString", xsink, "header"));
     if (*xsink) {
@@ -5151,11 +5195,8 @@ static QoreStringNode* qore_socket_exec_read_http_header_string(QoreSocket* s, i
 }
 
 static size_t qore_socket_exec_http_line_payload_size(const QoreStringNode& line) {
-    size_t len = line.size();
-    while (len && (line.c_str()[len - 1] == '\r' || line.c_str()[len - 1] == '\n')) {
-        --len;
-    }
-    return len;
+    // the line is taken as every reader of a chunked body takes it (issue 7417)
+    return qore_socket_private::httpLinePayloadSize(line.c_str(), line.size());
 }
 
 static bool qore_socket_exec_http_blank_line(const QoreStringNode& line) {
@@ -5164,32 +5205,7 @@ static bool qore_socket_exec_http_blank_line(const QoreStringNode& line) {
 
 static int qore_socket_exec_parse_http_chunk_size(const char* line_str, size_t line_len, int64_t& chunk_size,
         ExceptionSink* xsink) {
-    const char* semi = static_cast<const char*>(memchr(line_str, ';', line_len));
-    size_t hex_len = semi ? static_cast<size_t>(semi - line_str) : line_len;
-    if (!hex_len) {
-        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "empty value given for chunk size");
-        return -1;
-    }
-
-    std::string hex(line_str, hex_len);
-    errno = 0;
-    char* end = nullptr;
-    unsigned long long parsed = strtoull(hex.c_str(), &end, 16);
-    if (errno == ERANGE || end == hex.c_str() || *end) {
-        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "invalid value given for chunk size ('%s')", hex.c_str());
-        return -1;
-    }
-
-    unsigned long long max_read_size = static_cast<unsigned long long>(
-        std::numeric_limits<ssize_t>::max() - 2);
-    if (parsed > max_read_size) {
-        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "chunk size %llu exceeds the maximum supported size",
-            parsed);
-        return -1;
-    }
-
-    chunk_size = static_cast<int64_t>(parsed);
-    return 0;
+    return qore_socket_private::parseHttpChunkSize(line_str, line_len, chunk_size, xsink);
 }
 
 class QoreSocketControllerReadHttpChunkedBodyPollOperation : public SocketPollOperationBase {
@@ -5232,9 +5248,8 @@ public:
 
         qore_socket_private* priv = qore_socket_private::get(*sock);
         if (!http_expect_cleared) {
-            if (priv->http_exp_chunked_body) {
-                priv->http_exp_chunked_body = false;
-            }
+            // the body is unfinished until the read reaches its end (issue 7417)
+            priv->startHttpChunkedBodyRead();
             http_expect_cleared = true;
         }
 
@@ -5400,6 +5415,16 @@ private:
             return 0;
         }
 
+        // the limit is applied before the chunk is read, so that no memory is allocated for data over it (issue
+        // 7417)
+        int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
+        int64 max_chunked_body_size = priv.max_chunked_body_size.load(std::memory_order_relaxed);
+        if (max_chunked_body_size > 0 && chunk_size > max_chunked_body_size - body_size) {
+            xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
+                body_size + static_cast<int64>(chunk_size), max_chunked_body_size);
+            return -1;
+        }
+
         current_chunk_size = chunk_size;
         state = State::RecvChunkData;
         return 0;
@@ -5425,14 +5450,19 @@ private:
                 (int64)(bin->size()), (int64)chunk_size);
             return -1;
         }
+        // the chunk data ends with a line end (RFC 9112 section 7.1)
+        if (memcmp(static_cast<const char*>(bin->getPtr()) + chunk_size, "\r\n", 2)) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "the data of a chunk of " QLLD " bytes is not followed by "
+                "a line end", (int64)chunk_size);
+            return -1;
+        }
 
         priv.do_data_event(QORE_EVENT_HTTP_CHUNKED_DATA_READ, source, bin->getPtr(), chunk_size);
-        if (binary_body) {
-            body_bin->append(bin->getPtr(), chunk_size);
-        } else {
-            body_str->concat(static_cast<const char*>(bin->getPtr()), chunk_size);
-        }
         bytes_consumed = true;
+        if (qore_socket_append_http_body(xsink, binary_body ? *body_bin : nullptr,
+                binary_body ? nullptr : *body_str, bin->getPtr(), chunk_size)) {
+            return -1;
+        }
 
         int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
         int64 max_chunked_body_size = priv.max_chunked_body_size.load(std::memory_order_relaxed);
@@ -5498,6 +5528,8 @@ private:
                 }
                 priv.do_read_http_header(QORE_EVENT_HTTP_FOOTERS_RECEIVED, *out, source);
             }
+            // the whole body has been read
+            priv.finishHttpChunkedBodyRead();
             state = State::Done;
             done = true;
             return 0;
@@ -6681,10 +6713,28 @@ bool my_socket_priv::getHttpFieldsAtTopLevel() const {
     return socket->priv->http_fields_at_top_level.load(std::memory_order_relaxed);
 }
 
-void my_socket_priv::clearHttpExpectChunkedBody() const {
-    if (socket->priv->http_exp_chunked_body) {
-        socket->priv->http_exp_chunked_body = false;
-    }
+void my_socket_priv::startHttpChunkedBodyRead() const {
+    socket->priv->startHttpChunkedBodyRead();
+}
+
+void my_socket_priv::finishHttpChunkedBodyRead() const {
+    socket->priv->finishHttpChunkedBodyRead();
+}
+
+bool my_socket_priv::unfinishedHttpChunkedBody() const {
+    return socket->priv->unfinishedHttpChunkedBody();
+}
+
+int my_socket_priv::checkHttpChunkedBodyFinished(ExceptionSink* xsink) const {
+    return socket->priv->checkHttpChunkedBodyFinished(xsink);
+}
+
+size_t my_socket_priv::httpLinePayloadSize(const char* str, size_t len) {
+    return qore_socket_private::httpLinePayloadSize(str, len);
+}
+
+int my_socket_priv::parseHttpChunkSize(const char* line, size_t len, int64_t& chunk_size, ExceptionSink* xsink) {
+    return qore_socket_private::parseHttpChunkSize(line, len, chunk_size, xsink);
 }
 
 int64 my_socket_priv::getMaxChunkedBodySize() const {
@@ -10597,7 +10647,13 @@ int SocketRecvPacketPollState::continuePollIntern(ExceptionSink* xsink) {
 
 SocketRecvPollState::SocketRecvPollState(ExceptionSink* xsink, qore_socket_private* sock, size_t size) : sock(sock),
         bin(new BinaryNode), size(size) {
-    if (bin->preallocate(size)) {
+    // the buffer grows as the data arrives; the size to receive can come from the peer (issue 7417)
+    allocated = QORE_MIN(size, MaxPrealloc);
+    // the data in the socket buffer is taken first
+    if (sock->buflen > allocated) {
+        allocated = QORE_MIN(size, sock->buflen);
+    }
+    if (bin->preallocate(allocated)) {
         xsink->outOfMemory();
         return;
     }
@@ -10636,7 +10692,33 @@ int SocketRecvPollState::continuePoll(ExceptionSink* xsink) {
     return rc;
 }
 
+int SocketRecvPollState::grow(ExceptionSink* xsink, int fd) {
+    // the buffer is doubled up to the size to receive, so that the memory follows the data received
+    size_t new_size = allocated > size / 2 ? size : QORE_MAX(allocated * 2, static_cast<size_t>(4096));
+    if (new_size > size) {
+        new_size = size;
+    }
+    if (bin->preallocate(new_size)) {
+        // the size to receive can come from the peer, so the read fails without ending the process; the data
+        // received is lost, and the rest of it cannot be told apart from what follows it, so the connection is shut
+        // down: no more data is read from it (issue 7417)
+        failed = true;
+        ::shutdown(fd, SHUTDOWN_ARG);
+        xsink->raiseException("SOCKET-RECV-ERROR", "the memory for the data to receive could not be allocated "
+            "after " QLLD " of " QLLD " bytes were received; the connection has been shut down", (int64)received,
+            (int64)size);
+        return -1;
+    }
+    allocated = new_size;
+    return 0;
+}
+
 int SocketRecvPollState::continuePollIntern(ExceptionSink* xsink) {
+    if (failed) {
+        xsink->raiseException("SOCKET-RECV-ERROR", "the read failed, as the memory for its data could not be "
+            "allocated");
+        return -1;
+    }
     if (received == size) {
         return 0;
     }
@@ -10652,12 +10734,15 @@ int SocketRecvPollState::continuePollIntern(ExceptionSink* xsink) {
     unsigned loop = 0;
 
     while (true) {
+        if (received == allocated && grow(xsink, io_use.getDescriptor())) {
+            return -1;
+        }
         ssize_t rc;
         if (SSLSocketHelper* ssl = io_use.getSsl()) {
             size_t real_io = 0;
             rc = ssl->doNonBlockingIo(xsink, "read",
                 reinterpret_cast<void*>(const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()) + received)),
-                size - received, SslAction::READ, real_io);
+                allocated - received, SslAction::READ, real_io);
             if (rc > 0) {
                 retry_tls_read = ssl->mustRetryRead();
             }
@@ -10703,7 +10788,7 @@ int SocketRecvPollState::continuePollIntern(ExceptionSink* xsink) {
 #else
                 reinterpret_cast<void*>(const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()) + received)),
 #endif
-                size - received, 0);
+                allocated - received, 0);
             //printd(5, "SocketRecvPollState::continuePoll() left: %ld rc: %d errno: %d)\n", size - received, rc,
             //    errno);
             if (*xsink) {
@@ -19643,7 +19728,8 @@ QoreHashNode* qore_socket_poll_events_ops::continuePollImpl(SocketRecvPollOperat
             char* buf = reinterpret_cast<char*>(d->giveBuffer());
             char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
             if (!nbuf) {
-                xsink->outOfMemory();
+                // the size read can come from the peer (issue 7417)
+                qore_socket_raise_recv_string_memory_error(xsink, len);
                 ok = false;
             } else {
                 nbuf[len] = '\0';
@@ -19963,6 +20049,10 @@ int SocketReadHttpHeaderPollOperation::initPollState(ExceptionSink* xsink) {
     assert(sock->priv->m.trylock());
     if (initialized) {
         return 0;
+    }
+    // the rest of a chunked body that was not read to its end would be taken for the header (issue 7417)
+    if (sock->priv->socket->priv->checkHttpChunkedBodyFinished(xsink)) {
+        return -1;
     }
     if (initIntern(xsink)) {
         return -1;
@@ -20356,10 +20446,8 @@ int SocketReadHttpChunkedBodyPollOperation::handleChunkSize(ExceptionSink* xsink
     // the data helper must be used to read the bytes
     QoreStringDataHelper line(*line_val);
     const char* line_str = line.c_str();
-    size_t line_len = line.size();
-    if (line_len >= 2) {
-        line_len -= 2;
-    }
+    // the line is taken as every reader of a chunked body takes it (issue 7417)
+    size_t line_len = qore_socket_private::httpLinePayloadSize(line_str, line.size());
 
     int64_t chunk_size = 0;
     if (qore_socket_exec_parse_http_chunk_size(line_str, line_len, chunk_size, xsink)) {
@@ -20376,6 +20464,15 @@ int SocketReadHttpChunkedBodyPollOperation::handleChunkSize(ExceptionSink* xsink
         }
         chunked_body_state = ChunkedBodyState::RECV_TRAILER;
         return 0;
+    }
+
+    // the limit is applied before the chunk is read, so that no memory is allocated for data over it (issue 7417)
+    int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
+    int64 max_chunked_body_size = priv->getMaxChunkedBodySize();
+    if (max_chunked_body_size > 0 && chunk_size > max_chunked_body_size - body_size) {
+        xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
+            body_size + static_cast<int64>(chunk_size), max_chunked_body_size);
+        return -1;
     }
 
     current_chunk_size = chunk_size;
@@ -20402,15 +20499,20 @@ int SocketReadHttpChunkedBodyPollOperation::handleChunkData(ExceptionSink* xsink
             (int64)(bin->size()), (int64)chunk_size);
         return -1;
     }
+    // the chunk data ends with a line end (RFC 9112 section 7.1)
+    if (memcmp(static_cast<const char*>(bin->getPtr()) + chunk_size, "\r\n", 2)) {
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "the data of a chunk of " QLLD " bytes is not followed by "
+            "a line end", (int64)chunk_size);
+        return -1;
+    }
 
     my_socket_priv* priv = my_socket_priv::getPriv(*sock);
     priv->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_READ, source, bin->getPtr(), chunk_size);
-    if (binary_body) {
-        body_bin->append(bin->getPtr(), chunk_size);
-    } else {
-        body_str->concat(static_cast<const char*>(bin->getPtr()), chunk_size);
-    }
     bytes_consumed = true;
+    if (qore_socket_append_http_body(xsink, binary_body ? *body_bin : nullptr, binary_body ? nullptr : *body_str,
+            bin->getPtr(), chunk_size)) {
+        return -1;
+    }
 
     int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
     int64 max_chunked_body_size = priv->getMaxChunkedBodySize();
@@ -20461,6 +20563,8 @@ int SocketReadHttpChunkedBodyPollOperation::handleTrailer(ExceptionSink* xsink) 
             }
             priv->doReadHttpHeaderEvent(QORE_EVENT_HTTP_FOOTERS_RECEIVED, **out, source);
         }
+        // the whole body has been read
+        my_socket_priv::getPriv(*sock)->finishHttpChunkedBodyRead();
         chunked_body_state = ChunkedBodyState::DONE;
         received = true;
         return 0;
@@ -20476,7 +20580,8 @@ QoreHashNode* SocketReadHttpChunkedBodyPollOperation::continuePoll(ExceptionSink
     }
 
     if (!http_expect_cleared) {
-        my_socket_priv::getPriv(*sock)->clearHttpExpectChunkedBody();
+        // the body is unfinished until the read reaches its end (issue 7417)
+        my_socket_priv::getPriv(*sock)->startHttpChunkedBodyRead();
         http_expect_cleared = true;
     }
 
@@ -20660,6 +20765,8 @@ SocketReadHttpBodyPollOperation::SocketReadHttpBodyPollOperation(ExceptionSink* 
     body = new BinaryNode();
 
     if (chunked) {
+        // the body is unfinished until the read reaches its end (issue 7417)
+        my_socket_priv::getPriv(*sock_obj)->startHttpChunkedBodyRead();
         body_state = BodyState::RECV_CHUNK_SIZE;
         startBodyRead(xsink);
     } else if (content_length > 0) {
@@ -20767,6 +20874,11 @@ QoreHashNode* SocketReadHttpBodyPollOperation::continuePoll(ExceptionSink* xsink
         }
 
         if (!current_op->goalReached()) {
+            // the data ended before the end of a chunked body: it is not taken for the complete body (issue 7417)
+            if (body_state == BodyState::RECV_CHUNK_SIZE || body_state == BodyState::RECV_CHUNK_DATA
+                || body_state == BodyState::RECV_CHUNK_CRLF) {
+                xsink->raiseException("READ-HTTP-CHUNK-ERROR", "the data ended before the end of the chunked body");
+            }
             body_state = BodyState::DONE;
             return nullptr;
         }
@@ -20795,7 +20907,8 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvLength(ExceptionSink* x
     if (data->getType() == NT_BINARY) {
         const BinaryNode* bin = data->get<const BinaryNode>();
         if (bin->size() > 0) {
-            body->append(bin->getPtr(), bin->size());
+            // an exception is raised if the memory cannot be allocated (issue 7417)
+            qore_socket_append_http_body(xsink, body, nullptr, bin->getPtr(), bin->size());
         }
     }
 
@@ -20808,31 +20921,21 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkSize(ExceptionSink
     releaseCurrentOp(xsink);
 
     if (line_val->getType() != NT_STRING) {
+        // the data ended or was not read: the body is not complete (issue 7417)
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "expected a chunk size line, got '%s'",
+            line_val->getFullTypeName());
         body_state = BodyState::DONE;
         return nullptr;
     }
 
     QoreStringValueHelper line(*line_val);
-    const char* str = line->c_str();
-    size_t len = line->size();
-
-    // Strip trailing \r\n
-    if (len >= 2) {
-        len -= 2;
+    // the size is parsed as the other readers of a chunked body parse it (issue 7417)
+    int64_t chunk_size = 0;
+    if (qore_socket_private::parseHttpChunkSize(line->c_str(),
+            qore_socket_private::httpLinePayloadSize(line->c_str(), line->size()), chunk_size, xsink)) {
+        body_state = BodyState::DONE;
+        return nullptr;
     }
-
-    // Find semicolon (chunk extensions)
-    const char* semi = (const char*)memchr(str, ';', len);
-    size_t hex_len = semi ? (size_t)(semi - str) : len;
-
-    // Parse hex chunk size
-    char hex_buf[32];
-    if (hex_len >= sizeof(hex_buf)) {
-        hex_len = sizeof(hex_buf) - 1;
-    }
-    memcpy(hex_buf, str, hex_len);
-    hex_buf[hex_len] = '\0';
-    int64_t chunk_size = strtol(hex_buf, nullptr, 16);
 
     printd(5, "SocketReadHttpBodyPollOperation::handleRecvChunkSize() chunk_size=%lld\n",
         (long long)chunk_size);
@@ -20855,8 +20958,19 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkSize(ExceptionSink
         return continuePoll(xsink);
     }
 
+    // the limit of the socket is applied before the chunk is read, so that no memory is allocated for data over it
+    // (issue 7417)
+    int64 max_chunked_body_size = my_socket_priv::getPriv(*sock_obj)->getMaxChunkedBodySize();
+    if (max_chunked_body_size > 0 && chunk_size > max_chunked_body_size - static_cast<int64>(body->size())) {
+        xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
+            static_cast<int64>(body->size()) + static_cast<int64>(chunk_size), max_chunked_body_size);
+        body_state = BodyState::DONE;
+        return nullptr;
+    }
+
     // Read chunk data + trailing CRLF (chunk_size + 2 bytes)
     body_state = BodyState::RECV_CHUNK_DATA;
+    remaining = chunk_size;
     sock_obj->ref();
     current_op = new SocketRecvPollOperation(xsink, (ssize_t)(chunk_size + 2), sock_obj, false);
     if (*xsink) {
@@ -20871,13 +20985,27 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkData(ExceptionSink
     ValueHolder data_val(current_op->getOutput(), xsink);
     releaseCurrentOp(xsink);
 
-    if (data_val->getType() == NT_BINARY) {
-        const BinaryNode* bin = data_val->get<const BinaryNode>();
-        // Remove trailing CRLF (last 2 bytes)
-        if (bin->size() > 2) {
-            body->append(bin->getPtr(), bin->size() - 2);
-        }
+    // the chunk data, which ends with a line end (RFC 9112 section 7.1); data that ended before it, or a chunk not
+    // followed by a line end, is refused, and the body is not complete (issue 7417)
+    size_t chunk_size = static_cast<size_t>(remaining);
+    const BinaryNode* bin = data_val->getType() == NT_BINARY ? data_val->get<const BinaryNode>() : nullptr;
+    if (!bin || bin->size() != chunk_size + 2) {
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "read " QLLD " bytes for HTTP chunk size " QLLD,
+            bin ? (int64)bin->size() : 0ll, (int64)chunk_size);
+        body_state = BodyState::DONE;
+        return nullptr;
     }
+    if (memcmp(static_cast<const char*>(bin->getPtr()) + chunk_size, "\r\n", 2)) {
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "the data of a chunk of " QLLD " bytes is not followed by "
+            "a line end", (int64)chunk_size);
+        body_state = BodyState::DONE;
+        return nullptr;
+    }
+    if (qore_socket_append_http_body(xsink, body, nullptr, bin->getPtr(), chunk_size)) {
+        body_state = BodyState::DONE;
+        return nullptr;
+    }
+    remaining = 0;
 
     // Read next chunk size
     body_state = BodyState::RECV_CHUNK_SIZE;
@@ -20900,7 +21028,8 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkCrlf(ExceptionSink
     if (line_val->getType() == NT_STRING) {
         QoreStringValueHelper line(*line_val);
         if (line->size() == 2 && !strcmp(line->c_str(), "\r\n")) {
-            // Empty line — chunked transfer complete
+            // Empty line — chunked transfer complete; the whole body has been read
+            my_socket_priv::getPriv(*sock_obj)->finishHttpChunkedBodyRead();
             body_state = BodyState::DONE;
             return nullptr;
         }
@@ -20919,7 +21048,9 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkCrlf(ExceptionSink
         return continuePoll(xsink);
     }
 
-    // Unexpected output type — treat as complete
+    // the data ended or was not read: the body is not complete (issue 7417)
+    xsink->raiseException("READ-HTTP-CHUNK-ERROR", "expected a chunked body trailer line, got '%s'",
+        line_val->getFullTypeName());
     body_state = BodyState::DONE;
     return nullptr;
 }
@@ -20933,7 +21064,10 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvClose(ExceptionSink* xs
         const BinaryNode* bin = data_val->get<const BinaryNode>();
         if (bin->size() > 0) {
             has_data = true;
-            body->append(bin->getPtr(), bin->size());
+            if (qore_socket_append_http_body(xsink, body, nullptr, bin->getPtr(), bin->size())) {
+                body_state = BodyState::DONE;
+                return nullptr;
+            }
         }
     }
 
@@ -21114,8 +21248,11 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
                 }
                 return getSocketPollInfoHash(xsink, SOCK_POLLIN);
             }
-            // Data is available — transition to header reading
-            poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
+            // Data is available — transition to header reading; the rest of a chunked body that was not read to its
+            // end would be taken for the header (issue 7417)
+            if (!sock->priv->socket->priv->checkHttpChunkedBodyFinished(xsink)) {
+                poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
+            }
             if (!*xsink && poll_state
                 && qore_socket_private::limitHttpRead(xsink, poll_state.get(),
                     sock->priv->socket->getMaxHeaderSize(), 0, "header")) {
@@ -21761,8 +21898,11 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
                     }
                     return getSocketPollInfoHash(xsink, SOCK_POLLIN);
                 }
-                // Data is available — transition to header reading
-                poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
+                // Data is available — transition to header reading; the rest of a chunked body that was not read to its
+                // end would be taken for the header (issue 7417)
+                if (!sock->priv->socket->priv->checkHttpChunkedBodyFinished(xsink)) {
+                    poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
+                }
                 if (!*xsink && poll_state
                     && qore_socket_private::limitHttpRead(xsink, poll_state.get(),
                         sock->priv->socket->getMaxHeaderSize(), 0, "header")) {

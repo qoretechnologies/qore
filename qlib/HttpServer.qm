@@ -293,6 +293,9 @@ log("started listener on %s", lh.desc);
       limited by the default, and an explicit \c 0 still means no limit; added
       @ref HttpServer::HttpServer::getStreamMaxRequestBodySize() "HttpServer::getStreamMaxRequestBodySize()" and
       @ref HttpServer::HttpListener::getStreamMaxRequestBodySize() "HttpListener::getStreamMaxRequestBodySize()"
+    - the connection of an HTTP/1.x request whose chunked body a handler stopped reading before its end is closed
+      after the response, so that the rest of the body cannot be taken for another request
+      (<a href="https://github.com/qoretechnologies/qore/issues/7417">issue 7417</a>)
     - a stream handler that wants an HTTP/1.x request body with a \c Content-Length as a stream
       (@ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()") gets it in binary
       parts of at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize" bytes, each byte once, instead of
@@ -5398,6 +5401,16 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             if (want_body_reader && cast<Http1BodyReader>(cx."header-info".body_reader).getRemaining()) {
                 cx.close = True;
                 # a response header that a stream request has already set
+                if (rv.hdr.Connection) {
+                    rv.hdr.Connection = "close";
+                }
+            }
+
+            # an HTTP/1.x chunked body whose read stopped before its end (the handler's read raised an error that it
+            # handled, or it stopped reading): the rest of the body cannot be told apart from the next request, so
+            # the connection is closed after the response (issue 7417)
+            if (!is_multiplexed && s.unfinishedHttpChunkedBody()) {
+                cx.close = True;
                 if (rv.hdr.Connection) {
                     rv.hdr.Connection = "close";
                 }

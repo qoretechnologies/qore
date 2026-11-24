@@ -150,6 +150,17 @@ DLLLOCAL int qore_socket_exec_close_private(qore_socket_private* priv);
 //! Raises \a err and returns -1 if a UNIX socket path does not fit a socket address with its terminator (issue #6910)
 DLLLOCAL int qore_socket_check_unix_path(const char* path, const char* err, ExceptionSink* xsink);
 #endif
+
+//! Appends data received to an HTTP message body (the binary body, or the string body if \a body_bin is nullptr)
+/** The size of a body comes from the peer, so a body that cannot grow fails the read without ending the process or
+    losing data silently (issue 7417)
+
+    @return 0 for OK, -1 if the memory could not be allocated (a SOCKET-RECV-ERROR exception is raised; the body is
+    unchanged)
+*/
+DLLLOCAL int qore_socket_append_http_body(ExceptionSink* xsink, BinaryNode* body_bin, QoreString* body_str,
+        const void* data, size_t size);
+
 DLLLOCAL int do_read_error(ssize_t rc, const char* method_name, int timeout_ms, ExceptionSink* xsink);
 DLLLOCAL int sock_get_raw_error();
 #if defined(DEBUG) && !defined(_Q_WINDOWS)
@@ -1420,10 +1431,26 @@ private:
     //! Receives data; continuePoll() records received data on the socket
     DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
 
+    //! Makes room in the buffer for more data
+    /** @return -1 if the memory cannot be allocated: a SOCKET-RECV-ERROR exception is raised, the data received is
+        lost, and the connection is shut down, as the rest of the data cannot be told apart from what follows it
+    */
+    DLLLOCAL int grow(ExceptionSink* xsink, int fd);
+
+    //! the most memory allocated for the data before any of it has been received
+    /** The size to receive can come from the peer (a Content-Length or a chunk size), so the buffer grows as the
+        data arrives instead of being allocated for the whole size at once (issue 7417)
+    */
+    static constexpr size_t MaxPrealloc = 1024 * 1024;
+
     qore_socket_private* sock;
     SimpleRefHolder<BinaryNode> bin;
     size_t size;
+    //! the size of the buffer allocated for the data
+    size_t allocated = 0;
     bool retry_tls_read = false;
+    //! true if the buffer could not grow: the data received is lost, and the read cannot continue
+    bool failed = false;
     size_t received = 0;
 };
 
@@ -2148,6 +2175,11 @@ struct qore_socket_private : public QoreReferenceCounter {
     std::atomic<bool> http_fields_at_top_level{true};
     bool del = false,
         http_exp_chunked_body = false,
+        //! True while the read of a chunked body has started and has not reached the end of the body
+        /** The rest of such a body cannot be told apart from the next message, so no header is read on the
+            connection until it is closed (issue 7417)
+        */
+        http_chunked_body_unfinished = false,
         ssl_accept_all_certs = false,
         ssl_capture_remote_cert = false,
         event_data = false,
@@ -2971,6 +3003,9 @@ public:
         }
         if (http_exp_chunked_body) {
             http_exp_chunked_body = false;
+        }
+        if (http_chunked_body_unfinished) {
+            http_chunked_body_unfinished = false;
         }
         if (sse_got_cr) {
             sse_got_cr = false;
@@ -4435,6 +4470,10 @@ public:
     //! processes a header string to a hash and raises socket events
     DLLLOCAL QoreHashNode* processHttpHeaderString(ExceptionSink* xsink, QoreStringNodeHolder& hdr,
             QoreHashNode* info, int source, const char* headers_raw_key = "headers-raw") {
+        // the rest of a chunked body that was not read to its end would be taken for this header (issue 7417)
+        if (checkHttpChunkedBodyFinished(xsink)) {
+            return nullptr;
+        }
         // the header is parsed as a C string, which a NUL character would end: the header lines after it, such as
         // Content-Length or Transfer-Encoding, would be lost silently, and the rest of the message read as the body
         // or as another message, so a header with a NUL character is refused
@@ -5051,6 +5090,115 @@ public:
 
     DLLLOCAL bool pendingHttpChunkedBody() const {
         return http_exp_chunked_body && sock != QORE_INVALID_SOCKET;
+    }
+
+    //! Called when the read of a chunked body starts: the body is no longer pending, and it is unfinished until
+    //! the read reaches its end (finishHttpChunkedBodyRead())
+    DLLLOCAL void startHttpChunkedBodyRead() {
+        if (http_exp_chunked_body) {
+            http_exp_chunked_body = false;
+        }
+        http_chunked_body_unfinished = true;
+    }
+
+    //! Called when the read of a chunked body has read the end of the body (the last chunk and the trailer section)
+    DLLLOCAL void finishHttpChunkedBodyRead() {
+        if (http_chunked_body_unfinished) {
+            http_chunked_body_unfinished = false;
+        }
+    }
+
+    //! Returns true if the read of a chunked body started on the connection and stopped before the end of the body
+    DLLLOCAL bool unfinishedHttpChunkedBody() const {
+        return http_chunked_body_unfinished && sock != QORE_INVALID_SOCKET;
+    }
+
+    //! Raises an exception and returns -1 if a header cannot be read, because a chunked body read on the connection
+    //! stopped before its end: the rest of the body would be taken for the header (issue 7417)
+    DLLLOCAL int checkHttpChunkedBodyFinished(ExceptionSink* xsink) const {
+        if (!http_chunked_body_unfinished) {
+            return 0;
+        }
+        xsink->raiseException("SOCKET-HTTP-ERROR", "cannot read an HTTP header: the read of a chunked message body "
+            "on this connection stopped before the end of the body, whose rest cannot be told apart from the next "
+            "message; the connection must be closed");
+        return -1;
+    }
+
+    //! Returns the size of a line of a chunked body read up to its line end, without the line end
+    /** Exactly one line end is removed (CRLF, or a bare LF), so that every reader of a chunked body takes a line in
+        the same way: any other CR or LF stays in the line, where it is refused (issue 7417)
+    */
+    DLLLOCAL static size_t httpLinePayloadSize(const char* str, size_t len) {
+        if (len >= 2 && str[len - 2] == '\r' && str[len - 1] == '\n') {
+            return len - 2;
+        }
+        if (len && str[len - 1] == '\n') {
+            return len - 1;
+        }
+        return len;
+    }
+
+    //! Parses the size of a chunk from its chunk size line without the line end (RFC 9112 section 7.1)
+    /** The size is one or more hexadecimal digits, which whitespace and a chunk extension can follow; any other
+        value is refused, as a reader that took it otherwise than the sender's other readers would find the end of
+        the chunk elsewhere (issue 7417)
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL static int parseHttpChunkSize(const char* line, size_t len, int64_t& chunk_size, ExceptionSink* xsink) {
+        size_t i = 0;
+        // whitespace around the size is tolerated, as it cannot change the size
+        while (i < len && (line[i] == ' ' || line[i] == '\t')) {
+            ++i;
+        }
+        size_t start = i;
+        uint64_t size = 0;
+        // the largest size whose chunk can be read with its line end
+        const uint64_t max_size = static_cast<uint64_t>(std::numeric_limits<ssize_t>::max() - 2);
+        bool overflow = false;
+        for (; i < len; ++i) {
+            int v;
+            char c = line[i];
+            if (c >= '0' && c <= '9') {
+                v = c - '0';
+            } else if (c >= 'a' && c <= 'f') {
+                v = c - 'a' + 10;
+            } else if (c >= 'A' && c <= 'F') {
+                v = c - 'A' + 10;
+            } else {
+                break;
+            }
+            if (size > (max_size >> 4)) {
+                overflow = true;
+            } else {
+                size = (size << 4) | static_cast<uint64_t>(v);
+            }
+        }
+        size_t digits = i - start;
+        size_t digits_end = i;
+        // bad whitespace before a chunk extension (RFC 9112 section 7.1.1)
+        while (i < len && (line[i] == ' ' || line[i] == '\t')) {
+            ++i;
+        }
+        if (!digits || (i < len && line[i] != ';')) {
+            QoreString val(line, len);
+            if (!len || (!digits && i == len)) {
+                xsink->raiseException("READ-HTTP-CHUNK-ERROR", "empty value given for chunk size");
+            } else {
+                xsink->raiseException("READ-HTTP-CHUNK-ERROR", "invalid value given for chunk size ('%s')",
+                    val.c_str());
+            }
+            return -1;
+        }
+        if (overflow || size > max_size) {
+            QoreString val(line + start, digits_end - start);
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "chunk size 0x%s exceeds the maximum supported size",
+                val.c_str());
+            return -1;
+        }
+        chunk_size = static_cast<int64_t>(size);
+        return 0;
     }
 
     //! Advances the TLS state generation; called after every change of the TLS state (see @ref tls_state_gen)

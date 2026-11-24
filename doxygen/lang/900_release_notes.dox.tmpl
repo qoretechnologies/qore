@@ -4516,6 +4516,10 @@
     - the \c keys operator, the merge of an object into a hash and the iteration over its members list, for the code of a
       class that a subclass inherits with \c private:internal, the members that it uses on an object of a further
       subclass; they returned nothing (<a href="https://github.com/qoretechnologies/qore/issues/7180">issue 7180</a>)
+    - no HTTP header is read on a @ref Qore::Socket "Socket" after a chunked body read stopped before its end
+      (@ref Qore::Socket::unfinishedHttpChunkedBody() "unfinishedHttpChunkedBody()"), chunk sizes are checked alike,
+      and a body read allocates memory as its data arrives, so that a body can neither be taken for another message
+      nor end the process (<a href="https://github.com/qoretechnologies/qore/issues/7417">issue 7417</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 
