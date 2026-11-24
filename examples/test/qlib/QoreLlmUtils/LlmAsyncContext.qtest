@@ -1,0 +1,222 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - EventNotifier watches of the async I/O controller and the context that ThreadPool tasks run with
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires QoreLlmTypes
+
+%exec-class LlmAsyncContextTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! An executor that runs each task with the context of the code that hands it over, in a pool of one thread
+/** As @ref Qore::Thread::ThreadPool::submit() "ThreadPool::submit()" does; hold() occupies the thread until the
+    test releases it, so that the drain of an operation stays queued while the test posts more tasks
+*/
+class TestExecutor inherits LlmAsyncExecutor {
+    public {
+        #! the thread is held until it is zero
+        Counter gate(1);
+    }
+
+    private {
+        ThreadPool pool(1);
+    }
+
+    execute(code<nothing()> task) {
+        pool.submit(task);
+    }
+
+    #! occupies the pool's thread until the gate is released
+    hold() {
+        Counter gate = self.gate;
+        pool.submit(sub () { gate.waitForZero(HangGuard); });
+    }
+
+    #! releases the pool's thread
+    release() {
+        if (gate.getCount()) {
+            gate.dec();
+        }
+    }
+
+    #! the pool is stopped when it is released, also by a task of its own (see ThreadPool::destructor())
+    destructor() {
+        release();
+    }
+}
+
+#! posts a task of trusted code that reports the sandbox that it runs with
+/** Called by trusted code, and by sandboxed code through an import: the task is then created and posted in a thread
+    that the sandbox governs
+*/
+sub post_report(LlmAsyncOperation op, Queue q, string who) {
+    op.post(sub () {
+        q.push({"who": who, "governed": SandboxManager::isGoverned()});
+    });
+}
+
+#! hands a task to an executor; called by sandboxed code through an import
+sub execute_task(LlmAsyncExecutor executor, code<nothing()> task) {
+    executor.execute(task);
+}
+
+#! creates an operation; called by sandboxed code through an import
+LlmAsyncOperation sub make_operation(LlmAsyncExecutor executor) {
+    return new LlmAsyncOperation(executor);
+}
+
+#! creates an executor; called by sandboxed code through an import
+LlmThreadPoolExecutor sub make_executor(int threads) {
+    return new LlmThreadPoolExecutor(threads);
+}
+
+#! cancels an operation; called by sandboxed code through an import
+sub cancel_operation(LlmAsyncOperation op) {
+    op.cancel("stopped");
+}
+
+#! The tasks of an asynchronous LLM operation run with the context of the code that created it (qore#7497)
+/** A task of an operation was run by a drain that the first poster handed to the executor, so it ran with the context
+    of whatever code posted first: a cancellation handler runs in the thread of the code that cancels, so a sandboxed
+    canceller made the caller's steps and completion callback run with its restrictions, and trusted code that posted
+    to an operation of sandboxed code made that operation's steps run with its privileges.  LlmThreadPoolExecutor
+    started its workers once, so every task ran with the context of the code that created the executor: a task that
+    sandboxed code handed over ran without its sandbox.
+
+    The bodies of the tasks are trusted code, as the steps of the module are; a task created by sandboxed code keeps
+    its sandbox as any closure does, which is not what is tested here.
+*/
+class LlmAsyncContextTest inherits QUnit::Test {
+    constructor() : Test("LlmAsyncContextTest", "1.0") {
+        addTestCase("a task posted after sandboxed code posted runs with the creator's context",
+            \sandboxedPosterFirst());
+        addTestCase("a task that trusted code posts to a sandboxed operation runs governed",
+            \trustedPosterOfSandboxedOperation());
+        addTestCase("a sandboxed canceller does not restrict the completion callback", \sandboxedCanceller());
+        addTestCase("LlmThreadPoolExecutor runs a task with the context of the code that hands it over",
+            \sharedExecutor());
+        addTestCase("the workers of a sandboxed code's executor count against its thread limit",
+            \executorThreadLimit());
+        set_return_value(main());
+    }
+
+    #! makes a Program governed by a sandbox that denies the filesystem, with the trusted helpers imported
+    static Program sandboxedProgram(*int max_threads) {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        if (max_threads) {
+            sm.setMaxThreads(max_threads);
+        }
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.importFunction("post_report");
+        p.importFunction("execute_task");
+        p.importFunction("make_operation");
+        p.importFunction("cancel_operation");
+        p.importFunction("make_executor");
+        p.parse("sub post(object op, Queue q) { post_report(op, q, \"sandboxed\"); }
+object sub make(object executor) { return make_operation(executor); }
+sub run(object executor, code task) { execute_task(executor, task); }
+sub cancel(object op) { cancel_operation(op); }
+object sub make_ex(int threads) { return make_executor(threads); }", "sandboxed");
+        return p;
+    }
+
+    #! returns the governed state reported by each poster
+    private hash<string, bool> collect(Queue q, int n) {
+        hash<string, bool> rv;
+        for (int i = 0; i < n; ++i) {
+            hash<auto> r = q.get(HangGuard);
+            rv{r.who} = r.governed;
+        }
+        return rv;
+    }
+
+    sandboxedPosterFirst() {
+        TestExecutor executor();
+        on_exit executor.release();
+        # the drain stays queued behind this task until both tasks are posted
+        executor.hold();
+        LlmAsyncOperation op(executor);
+        on_exit op.complete(NOTHING);
+        Queue q();
+        Program p = sandboxedProgram();
+
+        # sandboxed code posts first: the drain was handed to the executor from its thread
+        p.callFunction("post", op, q);
+        # the trusted creator's task joins the same drain
+        post_report(op, q, "trusted");
+        executor.release();
+
+        hash<string, bool> governed = collect(q, 2);
+        assertEq(False, governed.trusted, "the creator's task runs with no sandbox");
+        assertEq(True, governed.sandboxed, "the task created by sandboxed code keeps its sandbox");
+    }
+
+    #! the methods of an object that sandboxed code creates run with its sandbox, so this passes also when a drain
+    #! takes the context of its poster; it states the direction in which the operation's tasks keep their restrictions
+    trustedPosterOfSandboxedOperation() {
+        TestExecutor executor();
+        Program p = sandboxedProgram();
+        LlmAsyncOperation op = p.callFunction("make", executor);
+        on_exit op.complete(NOTHING);
+        Queue q();
+
+        # trusted code posts the first task of the sandboxed code's operation
+        post_report(op, q, "trusted");
+        assertEq(True, collect(q, 1).trusted, "the task runs with the sandbox of the operation's creator");
+    }
+
+    sandboxedCanceller() {
+        TestExecutor executor();
+        Queue q();
+        LlmAsyncOperation op(executor, NOTHING, sub (LlmAsyncOperation o) {
+            q.push({"who": "completion", "governed": SandboxManager::isGoverned()});
+        });
+        Counter registered(1);
+        # a step registers a cancellation handler that posts a task made by the step, as the steps of the module do
+        op.post(sub () {
+            code<nothing()> cancelled = sub () { op.complete("cancelled"); };
+            op.getCancellation().addHandler(sub () { op.post(cancelled); });
+            registered.dec();
+        });
+        assertEq(0, registered.waitForZero(HangGuard), "the cancellation handler is registered");
+
+        Program p = sandboxedProgram();
+        p.callFunction("cancel", op);
+        assertTrue(op.wait(HangGuard), "the call ends");
+        assertEq("cancelled", op.getResult());
+        assertEq(False, collect(q, 1).completion, "the caller's completion callback runs with no sandbox");
+    }
+
+    sharedExecutor() {
+        Program p = sandboxedProgram();
+        # an executor of trusted code that sandboxed code uses
+        LlmThreadPoolExecutor executor(1);
+        on_exit executor.shutdown();
+        Queue q();
+        # a task made by trusted code, which carries no sandbox of its own, handed over by sandboxed code
+        code<nothing()> task = sub () {
+            q.push({"who": "handed-over", "governed": SandboxManager::isGoverned()});
+        };
+        p.callFunction("run", executor, task);
+        assertEq(True, collect(q, 1)."handed-over", "the task runs with the sandbox of the code that handed it over");
+    }
+
+    executorThreadLimit() {
+        Program p = sandboxedProgram(2);
+        # within the limit
+        object executor = p.callFunction("make_ex", 1);
+        executor.shutdown();
+        # beyond it: the workers are threads of the sandboxed code
+        assertThrows("THREAD-CREATION-FAILURE", \p.callFunction(), ("make_ex", 8));
+    }
+}
