@@ -114,6 +114,16 @@ public:
     */
     DLLLOCAL int checkIdleDataForAsyncPollLocked(ExceptionSink* xsink, bool buffered_is_data = false);
 
+    //! Returns the number of bytes that the socket has read from its descriptor and not yet returned to a reader
+    /** Such bytes are returned before any other by the next read, also after a TLS connection is started on the
+        socket, which never reads them: an HTTP client checks that none follow a proxy's response to \c CONNECT
+        before it starts the TLS connection to the target server through the tunnel (qore#7486).  Acquires the
+        socket lock.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL size_t getBufferedReadBytes() const;
+
     //! Error-reporting variant of @ref setNoDelay() for poll operation code.
     /** @ref setNoDelay() is already safe on async I/O execution paths -- libqore selects the
         inline (non-controller) route for socket config actions itself -- so this helper differs

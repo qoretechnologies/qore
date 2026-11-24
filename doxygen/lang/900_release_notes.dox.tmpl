@@ -4547,6 +4547,10 @@
       the response is invalid, such as with data before it or a status code like \c 1000 or \c 999 (see
       @ref httpclient_status_line "HTTPClient response status line";
       <a href="https://github.com/qoretechnologies/qore/issues/7485">issue 7485</a>)
+    - the HTTP clients skip the interim \c 1xx responses of a proxy to \c CONNECT, which failed the connection, and
+      fail it when the proxy sends data after its \c 2xx response before the TLS connection to the server starts (see
+      @ref httpclient_proxy_connect "HTTPClient proxy tunnels";
+      <a href="https://github.com/qoretechnologies/qore/issues/7486">issue 7486</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

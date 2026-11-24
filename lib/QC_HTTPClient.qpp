@@ -196,6 +196,17 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     HTTP proxies and basic proxy authentication are supported by setting the proxy constructor hash key to the proxy
     URL (with a proxy username and password if required) or by calling the HTTPClient::setProxyURL() method.
 
+    @anchor httpclient_proxy_connect
+    An HTTPS server is reached through a proxy with a \c CONNECT tunnel, which is made when the final response of the
+    proxy to the \c CONNECT request has a \c 2xx status (RFC 9110 section 9.3.6).  Interim responses of the proxy
+    (\c 1xx other than \c 101) are skipped as for any other request (see
+    @ref httpclient_interim_responses "interim responses"), up to 16 of them; with more, with a \c 101 response, or
+    with any final response other than \c 2xx, the connection fails, and no request is sent.  The client starts the
+    TLS connection to the server in the tunnel right after the proxy's \c 2xx response, so the connection fails too
+    when the proxy sends data after that response before the TLS connection is started, as such data would otherwise
+    be read as if the server had sent it.  The same applies to the connections of the
+    @ref httpclientiointro "HttpClientIo" module through a proxy, over HTTP/1.1 and HTTP/2.
+
     Objects of this class are thread-safe and support serializing multiple simultaneous requests from many threads. If
     a request is in progress and another thread attempts to make a request at the same time, the second thread will
     block until the first is complete. Therefore the total amount of time a thread could wait for a response in a
