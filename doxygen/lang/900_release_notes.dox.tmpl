@@ -231,9 +231,10 @@
 
     @par HTTP/1.x Messages With Ambiguous Framing Are Refused
     A request with both \c Transfer-Encoding and \c Content-Length, with a transfer coding other than chunked alone,
-    with more than one \c Host, or with a header line that ends with a bare LF, and a header or trailer section with an
-    empty line before its end are refused (see @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()");
-    @ref httpserverintro "HttpServer" answers such a request with 400 or 501 and closes the connection.
+    with more than one \c Host, or with a header line that ends with a bare LF, a trailer section with an empty line
+    before its end, and a header or trailer field line with a control character other than tab are refused (see
+    @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"); @ref httpserverintro "HttpServer" answers such a
+    request with 400 or 501 and closes the connection.
 
     @par A Member of a System Class Cannot Be Combined With a User Member of the Same Name
     A class hierarchy that combines a member of a user class with a member of a system class of the same name is
@@ -4565,9 +4566,10 @@
     - the trailer section of a chunked HTTP/1.x body ends where every reader ends it: a section with a line that ends
       with a bare LF or with an empty line before its end is refused, so that the bytes after it cannot be taken for
       another message
-    - an HTTP/1.x header ends where every reader ends it: a header with an empty line before its end, or a request
-      line or request field line that ends with a bare LF, is refused (see @ref Qore::Socket::readHTTPHeader()
-      "Socket::readHTTPHeader()"), so that the bytes after it cannot be taken for another message
+    - an HTTP/1.x header ends where every reader ends it, at its first empty line, whose line ends can be LF or CRLF,
+      and a request line or request field line that ends with a bare LF is refused (see
+      @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"), so that the bytes after it cannot be taken for
+      another message
     - the \c Transfer-Encoding of an HTTP/1.x message frames its body as RFC 9112 requires in every reader, the HTTP
       client and @ref httpserverintro "HttpServer": the chunked coding is recognized without regard to case and
       whitespace, a request whose framing is ambiguous or unsupported is refused, and a response whose final
@@ -4594,6 +4596,9 @@
       fail it when the proxy sends data after its \c 2xx response before the TLS connection to the server starts (see
       @ref httpclient_proxy_connect "HTTPClient proxy tunnels";
       <a href="https://github.com/qoretechnologies/qore/issues/7486">issue 7486</a>)
+    - an HTTP/1.x header or trailer field line with a control character other than tab is refused with
+      \c SOCKET-HTTP-ERROR, and the HTTP client closes the connection (see @ref Qore::Socket::readHTTPHeader()
+      "Socket::readHTTPHeader()"; <a href="https://github.com/qoretechnologies/qore/issues/7491">issue 7491</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 
