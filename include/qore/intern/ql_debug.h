@@ -411,6 +411,9 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! the address family race of an HTTP/3 client connection found the connection attempt that wins, before the
     //! operation's socket takes it over (the I/O thread)
     Http3RaceWinner,
+    //! an HTTP/2 or HTTP/3 client connection's streamed send found the stream's send buffer full and is about to wait
+    //! for it to drain (the sending thread; qore#7465)
+    SendDrainWait,
     //! the number of hold points
     Count,
 };
