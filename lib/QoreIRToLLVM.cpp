@@ -39051,11 +39051,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::DiscardTemps: {
             emitDiscardTemps(module, inst->temp_scope_id);
-            // a temporary's destructor can raise an exception, which the statement raises, as in the AST interpreter:
-            // a statement in a try block branches to its handler here
-            if (inst->exception_target) {
-                emitExceptionCheck(module, llvm_func, inst);
-            }
+            // A destructor raises in the statement that released its temporary. Without an enclosing handler,
+            // propagate it to the caller before the next statement can enter a try block (#7412).
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::SetCodeParseOptions: {

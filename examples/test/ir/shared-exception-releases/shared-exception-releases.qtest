@@ -59,6 +59,9 @@ class SharedExceptionReleasesTest inherits QUnit::Test {
         assertTrue(out =~ /\nloop:\n  0: ~l0 ! AT: check 0\n  1: ~m0 ~l0 ! AT: check 1\n  2: ~m0 ~l0 ~l1 ! AT/,
             "loop: the temporaries of each iteration");
         assertTrue(out =~ /\nreturn:\n  0: ~ra ! AT: check 0\n/, "return value");
+        assertTrue(out =~ /\nbefore try:\n  0: ! DTOR-T: statement ended\n/, "caller catches the temporary's exception");
+        assertTrue(out =~ /\nweak store before try:\n  0: ! DTOR-T: statement ended\n/, "caller catches after weak store");
+        assertTrue(out =~ /\nwithin try:\n  0: enclosing DTOR-T = null\n/, "enclosing try catches the exception");
         # every case runs twice, with the same output
         list<string> parts = out.split("untyped:\n");
         assertEq(3, parts.size(), "two passes");

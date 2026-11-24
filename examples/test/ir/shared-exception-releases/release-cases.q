@@ -1,4 +1,5 @@
 %modern
+%allow-weak-references
 # the temporaries of a statement that an exception interrupts at each of its checks, released by the shared releases
 # of the native code (qore#7174): each case prints the destruction of each temporary and the exception, which must be
 # those of the AST interpreter
@@ -57,6 +58,31 @@ auto sub inReturn(int k) {
     return mk("ra").get(chk(0, k)) + mk("rb").get(chk(1, k)) + mk("rc").get(chk(2, k));
 }
 
+class ThrowOnRelease {
+    destructor() { throw "DTOR-T", "statement ended"; }
+}
+
+# The temporary is released before control enters the next try (#7412).
+sub beforeTry(int k) {
+    new ThrowOnRelease();
+    try { log += " entered"; } catch (hash<ExceptionInfo> ex) { log += " caught too late"; }
+}
+
+sub weakStoreBeforeTry(int k) {
+    hash<auto> h = {};
+    h.w := new ThrowOnRelease();
+    try { log += " entered"; } catch (hash<ExceptionInfo> ex) { log += " caught too late"; }
+}
+
+sub withinTry(int k) {
+    try {
+        new ThrowOnRelease();
+        try { log += " entered"; } catch (hash<ExceptionInfo> ex) { log += " caught too late"; }
+    } catch (hash<ExceptionInfo> ex) {
+        log += " enclosing " + ex.err;
+    }
+}
+
 sub run(string name, code c, int checks) {
     printf("%s:\n", name);
     for (int k = 0; k <= checks; ++k) {
@@ -78,4 +104,7 @@ for (int pass = 0; pass < 2; ++pass) {
     run("loop", \inLoop(), 6);
     run("map", \withMap(), 5);
     run("return", \inReturn(), 3);
+    run("before try", \beforeTry(), 0);
+    run("weak store before try", \weakStoreBeforeTry(), 0);
+    run("within try", \withinTry(), 0);
 }
