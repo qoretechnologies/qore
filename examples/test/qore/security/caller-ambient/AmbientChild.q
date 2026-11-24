@@ -26,6 +26,10 @@ string sub lent_barrier(AmbientProbe::Lent l) {
 string sub barrier() {
     return AmbientProbe::barrier_probe();
 }
+# an object that library code creates inside the host's grant: its code runs inside the grant
+string sub barrier_object() {
+    return AmbientProbe::barrier_object_probe();
+}
 # its own callback that a host grant calls: still its own code
 string sub barrier_callback() {
     return AmbientProbe::barrier_callback(string sub () { return AmbientProbe::probe(); });
@@ -72,6 +76,7 @@ hash<string, auto> sub run(string kind, hash<auto> k, code cap, Qore::ExecMode m
     h.lent_restricted = p.callFunction("lent_restricted", l);
     h.lent_barrier = p.callFunction("lent_barrier", l);
     h.barrier = p.callFunction("barrier");
+    h.barrier_object = p.callFunction("barrier_object");
     h.barrier_callback = p.callFunction("barrier_callback");
     h.capability = p.callFunction("capability", cap);
     code own = p.callFunction("own_ref");

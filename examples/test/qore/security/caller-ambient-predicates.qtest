@@ -33,6 +33,7 @@ class CallerAmbientPredicatesTest inherits QUnit::Test {
             "lent_restricted": False,
             "lent_barrier": "T/T",
             "barrier": "T/T",
+            "barrier_object": "T/T",
             "barrier_callback": "T/T",
             "capability": "T/T",
             "own_ref": "T/T",
@@ -47,6 +48,7 @@ class CallerAmbientPredicatesTest inherits QUnit::Test {
             "lent_restricted": False,
             "lent_barrier": "T/T",
             "barrier": "T/T",
+            "barrier_object": "T/T",
             # the restricted code's own callback inside the grant
             "barrier_callback": "F/F",
             "capability": "T/T",
@@ -63,6 +65,7 @@ class CallerAmbientPredicatesTest inherits QUnit::Test {
             "lent_restricted": False,
             "lent_barrier": "T/T",
             "barrier": "T/T",
+            "barrier_object": "T/T",
             "barrier_callback": "T/F",
             "capability": "T/T",
             "own_ref": "T/F",

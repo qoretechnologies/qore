@@ -15,12 +15,15 @@ module AmbientProbe {
     # that the policy barrier calls is created here
     init = sub () {
         AmbientProbe::Probe = \AmbientProbe::probe();
+        AmbientProbe::MakeAndProbe = \AmbientProbe::make_and_probe();
     };
 }
 
 public namespace AmbientProbe {
     #! the call reference that the policy barrier calls, created in the module's initialization
     our code Probe;
+    #! the call reference that creates an object under the policy barrier, created in the module's initialization
+    our code MakeAndProbe;
 
     #! the predicates of the calling code: "<read>/<secrets>", each "T" or "F"
     public string sub probe() {
@@ -31,6 +34,16 @@ public namespace AmbientProbe {
     #! the predicates under a policy barrier that this module's code establishes
     public string sub barrier_probe() {
         return SandboxManager::callWithSystemPolicy(Probe);
+    }
+
+    #! the predicates in a method of an object that this module's code creates under a policy barrier
+    public string sub barrier_object_probe() {
+        return SandboxManager::callWithSystemPolicy(MakeAndProbe);
+    }
+
+    #! creates an object of this module's class and returns the predicates in its method
+    public string sub make_and_probe() {
+        return (new AmbientProbe::Lent()).probe();
     }
 
     #! calls the caller's callback under a policy barrier that this module's code establishes

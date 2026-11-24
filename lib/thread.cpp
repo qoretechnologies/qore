@@ -8478,9 +8478,11 @@ static bool qore_granted_caller_is_sandboxed(ThreadData* td) {
         if ((mib && frame == mib->provenance) || (boundary && frame == boundary)) {
             break;
         }
+        // under a grant, the sandboxes that govern the policy of the code (the managers for all other purposes, such
+        // as interrupts, also govern the code that trusted code runs inside the grant)
         const QoreSandboxContext* ctx = frame->getContext();
-        if (ctx->capturer_sandboxed || ctx->manager || ctx->policy_manager || ctx->provenance_manager
-                || ctx->provenance_policy_manager) {
+        if (ctx->capturer_sandboxed || ctx->policy_manager || ctx->provenance_policy_manager
+                || (!granted && (ctx->manager || ctx->provenance_manager))) {
             return true;
         }
     }
