@@ -170,6 +170,18 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     an \c Upgrade header (RFC 9110 section 7.8), as such a request, streamed or not, has no use for the connection
     after it.
 
+    @anchor httpclient_protocol_upgrade
+    A request that asks for a protocol upgrade with an \c Upgrade header other than a WebSocket upgrade, and is
+    answered with a \c 101 response, gets the \c 101 response as its response, which has no message body; the
+    connection, whose data is no longer HTTP after it, is then closed, as this class gives no way to use the new
+    protocol on it, and the next request opens a new connection.  A streamed request (such as with
+    HTTPClient::sendWithRecvCallback(), HTTPClient::sendWithCallbacks() or HTTPClient::sendAndStream()) ends at once
+    with the \c 101 response header, which is given to the receive callback followed by the end of the response,
+    instead of waiting for a message body until the request times out.  A non-streamed WebSocket upgrade request keeps
+    the connection for the WebSocket protocol; to use another protocol on an upgraded connection, use
+    @ref HttpClientIo::HttpClientConnectionManager::acquireAndStartStreaming()
+    "HttpClientConnectionManager::acquireAndStartStreaming()", whose caller takes the socket over (qore#7487).
+
     @anchor httpclient_status_line
     The status line of an HTTP/1.x response must be <tt>HTTP/</tt><em>digit</em><tt>.</tt><em>digit</em>, a space,
     a status code of exactly three digits in the range \c 100 - \c 599, and either the end of the line or a space and
@@ -195,6 +207,17 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
 
     HTTP proxies and basic proxy authentication are supported by setting the proxy constructor hash key to the proxy
     URL (with a proxy username and password if required) or by calling the HTTPClient::setProxyURL() method.
+
+    @anchor httpclient_proxy_connect
+    An HTTPS server is reached through a proxy with a \c CONNECT tunnel, which is made when the final response of the
+    proxy to the \c CONNECT request has a \c 2xx status (RFC 9110 section 9.3.6).  Interim responses of the proxy
+    (\c 1xx other than \c 101) are skipped as for any other request (see
+    @ref httpclient_interim_responses "interim responses"), up to 16 of them; with more, with a \c 101 response, or
+    with any final response other than \c 2xx, the connection fails, and no request is sent.  The client starts the
+    TLS connection to the server in the tunnel right after the proxy's \c 2xx response, so the connection fails too
+    when the proxy sends data after that response before the TLS connection is started, as such data would otherwise
+    be read as if the server had sent it.  The same applies to the connections of the
+    @ref httpclientiointro "HttpClientIo" module through a proxy, over HTTP/1.1 and HTTP/2.
 
     Objects of this class are thread-safe and support serializing multiple simultaneous requests from many threads. If
     a request is in progress and another thread attempts to make a request at the same time, the second thread will

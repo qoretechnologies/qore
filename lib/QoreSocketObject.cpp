@@ -5635,6 +5635,12 @@ int qore_socket_object_private::checkIdleDataForAsyncPoll(ExceptionSink* xsink, 
     return checkIdleDataForAsyncPollLocked(xsink, buffered_is_data);
 }
 
+size_t qore_socket_object_private::getBufferedReadBytes() const {
+    AutoLocker al(priv->m);
+    qore_socket_private* p = qore_socket_private::get(*priv->socket);
+    return p->buflen > 0 ? (size_t)p->buflen : 0;
+}
+
 int qore_socket_object_private::checkIdleDataForAsyncPollLocked(ExceptionSink* xsink, bool buffered_is_data) {
     assert(priv->m.trylock());
 

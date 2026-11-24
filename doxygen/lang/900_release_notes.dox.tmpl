@@ -4593,6 +4593,10 @@
       looks up every connection name through the \c QORE_DATA_PROVIDERS modules also after a lookup through them,
       which made every later lookup return nothing, and passes on an exception of a lookup instead of reporting the
       module as invalid (<a href="https://github.com/qoretechnologies/qore/issues/7484">issue 7484</a>)
+    - the HTTP clients skip the interim \c 1xx responses of a proxy to \c CONNECT, which failed the connection, and
+      fail it when the proxy sends data after its \c 2xx response before the TLS connection to the server starts (see
+      @ref httpclient_proxy_connect "HTTPClient proxy tunnels";
+      <a href="https://github.com/qoretechnologies/qore/issues/7486">issue 7486</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

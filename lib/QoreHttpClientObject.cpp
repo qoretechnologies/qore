@@ -5747,6 +5747,65 @@ private:
     int64_t stream_id;
 };
 
+//! Ends the connection of a streamed request that a 101 response ended (qore#7487)
+/** The request asked for a protocol upgrade with an \c Upgrade header (a 101 response to any other request fails it,
+    qore#7483), and the client operation ended its response with the 101 header, which has no content: the data that
+    follows on the connection is that of the new protocol.  HTTPClient has no way to give the connection of a streamed
+    request to its caller (a non-streamed WebSocket upgrade, whose socket the client takes over, does not get here), so
+    the connection is closed and evicted from the pool, and the next request takes a new one, as after a 101 response
+    to a request that is not streamed.
+
+    @param mgr the connection manager of the client
+    @param conn the connection of the request
+    @param channel the channel of the response
+    @param channel_kept true if the channel is kept for the reads of the body (sendAndStream()): it is closed first, so
+    that its reader is given the end of the response that the client operation delivered, or that it does not deliver
+    any more, and never the error of the connection closed here
+*/
+static void end_switched_connection(HttpClientConnectionManagerBase& mgr, HttpClientConnectionBase* conn,
+        QoreChannel* channel, bool channel_kept) {
+    assert(conn);
+    if (channel_kept) {
+        channel->close();
+    }
+    ExceptionSink close_xsink;
+    mgr.closeAndEvict(conn, &close_xsink);
+    close_xsink.clear();
+}
+
+//! Ends the connection of a streamed request with end_switched_connection() when it goes out of scope after a 101
+//! response, on every path: also when the request fails after the 101 response, such as in a receive callback
+class SwitchedConnectionGuard {
+public:
+    //! Creates the guard
+    /** @param mgr the connection manager of the client
+        @param conn the connection of the request, referenced by the caller for the lifetime of the guard
+        @param channel the channel of the response, referenced by the caller for the lifetime of the guard
+        @param code the status code of the response, which the request sets when it receives the response header
+        @param channel_kept true if the channel is kept for the reads of the body (sendAndStream())
+    */
+    DLLLOCAL SwitchedConnectionGuard(HttpClientConnectionManagerBase& mgr, HttpClientConnectionBase* conn,
+            QoreChannel* channel, const int& code, const bool& channel_kept) : mgr(mgr), conn(conn),
+            channel(channel), code(code), channel_kept(channel_kept) {
+    }
+
+    DLLLOCAL ~SwitchedConnectionGuard() {
+        if (code == 101) {
+            end_switched_connection(mgr, conn, channel, channel_kept);
+        }
+    }
+
+    DLLLOCAL SwitchedConnectionGuard(const SwitchedConnectionGuard&) = delete;
+    DLLLOCAL SwitchedConnectionGuard& operator=(const SwitchedConnectionGuard&) = delete;
+
+private:
+    HttpClientConnectionManagerBase& mgr;
+    HttpClientConnectionBase* conn;
+    QoreChannel* channel;
+    const int& code;
+    const bool& channel_kept;
+};
+
 QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink, const char* mname,
         const char* meth, const char* mpath, const QoreHashNode* headers, const QoreStringNode* msg_body,
         const void* data, unsigned size, const ResolvedCallReferenceNode* send_callback, bool getbody,
@@ -6146,6 +6205,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 bool channel_done = false;
                 bool got_headers = false;
                 bool keep_channel_open = false;
+                // a 101 response ends the request and HTTP/1.x on the connection (qore#7487)
+                SwitchedConnectionGuard switched_guard(mgr, conn, *channel, code, keep_channel_open);
                 // decodes a body that is delivered as it is received
                 StreamedBodyDecoder body_decoder;
                 // passes a body chunk to the receive callback
@@ -6521,6 +6582,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             // delivery to this thread, but the connection would go on receiving the rest of the response, which
             // has no end for a stream such as a server-sent event stream, with no reader
             StreamAbandonGuard abandon_guard(mgr, *stream_conn, stream_id);
+            // a 101 response ends the request and HTTP/1.x on the connection (qore#7487)
+            const bool channel_kept = false;
+            SwitchedConnectionGuard switched_guard(mgr, *stream_conn, *channel, code, channel_kept);
             bool channel_done = false;
 
             // Channel read loop: process streaming response
@@ -6996,6 +7060,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             // the request is abandoned unless its channel is kept for the reads of the body (see the recv_callback
             // path above)
             StreamAbandonGuard abandon_guard(mgr, *stream_conn, stream_id);
+            // a 101 response ends the request and HTTP/1.x on the connection (qore#7487); the channel is kept for the
+            // reads of the body
+            const bool channel_kept = true;
+            SwitchedConnectionGuard switched_guard(mgr, *stream_conn, *channel, code, channel_kept);
             bool channel_done = false;
 
             // Read only headers from the channel — body stays for later reads

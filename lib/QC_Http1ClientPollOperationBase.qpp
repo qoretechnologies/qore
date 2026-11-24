@@ -457,6 +457,8 @@ void Http1ClientPollOperationPriv::startProxyConnect(ExceptionSink* xsink) {
         connect_req->sprintf("Proxy-Authorization: %s\r\n", proxy_authorization.c_str());
     }
     connect_req->concat("\r\n");
+    // the interim responses of the proxy to CONNECT are counted (see handleProxyConnectRecv())
+    interim_response_count = 0;
 
     releaseCurrentOp(xsink);
     sock_obj->ref();
@@ -539,28 +541,86 @@ QoreHashNode* Http1ClientPollOperationPriv::handleProxyConnectRecv(ExceptionSink
 
     if (current_op->goalReached()) {
         ValueHolder output_val(current_op->getOutput(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        // the tunnel is made only on a final 2xx response of the proxy: a read without a parsed header is a failure,
+        // never a success
+        QoreHashNode* hdr = nullptr;
         if (output_val->getType() == NT_HASH) {
-            QoreHashNode* output = output_val->get<QoreHashNode>();
-            QoreValue hdr_val = output->getKeyValue("hdr");
+            QoreValue hdr_val = output_val->get<QoreHashNode>()->getKeyValue("hdr");
             if (hdr_val.getType() == NT_HASH) {
-                QoreHashNode* hdr = hdr_val.get<QoreHashNode>();
-                int status = (int)hdr->getKeyValue("status_code").getAsBigInt();
-                if (status < 200 || status >= 300) {
-                    SimpleRefHolder<QoreStringNode> desc(new QoreStringNode());
-                    QoreValue msg_val = hdr->getKeyValue("status_message");
-                    QoreStringValueHelper msg_str(msg_val);
-                    const char* msg = msg_val.getType() == NT_STRING
-                        ? msg_str->c_str() : "unknown";
-                    desc->sprintf("proxy CONNECT failed with HTTP %d: %s", status, msg);
-                    // the status code and headers of the response let the client answer a proxy authentication
-                    // challenge (407) and connect again
-                    ReferenceHolder<QoreHashNode> extra(new QoreHashNode(autoTypeInfo), xsink);
-                    extra->setKeyValue("status_code", status, xsink);
-                    extra->setKeyValue("headers", hdr->refSelf(), xsink);
-                    setError("HTTP1-CONNECT-ERROR", desc->c_str(), *extra, xsink);
-                    return nullptr;
-                }
+                hdr = hdr_val.get<QoreHashNode>();
             }
+        }
+        if (!hdr) {
+            setError("HTTP1-CONNECT-ERROR", "proxy CONNECT response read returned no header", xsink);
+            return nullptr;
+        }
+        int status = (int)hdr->getKeyValue("status_code").getAsBigInt();
+        // an interim response (1xx other than 101; RFC 9110 section 15.2) of the proxy is skipped as for any other
+        // request (qore#7483), and the final response that follows it decides whether the tunnel is made
+        // (qore#7486); their number is bounded, and each one is read with the size limit of a response header and
+        // has its status line checked, so a proxy that never sends a final response cannot make the client read
+        // without end
+        if (isInterimStatus(status)) {
+            if (++interim_response_count > MAX_INTERIM_RESPONSES) {
+                // setError() takes a literal description, not a format string
+                QoreString desc;
+                desc.sprintf("the proxy sent more than the maximum of %d interim (1xx) responses to CONNECT without "
+                    "sending a final response", MAX_INTERIM_RESPONSES);
+                setError("HTTP1-CONNECT-ERROR", desc.c_str(), xsink);
+                return nullptr;
+            }
+            ASYNC_IO_TRACE("H1 handleProxyConnectRecv: interim response %d (%d of max %d), reading the next header "
+                "fd=%d\n", status, interim_response_count, MAX_INTERIM_RESPONSES,
+                sock_obj ? sock_obj->getPollableDescriptor() : -1);
+            releaseCurrentOp(xsink);
+            sock_obj->ref();
+            // a read that cannot be started (the socket was closed) is reported with setError(), which notifies the
+            // pending stream and marks the connection closed
+            setCurrentOp(newHeaderReadOp(xsink, "proxy-connect-interim"));
+            if (!current_op) {
+                return nullptr;
+            }
+            current_op->setSelf(*self);
+            // an operation aborted meanwhile does no more I/O
+            if (isClosed()) {
+                return nullptr;
+            }
+            return handleProxyConnectRecv(xsink);
+        }
+        // any response other than 2xx fails the connection, including a 101, which a proxy cannot send to CONNECT
+        // (RFC 9110 sections 9.3.6 and 15.2.2: the request asks for no protocol upgrade)
+        if (status < 200 || status >= 300) {
+            SimpleRefHolder<QoreStringNode> desc(new QoreStringNode());
+            QoreValue msg_val = hdr->getKeyValue("status_message");
+            QoreStringValueHelper msg_str(msg_val);
+            const char* msg = msg_val.getType() == NT_STRING
+                ? msg_str->c_str() : "unknown";
+            desc->sprintf("proxy CONNECT failed with HTTP %d: %s", status, msg);
+            // the status code and headers of the response let the client answer a proxy authentication
+            // challenge (407) and connect again
+            ReferenceHolder<QoreHashNode> extra(new QoreHashNode(autoTypeInfo), xsink);
+            extra->setKeyValue("status_code", status, xsink);
+            extra->setKeyValue("headers", hdr->refSelf(), xsink);
+            setError("HTTP1-CONNECT-ERROR", desc->c_str(), *extra, xsink);
+            return nullptr;
+        }
+        // the tunnel starts right after the proxy's 2xx response, and the client speaks first in it (the TLS
+        // ClientHello): bytes that the proxy sent after its response and that the socket has already read are not
+        // data that ends the connection after a response (qore#7471), and they are not data of the target server
+        // either: the TLS connection to the target server never reads them, so they would be returned as the first
+        // bytes received through it, as if the target server had sent them, and data injected by the proxy, or by
+        // anyone on the path to a plain HTTP proxy, would be taken for a response of the target server.  The
+        // connection fails instead (qore#7486)
+        if (size_t buffered = qore_socket_object_private(sock_obj).getBufferedReadBytes()) {
+            QoreString desc;
+            desc.sprintf("the proxy sent %zu byte%s after its %d response to CONNECT, before the client started the "
+                "TLS connection to the target server through the tunnel", buffered, buffered == 1 ? "" : "s",
+                status);
+            setError("HTTP1-CONNECT-ERROR", desc.c_str(), xsink);
+            return nullptr;
         }
         printd(5, "Http1ClientPollOperationPriv::handleProxyConnectRecv() tunnel established\n");
         startSslUpgrade(xsink);
@@ -2037,22 +2097,26 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
                 if (delivered) {
                     switched_protocol.store(true, std::memory_order_release);
                 }
-            } else {
-                // Non-streaming: dispatch as a normal response with no body
-                return dispatchResponse(xsink);
-            }
-            // Enter PROTOCOL_SWITCHED state - continuePoll() will now
-            // use separate send/recv ops for full-duplex raw I/O.
-            protocol_switched = true;
-            req_state = ReqState::PROTOCOL_SWITCHED;
-            // an operation aborted meanwhile does no more I/O
-            if (!setStateUnlessClosed(H1State::PROTOCOL_SWITCHED, "protocol-switched")) {
+                // Enter PROTOCOL_SWITCHED state - continuePoll() will now
+                // use separate send/recv ops for full-duplex raw I/O.
+                protocol_switched = true;
+                req_state = ReqState::PROTOCOL_SWITCHED;
+                // an operation aborted meanwhile does no more I/O
+                if (!setStateUnlessClosed(H1State::PROTOCOL_SWITCHED, "protocol-switched")) {
+                    releaseCurrentOp(xsink);
+                    return nullptr;
+                }
+                ASYNC_IO_TRACE("H1 handleRecvHeader: 101 -> PROTOCOL_SWITCHED\n");
                 releaseCurrentOp(xsink);
-                return nullptr;
+                // the response ends with its 101 header: the reader of the stream is given the end of the stream
+                // at once instead of waiting for a body that never comes (qore#7487)
+                if (delivered) {
+                    dispatchStreamingSwitchEnd(xsink);
+                }
+                return handleProtocolSwitched(xsink);
             }
-            ASYNC_IO_TRACE("H1 handleRecvHeader: 101 -> PROTOCOL_SWITCHED\n");
-            releaseCurrentOp(xsink);
-            return handleProtocolSwitched(xsink);
+            // Non-streaming: dispatch as a normal response with no body
+            return dispatchResponse(xsink);
         }
 
         // Interim responses: RFC 9110 section 15.2 defines every 1xx response other than 101 (handled above) as
@@ -3013,6 +3077,30 @@ void Http1ClientPollOperationPriv::dispatchStreamingData(const BinaryNode* data,
         action->execute(data_resp.release(), xsink);
         action->deref(xsink);
     }
+}
+
+void Http1ClientPollOperationPriv::dispatchStreamingSwitchEnd(ExceptionSink* xsink) {
+    AbstractAsyncAction* action = nullptr;
+    int stream_id;
+    {
+        AutoLocker al(stream_lock);
+        stream_id = active_sid;
+        action = stream_action;
+        if (action) {
+            action->ref();
+        }
+    }
+    if (!action) {
+        return;
+    }
+    ReferenceHolder<QoreHashNode> end_resp(new QoreHashNode(autoTypeInfo), xsink);
+    end_resp->setKeyValue("end_stream", true, xsink);
+    end_resp->setKeyValue("stream_id", (int64_t)stream_id, xsink);
+    action->execute(end_resp.release(), xsink);
+    // no more is delivered on the stream: an error of the connection that follows, such as when the caller closes
+    // it, is not reported to the reader of the response, which has ended
+    action->complete(xsink);
+    action->deref(xsink);
 }
 
 QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* xsink) {
