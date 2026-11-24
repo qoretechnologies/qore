@@ -109,6 +109,11 @@
   Memcached or MongoDB test random key prefixes or a database of its own.  A test that takes more than about two minutes
   is split into parts: its class adds each case with `addPartCase(<part>, ...)` and each `<name>-<part>.qtest` runs one
   part (ex: `ir/CMakeBuildHelpers.qc`); `examples/test/runner/test_split_tests.py` checks the parts.
+- A test connects its clients to the address that its servers listen on: a server on `127.0.0.1` is reached at
+  `127.0.0.1`, not at `localhost`, which resolves to `::1` first, where a test running beside it can listen at the
+  same port number.  A test that needs the name `localhost` (a TLS host name check, an origin that must differ from
+  `127.0.0.1`, a fallback from `::1`) listens on both loopback addresses, or holds the port on `::1`, and declares
+  `# test-loopback: localhost - <why>`; `examples/test/runner/test_loopback_hosts.py` enforces it (#7469).
 - The shards of a CI job are balanced by `examples/test/docker_test/test-durations.tsv`; refresh it from a green
   pipeline with `examples/test/docker_test/update-test-durations.py <pipeline ID>` after adding long tests or shards.
 - The Linux CI build and test jobs run on the qore-test-base digests that `resolve-qore-test-base-images` resolves the

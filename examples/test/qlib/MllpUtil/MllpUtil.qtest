@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-loopback: localhost - listeners are bound to the host name "localhost" to test binding by name, which listens on its first address and holds the port on the other loopback address, and its clients connect to that name; "http://localhost:2575" is a URL that is rejected without connecting; the 127.0.0.1 listeners have 127.0.0.1 clients
 
 /*  MllpUtil.qtest Copyright 2026 Qore Technologies, s.r.o.
 

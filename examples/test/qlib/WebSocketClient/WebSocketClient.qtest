@@ -231,7 +231,7 @@ class WebSocketClientTest inherits QUnit::Test {
         mServer.setHandler("ws-handler", "", NOTHING, wsHandler);
         mServer.setHandler("health-handler", "/health", "text/plain", new HealthHandler());
         mServer.setDefaultHandler("ws-handler", wsHandler);
-        linfo = mServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
+        linfo = mServer.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
 
         # Try to add HTTPS/HTTP/2 listener.
         #
@@ -247,7 +247,7 @@ class WebSocketClientTest inherits QUnit::Test {
             SSLCertificate cert(CertPem);
             SSLPrivateKey key(KeyPem);
             h2info = mServer.addListener(<HttpListenerOptionInfo>{
-                "node": "localhost",
+                "node": "127.0.0.1",
                 "service": 0,
                 "cert": cert,
                 "key": key,
@@ -291,11 +291,11 @@ class WebSocketClientTest inherits QUnit::Test {
         HttpServer server(<HttpServerOptionInfo>{"logger": logger, "debug": True});
         MyWsHandler h();
         server.setDefaultHandler("ws-handler", h);
-        hash<auto> tl = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
+        hash<auto> tl = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
 
         # the 101 is sent before the pre-start delay, so connect() returns while the
         # server is parked in the window
-        WebSocketClient wsc(sub (*data msg) {}, {"url": "ws://localhost:" + tl.port, "logger": logger});
+        WebSocketClient wsc(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + tl.port, "logger": logger});
         wsc.connect();
         on_exit {
             try { wsc.disconnect(); } catch () {}
@@ -518,7 +518,7 @@ class WebSocketClientTest inherits QUnit::Test {
         # default http_version is "auto": the client negotiates H2, the extended
         # CONNECT handshake fails, and it must fall back to HTTP/1.1
         hash<auto> opts = {
-            "url": "wss://localhost:" + fb_info.port,
+            "url": "wss://127.0.0.1:" + fb_info.port,
             "logger": logger,
             "ssl_verify_cert": False,
         };
@@ -539,7 +539,7 @@ class WebSocketClientTest inherits QUnit::Test {
     reconnectTest() {
         MyObserver observer();
         WebSocketClientDelayedDataProvider prov({
-            "url": "ws://localhost:" + linfo.port,
+            "url": "ws://127.0.0.1:" + linfo.port,
             "data": "none",
             "logger": logger,
             "reconnect": True,
@@ -586,7 +586,7 @@ class WebSocketClientTest inherits QUnit::Test {
         observer.clear();
 
         # restart listener on the same port
-        linfo = mServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": linfo.port});
+        linfo = mServer.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": linfo.port});
 
         # wait for reconnect
         observer.wait(EVENT_WS_CONNECTED);
@@ -654,7 +654,7 @@ class WebSocketClientTest inherits QUnit::Test {
         {
             MyObserver observer();
             WedgedTestWebSocketClient c({
-                "url": "ws://localhost:" + linfo.port,
+                "url": "ws://127.0.0.1:" + linfo.port,
                 "logger": logger,
                 "reconnect": True,
             });
@@ -680,7 +680,7 @@ class WebSocketClientTest inherits QUnit::Test {
         {
             MyObserver observer();
             WedgedTestWebSocketClient c({
-                "url": "ws://localhost:" + linfo.port,
+                "url": "ws://127.0.0.1:" + linfo.port,
                 "logger": logger,
                 "reconnect": True,
             });
@@ -715,7 +715,7 @@ class WebSocketClientTest inherits QUnit::Test {
             assertGe(1, c.start_reconnect_calls, "startReconnect was at least attempted once");
 
             # Restart the listener on the same port so the recovery has somewhere to go
-            linfo = mServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": saved_port});
+            linfo = mServer.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": saved_port});
 
             # The fix in reconnect() must observe tid==0 and kick off a fresh
             # doReconnect rather than returning False
@@ -731,7 +731,7 @@ class WebSocketClientTest inherits QUnit::Test {
     dataProviderTest() {
         MyObserver observer();
         WebSocketClientDelayedDataProvider prov({
-            "url": "ws://localhost:" + linfo.port,
+            "url": "ws://127.0.0.1:" + linfo.port,
             "data": "none",
             "logger": logger,
         });
@@ -758,7 +758,7 @@ class WebSocketClientTest inherits QUnit::Test {
     connectionDataProviderIsDelayedTest() {
         WebSocketConnectionObject conn({
             "name": "delayed-data-provider-test",
-            "url": "ws://localhost:" + linfo.port,
+            "url": "ws://127.0.0.1:" + linfo.port,
             "opts": {
                 "headers": {
                     "test-header": "delayed-provider",
@@ -798,7 +798,7 @@ class WebSocketClientTest inherits QUnit::Test {
         };
         responseSize = Data.size();
         hash<auto> opts = {
-            "url": "ws://localhost:" + linfo.port,
+            "url": "ws://127.0.0.1:" + linfo.port,
             "logger": logger,
         };
         WebSocketClient wsc(cb, opts);
@@ -837,7 +837,7 @@ class WebSocketClientTest inherits QUnit::Test {
             };
             responseSize = 1;
             hash<auto> opts = {
-                "url": "ws://localhost:" + linfo.port,
+                "url": "ws://127.0.0.1:" + linfo.port,
                 "logger": logger,
                 "http_version": "1.1",
             };
@@ -858,7 +858,7 @@ class WebSocketClientTest inherits QUnit::Test {
                     msgs.push(msg);
                 }
             }, {
-                "url": "ws://localhost:" + linfo.port,
+                "url": "ws://127.0.0.1:" + linfo.port,
                 "logger": logger,
                 "http_version": "1.1",
             });
@@ -871,7 +871,7 @@ class WebSocketClientTest inherits QUnit::Test {
     }
 
     connectionTests() {
-        string url = "ws://localhost:8099";
+        string url = "ws://127.0.0.1:8099";
         WebSocketConnectionObject conn("test", "test", url);
         WebSocketClient client = conn.get(False);
         assertEq(url, client.getUrl());
@@ -891,7 +891,7 @@ class WebSocketClientTest inherits QUnit::Test {
 
         # Test polling API support
         {
-            url = "ws://localhost:" + linfo.port;
+            url = "ws://127.0.0.1:" + linfo.port;
             conn = new WebSocketConnectionObject("test", "test", url);
             assertTrue(conn.supportsPollingApi(), "WebSocketConnectionObject should support polling API");
 
@@ -903,7 +903,7 @@ class WebSocketClientTest inherits QUnit::Test {
         }
 
         if (h2info) {
-            url = "wss://localhost:" + h2info.port;
+            url = "wss://127.0.0.1:" + h2info.port;
             conn = new WebSocketConnectionObject("test", "test", url, {"monitor": False}, {
                 "http_version": "auto",
                 "ssl_verify_cert": False,
@@ -952,7 +952,7 @@ class WebSocketClientTest inherits QUnit::Test {
                 }
             };
             hash<auto> opts = {
-                "url": "wss://localhost:" + h2info.port,
+                "url": "wss://127.0.0.1:" + h2info.port,
                 "logger": logger,
                 "http_version": "auto",
                 "ssl_verify_cert": False,
@@ -992,7 +992,7 @@ class WebSocketClientTest inherits QUnit::Test {
             };
             responseSize = Data.size();
             hash<auto> opts = {
-                "url": "wss://localhost:" + h2info.port,
+                "url": "wss://127.0.0.1:" + h2info.port,
                 "logger": logger,
                 "http_version": "2.0",  # Force HTTP/2 negotiation
                 "ssl_verify_cert": False,  # Accept self-signed certificate
@@ -1016,7 +1016,7 @@ class WebSocketClientTest inherits QUnit::Test {
         {
             Queue msgs();
             hash<auto> opts = {
-                "url": "wss://localhost:" + h2info.port,
+                "url": "wss://127.0.0.1:" + h2info.port,
                 "logger": logger,
                 "http_version": "2.0",
                 "ssl_verify_cert": False,
@@ -1055,7 +1055,7 @@ class WebSocketClientTest inherits QUnit::Test {
                 got_pong = True;
             };
             hash<auto> opts = {
-                "url": "wss://localhost:" + h2info.port,
+                "url": "wss://127.0.0.1:" + h2info.port,
                 "logger": logger,
                 "http_version": "2.0",
                 "pong_callback": pong_cb,
@@ -1098,7 +1098,7 @@ class WebSocketClientTest inherits QUnit::Test {
                 }
             };
             hash<auto> opts = {
-                "url": "wss://localhost:" + h2info.port,
+                "url": "wss://127.0.0.1:" + h2info.port,
                 "logger": logger,
                 "http_version": "2.0",
                 "heartbeat": 200ms,
@@ -1133,7 +1133,7 @@ class WebSocketClientTest inherits QUnit::Test {
                 }
             };
             hash<auto> opts = {
-                "url": "wss://localhost:" + h2info.port,
+                "url": "wss://127.0.0.1:" + h2info.port,
                 "logger": logger,
                 "http_version": "2.0",
                 "heartbeat": 0,
@@ -1163,7 +1163,7 @@ class WebSocketClientTest inherits QUnit::Test {
 
             MyObserver observer();
             WebSocketClientWithSerialization wsc({
-                "url": "wss://localhost:" + h2info.port,
+                "url": "wss://127.0.0.1:" + h2info.port,
                 "logger": logger,
                 "http_version": "2.0",
                 "heartbeat": 0,
@@ -1187,7 +1187,7 @@ class WebSocketClientTest inherits QUnit::Test {
         {
             code cb = sub (*data msg) {};
             hash<auto> opts = {
-                "url": "wss://localhost:" + h2info.port,
+                "url": "wss://127.0.0.1:" + h2info.port,
                 "logger": logger,
                 "http_version": "2.0",
                 "ssl_verify_cert": False,  # Accept self-signed certificate
@@ -1217,7 +1217,7 @@ class WebSocketClientTest inherits QUnit::Test {
                 }
             };
             hash<auto> opts = {
-                "url": "wss://localhost:" + h2info.port,
+                "url": "wss://127.0.0.1:" + h2info.port,
                 "logger": logger,
                 "http_version": "2.0",
                 "ssl_verify_cert": False,
@@ -1244,7 +1244,7 @@ class WebSocketClientTest inherits QUnit::Test {
         # Test 5: HTTP/2 CONNECT handshake headers (Sec-WebSocket-Key/Accept)
         {
             hash<auto> http_opts = (
-                "url": "https://localhost:" + h2info.port,
+                "url": "https://127.0.0.1:" + h2info.port,
                 "http_version": "2.0",
                 "ssl_verify_cert": False,
                 "timeout": 5s,
@@ -1305,7 +1305,7 @@ class WebSocketClientTest inherits QUnit::Test {
                 }
             };
             hash<auto> opts = {
-                "url": "wss://localhost:" + h2info.port,
+                "url": "wss://127.0.0.1:" + h2info.port,
                 "logger": logger,
                 "http_version": "auto",
                 "ssl_verify_cert": False,
@@ -1339,7 +1339,7 @@ class WebSocketClientTest inherits QUnit::Test {
                 }
             };
             hash<auto> opts = {
-                "url": "wss://localhost:" + h2info.port,
+                "url": "wss://127.0.0.1:" + h2info.port,
                 "logger": logger,
                 "http_version": "auto",
                 "ssl_verify_cert": False,
@@ -1394,7 +1394,7 @@ class WebSocketClientTest inherits QUnit::Test {
                 }
             };
             hash<auto> opts = {
-                "url": "wss://localhost:" + ext_h2info.port,
+                "url": "wss://127.0.0.1:" + ext_h2info.port,
                 "logger": logger,
                 "http_version": "2.0",
                 "ssl_verify_cert": False,
@@ -1443,7 +1443,7 @@ class WebSocketClientTest inherits QUnit::Test {
                 }
             };
             hash<auto> opts = {
-                "url": "wss://localhost:" + ext_h2info.port,
+                "url": "wss://127.0.0.1:" + ext_h2info.port,
                 "logger": logger,
                 "http_version": "2.0",
                 "ssl_verify_cert": False,
@@ -1470,7 +1470,7 @@ class WebSocketClientTest inherits QUnit::Test {
                 }
             };
             hash<auto> opts = {
-                "url": "wss://localhost:" + ext_h2info.port,
+                "url": "wss://127.0.0.1:" + ext_h2info.port,
                 "logger": logger,
                 "http_version": "2.0",
                 "ssl_verify_cert": False,
@@ -1496,7 +1496,7 @@ class WebSocketClientTest inherits QUnit::Test {
                 got_pong = True;
             };
             hash<auto> opts = {
-                "url": "wss://localhost:" + ext_h2info.port,
+                "url": "wss://127.0.0.1:" + ext_h2info.port,
                 "logger": logger,
                 "http_version": "2.0",
                 "ssl_verify_cert": False,
@@ -1520,7 +1520,7 @@ class WebSocketClientTest inherits QUnit::Test {
         # Test 5: HTTP/2 CONNECT handshake headers
         {
             hash<auto> http_opts = (
-                "url": "https://localhost:" + ext_h2info.port,
+                "url": "https://127.0.0.1:" + ext_h2info.port,
                 "http_version": "2.0",
                 "ssl_verify_cert": False,
                 "timeout": 5s,
@@ -1557,7 +1557,7 @@ class WebSocketClientTest inherits QUnit::Test {
     testCookieOption() {
         code cb = sub (*data msg) {};
         hash<auto> opts = {
-            "url": "ws://localhost:" + linfo.port,
+            "url": "ws://127.0.0.1:" + linfo.port,
             "logger": logger,
             "cookie": "session=abc123",
         };
@@ -1578,7 +1578,7 @@ class WebSocketClientTest inherits QUnit::Test {
     testCookieOptionMultiple() {
         code cb = sub (*data msg) {};
         hash<auto> opts = {
-            "url": "ws://localhost:" + linfo.port,
+            "url": "ws://127.0.0.1:" + linfo.port,
             "logger": logger,
             "cookie": "a=1; b=2",
         };
@@ -1598,7 +1598,7 @@ class WebSocketClientTest inherits QUnit::Test {
     testCookieOptionAbsent() {
         code cb = sub (*data msg) {};
         hash<auto> opts = {
-            "url": "ws://localhost:" + linfo.port,
+            "url": "ws://127.0.0.1:" + linfo.port,
             "logger": logger,
         };
         WebSocketClient wsc(cb, opts);
@@ -1615,7 +1615,7 @@ class WebSocketClientTest inherits QUnit::Test {
     # the Accept header is added to the headers of the connection options whatever the type of their hash is
     connectOptionTypesTest() {
         code cb = sub (*data msg) {};
-        WebSocketClient wsc(cb, {"url": "ws://localhost:" + linfo.port, "logger": logger});
+        WebSocketClient wsc(cb, {"url": "ws://127.0.0.1:" + linfo.port, "logger": logger});
         on_exit {
             wsc.disconnect();
             delete wsc;

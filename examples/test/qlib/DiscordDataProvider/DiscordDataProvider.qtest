@@ -200,7 +200,7 @@ public class Main inherits QUnit::Test {
         assertEq(io_rest, prov.getRestClient());
 
         assertThrows("CONSTRUCTOR-ERROR", "must be a DiscordRestClientIo or a DiscordRestClient",
-            sub () { DiscordDataProvider p({"restclient": new RestClient({"url": "http://localhost:1"}, True)}); });
+            sub () { DiscordDataProvider p({"restclient": new RestClient({"url": "http://127.0.0.1:1"}, True)}); });
     }
 
     testActionDataDependentOptions() {

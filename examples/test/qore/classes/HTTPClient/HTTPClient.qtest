@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-platform: macos - HTTP client timeouts, UNIX-socket URLs, chunked disconnects, TLS client certs and HTTP/2
+# test-loopback: localhost - its Host header, proxy and URL tests use the name localhost, and the servers of their clients are bound to the name "localhost", which listens on its first address and holds the port on the other loopback address; its 127.0.0.1 servers have 127.0.0.1 clients
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 

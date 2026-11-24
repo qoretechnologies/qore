@@ -1006,7 +1006,7 @@ public class TableauDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeTableauHandler handler();
         server.setHandler("tableau", "", NOTHING, handler);
         server.setDefaultHandler("tableau", handler);
@@ -1015,7 +1015,7 @@ public class TableauDataProviderTest inherits QUnit::Test {
             "token_name": "pat-name",
             "token_secret": "pat-secret",
             "content_url": "my-site",
-            "url": "http://localhost:" + port + "/api/3.27",
+            "url": "http://127.0.0.1:" + port + "/api/3.27",
         });
         assertNothing(rest.getSiteLuid());
         TableauDataProvider::TableauDataProvider provider({"tableaurestclient": rest});

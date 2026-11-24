@@ -378,7 +378,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         EchoRequestHandler handler();
         server.setHandler("echo", "", NOTHING, handler);
         server.setDefaultHandler("echo", handler);
@@ -386,7 +386,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         SendCloudDataProvider::SendCloudDataProvider dp({
             "restclient_options": {"public_key": "pk-test", "secret_key": "sk-test"},
         });
-        string url = "http://localhost:" + port;
+        string url = "http://127.0.0.1:" + port;
         hash<auto> body = dp.doAbsoluteGet(url + "/api/v2/service-points", {"country": "NL"});
         assertEq("api/v2/service-points?country=NL", body.path);
         assertEq("Basic " + make_base64_string("pk-test:sk-test"), body.authorization);

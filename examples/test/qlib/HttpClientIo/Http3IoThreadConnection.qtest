@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-loopback: localhost - the fallback from ::1 to 127.0.0.1 of the name localhost is tested; the port number of the IPv4-only QUIC listener is held on ::1, where the system refuses the datagrams
 # Copyright 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -127,6 +128,8 @@ public class Http3IoThreadConnectionTest inherits QUnit::Test {
     public {
         #! the client APIs tested
         const Apis = ("REST", "REST async", "HTTP", "HTTP async");
+        #! the number of tries to find a port number that is free on both loopback addresses
+        const MaxBindAttempts = 20;
     }
 
     private {
@@ -134,6 +137,8 @@ public class Http3IoThreadConnectionTest inherits QUnit::Test {
         TestHandler handler();
         #! a QUIC listener on IPv4 only
         int quic_port;
+        #! holds the port number of the QUIC listener on ::1, where the system refuses the datagrams
+        *RefusedUdpPort v6_hold;
         #! TLS listeners that also receive HTTP/3 on their ports
         int port_a;
         int port_b;
@@ -157,11 +162,11 @@ public class Http3IoThreadConnectionTest inherits QUnit::Test {
             LoggerLevel::getLevelInfo())});
         server.setDefaultHandler("test", handler);
         server.waitForAsyncIo();
-        quic_port = server.addQuicListener(<HttpListenerOptionInfo>{
+        quic_port = addIpv4QuicListener(<HttpListenerOptionInfo>{
             "node": "127.0.0.1",
             "cert": new SSLCertificate(TestCertificates::CertPem),
             "key": new SSLPrivateKey(TestCertificates::KeyPem),
-        }).port;
+        });
         foreach string l in (("a", "b")) {
             int port = server.addListener(<HttpListenerOptionInfo>{
                 "node": "127.0.0.1",
@@ -182,6 +187,9 @@ public class Http3IoThreadConnectionTest inherits QUnit::Test {
     globalTearDown() {
         if (server) {
             server.stop();
+        }
+        if (v6_hold) {
+            v6_hold.close();
         }
     }
 
@@ -358,6 +366,34 @@ public class Http3IoThreadConnectionTest inherits QUnit::Test {
         assertEq(requests, handler.requests.getCount(), "the server was never reached");
         # without the sandbox, the request is made
         assertEq("reached", sandbox_h3_request(url, "HTTP async"));
+    }
+
+    #! adds the QUIC listener on 127.0.0.1 at a port number that the test holds on ::1, and returns the port
+    /** "localhost" resolves to ::1 first: the connection in IPv6 fails as at a port where nothing is bound, as the
+        system refuses the datagrams there, and no server of a test running beside this one can be bound to the port
+        number on ::1 while the test holds it (qore#7469)
+    */
+    private int addIpv4QuicListener(hash<HttpListenerOptionInfo> opts) {
+        for (int attempt = 1; ; ++attempt) {
+            RefusedUdpPort hold;
+            try {
+                hold = new RefusedUdpPort("::1", AF_INET6);
+            } catch (hash<ExceptionInfo> ex) {
+                # without IPv6 on the loopback interface, no server can listen on ::1
+                return server.addQuicListener(opts).port;
+            }
+            try {
+                int p = server.addQuicListener(opts, hold.port).port;
+                v6_hold = hold;
+                return p;
+            } catch (hash<ExceptionInfo> ex) {
+                hold.close();
+                # the port number is in use on 127.0.0.1: another one is tried
+                if (ex.desc !~ /in use/i || attempt == MaxBindAttempts) {
+                    rethrow;
+                }
+            }
+        }
     }
 
     #! returns True if "localhost" resolves to an IPv6 address first, which the test needs
