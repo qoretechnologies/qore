@@ -1115,19 +1115,25 @@ string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
     filesystem policy of the code that names the region.  Therefore only a canonical region name is read: one or
     more components separated by single \c "/" characters, each component made of ASCII letters, digits, \c "_",
     \c "+" and \c "-" (ex: \c "Etc/GMT+5", \c "America/Argentina/Buenos_Aires", \c "America/Port-au-Prince"),
-    whose file, with all symbolic links resolved, is a regular file under the zoneinfo directory (also resolved);
-    nothing else is accessed for it.  A region that is not a canonical name (ex: one with a \c "." or \c ".."
-    component, a leading or an empty path component, a backslash or a NUL character), whose file is outside of the
-    zoneinfo directory or that does not exist raises the same \c TZINFO-ERROR <tt>unknown time zone region</tt>,
-    which does not show whether a file exists.  A name that starts with the path of the zoneinfo directory names the
-    region after it.  This applies to @ref Qore::TimeZone::constructor() "TimeZone::constructor()",
+    whose file is a regular file reached from the zoneinfo directory one component at a time without leaving it:
+    symbolic links are followed only inside of the directory; nothing else is accessed for it.  A region that is
+    not a canonical name (ex: one with a \c "." or \c ".." component, an empty path component, a backslash or a
+    NUL character), whose file is outside of the zoneinfo directory or that does not exist raises the same
+    \c TZINFO-ERROR <tt>unknown time zone region</tt>, which does not show whether a file exists.  Only a region
+    loaded this way is cached under its region name.  This applies to
+    @ref Qore::TimeZone::constructor() "TimeZone::constructor()",
     @ref Qore::TimeZone::setRegion() "TimeZone::setRegion()",
     @ref Qore::Program::setTimeZoneRegion() "Program::setTimeZoneRegion()", the
     @ref set-time-zone "%set-time-zone" parse directive and to deserialized dates.
 
-    A zoneinfo file given as an absolute path or a path starting with \c "." is a path: it is subject
-    to @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM", which refuses it without opening the file, and
-    to the filesystem policy.
+    @note The zoneinfo directory and its subdirectories must not be writable by code that is not trusted: a file or
+    a hard link put there would be read as a region.
+
+    A zoneinfo file given as an absolute path or a path starting with \c "." is a path, also when it is given to
+    one of the region APIs above: a relative path is a path in the current directory; the path is subject to
+    @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM", which refuses it without opening the file, and to the
+    filesystem policy, also when the time zone of the path was loaded already; the file is opened at exactly this
+    path, and its time zone never changes the time zone of a region name.
 
     @since %Qore 3.0
 

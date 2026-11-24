@@ -11,20 +11,30 @@ immutable after construction; lookups need no lock.
 The whole file is read, up to `QoreZoneInfo::MaxFileSize` (1 MiB; real zoneinfo files are less than 8 KiB), and
 parsed from memory (`QoreZoneInfo::init()`):
 
-- A path (`findLoadRegionFromPath()`, the local zone at startup) is read with `QoreFile::open2()` and
-  `QoreFile::readBinary()`, subject to the file-system policy of the calling code.
+- A path (`findLoadRegionFromPath()`, also a name starting with `/` or `.` given to `findLoadRegion()`) is made
+  absolute with the current directory once, checked against `PO_NO_FILESYSTEM` and the file-system policy of the
+  calling code (`qore_qf_private::checkOpenAccess()`) before the cache is looked at, and read with
+  `QoreFile::open2()` and `QoreFile::readBinary()` at exactly that path; it is cached by the absolute path. The name
+  of the zone drops the directory of the local time file if a canonical region name follows (#3736); the name is
+  for display and serialization only and never finds a file.
+- The local zone at startup: a relative `TZ` value or an absolute path in the zoneinfo directory followed by a
+  canonical region name is loaded as a region; any other absolute path is read at exactly that path. Nothing is read
+  relative to the current directory.
 - A region (`QoreTimeZoneManager::findLoadRegion()`, also `find_create_timezone()`) is the runtime's own read of its
   time zone database, not subject to the file-system policy of the code that names it, so that sandboxed code can
-  deserialize a date in a region that is not cached yet (qore#7442). A cached zone is returned by its exact name
-  without file access (the local zone is cached by the path of its file, a region by its name). Otherwise, in this
-  order: `isRegionName()` accepts only a canonical name (components of `[A-Za-z0-9_+-]` separated by single `/`), the
-  zoneinfo directory and the region's file are resolved with `realpath()` and the file must be under the directory,
-  and `read_region_file()` opens the resolved path with `O_NOFOLLOW | O_NONBLOCK`, requires a regular file and reads
-  it with `read()`; nothing else is accessed. Every failure up to there raises the same `TZINFO-ERROR`
-  `unknown time zone region "<name>"` (`raiseUnknownRegion()`), so the error does not show whether a path exists;
-  errors in the data name the region, not the resolved path. `checkRegion()` gives the same error for a region
-  string with a NUL character, a `..` or empty component or a backslash.
-
+  deserialize a date in a region that is not cached yet (qore#7442). The name of the local zone returns it. A
+  canonical name (`isRegionName()`: components of `[A-Za-z0-9_+-]` separated by single `/`) is looked up in the
+  cache, where only the region loader stores zones under region names, and otherwise loaded by
+  `loadRegionIntern()`: `open_region_file()` opens the `realpath()` of the zoneinfo directory with `O_DIRECTORY` and
+  walks the region's components with `openat()` and `O_NOFOLLOW` (`O_DIRECTORY` for directories, `O_NONBLOCK` for
+  the file), so a component replaced during the walk cannot lead outside; a component that is a symbolic link is
+  read with `readlinkat()` and followed only inside of the directory (`..` cannot go above it, an absolute target
+  must be in it, at most 40 links); then `fstat()` must show a regular file, which is read with `read()`. Every
+  failure up to there raises the same `TZINFO-ERROR` `unknown time zone region "<name>"` (`raiseUnknownRegion()`),
+  so the error does not show whether a path exists; errors in the data name the region. Any other name raises that
+  error too. `checkRegion()` gives it for a region string with a NUL character, a `..` or empty component or a
+  backslash. The zoneinfo directory must not be writable by untrusted code (hard links and files put there cannot
+  be told apart).
 - `parse()` checks the version 1 header, computes the size of each data block from the header counts in 64-bit
   arithmetic and checks it against the file size before anything in the block is read. A version 1 file is read
   from its 32-bit block. In a version 2+ file the version 1 header and block are only skipped; the 64-bit block

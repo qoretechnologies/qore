@@ -76,9 +76,12 @@ class FindCreateTimeZoneTest inherits QUnit::Test {
             assertThrows("PARSE-SET-TIME-ZONE-ERROR", \cpp_api_find_create_timezone(), name, name);
         }
         # not an offset: the name is looked up as a zoneinfo region and not found, or it is not a region name
-        foreach string name in ("+1", "+x1", "-", "No/Such_Region", "../../etc/passwd", "/etc/passwd", "a.b") {
+        foreach string name in ("+1", "+x1", "-", "No/Such_Region", "Europe/../UTC", "a.b") {
             assertThrows("TZINFO-ERROR", sprintf("^unknown time zone region \"%s\"$", regex_escape(name)),
                 \cpp_api_find_create_timezone(), name, name);
         }
+        # a path is loaded as a path
+        string path = "/no/such/zoneinfo/" + get_random_string();
+        assertThrows("FILE-OPEN2-ERROR", path, \cpp_api_find_create_timezone(), path, path);
     }
 }

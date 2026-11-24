@@ -359,6 +359,8 @@ TimeZone::setRegion(region: "Europe/Prague");
     @throw TZINFO-ERROR <tt>unknown time zone region</tt>: the region is not a canonical region name, its file is
     outside of the zoneinfo directory or it does not exist; see @ref sandbox_fs_tz_regions
     @throw TZINFO-ERROR the zoneinfo file of the region is not a valid TZif file; see @ref zoneinfo_files
+    @throw ILLEGAL-FILESYSTEM-ACCESS the region is a path (absolute or starting with \c ".") and the
+    @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" sandboxing restriction is set
  */
 static nothing TimeZone::setRegion(string region) [dom=LOCALE_CONTROL;flags=NAMED_ARGS] {
     if (QoreTimeZoneManager::checkRegion(*region, false, xsink)) {

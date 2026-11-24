@@ -1,16 +1,21 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-platform: macos - zoneinfo region reads outside the sandbox file-system policy, realpath containment in the zoneinfo directory
+# test-platform: macos - zoneinfo region reads outside the sandbox file-system policy, openat walks in the zoneinfo directory, zoneinfo paths and the current directory
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 # A time zone region (a name in the zoneinfo database) is loaded by the runtime itself, not subject to the file-system
 # policy of the code that names it, so that sandboxed code can deserialize a date in a region that was not loaded yet
-# (qore#7442); only a canonical region name whose file resolves under the zoneinfo directory is read, and every
-# refused or missing region raises the same error.  A zoneinfo file given as a path stays subject to the policy.
+# (qore#7442); only a canonical region name whose file is reached inside of the zoneinfo directory is read, and every
+# refused or missing region raises the same error.  A zoneinfo file given as a path stays subject to the policy, also
+# when it is cached already, it is opened at exactly the given path (a relative path in the current directory), and it
+# never changes the zone of a region name, also not the local zone at startup.
 #
-# The symlink escape case needs a zoneinfo directory that the test can write to: configure a build with
-# -DZONEINFO_LOCATION=<dir>, fill <dir> with a copy of the system zoneinfo directory and run the test with
-# QORE_TEST_ZONEINFO_ROOT=<dir>; otherwise the case is skipped.
+# The cases with files in the zoneinfo directory (symbolic links, FIFOs, large and unreadable files) need a zoneinfo
+# directory that the test can write to: configure a build with -DZONEINFO_LOCATION=<dir>, fill <dir> with a copy of
+# the system zoneinfo directory and run the test with QORE_TEST_ZONEINFO_ROOT=<dir>; otherwise they are skipped.
+# Manual check of a component replaced while a region is opened: in such a directory, exchange a directory and a
+# symbolic link to a directory outside of it in a loop (renameat2(RENAME_EXCHANGE)) while sandboxed code loads a
+# region through that component; every load must fail with "unknown time zone region" or load the file inside.
 
 %modern
 %no-child-restrictions
@@ -25,13 +30,14 @@
 
 class TimeZoneRegionSandboxTest inherits QUnit::Test {
     public {
-        #! zoneinfo files to look for
-        const ZoneinfoFiles = ("/usr/share/zoneinfo/UTC", "/usr/lib/zoneinfo/UTC", "/usr/share/lib/zoneinfo/UTC");
+        #! zoneinfo directories to look for
+        const ZoneinfoDirs = ("/usr/share/zoneinfo", "/usr/lib/zoneinfo", "/usr/share/lib/zoneinfo");
 
         #! the code of the sandboxed Programs
         const TenantCode = "
 auto sub des(binary b) { return Serializable::deserialize(b); }
 string sub tz(string r) { return (new TimeZone(r)).region(); }
+int sub offset(string r) { return (new TimeZone(r)).UTCOffset(); }
 string sub set_region(string r) { TimeZone::setRegion(r); return TimeZone::get().region(); }
 code sub closure(string r) { return string sub () { return (new TimeZone(r)).region(); }; }
 ";
@@ -40,8 +46,14 @@ code sub closure(string r) { return string sub () { return (new TimeZone(r)).reg
     private {
         #! the test directory (canonical)
         string dir;
-        #! a zoneinfo file to copy, if any
+        #! the zoneinfo directory of the build, if known
+        *string zroot;
+        #! a zoneinfo file to copy (UTC), if any
         *string zoneinfo;
+        #! a zoneinfo file of a zone 14 hours east of UTC to copy, if any
+        *string gmt14;
+        #! the qore binary for child processes
+        string qore_bin;
     }
 
     constructor() : QUnit::Test("time zone regions in sandboxed code", "1.0", \ARGV) {
@@ -51,8 +63,12 @@ code sub closure(string r) { return string sub () { return (new TimeZone(r)).reg
         addTestCase("sandboxed region loads by name", \testRegionByName());
         addTestCase("a closure created by sandboxed code loads a region", \testProvenance());
         addTestCase("invalid, escaping and missing regions raise the same error", \testInvalidRegions());
-        addTestCase("a symlink leaving the zoneinfo directory is refused", \testSymlinkEscape());
+        addTestCase("files in the zoneinfo directory: symbolic links, FIFOs, large and unreadable files",
+            \testZoneinfoFiles());
         addTestCase("zoneinfo paths stay subject to the policy", \testPathsChecked());
+        addTestCase("a cached zoneinfo path stays subject to the policy", \testCachedPath());
+        addTestCase("a path load does not change a region", \testPathDoesNotChangeRegion());
+        addTestCase("the local zone at startup is not read from the current directory", \testStartupLocalZone());
         set_return_value(main());
     }
 
@@ -60,12 +76,34 @@ code sub closure(string r) { return string sub () { return (new TimeZone(r)).reg
         string tmp = tmp_location() + DirSep + "qore-tz-region-" + get_random_string(8);
         mkdir_ex(tmp);
         dir = realpath(tmp);
-        foreach string zf in (ZoneinfoFiles) {
-            if (is_file(zf)) {
-                zoneinfo = zf;
-                break;
+        zroot = ENV.QORE_TEST_ZONEINFO_ROOT;
+        if (!zroot) {
+            foreach string zd in (ZoneinfoDirs) {
+                if (is_dir(zd)) {
+                    zroot = zd;
+                    break;
+                }
             }
         }
+        if (zroot) {
+            if (is_file(zroot + "/UTC")) {
+                zoneinfo = zroot + "/UTC";
+            }
+            if (is_file(zroot + "/Etc/GMT-14")) {
+                gmt14 = zroot + "/Etc/GMT-14";
+            }
+        }
+        # the qore binary as an absolute path, as children run in other directories
+        string bin = QORE_ARGV[0];
+        qore_bin = (bin =~ /\// && !absolute_path(bin)) ? getcwd() + "/" + bin : bin;
+    }
+
+    #! copies a file
+    static copyFile(string from, string to) {
+        File f();
+        f.open2(to, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+        f.write(ReadOnlyFile::readBinaryFile(from));
+        f.close();
     }
 
     globalTearDown() {
@@ -82,6 +120,17 @@ code sub closure(string r) { return string sub () { return (new TimeZone(r)).reg
         Program p(PO_NEW_STYLE | opts);
         p.setSandboxManager(new SandboxManager());
         p.parse(TenantCode, "tenant");
+        return p;
+    }
+
+    #! returns a Program with a SandboxManager that allows reading the given directory only
+    static Program tenantAllow(string allowed) {
+        Program p(PO_NEW_STYLE);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        sm.addFilesystemAllowedPath(allowed, QSEC_READ);
+        p.setSandboxManager(sm);
+        p.parse(TenantCode, "tenant-allow");
         return p;
     }
 
@@ -177,8 +226,8 @@ code sub closure(string r) { return string sub () { return (new TimeZone(r)).reg
             "No/Such_Region",
             "Europe",
         );
-        # region names starting with '/' or '.' (TimeZone() takes them as paths)
-        list<string> region_only = (
+        # names starting with '/' or '.' are paths for the region APIs too: subject to the restrictions of the caller
+        list<string> path_names = (
             "../../etc/passwd",
             "/etc/passwd",
             "/Europe/Prague",
@@ -190,11 +239,18 @@ code sub closure(string r) { return string sub () { return (new TimeZone(r)).reg
             assertUnknownRegion(sub () { p.callFunction("tz", r); }, r, "sandboxed TimeZone(" + r + ")");
             assertUnknownRegion(sub () { TimeZone t(r); }, r, "TimeZone(" + r + ")");
         }
-        foreach string r in (names + region_only) {
+        foreach string r in (names) {
             assertUnknownRegion(sub () { p.callFunction("set_region", r); }, r, "sandboxed TimeZone::setRegion(" + r
                 + ")");
             assertUnknownRegion(sub () { TimeZone::setRegion(r); }, r, "TimeZone::setRegion(" + r + ")");
             assertUnknownRegion(sub () { p.setTimeZoneRegion(r); }, r, "Program::setTimeZoneRegion(" + r + ")");
+        }
+        Program p_sm = tenant(0);
+        foreach string r in (path_names) {
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \p.callFunction(), ("set_region", r),
+                "TimeZone::setRegion(" + r + ") under PO_NO_FILESYSTEM");
+            assertThrows("FILESYSTEM-ACCESS-DENIED", \p_sm.callFunction(), ("set_region", r),
+                "TimeZone::setRegion(" + r + ") under a SandboxManager");
         }
 
         # deserialized dates: regions of the same length as the serialized region
@@ -208,7 +264,15 @@ code sub closure(string r) { return string sub () { return (new TimeZone(r)).reg
         }
     }
 
-    testSymlinkEscape() {
+    #! creates a file of the given size
+    static makeSized(string path, int size) {
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+        f.write(binary(strmul("x", size)));
+        f.close();
+    }
+
+    testZoneinfoFiles() {
         *string root = ENV.QORE_TEST_ZONEINFO_ROOT;
         if (!root) {
             testSkip("QORE_TEST_ZONEINFO_ROOT is not set to the writable zoneinfo directory of a build configured "
@@ -217,75 +281,184 @@ code sub closure(string r) { return string sub () { return (new TimeZone(r)).reg
         if (!zoneinfo) {
             testSkip("no zoneinfo file to copy");
         }
-        # a valid TZif file outside of the zoneinfo directory
+        # a valid TZif file and a directory with one outside of the zoneinfo directory
         string outside = dir + "/outside-UTC";
-        File f();
-        f.open2(outside, O_CREAT | O_TRUNC | O_WRONLY, 0644);
-        f.write(ReadOnlyFile::readBinaryFile(zoneinfo));
-        f.close();
+        copyFile(zoneinfo, outside);
+        string outside_dir = dir + "/outside-dir";
+        mkdir(outside_dir);
+        copyFile(zoneinfo, outside_dir + "/Z");
 
         string subname = "Qore" + get_random_string(10, 1);
         string subdir = root + "/" + subname;
         mkdir(subdir);
         on_exit {
             try {
+                chmod(subdir + "/NoRead", 0644);
                 remove_tree(subdir);
             } catch (hash<ExceptionInfo> ex) {
             }
         }
-        # a symlink to the file outside, and one inside that points outside through ".."
+        # files and directories inside
+        copyFile(zoneinfo, subdir + "/Real");
+        mkdir(subdir + "/RealDir");
+        copyFile(zoneinfo, subdir + "/RealDir/Z");
+        mkdir(subdir + "/Dir");
+
+        # symbolic links leaving the directory: to a file, through "..", to a directory (an intermediate component),
+        # to a directory above the zoneinfo directory, and a loop
         symlink(outside, subdir + "/Outside");
         symlink("../../../../../../../../../../.." + outside, subdir + "/Dotdot");
-        # a symlink that stays inside of the zoneinfo directory
-        f.open2(subdir + "/Real", O_CREAT | O_TRUNC | O_WRONLY, 0644);
-        f.write(ReadOnlyFile::readBinaryFile(zoneinfo));
-        f.close();
+        symlink(outside_dir, subdir + "/OutDir");
+        symlink("../..", subdir + "/UpDir");
+        symlink("Loop", subdir + "/Loop");
+        # symbolic links inside: to a file, to a directory, and an absolute one to a directory
         symlink("Real", subdir + "/Inside");
+        symlink("RealDir", subdir + "/InDir");
+        symlink(root + "/" + subname + "/RealDir", subdir + "/AbsInDir");
+
+        # a FIFO, a file larger than the maximum and an unreadable file
+        mkfifo(subdir + "/Fifo");
+        makeSized(subdir + "/Big", 1024 * 1024 + 1);
+        copyFile(zoneinfo, subdir + "/NoRead");
+        chmod(subdir + "/NoRead", 0);
 
         Program p = tenant();
-        foreach string r in (subname + "/Outside", subname + "/Dotdot") {
+        list<string> refused = map subname + "/" + $1, ("Outside", "Dotdot", "OutDir/Z", "UpDir/" + basename(root)
+            + "/" + subname + "/Real", "Loop", "Fifo", "Dir", "Missing", "RealDir/Missing");
+        if (getuid()) {
+            refused += subname + "/NoRead";
+        }
+        foreach string r in (refused) {
             assertUnknownRegion(sub () { p.callFunction("tz", r); }, r, "sandboxed TimeZone(" + r + ")");
             assertUnknownRegion(sub () { TimeZone t(r); }, r, "TimeZone(" + r + ")");
         }
-        assertEq(subname + "/Inside", p.callFunction("tz", subname + "/Inside"), "a symlink inside of the directory");
-        assertEq(subname + "/Real", p.callFunction("tz", subname + "/Real"), "a file of a test zoneinfo directory");
+        assertThrows("TZINFO-ERROR", "the file is larger than the maximum", \p.callFunction(), ("tz", subname + "/Big"),
+            "a file larger than the maximum");
+
+        foreach string r in (map subname + "/" + $1, ("Real", "Inside", "InDir/Z", "AbsInDir/Z", "RealDir/Z")) {
+            assertEq(r, p.callFunction("tz", r), "inside of the directory: " + r);
+            assertEq(0, (new TimeZone(r)).UTCOffset(), r + " is UTC");
+        }
     }
 
     testPathsChecked() {
         if (!zoneinfo) {
             testSkip("no zoneinfo file to copy");
         }
-        # each path is used once, as the zone of a path that was read stays cached
-        list<string> paths = map dir + "/tz-" + $1 + "-" + get_random_string(8), ("nfs1", "sm22", "des3", "trus");
-        foreach string path in (paths) {
-            File f();
-            f.open2(path, O_CREAT | O_TRUNC | O_WRONLY, 0644);
-            f.write(ReadOnlyFile::readBinaryFile(zoneinfo));
-            f.close();
-        }
+        string path = dir + "/tz-path";
+        copyFile(zoneinfo, path);
 
         # PO_NO_FILESYSTEM refuses a path without opening it
         Program nfs = tenant();
-        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \nfs.callFunction(), ("tz", paths[0]),
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \nfs.callFunction(), ("tz", path),
             "TimeZone(path) under PO_NO_FILESYSTEM");
         # the SandboxManager's file-system policy refuses it
         Program p = tenant(0);
-        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("tz", paths[1]),
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("tz", path),
             "TimeZone(path) under a SandboxManager");
+        # the refused path was not read: removed, it cannot be loaded
+        string gone = dir + "/tz-gone";
+        copyFile(zoneinfo, gone);
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("tz", gone), "TimeZone(path) refused");
+        unlink(gone);
+        assertThrows("FILE-OPEN2-ERROR", sub () { TimeZone t(gone); }, NOTHING, "the zone was not read");
+    }
 
-        # a deserialized date whose zone is named by a path
-        date d = (new TimeZone(paths[3])).date("2026-01-15T10:00:00");
-        assertEq(0, d.info().zone.UTCOffset(), "trusted code reads the path");
-        binary data = replaceRegion(Serializable::serialize(d), paths[3], paths[2]);
-        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("des", data),
-            "a deserialized date with a zoneinfo path under a SandboxManager");
+    testCachedPath() {
+        if (!zoneinfo) {
+            testSkip("no zoneinfo file to copy");
+        }
+        # trusted code loads the path first, so the zone is cached
+        string path = dir + "/tz-cached";
+        copyFile(zoneinfo, path);
+        TimeZone t(path);
+        date d = t.date("2026-01-15T10:00:00");
+        binary data = Serializable::serialize(d);
+
+        Program nfs = tenant();
+        Program sm = tenant(0);
+        Program allowed = tenantAllow(dir);
+
+        # TimeZone(path)
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \nfs.callFunction(), ("tz", path),
+            "a cached path under PO_NO_FILESYSTEM");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \sm.callFunction(), ("tz", path),
+            "a cached path under a SandboxManager");
+        assertEq(0, allowed.callFunction("offset", path), "a cached path that the policy allows");
+
+        # a deserialized date in the zone of the path
         assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \nfs.callFunction(), ("des", data),
-            "a deserialized date with a zoneinfo path under PO_NO_FILESYSTEM");
+            "a date in a cached path's zone under PO_NO_FILESYSTEM");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \sm.callFunction(), ("des", data),
+            "a date in a cached path's zone under a SandboxManager");
+        assertEq(d, allowed.callFunction("des", data), "a date in a cached path's zone that the policy allows");
 
-        # the refused paths were not read: removed, they cannot be loaded
-        foreach string path in (paths[0..2]) {
-            unlink(path);
-            assertThrows("FILE-OPEN2-ERROR", sub () { TimeZone t(path); }, NOTHING, "the zone was not read");
+        # the region APIs take the path as a path
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \nfs.callFunction(), ("set_region", path),
+            "TimeZone::setRegion() of a cached path under PO_NO_FILESYSTEM");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \sm.callFunction(), ("set_region", path),
+            "TimeZone::setRegion() of a cached path under a SandboxManager");
+        Program trusted(PO_NEW_STYLE);
+        trusted.setTimeZoneRegion(path);
+        assertEq(0, trusted.getTimeZone().UTCOffset(), "Program::setTimeZoneRegion() of a path in trusted code");
+    }
+
+    testPathDoesNotChangeRegion() {
+        string region = "Asia/Tokyo";
+        if (!zroot || !is_file(zroot + "/" + region) || !gmt14) {
+            testSkip("no zoneinfo files to use");
+        }
+        # a file with the region's name in the current directory, with another zone
+        string cwd_dir = dir + "/cwd";
+        mkdir_ex(cwd_dir + "/Asia", 0755, True);
+        copyFile(gmt14, cwd_dir + "/" + region);
+        string old_cwd = getcwd();
+        chdir(cwd_dir);
+        on_exit chdir(old_cwd);
+
+        # code that may read the current directory only
+        Program p = tenantAllow(cwd_dir);
+        # the path in the zoneinfo directory is checked as given and opened as given, not in the current directory
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("tz", zroot + "/" + region),
+            "a path in the zoneinfo directory is checked as given");
+        # a relative path is a path in the current directory
+        assertEq(14 * 3600, p.callFunction("offset", "./" + region), "a relative path is read from the current "
+            "directory");
+        # neither changes the region, in any Program
+        assertEq(9 * 3600, (new TimeZone(region)).UTCOffset(), "the region in trusted code");
+        assertEq(9 * 3600, tenant().callFunction("offset", region), "the region in sandboxed code");
+        assertEq(9 * 3600, p.callFunction("offset", region), "the region in the code that read the path");
+        # trusted code reads the path in the zoneinfo directory
+        assertEq(9 * 3600, (new TimeZone(zroot + "/" + region)).UTCOffset(), "the path in the zoneinfo directory");
+        assertEq(14 * 3600, (new TimeZone(cwd_dir + "/" + region)).UTCOffset(), "the path in the current directory");
+    }
+
+    #! returns the directory of the zoneinfo file of the local time file with a trailing '/', if any
+    static *string localtimePrefix() {
+        *string real = is_file("/etc/localtime") ? realpath("/etc/localtime") : NOTHING;
+        if (!real) {
+            return;
+        }
+        int i = real.find("zoneinfo/");
+        return i >= 0 ? real.substr(0, i + 9) : NOTHING;
+    }
+
+    testStartupLocalZone() {
+        *string prefix = localtimePrefix();
+        string region = "Etc/GMT+5";
+        if (!prefix || !is_file(prefix + region) || !zroot || !is_file(zroot + "/" + region) || !gmt14) {
+            testSkip("no local time file in a zoneinfo directory or no zoneinfo files to use");
+        }
+        # a file with the region's name in the current directory of the child, with another zone
+        string cwd_dir = dir + "/startup";
+        mkdir_ex(cwd_dir + "/Etc", 0755, True);
+        copyFile(gmt14, cwd_dir + "/" + region);
+
+        foreach string tz in (prefix + region, ":" + prefix + region, region, ":" + region) {
+            string cmd = sprintf("cd '%s' && TZ='%s' '%s' -e 'printf(\"%%d\", TimeZone::get().UTCOffset());'",
+                cwd_dir, tz, qore_bin);
+            string out = backquote(cmd);
+            assertEq("-18000", trim(out), "TZ=" + tz);
         }
     }
 }

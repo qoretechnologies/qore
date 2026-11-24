@@ -177,12 +177,12 @@ public:
     DLLLOCAL AbstractQoreZoneInfo() : utcoff(0), has_dst(false) {
     }
 
-    DLLLOCAL AbstractQoreZoneInfo(const std::string& n_name, int n_utcoff = 0) : name(n_name), utcoff(n_utcoff), has_dst(false) {
-        // issue #3736: do not return leading path
-        if (!name.compare(0, localtime_path_prefix.size(), localtime_path_prefix)) {
-            name = name.c_str() + localtime_path_prefix.size();
-        }
-    }
+    //! creates the zone with the given name
+    /** A zoneinfo file in the directory of the local time file is named by its region (issue #3736): the directory is
+        removed from the name if a canonical region name follows it; the name is used for display and serialization
+        only, never to find a file
+    */
+    DLLLOCAL AbstractQoreZoneInfo(const std::string& n_name, int n_utcoff = 0);
 
     virtual DLLLOCAL ~AbstractQoreZoneInfo() {
     }
@@ -319,7 +319,12 @@ public:
    //! the maximum size of a TZif file that is read; real zoneinfo files are less than 8 KiB
    DLLLOCAL static constexpr size_t MaxFileSize = 1024 * 1024;
 
-   DLLLOCAL QoreZoneInfo(QoreString& root, std::string& n_name, ExceptionSink *xsink);
+   //! creates the zone from the zoneinfo file at exactly the given path, subject to the file-system policy
+   /** @param n_name the name of the zone
+       @param path the path of the file, opened as given
+       @param xsink an exception is raised here if the file cannot be read or used; the object is then not valid
+   */
+   DLLLOCAL QoreZoneInfo(std::string& n_name, const char* path, ExceptionSink* xsink);
 
    //! creates the zone from the TZif data of a file that was read already
    /** @param n_name the name of the zone
@@ -424,11 +429,9 @@ protected:
     AbstractQoreZoneInfo* localtz;
     std::string localtzname;
 
-    DLLLOCAL int processIntern(const char* fn, ExceptionSink *xsink);
-    DLLLOCAL int process(const char* fn);
-
+#ifdef _Q_WINDOWS
     DLLLOCAL const AbstractQoreZoneInfo* processFile(const char* fn, bool use_path, ExceptionSink *xsink);
-    DLLLOCAL int processDir(const char* d, ExceptionSink *xsink);
+#endif
 
     // to set the local time zone information from a file
     DLLLOCAL int setLocalTZ(QoreString fname);
@@ -445,6 +448,12 @@ protected:
         findLoadRegion()
     */
     DLLLOCAL const AbstractQoreZoneInfo* loadRegionIntern(const char* region, ExceptionSink* xsink);
+
+    //! loads the zoneinfo file at the given absolute path that is not cached; the write lock must be held
+    /** The file is opened exactly as given, subject to the file-system policy of the calling code; the zone is cached
+        by the path, which never matches a region name
+    */
+    DLLLOCAL const AbstractQoreZoneInfo* loadPathIntern(const std::string& path, ExceptionSink* xsink);
 #endif
 
 public:
@@ -474,8 +483,6 @@ public:
     DLLLOCAL const QoreOffsetZoneInfo* findCreateOffsetZone(int seconds_east);
     DLLLOCAL const QoreOffsetZoneInfo* findCreateOffsetZone(const char* offset, ExceptionSink *xsink = 0);
 
-    DLLLOCAL int readAll(ExceptionSink *xsink);
-
     DLLLOCAL void init();
 
     DLLLOCAL const AbstractQoreZoneInfo* getLocalZoneInfo() const {
@@ -489,13 +496,14 @@ public:
     //! finds or loads a time zone region: a name in the zoneinfo database (ex: \c "Europe/Prague")
     /** A region that is not cached is loaded by the runtime itself, not by the code that names it, so the
         file-system policy of a sandbox does not apply to its file (qore#7442); therefore only a canonical region
-        name (see isRegionName()) whose file, with all symbolic links resolved, is a regular file under the zoneinfo
-        directory (also resolved) is read; nothing else is accessed.  An invalid, escaping or missing region raises
-        the same \c TZINFO-ERROR (see raiseUnknownRegion()), which does not show whether a file exists.
+        name (see isRegionName()) is read, and only from a regular file that is reached from the zoneinfo directory
+        component by component without leaving it (symbolic links are followed only inside of the directory);
+        nothing else is accessed.  An invalid, escaping or missing region raises the same \c TZINFO-ERROR (see
+        raiseUnknownRegion()), which does not show whether a file exists.
 
-        A name that starts with the zoneinfo directory and a \c "/" names the region after it.  A cached zone is
-        returned by its exact name (the local zone is cached by the path of its file), without any file access.  An
-        empty name is UTC (\c nullptr, no exception).
+        Only a region loaded this way is cached by its region name.  The name of the local zone returns the local
+        zone.  A name that is a path (see isPathName()) is loaded with findLoadRegionFromPath(), subject to the
+        file-system policy of the calling code.  An empty name is UTC (\c nullptr, no exception).
 
         @param name the region name
         @param xsink an exception is raised here if the region cannot be loaded
@@ -505,9 +513,20 @@ public:
     DLLLOCAL const AbstractQoreZoneInfo* findLoadRegion(const char* name, ExceptionSink* xsink);
 
     //! finds or loads a time zone from a zoneinfo file given as a path
-    /** The file is opened subject to the file-system policy of the calling code
+    /** A relative path is made absolute with the current directory; the absolute path is checked against
+        \c PO_NO_FILESYSTEM and the file-system policy of the calling code before anything else, also for a zone
+        that is cached already, and the file is opened at exactly that path; the zone is cached by the absolute
+        path, which never matches a region name
+
+        @param name the path
+        @param xsink an exception is raised here if the path cannot be used or its file cannot be loaded
+
+        @return the zone or \c nullptr if an exception was raised
     */
     DLLLOCAL const AbstractQoreZoneInfo* findLoadRegionFromPath(const char* name, ExceptionSink* xsink);
+
+    //! returns true if the name is a path: an absolute path or a name starting with \c "."
+    DLLLOCAL static bool isPathName(const char* name);
 
     //! returns true if the string is a canonical time zone region name
     /** A canonical name is one or more components separated by single \c "/" characters, each component made of
