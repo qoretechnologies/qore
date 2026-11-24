@@ -6040,6 +6040,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 close_and_evict_if_unusable();
                 return nullptr;
             }
+            // the rest of a request body that a 101 response arrives before is written as it is pushed below, and
+            // each write is bounded by the timeout of the request (qore#7503)
+            if (Http1ClientConnection* h1 = dynamic_cast<Http1ClientConnection*>(conn)) {
+                h1->setSwitchedSendTimeout(timeout_ms);
+            }
 
             // From here the request is live on the I/O controller, and every
             // path out of this block that is not a delivered response has to
