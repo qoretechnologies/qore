@@ -2885,11 +2885,19 @@ private:
 
 //! Sets the call Program context of the thread to its current Program, as CodeContextHelperBase does for the body of
 //! user code without a class or an object, if it is not that already (qore#7394)
-/** @param old set to the call Program context replaced, if it was replaced
+/** @param thread_data_ptr the current thread's data (get_thread_data_for_native_calls()); if it is nullptr, it is
+    looked up and returned in it
+    @param old set to the call Program context replaced, if it was replaced
 
     @return true if the call Program context was replaced
 */
-DLLLOCAL bool qore_set_function_call_program_context(QoreProgram*& old);
+DLLLOCAL bool qore_set_function_call_program_context(void*& thread_data_ptr, QoreProgram*& old);
+
+//! Restores the call Program context that qore_set_function_call_program_context() replaced
+/** @param thread_data_ptr the current thread's data, as qore_set_function_call_program_context() returned it
+    @param old the call Program context that it replaced
+*/
+DLLLOCAL void qore_restore_function_call_program_context(void* thread_data_ptr, QoreProgram* old);
 
 //! Sets the call Program context of the body of a plain function that a fast call path runs in another Program
 /** A call of user code runs the body of a plain function with the call Program context of the Program it runs in
@@ -2905,15 +2913,20 @@ DLLLOCAL bool qore_set_function_call_program_context(QoreProgram*& old);
 class QoreFunctionCallProgramContextHelper {
 public:
     //! \a exec_pgm is the Program that the call entered, \a caller_pgm the one it was made from
-    DLLLOCAL QoreFunctionCallProgramContextHelper(QoreProgram* exec_pgm, QoreProgram* caller_pgm) {
+    /** @param thread_data_ptr the current thread's data, if the caller has it (CalleeContextHelper::getThreadData()),
+        so that neither the switch nor the restore makes a thread-local lookup; otherwise nullptr
+    */
+    DLLLOCAL QoreFunctionCallProgramContextHelper(QoreProgram* exec_pgm, QoreProgram* caller_pgm,
+            void* thread_data_ptr = nullptr) : td(thread_data_ptr) {
         if (exec_pgm && exec_pgm != caller_pgm) {
-            switched = qore_set_function_call_program_context(old);
+            switched = qore_set_function_call_program_context(td, old);
         }
     }
 
+    //! restores the caller's call Program context, also on an exceptional exit
     DLLLOCAL ~QoreFunctionCallProgramContextHelper() {
         if (switched) {
-            set_program_call_context(old);
+            qore_restore_function_call_program_context(td, old);
         }
     }
 
@@ -2921,6 +2934,8 @@ public:
     QoreFunctionCallProgramContextHelper& operator=(const QoreFunctionCallProgramContextHelper&) = delete;
 
 private:
+    //! the current thread's data
+    void* td;
     QoreProgram* old = nullptr;
     bool switched = false;
 };
@@ -3434,6 +3449,12 @@ public:
 
     CalleeContextHelper(const CalleeContextHelper&) = delete;
     CalleeContextHelper& operator=(const CalleeContextHelper&) = delete;
+
+    //! returns the current thread's data, which the helper got when it was created (for
+    //! QoreFunctionCallProgramContextHelper)
+    DLLLOCAL void* getThreadData() const {
+        return td;
+    }
 
     //! releases the implicit arguments that the helper set before it is destroyed, in the frame of the call, as the
     //! AST interpreter releases them (issue #5882); the destructor restores the caller's

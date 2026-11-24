@@ -5559,14 +5559,22 @@ QORE_INTERN_ALWAYS_INLINE void CodeContextHelperBase::init(const char* code, Qor
     }
 }
 
-bool qore_set_function_call_program_context(QoreProgram*& old) {
-    ThreadData* td = thread_data.get();
+bool qore_set_function_call_program_context(void*& thread_data_ptr, QoreProgram*& old) {
+    if (!thread_data_ptr) {
+        thread_data_ptr = thread_data.get();
+    }
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
     if (!td->current_pgm || td->current_pgm == td->call_program_context) {
         return false;
     }
     old = td->call_program_context;
     td->call_program_context = td->current_pgm;
     return true;
+}
+
+void qore_restore_function_call_program_context(void* thread_data_ptr, QoreProgram* old) {
+    assert(thread_data_ptr && thread_data_ptr == thread_data.get());
+    static_cast<ThreadData*>(thread_data_ptr)->call_program_context = old;
 }
 
 CodeContextHelperBase::~CodeContextHelperBase() {

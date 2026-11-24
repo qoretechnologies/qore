@@ -14320,7 +14320,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_t(const QoreFunction
         }
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         // the body of a plain function runs with the call Program context of the Program it runs in (qore#7394)
-        QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, caller_pgm);
+        QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, caller_pgm, function_context.getThreadData());
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp{args, nargs, CONSUME ? arg_cleanups : nullptr};
@@ -14969,7 +14969,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_with_target_t(uint64
         }
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         // the body of a plain function runs with the call Program context of the Program it runs in (qore#7394)
-        QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, caller_pgm);
+        QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, caller_pgm, function_context.getThreadData());
         execJITWithDeopt<CONSUME>(uvb, call_name, [target_fn](ExceptionSink* xs, bool& /*inv*/) {
             return target_fn(xs);
         }, val, xsink, caller_pgm, nullptr, exec_pgm,
@@ -20338,7 +20338,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
             }
             QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
             // the body of a plain function runs with the call Program context of the Program it runs in (qore#7394)
-            QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, caller_pgm);
+            QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, caller_pgm, function_context.getThreadData());
             if (uvb->hasCachedFunction()) {
                 execJITWithDeopt<CONSUME>(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
                     return uvb->execCachedFunction(xs, inv);
