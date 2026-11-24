@@ -643,10 +643,13 @@ void AsyncIoControllerPriv::detachOp(SocketPollOperationBase* op, uint64_t attac
 }
 
 namespace {
-//! a submitted poll operation without a C++ poll operation, by its Qore object (qore#6531)
+//! a submitted poll operation without a C++ poll operation, by its Qore object (qore#6531) and a generation
+//! (qore#7168)
 struct QoreQopEntry {
     //! the controller that the operation was submitted to
     AsyncIoControllerPriv* ctrl = nullptr;
+    //! the generation: no other entry has it
+    uint64_t gen = 0;
     //! the number of registrations (submissions whose cache entry or command exists)
     unsigned count = 0;
     //! the object was deleted
@@ -654,20 +657,66 @@ struct QoreQopEntry {
 };
 
 //! one stripe of the registry of the operations without a C++ poll operation
+/** The entries of an address are the generations of the objects that were registered at it, newest last.  Only the
+    newest can belong to an object that exists: the deletion of an object marks its entry (qoreOpObjectDeleted()), and
+    a deleted object submitted again shares its deleted entry (registerQoreOp()); an older entry is one that a
+    registration of a deleted object left (a
+    registration that is not ended, as in qore#7167), which can never apply to a later object at the address
+    (qore#7168)
+*/
 struct QoreQopStripe {
     QoreThreadLock lock;
-    std::unordered_map<const QoreObject*, QoreQopEntry> entries;
+    std::unordered_map<const QoreObject*, std::vector<QoreQopEntry>> entries;
 };
 
-//! the number of objects in the registry: the deletion of a poll operation's object takes no lock while it is 0, as
+//! the number of entries in the registry: the deletion of a poll operation's object takes no lock while it is 0, as
 //! for the operations that are not submitted, and those of the C++ poll operations, which are never registered
 std::atomic<size_t> qore_qop_count{0};
 
-QoreQopStripe& qore_qop_stripe(const QoreObject* obj) {
+//! the last generation of an entry of the registry
+std::atomic<uint64_t> qore_qop_gen{0};
+
+//! returns the entry of the given generation, or nullptr
+QoreQopEntry* qore_qop_find(std::vector<QoreQopEntry>& v, uint64_t gen) {
+    for (QoreQopEntry& e : v) {
+        if (e.gen == gen) {
+            return &e;
+        }
+    }
+    return nullptr;
+}
+
+//! ends a registration of the entry of the given generation of an address; must be called with the stripe locked
+void qore_qop_unregister_locked(QoreQopStripe& stripe, const QoreObject* obj, uint64_t gen) {
+    auto i = stripe.entries.find(obj);
+    if (i == stripe.entries.end()) {
+        return;
+    }
+    std::vector<QoreQopEntry>& v = i->second;
+    for (auto ei = v.begin(), e = v.end(); ei != e; ++ei) {
+        if (ei->gen == gen) {
+            if (!--ei->count) {
+                v.erase(ei);
+                qore_qop_count.fetch_sub(1, std::memory_order_release);
+                if (v.empty()) {
+                    stripe.entries.erase(i);
+                }
+            }
+            return;
+        }
+    }
+}
+
+//! returns the stripe of the given index
+QoreQopStripe& qore_qop_stripe_at(unsigned i) {
     // never freed: poll operations can be released in the exit of the process
     static QoreQopStripe* stripes = new QoreQopStripe[QoreSpopLockCount];
+    return stripes[i];
+}
+
+QoreQopStripe& qore_qop_stripe(const QoreObject* obj) {
     uintptr_t a = reinterpret_cast<uintptr_t>(obj);
-    return stripes[((a >> 4) ^ (a >> 10)) % QoreSpopLockCount];
+    return qore_qop_stripe_at(((a >> 4) ^ (a >> 10)) % QoreSpopLockCount);
 }
 }
 
@@ -677,24 +726,31 @@ size_t qore_dbg_registered_qore_ops() {
 }
 #endif
 
-void AsyncIoControllerPriv::registerQoreOp(const QoreObject* obj) {
+uint64_t AsyncIoControllerPriv::registerQoreOp(const QoreObject* obj) {
     QoreQopStripe& stripe = qore_qop_stripe(obj);
     AutoLocker al(stripe.lock);
-    QoreQopEntry& e = stripe.entries[obj];
-    e.ctrl = this;
-    if (!e.count++) {
+    std::vector<QoreQopEntry>& v = stripe.entries[obj];
+    // a deleted newest entry is that of an earlier object at the address, which a registration left (qore#7168),
+    // unless the object itself has been deleted and is submitted again: an object that exists gets an entry of its
+    // own, and a deleted object shares its deleted entry, so that its operation is canceled
+    bool current = obj->isCurrent();
+    if (v.empty() || (v.back().deleted && current)) {
+        v.emplace_back();
+        v.back().gen = qore_qop_gen.fetch_add(1, std::memory_order_relaxed) + 1;
+        // the status of an object leaves OS_OK before its deletion hook runs, which then finds the entry deleted
+        v.back().deleted = !current;
         qore_qop_count.fetch_add(1, std::memory_order_release);
     }
+    QoreQopEntry& e = v.back();
+    e.ctrl = this;
+    ++e.count;
+    return e.gen;
 }
 
-void AsyncIoControllerPriv::unregisterQoreOp(const QoreObject* obj) {
+void AsyncIoControllerPriv::unregisterQoreOp(const QoreObject* obj, uint64_t gen) {
     QoreQopStripe& stripe = qore_qop_stripe(obj);
     AutoLocker al(stripe.lock);
-    auto i = stripe.entries.find(obj);
-    if (i != stripe.entries.end() && !--i->second.count) {
-        stripe.entries.erase(i);
-        qore_qop_count.fetch_sub(1, std::memory_order_release);
-    }
+    qore_qop_unregister_locked(stripe, obj, gen);
 }
 
 #ifdef DEBUG
@@ -703,14 +759,48 @@ size_t AsyncIoControllerPriv::dbgQoreOpRegisteredCount() {
 }
 #endif
 
-bool AsyncIoControllerPriv::isQoreOpDeleted(const QoreObject* obj) {
+#ifdef DEBUG
+uint64_t AsyncIoControllerPriv::dbgQoreOpInjectStale(const QoreObject* obj) {
+    QoreQopStripe& stripe = qore_qop_stripe(obj);
+    AutoLocker al(stripe.lock);
+    // the entry of an earlier object at the address, deleted, whose registration was not ended: it is the oldest
+    std::vector<QoreQopEntry>& v = stripe.entries[obj];
+    QoreQopEntry stale;
+    stale.gen = qore_qop_gen.fetch_add(1, std::memory_order_relaxed) + 1;
+    stale.count = 1;
+    stale.deleted = true;
+    v.insert(v.begin(), stale);
+    qore_qop_count.fetch_add(1, std::memory_order_release);
+    return stale.gen;
+}
+
+void AsyncIoControllerPriv::dbgQoreOpReleaseStale(uint64_t gen) {
+    // found by its generation: the object at the address can have been deleted
+    for (unsigned si = 0; si < QoreSpopLockCount; ++si) {
+        QoreQopStripe& stripe = qore_qop_stripe_at(si);
+        AutoLocker al(stripe.lock);
+        for (auto& i : stripe.entries) {
+            if (qore_qop_find(i.second, gen)) {
+                qore_qop_unregister_locked(stripe, i.first, gen);
+                return;
+            }
+        }
+    }
+}
+#endif
+
+bool AsyncIoControllerPriv::isQoreOpDeleted(const QoreObject* obj, uint64_t gen) {
     if (!qore_qop_count.load(std::memory_order_acquire)) {
         return false;
     }
     QoreQopStripe& stripe = qore_qop_stripe(obj);
     AutoLocker al(stripe.lock);
     auto i = stripe.entries.find(obj);
-    return i != stripe.entries.end() && i->second.deleted;
+    if (i == stripe.entries.end()) {
+        return false;
+    }
+    QoreQopEntry* e = qore_qop_find(i->second, gen);
+    return e && e->deleted;
 }
 
 void AsyncIoControllerPriv::qoreOpObjectDeleted(const QoreObject* obj) {
@@ -721,13 +811,15 @@ void AsyncIoControllerPriv::qoreOpObjectDeleted(const QoreObject* obj) {
     QoreQopStripe& stripe = qore_qop_stripe(obj);
     AutoLocker al(stripe.lock);
     auto i = stripe.entries.find(obj);
-    if (i == stripe.entries.end() || i->second.deleted) {
+    // only the newest entry of the address can be the object's (qore#7168)
+    if (i == stripe.entries.end() || i->second.empty() || i->second.back().deleted) {
         return;
     }
-    i->second.deleted = true;
+    QoreQopEntry& e = i->second.back();
+    e.deleted = true;
     // the controller cannot go away while the operation is registered: its cache entries, and its commands, end the
     // registration before it is released
-    i->second.ctrl->postDeletedObjCancel(obj);
+    e.ctrl->postDeletedObjCancel(obj);
 }
 
 void AsyncIoControllerPriv::postDeletedObjCancel(const QoreObject* obj, int only_idx) {
@@ -1007,7 +1099,7 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
     }
     // the registration of an operation without a C++ poll operation by its object (qore#6531)
     if (qop_registered) {
-        AsyncIoControllerPriv::unregisterQoreOp(spop_obj);
+        AsyncIoControllerPriv::unregisterQoreOp(spop_obj, qop_gen);
         qop_registered = false;
     }
     if (controller && submit_route_thread_idx >= 0 && !submit_route_sock_hash.empty()) {
@@ -2216,7 +2308,7 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
             }
             if (cmd.submit_qop_registered) {
                 // the registration of the abandoned submission by its object (qore#6531)
-                AsyncIoControllerPriv::unregisterQoreOp(cmd.submit_spop_obj);
+                AsyncIoControllerPriv::unregisterQoreOp(cmd.submit_spop_obj, cmd.submit_qop_gen);
                 cmd.submit_qop_registered = false;
             }
             {
@@ -4786,14 +4878,15 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     // cancels it (qore#6531); the registration passes to the cache entry or the submit command, or ends here
     struct QopRegistration {
         const QoreObject* obj = nullptr;
+        uint64_t gen = 0;
         ~QopRegistration() {
             if (obj) {
-                AsyncIoControllerPriv::unregisterQoreOp(obj);
+                AsyncIoControllerPriv::unregisterQoreOp(obj, gen);
             }
         }
     } qop_reg;
     if (!spop_base) {
-        registerQoreOp(spop_obj);
+        qop_reg.gen = registerQoreOp(spop_obj);
         qop_reg.obj = spop_obj;
     }
 
@@ -5146,8 +5239,9 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         } else if (qop_reg.obj) {
             // the registration by the operation's object passes to the entry (qore#6531)
             pinfo.qop_registered = true;
+            pinfo.qop_gen = qop_reg.gen;
             qop_reg.obj = nullptr;
-            if (isQoreOpDeleted(pinfo.spop_obj)) {
+            if (isQoreOpDeleted(pinfo.spop_obj, pinfo.qop_gen)) {
                 postDeletedObjCancel(pinfo.spop_obj, t.thread_idx);
             }
         }
@@ -5206,6 +5300,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         cmd.submit_spop_base = spop_base; spop_base_holder.release();
         // the registration by the operation's object passes to the command (qore#6531)
         cmd.submit_qop_registered = qop_reg.obj != nullptr;
+        cmd.submit_qop_gen = qop_reg.gen;
         qop_reg.obj = nullptr;
         cmd.submit_poll_info = res.poll_info_hash; res.poll_info_hash = nullptr;
         cmd.submit_other = res.other_hash; res.other_hash = nullptr;
@@ -8990,7 +9085,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 continue;
             }
             // likewise an operation without a C++ poll operation whose object was deleted (qore#6531)
-            if (!op.spop_base && node->second.qop_registered && isQoreOpDeleted(op.spop_obj)) {
+            if (!op.spop_base && node->second.qop_registered
+                    && isQoreOpDeleted(op.spop_obj, node->second.qop_gen)) {
                 postDeletedObjCancel(op.spop_obj, t.thread_idx);
                 continue;
             }
@@ -11324,8 +11420,9 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     } else if (cmd.submit_qop_registered) {
                         // the registration by the operation's object passes to the entry (qore#6531)
                         pinfo.qop_registered = true;
+                        pinfo.qop_gen = cmd.submit_qop_gen;
                         cmd.submit_qop_registered = false;
-                        if (isQoreOpDeleted(pinfo.spop_obj)) {
+                        if (isQoreOpDeleted(pinfo.spop_obj, pinfo.qop_gen)) {
                             postDeletedObjCancel(pinfo.spop_obj, t.thread_idx);
                         }
                     }
@@ -11821,6 +11918,7 @@ AsyncIoControllerPriv::PollInfo AsyncIoControllerPriv::takeSubmitPollInfo(Comman
     // cleanup() releases it (qore#6531); it is not left registered for an operation that is never in the cache
     if (!pinfo.spop_base && cmd.submit_qop_registered) {
         pinfo.qop_registered = true;
+        pinfo.qop_gen = cmd.submit_qop_gen;
         cmd.submit_qop_registered = false;
     }
     // the payload now belongs to pinfo: its cleanup() releases it
