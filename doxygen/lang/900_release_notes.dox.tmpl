@@ -2100,6 +2100,8 @@
       - added DPQL, the Data Provider Query Language (see @ref dataprovider_dpql)
       - provider presentation metadata can be localized with source-owned catalogs and the
         \c qore-data-provider-i18n tool
+      - @ref DataProvider::DataProviderBaseInfo::supports_refusal_redelivery "supports_refusal_redelivery"
+        reports whether the source redelivers a refused event for file pollers, FTP pollers, and watch providers
       - watch data providers persist delivery checkpoints (see @ref dataprovider_watch)
       - a module can register actions to be built on first use, and the provider modules generating actions
         from REST API descriptions do, so loading them no longer builds their actions (see

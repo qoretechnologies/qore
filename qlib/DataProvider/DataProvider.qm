@@ -52,7 +52,7 @@ module DataProvider {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks), and starts
     # the background threads of its asynchronous operations (ex: AbstractDataProvider::searchRecordsAsync())
     domains = "PROCESS_CONTROL,THREAD_CONTROL";
-    version = "3.12";
+    version = "3.13";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -1597,6 +1597,11 @@ fetch
     observer, collects the failures, and then throws an aggregate \c OBSERVER-NOTIFICATION-ERROR
     exception carrying the individual exceptions.
 
+    Consumers can check \c getInfo().supports_refusal_redelivery before relying on the source to retry.
+    File and FTP pollers keep a refused file for a later poll. Watch providers leave their cursor at the
+    last successful delivery. Retrying from that cursor across restarts requires
+    @ref dataprovider_watch_durability "checkpoint persistence".
+
     Both halves of that are load-bearing. Notifying every observer means one broken handler cannot
     starve the handlers registered after it. Letting the failures out means the event source is told
     the truth: a watch provider's entire durability guarantee rests on the fact that raising an event
@@ -1748,6 +1753,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 */
 /** @page dataprovider_relnotes Release Notes
 
+
+    @section dataprovider_v3_13 DataProvider v3.13
+    - @ref DataProvider::DataProviderBaseInfo::supports_refusal_redelivery "supports_refusal_redelivery"
+      tells consumers whether the source redelivers a refused event
 
     @section dataprovider_v3_12 DataProvider v3.12
     - @ref DataProvider::DataProviderActionCatalog::actionMutatesState() "actionMutatesState()" can classify
