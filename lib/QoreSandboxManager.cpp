@@ -2097,6 +2097,19 @@ bool qore_object_program_is_sandboxed(const QoreObject* obj) {
     return static_cast<bool>(sm);
 }
 
+bool qore_object_sandboxed_program_id(const QoreObject* obj, qore_program_id_t& id) {
+    QoreProgram* pgm = obj->getProgram();
+    if (!pgm) {
+        return false;
+    }
+    ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*pgm)->getSandboxManagerRef(), nullptr);
+    if (!sm) {
+        return false;
+    }
+    id = qore_program_private::get(*pgm)->getProgramId();
+    return true;
+}
+
 QoreSandboxManager* qore_program_private::getSandboxManagerRef() {
     QoreSandboxManager* own_ptr;
     QoreSandboxManager* creator_ptr;

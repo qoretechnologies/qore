@@ -1863,6 +1863,12 @@
     \c qore_get_caller_program_id() and \c qore_get_caller_program() in the C++ API (\c QORE_HAVE_CALLER_PROGRAM)
     (<a href="https://github.com/qoretechnologies/qore/issues/6852">issue 6852</a>).
 
+    @par The Tenant of an Object's Class
+    Library code can identify the sandboxed %Program whose code declares the class of an object, to mark what such an
+    object produces, such as the messages that a data provider subclass writes to the host's process-wide logger:
+    @ref Qore::SandboxManager::getSandboxedProgramId()
+    (<a href="https://github.com/qoretechnologies/qore/issues/7110">issue 7110</a>).
+
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
     @ref sandboxing "sandbox" with the new \c QoreSandboxCapture and \c QoreSandboxCaptureHelper classes, and check
