@@ -3856,7 +3856,7 @@ static void qoreAOTWriteListValueType(QoreAOTBinaryWriter& writer,
 //! Returns true if a container holds only plain data at every level: scalars, binaries, enum values, and hashes and
 //! lists of them, which a CONST_VALUE holds; an object (such as a constant of a binary module holding one) is written
 //! with a reference to where it comes from by the literal paths instead
-static bool qoreAOTContainerHoldsPlainData(const QoreValue& v) {
+bool qoreAOTContainerHoldsPlainData(const QoreValue& v) {
     if (v.isNothing() || v.isNull() || v.isEnum()) {
         return true;
     }
@@ -4058,6 +4058,17 @@ private:
     std::string& path;
     const size_t len;
 };
+
+bool QoreAOTBinaryWriter::writeDeferredLiteral(const QoreValue& v, const std::string& path) {
+    std::string base;
+    if (!aot_get_constant_path_base(path, base)) {
+        return false;
+    }
+    base.swap(current_const_path);
+    bool ok = writeValue(v);
+    base.swap(current_const_path);
+    return ok;
+}
 
 bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
     const uint32_t start_pos = position();

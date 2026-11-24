@@ -1390,6 +1390,9 @@ inline bool qore_aot_string_needs_value(const QoreValue& v) {
     return qore_aot_string_needs_value(str.c_str(), str.size(), str.getEncoding());
 }
 
+//! Returns true for values that a CONST_VALUE slot can serialize without a runtime reference.
+DLLLOCAL bool qoreAOTContainerHoldsPlainData(const QoreValue& v);
+
 //! Returns true if a hash or list value has a type that a literal of it does not give (#5895); false for a container
 //! that needs evaluation, which is an expression, and for one that holds anything but plain data (such as an object)
 /** a hash of a hashdecl or of a complex type, or a list of a complex type, such as the hash<ExceptionInfo> of a
@@ -1774,6 +1777,9 @@ public:
         @return true on success, false if value type is unsupported
     */
     bool writeValue(const QoreValue& v);
+
+    //! Write a literal computed by a deferred initializer without referring back to its pending constant.
+    bool writeDeferredLiteral(const QoreValue& v, const std::string& path);
 
     //! Get current write position in buffer
     uint32_t position() const { return static_cast<uint32_t>(buffer.size()); }

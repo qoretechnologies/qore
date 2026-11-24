@@ -11033,8 +11033,17 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
             unique_source = unique;
         }
     }
-    QoreIRValue right = unique_source.isValid() ? unique_source
-        : lowerMutationOperand(assign->getLeft(), right_expr, assign->loc, error, true);
+    // A weak reference observes the lifetime of its source. An already evaluated list or hash belongs to the
+    // program; rebuilding it would leave the weak reference pointing at a temporary released after the statement.
+    QoreIRValue right = unique_source;
+    if (!right.isValid()) {
+        if (assign_mode == AssignmentMode::Weak && (right_expr.getType() == NT_LIST || right_expr.getType() == NT_HASH)
+                && right_expr.isValue() && !right_expr.needsEval()) {
+            right = builder.createLoadConstant(nullptr, right_expr, assign->loc)->result;
+        } else {
+            right = lowerMutationOperand(assign->getLeft(), right_expr, assign->loc, error, true);
+        }
+    }
     if (!right.isValid()) {
         return QoreIRValue();
     }

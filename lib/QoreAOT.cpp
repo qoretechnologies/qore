@@ -37694,8 +37694,15 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             && (dynamic_cast<const QoreHashNode*>(node) || dynamic_cast<const QoreListNode*>(node))) {
         auto cit = const_reverse_map->find(node);
         if (cit != const_reverse_map->end()) {
-            id.kind = AOTExprKind::RUNTIME_CONST_REF;
             id.ref1 = cit->second.path;
+            // A folded literal returned by an initializer can itself be the value in the reverse map. Its
+            // expression slot must own the literal, even while the named constant is still pending (#7290).
+            if (cit->second.deferred_init && !v.needsEval() && qoreAOTContainerHoldsPlainData(v)) {
+                id.kind = AOTExprKind::CONST_VALUE;
+                id.child_expr = v;
+            } else {
+                id.kind = AOTExprKind::RUNTIME_CONST_REF;
+            }
             return id;
         }
     }

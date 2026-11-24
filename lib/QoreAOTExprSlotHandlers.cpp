@@ -176,7 +176,8 @@ static bool write_slot_CONST_STRING(AOTExprSlotWriteCtx& ctx) {
 
 //! CONST_VALUE: serialized QoreValue payload
 static bool write_slot_CONST_VALUE(AOTExprSlotWriteCtx& ctx) {
-    return ctx.writer.writeValue(ctx.expr.child_expr);
+    return ctx.expr.ref1.empty() ? ctx.writer.writeValue(ctx.expr.child_expr)
+        : ctx.writer.writeDeferredLiteral(ctx.expr.child_expr, ctx.expr.ref1);
 }
 
 //! HASHDECL_NEW: ref1 = hashdecl path + u8 num_args + N×classifyAndWriteExpr-encoded args
