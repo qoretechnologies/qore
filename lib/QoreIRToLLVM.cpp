@@ -14774,7 +14774,7 @@ void QoreIRToLLVM::emitPopNativeFunctionContext(llvm::Module& module) {
 
 llvm::CallInst* QoreIRToLLVM::emitNativeCall(llvm::FunctionCallee fn, llvm::ArrayRef<llvm::Value*> args,
         const AbstractQoreFunctionVariant* callee, llvm::Module& module, llvm::Function* llvm_func,
-        const llvm::Twine& name, llvm::Value* arg_cleanups, int nargs) {
+        const llvm::Twine& name, llvm::Value* arg_cleanups, int nargs, bool ref_params_bound) {
     emitPushNativeCallFrame(callee, module, llvm_func);
     // the context is switched inside the frame and restored before the frame is popped
     bool function_context = nativeCallNeedsFunctionContext(callee);
@@ -14784,6 +14784,14 @@ llvm::CallInst* QoreIRToLLVM::emitNativeCall(llvm::FunctionCallee fn, llvm::Arra
     llvm::CallInst* call = builder->CreateCall(fn, args, name);
     if (function_context) {
         emitPopNativeFunctionContext(module);
+    }
+    if (ref_params_bound) {
+        // the reference parameters are released whatever the fast entry returned, in the call's frame
+        llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(callee)), ptr_type);
+        auto unbind_fn = module.getOrInsertFunction("qore_rt_unbind_fast_entry_ref_params",
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+        builder->CreateCall(unbind_fn, {variant_ptr, xsink_arg});
     }
     if (arg_cleanups) {
         // the arguments given to the call are released in the callee's frame
@@ -26619,7 +26627,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && qore_ir_fast_entry_args_need_no_binding(call_gives_args, direct_inst->variant,
                             direct_inst->expr, arg_start, nargs, nullptr, nullptr, nullptr, true)) {
                     aot_ref_fast_fn = module.getFunction(it->second.fast_name);
-                    if (aot_ref_fast_fn) {
+                    // a reference parameter fast entry has no fast-entry contract: it is called only in the module
+                    // that defines it, with internal linkage (see declareAOTSharedFastEntryFunctions() in
+                    // QoreAOT.cpp); a release build makes the generic call for any other
+                    assert(!aot_ref_fast_fn || aot_ref_fast_fn->hasLocalLinkage());
+                    if (aot_ref_fast_fn && aot_ref_fast_fn->hasLocalLinkage()) {
                         aot_ref_fast_callee = &it->second;
                     }
                 }
@@ -28088,7 +28100,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // Approach B: direct LLVM call to fast entry function.
                 // Args are passed directly as i64 values (NaN-boxed), bypassing
                 // the runtime helper entirely so LLVM can optimize across the call.
-                auto emit_approach_b_call = [&]() -> llvm::Value* {
+                auto emit_approach_b_call = [&](bool ref_params_bound = false) -> llvm::Value* {
                     llvm::Function* fast_fn = module.getFunction(callee_info.fast_name);
                     assert(fast_fn && "Approach B fast entry must be in module");
 
@@ -28105,7 +28117,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                     call_args.push_back(xsink_arg);
                     llvm::Value* result = emitNativeCall(fast_fn, call_args, direct_inst->variant, module,
-                            llvm_func, "", has_arg_cleanups ? arg_cleanups : nullptr, nargs);
+                            llvm_func, "", has_arg_cleanups ? arg_cleanups : nullptr, nargs, ref_params_bound);
                     return result;
                 };
                 if (is_approach_b) {
@@ -28141,14 +28153,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         builder->CreateCondBr(builder->CreateICmpEQ(bound, llvm::ConstantInt::get(i32_type, 1)),
                             guarded_fast_bb, not_bound_bb);
                         builder->SetInsertPoint(guarded_fast_bb);
-                        guarded_fast_result = emit_approach_b_call();
+                        // the parameters are released in the call's frame, whatever the fast entry returned
+                        guarded_fast_result = emit_approach_b_call(true);
                         if (!guarded_fast_result) {
                             return false;
                         }
-                        // the parameters are released whatever the fast entry returned
-                        auto unbind_fn = module.getOrInsertFunction("qore_rt_unbind_fast_entry_ref_params",
-                            llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
-                        builder->CreateCall(unbind_fn, {ref_variant_ptr, xsink_arg});
                         builder->CreateBr(guarded_merge_bb);
                         guarded_fast_bb = builder->GetInsertBlock();
                         // an argument that does not match its parameter: the batch entry below binds the arguments

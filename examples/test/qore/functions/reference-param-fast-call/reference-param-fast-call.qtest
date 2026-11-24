@@ -18,53 +18,139 @@
 #! Tests calls of functions and methods with reference parameters (issue #7271)
 /** ReferenceParamFastCall.q calls functions, methods, static methods and private methods with \c reference<T> and
     untyped \c reference parameters, given references to locals, hash keys, list elements, members and globals,
-    through several call levels, with \c NOTHING, with values that the parameter's type rejects and converts, with
-    writes that closures and other references see during the call and that an exception interrupts, with containers
-    that the callee changes while the caller holds a copy, with weak references, through call references and named
-    arguments bound at parse time and at run time, and across Program boundaries into a child and a sandboxed
-    Program; its output must be the one in ReferenceParamFastCall.expected, which the AST interpreter prints, in every
-    execution mode, on the IR tier and in programs compiled with qcc -O0 and -O3.
+    through several call levels, with \c NOTHING, with values that the parameter's type rejects (with the error's
+    description) and converts, with writes that closures and other references see during the call and that an
+    exception interrupts, with containers that the callee changes while the caller holds a copy, with weak
+    references, through call references and named arguments bound at parse time and at run time, and across Program
+    boundaries into a child and a sandboxed Program.  ReferenceParamFastCallExtra.q binds reference parameters
+    re-entrantly (a function called again through another function while its parameter is bound, also with
+    exceptions), takes the generic call path after another parameter's binding converted its lvalue, prints the call
+    stacks of exceptions raised in such functions, gives temporaries to them and calls them in threads.  The output of
+    each must be the one in its .expected file, which the AST interpreter prints, in every execution mode, on the IR
+    tier and in programs compiled with qcc -O0 and -O3.
+
+    ReferenceParamNativeRefCall.q runs with tiered execution and a JIT threshold of 5, so that code on the IR tier
+    calls functions with reference parameters that become native code while it runs (the inline call state
+    QORE_IR_INLINE_NATIVE_REF_CALL of the IR interpreter).  A module of two source files whose functions have
+    reference parameters and call each other is compiled with qcc -m (-O0 and -O3) and used in every execution mode.
 */
 class ReferenceParamFastCallTest inherits QUnit::Test {
+    public {
+        #! the fixtures run in every mode and compiled with qcc
+        const Fixtures = ("ReferenceParamFastCall", "ReferenceParamFastCallExtra");
+
+        #! the environment of the run whose IR code calls native callees
+        const NativeRefCallEnv = "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=5 QORE_JIT_TIMING=1";
+
+        #! the sources of the module
+        const ModuleQm = "%modern\nmodule RefParamMod {\n    version = \"1.0\";\n    desc = \"reference parameter "
+            "test module\";\n    author = \"Qore Technologies\";\n    url = \"https://qore.org\";\n    license = \"MIT\";"
+            "\n}\n";
+        const ModuleA = "%modern\npublic namespace RefParamMod {\npublic int sub set_ref(reference<int> r, int v) { "
+            "r += v; return r * 2; }\npublic string sub hset(reference<hash<auto>> h, string k) { h{k} = 1; "
+            "return h.keys().join(\",\"); }\n}\n";
+        const ModuleB = "%modern\npublic namespace RefParamMod {\npublic int sub caller(int n) { int x = 0; int acc = 0; "
+            "hash<auto> h = {}; for (int i = 0; i < n; ++i) { acc += set_ref(\\x, i); hset(\\h, \"k\" + (i % 3)); } "
+            "return acc * 1000 + x + h.size(); }\n}\n";
+        const ModuleUser = "%modern\n%requires RefParamMod\nprintf(\"%y\\n\", RefParamMod::caller(10));\nint y = 1;\n"
+            "printf(\"%y %y\\n\", RefParamMod::set_ref(\\y, 5), y);\nstring hs;\nfor (int i = 0; i < 3; ++i) { "
+            "hash<auto> h = {}; hs = RefParamMod::hset(\\h, \"a\" + i); }\nprintf(\"%y\\n\", hs);\n";
+    }
+
     private {
         string qore_bin = TestInterpreter::qore_interpreter();
-        string fixture = get_script_dir() + "/ReferenceParamFastCall.q";
-        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/ReferenceParamFastCall.expected");
     }
 
     constructor() : QUnit::Test("reference parameter fast calls", "1.0", \ARGV) {
-        foreach string mode in (ExecModeHarness::ExecModes) {
-            string execution_mode = mode;
-            addTestCase("execution mode " + mode, sub () {
-                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+        foreach string fixture in (Fixtures) {
+            string name = fixture;
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                string execution_mode = mode;
+                addTestCase(sprintf("%s: execution mode %s", name, mode), sub () {
+                    assertEq(expected(name), ExecModeHarness::run(command(execution_mode, path(name))));
+                });
+            }
+            addTestCase(name + ": IR tier", sub () {
+                assertEq(expected(name), ExecModeHarness::run_ir_tier(command("tiered", path(name))));
             });
+            addTestCase(name + ": qcc -O0", sub () { checkQcc(name, 0); });
+            addTestCase(name + ": qcc -O3", sub () { checkQcc(name, 3); });
         }
-        addTestCase("IR tier", sub () {
-            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
-        });
-        addTestCase("qcc -O0", sub () { checkQcc(0); });
-        addTestCase("qcc -O3", sub () { checkQcc(3); });
+        addTestCase("IR code calling native callees", \testNativeRefCall());
+        addTestCase("compiled module", \testModule());
 
         set_return_value(main());
     }
 
-    private string command(string mode) {
-        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    testNativeRefCall() {
+        string name = "ReferenceParamNativeRefCall";
+        hash<ModeRunResult> r = ExecModeHarness::run_command(command("tiered", path(name)), NOTHING, NativeRefCallEnv);
+        ExecModeHarness::check_loader_warnings(r);
+        # the callees were compiled to native code
+        ExecModeHarness::check_native(r);
+        assertEq(expected(name), r.out);
     }
 
-    #! compiles the fixture with qcc and compares the output of the program
-    private checkQcc(int opt) {
-        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
-        if (!is_file(qcc_bin)) {
-            qcc_bin = "qcc";
+    testModule() {
+        TmpDir tmp("qore-ref-param-mod-");
+        string src = tmp.path + DirSep + "src";
+        string mod = src + DirSep + "RefParamMod";
+        mkdir(mod, 0755, True);
+        writeFile(mod + DirSep + "RefParamMod.qm", ModuleQm);
+        writeFile(mod + DirSep + "a.qc", ModuleA);
+        writeFile(mod + DirSep + "b.qc", ModuleB);
+        string user = tmp.path + DirSep + "use.q";
+        writeFile(user, ModuleUser);
+        # the AST interpreter with the module's sources
+        string exp = ExecModeHarness::run(sprintf("QORE_MODULE_DIR=%s %s", shellQuote(src), command("ast", user)));
+        assertTrue(exp =~ /^330048\n12 6\n/, "the module's sources give the AST interpreter's output: " + exp);
+        foreach int opt in ((0, 3)) {
+            string out = sprintf("%s%sout%d", tmp.path, DirSep, opt);
+            mkdir(out);
+            string log = backquote(sprintf("%s -m -O%d -o %s %s 2>&1", shellQuote(qccBin()), opt,
+                shellQuote(out + DirSep + "RefParamMod.qmod"), shellQuote(mod)));
+            assertTrue(is_file(out + DirSep + "RefParamMod.qmod"), "compiled the module with -O" + opt + ": " + log);
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                # the module's code is AOT code, and the user's top-level code is too short to be compiled
+                assertEq(exp, ExecModeHarness::run(sprintf("QORE_MODULE_DIR=%s %s", shellQuote(out),
+                    command(mode, user)), NativeCheck::None), sprintf("module -O%d, mode %s", opt, mode));
+            }
         }
+    }
+
+    private string path(string name) {
+        return get_script_dir() + "/" + name + ".q";
+    }
+
+    private string expected(string name) {
+        return ReadOnlyFile::readTextFile(get_script_dir() + "/" + name + ".expected");
+    }
+
+    private string command(string mode, string script) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(script));
+    }
+
+    private string qccBin() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        return is_file(qcc_bin) ? qcc_bin : "qcc";
+    }
+
+    #! compiles a fixture with qcc and compares the output of the program
+    private checkQcc(string name, int opt) {
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
-        string program = dir + "/reference-param-fast-call";
-        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
-            shellQuote(fixture)));
+        string program = dir + "/" + name.lwr();
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qccBin()), opt, shellQuote(program),
+            shellQuote(path(name))));
         assertTrue(is_file(program), "the fixture compiled: " + output);
-        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+        assertEq(expected(name), backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(text);
+        f.close();
     }
 
     private static string shellQuote(string value) {

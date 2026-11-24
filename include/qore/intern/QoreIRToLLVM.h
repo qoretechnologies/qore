@@ -2692,9 +2692,13 @@ private:
         to the call (buildArgCleanupArray()), which are released when the callee returns, before its frame is popped,
         as the AST interpreter releases the parameters that took the arguments over in the callee's frame (issue #5882)
     */
+    //! @param ref_params_bound true if the call is one of a reference parameter fast entry whose reference parameters
+    //! the caller bound (qore_rt_bind_fast_entry_ref_params()): they are released in the call's frame once the fast
+    //! entry has returned, as AOT code releases them (issue #7271)
     llvm::CallInst* emitNativeCall(llvm::FunctionCallee fn, llvm::ArrayRef<llvm::Value*> args,
             const AbstractQoreFunctionVariant* callee, llvm::Module& module, llvm::Function* llvm_func,
-            const llvm::Twine& name = "", llvm::Value* arg_cleanups = nullptr, int nargs = 0);
+            const llvm::Twine& name = "", llvm::Value* arg_cleanups = nullptr, int nargs = 0,
+            bool ref_params_bound = false);
 
     //! Emits a call that AOT-compiled code makes directly to a native entry of user code, with its frame
     /** As emitNativeCall(); the callee is the call target of \a target_slot in this function's context, and the

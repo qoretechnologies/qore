@@ -17735,7 +17735,8 @@ static bool auditAOTBatchFastEntryDefinitions(llvm::Module& module,
             return false;
         }
         ++callee_i;
-        if (!info.approach_b_eligible || info.fast_name.empty()
+        // a reference parameter fast entry is audited as well: its callers call it as directly (issue #7271)
+        if ((!info.approach_b_eligible && !info.ref_fast_entry) || info.fast_name.empty()
                 || info.preloaded_fast_entry) {
             continue;
         }
@@ -17772,6 +17773,11 @@ static bool declareAOTSharedFastEntryFunctions(llvm::LLVMContext& ctx, llvm::Mod
         }
         ++callee_i;
         const BatchCalleeInfo& info = entry.second;
+        // a reference parameter fast entry (BatchCalleeInfo::ref_fast_entry) is never declared here: it has no fast-
+        // entry contract (finalizeAOTBatchFastEntrySymbols() hashes the fast entries of approach_b_eligible callees
+        // only), so a stale object could call one of another object with another ABI; it is defined with internal
+        // linkage in the module of its callers only (refreshAOTBatchFastEntryDeclarations()), whose calls of it
+        // require that linkage (issue #7271).  A change that calls one from another object must add its contract
         if (!info.approach_b_eligible || info.fast_name.empty()) {
             continue;
         }

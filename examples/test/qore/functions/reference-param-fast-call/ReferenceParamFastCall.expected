@@ -67,7 +67,7 @@ temp after: 5
 weak: "Obj"
 weak set: "Obj"
 weak after delete: True
-type error ex: "RUNTIME-TYPE-ERROR"
+type error ex: "RUNTIME-TYPE-ERROR: <reference> expects type 'int', but got type 'string' instead"
 type error after: "str"
 capture: [2, 3]
 capture after: 3
@@ -150,7 +150,7 @@ temp after: 5
 weak: "Obj"
 weak set: "Obj"
 weak after delete: True
-type error ex: "RUNTIME-TYPE-ERROR"
+type error ex: "RUNTIME-TYPE-ERROR: <reference> expects type 'int', but got type 'string' instead"
 type error after: "str"
 capture: [2, 3]
 capture after: 3
@@ -233,7 +233,7 @@ temp after: 5
 weak: "Obj"
 weak set: "Obj"
 weak after delete: True
-type error ex: "RUNTIME-TYPE-ERROR"
+type error ex: "RUNTIME-TYPE-ERROR: <reference> expects type 'int', but got type 'string' instead"
 type error after: "str"
 capture: [2, 3]
 capture after: 3

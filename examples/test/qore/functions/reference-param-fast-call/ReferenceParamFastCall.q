@@ -180,7 +180,7 @@ sub run(int i) {
     try {
         out("type error", set_ref(\av, 1));
     } catch (hash<ExceptionInfo> ex) {
-        out("type error ex", ex.err);
+        out("type error ex", ex.err + ": " + ex.desc);
     }
     out("type error after", av);
 
