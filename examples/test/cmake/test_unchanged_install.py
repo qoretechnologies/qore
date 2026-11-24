@@ -267,7 +267,8 @@ class UnchangedInstallTest(unittest.TestCase):
         result = subprocess.run([CMAKE, "--build", str(build), "--target", "Flat-qmod"],
                                 capture_output=True, text=True, timeout=60)
         self.assertNotEqual(0, result.returncode)
-        self.assertIn("does not report an AOT runtime identity", result.stdout + result.stderr)
+        # CMake's message() wraps its text at a width that depends on the platform, so whitespace is normalized
+        self.assertIn("does not report an AOT runtime identity", " ".join((result.stdout + result.stderr).split()))
 
     def test_module_reinstall_keeps_unchanged_qmods_and_links(self):
         registrations = ('qore_user_module("{}")\n', 'qore_external_user_module("{}" "")\n')
