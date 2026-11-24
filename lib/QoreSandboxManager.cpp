@@ -594,21 +594,21 @@ bool QoreFilesystemSecurityManager::checkAccess(const char* path, int mode, Exce
     return priv->checkRules(canon, path, mode, xsink);
 }
 
-bool QoreFilesystemSecurityManager::checkCanonicalAccess(const char* canon, const char* path, int mode,
-        ExceptionSink* xsink) {
-    if (priv->composition) {
+bool QoreSandboxComposition::checkCanonicalAccess(QoreFilesystemSecurityManager& fs, const char* canon,
+        const char* path, int mode, ExceptionSink* xsink) {
+    if (fs.priv->composition) {
         unsigned checked = 0;
-        for (auto* manager : priv->composition->managers) {
+        for (auto* manager : fs.priv->composition->managers) {
             if (!(checked++ % 100) && qore_check_cancel(xsink, "sandbox policy intersection")) {
                 return false;
             }
-            if (!manager->filesystem().checkCanonicalAccess(canon, path, mode, xsink)) {
+            if (!checkCanonicalAccess(manager->filesystem(), canon, path, mode, xsink)) {
                 return false;
             }
         }
         return true;
     }
-    return priv->checkRules(canon, path, mode, xsink);
+    return fs.priv->checkRules(canon, path, mode, xsink);
 }
 
 QoreHashNode* QoreFilesystemSecurityManager::getConfiguration(ExceptionSink* xsink) const {
@@ -2055,12 +2055,12 @@ static bool is_module_initialization_resource_read(const char* path, int mode) {
     return target.size() == root.size() || root.back() == '/' || target[root.size()] == '/';
 }
 
-bool QoreSandboxManager::checkCanonicalFilesystemAccess(const char* canon, const char* path, int mode,
-        ExceptionSink* xsink) {
+bool QoreSandboxComposition::checkCanonicalFilesystemAccess(QoreSandboxManager& sm, const char* canon,
+        const char* path, int mode, ExceptionSink* xsink) {
     if (is_module_initialization_resource_read(canon, mode)) {
         return true;
     }
-    return fs_mgr.checkCanonicalAccess(canon, path, mode, xsink);
+    return checkCanonicalAccess(sm.fs_mgr, canon, path, mode, xsink);
 }
 
 bool QoreSandboxManager::checkFilesystemAccess(const char* path, int mode, ExceptionSink* xsink) {
@@ -2799,7 +2799,7 @@ int q_sandbox_pin_path(QoreSandboxManager& sm, const char* name, int mode, bool 
 
     // the policy is checked for the canonical path pinned, without resolving it again: the directory was opened along
     // it without following a link, so the decision applies to the directory pinned; the error names the path as given
-    if (!sm.checkCanonicalFilesystemAccess(pin.canon.c_str(), name, mode, xsink)) {
+    if (!QoreSandboxComposition::checkCanonicalFilesystemAccess(sm, pin.canon.c_str(), name, mode, xsink)) {
         return -1;
     }
     // a name ending with '/' keeps it for the operation, to which the operating system applies its rules
