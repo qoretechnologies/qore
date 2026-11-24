@@ -21784,7 +21784,10 @@ load_local_done:
                     QoreValue res;
                     bool inline_may_invalidate_external_caches = true;
                     bool used_inline_ir;
-                    if (inst->interpreter_gives_call_args && hasConsumedCallArgs(inst)) {
+                    // a call that gives its temporary arguments is the uncommon one: the common call stays on the
+                    // straight path of the instruction (qore#7272: without the hint, GCC placed it out of line, with a
+                    // jump back, after an unrelated change)
+                    if (inst->interpreter_gives_call_args && hasConsumedCallArgs(inst)) [[unlikely]] {
                         // the references of the temporary arguments are given to the call, which releases them in the
                         // callee's frame, as the AST interpreter moves its argument list into the parameters
                         used_inline_ir = irCallStaticDirectGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,
