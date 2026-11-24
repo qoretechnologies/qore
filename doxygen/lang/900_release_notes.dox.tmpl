@@ -4563,6 +4563,9 @@
       client and @ref httpserverintro "HttpServer": the chunked coding is recognized without regard to case and
       whitespace, a request whose framing is ambiguous or unsupported is refused, and a response whose final
       transfer coding is not chunked is read until the connection closes
+    - the parse of a circular @ref inheritance "class hierarchy" whose code looks up a method or member of a class
+      of the cycle ends with the parse error of the circular hierarchy instead of never ending or exhausting the
+      stack (<a href="https://github.com/qoretechnologies/qore/issues/7464">issue 7464</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 
