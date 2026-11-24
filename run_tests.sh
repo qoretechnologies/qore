@@ -104,7 +104,9 @@ print_usage () {
   echo "                           comment of check_build() in run_tests.sh)."
   echo "  QORE_MODULE_DIR_ONLY     Configured builds use QORE_EXTERNAL_MODULE_DIRS from CMake after the build and"
   echo "                           source paths. Set QORE_MODULE_DIR_ONLY (even to an empty value) to use the"
-  echo "                           external paths in QORE_MODULE_DIR instead. Older builds keep their module paths."
+  echo "                           external paths in QORE_MODULE_DIR instead. Older builds keep in-tree caller paths."
+  echo "  QORE_TEST_ALLOW_EXTERNAL_INCLUDES"
+  echo "                           Set to 1 to preserve QORE_INCLUDE_DIR entries outside the source and build trees."
   echo "  QORE_TEST_BUILD_JOBS     Jobs a test that builds a CMake project runs (default: the number of CPUs, at"
   echo "                           least 2), e.g. examples/test/ir/CMakeBuildHelpers*.qtest."
   echo "  QORE_TEST_PRESERVE_PROVIDER_ENV"
@@ -1458,13 +1460,47 @@ if [ -n "$BUILD_MODULE_DIRS" ]; then
         TEST_MODULE_DIRS="$BUILD_MODULE_DIRS"
     fi
 fi
-# A build configured with the external path option uses exactly its recorded external paths. In particular, an
-# empty list excludes modules that a developer shell exposes through QORE_MODULE_DIR. Older builds had an additive
-# list; preserve their behaviour. A caller setting QORE_MODULE_DIR_ONLY explicitly still owns the external path.
-if [ -z "${QORE_MODULE_DIR_ONLY+set}" ] && [ -f "$QORE_BUILD_DIR/qore-external-module-dirs.txt" ] && \
-        grep -q '^QORE_EXTERNAL_MODULE_DIRS:STRING=' "$QORE_BUILD_DIR/CMakeCache.txt" 2>/dev/null; then
-    QORE_MODULE_DIR=$(cat "$QORE_BUILD_DIR/qore-external-module-dirs.txt")
-    export QORE_MODULE_DIR_ONLY=1
+# Print the existing directories under the source or build root, in search order. Resolve relative paths here,
+# before the runner enters the test directories. Resolve symlinks and .. before checking the directory boundary.
+in_tree_search_path() (
+    remaining=$1
+    filtered=
+    while [ -n "$remaining" ]; do
+        entry=${remaining%%:*}
+        case "$remaining" in
+            *:*) remaining=${remaining#*:} ;;
+            *) remaining= ;;
+        esac
+        [ -n "$entry" ] || continue
+        case "$entry" in
+            /*) ;;
+            *) entry=$QORE_SOURCE_DIR/$entry ;;
+        esac
+        dir=$(CDPATH= cd -P "$entry" 2>/dev/null && pwd -P) || continue
+        case "$dir/" in
+            "${QORE_SOURCE_DIR%/}/"*|"${QORE_BUILD_DIR%/}/"*) filtered=${filtered:+$filtered:}$dir ;;
+        esac
+    done
+    printf '%s' "$filtered"
+)
+
+if [ "$QORE_TEST_ALLOW_EXTERNAL_INCLUDES" != 1 ] && [ -n "${QORE_INCLUDE_DIR+set}" ]; then
+    QORE_INCLUDE_DIR=$(in_tree_search_path "$QORE_INCLUDE_DIR")
+    if [ -z "$QORE_INCLUDE_DIR" ]; then
+        unset QORE_INCLUDE_DIR
+    fi
+fi
+
+# A configured build uses exactly its recorded paths. Older builds append their recorded paths to the caller's
+# in-tree paths. A caller setting QORE_MODULE_DIR_ONLY explicitly supplies its own external paths in either case.
+if [ -z "${QORE_MODULE_DIR_ONLY+set}" ]; then
+    if [ -f "$QORE_BUILD_DIR/qore-external-module-dirs.txt" ] && \
+            grep -q '^QORE_EXTERNAL_MODULE_DIRS:STRING=' "$QORE_BUILD_DIR/CMakeCache.txt" 2>/dev/null; then
+        QORE_MODULE_DIR=$(cat "$QORE_BUILD_DIR/qore-external-module-dirs.txt")
+        export QORE_MODULE_DIR_ONLY=1
+    elif [ -n "$QORE_MODULE_DIR" ]; then
+        QORE_MODULE_DIR=$(in_tree_search_path "$QORE_MODULE_DIR")
+    fi
 fi
 if [ -n "$TEST_MODULE_DIRS" ]; then
     export QORE_MODULE_DIR=$TEST_MODULE_DIRS:$QORE_SOURCE_DIR/qlib${QORE_MODULE_DIR:+:$QORE_MODULE_DIR}
