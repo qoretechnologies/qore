@@ -2,7 +2,8 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright 2026 Qore Technologies, s.r.o.
 
-# a reference element is bound while the assignment holds the lock of the referenced lvalue (qore#7380)
+# a reference element of a value stored into a locked lvalue is bound after the store has released the lock, also
+# when the referenced lvalue is guarded by the same lock (qore#7380, qore#7391)
 
 %modern
 %allow-weak-references
@@ -58,13 +59,13 @@ class Notified {
     public {
         auto b = 1;
         list<reference<softint>> s;
-        int notifications = 0;
+        list<string> notified = ();
     }
 
     memberNotification(string member) {
         # reads the object: this must not run under the lock of the assignment
         auto v = self.b;
-        ++notifications;
+        notified += member;
     }
 }
 
@@ -108,6 +109,13 @@ class ChainOuter {
     }
 }
 
+class LocalTarget {
+    public {
+        auto b = "6";
+        list<reference<softint>> s;
+    }
+}
+
 hashdecl H {
     auto b;
     list<reference<softint>> s;
@@ -116,6 +124,22 @@ hashdecl H {
 our hash<H> g_h = cast<hash<H>>({"b": 5});
 our hash<H> g_conv = cast<hash<H>>({"b": "5"});
 our auto g_anc;
+our hash<H> g_lref = cast<hash<H>>({"b": "9"});
+
+# stores a value through a typed reference held by a local variable (a parameter)
+sub store_typed_ref(reference<list<reference<softint>>> r, list<auto> v) {
+    r = v;
+}
+
+# stores a value through a reference held by an untyped local variable (a parameter)
+sub store_untyped_ref(auto r, list<auto> v) {
+    r = v;
+}
+
+# stores a value whose element the referenced lvalue refuses through a reference held by a local variable
+sub store_int_ref(reference<list<reference<int>>> r, list<auto> v) {
+    r = v;
+}
 
 sub show(string label, code c) {
     try {
@@ -135,18 +159,14 @@ show("member of the same object", auto sub () {
     return (c.a.fullType(), c.b);
 });
 
-# a value that would have to be converted cannot be written under the lock: the target and the value stay as they were
+# a value that has to be converted is converted and written back after the lock has been released
 show("member that needs a conversion", auto sub () {
     C c();
     c.b = "7";
     list<auto> i = (\c.b,);
     auto x = i;
-    try {
-        c.s = x;
-    } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.s, c.b.type(), c.b);
-    }
-    return "no exception";
+    c.s = x;
+    return (c.s.fullType(), c.b.type(), c.b);
 });
 
 # a value that the element type rejects leaves the target as it was
@@ -207,26 +227,19 @@ show("global variable", auto sub () {
 show("global variable that needs a conversion", auto sub () {
     list<auto> i = (\g_conv.b,);
     auto x = i;
-    try {
-        g_conv.s = x;
-    } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, g_conv.s, g_conv.b.type(), g_conv.b);
-    }
-    return "no exception";
+    g_conv.s = x;
+    return (g_conv.s.fullType(), g_conv.b.type(), g_conv.b);
 });
 
-# the referenced lvalue contains the target: a conversion would replace the container that the assignment writes to
+# the referenced lvalue contains the target: the bind converts the container that the assignment writes to, and the
+# store resolves its target again in the converted container
 show("reference to an ancestor of the target", auto sub () {
     hash<string, *list<reference<hash<string, *list<auto>>>>> t = {"k": NOTHING};
     g_anc = t;
     list<auto> i = (\g_anc,);
     auto x = i;
-    try {
-        g_anc.k = x;
-    } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, g_anc.k, g_anc.fullType());
-    }
-    return g_anc.k.fullType();
+    g_anc.k = x;
+    return (g_anc.k.fullType(), g_anc.fullType());
 });
 
 # an element of the same closure-bound variable
@@ -268,22 +281,19 @@ show("member holding an object of a recursive set", auto sub () {
     return rv;
 });
 
-# a path through another object from the object being assigned: a shared container stays as it is
+# a path through another object from the object being assigned: the converted value is written to a copy of the
+# shared container, which stays as it is
 show("path through another object with a shared container", auto sub () {
     ChainOuter c();
     c.o.h = {"k": "5"};
     hash<auto> saved = c.o.h;
     list<auto> i = (\c.o.h.k,);
     auto x = i;
-    try {
-        c.s = x;
-    } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.s, saved.k.type(), c.o.h.k.type());
-    }
-    return "no exception";
+    c.s = x;
+    return (c.s.fullType(), saved.k.type(), saved.k, c.o.h.k.type(), c.o.h.k);
 });
 
-# the same path in a recursive set, with a value that would be copied: no scan runs under the lock
+# the same path in a recursive set, with a value that is copied to be converted
 show("path through another object in a recursive set", auto sub () {
     ChainOuter c();
     ChainInner o = c.o;
@@ -292,12 +302,12 @@ show("path through another object in a recursive set", auto sub () {
     o.m = objs;
     list<auto> i = (\c.o.m,);
     auto x = i;
-    string rv;
+    list<auto> rv;
     try {
         c.l = x;
-        rv = c.l.fullType();
+        rv = (c.l.fullType(), o.m.fullType(), o.m[0] == c);
     } catch (hash<ExceptionInfo> ex) {
-        rv = ex.err;
+        rv = (ex.err,);
     }
     # breaks the cycle
     remove o.back;
@@ -329,21 +339,18 @@ show("object of a subclass", auto sub () {
     return c.o.fullType();
 });
 
-# an enum value would be converted to its base value
+# an enum value is converted to its base value
 show("enum value", auto sub () {
     TypedHolder c();
     c.b = BindEnumOne;
     list<auto> i = (\c.b,);
     auto x = i;
-    try {
-        c.i = x;
-    } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.i);
-    }
-    return "no exception";
+    c.i = x;
+    return (c.i.fullType(), c.b.type(), c.b);
 });
 
-# a list whose element type is wider than the type of the reference, holding a value that the reference does not accept
+# a list whose element type is wider than the type of the reference, holding a value that the reference does not accept:
+# the target and the referenced value stay as they were
 show("list with a wider element type", auto sub () {
     TypedHolder c();
     list<*int> v = (1, NOTHING);
@@ -353,7 +360,7 @@ show("list with a wider element type", auto sub () {
     try {
         c.l = x;
     } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.l);
+        return (ex.err, c.l, c.b.fullType(), c.b);
     }
     return "no exception";
 });
@@ -377,7 +384,7 @@ show("relative date for an absolute date", auto sub () {
     try {
         c.d = x;
     } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.d);
+        return (ex.err, c.d, c.b.isRelative());
     }
     return c.d.fullType();
 });
@@ -391,7 +398,7 @@ show("list of relative dates for a list of absolute dates", auto sub () {
     try {
         c.ld = x;
     } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.ld);
+        return (ex.err, c.ld, c.b.fullType(), c.b[0].isRelative());
     }
     return c.ld.fullType();
 });
@@ -401,12 +408,9 @@ show("object for a soft list", auto sub () {
     c.b = new BaseValue();
     list<auto> i = (\c.b,);
     auto x = i;
-    try {
-        c.sl = x;
-    } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.sl);
-    }
-    return c.sl.fullType();
+    c.sl = x;
+    # the object is converted to a list holding it
+    return (c.sl.fullType(), c.b.fullType(), c.b[0] instanceof BaseValue);
 });
 
 show("deleted object", auto sub () {
@@ -416,10 +420,11 @@ show("deleted object", auto sub () {
     delete d;
     list<auto> i = (\c.b,);
     auto x = i;
+    # a deleted object is no value, which the object type does not accept
     try {
         c.obj = x;
     } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.obj);
+        return (ex.err, c.obj, type(c.b), c.b instanceof BaseValue);
     }
     return c.obj.fullType();
 });
@@ -430,12 +435,9 @@ show("weak reference to a list", auto sub () {
     c.b := v;
     list<auto> i = (\c.b,);
     auto x = i;
-    try {
-        c.lsi = x;
-    } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.lsi);
-    }
-    return c.lsi.fullType();
+    c.lsi = x;
+    # the list is converted to a new list, which replaces the weak reference; the list it refers to stays as it is
+    return (c.lsi.fullType(), c.b.fullType(), c.b, v.fullType(), v);
 });
 
 show("weak reference to a plain list", auto sub () {
@@ -447,7 +449,7 @@ show("weak reference to a plain list", auto sub () {
     try {
         c.plain_list = x;
     } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.plain_list);
+        return (ex.err, c.plain_list, c.b[0]);
     }
     return c.plain_list.fullType();
 });
@@ -461,7 +463,7 @@ show("weak reference to a plain hash", auto sub () {
     try {
         c.plain_hash = x;
     } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.plain_hash);
+        return (ex.err, c.plain_hash, c.b.a);
     }
     return c.plain_hash.fullType();
 });
@@ -481,19 +483,16 @@ show("reference held in the referenced lvalue", auto sub () {
     return c.a.fullType();
 });
 
-# a member notification of the same object cannot run under the lock: the assignment is refused and changes nothing
+# the member notifications of the same object run after the lock has been released: one for the member written back by
+# the bind and one for the target; the round of the store that was not made adds none ("b" is first notified by the
+# assignment of 4)
 show("member notification of the same object", auto sub () {
     Notified n();
     n.b = 4;
-    int before = n.notifications;
     list<auto> i = (\n.b,);
     auto x = i;
-    try {
-        n.s = x;
-    } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, n.s, n.b, n.notifications - before);
-    }
-    return "no exception";
+    n.s = x;
+    return (n.s.fullType(), n.b.type(), n.b, n.notified);
 });
 
 # a member notification of another object runs as usual
@@ -504,4 +503,132 @@ show("member notification of another object", auto sub () {
     auto x = i;
     c.s = x;
     return (o.b.type(), o.b, o.notifications > 0);
+});
+
+# a local variable that holds a reference to a member of an object stores a value whose element refers to another
+# member of the same object (qore#7391)
+show("local reference to a member of the same object", auto sub () {
+    LocalTarget t();
+    list<auto> v = (\t.b,);
+    store_typed_ref(\t.s, v);
+    return (t.s.fullType(), t.b.type(), t.b);
+});
+
+show("untyped local reference to a member of the same object", auto sub () {
+    LocalTarget t();
+    list<auto> v = (\t.b,);
+    store_untyped_ref(\t.s, v);
+    return (t.s.fullType(), t.b.type(), t.b);
+});
+
+show("local reference to a member of another object", auto sub () {
+    LocalTarget t();
+    Other o();
+    o.b = "3";
+    list<auto> v = (\o.b,);
+    store_typed_ref(\t.s, v);
+    return (t.s.fullType(), o.b.type(), o.b, t.b);
+});
+
+show("local reference to a global variable", auto sub () {
+    list<auto> v = (\g_lref.b,);
+    store_typed_ref(\g_lref.s, v);
+    return (g_lref.s.fullType(), g_lref.b.type(), g_lref.b);
+});
+
+show("local reference to a closure-bound variable", auto sub () {
+    hash<H> h = cast<hash<H>>({"b": "4"});
+    code get = auto sub () { return h.b; };
+    list<auto> v = (\h.b,);
+    store_typed_ref(\h.s, v);
+    return (h.s.fullType(), h.b.type(), get());
+});
+
+# the referenced value is refused: the target and the referenced value stay as they were
+show("local reference with a refused element", auto sub () {
+    C c();
+    c.b = "x";
+    list<auto> v = (\c.b,);
+    try {
+        store_int_ref(\c.a, v);
+    } catch (hash<ExceptionInfo> ex) {
+        return (ex.err, c.a, c.b);
+    }
+    return "no exception";
+});
+
+# the variable of a foreach loop is given a reference by the first element; the second element is assigned through it
+show("foreach variable holding a reference", auto sub () {
+    LocalTarget t();
+    t.b = "5";
+    list<auto> elems = (\t.s, (\t.b,));
+    int n = 0;
+    foreach auto e in (elems) {
+        ++n;
+    }
+    return (n, t.s.fullType(), t.b.type(), t.b);
+});
+
+# a cast binds the reference elements of the list it converts: the referenced value is converted (qore#7377, qore#7391)
+show("cast to a list of references to int", auto sub () {
+    C c();
+    c.b = BindEnumOne;
+    list<auto> x = (\c.b,);
+    auto l = cast<list<reference<int>>>(x);
+    return (l.fullType(), c.b.type(), c.b);
+});
+
+show("cast to a list of references to int refused", auto sub () {
+    C c();
+    c.b = "x";
+    list<auto> x = (\c.b,);
+    try {
+        auto l = cast<list<reference<int>>>(x);
+        return l.fullType();
+    } catch (hash<ExceptionInfo> ex) {
+        return (ex.err, c.b);
+    }
+});
+
+show("nested cast to references to softint", auto sub () {
+    C c();
+    c.b = "7";
+    list<auto> inner = (\c.b,);
+    list<list<auto>> nested = (inner,);
+    auto l = cast<list<list<reference<softint>>>>(nested);
+    return (l.fullType(), c.b.type(), c.b);
+});
+
+show("nested cast to references to int refused", auto sub () {
+    C c();
+    c.b = "x";
+    list<auto> inner = (\c.b,);
+    list<list<auto>> nested = (inner,);
+    try {
+        auto l = cast<list<list<reference<int>>>>(nested);
+        return l.fullType();
+    } catch (hash<ExceptionInfo> ex) {
+        return (ex.err, c.b);
+    }
+});
+
+# a reference element given to a soft list element type is bound before it is wrapped in a list
+show("soft list element", auto sub () {
+    C c();
+    c.b = "8";
+    list<auto> outer = (\c.b,);
+    auto l = cast<list<softlist<reference<softint>>>>(outer);
+    return (l.fullType(), l[0].fullType(), c.b.type(), c.b);
+});
+
+show("soft list element refused", auto sub () {
+    C c();
+    c.b = "x";
+    list<auto> outer = (\c.b,);
+    try {
+        auto l = cast<list<softlist<reference<int>>>>(outer);
+        return l.fullType();
+    } catch (hash<ExceptionInfo> ex) {
+        return (ex.err, c.b);
+    }
 });

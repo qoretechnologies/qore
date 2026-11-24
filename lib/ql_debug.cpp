@@ -28706,6 +28706,114 @@ static QoreValue f_dbg_continue_reference_lvalue(const QoreListNode* params, Run
 }
 
 namespace {
+//! a rendezvous of the threads that bind reference elements (qore#7391)
+/** see qore_dbg_reference_bind_hook: each of the first \c parties binds made while the rendezvous is armed arrives at
+    it.  A bind made with an lvalue write lock held fails at once (it would lock the referenced lvalue under the lock
+    of the store, which deadlocks when two threads do it in the opposite order); a bind made with no lock held waits
+    until all parties have arrived, so that the binds of all parties are in progress at the same time.  The wait has a
+    bound only so that a test that is broken does not hang; no result depends on it.
+*/
+struct ReferenceBindRendezvous {
+    std::mutex m;
+    std::condition_variable cond;
+    //! the number of binds that arrive at the rendezvous
+    int64 parties = 0;
+    //! the bound of the wait of a bind for the other parties, in milliseconds
+    int64 timeout_ms = 0;
+    //! the number of binds that have arrived
+    int64 arrived = 0;
+    //! the number of binds that arrived with an lvalue write lock held
+    int64 held = 0;
+    //! the highest number of lvalue write locks that a bind arrived with
+    int64 max_held = 0;
+    //! the number of binds whose wait for the other parties reached its bound
+    int64 timeouts = 0;
+    //! the rendezvous is armed
+    bool armed = false;
+};
+
+ReferenceBindRendezvous& reference_bind_rendezvous() {
+    // not destroyed, as references can be bound while static objects are destroyed
+    static ReferenceBindRendezvous* r = new ReferenceBindRendezvous;
+    return *r;
+}
+
+bool dbg_reference_bind_rendezvous_hook(int held) {
+    ReferenceBindRendezvous& r = reference_bind_rendezvous();
+    std::unique_lock<std::mutex> l(r.m);
+    if (!r.armed || r.arrived >= r.parties) {
+        return false;
+    }
+    ++r.arrived;
+    if (held > r.max_held) {
+        r.max_held = held;
+    }
+    if (held > 0) {
+        // the bind fails at once; a party that waits for it is let go
+        ++r.held;
+        r.cond.notify_all();
+        return true;
+    }
+    if (r.arrived == r.parties) {
+        r.cond.notify_all();
+        return false;
+    }
+    if (!r.cond.wait_for(l, std::chrono::milliseconds(r.timeout_ms), [&r]() { return r.arrived >= r.parties; })) {
+        ++r.timeouts;
+    }
+    return false;
+}
+}
+
+//! arms a rendezvous of the next binds of reference elements; see ReferenceBindRendezvous
+static QoreValue f_dbg_reference_bind_rendezvous(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 parties = get_param_value(params, 0).getAsBigInt();
+    int64 timeout_ms = get_param_value(params, 1).getAsBigInt();
+    if (parties < 1 || timeout_ms < 1) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the number of parties and the timeout must be positive");
+        return QoreValue();
+    }
+    ReferenceBindRendezvous& r = reference_bind_rendezvous();
+    std::lock_guard<std::mutex> l(r.m);
+    if (r.armed) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a reference bind rendezvous is already armed");
+        return QoreValue();
+    }
+    r.parties = parties;
+    r.timeout_ms = timeout_ms;
+    r.arrived = 0;
+    r.held = 0;
+    r.max_held = 0;
+    r.timeouts = 0;
+    r.armed = true;
+    qore_dbg_reference_bind_hook.store(dbg_reference_bind_rendezvous_hook);
+    return QoreValue();
+}
+
+//! disarms the rendezvous and returns its result: the binds that arrived, that held a lock, and whose wait timed out
+static QoreValue f_dbg_reference_bind_rendezvous_result(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceBindRendezvous& r = reference_bind_rendezvous();
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    {
+        std::lock_guard<std::mutex> l(r.m);
+        if (!r.armed) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "no reference bind rendezvous is armed");
+            return QoreValue();
+        }
+        qore_dbg_reference_bind_hook.store(nullptr);
+        r.armed = false;
+        rv->setKeyValue("parties", r.parties, xsink);
+        rv->setKeyValue("arrived", r.arrived, xsink);
+        rv->setKeyValue("held", r.held, xsink);
+        rv->setKeyValue("max_held", r.max_held, xsink);
+        rv->setKeyValue("timeouts", r.timeouts, xsink);
+    }
+    return rv.release();
+}
+
+namespace {
 //! holds the thread that tears down a Program after the cleanup callback, before it marks the Program as torn down
 /** While the thread is held, other threads can enter the Program, as they could while the callback ran
 */
@@ -35051,6 +35159,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_continue_reference_lvalue", f_dbg_continue_reference_lvalue, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_reference_bind_rendezvous", f_dbg_reference_bind_rendezvous, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "parties", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_reference_bind_rendezvous_result", f_dbg_reference_bind_rendezvous_result,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 0);
     qns.addBuiltinVariant("dbg_hold_program_teardown", f_dbg_hold_program_teardown, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_wait_program_teardown_held", f_dbg_wait_program_teardown_held, QCF_NO_FLAGS,

@@ -35,6 +35,7 @@
 // included after <qore/Qore.h>, which declares QoreValue
 #include "qore/intern/LexicalSemanticPolicy.h"
 
+#include <atomic>
 #include <cstddef>
 #include <optional>
 #include <type_traits>
@@ -391,5 +392,15 @@ private:
     //! returns the state, allocating it if needed
     DLLLOCAL QoreBindRetryState& getState();
 };
+
+#ifdef DEBUG
+//! called by the bind of a reference element before it resolves the referenced lvalue (qore#7391)
+/** Called with the number of lvalue write locks that the thread holds (qore_lvalue_write_locks_held), which is 0 for
+    a bind made outside the locks of the store; returns true if the bind must fail with DBG-REFERENCE-BIND-HELD.  Set
+    by dbg_reference_bind_rendezvous() (lib/ql_debug.cpp).
+*/
+typedef bool (*qore_dbg_reference_bind_hook_t)(int held);
+DLLLOCAL extern std::atomic<qore_dbg_reference_bind_hook_t> qore_dbg_reference_bind_hook;
+#endif
 
 #endif

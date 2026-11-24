@@ -1,0 +1,56 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - threads and lvalue locking
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class ReferenceBindTwoThreadTest
+
+#! Two threads store values whose reference elements refer to each other's targets (qore#7391)
+/** Thread 1 stores <tt>(\\b.v,)</tt> into \c a.r and thread 2 <tt>(\\a.v,)</tt> into \c b.r, where \c r has the type
+    \c list<reference<softint>> and \c v is untyped: the check of each store binds a reference element, which converts
+    the value of the other target's lvalue.  A bind made under the lock of the store's target locks the other lvalue
+    with it held, which deadlocks when the two threads do it at the same time.  The binds are made with no lvalue lock
+    held: a debug hook (dbg_reference_bind_rendezvous()) makes the binds of both threads wait for each other, so that
+    they are in progress at the same time, and makes a bind made with an lvalue write lock held fail at once with
+    \c DBG-REFERENCE-BIND-HELD instead of waiting.  The program covers members of two objects, global variables,
+    closure-bound variables and a member of the object of the target itself (qore#7380), in the AST, IR, JIT and tiered
+    modes; qcc executables are not built, as the hook is a debug function of the library.
+
+    The program is in \c reference-bind-two-thread/.
+*/
+class ReferenceBindTwoThreadTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/reference-bind-two-thread";
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+        const Program = "reference-bind-two-thread";
+    }
+
+    constructor() : QUnit::Test("ReferenceBindTwoThreadTest", "1.0", \ARGV) {
+        addTestCase("the stores of two threads bind their references outside their locks", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the reference bind rendezvous requires a debug build");
+        }
+        string expected = ReadOnlyFile::readTextFile(dir + "/" + Program + ".expected");
+        foreach string mode in (Modes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+                "--exec-mode=%s %s/%s.q", qore_bin, mode, dir, Program));
+            assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+            assertEq(expected, r.stdout, mode);
+        }
+    }
+}

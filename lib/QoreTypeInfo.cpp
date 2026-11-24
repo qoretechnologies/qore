@@ -6117,6 +6117,10 @@ bool QoreTypeInfo::unionHasEnumTypeFor(const QoreTypeInfo* ti, const QoreValue& 
     return n.isEnum() && getUnionType(ti) && qore_type_info_has_enum_spec_for(*ti, n);
 }
 
+#ifdef DEBUG
+std::atomic<qore_dbg_reference_bind_hook_t> qore_dbg_reference_bind_hook{nullptr};
+#endif
+
 //! Binds the reference \a r to the reference type of \a target_ti with no lvalue lock held (qore#7391)
 /** The value of the referenced lvalue is checked or converted to \a target_ti and written back if the conversion
     changed it.  A store of the write-back that records references of its own (its lvalue's type can bind references)
@@ -6133,6 +6137,20 @@ static void qore_reference_bind_unlocked(ReferenceNode* r, const QoreTypeInfo* t
     QoreReferenceBindFrame frame(r, target_ti);
     // a check that runs with a probe installed binds no reference itself
     QoreReferenceBindProbeSuspend suspend;
+#ifdef DEBUG
+    // a test checks that no lvalue lock is held here and makes threads bind at the same time
+    // (dbg_reference_bind_rendezvous())
+    if (qore_dbg_reference_bind_hook_t hook = qore_dbg_reference_bind_hook.load()) [[unlikely]] {
+        // the bind is not made under the locks held: it could deadlock
+        if (hook(qore_lvalue_write_locks_held)) {
+            if (xsink) {
+                xsink->raiseException("DBG-REFERENCE-BIND-HELD", "a reference element was bound while the thread held "
+                    "%d lvalue write lock(s)", qore_lvalue_write_locks_held);
+            }
+            return;
+        }
+    }
+#endif
 
     // issue #2891: do not create a value in the source reference if none already exists
     // do not process if there is no type restriction

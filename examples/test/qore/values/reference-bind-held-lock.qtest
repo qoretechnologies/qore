@@ -16,11 +16,16 @@
 
 %exec-class ReferenceBindHeldLockTest
 
-#! Binding a reference element while the assignment holds the lock of the referenced lvalue (qore#7380)
+#! Binding a reference element of a value stored into a locked lvalue (qore#7380, qore#7391)
 /** The type check of an assignment runs with the lock of its target held.  A \c reference<T> element whose variable
-    has a wider declared type is bound there, which reads and can write the referenced lvalue; when that lvalue is
-    guarded by the same lock (a member of the same object, an element of the same global or closure-bound variable),
-    the thread locked it twice.  Every mode, qcc executables included, must print the output of the AST.
+    has a wider declared type is bound, which reads and can write the referenced lvalue; when that lvalue is guarded by
+    the same lock (a member of the same object, an element of the same global or closure-bound variable), binding it
+    under the lock locked it twice.  The check now records the reference, the store is abandoned, the reference is
+    bound with no lock held, and the store is made again: a value that the bind converts is converted and written back,
+    a value that it refuses raises \c RUNTIME-TYPE-ERROR and leaves the target and the referenced value as they were,
+    and member notifications run outside the lock.  The program also stores through a local variable that holds a
+    reference (a parameter, the variable of a foreach loop) and casts lists whose elements are references (qore#7377).
+    Every mode, qcc executables included, must print the output of the AST.
 
     The program is in \c reference-bind-held-lock/.
 */

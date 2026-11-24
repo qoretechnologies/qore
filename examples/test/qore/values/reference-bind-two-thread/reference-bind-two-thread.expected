@@ -1,0 +1,5 @@
+members of two objects: parties 2, arrived 2, held 0, max held 0, timeouts 0; stores: ["ok", "ok"]; ["list<reference<softint>>", "list<reference<softint>>", "integer", 1, "integer", 2, 20, 10]
+global variables: parties 2, arrived 2, held 0, max held 0, timeouts 0; stores: ["ok", "ok"]; ["list<reference<softint>>", "list<reference<softint>>", "integer", 1, "integer", 2, 20, 10]
+closure-bound variables: parties 2, arrived 2, held 0, max held 0, timeouts 0; stores: ["ok", "ok"]; ["list<reference<softint>>", "list<reference<softint>>", "integer", 1, "integer", 2, 20, 10]
+member of the same object: parties 1, arrived 1, held 0, max held 0, timeouts 0; stores: ["ok"]; ["list<reference<softint>>", "integer", 3, 30]
+members of the same objects: parties 2, arrived 2, held 0, max held 0, timeouts 0; stores: ["ok", "ok"]; ["list<reference<softint>>", "list<reference<softint>>", "integer", 4, "integer", 5]

@@ -2545,6 +2545,29 @@ static AssignmentMode qore_rt_store_mode(int32_t mode) {
     return m;
 }
 
+//! Assigns a value to a local whose lvalue is locked and whose type can bind a reference element (qore#7391)
+/** The local holds a reference to a member or to a global or closure-bound variable, or is closure-bound (see
+    qore_local_store_needs_bind_retry()): the store is made with a QoreBindRetry, which binds the reference elements
+    of the value with no lvalue lock held, and the local is resolved again for each round.  The arguments are those of
+    qore_rt_assign_local_impl(); \a val is borrowed.
+*/
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD void qore_rt_assign_local_bind_retry(LocalVar* var, QoreValue val,
+        ExceptionSink* xsink, bool check_types, const char* desc, AssignmentMode mode, QoreValue* converted) {
+    qore_store_with_bind_retry(xsink, false, val.needsRef() ? val.refSelf() : val,
+        [var](LValueHelper& helper) -> int {
+            return var->getLValue(helper, false, true);
+        },
+        [&](LValueHelper& helper, QoreValue stored) -> int {
+            if (helper.assign(stored, desc, check_types, mode)) {
+                return -1;
+            }
+            if (converted) {
+                *converted = qore_rt_store_converted_value(helper, xsink);
+            }
+            return 0;
+        });
+}
+
 //! Assigns a value to a local on the runtime stack
 /** @param desc the description of the lvalue in a type error of the assignment's own type check: "<lvalue>", or
     "<foreach lvalue assignment>" for the variable of a foreach loop, as the AST interpreter describes them
@@ -2565,15 +2588,24 @@ static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSi
             return;
         }
     }
-    LValueHelper helper(xsink);
-    if (var->getLValueInline(helper, false, true)) {
-        return;
+    {
+        LValueHelper helper(xsink);
+        if (var->getLValueInline(helper, false, true)) {
+            return;
+        }
+        if (!qore_local_store_needs_bind_retry(helper)) [[likely]] {
+            // refSelf before assign — assign takes ownership of the reference
+            QoreValue stored = val.needsRef() ? val.refSelf() : val;
+            if (!helper.assign(stored, desc, check_types, mode) && converted) {
+                *converted = qore_rt_store_converted_value(helper, xsink);
+            }
+            return;
+        }
+        // the lvalue is locked and its type can bind a reference element: the entries created to reach it are
+        // removed, and the store is made out of line after the helper has released the lock (qore#7391)
+        helper.rollbackVivification();
     }
-    // refSelf before assign — assign takes ownership of the reference
-    QoreValue stored = val.needsRef() ? val.refSelf() : val;
-    if (!helper.assign(stored, desc, check_types, mode) && converted) {
-        *converted = qore_rt_store_converted_value(helper, xsink);
-    }
+    qore_rt_assign_local_bind_retry(var, val, xsink, check_types, desc, mode, converted);
 }
 
 static void qore_rt_assign_closure_impl(ClosureVarValue* cvv, uint64_t value,
@@ -2607,6 +2639,29 @@ static void qore_rt_assign_closure_impl(ClosureVarValue* cvv, uint64_t value,
         });
 }
 
+//! qore_rt_assign_local_transfer() for a local whose lvalue is locked and whose type can bind a reference element
+/** The store is made with a QoreBindRetry, which binds the reference elements of the value with no lvalue lock held,
+    and the local is resolved again for each round (qore#7391); \a value is owned by this function in every case
+*/
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue qore_rt_assign_local_transfer_bind_retry(LocalVar* var,
+        QoreValue value, ExceptionSink* xsink) {
+    QoreValue stored;
+    qore_store_with_bind_retry(xsink, false, value,
+        [var](LValueHelper& helper) -> int {
+            return var->getLValue(helper, false, true);
+        },
+        [&stored](LValueHelper& helper, QoreValue v) -> int {
+            if (helper.assign(v, "<lvalue>", true)) {
+                return -1;
+            }
+            // see qore_rt_assign_local_transfer()
+            stored = QoreValue(helper.getInternalNode());
+            return 0;
+        });
+    assert(stored.isNothing() || stored.getType() == NT_HASH || stored.getType() == NT_LIST);
+    return stored;
+}
+
 // Variant of qore_rt_assign_local_impl() that TRANSFERS ownership of value's
 // reference instead of taking a new one, and returns the value the lvalue
 // actually stores afterward (borrowed against the local's own reference;
@@ -2622,21 +2677,29 @@ static QoreValue qore_rt_assign_local_transfer(LocalVar* var, QoreValue value,
         value.discard(xsink);
         return QoreValue();
     }
-    LValueHelper helper(xsink);
-    if (var->getLValue(helper, false, true)) {
-        value.discard(xsink);
-        return QoreValue();
+    {
+        LValueHelper helper(xsink);
+        if (var->getLValue(helper, false, true)) {
+            value.discard(xsink);
+            return QoreValue();
+        }
+        if (!qore_local_store_needs_bind_retry(helper)) [[likely]] {
+            // assign() takes ownership of value's reference on success and on error
+            if (helper.assign(value, "<lvalue>", true)) {
+                return QoreValue();
+            }
+            // the node that the local stores, which stays valid after the helper is gone: the callers pass a copy of
+            // a hash or a list; helper.getValue() would return a scalar that the local stores natively in a node that
+            // the helper keeps and releases when it is destroyed (qore#6094)
+            QoreValue stored(helper.getInternalNode());
+            assert(stored.getType() == NT_HASH || stored.getType() == NT_LIST);
+            return stored;
+        }
+        // the lvalue is locked and its type can bind a reference element: the entries created to reach it are
+        // removed, and the store is made out of line after the helper has released the lock (qore#7391)
+        helper.rollbackVivification();
     }
-    // assign() takes ownership of value's reference on success and on error
-    if (helper.assign(value, "<lvalue>", true)) {
-        return QoreValue();
-    }
-    // the node that the local stores, which stays valid after the helper is gone: the callers pass a copy of a hash or
-    // a list; helper.getValue() would return a scalar that the local stores natively in a node that the helper keeps
-    // and releases when it is destroyed (qore#6094)
-    QoreValue stored(helper.getInternalNode());
-    assert(stored.getType() == NT_HASH || stored.getType() == NT_LIST);
-    return stored;
+    return qore_rt_assign_local_transfer_bind_retry(var, value, xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_assign_local(LocalVar* var, uint64_t value, ExceptionSink* xsink) {

@@ -2132,6 +2132,18 @@ QORE_INTERN_ALWAYS_INLINE int qore_reference_store_with_bind_retry(const Referen
     return -1;
 }
 
+//! returns true if a store to a local variable resolved by \a lvh must be made with a QoreBindRetry (qore#7391)
+/** A local variable on the runtime stack is resolved with no lvalue lock, and the check of a value stored into it binds
+    its reference elements inline.  A local variable that holds a reference to a member or to a global or closure-bound
+    variable, or a closure-bound local variable, is resolved to an lvalue that the helper locks: if the type of that
+    lvalue can bind a reference element, the store must not be made with this helper, which has no retry; the caller
+    releases it and makes the store out of line with qore_store_with_bind_retry(), which resolves the variable again
+    for each round.  The type is tested first: it is a cached byte, and the types of most stores cannot bind.
+*/
+QORE_INTERN_ALWAYS_INLINE bool qore_local_store_needs_bind_retry(const LValueHelper& lvh) {
+    return QoreTypeInfo::mayBindReference(lvh.getTypeInfo()) && lvh.vl;
+}
+
 class LValueRemoveHelper {
 private:
     // not implemented

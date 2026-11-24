@@ -3029,6 +3029,24 @@ static QORE_INTERN_NOINLINE QoreValue evalPlusEquals(const QoreValue& lvalue, co
 QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right, ExceptionSink* xsink);
 QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
 
+//! Assigns a value to a local whose lvalue is locked and whose type can bind a reference element (qore#7391)
+/** The local holds a reference to a member or to a global or closure-bound variable, or is closure-bound (see
+    qore_local_store_needs_bind_retry()): the store is made with a QoreBindRetry, which binds the reference elements
+    of the value with no lvalue lock held, and the local is resolved again for each round
+
+    @param resolve <tt>int (LValueHelper&)</tt>: resolves the local
+    @param value the value, which this function owns in every case
+    @param desc the description of the lvalue in a type error
+*/
+template <typename Resolve>
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD void qore_ir_assign_local_bind_retry(Resolve&& resolve, QoreValue value,
+        const char* desc, ExceptionSink* xsink) {
+    qore_store_with_bind_retry(xsink, false, value, resolve,
+        [desc](LValueHelper& helper, QoreValue v) -> int {
+            return helper.assign(v, desc);
+        });
+}
+
 //! Assigns a value to a local on the runtime stack
 /** @param desc the description of the lvalue in a type error: "<lvalue>", or "<foreach lvalue assignment>" for an
     element given to the variable of a foreach loop, as the AST interpreter describes them
@@ -3038,13 +3056,24 @@ static void assignLocalVarValue(LocalVar* var, const QoreValue& value, Exception
     if (!var) {
         return;
     }
-    LValueHelper helper(xsink);
-    if (var->getLValue(helper, false, true)) {
-        return;
+    {
+        LValueHelper helper(xsink);
+        if (var->getLValue(helper, false, true)) {
+            return;
+        }
+        if (!qore_local_store_needs_bind_retry(helper)) [[likely]] {
+            // refSelf before assign — assign takes ownership of the reference
+            QoreValue stored = value.needsRef() ? value.refSelf() : value;
+            helper.assign(stored, desc);
+            return;
+        }
+        // the lvalue is locked and its type can bind a reference element: the entries created to reach it are
+        // removed, and the store is made out of line after the helper has released the lock (qore#7391)
+        helper.rollbackVivification();
     }
-    // refSelf before assign — assign takes ownership of the reference
-    QoreValue stored = value.needsRef() ? value.refSelf() : value;
-    helper.assign(stored, desc);
+    qore_ir_assign_local_bind_retry([var](LValueHelper& helper) -> int {
+            return var->getLValue(helper, false, true);
+        }, value.needsRef() ? value.refSelf() : value, desc, xsink);
 }
 
 // Variant of assignLocalVarValue that TRANSFERS ownership of value's reference
@@ -3062,13 +3091,23 @@ static void assignLocalVarValueTransfer(LocalVar* var, QoreValue value, Exceptio
         value.discard(xsink);
         return;
     }
-    LValueHelper helper(xsink);
-    if (var->getLValue(helper, false, true)) {
-        value.discard(xsink);
-        return;
+    {
+        LValueHelper helper(xsink);
+        if (var->getLValue(helper, false, true)) {
+            value.discard(xsink);
+            return;
+        }
+        if (!qore_local_store_needs_bind_retry(helper)) [[likely]] {
+            // Transfer: no refSelf. helper.assign takes ownership of the passed ref.
+            helper.assign(value, desc);
+            return;
+        }
+        // see assignLocalVarValue() (qore#7391)
+        helper.rollbackVivification();
     }
-    // Transfer: no refSelf. helper.assign takes ownership of the passed ref.
-    helper.assign(value, desc);
+    qore_ir_assign_local_bind_retry([var](LValueHelper& helper) -> int {
+            return var->getLValue(helper, false, true);
+        }, value, desc, xsink);
 }
 
 //! Mirrors a value that the IR slot cache already holds to the thread's local variable, if it has one
@@ -3079,14 +3118,25 @@ static void assignLocalVarValueTransfer(LocalVar* var, QoreValue value, Exceptio
 */
 static void mirrorLocalVarValueTransfer(LocalVar* var, QoreValue value, ExceptionSink* xsink) {
     assert(var);
-    LValueHelper helper(xsink);
-    LocalVarLValueLookup rc = var->tryGetLValue(helper, false, true);
-    if (rc != LocalVarLValueLookup::Found) {
-        assert(rc == LocalVarLValueLookup::NotInstantiated || *xsink);
-        value.discard(xsink);
-        return;
+    {
+        LValueHelper helper(xsink);
+        LocalVarLValueLookup rc = var->tryGetLValue(helper, false, true);
+        if (rc != LocalVarLValueLookup::Found) {
+            assert(rc == LocalVarLValueLookup::NotInstantiated || *xsink);
+            value.discard(xsink);
+            return;
+        }
+        if (!qore_local_store_needs_bind_retry(helper)) [[likely]] {
+            helper.assign(value);
+            return;
+        }
+        // see assignLocalVarValue() (qore#7391)
+        helper.rollbackVivification();
     }
-    helper.assign(value);
+    // the variable was found above, on this thread, where it stays instantiated
+    qore_ir_assign_local_bind_retry([var](LValueHelper& helper) -> int {
+            return var->getLValue(helper, false, true);
+        }, value, "<lvalue>", xsink);
 }
 
 //! Returns the value stored in an IR-only local, with the reference its slot owns
