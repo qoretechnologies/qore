@@ -36,21 +36,6 @@
 #include "qore/intern/QoreSandboxMemory.h"
 #include <list>
 
-// to maintain the order of inserts
-class HashMember {
-public:
-    QoreValue val{};
-    std::string key;
-
-    DLLLOCAL HashMember(const char* n_key) : key(n_key) {
-    }
-
-    DLLLOCAL ~HashMember() {
-    }
-};
-
-typedef std::list<HashMember*> qhlist_t;
-
 #include <unordered_map>
 #include "qore/intern/xxhash.h"
 #include "qore/intern/qore_container_free.h"
@@ -60,7 +45,7 @@ typedef std::list<HashMember*> qhlist_t;
 /** The hash is the one that qore_hash_str gives for the key, so that a hash computed in advance with qore_hash_str
     (ex: by the JIT for a constant key) finds the key.
 */
-struct qore_hash_lookup_key {
+struct DLLLOCAL qore_hash_lookup_key {
     const char* str;
     size_t len;
     size_t hash;
@@ -87,53 +72,104 @@ struct qore_hash_lookup_key {
     }
 };
 
-//! The hash function of the key map of a hash (qore#7194)
-/** Not noexcept: libstdc++ then keeps the hash of each key in its node and compares it before the keys, so that the
-    keys of a lookup are compared only when their hashes are equal (see the static_assert after hm_hm_t)
+//! A member of a hash, in insertion order
+/** The member keeps the hash of its key (qore_hash_lookup_key::hashBytes()), so that the key map does not keep a
+    copy of it in its node, and so that a copy of the hash inserts its keys without hashing them again (qore#7265)
 */
-struct qore_hash_member_key_hash {
-    using is_transparent = void;
+class DLLLOCAL HashMember {
+public:
+    QoreValue val{};
+    std::string key;
+    //! the hash of the key; the same as qore_hash_str for the key
+    size_t hash;
 
-    DLLLOCAL size_t operator()(const std::string* key) const {
-        return qore_hash_lookup_key::hashBytes(key->data(), key->size());
+    //! creates a member with the key and hash of \a k
+    DLLLOCAL explicit HashMember(const qore_hash_lookup_key& k) : key(k.str, k.len), hash(k.hash) {
     }
 
-    DLLLOCAL size_t operator()(const qore_hash_lookup_key& key) const {
+    //! creates a member with the key \a n_key, whose hash is \a n_hash (ex: the key and hash of another member)
+    DLLLOCAL HashMember(const std::string& n_key, size_t n_hash) : key(n_key), hash(n_hash) {
+        assert(hash == qore_hash_lookup_key::hashBytes(key.data(), key.size()));
+    }
+
+    DLLLOCAL HashMember(const HashMember&) = delete;
+    DLLLOCAL HashMember& operator=(const HashMember&) = delete;
+};
+
+typedef std::list<HashMember*> qhlist_t;
+
+//! The hash function of the key map of a hash (qore#7194, qore#7265)
+/** The hash of a member's key is kept in the member, so the function is noexcept: libstdc++ then does not keep a
+    second copy of it in each node of the map (see the static_assert after hm_hm_t); qore_hash_member_key_eq
+    compares the hashes before the keys
+*/
+struct DLLLOCAL qore_hash_member_key_hash {
+    using is_transparent = void;
+
+    DLLLOCAL size_t operator()(const HashMember* m) const noexcept {
+        return m->hash;
+    }
+
+    DLLLOCAL size_t operator()(const qore_hash_lookup_key& key) const noexcept {
         return key.hash;
     }
 };
 
-//! The key comparison of the key map of a hash: by length, then inline (qore#7194)
-struct qore_hash_member_key_eq {
+//! The key comparison of the key map of a hash: by hash, then by length, then inline (qore#7194, qore#7265)
+struct DLLLOCAL qore_hash_member_key_eq {
     using is_transparent = void;
 
-    DLLLOCAL bool operator()(const std::string* a, const std::string* b) const {
-        return a == b || qore_key_equal(a->data(), a->size(), b->data(), b->size());
+    DLLLOCAL bool operator()(const HashMember* a, const HashMember* b) const {
+        return a == b || (a->hash == b->hash
+            && qore_key_equal(a->key.data(), a->key.size(), b->key.data(), b->key.size()));
     }
 
-    DLLLOCAL bool operator()(const qore_hash_lookup_key& a, const std::string* b) const {
-        return qore_key_equal(a.str, a.len, b->data(), b->size());
+    DLLLOCAL bool operator()(const qore_hash_lookup_key& a, const HashMember* b) const {
+        return a.hash == b->hash && qore_key_equal(a.str, a.len, b->key.data(), b->key.size());
     }
 
-    DLLLOCAL bool operator()(const std::string* a, const qore_hash_lookup_key& b) const {
-        return qore_key_equal(a->data(), a->size(), b.str, b.len);
+    DLLLOCAL bool operator()(const HashMember* a, const qore_hash_lookup_key& b) const {
+        return a->hash == b.hash && qore_key_equal(a->key.data(), a->key.size(), b.str, b.len);
     }
 };
 
-//! The key map of a hash: the key of each member (the key string of its HashMember) to its place in the member list
-/** The map refers to the key of the member (HashMember::key), which is not changed while the member is in the hash,
-    so that a key comparison knows the length of the key (qore#7194)
+//! The key map of a hash: each member to its place in the member list
+/** The map refers to the member, whose key and hash are not changed while the member is in the hash; a member is
+    removed from the map before it is deleted while code can search the map, as the map reads the hash of the members
+    in a bucket when it searches it; when no code can (the release of a hash), the map is cleared after the members
+    are deleted (qore#7194, qore#7265)
+
+    HashMember and the hash and comparison types are hidden (DLLLOCAL), so that the code of the map is not exported
+    from the library: its calls are direct, not through the PLT, and can be optimized for their callers
 */
-typedef std::unordered_map<const std::string*, qhlist_t::iterator, qore_hash_member_key_hash,
+typedef std::unordered_map<HashMember*, qhlist_t::iterator, qore_hash_member_key_hash,
     qore_hash_member_key_eq> hm_hm_t;
 #ifdef __GLIBCXX__
-// the hash of each key is kept in its node and compared before the keys (see qore_hash_member_key_hash)
-static_assert(std::__cache_default<const std::string*, qore_hash_member_key_hash>::value,
-    "the key map of a hash must keep the hash of each key");
+// the hash of each key is in its member (see qore_hash_member_key_hash), so libstdc++ does not keep it in the node of
+// the map: the node is 3 words (the next pointer, the member and its place in the member list)
+static_assert(!std::__cache_default<HashMember*, qore_hash_member_key_hash>::value,
+    "the key map of a hash must not keep a second copy of the hash of each key");
+#endif
+//! the words of a node of the key map of a hash (see qore_hash_private::sbMemberSize())
+#ifdef _LIBCPP_VERSION
+// libc++ always keeps the hash of the key in the node
+#define QORE_HASH_MAP_NODE_WORDS 4
+#else
+#define QORE_HASH_MAP_NODE_WORDS 3
+#endif
+
+//! the searches of the key map of a hash are functions of their own with the map's search inlined (qore#7265)
+/** The key to look up is passed to the map's search in registers, not in memory, and its hash and bytes are compared
+    inline; the searches are not inlined into their callers, so that the code of their callers stays small
+*/
+#if defined(__GNUC__) || defined(__clang__)
+#define QORE_HASH_FIND_INLINE __attribute__((noinline, flatten))
+#else
+#define QORE_HASH_FIND_INLINE
 #endif
 
 // QoreHashIterator private class
-class qhi_priv {
+class DLLLOCAL qhi_priv {
 public:
     qhlist_t::iterator i;
     bool val;
@@ -188,7 +224,7 @@ public:
     }
 };
 
-class qore_hash_private {
+class DLLLOCAL qore_hash_private {
 public:
     qhlist_t member_list;
     hm_hm_t hm;
@@ -207,6 +243,9 @@ public:
     //! true if the weak holders of the hash hold one reference of their own since its free started (see
     //! QoreContainerWeakRefs)
     bool weak_hold = false;
+    //! true while the values that were saved in a hash of thread-local data during its release are freed: nothing can
+    //! be saved in it then (see clear() and checkClearingSave())
+    bool refuse_saves = false;
     //! the estimated memory of the members (see sbMemberSize()); always kept, so that it is right when charged
     size_t sb_bytes = 0;
     //! the sandbox memory charge of the members (see design/sandbox-resource-limits.md); synced with sb_bytes
@@ -216,8 +255,12 @@ public:
     }
 
     //! the estimated memory of a member: the member, its key and its node in the member list and in the key map
+    /** the node of the key map: the next pointer, the member and its place in the member list, and with libc++ the
+        hash of the key (see hm_hm_t)
+    */
     DLLLOCAL static size_t sbMemberSize(const HashMember* m) {
-        return sizeof(HashMember) + m->key.size() + 4 * sizeof(void*) + 2 * sizeof(void*) + sizeof(qhlist_t::iterator);
+        return sizeof(HashMember) + m->key.size() + QORE_HASH_MAP_NODE_WORDS * sizeof(void*) + 2 * sizeof(void*)
+            + sizeof(qhlist_t::iterator);
     }
 
     //! Accounts a member that was added
@@ -266,9 +309,11 @@ public:
         h.needs_eval_flag = true;
     }
 
+    //! frees the members of a hash that has no other reference and that no code can reach (an object's members when
+    //! the object is released)
     DLLLOCAL static void clear(QoreHashNode& h, ExceptionSink* xsink, bool reverse = false) {
         assert(h.is_unique());
-        h.priv->clear(xsink, reverse);
+        h.priv->freeMembers(xsink, reverse);
     }
 
     DLLLOCAL int checkValid(ExceptionSink* xsink) {
@@ -285,38 +330,38 @@ public:
     //! returns the key map entry of \a key, or hm.end()
     /** An empty hash is not searched, so that its key is not hashed (qore#7194)
     */
-    DLLLOCAL hm_hm_t::const_iterator findIter(const char* key) const {
+    QORE_HASH_FIND_INLINE DLLLOCAL hm_hm_t::const_iterator findIter(const char* key) const {
         return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key));
     }
 
-    DLLLOCAL hm_hm_t::iterator findIter(const char* key) {
+    QORE_HASH_FIND_INLINE DLLLOCAL hm_hm_t::iterator findIter(const char* key) {
         return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key));
     }
 
     //! returns the key map entry of \a key of \a len bytes, or hm.end()
-    DLLLOCAL hm_hm_t::const_iterator findIter(const char* key, size_t len) const {
+    QORE_HASH_FIND_INLINE DLLLOCAL hm_hm_t::const_iterator findIter(const char* key, size_t len) const {
         return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key, len));
     }
 
-    DLLLOCAL hm_hm_t::iterator findIter(const char* key, size_t len) {
+    QORE_HASH_FIND_INLINE DLLLOCAL hm_hm_t::iterator findIter(const char* key, size_t len) {
         return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key, len));
     }
 
     //! returns the key map entry of \a key, or hm.end()
-    DLLLOCAL hm_hm_t::const_iterator findIter(const qore_hash_lookup_key& key) const {
+    QORE_HASH_FIND_INLINE DLLLOCAL hm_hm_t::const_iterator findIter(const qore_hash_lookup_key& key) const {
         return hm.empty() ? hm.end() : hm.find(key);
     }
 
-    DLLLOCAL hm_hm_t::iterator findIter(const qore_hash_lookup_key& key) {
+    QORE_HASH_FIND_INLINE DLLLOCAL hm_hm_t::iterator findIter(const qore_hash_lookup_key& key) {
         return hm.empty() ? hm.end() : hm.find(key);
     }
 
     //! returns the key map entry of \a key, whose hash is \a hash, or hm.end()
-    DLLLOCAL hm_hm_t::const_iterator findIterPrehashed(const char* key, size_t hash) const {
+    QORE_HASH_FIND_INLINE DLLLOCAL hm_hm_t::const_iterator findIterPrehashed(const char* key, size_t hash) const {
         return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key, strlen(key), hash));
     }
 
-    DLLLOCAL hm_hm_t::iterator findIterPrehashed(const char* key, size_t hash) {
+    QORE_HASH_FIND_INLINE DLLLOCAL hm_hm_t::iterator findIterPrehashed(const char* key, size_t hash) {
         return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key, strlen(key), hash));
     }
 
@@ -356,8 +401,10 @@ public:
         }
         for (; i != e; ++i) {
             const HashMember* m = *i;
-            hm_hm_t::const_iterator found = other.findIter(m->key.data(), m->key.size());
-            if (found == other.hm.end() || !value_equal(m->val, (*found->second)->val)) {
+            // the key is searched with the hash that the member keeps (qore#7265)
+            hm_hm_t::const_iterator found = other.findIter(qore_hash_lookup_key(m->key.data(), m->key.size(),
+                m->hash));
+            if (found == other.hm.end() || !value_equal(m->val, found->first->val)) {
                 return false;
             }
         }
@@ -393,7 +440,7 @@ public:
         hm_hm_t::const_iterator i = findIter(key);
         if (i != hm.end()) {
             exists = true;
-            return (*(i->second))->val.refSelf();
+            return i->first->val.refSelf();
         }
 
         exists = false;
@@ -406,7 +453,7 @@ public:
         hm_hm_t::const_iterator i = findIter(key, len);
         if (i != hm.end()) {
             exists = true;
-            return (*(i->second))->val.refSelf();
+            return i->first->val.refSelf();
         }
 
         exists = false;
@@ -418,7 +465,7 @@ public:
         hm_hm_t::const_iterator i = findIter(key);
         if (i != hm.end()) {
             exists = true;
-            return (*(i->second))->val.refSelf();
+            return i->first->val.refSelf();
         }
 
         exists = false;
@@ -429,7 +476,7 @@ public:
             const char* key, size_t hash) const {
         assert(key);
         hm_hm_t::const_iterator i = findIterPrehashed(key, hash);
-        return i != hm.end() ? (*(i->second))->val.refSelf() : QoreValue();
+        return i != hm.end() ? i->first->val.refSelf() : QoreValue();
     }
 
     DLLLOCAL int64 getKeyAsBigInt(const char* key, bool &found) const {
@@ -438,7 +485,7 @@ public:
 
         if (i != hm.end()) {
             found = true;
-            return (*(i->second))->val.getAsBigInt();
+            return i->first->val.getAsBigInt();
         }
 
         found = false;
@@ -451,7 +498,7 @@ public:
 
         if (i != hm.end()) {
             found = true;
-            return (*(i->second))->val.getAsBool();
+            return i->first->val.getAsBool();
         }
 
         found = false;
@@ -468,71 +515,81 @@ public:
         hm_hm_t::const_iterator i = findIter(key);
         if (i == hm.end())
             return false;
-        return !(*(i->second))->val.isNothing();
+        return !i->first->val.isNothing();
     }
 
     DLLLOCAL HashMember* findMember(const char* key) {
         assert(key);
         hm_hm_t::iterator i = findIter(key);
-        return i != hm.end() ? (*(i->second)) : nullptr;
+        return i != hm.end() ? i->first : nullptr;
     }
 
     //! returns the member with the key \a key of \a len bytes, or nullptr
     DLLLOCAL HashMember* findMember(const char* key, size_t len) {
         hm_hm_t::iterator i = findIter(key, len);
-        return i != hm.end() ? (*(i->second)) : nullptr;
+        return i != hm.end() ? i->first : nullptr;
     }
 
     DLLLOCAL HashMember* findMember(const qore_hash_lookup_key& key) {
         hm_hm_t::iterator i = findIter(key);
-        return i != hm.end() ? (*(i->second)) : nullptr;
+        return i != hm.end() ? i->first : nullptr;
     }
 
     DLLLOCAL HashMember* findMemberPrehashed(const char* key, size_t hash) {
         assert(key);
         hm_hm_t::iterator i = findIterPrehashed(key, hash);
-        return i != hm.end() ? (*(i->second)) : nullptr;
+        return i != hm.end() ? i->first : nullptr;
     }
 
     DLLLOCAL HashMember* findCreateMember(const char* key) {
-        // otherwise create the new hash entry
-        HashMember* om = findMember(key);
-        if (om)
-            return om;
-
-        return createMemberKnownAbsent(key);
+        // the key is hashed once, for the search and for the new member (qore#7265)
+        qore_hash_lookup_key k(key);
+        HashMember* om = findMember(k);
+        return om ? om : createMemberKnownAbsent(k);
     }
 
     // as above; "created" is set to true if the member did not exist and was created here
     DLLLOCAL HashMember* findCreateMember(const char* key, bool& created) {
-        HashMember* om = findMember(key);
+        qore_hash_lookup_key k(key);
+        HashMember* om = findMember(k);
         if (om) {
             created = false;
             return om;
         }
 
         created = true;
-        return createMemberKnownAbsent(key);
+        return createMemberKnownAbsent(k);
     }
 
     DLLLOCAL HashMember* findCreateMemberPrehashed(const char* key, size_t hash) {
-        HashMember* om = findMemberPrehashed(key, hash);
-        return om ? om : createMemberKnownAbsent(key);
+        qore_hash_lookup_key k(key, strlen(key), hash);
+        HashMember* om = findMember(k);
+        return om ? om : createMemberKnownAbsent(k);
     }
 
-    DLLLOCAL HashMember* createMemberKnownAbsent(const char* key) {
-        HashMember* om = new HashMember(key);
+    //! creates the member of the key \a key, which the hash does not have
+    /** The functions that create members are not inline, so that their code is not copied into the inline code of
+        their callers (qore#7265)
+    */
+    DLLLOCAL HashMember* createMemberKnownAbsent(const char* key);
+
+    //! creates the member of the key \a key, which the hash does not have
+    DLLLOCAL HashMember* createMemberKnownAbsent(const qore_hash_lookup_key& key);
+
+    //! creates a member with the key of the member \a old of another hash, which this hash does not have, without
+    //! hashing the key (qore#7265)
+    DLLLOCAL HashMember* createMemberKnownAbsent(const HashMember& old);
+
+    //! adds the new member \a m, whose key the hash does not have, at the end of the hash; takes over \a m
+    DLLLOCAL HashMember* addMemberKnownAbsent(HashMember* m);
+
+    //! sets the value of a new member \a om, which has no value, without type checks; takes over the reference of \a v
+    DLLLOCAL void setNewMemberValue(HashMember* om, QoreValue v) {
         assert(om->val.isNothing());
-        member_list.push_back(om);
-        sbAdd(om);
-
-        // add to the map
-        qhlist_t::iterator i = member_list.end();
-        --i;
-        hm[&om->key] = i;
-
-        // return the new member
-        return om;
+        om->val = v;
+        if (needs_scan(v)) {
+            incScanCount(1);
+        }
     }
 
     DLLLOCAL QoreValue& getValueRef(const char* key) {
@@ -562,8 +619,12 @@ public:
         qhlist_t::iterator li = i->second;
         hm.erase(i);
 
-        // dereference node if present
+        // the value is taken and the member deleted before the value is released, as releasing it can run code
+        // that changes the hash
         AbstractQoreNode* n = (*li)->val.assignNothing();
+        internDeleteKey(li);
+
+        // dereference node if present
         if (n) {
             if (needs_scan(n))
                 incScanCount(-1);
@@ -572,8 +633,6 @@ public:
                 reinterpret_cast<QoreObject*>(n)->doDelete(xsink);
             n->deref(xsink);
         }
-
-        internDeleteKey(li);
     }
 
     // removes the value and dereferences it, without performing a delete on it
@@ -741,17 +800,14 @@ public:
             return h;
         }
         QoreHashNode* h = new QoreHashNode;
+        qore_hash_private& hp = *h->priv;
+        hp.reserveForCopy(*this);
         // copy all members to new object
-        for (auto& i : member_list) {
-            hash_assignment_priv ha(*h, i->key.c_str());
-            QoreValue v = copy_strip_complex_types(i->val);
-#ifdef DEBUG
-            assert(ha.swap(v).isNothing());
-#else
-            ha.swap(v);
-#endif
+        for (const HashMember* i : member_list) {
+            HashMember* om = hp.createMemberKnownAbsent(*i);
+            hp.setNewMemberValue(om, copy_strip_complex_types(i->val));
         }
-        copyFreedState(*h->priv);
+        copyFreedState(hp);
         return h;
     }
 
@@ -784,15 +840,25 @@ public:
         return h;
     }
 
+    //! copies the members to the new hash \a h, which has none
     DLLLOCAL void copyIntern(qore_hash_private& h) const {
+        h.reserveForCopy(*this);
         // copy all members to new object
-        for (auto& i : member_list) {
-            hash_assignment_priv ha(h, i->key.c_str());
-#ifdef DEBUG
-            assert(ha.swap(i->val.refSelf()).isNothing());
-#else
-            ha.swap(i->val.refSelf());
-#endif
+        for (const HashMember* i : member_list) {
+            h.setNewMemberValue(h.createMemberKnownAbsent(*i), i->val.refSelf());
+        }
+    }
+
+    //! prepares this new hash, which has no members, for the members of \a src: the key map takes them without a
+    //! rehash (qore#7265)
+    /** the key map of a hash that grows from empty has 13 buckets for up to 13 keys, then grows (libstdc++); reserved,
+        it has as many buckets as the next prime from the number of keys, which is not more
+    */
+    DLLLOCAL void reserveForCopy(const qore_hash_private& src) {
+        assert(member_list.empty());
+        assert(hm.empty());
+        if (!src.hm.empty()) {
+            hm.reserve(src.hm.size());
         }
     }
 
@@ -806,6 +872,8 @@ public:
 
     DLLLOCAL QoreHashNode* evalImpl(ExceptionSink* xsink) const {
         QoreHashNodeHolder h(getCopy(), xsink);
+        qore_hash_private& hp = *h->priv;
+        hp.reserveForCopy(*this);
         size_t count = 0;
         for (qhlist_t::const_iterator i = member_list.begin(), e = member_list.end(); i != e; ++i) {
             if (++count % 100 == 0 && qore_check_cancel(xsink, "hash expression evaluation")) {
@@ -815,7 +883,10 @@ public:
             if (*xsink) {
                 return nullptr;
             }
-            h->priv->setKeyValue((*i)->key, value.takeReferencedValue(), xsink);
+            // the keys of this hash are unique, and the new hash has none of them; the member is created here, so a
+            // rejected assignment removes it again
+            hash_assignment_priv ha(hp, hp.createMemberKnownAbsent(**i), true);
+            ha.assign(value.takeReferencedValue(), xsink);
             if (*xsink) {
                 return nullptr;
             }
@@ -878,6 +949,13 @@ public:
     }
 
     //! Frees all members; the hash itself stays valid (see clear())
+    /** Only for a hash that no code can reach any more, or whose values' release runs no code (see clear()): no code
+        searches the key map while the members are deleted, so it is cleared after them, in one pass
+    */
+    // always inline, as before qore#7265, in the release of a hash and of an object's members
+#if defined(__GNUC__) || defined(__clang__)
+    __attribute__((always_inline))
+#endif
     DLLLOCAL void freeMembers(ExceptionSink* xsink, bool reverse = false) {
         if (reverse) {
             for (qhlist_t::reverse_iterator i = member_list.rbegin(), e = member_list.rend(); i != e; ++i) {
@@ -968,14 +1046,102 @@ public:
         return ha.swap(val);
     }
 
-    //! Empties a hash that stays in use (an object's members before it is released, a thread's data)
+    //! Empties a hash that stays in use (a thread's data)
     /** Unlike derefImpl(), the hash is not marked as freed: marking it made a hash that is used again, such as the
         thread-local data of a pooled thread, reject changes, and made its eventual release look like the release of
         a freed hash.
+
+        Code that runs when a value is freed (a destructor) can read and change the hash (ex: thread-local data), in
+        two phases (qore#7265):
+        - first the values that the hash has when the clearing starts are freed in order: their destructors can read
+          the values not freed yet and save values;
+        - then the values saved in the first phase are freed in the same way, while nothing can be saved in the hash
+          (checkClearingSave()): the clearing ends also when destructors save values again and again, as the release
+          of thread_local variables does (see thread_local_vars_finalizing()).
+
+        Each value is taken, and its member deleted (from the key map first), before the value is freed, as
+        deleteKey() does, so that no member or iterator is held while code runs, and each member is visited once;
+        nothing is allocated.  If no value's release can run code (freeRunsNoCode()), the members are deleted as
+        when the hash is freed.
+
+        Values saved through the C++ API (QoreProgram::getThreadData()) during the release are not refused: a module
+        must not save thread-local data from code that runs when thread-local data is released.
     */
-    DLLLOCAL void clear(ExceptionSink* xsink, bool reverse) {
-        freeMembers(xsink, reverse);
-    }
+    DLLLOCAL void clear(ExceptionSink* xsink);
+
+    //! raises \c DESTRUCTOR-ERROR and returns -1 if nothing can be saved in this hash of thread-local data now (see
+    //! clear())
+    DLLLOCAL int checkClearingSave(ExceptionSink* xsink) const;
+
+    //! returns true if freeing \a v runs no code (a destructor): a value without a node, or a string, date, binary,
+    //! number or null (see clear())
+    DLLLOCAL static bool freeRunsNoCode(const QoreValue& v);
+
+    //! freeMembers() for clear(), not inline, so that freeMembers() stays inline in its other callers (the release
+    //! of a hash and of an object's members)
+#if defined(__GNUC__) || defined(__clang__)
+    __attribute__((noinline))
+#endif
+    DLLLOCAL void freeMembersOutOfLine(ExceptionSink* xsink);
+
+
+    //! The nodes of the member list of the members that clear() released (qore#7265)
+    /** With glibc, they are freed at the end of clear() in a scattered order; with other allocators, at once.
+
+        Why the order exists: clear() must delete each member, and free the node of its key map, before its value is
+        freed (the map must not refer to a deleted member while code runs), so the node of its member list is what is
+        left between the memory of one value and that of the next.  Freeing it at once, or freeing all of them in their
+        order at the end, merged the memory freed before into one chunk that grew with each value or node; once a
+        merged free chunk reaches 64 KiB, glibc's _int_free_maybe_trim() consolidates the fast bins and calls
+        systrim() at every free, which ran at 0.96 of the values against 0.08 for the release of a hash, which frees
+        the nodes after the values and those of its key map in the order of its buckets.  The nodes are dealt into
+        lists that are freed one after the other, so that the chunks that all but the last list merge span at most
+        that many members: systrim() ran at 0.11 of the values.
+
+        Measured (Ir or instructions per value, delete_all_thread_data() of N objects (qo) and of N objects whose
+        destructors save a value each (qd), against the release before qore#7265):
+        - glibc 2.43 (canoe, callgrind): qo +45 with the scattered order (+65 at once, with the trims), qd -250;
+        - musl (Alpine, callgrind): scattered, qo -7..+31 and qd -311..-390; at once, qo -1..-17 and qd -436..-543;
+        - macOS (instructions retired, minimum of runs): scattered, qd +1401; at once, qd +219 and qo +10 (within
+          the noise of the measurement there, several hundred instructions per value).
+        So only glibc frees the nodes in the scattered order.
+
+        Do not simplify the order or make it unconditional without measuring again on each allocator.
+    */
+    class ReleasedNodes {
+    public:
+        //! moves the node at \a li of \a l to the nodes released (glibc), or frees it
+        DLLLOCAL void add(qhlist_t& l, qhlist_t::iterator li) {
+#ifdef __GLIBC__
+            lists[next].splice(lists[next].end(), l, li);
+            if (++next == ways) {
+                next = 0;
+            }
+#else
+            l.erase(li);
+#endif
+        }
+
+        //! frees the nodes, one list after the other
+        DLLLOCAL void free() {
+#ifdef __GLIBC__
+            for (qhlist_t& l : lists) {
+                l.clear();
+            }
+#endif
+        }
+
+    private:
+#ifdef __GLIBC__
+        static constexpr unsigned ways = 61;
+        qhlist_t lists[ways];
+        unsigned next = 0;
+#endif
+    };
+
+    //! takes the value of the first member, deletes the member and frees the value, which can run code that changes
+    //! the hash; the node of the member in the member list is moved to \a released (see clear())
+    DLLLOCAL void takeFreeMemberForClear(ReleasedNodes& released, ExceptionSink* xsink);
 
     DLLLOCAL size_t size() const {
         return member_list.size();
