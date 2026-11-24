@@ -22,10 +22,11 @@
     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
     DEALINGS IN THE SOFTWARE.
 
-    The socket of an HTTP/1.x request is the connection's: the code of a handler class that sandboxed code declares,
-    and the code that serves a stream request, get a placeholder that is not connected, so that they cannot read a
-    request that the client sends after its own on the connection, nor close the connection; the stream request
-    itself and the trusted code of a handler use the connection's socket (qore#6843)
+    The socket of an HTTP/1.x request is the connection's: the code of a handler class of a sandboxed Program gets a
+    socket of its own request (qore#7305), and the code that serves a stream request gets a placeholder that is not
+    connected, so that neither can read a request that the client sends after its own on the connection, nor close
+    the connection; the stream request itself and the trusted code of a handler use the connection's socket
+    (qore#6843)
 */
 
 %modern
@@ -198,11 +199,21 @@ class HttpServerHandlerSocketTest inherits QUnit::Test {
         "close": "OK string",
     };
 
+    #! the socket of its own request (qore#7305): it reads its own request only and cannot act on the connection
+    const TenantViewOps = {
+        "open": True,
+        "read-header": "HTTP-HANDLER-SOCKET-ERROR",
+        "recv": "OK string",
+        "send": "HTTP-HANDLER-SOCKET-ERROR",
+        "shutdown": "HTTP-HANDLER-SOCKET-ERROR",
+        "close": "HTTP-HANDLER-SOCKET-ERROR",
+    };
+
     testTenantHandler() {
         # the request, and one with credentials pipelined after it on the connection
         hash<auto> r = pipelined("/tenant/all");
         assertEq(200, r.first.status_code);
-        assertEq(sprintf("%y", PlaceholderOps), r.first.body);
+        assertEq(sprintf("%y", TenantViewOps), r.first.body);
         # the next request is served
         assertEq(200, r.next.status_code);
     }

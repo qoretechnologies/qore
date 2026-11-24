@@ -140,9 +140,10 @@ private nothing recvDataImpl(auto data) {
     @section datastreamrequesthandlerrelnotes Release Notes
 
     @subsection datastreamrequesthandler_v1_2 DataStreamRequestHandler v1.2
-    - a data stream request handler of a class that sandboxed code declared refuses an HTTP/1.x request when it is
-      created (\c DATASTREAM-ERROR): the REST handler does not give such a class the socket of an HTTP/1.x request
-      (see @ref rest_request_credentials; issue #6843); its HTTP/2 and HTTP/3 data streams work
+    - a data stream request handler of a class of a sandboxed Program refuses an HTTP/1.x request when it is created
+      (\c DATASTREAM-ERROR) if it gets no socket of the request: the REST handler does not give such a class the
+      socket of the connection (see @ref rest_request_credentials; issue #6843), while a socket of its own request
+      (see @ref httpserver_handler_socket) and its HTTP/2 and HTTP/3 data streams work
     - reads the fields of a request from the \c "headers" key of its header hash, or from the top level of a hash
       built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with the HttpServer
       option \c http_fields_at_top_level set to @ref False
@@ -223,17 +224,20 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
         the abstract methods @ref recvDataImpl() and @ref sendDataImpl() work identically
         regardless of the detected protocol.
 
-        @throw DATASTREAM-ERROR the request is an HTTP/1.x request, and the object's class was declared by sandboxed
-        code: the REST handler does not give the code of such a class the socket of an HTTP/1.x request (see
-        @ref rest_request_credentials; issue #6843), which a data stream needs; HTTP/2 and HTTP/3 data streams work
+        @throw DATASTREAM-ERROR the request is an HTTP/1.x request whose socket the object does not get: the REST
+        handler does not give the code of a class of a sandboxed Program the socket of the connection (see
+        @ref rest_request_credentials; issue #6843), which a data stream needs; a socket of its own request (see
+        @ref httpserver_handler_socket) and HTTP/2 and HTTP/3 data streams work
 
         @since DataStreamRequestHandler 1.0, updated in 1.2 with Connect detection
     */
     constructor(hash<auto> cx, *hash<auto> ah) : AbstractRestStreamRequestHandler(cx, ah) {
-        # the socket of an HTTP/1.x request is not given to the code of a class that sandboxed code declared
+        # the socket of the connection of an HTTP/1.x request is not given to the code of a class of a sandboxed
+        # Program
         if (!cx.socketobject) {
-            throw "DATASTREAM-ERROR", "a data stream request handler of a class that sandboxed code declared cannot "
-                "serve an HTTP/1.x request: its socket is not given to such a class; use HTTP/2 or HTTP/3";
+            throw "DATASTREAM-ERROR", "a data stream request handler of a class of a sandboxed Program cannot serve an "
+                "HTTP/1.x request without a socket of the request: the socket of the connection is not given to such a "
+                "class";
         }
         # Detect Connect protocol from Content-Type or Connect-specific headers.
         # Do NOT auto-upgrade based on HTTP/2 pseudo-headers alone — a client that downgraded
