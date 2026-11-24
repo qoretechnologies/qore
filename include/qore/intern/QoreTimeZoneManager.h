@@ -320,6 +320,12 @@ public:
    //! the maximum size of a TZif file that is read; real zoneinfo files are less than 8 KiB
    DLLLOCAL static constexpr size_t MaxFileSize = 1024 * 1024;
 
+   //! the maximum number of transitions in a TZif data block; real zoneinfo files have a few hundred
+   DLLLOCAL static constexpr uint32_t MaxTransitions = 10000;
+
+   //! returns the approximate size of the zone in memory in bytes
+   DLLLOCAL size_t memorySize() const;
+
    //! creates the zone from the zoneinfo file at exactly the given path, subject to the file-system policy
    /** @param n_name the name of the zone
        @param path the path of the file, opened as given
@@ -433,10 +439,17 @@ protected:
     pathmap_t pathmap;
     //! zones of files whose data changed; kept as dates refer to them
     std::vector<AbstractQoreZoneInfo*> retired_path_zones;
-    //! the number of zones loaded from paths in the process
-    unsigned path_zone_count = 0;
-    //! the size of the files of the zones loaded from paths in the process
-    size_t path_zone_bytes = 0;
+    //! the number and memory of the zones that an isolation domain loaded from paths
+    struct PathZoneQuota {
+        unsigned zones = 0;
+        int64_t bytes = 0;
+    };
+    //! the zones loaded from paths by isolation domain
+    std::map<std::string, PathZoneQuota> domain_path_quota;
+    //! the number of zones that sandboxed code loaded from paths in the process
+    unsigned sandboxed_path_zones = 0;
+    //! the memory of the zones that sandboxed code loaded from paths in the process
+    int64_t sandboxed_path_bytes = 0;
 #else
     //! the number of zones loaded from paths in the process
     unsigned path_zone_count = 0;
@@ -478,13 +491,15 @@ protected:
         (and verified to name it) and checked against the policy of the calling code, as the open can reach another
         file than the checked path named.  The file is read without the lock; its zone is cached by the canonical
         path and used for that path only with the same data (SHA-256 of the data), so a file at another path, a reused
-        inode or changed data never gets another file's zone.  A new zone counts against the quota of the Program
-        that loads it (MaxProgramPathZones files, MaxProgramPathZoneBytes bytes) and of the process (MaxPathZones,
-        MaxPathZoneBytes); the zone is named by the canonical path
+        inode or changed data never gets another file's zone.  A new zone is charged with its parsed size to the
+        sandbox that governs the loading code (every member of a composite sandbox: MaxSandboxPathZones zones,
+        MaxSandboxPathZoneBytes bytes, and the memory limit), to its isolation domain and to the process total for
+        sandboxed code (MaxPathZones, MaxPathZoneBytes), or, if no sandbox governs the code, to the Program
+        (MaxProgramPathZones, MaxProgramPathZoneBytes); the zone is named by the canonical path
 
         @param name the path as given, for error messages
         @param path the absolute path
-        @param charge the Program whose quota a new zone counts against, if any
+        @param charge the Program whose quota a new zone counts against if no sandbox governs the loading code
         @param xsink an exception is raised here if the file cannot be loaded
     */
     DLLLOCAL const AbstractQoreZoneInfo* loadPath(const char* name, const std::string& path, QoreProgram* charge,
@@ -492,6 +507,9 @@ protected:
 
     //! checks the path against the file-system policy of the calling code; errors name the path as given
     DLLLOCAL static int checkPathPolicy(const char* name, const std::string& path, ExceptionSink* xsink);
+
+    //! raises the error for a zone that would exceed a quota of zones loaded from paths
+    DLLLOCAL static void raisePathQuota(const char* name, const char* who, ExceptionSink* xsink);
 #endif
 
 public:
@@ -539,14 +557,19 @@ public:
         return localtzname.empty() ? nullptr : localtzname.c_str();
     }
 
-    //! the maximum number of zones loaded from paths by one Program; zones are never freed
-    static constexpr unsigned MaxProgramPathZones = 256;
-    //! the maximum size of the zoneinfo files of the zones loaded from paths by one Program
-    static constexpr size_t MaxProgramPathZoneBytes = 32 * 1024 * 1024;
-    //! the maximum number of zones loaded from paths in the process
+    //! the maximum number of zones loaded from paths by the code of one sandbox (every member of a composite
+    //! sandbox), one isolation domain, or one Program that no sandbox governs; zones are never freed
+    static constexpr unsigned MaxSandboxPathZones = 256;
+    //! the maximum memory of the zones loaded from paths by one sandbox, isolation domain or Program
+    static constexpr int64_t MaxSandboxPathZoneBytes = 32 * 1024 * 1024;
+    //! the maximum number of zones loaded from paths by one Program that no sandbox governs
+    static constexpr unsigned MaxProgramPathZones = MaxSandboxPathZones;
+    //! the maximum memory of the zones loaded from paths by one Program that no sandbox governs
+    static constexpr size_t MaxProgramPathZoneBytes = MaxSandboxPathZoneBytes;
+    //! the maximum number of zones that sandboxed code loads from paths in the process (trusted code is not limited)
     static constexpr unsigned MaxPathZones = 16384;
-    //! the maximum size of the zoneinfo files of the zones loaded from paths in the process
-    static constexpr size_t MaxPathZoneBytes = 256 * 1024 * 1024;
+    //! the maximum memory of the zones that sandboxed code loads from paths in the process
+    static constexpr int64_t MaxPathZoneBytes = 256 * 1024 * 1024;
 
     //! finds or loads a time zone region: a name in the zoneinfo database (ex: \c "Europe/Prague")
     /** For names that come from data (deserialized dates, imported files, database values, compiled literals) and for

@@ -34,6 +34,8 @@
 #include "qore/intern/qore_date_private.h"
 #include "qore/intern/qore_qf_private.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreSandboxMemory.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 
 #include <algorithm>
 #include <cctype>
@@ -578,6 +580,18 @@ QoreZoneInfo::QoreZoneInfo(std::string& n_name, const char* path, ExceptionSink*
     init(len ? static_cast<const unsigned char*>(data->getPtr()) : nullptr, len, path, xsink);
 }
 
+size_t QoreZoneInfo::memorySize() const {
+    size_t size = sizeof(*this) + name.capacity() + QoreDSTTransitions.capacity() * sizeof(QoreDSTTransition)
+        + tti.capacity() * sizeof(QoreTransitionInfo) + leapinfo.capacity() * sizeof(QoreLeapInfo);
+    for (const QoreTransitionInfo& i : tti) {
+        size += i.abbr.capacity();
+    }
+    if (footer) {
+        size += sizeof(QorePosixTzRule) + 64;
+    }
+    return size;
+}
+
 QoreZoneInfo::QoreZoneInfo(std::string& n_name, const unsigned char* data, size_t len, const char* fn,
         ExceptionSink* xsink) : AbstractQoreZoneInfo(n_name), valid(false) {
     assert(fn);
@@ -718,6 +732,14 @@ int QoreZoneInfo::parseDataBlock(const unsigned char* data, size_t offset, unsig
     assert(typecnt && charcnt);
     printd(5, "QoreZoneInfo::parseDataBlock() time size: %u isutcnt: %u isstdcnt: %u leapcnt: %u timecnt: %u "
         "typecnt: %u charcnt: %u\n", time_size, isutcnt, isstdcnt, leapcnt, timecnt, typecnt, charcnt);
+
+    // real zoneinfo files have a few hundred transitions; a file with very many is refused, as each one takes more
+    // memory parsed than in the file
+    if (timecnt > MaxTransitions) {
+        xsink->raiseException("TZINFO-ERROR", "%s: the TZif file has %u transitions; the maximum is %u", fn, timecnt,
+            MaxTransitions);
+        return -1;
+    }
 
     // the caller has checked that the whole data block is in the buffer (RFC 9636 section 3.2)
     const unsigned char* p = data + offset;
@@ -866,29 +888,16 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::processFile(const char* fn, boo
 
     AbstractQoreZoneInfo* rv;
 
-    if (use_path) {
-        // only trusted code loads paths on Windows (see findLoadRegionFromPath()); the number of zones is bounded,
-        // as they are never freed
-        if (path_zone_count >= MaxPathZones) {
-            xsink->raiseException("TZINFO-ERROR", "cannot load time zone file '%s': the process has loaded the "
-                "maximum of %u time zone files", fn, MaxPathZones);
-            return nullptr;
-        }
-        std::string name = fn;
-        std::unique_ptr<QoreZoneInfo> tzi(new QoreZoneInfo(name, fn, xsink));
-        if (!*(tzi.get())) {
-            return nullptr;
-        }
-        rv = tzi.release();
-        ++path_zone_count;
-    } else {
+    // zoneinfo files given as paths are loaded by findLoadRegionFromPath()
+    assert(!use_path);
+    (void)use_path;
+    {
         //printd(5, "QoreTimeZoneManager::processFile() %s: loading from registry\n", fn);
         std::unique_ptr<QoreWindowsZoneInfo> tzi(new QoreWindowsZoneInfo(fn, xsink));
         if (!*(tzi.get())) {
             return nullptr;
         }
 
-        //printd(5, "QoreTimeZoneManager::processFile() %s -> %p\n", name.c_str(), tzi.get());
         rv = tzi.release();
     }
     tzmap[fn] = rv;
@@ -2606,27 +2615,69 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadPath(const char* name, cons
         return nullptr;
     }
 
+    // a new zone is charged to the sandbox that governs the code that loads it (every member of a composite sandbox,
+    // so that the Programs that sandboxed code creates share its quota) and to its isolation domain, or to the
+    // Program if no sandbox governs the code; zones are never freed, as dates refer to them, so the memory of the
+    // parsed zone stays charged
+    QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::Policy);
+    std::vector<QoreSandboxMemoryAccount*> accounts;
+    std::string domain;
+    if (policy) {
+        if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(policy.get())) {
+            for (QoreSandboxManager* m : *members) {
+                accounts.push_back(m->getMemoryAccount());
+            }
+        } else {
+            accounts.push_back(policy->getMemoryAccount());
+        }
+        domain = policy->getIsolationDomain();
+    }
+    int64_t size = static_cast<int64_t>(tzi->memorySize());
+
     QoreAutoRWWriteLocker al(rwl);
     pathmap_t::iterator i = pathmap.find(canon);
+    // another thread can have loaded the same data in the meantime; its zone is used.  If it loaded other data
+    // (the file changed), the zone loaded last replaces it in the cache below, and the replaced zone is kept for the
+    // dates that refer to it
     if (i != pathmap.end() && i->second.digest == digest) {
         return i->second.zone;
     }
-    // zones are never freed, as dates refer to them: new zones are limited per Program and in the process
-    size_t size = data.size();
-    qore_program_private* cpgm = charge ? qore_program_private::get(*charge) : nullptr;
-    if (cpgm && (cpgm->tz_path_zone_count >= MaxProgramPathZones
-            || cpgm->tz_path_zone_bytes + size > MaxProgramPathZoneBytes)) {
-        xsink->raiseException("TZINFO-ERROR", "cannot load time zone file '%s': the Program has loaded the maximum "
-            "of %u time zone files or %u MiB of time zone file data", name, MaxProgramPathZones,
-            static_cast<unsigned>(MaxProgramPathZoneBytes / (1024 * 1024)));
+    qore_program_private* cpgm = (!policy && charge) ? qore_program_private::get(*charge) : nullptr;
+    if (policy) {
+        for (QoreSandboxMemoryAccount* account : accounts) {
+            if (account->tz_path_zones >= MaxSandboxPathZones
+                    || account->tz_path_bytes + size > MaxSandboxPathZoneBytes) {
+                raisePathQuota(name, "the sandbox", xsink);
+                return nullptr;
+            }
+            int64_t limit = account->limit.load(std::memory_order_relaxed);
+            if (limit > 0 && account->used.load(std::memory_order_relaxed) + size > limit) {
+                ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
+                arg->setKeyValue("memory_limit", limit, xsink);
+                xsink->raiseExceptionArg("SANDBOX-MEMORY-LIMIT", arg.release(), new QoreStringNodeMaker("loading "
+                    "time zone file '%s': its " QLLD " bytes would exceed the sandbox memory limit of " QLLD " bytes",
+                    name, static_cast<int64>(size), static_cast<int64>(limit)));
+                return nullptr;
+            }
+        }
+        if (!domain.empty()) {
+            PathZoneQuota& q = domain_path_quota[domain];
+            if (q.zones >= MaxSandboxPathZones || q.bytes + size > MaxSandboxPathZoneBytes) {
+                raisePathQuota(name, "the isolation domain", xsink);
+                return nullptr;
+            }
+        }
+        // the process limit applies to sandboxed code only, so that trusted code can always load
+        if (sandboxed_path_zones >= MaxPathZones || sandboxed_path_bytes + size > MaxPathZoneBytes) {
+            raisePathQuota(name, "sandboxed code in the process", xsink);
+            return nullptr;
+        }
+    } else if (cpgm && (cpgm->tz_path_zone_count >= MaxProgramPathZones
+            || cpgm->tz_path_zone_bytes + static_cast<size_t>(size) > MaxProgramPathZoneBytes)) {
+        raisePathQuota(name, "the Program", xsink);
         return nullptr;
     }
-    if (path_zone_count >= MaxPathZones || path_zone_bytes + size > MaxPathZoneBytes) {
-        xsink->raiseException("TZINFO-ERROR", "cannot load time zone file '%s': the process has loaded the maximum "
-            "of %u time zone files or %u MiB of time zone file data", name, MaxPathZones,
-            static_cast<unsigned>(MaxPathZoneBytes / (1024 * 1024)));
-        return nullptr;
-    }
+
     QoreZoneInfo* rv = tzi.get();
     if (i != pathmap.end()) {
         // the file has other data now: the zone of the old data stays valid for the dates that refer to it
@@ -2638,13 +2689,32 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadPath(const char* name, cons
     }
     tzi.release();
     ++tzsize;
-    ++path_zone_count;
-    path_zone_bytes += size;
-    if (cpgm) {
+    if (policy) {
+        for (QoreSandboxMemoryAccount* account : accounts) {
+            ++account->tz_path_zones;
+            account->tz_path_bytes += size;
+            account->used.fetch_add(size, std::memory_order_relaxed);
+        }
+        if (!domain.empty()) {
+            PathZoneQuota& q = domain_path_quota[domain];
+            ++q.zones;
+            q.bytes += size;
+        }
+        ++sandboxed_path_zones;
+        sandboxed_path_bytes += size;
+    } else if (cpgm) {
         ++cpgm->tz_path_zone_count;
-        cpgm->tz_path_zone_bytes += size;
+        cpgm->tz_path_zone_bytes += static_cast<size_t>(size);
     }
     return rv;
+}
+
+void QoreTimeZoneManager::raisePathQuota(const char* name, const char* who, ExceptionSink* xsink) {
+    xsink->raiseException("TZINFO-ERROR", "cannot load time zone file '%s': %s has loaded the maximum of time zones "
+        "from paths (%u zones or %u MiB per sandbox, isolation domain or Program; %u zones or %u MiB for sandboxed "
+        "code in the process)", name, who, MaxSandboxPathZones,
+        static_cast<unsigned>(MaxSandboxPathZoneBytes / (1024 * 1024)), MaxPathZones,
+        static_cast<unsigned>(MaxPathZoneBytes / (1024 * 1024)));
 }
 #endif
 
@@ -2732,9 +2802,36 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadRegionFromPath(const ch
         path += name;
     }
     (void)charge;
+    {
+        QoreAutoRWReadLocker al(rwl);
+        tzmap_t::iterator i = tzmap.find(path);
+        if (i != tzmap.end()) {
+            return i->second;
+        }
+    }
+    // the file is read without the lock
+    std::string zname = path;
+    std::unique_ptr<QoreZoneInfo> tzi(new QoreZoneInfo(zname, path.c_str(), xsink));
+    if (!*tzi) {
+        return nullptr;
+    }
     QoreAutoRWWriteLocker al(rwl);
-    // find or load the file
-    return processFile(path.c_str(), true, xsink);
+    tzmap_t::iterator i = tzmap.find(path);
+    if (i != tzmap.end()) {
+        return i->second;
+    }
+    // only trusted code loads paths on Windows; the number of zones is bounded, as they are never freed
+    if (path_zone_count >= MaxPathZones) {
+        xsink->raiseException("TZINFO-ERROR", "cannot load time zone file '%s': the process has loaded the maximum "
+            "of %u time zone files", name, MaxPathZones);
+        return nullptr;
+    }
+    QoreZoneInfo* rv = tzi.get();
+    tzmap[path] = rv;
+    tzi.release();
+    ++tzsize;
+    ++path_zone_count;
+    return rv;
 #else
     // a relative path is made absolute with the current directory once; the policy is checked for this path, and
     // the file is opened at exactly this path

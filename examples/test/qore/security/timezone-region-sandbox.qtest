@@ -83,7 +83,12 @@ nothing sub remove_file(string p) { unlink(p); }
         addTestCase("the local zone named by a path", \testLocalZonePath());
         addTestCase("deserialized time zones never open files", \testDeserializeNoPath());
         addTestCase("a path zone is never another file's zone", \testPathZoneIdentity());
-        addTestCase("the path zone quota of a Program does not limit other Programs", \testPathZoneQuota());
+        addTestCase("the path zone quota of a sandbox does not limit another sandbox or trusted code",
+            \testPathZoneQuota());
+        addTestCase("Programs created by sandboxed code and sandboxes of one domain share a quota",
+            \testPathZoneQuotaShared());
+        addTestCase("path zones are charged with their memory", \testPathZoneMemory());
+        addTestCase("the policy is checked for the file that was opened (/dev/fd)", \testDevFd());
         addTestCase("the policy applies to the file that a path reaches", \testPathPolicyTarget());
         set_return_value(main());
     }
@@ -739,13 +744,13 @@ print(out.join(\"|\"));
         for (int i = 0; i < max; ++i) {
             a.callFunction("offset", sprintf("%s/z%d", a_dir, i));
         }
-        assertThrows("TZINFO-ERROR", "the Program has loaded the maximum of 256 time zone files", \a.callFunction(),
-            ("offset", sprintf("%s/z%d", a_dir, max)), "the Program's quota is used up");
+        assertThrows("TZINFO-ERROR", "the sandbox has loaded the maximum of time zones from paths", \a.callFunction(),
+            ("offset", sprintf("%s/z%d", a_dir, max)), "the sandbox's quota is used up");
         # zones that the Program loaded already are found
         assertEq(0, a.callFunction("offset", a_dir + "/z0"), "a zone that the Program loaded");
-        # other Programs are not limited
+        # the quota of another sandbox and trusted code are not affected (the process limit is shared)
         Program b = tenantAllow(b_dir);
-        assertEq(0, b.callFunction("offset", b_dir + "/z"), "another Program");
+        assertEq(0, b.callFunction("offset", b_dir + "/z"), "another sandbox");
         assertEq(0, (new TimeZone(sprintf("%s/z%d", a_dir, max))).UTCOffset(), "trusted code");
     }
 
@@ -769,5 +774,223 @@ print(out.join(\"|\"));
         assertEq(other + "/zone", (new TimeZone(allowed + "/link")).region(), "the zone is named by its file");
         assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("offset", allowed + "/link"),
             "the link after trusted code loaded its file");
+    }
+
+    #! returns a Program with a SandboxManager that may read the directory and create Programs that load time zones
+    static Program tenantParent(string allowed, *string domain) {
+        Program p(PO_NEW_STYLE);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        sm.addFilesystemAllowedPath(allowed, QSEC_READ);
+        if (domain) {
+            sm.setIsolationDomain(domain);
+        }
+        p.setSandboxManager(sm);
+        p.parse(TenantCode + "
+int sub child_load(list<string> paths) {
+    Program c(PO_NEW_STYLE);
+    c.parse(\"int sub f(string p) { return (new TimeZone(p)).UTCOffset(); }\", \"child\");
+    int n = 0;
+    foreach string path in (paths) {
+        try {
+            c.callFunction(\"f\", path);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.desc !~ /has loaded the maximum of time zones from paths/) {
+                rethrow;
+            }
+            break;
+        }
+        ++n;
+    }
+    return n;
+}
+int sub load_all(list<string> paths) {
+    int n = 0;
+    foreach string path in (paths) {
+        try {
+            (new TimeZone(path)).UTCOffset();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.desc !~ /has loaded the maximum of time zones from paths/) {
+                rethrow;
+            }
+            break;
+        }
+        ++n;
+    }
+    return n;
+}
+", "tenant-parent");
+        return p;
+    }
+
+    #! creates the given number of copies of a file in a new directory and returns their paths
+    list<string> makeCopies(string name, string from, int n) {
+        string d = dir + "/" + name;
+        mkdir(d);
+        binary data = ReadOnlyFile::readBinaryFile(from);
+        list<string> rv = ();
+        for (int i = 0; i < n; ++i) {
+            string path = sprintf("%s/z%d", d, i);
+            File f();
+            f.open2(path, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+            f.write(data);
+            f.close();
+            rv += path;
+        }
+        return rv;
+    }
+
+    testPathZoneQuotaShared() {
+        if (!zoneinfo) {
+            testSkip("no zoneinfo file to copy");
+        }
+        int max = 256;
+        # Programs that sandboxed code creates are governed by its sandbox and share its quota
+        list<string> paths = makeCopies("shared-children", zoneinfo, max + 10);
+        Program parent = tenantParent(dir + "/shared-children");
+        assertEq(200, parent.callFunction("child_load", paths[0..199]), "the first child");
+        assertEq(max - 200, parent.callFunction("child_load", paths[200..]), "the second child gets the rest");
+        assertEq(0, parent.callFunction("load_all", paths[max..]), "the parent gets nothing more");
+
+        # the sandboxes of one isolation domain share its quota
+        list<string> dpaths = makeCopies("shared-domain", zoneinfo, max + 10);
+        string domain = "tz-domain-" + get_random_string(8, 1);
+        Program a = tenantParent(dir + "/shared-domain", domain);
+        Program b = tenantParent(dir + "/shared-domain", domain);
+        assertEq(200, a.callFunction("load_all", dpaths[0..199]), "the first sandbox of the domain");
+        assertEq(max - 200, b.callFunction("load_all", dpaths[200..]), "the second sandbox of the domain");
+        # a sandbox of another domain is not limited
+        Program c = tenantParent(dir + "/shared-domain", domain + "-other");
+        assertEq(10, c.callFunction("load_all", dpaths[0..9]), "a sandbox of another domain");
+    }
+
+    #! returns a TZif version 1 file with the given number of transitions between two time types
+    static binary makeTzif(int transitions) {
+        binary b = binary("TZif");
+        # version 1, 15 reserved bytes
+        b += parse_hex_string("00" + strmul("00", 15));
+        # isutcnt, isstdcnt, leapcnt, timecnt, typecnt, charcnt
+        foreach int c in ((0, 0, 0, transitions, 2, 8)) {
+            b += parse_hex_string(sprintf("%08x", c));
+        }
+        string times;
+        for (int i = 0; i < transitions; ++i) {
+            times += sprintf("%08x", -2000000000 + i * 3600 + 0x100000000 & 0xffffffff);
+        }
+        b += parse_hex_string(times);
+        string types;
+        for (int i = 0; i < transitions; ++i) {
+            types += (i % 2) ? "01" : "00";
+        }
+        b += parse_hex_string(types);
+        # two types: UTC "AAA" and one hour east, DST "BBB"
+        b += parse_hex_string("00000000" + "00" + "00" + "00000e10" + "01" + "04");
+        b += binary("AAA\x00BBB\x00");
+        return b;
+    }
+
+    testPathZoneMemory() {
+        # a file with more transitions than any real zoneinfo file is refused
+        string over = dir + "/tz-transitions";
+        File f();
+        f.open2(over, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+        f.write(makeTzif(10001));
+        f.close();
+        assertThrows("TZINFO-ERROR", "transitions; the maximum is 10000", sub () { TimeZone t(over); }, NOTHING,
+            "too many transitions");
+
+        # zones with many transitions: the memory of the parsed zone counts, not the size of the file
+        string big = dir + "/tz-big";
+        f.open2(big, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+        f.write(makeTzif(10000));
+        f.close();
+        assertEq(3600, (new TimeZone(big)).UTCOffset() + 3600, "a zone with 10000 transitions loads");
+        list<string> paths = makeCopies("bytes", big, 256);
+        Program p = tenantParent(dir + "/bytes");
+        int n = p.callFunction("load_all", paths);
+        # each zone takes more than 128 KiB parsed, so the 32 MiB limit is reached before the 256 zone limit
+        assertGt(0, n, "zones are loaded");
+        assertLt(256, n, "the memory limit is reached before the number of zones");
+
+        # a sandbox memory limit: zones are charged to it, permanently
+        list<string> mpaths = makeCopies("memlimit", big, 64);
+        Program m(PO_NEW_STYLE);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        sm.addFilesystemAllowedPath(dir + "/memlimit", QSEC_READ);
+        sm.setMemoryLimit(4 * 1024 * 1024);
+        m.setSandboxManager(sm);
+        m.parse(TenantCode, "tenant-memlimit");
+        int loaded = 0;
+        try {
+            foreach string path in (mpaths) {
+                m.callFunction("offset", path);
+                ++loaded;
+            }
+            assertTrue(False, "the memory limit is reached");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SANDBOX-MEMORY-LIMIT", ex.err, "the memory limit is reached: " + ex.desc);
+        }
+        assertGt(0, loaded, "zones are loaded within the limit");
+        assertGt(loaded * 128 * 1024, sm.getMemoryUsage(), "the zones are charged to the sandbox");
+    }
+
+    testDevFd() {
+        if (!zoneinfo || !gmt14) {
+            testSkip("no zoneinfo files to use");
+        }
+        # files that trusted code holds open: one outside of the directory that the tenant may read, one removed
+        string outside = dir + "/fd-outside";
+        mkdir(outside);
+        copyFile(gmt14, outside + "/secret");
+        string allowed = dir + "/fd-allowed";
+        mkdir(allowed);
+        copyFile(zoneinfo, dir + "/fd-gone");
+        File keep();
+        keep.open2(outside + "/secret");
+        File gone();
+        gone.open2(dir + "/fd-gone");
+        unlink(dir + "/fd-gone");
+
+        Program p(PO_NEW_STYLE);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        sm.addFilesystemAllowedPath(allowed, QSEC_READ);
+        sm.addFilesystemAllowedPath("/dev", QSEC_READ);
+        p.setSandboxManager(sm);
+        p.parse(TenantCode, "tenant-devfd");
+
+        bool rechecked;
+        bool removed;
+        bool trusted_loaded;
+        for (int i = 3; i < 256; ++i) {
+            string path = "/dev/fd/" + i;
+            try {
+                int off = p.callFunction("offset", path);
+                assertNeq(50400, off, "the tenant does not load the file outside: " + path);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.desc =~ /access to time zone path '\/dev\/fd\/[0-9]+' is not permitted/) {
+                    rechecked = True;
+                }
+            }
+            try {
+                TimeZone t(path);
+                if (t.UTCOffset() == 50400) {
+                    assertEq(outside + "/secret", t.region(), "the zone is named by the file");
+                    trusted_loaded = True;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.desc =~ /was replaced or removed while it was loaded/) {
+                    removed = True;
+                }
+            }
+        }
+        assertTrue(trusted_loaded, "trusted code loads the file through /dev/fd");
+        assertTrue(removed, "a removed file is refused");
+        if (PlatformOS == "Darwin") {
+            # /dev/fd/N is not a symbolic link on macOS, so the policy check of the name allows it; the check of the
+            # file that was opened refuses it
+            assertTrue(rechecked, "the policy is checked for the file that was opened");
+        }
     }
 }

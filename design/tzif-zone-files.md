@@ -20,14 +20,21 @@ parsed from memory (`QoreZoneInfo::init()`):
   file (`stat()` device and inode), checks the policy again for that path (the open can reach another file than the
   checked path named), reads the file and computes the SHA-256 of its data. `pathmap` maps the canonical path to the
   zone and digest; an entry is used only with the same digest, so a reused inode, another file or changed data never
-  gets another file's zone, and spellings and symbolic links of one file share a zone (hard links are separate
-  entries). A changed file gets a new zone; the old one is kept in `retired_path_zones`, as dates refer to it. New
-  zones are inserted under the write lock and count against the quota of the Program that loads them
-  (`qore_program_private::tz_path_zone_count`/`tz_path_zone_bytes`: 256 zones, 32 MiB of file data) and of the
-  process (16384 zones, 256 MiB). The zone is named by the canonical path (the directory of the local time file is
-  dropped from the name if a canonical region name follows, #3736). On Windows, where the file is not identified by
-  its handle, code that a sandbox governs cannot load a path; trusted code's paths are made absolute and cached by
-  that path in `processFile()` (at most 16384).
+  gets another file's zone, and spellings and symbolic links of one file share a zone (on Linux hard links are
+  separate entries; on macOS `F_GETPATH` gives the link name the kernel has cached, so a zone can be named by any
+  link name of its file: that can only lead to false denials, never to access to another file). A changed file gets
+  a new zone; the old one is kept in `retired_path_zones`, as dates refer to it. New zones are inserted under the
+  write lock: when another thread inserted the same data first, its zone is used; when it inserted other data (the
+  file changed), the zone inserted last replaces it in the cache and the replaced one is retired. A new zone is
+  charged with its parsed size (`QoreZoneInfo::memorySize()`; files with more than 10000 transitions are refused)
+  to the sandbox that governs the loading code (`QoreSandboxMemoryAccount` of each member of a composite sandbox:
+  `tz_path_zones`/`tz_path_bytes` against 256 zones and 32 MiB, and `used` against its memory limit, permanently),
+  to its isolation domain (`domain_path_quota`, the same limits) and to the process total for sandboxed code (16384
+  zones, 256 MiB); code that no sandbox governs is charged to its Program (`qore_program_private`, 256 zones, 32 MiB)
+  and not limited by the process total. The zone is named by the canonical path (the directory of the local time
+  file is dropped from the name if a canonical region name follows, #3736). On Windows, where the file is not
+  identified by its handle, code that a sandbox governs cannot load a path; trusted code's paths are made absolute,
+  read without the lock and cached by that path (at most 16384).
 - The `%set-time-zone` parse directive (`qore_program_private::findTimeZoneDirectiveZone()`) is processed while
   the Program is parsed, when the code that runs is the caller of the parse: a path is refused when the parsed
   Program has `PO_NO_FILESYSTEM` or any sandbox manager; a region goes to the region loader.
