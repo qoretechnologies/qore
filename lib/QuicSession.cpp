@@ -1891,11 +1891,7 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     callbacks.encrypt = ngtcp2_crypto_encrypt_cb;
     callbacks.decrypt = ngtcp2_crypto_decrypt_cb;
     callbacks.hp_mask = ngtcp2_crypto_hp_mask_cb;
-#ifdef DEBUG
-    callbacks.recv_retry = recvRetryCallback;
-#else
     callbacks.recv_retry = ngtcp2_crypto_recv_retry_cb;
-#endif
     callbacks.recv_stateless_reset = recvStatelessResetCallback;
     callbacks.update_key = ngtcp2_crypto_update_key_cb;
     callbacks.delete_crypto_aead_ctx = ngtcp2_crypto_delete_crypto_aead_ctx_cb;
@@ -2473,9 +2469,6 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
         if (is_server_ && (rv == NGTCP2_ERR_RETRY || rv == NGTCP2_ERR_DROP_CONN)) {
             retry_requested_.store(rv == NGTCP2_ERR_RETRY, std::memory_order_release);
             dropped_.store(true, std::memory_order_release);
-#ifdef DEBUG
-            qore_dbg_quic_server_initial_drops.fetch_add(1, std::memory_order_relaxed);
-#endif
             xsink->raiseException("QUIC-DROP-CONN", "the client Initial does not start the ClientHello "
                 "(%s); dropping the connection without CONNECTION_CLOSE so the client retransmits",
                 ngtcp2_strerror(rv));
@@ -2605,10 +2598,6 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
             if (is_server_ && (rv == NGTCP2_ERR_RETRY || rv == NGTCP2_ERR_DROP_CONN)) {
                 retry_requested_.store(rv == NGTCP2_ERR_RETRY, std::memory_order_release);
                 dropped_.store(true, std::memory_order_release);
-#ifdef DEBUG
-                // see readPacketLocked()
-                qore_dbg_quic_server_initial_drops.fetch_add(1, std::memory_order_relaxed);
-#endif
                 break;
             }
             // Log per-packet errors and continue (matching existing batch error handling)
@@ -5204,13 +5193,6 @@ QuicSession::CloseReason QuicSession::getCloseReason() const {
     }
     return CloseReason::Open;
 }
-
-#ifdef DEBUG
-int QuicSession::recvRetryCallback(ngtcp2_conn* conn, const ngtcp2_pkt_hd* hd, void* user_data) {
-    qore_dbg_quic_retries_received.fetch_add(1, std::memory_order_relaxed);
-    return ngtcp2_crypto_recv_retry_cb(conn, hd, user_data);
-}
-#endif
 
 int QuicSession::recvStatelessResetCallback(ngtcp2_conn* /* conn */, const ngtcp2_pkt_stateless_reset* /* sr */,
         void* user_data) {

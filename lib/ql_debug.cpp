@@ -30077,19 +30077,21 @@ static QoreValue f_dbg_quic_wait_dropped_client_datagrams(const QoreListNode* pa
 
 std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent{0};
 std::atomic<int64_t> qore_dbg_quic_stateless_resets_received{0};
-std::atomic<int64_t> qore_dbg_quic_retries_received{0};
-std::atomic<int64_t> qore_dbg_quic_server_initial_drops{0};
+std::atomic<int64_t> qore_dbg_quic_server_retries_sent{0};
+std::atomic<int64_t> qore_dbg_quic_server_validated_drops{0};
 
-//! returns the number of connections that the QUIC servers of the process dropped since it started because a client
-//! Initial did not start the ClientHello (ngtcp2's NGTCP2_ERR_RETRY or NGTCP2_ERR_DROP_CONN)
-static QoreValue f_dbg_quic_server_initial_drops(const QoreListNode* params, RuntimeConfig& rc,
+//! returns the Retry packets that the QUIC servers of the process sent, and the connections that they dropped
+/** As a hash with the keys \c retries_sent and \c validated_drops (the connections dropped because a client
+    Initial did not start the ClientHello although the client had returned a valid Retry token), counted since the
+    process started.  Both are counted by the server, so that they do not depend on when the client's timers expire.
+*/
+static QoreValue f_dbg_quic_server_retry_counts(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    return qore_dbg_quic_server_initial_drops.load(std::memory_order_relaxed);
-}
-
-//! returns the number of Retry packets that the QUIC clients of the process took since it started
-static QoreValue f_dbg_quic_retries_received(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    return qore_dbg_quic_retries_received.load(std::memory_order_relaxed);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), xsink);
+    h->setKeyValue("retries_sent", qore_dbg_quic_server_retries_sent.load(std::memory_order_relaxed), xsink);
+    h->setKeyValue("validated_drops", qore_dbg_quic_server_validated_drops.load(std::memory_order_relaxed),
+        xsink);
+    return h.release();
 }
 
 //! returns the stateless resets that the QUIC listeners of the process sent and that its QUIC clients received
@@ -33334,10 +33336,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_quic_stateless_reset_counts", f_dbg_quic_stateless_reset_counts, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
-    qns.addBuiltinVariant("dbg_quic_retries_received", f_dbg_quic_retries_received, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
-        bigIntTypeInfo);
-    qns.addBuiltinVariant("dbg_quic_server_initial_drops", f_dbg_quic_server_initial_drops, QCF_NO_FLAGS,
-        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_server_retry_counts", f_dbg_quic_server_retry_counts, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_quic_fail_sends", f_dbg_quic_fail_sends, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 5, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", boolTypeInfo, QORE_PARAM_NO_ARG, "by_peer",
         listTypeInfo, QORE_PARAM_NO_ARG, "datagrams", bigIntTypeInfo, QORE_PARAM_NO_ARG, "err", boolTypeInfo,

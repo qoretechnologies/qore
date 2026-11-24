@@ -1788,11 +1788,6 @@ private:
         the stream closed, which needs the peer's acknowledgment of that RESET_STREAM, so a response could be read
         whole while a send still went out unreported.  See @ref recordPeerStopSending().
     */
-#ifdef DEBUG
-    //! a Retry taken by a client connection: counted for dbg_quic_retries_received() before ngtcp2's callback takes it
-    DLLLOCAL static int recvRetryCallback(ngtcp2_conn* conn, const ngtcp2_pkt_hd* hd, void* user_data);
-#endif
-
     //! a stateless reset that ends a client connection (qore#6931): its close reason is then StatelessReset
     DLLLOCAL static int recvStatelessResetCallback(ngtcp2_conn* conn, const ngtcp2_pkt_stateless_reset* sr,
         void* user_data);
