@@ -5264,9 +5264,10 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         // the module's own code is parsed under the mask in this block
         QoreModuleMaskAddedClearHelper mask_added_clear(userModule->getProgram());
 
-        // issue #3212: warning sink
+        // issue #3212: warning sink; the warnings go to the caller's warning sink, as those of a single-file module
+        // do (see loadUserModuleFromPath()), so that a module is accepted or refused the same in either form (#7324)
         qore_program_private::get(*userModule->getProgram())->parsePending(moduleCode, modulePath.c_str(), &xsink,
-            &xsink, warning_mask);
+            &wsink, warning_mask);
         if (xsink) {
             xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
             return nullptr;
@@ -5292,14 +5293,17 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
             fileOpenPath += file->c_str();
 
             std::string fileCode = QoreDir::get_file_content(fileOpenPath);
-            qore_program_private::get(*userModule->getProgram())->parsePending(fileCode, filePath.c_str(), &xsink, &xsink,
-                file_warning_mask);
+            qore_program_private::get(*userModule->getProgram())->parsePending(fileCode, filePath.c_str(), &xsink,
+                &wsink, file_warning_mask);
             if (xsink) {
                 xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
                 return nullptr;
             }
         }
-        userModule->getProgram()->parseCommit(&xsink);
+        // the warnings found when the module is committed are reported as well, under the warning mask that the .qm
+        // file left, as a single-file module's are under the mask that its file left: most of the QP_WARN_MODULES
+        // warnings are found only then (#7324)
+        userModule->getProgram()->parseCommit(&xsink, &wsink, file_warning_mask);
     }
     if (xsink) {
         xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);

@@ -786,7 +786,7 @@ static size_t get_stack_size() {
 static int initial_thread = -1;
 
 // this structure holds all thread-specific data
-class ThreadData {
+class DLLLOCAL ThreadData {
 public:
     //! the run-time parse options of the thread and the override that they were computed with; a struct declared in
     //! qore_thread_intern.h, so that RuntimeParseOptionsOverrideHelper restores it inline (qore#6446)
@@ -9872,6 +9872,16 @@ QoreAOTMethodDispatchReclaimer::Record* qore_acquire_aot_dispatch_thread_reader(
         }
     }
     return td->aot_dispatch_reader;
+}
+
+QoreProgram* runtime_get_program_with_current_options(const RuntimeConfig& rc) {
+    ThreadData* td = thread_data.get();
+    QoreProgram* pgm = td->current_pgm;
+    if (!pgm || (td->call_program_context && td->call_program_context != pgm)) {
+        return nullptr;
+    }
+    QoreParseOptions po = qore_program_private::getParseOptions(*pgm);
+    return td->runtime_po_state.po == po && rc.getParseOptions() == po ? pgm : nullptr;
 }
 
 QoreParseOptions runtime_get_effective_program_parse_options() {

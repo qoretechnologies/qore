@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par A Separated Module Is Refused for the Warnings Found When It Is Committed
+    A @ref separated_modules "separated module" whose code raises a warning of its warning mask when it is committed
+    (such as \c INVALID-OPERATION) is now refused, as the same module in a single file always was; fix the code or
+    disable the warning in the module (see @ref user_modules;
+    <a href="https://github.com/qoretechnologies/qore/issues/7324">issue 7324</a>).
+
     @par HttpServer Limits the Request Bodies That It Buffers to 256 MiB by Default
     A request body that @ref HttpServer::HttpServer "HttpServer" reads into memory and that is larger than
     @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" (256 MiB) is answered with HTTP 413 when no
@@ -2850,6 +2856,14 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a functional-domain restriction set on a Program after parsing with @ref Qore::Program::setParseOptions()
+      "Program::setParseOptions()" applies to the construction of objects of every class of the Program, whether or
+      not the class has a constructor of its own (<a href="https://github.com/qoretechnologies/qore/issues/7513">issue
+      7513</a>)
+    - a @ref separated_modules "separated module" dropped the warnings found when its code is committed, so it was
+      loaded with code that the same module in a single file is refused for, and its parse-time warnings were errors
+      also for @ref Qore::load_module_warn() "load_module_warn()" (see @ref user_modules;
+      <a href="https://github.com/qoretechnologies/qore/issues/7324">issue 7324</a>)
     - a pseudo-method call runs the method of the pseudo-class of the value's type at run time, also when the parser
       resolved the call from another type, and the code of a pseudo-class refuses a value of another type with an
       exception (see the note on pseudo-classes in @ref qore_classes;
