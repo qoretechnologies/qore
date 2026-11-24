@@ -82,6 +82,18 @@ auto sub azure_mi(string url) {
 }
 ";
 
+        #! the code of a Program that is restricted only from the network: it may receive the host's secrets
+        const NetworkRestrictedSource = "%modern
+%requires AzureOpenAiRestClient
+auto sub openai_request(object client, bool async) {
+    try {
+        return async ? client.restGetAsync(\"/x\").get().status_code : client.restGet(\"/x\").status_code;
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+";
+
         #! what the error of a refused caller says
         const Refused = "not available to the calling code";
     }
@@ -206,6 +218,18 @@ auto sub azure_mi(string url) {
         AzureOpenAiRestClient::AzureOpenAiRestClientIo lent({"url": mds.url,
             "azure_auth_mode": "entra_managed_identity"});
         on_exit lent.close();
+        # the positive control: code that may receive the host's secrets gets past the check of the credential and
+        # is stopped by the next step, the connection to the managed-identity endpoint, which code restricted from
+        # the network may not make (the default endpoint, which this test cannot provide, is not reached)
+        {
+            Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+            p.parse(NetworkRestrictedSource, "no-network");
+            foreach bool async in ((False, True)) {
+                auto v = p.callFunction("openai_request", lent, async);
+                assertNRegex(Refused, sprintf("%y", v), "network restricted: " + (async ? "async" : "sync"));
+                assertRegex("^PERMISSION-DENIED: .*NETWORK", v, "network restricted: " + (async ? "async" : "sync"));
+            }
+        }
         foreach string kind in (keys pgms) {
             # the host's identity is fetched from the default endpoint, which this test cannot provide
             if (AmbientCallers::may_receive(kind)) {
