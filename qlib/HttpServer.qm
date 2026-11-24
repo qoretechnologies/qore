@@ -12199,8 +12199,6 @@ class Http1HandlerSocket inherits Qore::Socket {
         }
     }
 
-    #! Admits the read of the request's chunked body, which is refused if the request has none, or if it is read or
-
     #! Raises the exception of a method that the handler's code cannot call on the connection's socket
     private:internal static refuse(string method) {
         throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s() cannot be called on the socket of an HTTP/1.x "
@@ -13649,7 +13647,7 @@ class HandlerSocketState {
             ++h1_gen;
             if (h1_ops) {
                 # the last send or read in progress that ends releases the end of the socket
-                h1_waiter = new Counter(1);
+                h1_waiter = h1_waiter ?? new Counter(1);
                 return -1;
             }
         }
@@ -13658,17 +13656,19 @@ class HandlerSocketState {
 
     #! Ends the socket of the current HTTP/1.x request (qore#7305)
     /** The server calls it before it sends a response for the request or reads the next request, or after h1End()
-        returned -1; a later call only returns the state.  A send or read of the socket in progress (of a thread of the handler that outlives its
-        request) is waited for, at most for its timeout, which the socket bounds (the \c handler_socket_max_timeout
-        option of the server); the response is then broken, and the connection is shut down and closed by the
-        server.  It is called only by the server's own code
+        returned -1; a later call only returns the state.  A send or read of the socket in progress (of a thread of the
+        handler that outlives its request) is waited for, at most for its timeout, which the socket bounds (the
+        \c handler_socket_max_timeout option of the server); the response is then broken, and the connection is shut
+        down and closed by the server.  A send or read that h1End() found and that ended before this call is not in
+        progress here: the state of the response is then returned as it is.  It is called only by the server's own
+        code
 
         @return the state of the response that the handler sent through the socket (an Http1ResponseState value)
     */
     int endHandlerSocket() {
         int state;
-        # a send or read of another thread in progress, also one that h1End() found: the response is broken
-        # whatever it does
+        # a send or read of another thread still in progress (one that h1End() found and that ended since is not):
+        # the response is broken whatever it does
         if (*Counter waiter = h1EndLocked(\state)) {
             h1Broken();
             # at most the longest timeout of the socket: a send or read whose callback or stream (code of the

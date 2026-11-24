@@ -1096,7 +1096,8 @@ public namespace RestHandler {
                 # a class of a sandboxed Program never gets the connection's socket of an HTTP/1.x request: decided
                 # when the class is handed the request, whatever the handler hosted when the request started
                 # (qore#7305)
-                if (SandboxManager::isFromSandboxedProgram(cls) && !RestRequestSocketClasses{s.className()} && s.isOpen()) {
+                if (SandboxManager::isFromSandboxedProgram(cls) && !RestRequestSocketClasses{s.className()}
+                        && s.isOpen()) {
                     return rest_refuse_connection_socket(cls);
                 }
                 return cls.handleRequest(listener, rh, s, cl, mn, cx, args);
@@ -1218,7 +1219,8 @@ public namespace RestHandler {
                 }
                 # a stream handler of a sandboxed Program never gets the connection's socket of an HTTP/1.x request
                 # (qore#7305)
-                if (SandboxManager::isFromSandboxedProgram(rsh) && !RestRequestSocketClasses{s.className()} && s.isOpen()) {
+                if (SandboxManager::isFromSandboxedProgram(rsh) && !RestRequestSocketClasses{s.className()}
+                        && s.isOpen()) {
                     return rest_refuse_connection_socket(rsh);
                 }
                 RestStreamRequest req(rsh, listener, rh, s, cx, cx.hdr, sb);
@@ -2058,7 +2060,8 @@ public namespace RestHandler {
 
             # a class of a sandboxed Program never gets the connection's socket of an HTTP/1.x request: decided when
             # the class is handed the request, whatever the handler hosted when the request started (qore#7305)
-            if (SandboxManager::isFromSandboxedProgram(rcls) && !RestRequestSocketClasses{s.className()} && s.isOpen()) {
+            if (SandboxManager::isFromSandboxedProgram(rcls) && !RestRequestSocketClasses{s.className()}
+                    && s.isOpen()) {
                 return rest_refuse_connection_socket(rcls);
             }
             return rcls.handleRequest(listener, self, s, class_list, method_name, cx, args);
