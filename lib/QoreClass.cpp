@@ -62,9 +62,15 @@
 #include <cassert>
 #include <cstring>
 
+//! QORE_DISABLE_DIRECT_OBJECT_CALLS, read once when the library is loaded (testing only; see
+//! qore_direct_object_calls_disabled())
+static const bool qore_direct_object_calls_off = []() -> bool {
+    QoreEnvironmentValue env_holder("QORE_DISABLE_DIRECT_OBJECT_CALLS");
+    return env_holder.c_str() != nullptr;
+}();
+
 bool qore_direct_object_calls_disabled() {
-    static constinit QoreEnvFlag disabled("QORE_DISABLE_DIRECT_OBJECT_CALLS");
-    return disabled.get();
+    return qore_direct_object_calls_off;
 }
 
 namespace {
@@ -11736,6 +11742,30 @@ bool BuiltinConstructorValueVariant::evalConstructor(const QoreClass& thisclass,
     return evalConstructorImpl<false>({}, thisclass, self, ceh, bcl, bceal, xsink);
 }
 
+const BuiltinConstructorValueVariant* BuiltinConstructorValueVariant::getDirectBuiltinConstructor() const {
+    // see the declaration: what the variant search and CodeEvaluationHelper check at run time for a call without
+    // arguments, other than the functional domains, cannot refuse the variant
+    if (signature.numParams() || signature.declaresTypeParameters() || signature.needsTypeParameterSubstitution()
+            || (getFlags() & (QCF_NOOP | QCF_RUNTIME_NOOP | QCF_NO_DOMAIN_THROW))
+            || (getFunctionality() & QDOM_UNCONTROLLED_API)
+            || getAccess() != Public) {
+        return nullptr;
+    }
+    return this;
+}
+
+bool BuiltinConstructorValueVariant::evalDirectConstructor(const QoreClass& thisclass, QoreObject* self,
+        BCList* bcl, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const {
+    // as evalConstructorImpl(), which runs the constructor with the arguments of the call: there are none
+    CodeContextHelper cch(xsink, CT_BUILTIN, "constructor", self, qore_class_private::get(thisclass));
+
+    if (constructorPreludeImpl<false>({}, thisclass, rc, self, bcl, bceal, xsink))
+        return false;
+
+    constructor(self, nullptr, rc, xsink);
+    return !qore_constructor_has_event(xsink);
+}
+
 bool BuiltinConstructorValueVariant::evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     return evalConstructorImpl<true>(policy, thisclass, self, ceh, bcl, bceal, xsink);
@@ -11764,7 +11794,7 @@ bool BuiltinExternalConstructorValueVariant::evalConstructor(LexicalSemanticPoli
 }
 
 template <bool Lexical>
-QORE_INTERN_ALWAYS_INLINE int ConstructorMethodVariant::constructorPreludeImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, CodeEvaluationHelper& ceh,
+QORE_INTERN_ALWAYS_INLINE int ConstructorMethodVariant::constructorPreludeImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, RuntimeConfig& rc,
         QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     if (bcl) {
         const BCAList* bcal = getBaseClassArgumentList();
@@ -11775,8 +11805,8 @@ QORE_INTERN_ALWAYS_INLINE int ConstructorMethodVariant::constructorPreludeImpl(L
                 return -1;
             }
         }
-        if constexpr (Lexical) bcl->execConstructors({}, self, bceal, ceh.getRuntimeConfig(), xsink);
-        else bcl->execConstructors(self, bceal, ceh.getRuntimeConfig(), xsink);
+        if constexpr (Lexical) bcl->execConstructors({}, self, bceal, rc, xsink);
+        else bcl->execConstructors(self, bceal, rc, xsink);
         if (*xsink) {
             return -1;
         }
@@ -12046,6 +12076,184 @@ void BuiltinCopyVariantBase::evalCopyImpl(LexicalSemanticPolicy policy, const Qo
     qore_object_ops(old).evalCopyMethodWithPrivateData(thisclass, this, self, ceh.getRuntimeConfig(), xsink);
 }
 
+namespace {
+//! A call of a builtin constructor or destructor made without a CodeEvaluationHelper (qore#7336)
+/** Makes what CodeEvaluationHelper makes for the call of a builtin variant whose variant is known, without arguments,
+    in a class without a Program context, in the same order, and restores it in the same order when it is destroyed:
+    the call site is taken (or hidden, for a destructor) and the pending call of a call reference is taken, the
+    object's creation context (sandbox provenance) is applied and checked for isolation, the stack is checked, the
+    pending caller parse options are taken, the receiver type, the return type and the runtime flags of the variant are
+    set, and the variant's frame is pushed on the call stack, with the same name, call type, location, statement and
+    Program.  The checks of the variant search are made by the callers (see qore_eval_direct_builtin_constructor()).
+
+    Keep this in sync with CodeEvaluationHelper::CodeEvaluationHelper(), CodeEvaluationHelper::initImpl() and
+    CodeEvaluationHelper::~CodeEvaluationHelper() (lib/Function.cpp); see design/object-construction-cost.md
+*/
+class QoreDirectBuiltinCall : public QoreStackLocation {
+public:
+    //! takes the call site (\a hide_call_site: hides it, as for a destructor) and the pending call reference call
+    DLLLOCAL QoreDirectBuiltinCall(RuntimeConfig& rc, const qore_class_private* qc, const QoreFunction* func,
+            bool hide_call_site) : rc(rc), qc(qc), func(func),
+            loc(hide_call_site ? hide_runtime_call_site(hidden_call_site_slot, hidden_call_site)
+                : take_runtime_call_location()) {
+        rc_take_call_reference_call(rc, nullptr);
+    }
+
+    //! sets up the call of \a variant on \a self; returns -1 with an exception raised if the call cannot be made
+    DLLLOCAL int enter(QoreObject* self, const AbstractQoreFunctionVariant* variant, ExceptionSink* xsink) {
+        assert(&rc == &rc_get_tls_ref());
+        assert(!self->getInstantiatedTypeInfo());
+#ifdef DEBUG
+        qore_dbg_runtime_chosen_variant = false;
+#endif
+        provenance.set(self);
+        // the receiver's code is of another tenant than the trusted build that a tenant called (qore#6536)
+        if (provenance.getContext() && qore_sandbox_check_isolation(xsink, "calling a method")) {
+            return -1;
+        }
+#ifdef QORE_MANAGE_STACK
+        if (check_stack(xsink)) {
+            return -1;
+        }
+#endif
+        // the pending caller options are taken by the call, as by any call
+        {
+            const QoreProgram* code_pgm;
+            runtime_take_call_caller_parse_options(code_pgm);
+        }
+        old_receiver_type_info = runtime_set_receiver_type_info(self->getClass()->getTypeInfo());
+        restore_receiver_type_info = true;
+        old_return_type_info = saveReturnTypeInfo(variant->getSignature()->getReturnTypeInfo());
+        restore_return_type_info = true;
+        old_rtflags = QoreRuntimeFlags::get(rc);
+        QoreRuntimeFlags::set(rc, static_cast<q_rt_flags_t>(variant->getFlags()));
+        restore_rtflags = true;
+        stack_loc = update_get_runtime_stack_builtin_location(this, stmt, pgm, old_runtime_loc, nullptr);
+        restore_stack = true;
+        return 0;
+    }
+
+    DLLLOCAL ~QoreDirectBuiltinCall() {
+        if (restore_stack) {
+            update_runtime_stack_location(stack_loc, old_runtime_loc);
+        }
+        if (restore_rtflags) {
+            QoreRuntimeFlags::set(rc, old_rtflags);
+        }
+        if (restore_receiver_type_info) {
+            runtime_set_receiver_type_info(old_receiver_type_info);
+        }
+        if (restore_return_type_info) {
+            saveReturnTypeInfo(old_return_type_info);
+        }
+        if (hidden_call_site) {
+            *hidden_call_site_slot = hidden_call_site;
+        }
+    }
+
+    DLLLOCAL QoreDirectBuiltinCall(const QoreDirectBuiltinCall&) = delete;
+    DLLLOCAL QoreDirectBuiltinCall& operator=(const QoreDirectBuiltinCall&) = delete;
+
+    DLLLOCAL virtual QoreProgram* getProgram() const override {
+        return pgm;
+    }
+
+    DLLLOCAL virtual const AbstractStatement* getStatement() const override {
+        return stmt;
+    }
+
+    DLLLOCAL virtual const std::string& getCallName() const override {
+        return call_name.get(qc, func);
+    }
+
+    DLLLOCAL virtual qore_call_t getCallType() const override {
+        return CT_BUILTIN;
+    }
+
+    DLLLOCAL virtual const QoreProgramLocation& getLocation() const override {
+        return loc ? *loc : loc_builtin;
+    }
+
+private:
+    RuntimeConfig& rc;
+    const qore_class_private* qc;
+    const QoreFunction* func;
+    //! the call site hidden while the call runs, restored through the slot
+    const QoreProgramLocation** hidden_call_site_slot = nullptr;
+    const QoreProgramLocation* hidden_call_site = nullptr;
+    const QoreProgramLocation* loc;
+    QoreSandboxProvenanceHelper provenance;
+    CodeEvaluationCallName call_name;
+    QoreProgram* pgm = nullptr;
+    const AbstractStatement* stmt = nullptr;
+    const QoreStackLocation* stack_loc = nullptr;
+    const QoreProgramLocation* old_runtime_loc = nullptr;
+    const QoreTypeInfo* old_receiver_type_info = nullptr;
+    const QoreTypeInfo* old_return_type_info = nullptr;
+    q_rt_flags_t old_rtflags = 0;
+    bool restore_stack = false;
+    bool restore_rtflags = false;
+    bool restore_receiver_type_info = false;
+    bool restore_return_type_info = false;
+};
+
+//! Calls a builtin constructor without arguments without a CodeEvaluationHelper (qore#7336)
+/** @return true if the call was made (\a completed is set as evalConstructor() returns it), false if the variant or the
+    call is not one that QoreDirectBuiltinCall makes, and the caller makes the call through CodeEvaluationHelper; then
+    nothing has been changed
+
+    What the variant search (QoreFunction::runtimeFindVariantImpl()) and CodeEvaluationHelper check at run time for
+    the call of a builtin constructor without arguments, and how the call here keeps it:
+    - the object must not be deleted (CodeEvaluationHelper::CodeEvaluationHelper()): one that is is called through
+      CodeEvaluationHelper, which raises the error
+    - the variant: a function with one variant only and no inherited variants, and the variant resolved at parse time,
+      if any, is that one; the search could select no other
+    - the parameters, the flags that the search tests (QCF_NOOP, QCF_RUNTIME_NOOP), the uncontrolled API domain
+      (check_sandbox_uncontrolled_api()), the type parameters and the access of the variant: see
+      BuiltinConstructorValueVariant::getDirectBuiltinConstructor(); a variant without parameters has no argument
+      to convert or to default (CodeEvaluationHelper::prepareCallArgumentsImpl(), processDefaultArgs())
+    - the functional domains of a variant resolved at run time (runtimeFindVariantImpl()): checked here with the same
+      function and the same runtime parse options; a variant that they refuse is called through CodeEvaluationHelper,
+      which raises the error (keep this in sync with runtimeFindVariantImpl() in lib/Function.cpp)
+    - a generic receiver (an object with an instantiated type): called through CodeEvaluationHelper
+    - the Program context of the class (qore_get_method_pgm_context()): a class with one is called through
+      CodeEvaluationHelper
+    - the sandbox isolation of the object's creation context, the stack, and the call frame: QoreDirectBuiltinCall
+*/
+static bool qore_eval_direct_builtin_constructor(const ConstructorMethodFunction* f,
+        const AbstractQoreFunctionVariant* variant, const QoreClass& thisclass, QoreObject* self, BCList* bcl,
+        BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink, bool& completed) {
+    if (!f->hasSingleCallVariant()) {
+        return false;
+    }
+    const AbstractQoreFunctionVariant* v = f->first();
+    if (variant && variant != v) {
+        return false;
+    }
+    const BuiltinConstructorValueVariant* bv = CONMV_const(v)->getDirectBuiltinConstructor();
+    if (!bv || !self->isValid() || self->getInstantiatedTypeInfo()) {
+        return false;
+    }
+    // a variant resolved at run time is checked against the functional domains that the runtime parse options allow,
+    // as runtimeFindVariantImpl() checks it: keep these checks in sync
+    if (!variant && qore_get_variant_denied_domains(v, runtime_get_parse_options())) {
+        return false;
+    }
+    QoreSourceProgramHolder spgm_holder(xsink);
+    if (qore_get_method_pgm_context(thisclass, spgm_holder)) {
+        return false;
+    }
+    QoreDirectBuiltinCall call(rc, qore_class_private::get(thisclass), f, false);
+    // the Program of the class is being deleted (qore_get_method_pgm_context() raised the error)
+    if (*xsink || call.enter(self, v, xsink)) {
+        completed = false;
+        return true;
+    }
+    completed = bv->evalDirectConstructor(thisclass, self, bcl, bceal, rc, xsink);
+    return true;
+}
+}
+
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE bool ConstructorMethodFunction::evalConstructorImpl(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant,
         const QoreClass& thisclass, QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal,
@@ -12054,6 +12262,14 @@ QORE_INTERN_ALWAYS_INLINE bool ConstructorMethodFunction::evalConstructorImpl(Le
     // QoreListNodeEvalOptionalRefHolder::evalIntern()), so that converting an argument needs no copy of the list,
     // which referenced every argument again
     assert(!tmp_args || !args || args->reference_count() == 1);
+    // a builtin constructor called without arguments is called without a CodeEvaluationHelper (qore#7336)
+    if constexpr (!Lexical) {
+        bool completed;
+        if (!args && !qore_direct_object_calls_disabled() && qore_eval_direct_builtin_constructor(this, variant,
+                thisclass, self, bcl, bceal, rc, xsink, completed)) {
+            return completed;
+        }
+    }
     QoreSourceProgramHolder spgm_holder(xsink);
     QoreProgram* mpgm = qore_get_method_pgm_context(thisclass, spgm_holder);
     CodeEvaluationHelper ceh = tmp_args
@@ -12132,6 +12348,24 @@ void DestructorMethodFunction::evalDestructor(const QoreClass& thisclass, QoreOb
     QoreNativeDestructorProgramEntry native_entry;
     if (pgm_ctx && ct == CT_BUILTIN && native_entry.runWithoutContext(pgm_ctx, xsink)) {
         pgm_ctx = nullptr;
+    }
+    // a builtin destructor of a class without a Program context is called without a CodeEvaluationHelper
+    // (qore#7336): QoreDirectBuiltinCall makes what CodeEvaluationHelper makes for it.  The variant is the class's
+    // only one, so there is no variant search, and it has no parameters; the uncontrolled API domain (which
+    // check_sandbox_uncontrolled_api() exempts for a destructor after a test of the sandbox), a deleted object (which
+    // CodeEvaluationHelper refuses), a generic receiver, and a variant flagged QCF_NO_DOMAIN_THROW (which a debug
+    // build's CodeEvaluationHelper verifies) are left to CodeEvaluationHelper
+    if (!pgm_ctx && ct == CT_BUILTIN && !(variant->getFunctionality() & QDOM_UNCONTROLLED_API)
+            && !(variant->getFlags() & QCF_NO_DOMAIN_THROW) && self->isValid() && !self->getInstantiatedTypeInfo()
+            && !qore_direct_object_calls_disabled()) {
+        // a destructor is called by no call expression: the call site is hidden (see below)
+        QoreDirectBuiltinCall call(rc, qore_class_private::get(thisclass), this, true);
+        // the Program of the class is being deleted (qore_get_method_pgm_context() raised the error)
+        if (*xsink || call.enter(self, variant, xsink)) {
+            return;
+        }
+        DESMV_const(variant)->evalDestructor(thisclass, self, rc, xsink);
+        return;
     }
     // a destructor is called by no call expression: its frame is located where the code that runs it is, and it can
     // run between a call site and the frame that takes it, as when a temporary value is released
