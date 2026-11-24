@@ -58,10 +58,14 @@ std::mutex qore_program_cache_create_lock;
 
 // returns 0 if the code that calls the builtin may use the values of the owner in the per-Program cache: code that no
 // sandbox governs, of the Program of a class of the owner (the source Program of the owner's class or of one of its
-// base classes), or raises PROGRAM-CACHE-ERROR and returns -1
-int qore_program_cache_check_caller(const QoreObject* owner, const char* what, ExceptionSink* xsink) {
+// base classes), or raises PROGRAM-CACHE-ERROR and returns -1; with \a owner_dying, the code of a class of the owner
+// that runs in the destructor of the owner is also accepted when sandboxed code released the owner's last reference:
+// the destructor is the code of the owner's class, and the values of an object that is destroyed are released
+int qore_program_cache_check_caller(const QoreObject* owner, const char* what, ExceptionSink* xsink,
+        bool owner_dying = false) {
     QoreProgram* pgm = qore_builtin_caller_program();
-    if (pgm && !qore_builtin_caller_is_sandboxed()) {
+    if (pgm && (!qore_builtin_caller_is_sandboxed()
+        || (owner_dying && qore_object_private::get(*owner)->inDestructorOfThisThread()))) {
         const qore_class_private* cls = qore_class_private::get(*owner->getClass());
         if (cls->spgm.load() == pgm) {
             return 0;
@@ -2456,7 +2460,8 @@ static nothing SandboxManager::setProgramCacheValue(object owner, string key, au
 
     @param owner the object whose values are released; the calling code must be code that no sandbox governs, of
     the %Program of a class of the object (of its class or of one of its base classes), so that no other code can
-    release (and so evict) the values of an object
+    release (and so evict) the values of an object; in the destructor of \a owner, the code of a class of the object
+    can also release them when sandboxed code released the object's last reference
 
     @throw PROGRAM-CACHE-ERROR the calling code is sandboxed, or not of the %Program of a class of \a owner
 
@@ -2471,7 +2476,7 @@ destructor() {
     @since %Qore 3.0
 */
 static nothing SandboxManager::releaseProgramCacheValues(object owner) {
-    if (qore_program_cache_check_caller(owner, "release", xsink)) {
+    if (qore_program_cache_check_caller(owner, "release", xsink, true)) {
         return QoreValue();
     }
     QoreProgramObjectCache::releaseOwner(owner, xsink);

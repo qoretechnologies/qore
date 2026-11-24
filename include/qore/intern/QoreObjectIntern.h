@@ -342,6 +342,11 @@ public:
         return shared_object.load(std::memory_order_relaxed);
     }
 
+    //! Returns true if the calling thread is running the destructor of the object
+    DLLLOCAL bool inDestructorOfThisThread() const {
+        return status.load(std::memory_order_acquire) == q_gettid();
+    }
+
     //! Returns 0 if the running code can change (or delete) the object, or raises SHARED-OBJECT-ERROR and returns -1
     /** Code that a sandbox governs, or that acts for sandboxed code, cannot change an object that trusted code marked
         as shared, unless the change is made in an update scope for the object (see

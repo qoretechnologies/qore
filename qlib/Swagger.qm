@@ -1242,6 +1242,18 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         return res;
     }
 
+    #! Restores the document; a shared document restores no type in its type cache (qore#6843)
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::deserializeMembers() "AbstractRestSchemaObject::deserializeMembers()"
+    */
+    private:internal deserializeMembers(*hash<auto> members) {
+        # the transient member is initialized here, as this method is defined
+        response_types = {};
+        self += members;
+        if (SandboxManager::createsSharedObjects()) {
+            remove typemap;
+        }
+    }
+
     #! Returns the reusable schema object for the given reference name or @ref nothing if there is none
     private *RestSchemaValidator::AbstractRestSchemaObject getSchemaObjectForReferenceImpl(string rstr) {
         return definitions{rstr};
@@ -1273,6 +1285,9 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
                 return rv;
             }
             AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required);
+            # a value of a per-Program cache can be given to other code of the Program, also to trusted code that
+            # sandboxed code calls, so it cannot be changed (qore#6843)
+            rv.freeze();
             SandboxManager::setProgramCacheValue(self, key, rv, CallerTypeCacheSize);
             return rv;
         }
@@ -1442,6 +1457,8 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             }
             hash<string, AbstractDataProviderType> copies = response_types;
             AbstractDataProviderType rv = SwaggerHashDataType::forResponse(type, \copies);
+            # a value of a per-Program cache cannot be changed (see getType())
+            rv.freeze();
             SandboxManager::setProgramCacheValue(self, key, rv, CallerTypeCacheSize);
             return rv;
         }
@@ -4656,6 +4673,13 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     *RestSchemaValidator::AbstractRestSchemaValidator getTypeBuildSchema() {
         # the document is held through a weak reference, which does not exist once the document is deleted
         return exists swagger ? swagger : NOTHING;
+    }
+
+    #! Returns @ref True once the document of this schema object has been destroyed
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::isTypeBuildSchemaDestroyed() "AbstractRestSchemaObject::isTypeBuildSchemaDestroyed()"
+    */
+    bool isTypeBuildSchemaDestroyed() {
+        return !exists swagger;
     }
 
     #! Returns the data provider type for a given type/format/items path

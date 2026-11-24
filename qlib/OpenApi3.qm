@@ -2006,6 +2006,9 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
             return rv;
         }
         AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required, strict);
+        # a value of a per-Program cache can be given to other code of the Program, also to trusted code that
+        # sandboxed code calls, so it cannot be changed (qore#6843)
+        rv.freeze();
         SandboxManager::setProgramCacheValue(self, key, rv, CallerTypeCacheSize);
         return rv;
     }
@@ -2145,6 +2148,16 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
     AbstractDataProviderType getSchemaDataType(string path, SchemaObject schema, bool required = True,
             *object rest) {
         return schema.getDataType(required, rest);
+    }
+
+    #! Restores the document; a shared document restores no type in its type cache (qore#6843)
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::deserializeMembers() "AbstractRestSchemaObject::deserializeMembers()"
+    */
+    private:internal deserializeMembers(*hash<auto> members) {
+        self += members;
+        if (SandboxManager::createsSharedObjects()) {
+            remove typemap;
+        }
     }
 
     #! Returns the reusable schema object for the given reference name or @ref nothing if there is none
@@ -5947,6 +5960,23 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         return exists openapi3 ? openapi3 : NOTHING;
     }
 
+    #! Restores the object; a shared object restores no alternative type in its cache (qore#6843)
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::deserializeMembers() "AbstractRestSchemaObject::deserializeMembers()"
+    */
+    private:internal deserializeMembers(*hash<auto> members) {
+        self += members;
+        if (SandboxManager::createsSharedObjects()) {
+            remove alternativeDataType;
+        }
+    }
+
+    #! Returns @ref True once the document of this schema object has been destroyed
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::isTypeBuildSchemaDestroyed() "AbstractRestSchemaObject::isTypeBuildSchemaDestroyed()"
+    */
+    bool isTypeBuildSchemaDestroyed() {
+        return !exists openapi3;
+    }
+
     #! private constructor; use newSchemaObject() instead
     /**
         @param name the name of the object
@@ -6562,10 +6592,15 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                 return getAlternativeDataType(rest);
             });
         }
+        # an orphaned shared object reads its cache, and writes none (qore#6843)
+        if (!schema && isOrphanedSharedObject() && alternativeDataType) {
+            return alternativeDataType;
+        }
         if (!isPlainAlternative()) {
             return getDataType(True, rest);
         }
         if (!alternativeDataType) {
+            checkCacheWrite();
             AbstractDataProviderType t = getLiveDocument().getType("/", type, format, items, !nullable, True)
                 .copyWithConstraints(getConstraintInfo());
             bool opaque;
@@ -6623,6 +6658,15 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         remove alternativeDataType;
     }
 
+    #! Releases the types and fields that this object caches, for its schema
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::releaseTypeCachesFor() "AbstractRestSchemaObject::releaseTypeCachesFor()"
+    */
+    releaseTypeCachesFor(RestSchemaValidator::AbstractRestSchemaValidator schema) {
+        RestSchemaValidator::AbstractRestSchemaObject::releaseTypeCachesFor(schema);
+        # the shared object was checked above
+        update_shared_cache(self, sub () { remove alternativeDataType; });
+    }
+
     AbstractDataProviderType getSchemaType(string path, string typestr, *string format,
             *AbstractSchemaObject arrayItems, bool required) {
         return getLiveDocument().getType(path, typestr, format, arrayItems, required);
@@ -6672,6 +6716,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                     return getDataType(required, rest);
                 });
             }
+        } else if (isOrphanedSharedObject()) {
+            # its caches are read, never written (qore#6843)
+            if (*AbstractDataProviderType t = getCachedDataType(required)) {
+                return t;
+            }
+            checkCacheWrite();
         }
         required = required && !nullable;
         if (*AbstractDataProviderType t = getReplacedDataType(required)) {

@@ -732,10 +732,13 @@ authenticate();
     of a shared schema, and code that sandboxed code supplied cannot change it in one): the types and fields asked for
     outside a type build, with the data of whichever caller, are read from the schema's caches and otherwise built
     without writing them and kept in the per-%Program cache, from which they are released with the schema; so are the
-    response types of types that the schema did
-    not build, and, for every caller, the variants of the schema's types with the request body defaults of a REST
-    client: such a variant is a copy of the schema's own type that shares every field and type of it but the fields
-    with a default, and the code of the REST client runs before any type build of the schema, never in one.  Setting the environment variable
+    response types of types that the schema did not build, and, for every caller, the variants of the schema's types
+    with the request body defaults of a REST client: such a variant is a copy of the schema's own type that shares
+    every field and type of it but the fields with a default, and the code of the REST client runs before any type
+    build of the schema, never in one.  What the per-%Program cache keeps is frozen, as trusted code that sandboxed
+    code calls back uses the sandboxed %Program's cache: no code of the %Program can change it.  A schema object whose
+    document has been destroyed reads what it cached and builds nothing, and a schema that trusted code deserializes is
+    shared as one that it creates, and restores no type in its caches.  Setting the environment variable
     \c QORE_SHARED_OBJECT_TRACE reports each refused change of a shared object, and each refused mark, on standard
     error, to find the changes that a class must make in an update scope.
 
