@@ -1115,6 +1115,7 @@ public class BedrockControlManifest {
             <RestSchemaActionInfo>{
                 "action": "list-tags-for-resource",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/listTagsForResource",
                 "operation_id": "ListTagsForResource",
                 "display_name": "List Tags For Resource",
