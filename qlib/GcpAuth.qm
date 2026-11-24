@@ -332,16 +332,16 @@ public string sub getAccessTokenFromServiceAccountFile(string sa_json_path,
     @return the bearer access token
 
     @throw GCP-AUTH-ERROR metadata server unreachable or returned an error, or no \c metadata_endpoint is given while
-    \c QORE_GCP_ADC_DISABLED is set (see @ref gcpauthintro), or the calling code is restricted from external
-    information (see @ref Qore::SandboxManager::callerMayReadExternalInfo()
-    "SandboxManager::callerMayReadExternalInfo()"): the metadata server's token is the host's identity
+    \c QORE_GCP_ADC_DISABLED is set (see @ref gcpauthintro), or the calling code may not receive the host's secrets
+    (see @ref GcpAuth::hostCredentialsAllowed() "hostCredentialsAllowed()"): the metadata server's token is the
+    host's identity
 */
 public string sub getAccessTokenFromMetadataServer(list<string> scopes,
         *hash<auto> opts) {
-    # the host's instance identity is not given to a caller restricted from external information (qore#6844)
-    if (!SandboxManager::callerMayReadExternalInfo()) {
-        throw "GCP-AUTH-ERROR", "the metadata server's credentials of the host are not available to code restricted "
-            "from external information; give a credential file explicitly";
+    # the host's instance identity only for a caller that may receive it (qore#6844)
+    if (!hostCredentialsAllowed()) {
+        throw "GCP-AUTH-ERROR", "the metadata server's credentials of the host are not available to the calling "
+            "code; give a credential file explicitly";
     }
     if (!opts.metadata_endpoint && adcDisabled()) {
         throw "GCP-AUTH-ERROR", "the default metadata server is not used: QORE_GCP_ADC_DISABLED is set";
@@ -399,9 +399,9 @@ public string sub getAccessTokenFromMetadataServer(list<string> scopes,
 
     @return the bearer access token
 
-    @throw GCP-AUTH-ERROR all candidate sources failed; for code restricted from external information (see
-    @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), when no
-    \a sa_json_path is given: the application default credentials and the metadata server are the host's (qore#6844)
+    @throw GCP-AUTH-ERROR all candidate sources failed; for code that may not receive the host's secrets (see
+    @ref GcpAuth::hostCredentialsAllowed() "hostCredentialsAllowed()"), when no \a sa_json_path is given: the
+    application default credentials and the metadata server are the host's (qore#6844)
 */
 public string sub getAccessToken(*string sa_json_path, list<string> scopes,
         *hash<auto> opts) {
@@ -419,19 +419,29 @@ public string sub getAccessToken(*string sa_json_path, list<string> scopes,
     return getAccessTokenFromMetadataServer(scopes, opts);
 }
 
+#! Returns @ref True "True" if the calling code may receive the host's GCP credentials (qore#6844)
+/** The application default credentials of the environment and of the user's home and the metadata server's token are
+    the host's secrets: they are resolved only for code that may receive them (see
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"): not for
+    code restricted from external information, nor for sandboxed code, unless the host grants them with a policy
+    barrier or a system-policy capability
+*/
+public bool sub hostCredentialsAllowed() {
+    return SandboxManager::callerMayReceiveHostSecrets();
+}
+
 #! Resolves the supported file-based ADC chain without acquiring a token
 /** @param location explicit credential location, or NOTHING for ADC
     @return the selected credential location, or NOTHING for compute metadata credentials
 
-    @note For code restricted from external information (see @ref Qore::SandboxManager::callerMayReadExternalInfo()
-    "SandboxManager::callerMayReadExternalInfo()"), only an explicit \a location is returned: the application default
-    credentials of the environment and of the user's home are the host's (qore#6844)
+    @note For code that may not receive the host's secrets (see @ref GcpAuth::hostCredentialsAllowed()
+    "hostCredentialsAllowed()"), only an explicit \a location is returned: the application default credentials of the
+    environment and of the user's home are the host's (qore#6844)
 */
 public *string sub resolveCredentialLocation(*string location) {
     *string candidate = location;
-    # the host's application default credentials are not resolved for a caller restricted from external information
-    # (qore#6844)
-    if (!candidate.val() && !SandboxManager::callerMayReadExternalInfo()) {
+    # the host's application default credentials only for a caller that may receive them (qore#6844)
+    if (!candidate.val() && !hostCredentialsAllowed()) {
         return;
     }
     if (!candidate.val()) {
@@ -471,9 +481,13 @@ public bool sub adcDisabled() {
     @return the override, GOOGLE_CLOUD_QUOTA_PROJECT, or the selected credential's quota_project_id
     @throw GCP-AUTH-ERROR invalid quota project or unreadable selected credentials
     @note No resource project is inferred. The caller needs serviceusage.services.use on this project.
+    @note \c GOOGLE_CLOUD_QUOTA_PROJECT is read only for code that may read external information (see
+    @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"; qore#6844)
 */
 public *string sub getQuotaProject(*string location, *string project) {
-    *string value = project ?? getenv("GOOGLE_CLOUD_QUOTA_PROJECT");
+    # the host's environment only for a caller that could read it itself (qore#6844)
+    *string value = project ?? (SandboxManager::callerMayReadExternalInfo()
+        ? getenv("GOOGLE_CLOUD_QUOTA_PROJECT") : NOTHING);
     if (!exists value) {
         *string candidate = resolveCredentialLocation(location);
         if (candidate.val()) {

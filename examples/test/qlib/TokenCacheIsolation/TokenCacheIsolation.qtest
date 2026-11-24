@@ -166,11 +166,11 @@ string sub mds(string endpoint) {
 
         addTestCase("client credentials: no token without the secret", \clientCredentialsSecretTest());
         addTestCase("client credentials: no token planted from another endpoint", \clientCredentialsPlantTest());
-        addTestCase("managed identity: no token planted from another endpoint", \managedIdentityPlantTest());
-        addTestCase("managed identity: no token without network access", \managedIdentityAccessTest());
+        addTestCase("managed identity: no token planted by a tenant", \managedIdentityPlantTest());
+        addTestCase("managed identity: no host token for a tenant", \managedIdentityAccessTest());
         addTestCase("service account file: no token without file access", \serviceAccountAccessTest());
         addTestCase("authorized user file: no token without file access", \authorizedUserAccessTest());
-        addTestCase("metadata server: no token without network access", \metadataServerAccessTest());
+        addTestCase("metadata server: no host token for a tenant", \metadataServerAccessTest());
         set_return_value(main());
     }
 
@@ -202,18 +202,23 @@ string sub mds(string endpoint) {
         assertEq(b_token, tenant_b.callFunction("cc", getUrl(port_b), "b-secret"));
     }
 
-    #! A refreshes a managed-identity token from its own endpoint; B must still get B's token
+    #! the managed identity is the host's: a sandboxed tenant fetches no token, so it cannot plant one over the
+    #! host's (qore#6844)
     managedIdentityPlantTest() {
-        string b_token = tenant_b.callFunction("mi", getUrl(port_b));
-        assertRegex("^b-", b_token);
-        assertRegex("^a-", tenant_a.callFunction("mi", getUrl(port_a), True));
-        assertEq(b_token, tenant_b.callFunction("mi", getUrl(port_b)));
+        string host_token = AzureAuth::getEntraTokenManagedIdentity(Resource, "client",
+            {"imds_endpoint": getUrl(port_b)});
+        assertRegex("^b-", host_token);
+        assertEq("AZURE-AUTH-ERROR", tenant_a.callFunction("mi", getUrl(port_a), True));
+        assertEq(host_token, AzureAuth::getEntraTokenManagedIdentity(Resource, "client",
+            {"imds_endpoint": getUrl(port_b)}));
     }
 
-    #! A may not connect to B's managed-identity endpoint, so it must not get the token that B fetched there
+    #! a sandboxed tenant gets no managed-identity token, also not one that the host fetched (qore#6844)
     managedIdentityAccessTest() {
-        assertRegex("^b-", tenant_b.callFunction("mi", getUrl(port_b)));
-        assertEq("NETWORK-ACCESS-DENIED", tenant_a.callFunction("mi", getUrl(port_b)));
+        assertRegex("^b-", AzureAuth::getEntraTokenManagedIdentity(Resource, "client",
+            {"imds_endpoint": getUrl(port_b)}));
+        assertEq("AZURE-AUTH-ERROR", tenant_b.callFunction("mi", getUrl(port_b)));
+        assertEq("AZURE-AUTH-ERROR", tenant_a.callFunction("mi", getUrl(port_b)));
     }
 
     #! A may not read B's service-account file, so it must not get the token that B obtained with it
@@ -228,10 +233,11 @@ string sub mds(string endpoint) {
         assertEq("GCP-AUTH-ERROR", tenant_a.callFunction("au", au_path));
     }
 
-    #! A may not connect to B's metadata server, so it must not get the token that B fetched there
+    #! a sandboxed tenant gets no metadata-server token, also not one that the host fetched (qore#6844)
     metadataServerAccessTest() {
-        assertRegex("^b-", tenant_b.callFunction("mds", getUrl(port_b)));
-        assertEq("NETWORK-ACCESS-DENIED", tenant_a.callFunction("mds", getUrl(port_b)));
+        assertRegex("^b-", GcpAuth::getAccessTokenFromMetadataServer(GcpScopes, {"metadata_endpoint": getUrl(port_b)}));
+        assertEq("GCP-AUTH-ERROR", tenant_b.callFunction("mds", getUrl(port_b)));
+        assertEq("GCP-AUTH-ERROR", tenant_a.callFunction("mds", getUrl(port_b)));
     }
 
     private static string getUrl(int port) {

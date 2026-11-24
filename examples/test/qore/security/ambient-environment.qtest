@@ -92,38 +92,47 @@ auto sub download(string url) {
             "log_files": (empty, empty),
         };
         hash<string, string> expected;
-        foreach hash<auto> i in ({"host": may, "restricted": may_not, "sandboxed_restricted": may_not,
-                "sandboxed": may}.pairIterator()) {
-            foreach hash<auto> k in (i.value.pairIterator()) {
-                expected{i.key + "_" + k.key} = sprintf("%y", k.value);
-            }
-        }
-        # the file URL "file:///data.txt" and the schema reference "/ext.json" of an empty environment are not found
-        foreach string kind in (("restricted", "sandboxed_restricted")) {
-            foreach string k in (("file_url", "openapi3", "swagger")) {
-                assertNeq(expected{kind + "_" + k}, r{kind + "_" + k}, kind + ": " + k);
-                assertRegex("^\"[A-Z0-9-]+\"$", r{kind + "_" + k} ?? "", kind + ": " + k + ": an error");
-                expected{kind + "_" + k} = r{kind + "_" + k};
+        map expected{"host_" + $1.key} = sprintf("%y", $1.value), may.pairIterator();
+        foreach hash<auto> k in (AmbientCallers::KindInfo.pairIterator()) {
+            foreach string mode in (keys AmbientCallers::Modes) {
+                string key = replace(k.key, " ", "_") + "_" + mode;
+                foreach hash<auto> i in ((k.value.read ? may : may_not).pairIterator()) {
+                    expected{key + "_" + i.key} = sprintf("%y", i.value);
+                }
+                # the file URL "file:///data.txt" and the schema reference "/ext.json" of an empty environment are
+                # not found
+                if (!k.value.read) {
+                    foreach string e in (("file_url", "openapi3", "swagger")) {
+                        string ek = key + "_" + e;
+                        assertNeq(expected{ek}, r{ek}, ek);
+                        assertRegex("^\"[A-Z0-9-]+\"$", r{ek} ?? "", ek + ": an error");
+                        expected{ek} = r{ek};
+                    }
+                }
             }
         }
         assertEq(expected, r, out);
     }
 
+    #! the proxy of the environment: none for code that may not read the environment, without its credentials for
+    #! code that may not receive the host's secrets
     proxyTest() {
         hash<string, Program> pgms = AmbientCallers::make_programs(Source, "proxy");
         AmbientCallers::FakeMetadataServer proxy();
-        AmbientCallers::EnvHelper penv({"http_proxy": proxy.url, "no_proxy": NOTHING, "NO_PROXY": NOTHING,
+        string with_creds = regex_subst(proxy.url, "^http://", "http://puser:ppass@");
+        AmbientCallers::EnvHelper penv({"http_proxy": with_creds, "no_proxy": NOTHING, "NO_PROXY": NOTHING,
             "all_proxy": NOTHING, "ALL_PROXY": NOTHING});
-        assertEq(proxy.url, get_proxy_url_from_environment("http://example.com/"), "host");
+        assertEq(with_creds, get_proxy_url_from_environment("http://example.com/"), "host");
         # a target where nothing listens: a request through the proxy reaches the proxy, which answers 404
         string target = "http://127.0.0.1:1/x";
-        foreach string kind in (AmbientCallers::Kinds) {
-            bool r = AmbientCallers::restricted(kind);
-            assertEq(r ? NOTHING : proxy.url, pgms{kind}.callFunction("proxy", "http://example.com/"), kind);
+        foreach string kind in (keys pgms) {
+            *string expected = AmbientCallers::may_receive(kind) ? with_creds
+                : (AmbientCallers::may_read(kind) ? proxy.url : NOTHING);
+            assertEq(expected, pgms{kind}.callFunction("proxy", "http://example.com/"), kind);
             int calls = proxy.handler.calls;
             auto v = pgms{kind}.callFunction("download", target);
             assertNeq("DONE", v, kind);
-            assertEq(r ? calls : calls + 1, proxy.handler.calls, kind);
+            assertEq(AmbientCallers::may_read(kind) ? calls + 1 : calls, proxy.handler.calls, kind);
         }
     }
 

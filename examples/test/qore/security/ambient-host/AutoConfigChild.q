@@ -33,7 +33,7 @@ printf("host_auto_config=%y\n", DataProvider::getAutoConfig());
 }
 hash<string, Program> pgms = AmbientCallers::make_programs(Source, "auto-config");
 foreach hash<auto> i in (pgms.pairIterator()) {
-    string kind = replace(i.key, " ", "_");
+    string kind = replace(replace(i.key, ": ", "_"), " ", "_");
     printf("%s_auto_config=%y\n", kind, i.value.callFunction("auto_config"));
     printf("%s_servicenow=%y\n", kind, i.value.callFunction("servicenow"));
     # options that the caller gives are its own

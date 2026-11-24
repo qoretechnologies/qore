@@ -86,5 +86,7 @@ sub report(string kind, code call) {
 }
 foreach hash<auto> i in (AmbientCallers::make_programs(Source, "environment").pairIterator()) {
     Program p = i.value;
-    report(replace(i.key, " ", "_"), auto sub (string f, auto arg) { return p.callFunction(f, arg); });
+    report(replace(replace(i.key, ": ", "_"), " ", "_"), auto sub (string f, auto arg) {
+        return p.callFunction(f, arg);
+    });
 }

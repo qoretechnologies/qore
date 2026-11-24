@@ -16,33 +16,94 @@ module AmbientCallers {
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
     license = "MIT";
+    init = sub () {
+        AmbientCallers::Invoke = \AmbientCallers::invoke();
+        # called by name, so that the module can be loaded by code that may not use uncontrolled APIs
+        AmbientCallers::Capability = call_static_method("SandboxManager", "createSystemPolicyCall",
+            AmbientCallers::Invoke);
+    };
 }
 
 public namespace AmbientCallers {
-    #! the kinds of calling code that may not read external information, and one that may
-    public const Kinds = ("restricted", "sandboxed restricted", "sandboxed");
+    #! the kinds of calling code: what they may get (see SandboxManager::callerMayReadExternalInfo() and
+    #! SandboxManager::callerMayReceiveHostSecrets())
+    public const KindInfo = {
+        # a Program that is neither restricted nor sandboxed
+        "unrestricted": {"po": 0, "sandboxed": False, "read": True, "secrets": True},
+        "restricted": {"po": PO_NO_EXTERNAL_INFO, "sandboxed": False, "read": False, "secrets": False},
+        "sandboxed restricted": {"po": PO_NO_EXTERNAL_INFO, "sandboxed": True, "read": False, "secrets": False},
+        # a sandbox that allows everything: it governs the code without restricting it
+        "sandboxed": {"po": 0, "sandboxed": True, "read": True, "secrets": False},
+    };
 
-    #! returns True if code of the given kind may not read external information
-    public bool sub restricted(string kind) {
-        return kind != "sandboxed";
+    #! the execution modes in which the Programs run
+    public const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+    #! the code that the grants run, created in the module's initialization (a call reference created while serving
+    #! a restricted caller keeps its restrictions)
+    our code Invoke;
+    #! a system-policy capability of Invoke, created in the module's initialization
+    our code Capability;
+
+    #! returns the kind of the Program of the given key of make_programs()
+    public string sub kind(string key) {
+        return (key =~ x/^([^:]+):/)[0];
     }
 
-    #! creates a Program of each kind with the given source
-    /** a sandbox that allows everything governs the sandboxed kinds: it governs the code without restricting it
-    */
+    #! returns True if code of the Program of the given key may read external information
+    public bool sub may_read(string key) {
+        return KindInfo{kind(key)}.read;
+    }
+
+    #! returns True if code of the Program of the given key may receive the host's secrets
+    public bool sub may_receive(string key) {
+        return KindInfo{kind(key)}.secrets;
+    }
+
+    #! returns True if code of the Program of the given key may not read external information
+    public bool sub restricted(string key) {
+        return !may_read(key);
+    }
+
+    #! creates a Program of each kind in each execution mode with the given source; keys: "<kind>: <mode>"
     public hash<string, Program> sub make_programs(string source, string label) {
-        hash<string, Program> rv = {
-            "restricted": new Program(PO_NEW_STYLE | PO_NO_EXTERNAL_INFO),
-            "sandboxed restricted": new Program(PO_NEW_STYLE | PO_NO_EXTERNAL_INFO),
-            "sandboxed": new Program(PO_NEW_STYLE),
-        };
-        SandboxManager sm();
-        sm.setNetworkDefaultPolicy(True);
-        sm.setFilesystemDefaultPolicy(True);
-        rv."sandboxed restricted".setSandboxManager(sm);
-        rv.sandboxed.setSandboxManager(sm);
-        map $1.parse(source, label), rv.iterator();
+        hash<string, Program> rv;
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            foreach hash<auto> k in (KindInfo.pairIterator()) {
+                Program p(PO_NEW_STYLE | k.value.po);
+                # runtime-created Programs do not take the execution mode of the process
+                p.setExecMode(m.value);
+                if (k.value.sandboxed) {
+                    SandboxManager sm();
+                    sm.setNetworkDefaultPolicy(True);
+                    sm.setFilesystemDefaultPolicy(True);
+                    p.setSandboxManager(sm);
+                }
+                p.parse(source, label);
+                rv{k.key + ": " + m.key} = p;
+            }
+        }
         return rv;
+    }
+
+    #! calls a function, or a static method if \a cls is given, of library code for the caller
+    public auto sub invoke(*string cls, string name, *softlist<auto> args) {
+        # the module of the target, in this module's Program (a no-op once it is loaded)
+        *string mod = ((cls ?? name) =~ x/^([^:]+)::/)[0];
+        if (mod) {
+            load_module(mod);
+        }
+        return cls ? call_static_method_args(cls, name, args) : call_function_args(name, args);
+    }
+
+    #! calls invoke() under a policy barrier that this module's code establishes (a host grant)
+    public auto sub invoke_barrier(*string cls, string name, *softlist<auto> args) {
+        return call_static_method("SandboxManager", "callWithSystemPolicy", Invoke, (cls, name, args));
+    }
+
+    #! calls invoke() through a system-policy capability that this module created in its initialization (a host grant)
+    public auto sub invoke_capability(*string cls, string name, *softlist<auto> args) {
+        return Capability(cls, name, args);
     }
 
     #! sets the given environment variables while the returned object exists, and restores them after
@@ -111,6 +172,11 @@ public namespace AmbientCallers {
             if (path =~ /^\/metadata\/identity\//) {
                 return makeResponse({"Content-Type": "application/json"}, 200,
                     "{\"access_token\":\"host-azure-token\",\"expires_in\":\"1800\",\"token_type\":\"Bearer\"}");
+            }
+            # an HTTP Negotiate (Kerberos) challenge
+            if (path =~ /^\/negotiate/) {
+                return makeResponse({"Content-Type": "text/plain", "WWW-Authenticate": "Negotiate"}, 401,
+                    "authentication required");
             }
             return makeResponse({"Content-Type": "text/plain"}, 404, "not found");
         }

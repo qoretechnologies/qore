@@ -262,6 +262,16 @@ public string sub getEntraTokenClientCredentials(string tenant, string client_id
     return token;
 }
 
+#! Returns @ref True "True" if the calling code may receive the host's managed identity (qore#6844)
+/** The managed identity's token is the host's secret: it is fetched only for code that may receive it (see
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"): not for
+    code restricted from external information, nor for sandboxed code, unless the host grants it with a policy barrier
+    or a system-policy capability
+*/
+public bool sub hostCredentialsAllowed() {
+    return SandboxManager::callerMayReceiveHostSecrets();
+}
+
 #! Fetches an Entra access token via the Azure IMDS managed-identity flow
 /** Caches the token keyed by (resource, client_id, endpoint, API version); a
     second call with the same parameters returns the cached token unless within @ref TokenSafetyWindowMs
@@ -284,17 +294,17 @@ public string sub getEntraTokenClientCredentials(string tenant, string client_id
 
     @return the bearer access token
 
-    @throw AZURE-AUTH-ERROR IMDS unreachable or returned an error, or the calling code is restricted from external
-    information (see @ref Qore::SandboxManager::callerMayReadExternalInfo()
-    "SandboxManager::callerMayReadExternalInfo()"): the managed identity is the host's (qore#6844)
+    @throw AZURE-AUTH-ERROR IMDS unreachable or returned an error, or the calling code may not receive the host's
+    secrets (see @ref AzureAuth::hostCredentialsAllowed() "hostCredentialsAllowed()"): the managed identity is the
+    host's (qore#6844)
     @throw AZURE-AUTH-MISSING-JSON-MODULE the json module is unavailable
 */
 public string sub getEntraTokenManagedIdentity(string resource, *string client_id,
         *hash<auto> opts) {
-    # the host's managed identity is not given to a caller restricted from external information (qore#6844)
-    if (!SandboxManager::callerMayReadExternalInfo()) {
-        throw "AZURE-AUTH-ERROR", "the managed identity of the host is not available to code restricted from "
-            "external information; give client credentials explicitly";
+    # the host's managed identity only for a caller that may receive it (qore#6844)
+    if (!hostCredentialsAllowed()) {
+        throw "AZURE-AUTH-ERROR", "the managed identity of the host is not available to the calling code; give "
+            "client credentials explicitly";
     }
     string endpoint = opts.imds_endpoint ?? ImdsEndpoint;
     string api_version = opts.api_version ?? ImdsApiVersion;

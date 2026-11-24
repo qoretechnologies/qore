@@ -122,8 +122,8 @@ printf("%Y\n", ans.body);
       assumption and the IMDS and STS endpoints,
       and static credential helpers such as
       @ref AwsRestClient::AwsRestClientBase::applyEnvCredentials() "AwsRestClientBase::applyEnvCredentials()";
-      the chain resolves no credentials of the host for code restricted from external information, which gives its
-      own (see @ref sandbox_ambient_host_data)
+      the chain resolves no credentials of the host for code that may not receive the host's secrets (code restricted
+      from external information and sandboxed code), which gives its own (see @ref sandbox_ambient_host_data)
 
     @subsection awsrestclientv1_2 AwsRestClient v1.2
     - added support for the DataProvider API
@@ -421,17 +421,19 @@ public class AwsRestClientBase {
         (fallback for \c aws_region) — the standard AWS SDK / CLI convention.
         Values explicitly passed in \a opts always win over the environment.
 
-        For code restricted from external information (see
-        @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), the
-        key, secret and session token are not taken from the environment, as they are the host's credentials: such
-        code gives its own credentials (the region, which is not a credential, is still taken from the environment)
+        For code that may not receive the host's secrets (see hostCredentialsAllowed(): code restricted from external
+        information and sandboxed code, unless the host grants them), the key, secret and session token are not taken
+        from the environment, as they are the host's credentials: such code gives its own credentials; the region,
+        which is not a credential, is taken from the environment for code that may read external information
 
         @return \a opts with any missing AWS credential keys filled in from
         the environment
     */
     static hash<auto> applyEnvCredentials(hash<auto> opts) {
-        # the host's credentials are not resolved for a caller restricted from external information (qore#6844)
-        bool ambient = SandboxManager::callerMayReadExternalInfo();
+        # the host's credentials only for a caller that may receive them, the region for one that may read the
+        # environment (qore#6844)
+        bool ambient = AwsRestClientBase::hostCredentialsAllowed();
+        bool region = SandboxManager::callerMayReadExternalInfo();
         # Read via getenv() rather than the ENV hash: ENV is a snapshot
         # captured at module load, while getenv() always queries the live
         # process environment so callers that bridge env state at runtime
@@ -439,7 +441,7 @@ public class AwsRestClientBase {
         foreach hash<auto> i in (AwsEnvVarMap.pairIterator()) {
             string opt_key = i.key;
             string env_key = i.value;
-            if (!ambient && opt_key != "aws_region") {
+            if (opt_key == "aws_region" ? !region : !ambient) {
                 continue;
             }
             if (!opts{opt_key}) {
@@ -450,7 +452,7 @@ public class AwsRestClientBase {
             }
         }
         # AWS_DEFAULT_REGION is the older variant, kept for compatibility
-        if (!opts.aws_region) {
+        if (!opts.aws_region && region) {
             *string v = getenv("AWS_DEFAULT_REGION");
             if (v.val()) {
                 opts.aws_region = v;
@@ -679,10 +681,8 @@ public class AwsRestClientBase {
 
         @return hash with \c aws_keyid, \c aws_secret, \c aws_token, \c expires
 
-        @throw AWSRESTCLIENT-IMDS-ERROR IMDS unreachable or returned an error, or the calling code is restricted from
-        external information (see
-        @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"): the
-        instance's credentials are the host's
+        @throw AWSRESTCLIENT-IMDS-ERROR IMDS unreachable or returned an error, or the calling code may not receive
+        the host's secrets (see hostCredentialsAllowed()): the instance's credentials are the host's
     */
     static hash<auto> getImdsCredentials(*hash<auto> opts) {
         AwsRestClientBase::checkAmbientCredentials("instance metadata");
@@ -767,10 +767,8 @@ public class AwsRestClientBase {
         \c AWS_CONTAINER_CREDENTIALS_RELATIVE_URI env var is set.
 
         @return hash with \c aws_keyid, \c aws_secret, \c aws_token, \c expires
-        @throw AWSRESTCLIENT-IMDS-ERROR endpoint unreachable or response unparseable, or the calling code is restricted
-        from external information (see
-        @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"): the
-        task's credentials are the host's
+        @throw AWSRESTCLIENT-IMDS-ERROR endpoint unreachable or response unparseable, or the calling code may not
+        receive the host's secrets (see hostCredentialsAllowed()): the task's credentials are the host's
     */
     static hash<auto> getEcsCredentials() {
         AwsRestClientBase::checkAmbientCredentials("container (task-role)");
@@ -887,8 +885,8 @@ public class AwsRestClientBase {
         disabling credential auto-discovery on a real instance
     */
     static *bool isEc2Compute() {
-        # the host's hardware identity is not read for a caller restricted from external information (qore#6844)
-        if (!SandboxManager::callerMayReadExternalInfo()) {
+        # the probe only serves the host's instance credentials (qore#6844)
+        if (!AwsRestClientBase::hostCredentialsAllowed()) {
             return;
         }
         *string asset_tag = AwsRestClientBase::tryReadLocalFile(
@@ -921,10 +919,9 @@ public class AwsRestClientBase {
         failing fast. An explicit \c aws_imds_url override is always honored
         regardless (e.g. tests pointing at a fake IMDS server).
 
-        For code restricted from external information (see
-        @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"),
-        neither endpoint is queried and \a opts is returned unchanged: the task's and the instance's credentials are
-        the host's, and such code gives its own
+        For code that may not receive the host's secrets (see hostCredentialsAllowed()), neither endpoint is queried
+        and \a opts is returned unchanged: the task's and the instance's credentials are the host's, and such code
+        gives its own
     */
     static hash<auto> applyInstanceCredentials(hash<auto> opts) {
         if (opts.aws_keyid.val()) {
@@ -933,9 +930,8 @@ public class AwsRestClientBase {
         if (opts.aws_imds_disabled) {
             return opts;
         }
-        # the host's task-role and instance credentials are not resolved for a caller restricted from external
-        # information (qore#6844)
-        if (!SandboxManager::callerMayReadExternalInfo()) {
+        # the host's task-role and instance credentials only for a caller that may receive them (qore#6844)
+        if (!AwsRestClientBase::hostCredentialsAllowed()) {
             return opts;
         }
         # ECS first: it only takes one HTTP round trip and is the common path
@@ -974,21 +970,31 @@ public class AwsRestClientBase {
         return opts;
     }
 
-    #! Throws \c AWSRESTCLIENT-IMDS-ERROR if the calling code is restricted from external information (qore#6844)
+    #! Returns @ref True if the calling code may receive the host's AWS credentials (qore#6844)
+    /** The key, secret and session token of the environment, the ECS task-role and the IMDSv2 instance credentials
+        are the host's secrets: they are resolved only for code that may receive them (see
+        @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"): not for code restricted from external information,
+        nor for sandboxed code, unless the host grants them with a policy barrier or a system-policy capability
+    */
+    static bool hostCredentialsAllowed() {
+        return SandboxManager::callerMayReceiveHostSecrets();
+    }
+
+    #! Throws \c AWSRESTCLIENT-IMDS-ERROR if the calling code may not receive the host's credentials (qore#6844)
     private:internal static checkAmbientCredentials(string what) {
-        if (!SandboxManager::callerMayReadExternalInfo()) {
-            throw "AWSRESTCLIENT-IMDS-ERROR", sprintf("%s credentials of the host are not available to code "
-                "restricted from external information; give the credentials explicitly", what);
+        if (!AwsRestClientBase::hostCredentialsAllowed()) {
+            throw "AWSRESTCLIENT-IMDS-ERROR", sprintf("%s credentials of the host are not available to the calling "
+                "code; give the credentials explicitly", what);
         }
     }
 
     #! Throws \c AWSRESTCLIENT-ERROR for a missing required option, saying that the host's credentials are not used
-    #! for a caller restricted from external information (qore#6844)
+    #! for a caller that may not receive them (qore#6844)
     private static missingOption(string key) {
-        if (key != "aws_region" && !SandboxManager::callerMayReadExternalInfo()) {
+        if (key != "aws_region" && !AwsRestClientBase::hostCredentialsAllowed()) {
             throw "AWSRESTCLIENT-ERROR", sprintf("missing required option %y in option argument; the host's AWS "
-                "credentials (environment variables, container and instance metadata) are not available to code "
-                "restricted from external information", key);
+                "credentials (environment variables, container and instance metadata) are not available to the "
+                "calling code", key);
         }
         throw "AWSRESTCLIENT-ERROR", sprintf("missing required option %y in option argument", key);
     }

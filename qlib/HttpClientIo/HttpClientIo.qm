@@ -949,9 +949,11 @@ string target = encode_http_request_target("/files/my report.txt?q=a|b");
         @param url the URL to retrieve
 
         For code restricted from external information (see @ref Qore::SandboxManager::callerMayReadExternalInfo()
-        "SandboxManager::callerMayReadExternalInfo()"), the environment is not read and @ref NOTHING is returned: the
-        proxy of the host, which can carry its credentials, is the host's; such code gives its proxy explicitly
-        (qore#6844)
+        "SandboxManager::callerMayReadExternalInfo()"), the environment is not read and @ref NOTHING is returned; for
+        other code that may not receive the host's secrets (sandboxed code, see
+        @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"), the
+        proxy URL is returned without its user name and password, which are the host's credentials, or @ref NOTHING
+        if it cannot be parsed; such code gives its proxy credentials explicitly (qore#6844)
 
         @return the proxy URL, or @ref NOTHING if no proxy is to be used; a proxy given without a scheme is returned
         with \c "http://"
@@ -984,7 +986,28 @@ HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
         if (no_proxy.val() && info.host && http_proxy_matches_no_proxy(info.host, no_proxy)) {
             return;
         }
-        return proxy =~ /^[A-Za-z][A-Za-z0-9+.-]*:\/\// ? proxy : "http://" + proxy;
+        proxy = proxy =~ /^[A-Za-z][A-Za-z0-9+.-]*:\/\// ? proxy : "http://" + proxy;
+        # the proxy's credentials only for a caller that may receive the host's secrets (qore#6844)
+        if (!SandboxManager::callerMayReceiveHostSecrets()) {
+            return http_proxy_url_without_credentials(proxy);
+        }
+        return proxy;
+    }
+
+    #! Returns a proxy URL without its user name and password, or @ref NOTHING if it cannot be parsed (qore#6844)
+    *string sub http_proxy_url_without_credentials(string proxy) {
+        hash<UrlInfo> info;
+        try {
+            info = parse_url(trim(proxy));
+        } catch (hash<ExceptionInfo> ex) {
+            return;
+        }
+        if (!info.host.val()) {
+            return;
+        }
+        string host = info.host.find(":") >= 0 ? "[" + info.host + "]" : info.host;
+        return sprintf("%s://%s%s%s", info.protocol ?? "http", host, exists info.port ? ":" + info.port : "",
+            info.path ?? "");
     }
 
     #! Creates the TLS socket for an HTTP client operation with the ownership of each supplied credential

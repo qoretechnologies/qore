@@ -24,12 +24,16 @@ class AmbientCloudIdentityTest inherits QUnit::Test {
         const Source = "%modern
 %requires GcpAuth
 %requires AzureAuth
+%requires AmbientCallers
 auto sub try_call(code c) {
     try {
         return c();
     } catch (hash<ExceptionInfo> ex) {
         return ex.err + \": \" + ex.desc;
     }
+}
+*string sub quota() {
+    return GcpAuth::getQuotaProject(NOTHING);
 }
 *string sub location(*string loc) {
     return GcpAuth::resolveCredentialLocation(loc);
@@ -44,6 +48,17 @@ auto sub gcp_token(string url) {
         return GcpAuth::getAccessToken(NOTHING, (\"scope-b\",), {\"metadata_endpoint\": url});
     });
 }
+auto sub grant(string how, string name, list<auto> args) {
+    return how == \"barrier\" ? AmbientCallers::invoke_barrier(NOTHING, name, args)
+        : AmbientCallers::invoke_capability(NOTHING, name, args);
+}
+auto sub gcp_grant(string how, string url) {
+    return grant(how, \"GcpAuth::getAccessTokenFromMetadataServer\", ((\"scope-a\",), {\"metadata_endpoint\": url}));
+}
+auto sub azure_grant(string how, string url) {
+    return grant(how, \"AzureAuth::getEntraTokenManagedIdentity\", (\"https://res.example\", NOTHING,
+        {\"imds_endpoint\": url}));
+}
 auto sub azure_mi(string url) {
     return try_call(auto sub () {
         return AzureAuth::getEntraTokenManagedIdentity(\"https://res.example\", NOTHING, {\"imds_endpoint\": url});
@@ -52,7 +67,7 @@ auto sub azure_mi(string url) {
 ";
 
         #! what the error of a refused caller says
-        const Refused = "restricted from external information";
+        const Refused = "not available to the calling code";
     }
 
     private {
@@ -65,6 +80,7 @@ auto sub azure_mi(string url) {
         addTestCase("GCP application default credentials", \adcTest());
         addTestCase("GCP metadata server", \gcpMetadataTest());
         addTestCase("Azure managed identity", \azureTest());
+        addTestCase("GCP quota project", \quotaTest());
         set_return_value(main());
     }
 
@@ -109,9 +125,9 @@ auto sub azure_mi(string url) {
                 path = writeFile("home/.config/gcloud/application_default_credentials.json");
             }
             assertEq(path, GcpAuth::resolveCredentialLocation(), "host: " + i.key);
-            foreach string kind in (AmbientCallers::Kinds) {
+            foreach string kind in (keys pgms) {
                 string label = kind + ": " + i.key;
-                assertEq(AmbientCallers::restricted(kind) ? NOTHING : path,
+                assertEq(AmbientCallers::may_receive(kind) ? path : NOTHING,
                     pgms{kind}.callFunction("location"), label);
                 # a location that the caller gives is its own
                 assertEq(adc, pgms{kind}.callFunction("location", adc), label);
@@ -125,13 +141,17 @@ auto sub azure_mi(string url) {
             "HOME": tmp.path, "QORE_GCP_ADC_DISABLED": NOTHING});
         assertEq("host-gcp-token", GcpAuth::getAccessTokenFromMetadataServer(("scope-a",),
             {"metadata_endpoint": mds.url}), "host");
-        foreach string kind in (AmbientCallers::Kinds) {
-            if (AmbientCallers::restricted(kind)) {
-                assertRegex("^GCP-AUTH-ERROR: .*" + Refused, pgms{kind}.callFunction("gcp_metadata", mds.url), kind);
-                assertRegex("^GCP-AUTH-ERROR: .*" + Refused, pgms{kind}.callFunction("gcp_token", mds.url), kind);
-            } else {
+        foreach string kind in (keys pgms) {
+            if (AmbientCallers::may_receive(kind)) {
                 assertEq("host-gcp-token", pgms{kind}.callFunction("gcp_metadata", mds.url), kind);
                 assertEq("host-gcp-token", pgms{kind}.callFunction("gcp_token", mds.url), kind);
+            } else {
+                assertRegex("^GCP-AUTH-ERROR: .*" + Refused, pgms{kind}.callFunction("gcp_metadata", mds.url), kind);
+                assertRegex("^GCP-AUTH-ERROR: .*" + Refused, pgms{kind}.callFunction("gcp_token", mds.url), kind);
+            }
+            # the host's grants
+            foreach string how in (("barrier", "capability")) {
+                assertEq("host-gcp-token", pgms{kind}.callFunction("gcp_grant", how, mds.url), kind + ": " + how);
             }
         }
     }
@@ -140,12 +160,26 @@ auto sub azure_mi(string url) {
     azureTest() {
         assertEq("host-azure-token", AzureAuth::getEntraTokenManagedIdentity("https://res.example", NOTHING,
             {"imds_endpoint": mds.url}), "host");
-        foreach string kind in (AmbientCallers::Kinds) {
-            if (AmbientCallers::restricted(kind)) {
-                assertRegex("^AZURE-AUTH-ERROR: .*" + Refused, pgms{kind}.callFunction("azure_mi", mds.url), kind);
-            } else {
+        foreach string kind in (keys pgms) {
+            if (AmbientCallers::may_receive(kind)) {
                 assertEq("host-azure-token", pgms{kind}.callFunction("azure_mi", mds.url), kind);
+            } else {
+                assertRegex("^AZURE-AUTH-ERROR: .*" + Refused, pgms{kind}.callFunction("azure_mi", mds.url), kind);
             }
+            foreach string how in (("barrier", "capability")) {
+                assertEq("host-azure-token", pgms{kind}.callFunction("azure_grant", how, mds.url), kind + ": " + how);
+            }
+        }
+    }
+
+    #! the quota project of the environment is configuration of the host: read for code that may read it
+    quotaTest() {
+        AmbientCallers::EnvHelper env({"GOOGLE_CLOUD_QUOTA_PROJECT": "host-quota-project",
+            "GOOGLE_APPLICATION_CREDENTIALS": NOTHING, "CLOUDSDK_CONFIG": NOTHING, "HOME": tmp.path});
+        assertEq("host-quota-project", GcpAuth::getQuotaProject(NOTHING), "host");
+        foreach string kind in (keys pgms) {
+            assertEq(AmbientCallers::may_read(kind) ? "host-quota-project" : NOTHING, pgms{kind}.callFunction("quota"),
+                kind);
         }
     }
 }

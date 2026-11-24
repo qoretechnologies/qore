@@ -9,6 +9,7 @@
 %requires QUnit
 %requires Util
 %requires ../../TestInterpreter.qm
+%requires ./ambient-host/AmbientCallers.qm
 
 %exec-class AmbientAutoConfigTest
 
@@ -35,17 +36,17 @@ class AmbientAutoConfigTest inherits QUnit::Test {
         hash<string, string> expected = {
             "host_auto_config": "True",
             "host_servicenow": host,
-            "restricted_auto_config": "False",
-            "restricted_servicenow": none,
-            "restricted_servicenow_explicit": own,
-            "sandboxed_restricted_auto_config": "False",
-            "sandboxed_restricted_servicenow": none,
-            "sandboxed_restricted_servicenow_explicit": own,
-            # a sandbox that does not restrict external information: the code could read the environment itself
-            "sandboxed_auto_config": "True",
-            "sandboxed_servicenow": host,
-            "sandboxed_servicenow_explicit": own,
         };
+        # code that could read the environment itself (a sandbox that does not restrict external information)
+        # gets the options, other code its own only
+        foreach hash<auto> k in (AmbientCallers::KindInfo.pairIterator()) {
+            foreach string mode in (keys AmbientCallers::Modes) {
+                string key = replace(k.key, " ", "_") + "_" + mode;
+                expected{key + "_auto_config"} = k.value.read ? "True" : "False";
+                expected{key + "_servicenow"} = k.value.read ? host : none;
+                expected{key + "_servicenow_explicit"} = own;
+            }
+        }
         assertEq(expected, r, out);
     }
 
