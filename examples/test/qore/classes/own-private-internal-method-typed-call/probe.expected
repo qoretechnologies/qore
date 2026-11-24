@@ -13,3 +13,7 @@ parent class object typed: "PA::m(string)"
 parent class object untyped: "PA::m(string)"
 parent class object call reference: "PA::m(string)"
 decorator: "PB(PA::m(string))"
+parent, parent, parent, parent static, parent static, LR
+child, child, child, child static, child static, LR
+child, child, child, child static, child static, LR
+named families: P 7

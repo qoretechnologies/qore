@@ -816,9 +816,10 @@ int ParseObjectMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseConte
                     // parent class of the object's class implements them, and the abstract methods of the classes
                     // are resolved after this code is parsed, so that the method found here may not be the one that
                     // is called (qore#7206)
-                    if (!m->isStatic() && (qore_method_private::get(*m)->isAbstract()
+                    if (qore_class_private::parseNeedsReceiverDispatch(*n_qc, m)
+                            || (!m->isStatic() && (qore_method_private::get(*m)->isAbstract()
                             || qore_class_private::get(*m->getClass())->hasUnimplementedAbstractVariants(
-                                method.c_str()))) {
+                                method.c_str())))) {
                         m = nullptr;
                     } else {
                         qc = n_qc;

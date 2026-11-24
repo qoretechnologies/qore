@@ -8,6 +8,8 @@
 %modern
 
 namespace OITC {
+%include whole-method.ql
+
 # B has a private:internal variant of m(), so its code calls its own method m() first, also on an object of a subclass
 # that overrides m(): a typed call, a call reference and the untyped call call the same variant (qore#7440)
 class B {

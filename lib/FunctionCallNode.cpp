@@ -916,7 +916,7 @@ int FunctionCallBase::parseInitCallArgs(QoreParseContext& parse_context, QorePar
 
 int FunctionCallBase::parseFindCallVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context,
         QoreFunction* func, qore_ns_private* ns, QoreParseCallArgs& call_args, bool infer_class_receiver_from_args,
-        const char* receiver_inference_call_desc) {
+        const char* receiver_inference_call_desc, bool dispatch_on_receiver) {
     int err = 0;
     const QoreParseAnalysis& arg_analysis = call_args.arg_analysis;
     const bool named_args = call_args.named_args;
@@ -1007,7 +1007,8 @@ int FunctionCallBase::parseFindCallVariant(const QoreProgramLocation* loc, QoreP
             // select must be accepted by (#5838); the checks of the variant below are made, and the call is made
             // resolved at run time after them (see virtual_named_names)
             if (!named_binding.runtime_names && virtual_named_dispatch && allow_runtime_arg_names
-                    && named_call_may_call_override(func, variant ? variant : named_binding.variant)) {
+                    && (dispatch_on_receiver
+                        || named_call_may_call_override(func, variant ? variant : named_binding.variant))) {
                 named_bound_variant = variant ? variant : named_binding.variant;
                 virtual_named_names = std::move(arg_names);
             } else if (named_binding.runtime_names) {
@@ -1124,8 +1125,14 @@ int FunctionCallBase::parseFindCallVariant(const QoreProgramLocation* loc, QoreP
             receiver_type_info, &type_param_instantiation);
         // a named call of a method that a class can override is resolved at run time, after the checks of its variant
         // and with its type (qore#5990)
-        if (parseCommitVirtualNamedCall()) {
+        if (parseCommitVirtualNamedCall() || dispatch_on_receiver) {
             variant = nullptr;
+        }
+
+        if (dispatch_on_receiver) {
+            // The other method family can have a different result type or generic arguments.
+            type_param_instantiation.clear();
+            parse_context.typeInfo = nullptr;
         }
 
         //printd(5, "FunctionCallBase::parseArgsVariant() this: %p func: %s variant: %p pflag: %d pe: %d\n", this,

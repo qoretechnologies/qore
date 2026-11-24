@@ -4022,13 +4022,13 @@ public:
         return scl && scl->inAccessHierarchy(class_ctx, access);
     }
 
-    //! returns true if the run-time lookups of the class call the method \a m of the class context \a class_ctx, which
-    //! has private:internal variants, in place of the method of the class: if it is private:internal as a whole, or
-    //! if the class inherits the class context (qore#7440)
-    /** out of line and cold, so that the lookups, which call it only for such a method, cost nothing more otherwise
-    */
+    //! The shared declaration or one of its descendants can receive the lexical internal method.
     DLLLOCAL QORE_INTERN_COLD QORE_INTERN_NOINLINE bool runtimeCallsOwnMethod(const QoreMethod& m,
             const qore_class_private& class_ctx) const;
+
+    //! A lexical method of a derived class can be called through a parent-typed receiver only when
+    //! the actual object belongs to the declaring class.
+    DLLLOCAL static bool parseNeedsReceiverDispatch(const QoreClass& receiver, const QoreMethod* method);
 
     //! returns the type of a call of the method \a mname before it is bound, for a class for which
     //! parseAbstractMethodPending() is true (qore#7411)

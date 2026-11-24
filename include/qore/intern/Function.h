@@ -3275,8 +3275,9 @@ public:
 
     //! Returns the union of the return types of the variants that the arguments of a named call can be bound to by
     //! name, for a call resolved at run time by parameter name, or nullptr if it is not known
+    //! If supplied, \a matched distinguishes no matching parameter names from a match with an unknown return type.
     DLLLOCAL const QoreTypeInfo* parseRuntimeNamedReturnType(const type_vec_t& argTypeInfo, const name_vec_t& argNames,
-            const qore_class_private* class_ctx, QoreParseOptions po) const;
+            const qore_class_private* class_ctx, QoreParseOptions po, bool* matched = nullptr) const;
 
     //! Returns the return type of a call whose variant is resolved at run time (qore#5896, qore#6151)
     /** The type parameters of a generic variant's return type are those of the callee, not of the code that makes the

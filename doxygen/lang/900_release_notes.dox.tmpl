@@ -4625,6 +4625,9 @@
       class's own method, as the untyped call does, on an object of a subclass that overrides the method, and no call
       calls it on an object of a parent class (<a href="https://github.com/qoretechnologies/qore/issues/7440">issue
       7440</a>)
+    - Calls and method references through a parent-typed object select a @ref private_access_class_identity
+      "private:internal method" of the calling class only for a receiver of that class or a subclass
+      (<a href="https://github.com/qoretechnologies/qore/issues/7463">issue 7463</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

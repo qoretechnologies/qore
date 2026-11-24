@@ -334,6 +334,9 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 class_ctx = nullptr;
             }
             meth = qore_class_private::get(*const_cast<QoreClass*>(nqc))->parseFindAnyMethod(mname, class_ctx);
+            if (qore_class_private::parseNeedsReceiverDispatch(*nqc, meth)) {
+                return parseReceiverDispatch(parse_context, *nqc, *meth, typeInfo, readonly_receiver, err);
+            }
             if (meth && strcmp(mname, "copy") && meth->isStatic()) {
                 m->parseSetClassAndMethod(nqc, meth);
                 parse_context.typeInfo = nullptr;
@@ -472,6 +475,10 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
         assert(tmp.getInternalNode() == m);
         parse_context.typeInfo = returnTypeInfo = qc->getTypeInfo();
         return err;
+    }
+
+    if (qore_class_private::parseNeedsReceiverDispatch(*qc, meth)) {
+        return parseReceiverDispatch(parse_context, *qc, *meth, typeInfo, readonly_receiver, err);
     }
 
     if (!meth) {
@@ -614,6 +621,47 @@ int QoreDotEvalOperatorNode::parseDeferredMethodBind(QoreParseContext& parse_con
         meth = nm;
     }
     return parseBindMethod(parse_context, qc, meth, readonly_receiver, &call_args, 0);
+}
+
+int QoreDotEvalOperatorNode::parseReceiverDispatch(QoreParseContext& parse_context, const QoreClass& receiver,
+        const QoreMethod& lexical, const QoreTypeInfo* receiver_type, bool readonly_receiver, int err) {
+    QoreParseCallArgs args;
+    if (m->parseInitCallArgs(parse_context, args)) {
+        return -1;
+    }
+    const QoreMethod* declared = qore_class_private::get(const_cast<QoreClass&>(receiver))->parseFindAnyMethod(
+        m->getName(), qore_class_private::get(receiver));
+    QoreFunction* func = qore_method_private::get(lexical)->getFunction();
+    func->resolvePendingSignatures();
+    if (readonly_receiver) {
+        for (const QoreMethod* candidate : {&lexical, declared}) {
+            if (candidate && check_readonly_receiver_method_call(loc, m->getName(), nullptr,
+                    qore_method_private::get(*candidate)->getFunction())) {
+                return -1;
+            }
+        }
+    }
+    // Preserve the lexical signature's normal parse checks. A parent method can accept
+    // arguments the lexical method does not, in which case validate against the parent.
+    if (declared && declared->getAccess() != Internal) {
+        bool matches = false;
+        if (args.named_args) {
+            func->parseRuntimeNamedReturnType(args.arg_type_info, args.arg_names, parse_get_class_priv(),
+                parse_get_parse_options(), &matches);
+        } else {
+            bool runtime_possible = false;
+            matches = func->parseFindVariantNoDiagnostics(args.arg_type_info, parse_get_class_priv(),
+                receiver_type, nullptr, nullptr, &runtime_possible) || runtime_possible;
+        }
+        if (!matches) {
+            func = qore_method_private::get(*declared)->getFunction();
+        }
+    }
+    m->setAllowRuntimeArgNames();
+    m->setVirtualNamedDispatch();
+    int rc = m->parseFindCallVariant(loc, parse_context, func, nullptr, args, false, nullptr, true);
+    returnTypeInfo = parse_context.typeInfo;
+    return err ? err : rc;
 }
 
 int QoreDotEvalOperatorNode::parseBindMethod(QoreParseContext& parse_context, const QoreClass* qc,

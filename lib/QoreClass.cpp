@@ -8303,8 +8303,7 @@ const QoreMethod* qore_class_private::runtimeFindCommittedMethodForEval(const ch
             //printd(5, "qore_class_private::runtimeFindCommittedMethodForEval() '%s::%s': %p (pi: %d a: %d)\n", name.c_str(), nme, meth, meth->getFunction()->hasPrivateInternalVariants(), meth->isAbstract());
             // a method with private:internal variants beside others only on an object of a class that inherits the
             // class context: on an object of another class (a parent class of the class context), the method of the
-            // object's class is called (qore#7440); a method that is private:internal as a whole is called for any
-            // object, as the parse-time lookup binds it (parseFindAnyMethod())
+            // object's class is called (qore#7440, qore#7463)
             if (meth->getFunction()->hasPrivateInternalVariants() && !meth->isAbstract()
                     && runtimeCallsOwnMethod(*m, *class_ctx)) {
                 return m;
@@ -10766,7 +10765,20 @@ static bool parse_abstract_creates_method(const qore_class_private& qc, const ch
 }
 
 bool qore_class_private::runtimeCallsOwnMethod(const QoreMethod& m, const qore_class_private& class_ctx) const {
-    return m.getAccess() == Internal || inheritsClassContext(class_ctx);
+    return (m.getAccess() == Internal && isClassContext(&class_ctx)) || inheritsClassContext(class_ctx);
+}
+
+bool qore_class_private::parseNeedsReceiverDispatch(const QoreClass& receiver, const QoreMethod* method) {
+    if (!method || method->getAccess() != Internal) {
+        return false;
+    }
+    const qore_class_private* owner = get(*method->getClass());
+    qore_class_private* qc = get(const_cast<QoreClass&>(receiver));
+    if (qc->isClassContext(owner)) {
+        return false;
+    }
+    qc->initialize();
+    return !qc->inheritsClassContext(*owner);
 }
 
 bool qore_class_private::parseCalledAsOwnMethod(const QoreMethod& m, const qore_class_private* class_ctx) {
