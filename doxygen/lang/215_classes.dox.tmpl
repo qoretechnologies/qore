@@ -552,7 +552,9 @@ c3.m("a");   # "C3::m(string)"
     variant implements it for that class and its subclasses, also a @ref private_methods "private" variant: the method
     then has the access of the variants that implement it, so that a public abstract method implemented by a private
     variant of a parent class is private, as a method that a class implements with a private method of its own; a
-    subclass does not implement such a variant again.  Code outside the class hierarchy then calls the public method
+    subclass does not implement such a variant again, also when another of its parent classes declares the abstract
+    variant, whatever the order of its parent classes and whether they were parsed with it or loaded from a module
+    (since %Qore 3.0).  Code outside the class hierarchy then calls the public method
     of the name of a later parent class, as for any private method (see @ref private_methods), while code of the
     class hierarchy calls the first method in the @ref multiple_inheritance_order "resolution order" that it can
     access; a call reference resolves the method for the class of the object when it is made, as a call does:

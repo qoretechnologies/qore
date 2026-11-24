@@ -6095,10 +6095,14 @@ MethodVariantBase* BCList::matchNonAbstractVariant(const std::string& name, Meth
         const BCNode& n = *(*f.list)[f.next++];
         const QoreClass* nqc = n.sclass;
         // nqc may be 0 if there were a parse error with an unknown class earlier
-        // also if the original abstract variant comes from the class being searched, then skip it
         // a class that a parent class inherits with private:internal access is not in the hierarchy of the class:
         // its variants do not implement the class's abstract variants (qore#7316)
-        if (!nqc || v->getClass() == nqc || (f.list != this && n.access >= Internal)) {
+        // the class that declares the abstract variant is searched as any other: once it has implemented the variant
+        // itself, its method has the implementation, and otherwise its abstract variant is passed over and its parent
+        // classes are searched, so that the variant found does not depend on which of the declarations with the same
+        // signature in the parent classes the class has kept, i.e. on the order of the parent classes or on whether
+        // a parent class was parsed in the same program (qore#7382)
+        if (!nqc || (f.list != this && n.access >= Internal)) {
             continue;
         }
         QORE_CLASS_HIERARCHY_WALK_STEP();
@@ -6143,9 +6147,8 @@ MethodVariantBase* BCList::runtimeMatchNonAbstractVariant(const std::string& nam
         const BCNode& n = *(*f.list)[f.next++];
         const QoreClass* nqc = n.sclass;
         // nqc may be nullptr if there were errors earlier
-        // also if the original abstract variant comes from the class being searched, then skip it
-        // as in matchNonAbstractVariant() (qore#7316)
-        if (!nqc || v->getClass() == nqc || (f.list != this && n.access >= Internal)) {
+        // as in matchNonAbstractVariant() (qore#7316, qore#7382)
+        if (!nqc || (f.list != this && n.access >= Internal)) {
             continue;
         }
         QORE_CLASS_HIERARCHY_WALK_STEP();

@@ -2805,6 +2805,10 @@
       class, also on the objects of its subclasses, and no longer by the code of other classes in the hierarchy; the
       methods of a class that a public path also reaches are public (see @ref private_inheritance;
       <a href="https://github.com/qoretechnologies/qore/issues/7410">issue 7410</a>)
+    - a class that inherits an abstract method from a class that declares it again over its parent class's
+      implementation and from another parent class could not be instantiated when the redeclaring class came first in
+      the same program (see @ref abstract_parent_implementation;
+      <a href="https://github.com/qoretechnologies/qore/issues/7382">issue 7382</a>)
     - @ref Qore::call_static_method() "call_static_method()" and the related calls call the static method that a static
       method call in the caller's code calls: they refused a later parent class's public method behind a private one,
       and called a method of a privately inherited class from outside it
