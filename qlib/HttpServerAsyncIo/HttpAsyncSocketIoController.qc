@@ -1210,7 +1210,24 @@ public class HttpAsyncSocketIoController {
         # restrictions and provenance) of the code that submitted it, so the work item of another submission taken
         # from a shared queue could run with the wrong context (qore#7494)
         Priv::HttpHandlerHandoff handoff(target, body);
-        pool.submit(handlerTaskRunner(pool, handoff));
+        submitHandlerTask(pool, handlerTaskRunner(pool, handoff));
+    }
+
+    #! Submits a task that runs a work item of submitToHandlerPool() to the handler pool
+    /** The task runs with the context (sandbox restrictions and provenance) of the code that submits it: the code
+        that called submitToHandlerPool(), and an override of this method on the call stack.  An override must submit
+        the task by calling this method of HttpAsyncSocketIoController in the calling thread.
+
+        This is a test hook, not an extension point: a test holds a submission here, after its task was submitted, to
+        make submissions overlap at a point of its choice (qore#7494).
+
+        @param pool the handler pool
+        @param task the task to submit
+
+        @throw any exception raised by ThreadPool::submit() (e.g. when stopping)
+    */
+    private submitHandlerTask(Qore::Thread::ThreadPool pool, code task) {
+        pool.submit(task);
     }
 
     #! Takes the handler-pool thread that runs the calling task out of the handler pool

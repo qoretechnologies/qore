@@ -51,21 +51,102 @@ sub submit_bodies(HttpAsyncSocketIoController ctl, HttpAsyncTarget target, Queue
     }
 }
 
+#! A controller that holds its first submission after the submission's task was submitted
+/** So the test's second submission overlaps the first at the point at which a work item shared by the submissions'
+    tasks would be taken by the task of the other submission
+*/
+class GatedController inherits HttpAsyncSocketIoController {
+    public {
+        #! decremented when the first submission's task was submitted
+        Counter first_submitted(1);
+        #! the first submission returns when it is zero
+        Counter gate(1);
+    }
+
+    private {
+        bool held;
+    }
+
+    constructor(AsyncSocketIoController aio, hash<auto> opts) : HttpAsyncSocketIoController(aio, NOTHING, opts) {
+    }
+
+    private submitHandlerTask(ThreadPool pool, code task) {
+        HttpAsyncSocketIoController::submitHandlerTask(pool, task);
+        # the test makes the second submission only when the first one is held here
+        if (!held) {
+            held = True;
+            first_submitted.dec();
+            gate.waitForZero(HangGuard);
+        }
+    }
+}
+
 #! A handler-pool body always runs with the context of the code that submitted it (qore#7494)
 /** A task of a ThreadPool runs with the context (sandbox restrictions and provenance) of the code that submitted it.
     The handler pool submitted a runner and pushed the work item to a queue shared by all runners, so when two
     submissions overlapped, a runner could run the work item of the other submission: a trusted body with a sandboxed
-    submitter's restrictions, and a sandboxed body with a trusted submitter's privileges.  A sandboxed Program and
-    trusted code submit at the same time; each body records
-    whether it runs governed by a sandbox, which must be its submitter's.  Every interleaving must give the submitter's
-    context; the many overlapping submissions of the test make a runner take the work item of the other submitter if
-    the work items are shared (the module's pool class is private, so no gate can be put between the two halves of a
-    submission there).
+    submitter's restrictions, and a sandboxed body with a trusted submitter's privileges.  Each body records whether it
+    runs governed by a sandbox, which must be its submitter's.  The first case holds a sandboxed submission after its
+    task was submitted and makes a trusted submission meanwhile, in a pool of one thread: the interleaving in which
+    shared work items cross between the submissions in both directions; a sandboxed body that crosses still runs
+    governed, as the closure keeps the sandbox of the thread that created it, so the crossing shows as the demotion of
+    the trusted body.  The second case makes many submissions of
+    both at the same time, for the interleavings that the first does not choose.
 */
 class HandlerPoolSubmitterContextTest inherits QUnit::Test {
     constructor() : Test("HandlerPoolSubmitterContextTest", "1.0") {
+        addTestCase("a body runs with its submitter's context when submissions overlap", \heldSubmissionTest());
         addTestCase("each body runs with its own submitter's sandbox context", \pairingTest());
         set_return_value(main());
+    }
+
+    #! makes a Program governed by a sandbox that denies the filesystem, which submits through submit_bodies()
+    static Program sandboxedProgram() {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.importFunction("submit_bodies");
+        p.parse("sub run(object ctl, object target, Queue q, int n) {
+    submit_bodies(ctl, target, q, \"sandboxed\", n);
+}", "sandboxed");
+        return p;
+    }
+
+    heldSubmissionTest() {
+        AsyncSocketIoController aio();
+        GatedController ctl(aio, {"max_handler_threads": 1});
+        ctl.start();
+        on_exit ctl.stop();
+        TestTarget target();
+        Queue results();
+        Program p = sandboxedProgram();
+
+        # 1: the sandboxed submission, held after its task was submitted
+        Counter sandboxed_done(1);
+        background sub () {
+            on_exit sandboxed_done.dec();
+            p.callFunction("run", ctl, target, results, 1);
+        }();
+        # the held submission is released also when the case fails
+        on_exit {
+            if (ctl.gate.getCount()) {
+                ctl.gate.dec();
+            }
+        }
+        assertEq(0, ctl.first_submitted.waitForZero(HangGuard), "the sandboxed submission is held");
+        # 2: the trusted submission, made while the sandboxed one is held
+        submit_bodies(ctl, target, results, "trusted", 1);
+        ctl.gate.dec();
+        assertEq(0, sandboxed_done.waitForZero(HangGuard), "the sandboxed submission returns");
+
+        hash<string, bool> governed;
+        for (int i = 0; i < 2; ++i) {
+            hash<auto> r = results.get(HangGuard);
+            governed{r.who} = r.governed;
+        }
+        assertEq(True, governed.sandboxed, "the sandboxed submitter's body runs governed by its sandbox");
+        assertEq(False, governed.trusted, "the trusted submitter's body runs with no sandbox");
     }
 
     pairingTest() {
@@ -75,16 +156,7 @@ class HandlerPoolSubmitterContextTest inherits QUnit::Test {
         on_exit ctl.stop();
         TestTarget target();
         Queue results();
-
-        # a sandbox that denies the filesystem
-        SandboxManager sm();
-        sm.setFilesystemDefaultPolicy(False);
-        Program p(PO_NEW_STYLE);
-        p.setSandboxManager(sm);
-        p.importFunction("submit_bodies");
-        p.parse("sub run(object ctl, object target, Queue q, int n) {
-    submit_bodies(ctl, target, q, \"sandboxed\", n);
-}", "sandboxed");
+        Program p = sandboxedProgram();
 
         # the sandboxed code and trusted code submit at the same time, so that their submissions overlap
         Counter start(1);
