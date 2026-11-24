@@ -671,8 +671,17 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        executable or script object calls qore_aot_run_v4(), qore_aot_script_register_v2() and
 //!        qore_aot_script_register_native_v2() and checks the AOT runtime identity, and the earlier entry points refuse
 //!        (qore#6898)
+//! v53 (the second AOT-identity batch; the reader refuses v52 and older images, also those that a qcc executable
+//!      embeds):
+//!      - no format change, but the class signature hashes of the CLASSES records that a v52 compiler wrote differ (an
+//!        image must be rebuilt): the signature of a user class starts with the path of its namespace
+//!        (qore_class_private::initializeIntern(), qore#7397), so that classes with the same name and declarations in
+//!        different namespaces are different types; the hashes of an earlier image do not have it, and its classes of
+//!        the same name and declarations in different namespaces would be one type
 //! The shared format version for the changes of the AOT-identity batch (see v52 above).
 constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY_VERSION = 52;
+//! The shared format version for the changes of the second AOT-identity batch (see v53 above).
+constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY2_VERSION = 53;
 //! The shared format version for the changes in batch AL (see v48 above).
 constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
 //! The shared format version for the changes in batch AM (see v49 above).
@@ -700,12 +709,13 @@ static_assert(QORE_AOT_WILDCARD_BOUND_VERSION == QORE_AOT_BATCH_AOT_IDENTITY_VER
     && QORE_AOT_METHOD_DECL_INDEX_VERSION == QORE_AOT_BATCH_AOT_IDENTITY_VERSION
     && QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION == QORE_AOT_BATCH_AOT_IDENTITY_VERSION,
     "the format changes of the AOT-identity batch share one format version (v52)");
-//! Old compiled artifacts must be rebuilt (see v52 above): the reader refuses older images, the program image of a qcc
+//! Old compiled artifacts must be rebuilt (see v53 above): the reader refuses older images, the program image of a qcc
 //! executable included (qore_aot_run_v4() reads it before anything else), before it reads any record; the reader of a
-//! v52 image always has the temp scopes of its IR (qore#6742), the local unwind locations of its IR functions
+//! v53 image always has the temp scopes of its IR (qore#6742), the local unwind locations of its IR functions
 //! (qore#6672), the owner-qualified wildcard bounds of its type paths (qore#7184), the declaration index of each
-//! METHODS record (qore#7169) and the callee of each background helper (qore#7087)
-constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AOT_IDENTITY_VERSION;
+//! METHODS record (qore#7169), the callee of each background helper (qore#7087) and class signature hashes with the
+//! namespace path of their class (qore#7397)
+constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AOT_IDENTITY2_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
 //! Variant-flags bit of FUNCTIONS and METHODS records (QORE_AOT_FEAT_METHOD_SYNC): the variant is synchronized
@@ -854,7 +864,7 @@ static_assert(QORE_AOT_TEMP_SCOPES_VERSION == QORE_AOT_BATCH_AN_VERSION,
 constexpr uint16_t QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION = 51;
 static_assert(QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION == QORE_AOT_BATCH_AO_VERSION,
     "the format changes of batch AO share one format version (v51)");
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AOT_IDENTITY_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AOT_IDENTITY2_VERSION;
 
 //! The tag of the runtime location of a serialized IR instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
 enum class QoreAOTStmtLocTag : uint8_t {
@@ -979,11 +989,8 @@ constexpr uint64_t QORE_AOT_FEAT_BCA_LINES = 1ULL << 29; //!< BCA records includ
 constexpr uint64_t QORE_AOT_FEAT_BCA_NATIVE_ARGS = 1ULL << 30; //!< BCA arg blobs contain native inline AOT expressions, not legacy EXPR_TREE blobs
 constexpr uint64_t QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS = 1ULL << 31; //!< closure records split effective varargs from signature ellipsis
 constexpr uint64_t QORE_AOT_FEAT_CONTAINER_TYPEINFO = 1ULL << 32; //!< MakeList/MakeHash records carry parse-time container typeInfo
-//! CLASSES records carry parser-produced class signature hashes
-/** The signature of a user class includes the path of its namespace (qore_class_private::initializeIntern(),
-    qore#7397); as this header is part of the AOT runtime identity, a module whose hashes were computed without it is
-    not loaded by a runtime that computes them with it
-*/
+//! CLASSES records carry parser-produced class signature hashes (with the namespace path of the class from v53, see
+//! QORE_AOT_BATCH_AOT_IDENTITY2_VERSION)
 constexpr uint64_t QORE_AOT_FEAT_CLASS_HASH = 1ULL << 33;
 constexpr uint64_t QORE_AOT_FEAT_METHOD_SYNC = 1ULL << 34; //!< FUNCTIONS/METHODS variant flags preserve synchronized gates
 constexpr uint64_t QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS = 1ULL << 35; //!< Serialized list/hash values preserve complex/hashdecl runtime typeInfo

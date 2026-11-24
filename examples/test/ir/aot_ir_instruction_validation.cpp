@@ -338,6 +338,8 @@ int main() {
         false, false, QORE_AOT_BATCH_AN_VERSION);
     run("AO v51 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 51 ",
         false, false, QORE_AOT_BATCH_AO_VERSION);
+    run("AOT-identity v52 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 52 ",
+        false, false, QORE_AOT_BATCH_AOT_IDENTITY_VERSION);
     for (O op : {O::ConstInt, O::Br, O::BrIf, O::Return, O::Invoke, O::InvokeMethodDirect,
             O::ScopeEnter, O::MakeList, O::DebugStatement}) {
         run("wrong nested opcode", O::Invoke, G::Invoke, {}, invoke(op), pairing);
@@ -583,11 +585,11 @@ int main() {
                 &inspect) && ok;
             ++count;
         };
-        static_assert(QORE_AOT_BINARY_MIN_VERSION == QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION,
+        static_assert(QORE_AOT_BINARY_MIN_VERSION >= QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION,
             "the reader refuses the layout before the callee");
         constexpr uint16_t old_version = QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION - 1;
         callee("v51 helper without a callee", old_version, 0, 2, 0,
-            "unsupported binary format version 51 (supported 52-52); rebuild the artifact with this version of qcc");
+            "unsupported binary format version 51 (supported 53-53); rebuild the artifact with this version of qcc");
         callee("helper callee parameter 0", QORE_AOT_BINARY_VERSION, 0, 2, 0);
         callee("helper callee parameter 1", QORE_AOT_BINARY_VERSION, 1, 2, 1);
         callee("helper callee checked in the thread", QORE_AOT_BINARY_VERSION, QBH_CHECK_IN_THREAD, 2,
@@ -601,7 +603,7 @@ int main() {
             "invalid background helper callee -3");
     }
     constexpr unsigned expected_count =
-        QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION ? 178 : 168;
+        QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION ? 179 : 169;
     if (count != expected_count) {
         fprintf(stderr, "ran %u of %u expected checks for AOT format %u\n", count, expected_count,
             static_cast<unsigned>(QORE_AOT_BINARY_VERSION));

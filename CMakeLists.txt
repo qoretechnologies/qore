@@ -3313,6 +3313,11 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/Function.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/LocalVar.h
     ${CMAKE_SOURCE_DIR}/lib/Function.cpp
+    # the class signature hashes (qore_class_private::initializeIntern(), do_sig(), do_variant_sig(),
+    # SignatureHash) and class paths (QoreClass::getNamespacePath()) that CLASSES records and type paths store; a
+    # change in how they are computed would leave a module's classes incompatible with, or wrongly compatible with,
+    # those that the runtime computes (qore#7397)
+    ${CMAKE_SOURCE_DIR}/lib/QoreClass.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOT.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTBinary.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTExprHandlers.cpp
