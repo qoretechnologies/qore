@@ -105,6 +105,8 @@ module MailgunDataProvider {
             "desc": "Validate an email address using Mailgun's email validation API. Returns information "
                 "about deliverability, risk assessment, and suggested corrections.",
             "action_code": DPAT_API,
+            # a GET of the validation API: billed per check, but it stores nothing (qore#7454)
+            "mutates_state": False,
             "data_provider_info": MailgunValidateEmailDataProvider::ProviderInfo,
             "output_type": new MailgunValidateEmailResponseDataType(),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -159,6 +161,7 @@ module MailgunDataProvider {
             "short_desc": "Get a member from a mailing list",
             "desc": "Retrieve a specific member from a Mailgun mailing list by their email address.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": MailgunGetMailingListMemberDataProvider::ProviderInfo,
             "output_type": new MailgunMailingListMemberDataType(),
             "options": {

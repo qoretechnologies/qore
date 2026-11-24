@@ -664,6 +664,26 @@ public const string DPAD_MODIFIED_PASS_THROUGH = "modified-pass-through";
 public const string DPAD_CREATE_OUTPUT = "create-output";
 #/@}
 
+#! Declares the option values for which one condition on a read-only action is satisfied
+/** See @ref DataProviderActionBaseInfo::read_only_options.  The path and values are data so that an index can
+    carry the same declaration as the registered action.
+
+    @since %DataProvider 3.12
+*/
+public hashdecl DataProviderReadOnlyOption {
+    #! Keys from the root of the configured action options to the value, for example <tt>("profile", "saveChanges")</tt>
+    list<string> path;
+
+    #! Exact typed values that allow read-only operation at this path
+    list<auto> values;
+
+    #! True if omission of the option, or an enclosing hash, also allows read-only operation
+    bool allow_missing = True;
+
+    #! Allow omission of an enclosing hash even when its terminal option is required if that hash is present
+    bool allow_missing_parent = False;
+}
+
 #! DataProvider action definition without its options and output type
 /** @see
     - @ref DataProviderActionInfo for a registered action
@@ -747,6 +767,15 @@ public hashdecl DataProviderActionBaseInfo {
         @since %DataProvider 3.7
     */
     *bool mutates_state;
+
+    #! Conditions under which an otherwise mutating action is read-only for a particular configuration
+    /** All conditions must match.  Only declare these when they account for every option-controlled change to
+        external state.  Set @ref DataProviderActionBaseInfo::mutates_state to True for callers without the configured
+        options.  See @ref DataProviderActionCatalog::actionMutatesState().
+
+        @since %DataProvider 3.12
+    */
+    *list<hash<DataProviderReadOnlyOption>> read_only_options;
 
     #! Message or event type
     /** if \c action_code is:
@@ -3903,6 +3932,49 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 return False;
         }
         return True;
+    }
+
+    #! Returns whether the action can change state with the given effective, resolved option values
+    /** Pass an empty hash for the action's defaults.  When option values are unknown, call the one-argument
+        variant.  Actions without conditions retain their static classification.
+
+        Each declared path must either be omitted when allowed or have one of its exact read-only values.
+        A non-hash along a path cannot establish read-only operation.  Consumers with unresolved expressions
+        must use the one-argument variant until all relevant option values are known.
+
+        @since %DataProvider 3.12
+    */
+    static bool actionMutatesState(hash<DataProviderActionInfo> action, hash<auto> options) {
+        if (!action.read_only_options) {
+            return actionMutatesState(action);
+        }
+        foreach hash<DataProviderReadOnlyOption> condition in (action.read_only_options) {
+            if (!condition.path || !matchesReadOnlyOption(condition, options)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    private static bool matchesReadOnlyOption(hash<DataProviderReadOnlyOption> condition, hash<auto> options) {
+        auto value = options;
+        int depth = 0;
+        foreach string key in (condition.path) {
+            ++depth;
+            if (value.typeCode() != NT_HASH) {
+                return False;
+            }
+            if (!value.hasKey(key)) {
+                return condition.allow_missing || (condition.allow_missing_parent && depth < condition.path.size());
+            }
+            value = value{key};
+        }
+        foreach auto allowed in (condition.values) {
+            if (value === allowed) {
+                return True;
+            }
+        }
+        return False;
     }
 
     #! Registers a data provider action

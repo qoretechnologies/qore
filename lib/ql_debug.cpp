@@ -9237,6 +9237,13 @@ public:
         }
     }
 
+    //! Runs the shutdown of a close (prepareForClose()) after the UNIX connection's check read its descriptor, as
+    //! another thread's close can; the close itself follows the connection's step (see runUnixConnectClose())
+    static void shutDownInUnixCheck(int) {
+        qore_dbg_unix_connect_before_check.store(nullptr, std::memory_order_release);
+        qore_socket_private::get(*unix_close_sock)->prepareForClose();
+    }
+
     //! Where runUnixConnectClose() closes the socket
     enum UnixCloseMode {
         //! right before the connection gives the socket its descriptor (qore_dbg_unix_connect_before_adopt)
@@ -9249,6 +9256,10 @@ public:
         UCM_BEFORE_CONNECTED_REOPENED,
         //! after the connection's state was set (qore_dbg_unix_connect_after_connected)
         UCM_AFTER_CONNECTED,
+        //! the shutdown of a close after the connection's check read the descriptor (qore_dbg_unix_connect_before_check):
+        //! the check fails with the shutdown's error, and the connection must fail as closed; the close itself follows
+        //! the connection's step
+        UCM_SHUTDOWN_IN_CHECK,
     };
 
     //! The descriptor that the socket is given after the close (UCM_BEFORE_CONNECTED_REOPENED), and its peer
@@ -9289,10 +9300,15 @@ public:
         stay reserved while the check uses it (another socket opened then must not get it), and the check must not
         continue the connection; before the connection's state is set, the state is set with the socket's close lock
         held only if the socket was not closed meanwhile.  With UCM_BEFORE_CONNECTED_REOPENED, the socket is given
-        another descriptor after the close: the failed connection must not close it.
+        another descriptor after the close: the failed connection must not close it.  With UCM_SHUTDOWN_IN_CHECK, only
+        the shutdown of the close runs in the check (qore_socket_private::prepareForClose(), which changes the
+        descriptor generation with it), as when another thread's close has shut the descriptor down and not released it
+        yet: the check fails with the shutdown's error (EPIPE), and the connection must fail as closed, not with that
+        error; the test closes the socket after the connection's step.
     */
     static void runUnixConnectClose(UnitTestCounters& c, UnixCloseMode mode) {
-        const std::string when = mode == UCM_IN_CHECK ? " (UNIX connection closed in its check)"
+        const std::string when = mode == UCM_SHUTDOWN_IN_CHECK ? " (UNIX connection shut down by a close in its check)"
+            : mode == UCM_IN_CHECK ? " (UNIX connection closed in its check)"
             : (mode == UCM_BEFORE_ADOPT ? " (UNIX connection closed before its descriptor is taken)"
                 : (mode == UCM_BEFORE_CONNECTED ? " (UNIX connection closed before it is connected)"
                     : (mode == UCM_AFTER_CONNECTED ? " (UNIX connection closed after it is connected)"
@@ -9358,6 +9374,8 @@ public:
         unix_reopen_peer = mode == UCM_BEFORE_CONNECTED_REOPENED ? 0 : -1;
         if (mode == UCM_IN_CHECK) {
             qore_dbg_unix_connect_before_check.store(closeInUnixCheck, std::memory_order_release);
+        } else if (mode == UCM_SHUTDOWN_IN_CHECK) {
+            qore_dbg_unix_connect_before_check.store(shutDownInUnixCheck, std::memory_order_release);
         } else if (mode == UCM_BEFORE_ADOPT) {
             qore_dbg_unix_connect_before_adopt.store(closeBeforeUnixAdopt, std::memory_order_release);
         } else if (mode == UCM_AFTER_CONNECTED) {
@@ -9390,6 +9408,11 @@ public:
             }
             UT_ASSERT(c, !foreign_send,
                 ("the check does not use a number that the close released and another socket took" + when).c_str());
+        } else if (mode == UCM_SHUTDOWN_IN_CHECK) {
+            UT_ASSERT(c, !qore_dbg_unix_connect_before_check.load(std::memory_order_acquire),
+                ("the socket was shut down in the check" + when).c_str());
+            // the close whose shutdown ran in the check
+            s->close();
         } else if (mode == UCM_BEFORE_ADOPT) {
             UT_ASSERT(c, !qore_dbg_unix_connect_before_adopt.load(std::memory_order_acquire),
                 ("the socket was closed before its descriptor was taken" + when).c_str());
@@ -22845,6 +22868,71 @@ static QoreValue f_dbg_http1_header_read_op_failure_site(const QoreListNode* par
     return f.failed_at.empty() ? QoreValue() : new QoreStringNode(f.failed_at);
 }
 
+namespace {
+//! the state of the dbg_fail_http_header_text_alloc() hook
+struct DbgHeaderTextAllocFailure {
+    QoreThreadLock m;
+    //! the site where the allocation fails; empty: the hook is not armed
+    std::string target;
+    //! true once the allocation has failed
+    bool failed = false;
+};
+
+DbgHeaderTextAllocFailure dbg_header_text_alloc_failure;
+}
+
+bool qore_dbg_http_header_text_alloc_must_fail(const char* site) {
+    DbgHeaderTextAllocFailure& f = dbg_header_text_alloc_failure;
+    AutoLocker al(f.m);
+    if (f.target.empty() || f.target != site) {
+        return false;
+    }
+    f.target.clear();
+    f.failed = true;
+    return true;
+}
+
+//! Debug-only: the next allocation of the text of an HTTP header received at the given site fails (one-shot)
+/** @param site \c "read-header" (the blocking header reader of the C++ API), \c "send-and-read-header" or
+    \c "send-stream-and-read-header" (the operations that send a response and read the next request header)
+*/
+static QoreValue f_dbg_fail_http_header_text_alloc(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    // note: the argument can be an inline short string, which the helper reads
+    DbgStringNodeHelper site(get_param_value(params, 0));
+    DbgHeaderTextAllocFailure& f = dbg_header_text_alloc_failure;
+    AutoLocker al(f.m);
+    f.target = (*site)->c_str();
+    f.failed = false;
+    return QoreValue();
+}
+
+//! Debug-only: returns True if the allocation armed by dbg_fail_http_header_text_alloc() has failed, and disarms it
+static QoreValue f_dbg_http_header_text_alloc_failed(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    DbgHeaderTextAllocFailure& f = dbg_header_text_alloc_failure;
+    AutoLocker al(f.m);
+    bool rv = f.failed;
+    f.target.clear();
+    f.failed = false;
+    return rv;
+}
+
+//! the size over which the buffer of a binary value cannot grow; 0: no limit (dbg_fail_binary_reserve_over())
+static std::atomic<int64> dbg_binary_reserve_limit{0};
+
+bool qore_dbg_binary_reserve_must_fail(size_t size) {
+    int64 limit = dbg_binary_reserve_limit.load(std::memory_order_relaxed);
+    return limit > 0 && size > static_cast<size_t>(limit);
+}
+
+//! Debug-only: the buffer of a binary value cannot grow over the given size in the process, as if the memory could not
+//! be allocated; 0 removes the limit
+static QoreValue f_dbg_fail_binary_reserve_over(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    dbg_binary_reserve_limit.store(get_param_value(params, 0).getAsBigInt(), std::memory_order_relaxed);
+    return QoreValue();
+}
+
 //! Debug-only: returns the number of records that a session of a socket keeps for its streams, by kind
 /** The QUIC session with the given ID, or the HTTP/2 session of the socket if no ID is given.  Tests use it to show
     that a long-lived session does not keep records for the streams it has finished.  DEBUG builds only.
@@ -28700,6 +28788,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runUnixConnectClose(c, AsyncIoDescriptorHoldTest::UCM_BEFORE_CONNECTED);
     AsyncIoDescriptorHoldTest::runUnixConnectClose(c, AsyncIoDescriptorHoldTest::UCM_BEFORE_CONNECTED_REOPENED);
     AsyncIoDescriptorHoldTest::runUnixConnectClose(c, AsyncIoDescriptorHoldTest::UCM_AFTER_CONNECTED);
+    AsyncIoDescriptorHoldTest::runUnixConnectClose(c, AsyncIoDescriptorHoldTest::UCM_SHUTDOWN_IN_CHECK);
 #endif
     AsyncIoDescriptorHoldTest::runCloseWithoutDescriptor(c, true);
     AsyncIoDescriptorHoldTest::runCloseWithoutDescriptor(c, false);
@@ -32552,6 +32641,15 @@ static QoreValue f_dbg_quic_wait_dropped_client_datagrams(const QoreListNode* pa
     }, static_cast<int>(timeout_ms));
 }
 
+std::atomic<bool> qore_dbg_h2_fail_next_submit{false};
+
+//! Debug-only: the next request submitted on an HTTP/2 client session fails as when the session has no stream ID left
+//! (NGHTTP2_ERR_STREAM_ID_NOT_AVAILABLE, raised as HTTP2-ERROR; qore#7443)
+static QoreValue f_dbg_http2_fail_next_submit(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    qore_dbg_h2_fail_next_submit.store(true, std::memory_order_release);
+    return QoreValue();
+}
+
 std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent{0};
 std::atomic<int64_t> qore_dbg_quic_stateless_resets_received{0};
 std::atomic<int64_t> qore_dbg_quic_server_retries_sent{0};
@@ -33092,7 +33190,9 @@ static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* param
     sent and its response can arrive before the registration; \c "h3-response-buffered": an HTTP/3 client poll
     operation received the response of a request that is not registered yet and kept it for the registration (with a
     release Counter of 0, it only reports it); \c "h3-race-winner": the address family race of an HTTP/3 client
-    connection found the connection attempt that wins, before the operation's socket takes it over (the I/O thread)
+    connection found the connection attempt that wins, before the operation's socket takes it over (the I/O thread);
+    \c "send-drain-wait": an HTTP/2 or HTTP/3 client connection's streamed send found the stream's send buffer full
+    and is about to wait for it to drain (qore#7465)
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
     @param target if given, only a thread that reaches the point for this object is held: the poll operation of the
@@ -33142,6 +33242,8 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::Http3ResponseBuffered);
     } else if (!strcmp(name->c_str(), "h3-race-winner")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::Http3RaceWinner);
+    } else if (!strcmp(name->c_str(), "send-drain-wait")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::SendDrainWait);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();
@@ -35525,6 +35627,12 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringOrNothingTypeInfo, QORE_PARAM_NO_ARG, "site");
     qns.addBuiltinVariant("dbg_http1_header_read_op_failure_site", f_dbg_http1_header_read_op_failure_site,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, stringOrNothingTypeInfo);
+    qns.addBuiltinVariant("dbg_fail_http_header_text_alloc", f_dbg_fail_http_header_text_alloc, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "site");
+    qns.addBuiltinVariant("dbg_http_header_text_alloc_failed", f_dbg_http_header_text_alloc_failed, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_fail_binary_reserve_over", f_dbg_fail_binary_reserve_over, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "size");
     qns.addBuiltinVariant("dbg_clear_http1_header_read_op_failure", f_dbg_clear_http1_header_read_op_failure,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_socket_stream_records", f_dbg_socket_stream_records,
@@ -35870,6 +35978,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_quic_stateless_reset_counts", f_dbg_quic_stateless_reset_counts, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_http2_fail_next_submit", f_dbg_http2_fail_next_submit, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_quic_server_retry_counts", f_dbg_quic_server_retry_counts, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_quic_fail_sends", f_dbg_quic_fail_sends, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

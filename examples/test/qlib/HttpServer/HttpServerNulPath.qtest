@@ -96,7 +96,7 @@ class HttpServerNulPathTest inherits QUnit::Test {
             "enable_h3": False}).port;
         server.waitForAsyncIo();
 
-        HTTPClient client({"url": sprintf("https://localhost:%d", port), "ssl_verify_cert": False,
+        HTTPClient client({"url": sprintf("https://127.0.0.1:%d", port), "ssl_verify_cert": False,
             "http_version": "2.0", "pre_encoded_urls": True, "timeout": 30s});
         client.setHttp2Mode("required");
         hash<auto> info = send(client, "/a%00b");
@@ -119,7 +119,7 @@ class HttpServerNulPathTest inherits QUnit::Test {
             "enable_h3": True}).port;
         server.waitForAsyncIo();
 
-        HTTPClient client({"url": sprintf("https://localhost:%d", port), "ssl_verify_cert": False,
+        HTTPClient client({"url": sprintf("https://127.0.0.1:%d", port), "ssl_verify_cert": False,
             "http3_mode": "required", "pre_encoded_urls": True, "timeout": 30s});
         hash<auto> info = send(client, "/a%00b");
         assertEq(400, info."response-headers".status_code);

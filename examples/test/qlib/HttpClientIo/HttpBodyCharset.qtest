@@ -328,11 +328,11 @@ class HttpBodyCharsetTest inherits QUnit::Test {
     }
 
     private string getUrl() {
-        return "http://localhost:" + port;
+        return "http://127.0.0.1:" + port;
     }
 
     private string getTlsUrl() {
-        return "https://localhost:" + tls_port;
+        return "https://127.0.0.1:" + tls_port;
     }
 
     private HTTPClient getHttpClient(string url, *hash<auto> opts) {

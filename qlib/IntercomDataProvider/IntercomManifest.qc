@@ -407,6 +407,7 @@ public class IntercomManifest {
             <RestSchemaActionInfo>{
                 "action": "SearchContacts",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/contacts/search",
                 "operation_id": "SearchContacts",
                 "display_name": "Search Contacts",
@@ -593,6 +594,7 @@ public class IntercomManifest {
             <RestSchemaActionInfo>{
                 "action": "listAllCompanies",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/companies/list",
                 "operation_id": "listAllCompanies",
                 "display_name": "List Companies",
@@ -660,6 +662,7 @@ public class IntercomManifest {
             <RestSchemaActionInfo>{
                 "action": "searchConversations",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/conversations/search",
                 "operation_id": "searchConversations",
                 "display_name": "Search Conversations",

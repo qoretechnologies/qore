@@ -4928,6 +4928,11 @@ void QuicSession::releaseStream(int64_t stream_id) {
     }
 }
 
+bool QuicSession::isBidiStreamOpen(int64_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    return open_bidi_streams_.count(stream_id) > 0;
+}
+
 uint64_t QuicSession::getBytesInFlight() const {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     if (!conn_) {

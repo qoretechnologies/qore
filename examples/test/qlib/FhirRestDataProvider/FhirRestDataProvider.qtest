@@ -418,6 +418,29 @@ class FhirRestDataProviderTest inherits QUnit::Test {
         assertFalse(exists create_patient.options.resource_type);
         assertEq("Patient", create_patient.options.resource.type.getName());
         assertTrue(create_patient.options.resource.required);
+
+        # the actions that only read (GET requests, and $validate, which FHIR defines as not changing state)
+        # declare that they do not change state; the others keep the default (qore#7454)
+        hash<string, hash<DataProviderActionInfo>> by_name = map {$1.action: $1},
+            DataProviderActionCatalog::getActions(FhirRestDataProvider::AppName);
+        list<string> read_only = ("get-capability-statement", "get-smart-configuration", "read-resource",
+            "search-resources", "search-all-resources", "validate-resource", "validate-code", "lookup-code",
+            "translate-code", "expand-value-set");
+        list<string> mutating = ("create-resource", "submit-bundle", "update-resource", "conditional-update-resource",
+            "patch-resource", "delete-resource");
+        foreach string resource_type in (FhirRestDataProvider::FhirR4GeneratedResourceTypeList) {
+            string path_name = resource_type.lwr();
+            read_only += map $1 + "-" + path_name, ("read", "search", "search-all", "validate");
+            mutating += map $1 + "-" + path_name, ("create", "update", "conditional-update", "patch", "delete");
+        }
+        foreach string name in (read_only) {
+            assertEq(NT_BOOLEAN, by_name{name}.mutates_state.typeCode(), name);
+            assertFalse(by_name{name}.mutates_state, name);
+            assertFalse(DataProviderActionCatalog::actionMutatesState(by_name{name}), name);
+        }
+        foreach string name in (mutating) {
+            assertTrue(DataProviderActionCatalog::actionMutatesState(by_name{name}), name);
+        }
     }
 
     metadataActionsTest() {

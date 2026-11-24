@@ -5643,8 +5643,10 @@ int qore_socket_object_private::checkIdleDataForAsyncPollLocked(ExceptionSink* x
         return -1;
     }
     // bytes that the socket has already read from the descriptor are not seen by a peek of the descriptor: a client
-    // that sent its next request before the response to the previous one (pipelining) has it here; for a server only
-    // (an HTTP client may have bytes there that it does not use, such as a body that a server sent to a HEAD request)
+    // that sent its next request before the response to the previous one (pipelining) has it here, and an HTTP client
+    // has bytes here that follow the response it read, which keep the connection from being reused (qore#7471): the
+    // client checks for them when a response ends, which closes such a connection, and again before it sends its
+    // next request on the connection
     if (buffered_is_data && p->buflen > 0) {
         return 1;
     }
@@ -6354,6 +6356,11 @@ bool qore_socket_object_private::isHttp2StreamEndStreamReceivedForAsyncPoll(int3
     return h2 && h2->isStreamEndStreamReceived(stream_id);
 }
 
+bool qore_socket_object_private::isHttp2StreamLocalOpen(int32_t stream_id) const {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(so);
+    return h2 && h2->isStreamLocalOpen(stream_id);
+}
+
 bool qore_socket_object_private::isHttp2StreamResetForAsyncPoll(int32_t stream_id) const {
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(so);
     return h2 && h2->isStreamReset(stream_id);
@@ -6393,6 +6400,11 @@ void qore_socket_object_private::releaseQuicStream(int64_t session_id, int64_t s
     if (session) {
         session->releaseStream(stream_id);
     }
+}
+
+bool qore_socket_object_private::isQuicBidiStreamOpen(int64_t session_id, int64_t stream_id) const {
+    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(so, session_id);
+    return session && session->isBidiStreamOpen(stream_id);
 }
 
 int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms) {

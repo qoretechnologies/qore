@@ -92,6 +92,8 @@ module FireworksDataProvider {
                 "desc": "Converts text inputs into embedding vectors using a Fireworks-hosted "
                     "embedding model via the OpenAI-compatible `/v1/embeddings` endpoint.",
                 "action_code": DPAT_API,
+                # the embeddings are returned; nothing is stored (qore#7454)
+                "mutates_state": False,
                 "groups": ("Embeddings",),
                 "options": DataProviderActionCatalog::getActionOptionFromFields(
                     FireworksEmbeddingRequestDataType::Fields{"input", "model",}, {
@@ -108,6 +110,7 @@ module FireworksDataProvider {
                 "desc": "Improve search results by scoring candidate documents against a query. "
                     "Use `top_n` to keep the most relevant results. **Inference is billed by Fireworks.**",
                 "action_code": DPAT_API, "groups": ("Embeddings",),
+                "mutates_state": False,
                 "options": DataProviderActionCatalog::getActionOptionFromFields(
                     FireworksRerankRequestDataType::Fields{"query", "documents",},
                     {"preselected": True, "required": True})
