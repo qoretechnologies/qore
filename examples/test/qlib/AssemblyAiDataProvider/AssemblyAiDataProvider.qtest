@@ -116,7 +116,7 @@ public class AssemblyAiDataProviderTest inherits QUnit::Test {
     #! the POST operations that the vendored API description documents as pure queries, validations,
     #! estimates or stateless inference declare mutates_state False; the others keep the default (qore#7454)
     private readOnlyActionsTest() {
-        foreach string name in (("transcribe-short-audio", "transcribe-live-upload", "transcribe-dictation", "create-chat-completion", "understand-speech",)) {
+        foreach string name in (("transcribe-short-audio", "transcribe-live-upload", "transcribe-dictation", "create-chat-completion",)) {
             hash<DataProvider::DataProviderActionInfo> action =
                 DataProvider::DataProviderActionCatalog::getAppActionEx("AssemblyAI", name);
             assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
@@ -124,7 +124,8 @@ public class AssemblyAiDataProviderTest inherits QUnit::Test {
             assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
         }
         # operations that create, change or start something on the server still declare a change
-        foreach string name in (("create-transcript", "upload-audio", "create-webhook",)) {
+        # understand-speech works on a stored transcript, which speaker identification can update
+        foreach string name in (("create-transcript", "upload-audio", "create-webhook", "understand-speech",)) {
             hash<DataProvider::DataProviderActionInfo> action =
                 DataProvider::DataProviderActionCatalog::getAppActionEx("AssemblyAI", name);
             assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);

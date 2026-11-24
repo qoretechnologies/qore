@@ -139,7 +139,6 @@ module EasyPostDataProvider {
                 "short_desc": "Verify an existing address",
                 "desc": "Run carrier-side address verification on an existing address.",
                 "action_code": DPAT_API,
-                "mutates_state": False,
                 "data_provider_info": EasyPostVerifyAddressDataProvider::ProviderInfo,
                 "get_output_type": AbstractDataProviderType sub () { return EasyPostVerifyAddressDataProvider::ResponseType; },
                 "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostVerifyAddressRequestDataType::Fields),

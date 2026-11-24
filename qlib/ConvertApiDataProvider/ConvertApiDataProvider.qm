@@ -100,7 +100,6 @@ module ConvertApiDataProvider {
                 "**Output**: the output files are returned as `FileData`, or as download URLs if `store_file` is "
                 "`True`.",
             "action_code": DPAT_API,
-            "mutates_state": False,
 
             # the formats select the converter, whose parameters are added as typed options when both are given
             "data_dependent_options": True,
@@ -165,7 +164,6 @@ module ConvertApiDataProvider {
             "desc": "Converts a Word document (`doc` or `docx`) to PDF with the layout of the original document.\n\n"
                 "Supports page ranges, protected documents, bookmarks from headings and PDF/A output.",
             "action_code": DPAT_API,
-            "mutates_state": False,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ConvertApiConvertWordToPdfRequestDataType::Fields{"file", "url", "PageRange"}, {
@@ -189,7 +187,6 @@ module ConvertApiDataProvider {
                 "Convert all worksheets, the active worksheet or a worksheet by name; fit sheets to the page "
                 "width and create PDF/A output.",
             "action_code": DPAT_API,
-            "mutates_state": False,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ConvertApiConvertExcelToPdfRequestDataType::Fields{"file", "url"}, {
@@ -212,7 +209,6 @@ module ConvertApiDataProvider {
             "desc": "Converts a PowerPoint presentation (`ppt` or `pptx`) to PDF.\n\n"
                 "Supports slide ranges, hidden slides, speaker notes and PDF/A output.",
             "action_code": DPAT_API,
-            "mutates_state": False,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ConvertApiConvertPowerPointToPdfRequestDataType::Fields{"file", "url", "PageRange"}, {
@@ -242,7 +238,6 @@ module ConvertApiDataProvider {
                 "Supports page size, orientation, margins, the CSS media type and a delay for pages that load "
                 "content late.",
             "action_code": DPAT_API,
-            "mutates_state": False,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ConvertApiConvertHtmlToPdfRequestDataType::Fields{"url", "file"}, {
@@ -271,7 +266,6 @@ module ConvertApiDataProvider {
                 "Choose the image `format` and resolution, and optionally a page range; the other options "
                 "depend on the format.",
             "action_code": DPAT_API,
-            "mutates_state": False,
 
             # the image formats take different parameters, so the options depend on the format
             "data_dependent_options": True,
@@ -304,7 +298,6 @@ module ConvertApiDataProvider {
                 "Give the PDF files in `files` or their URLs in `urls`; optionally add a bookmark for each "
                 "merged file.",
             "action_code": DPAT_API,
-            "mutates_state": False,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ConvertApiMergePdfRequestDataType::Fields{"files", "urls"}, {
@@ -327,7 +320,6 @@ module ConvertApiDataProvider {
             "desc": "Compresses a PDF to reduce its size, for example for e-mail or web publishing.\n\n"
                 "Choose a `Preset` from lossless compression to low-resolution images for the smallest files.",
             "action_code": DPAT_API,
-            "mutates_state": False,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ConvertApiCompressPdfRequestDataType::Fields{"file", "url", "Preset"}, {

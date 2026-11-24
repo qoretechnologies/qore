@@ -52,7 +52,6 @@ public class AssemblyAiLlmGatewayManifest {
             <RestSchemaActionInfo>{
                 "action": "understand-speech",
                 "method": "POST",
-                "mutates_state": False,
                 "path": "/understanding",
                 "operation_id": "createSpeechUnderstanding",
                 "display_name": "Understand Speech",

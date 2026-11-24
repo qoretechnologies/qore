@@ -258,14 +258,14 @@ public class GrokDataProviderTest inherits QUnit::Test {
         assertEq("/deferred-completion", action.path);
         assertEq(DPAT_API, action.action_code);
 
-        # get-response and deferred-completion only GET a stored result: they declare that they are read-only
-        # (qore#7454)
-        foreach string name in ("get-response", "deferred-completion") {
-            action = DataProviderActionCatalog::getAppAction(GrokDataProvider::AppName, name);
-            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
-            assertFalse(action.mutates_state, name);
-            assertFalse(DataProviderActionCatalog::actionMutatesState(action), name);
-        }
+        # get-response only GETs a stored response: it declares that it is read-only; a deferred completion can be
+        # retrieved once, after which xAI discards it, so deferred-completion changes state (qore#7454)
+        action = DataProviderActionCatalog::getAppAction(GrokDataProvider::AppName, "get-response");
+        assertEq(NT_BOOLEAN, action.mutates_state.typeCode());
+        assertFalse(action.mutates_state);
+        assertFalse(DataProviderActionCatalog::actionMutatesState(action));
+        action = DataProviderActionCatalog::getAppAction(GrokDataProvider::AppName, "deferred-completion");
+        assertTrue(DataProviderActionCatalog::actionMutatesState(action));
         # with the deferred option xAI keeps the chat completion for later retrieval, so the chat actions are not
         # read-only (qore#7454)
         foreach string name in ("multi-chat", "simple-chat") {
