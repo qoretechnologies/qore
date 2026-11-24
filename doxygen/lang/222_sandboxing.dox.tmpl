@@ -861,38 +861,54 @@ authenticate();
       created)
 
     Both fail closed: a method of an object that the host lent (see @ref sandbox_lent_objects) lends nothing here, so
-    a restricted borrower gets no ambient credential through it; the host grants access through a policy barrier
+    a restricted borrower gets no ambient data through it, also for the work that a lent client continues on a thread
+    of the async I/O controller; the host grants access through a policy barrier
     (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()") or a capability
     (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()"), inside which
     only the code that runs inside the grant counts.  Credentials that the caller gives explicitly are the caller's
     own and are not affected.
 
-    For code that may not read external information:
-    - environment variables expand to empty strings, as they do in that code's own environment:
-      @ref Util::substitute_env_vars() "substitute_env_vars()" (also for the connection options, file locations and
-      paths that library code expands with it), the \c $VAR references of a \c file:// URL of
-      @ref Util::get_file_from_url() "get_file_from_url()" and the external references of OpenApi3 and Swagger
-      schemas; the \c %%E{VAR} field of the file names of the Logger file appenders is empty for an appender that such
-      code created (it is decided when the appender is created, so an appender of the host keeps its file names
-      whatever code logs through it)
-    - the proxy of the environment is not used
-      (@ref HttpClientIo::get_proxy_url_from_environment() "get_proxy_url_from_environment()" returns @ref NOTHING,
-      also for @ref UrlDownloader::UrlDownloader "UrlDownloader"); such code gives its proxy explicitly
-    - the AWS credential chain (\c AwsRestClient) takes no key, secret or session token from the environment (the
-      region still) and queries neither the ECS task-role endpoint nor IMDSv2; a client without credentials raises
-      \c AWSRESTCLIENT-ERROR, and the static helpers for the endpoints \c AWSRESTCLIENT-IMDS-ERROR
+    The ambient credentials of the host are the host's secrets: the paths that resolve them ask
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "callerMayReceiveHostSecrets()", so neither code
+    restricted from external information nor sandboxed code gets them (whatever its sandbox allows), unless the host
+    grants them; each module has a function or method that answers for its credentials
+    (@ref AwsRestClient::AwsRestClientBase::hostCredentialsAllowed() "AwsRestClientBase::hostCredentialsAllowed()",
+    @ref GcpAuth::hostCredentialsAllowed() "GcpAuth::hostCredentialsAllowed()",
+    @ref AzureAuth::hostCredentialsAllowed() "AzureAuth::hostCredentialsAllowed()",
+    @ref Krb5Util::hostCredentialsAllowed() "Krb5Util::hostCredentialsAllowed()"):
+    - the AWS credential chain (\c AwsRestClient) takes no key, secret or session token from the environment and
+      queries neither the ECS task-role endpoint nor IMDSv2 (nor probes the host's hardware for it); a client without
+      credentials raises \c AWSRESTCLIENT-ERROR, and the static helpers for the endpoints \c AWSRESTCLIENT-IMDS-ERROR
     - \c GcpAuth resolves no application default credentials of the environment or of the user's home and gives no
-      token of the metadata server (\c GCP-AUTH-ERROR), and \c AzureAuth no token of the managed identity
-      (\c AZURE-AUTH-ERROR)
+      token of the metadata server (\c GCP-AUTH-ERROR), also not one that it cached for the host, and \c AzureAuth no
+      token of the managed identity (\c AZURE-AUTH-ERROR)
+    - Kerberos: the HTTP Negotiate client of \c Krb5Util, which \c RestClient and \c RestClientIo use, and the
+      classes of the \c krb5 module use no default credential of the process (\c KRB5-GSS-ERROR from
+      @ref Qore::Krb5::GssClientContext::step() "GssClientContext::step()" and
+      @ref Qore::Krb5::GssAcceptorContext::step() "GssAcceptorContext::step()" without an explicit credential), give
+      no default credential cache or keytab and its name and list no credential caches of the host
+      (@ref Qore::Krb5::Krb5Context "Krb5Context"; \c KRB5-CACHE-ERROR, \c KRB5-KEYTAB-ERROR); a credential store that
+      the caller names is its own only if it is a memory store or a file that the caller may use (it is not
+      restricted from the file system, as @ref Qore::SandboxManager::isLentToRestricted() "isLentToRestricted()"
+      resolves it, and a sandbox's file system policy allows it): the other backends (KCM, KEYRING, API, MSLSA) hold
+      the host's credentials
+    - the proxy of the environment is given without its user name and password
+      (@ref HttpClientIo::get_proxy_url_from_environment() "get_proxy_url_from_environment()", also for
+      @ref UrlDownloader::UrlDownloader "UrlDownloader")
+
+    For code that may not read external information, the host's environment is empty, as it is in that code itself:
+    - environment variables expand to empty strings: @ref Util::substitute_env_vars() "substitute_env_vars()" (also for
+      the connection options, file locations and paths that library code expands with it), the \c $VAR references of
+      a \c file:// URL of @ref Util::get_file_from_url() "get_file_from_url()" and the external references of OpenApi3
+      and Swagger schemas; the \c %%E{VAR} field of the file names of the Logger file appenders is empty for an
+      appender that such code created (it is decided when the appender is created, so an appender of the host keeps
+      its file names whatever code logs through it)
+    - the proxy of the environment is not used at all, and neither are the AWS region and the GCP quota project of the
+      environment; such code gives them explicitly
     - the data providers that take missing options from the environment when
       @ref DataProvider::DataProvider::setAutoConfig() "DataProvider::setAutoConfig()" is in effect (ServiceNow,
       Salesforce, Dataverse and Business Central) do not:
       @ref DataProvider::DataProvider::getAutoConfig() "DataProvider::getAutoConfig()" returns @ref False for it
-    - the HTTP Negotiate (Kerberos) client of \c Krb5Util, which \c RestClient and \c RestClientIo use, uses no
-      default Kerberos credential of the process (\c KRB5-GSS-ERROR); a credential cache or keytab that the caller
-      names is opened only for a caller that may use the file system, as
-      @ref Qore::SandboxManager::isLentToRestricted() "isLentToRestricted()" resolves it (\c KRB5-CACHE-ERROR,
-      \c KRB5-KEYTAB-ERROR)
 
     @since %Qore 3.0
 
