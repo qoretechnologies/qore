@@ -124,11 +124,11 @@ class LazyValueOwnerTest inherits QUnit::Test {
 
     testByPath() {
         # its initialization registers the value while the code that loads it runs (qore#7289)
-        load_module(get_script_dir() + "/lazy-value-owner/LazyOwnerPath.qm");
+        load_module(normalize_dir(get_script_dir()) + "/lazy-value-owner/LazyOwnerPath.qm");
         assertEq("owned by path", call_static_method("LazyOwnerPath::LazyOwnerPath", "getValue"));
         # a child Program that loads it by its path
         Program p(TenantOpts);
-        p.loadModule(get_script_dir() + "/lazy-value-owner/LazyOwnerPath.qm");
+        p.loadModule(normalize_dir(get_script_dir()) + "/lazy-value-owner/LazyOwnerPath.qm");
         p.parse("string sub get() { return LazyOwnerPath::LazyOwnerPath::getValue(); }", "by-path");
         assertEq("owned by path", p.callFunction("get"));
     }
