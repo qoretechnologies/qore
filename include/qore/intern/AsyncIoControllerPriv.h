@@ -179,6 +179,9 @@ struct AsyncIoDeferredRelease {
     //! the functional-domain restrictions of the code that submitted the work whose references these are, which the
     //! release runs with (see QoreSubmitterRestrictionsHelper, qore#6844)
     QoreParseOptions caller_restrictions;
+    //! the restrictions of that code as the checks that a lent object's method does not lend see them
+    //! (QoreSandboxContext::lent_to_restrictions)
+    QoreParseOptions lent_to_restrictions;
 
     //! Sets the module cleanup flags of the references from the context of the work that they belong to
     DLLLOCAL void setModuleCleanup(const std::shared_ptr<const QoreSandboxContext>& ctx);
@@ -346,6 +349,12 @@ DLLLOCAL inline bool async_io_module_cleanup_cancel_match(const std::shared_ptr<
 //! Returns the functional-domain restrictions of the code that captured the context, or none (qore#6844)
 DLLLOCAL inline QoreParseOptions async_io_caller_restrictions(const std::shared_ptr<const QoreSandboxContext>& ctx) {
     return ctx ? ctx->caller_restrictions : QoreParseOptions();
+}
+
+//! Returns the lent-to restrictions of the code that captured the context, or none (qore#6844)
+DLLLOCAL inline QoreParseOptions async_io_lent_to_restrictions(
+        const std::shared_ptr<const QoreSandboxContext>& ctx) {
+    return ctx ? ctx->lent_to_restrictions : QoreParseOptions();
 }
 
 //! Captures the sandbox of the current thread for work continued on a callback worker; empty if no sandbox governs it

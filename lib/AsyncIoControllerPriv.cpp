@@ -1050,6 +1050,7 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
     // taken before the context is released below
     refs.setModuleCleanup(sandbox_ctx);
     refs.caller_restrictions = async_io_caller_restrictions(sandbox_ctx);
+    refs.lent_to_restrictions = async_io_lent_to_restrictions(sandbox_ctx);
     sock_obj = nullptr;
     sock = nullptr;
     spop_obj = nullptr;
@@ -2235,6 +2236,7 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
                 refs.spop_base = cmd.submit_spop_base;
                 refs.setModuleCleanup(cmd.submit_sandbox_ctx);
                 refs.caller_restrictions = async_io_caller_restrictions(cmd.submit_sandbox_ctx);
+                refs.lent_to_restrictions = async_io_lent_to_restrictions(cmd.submit_sandbox_ctx);
                 cmd.submit_sock_obj = nullptr;
                 cmd.submit_sock = nullptr;
                 cmd.submit_spop_obj = nullptr;
@@ -2448,7 +2450,8 @@ static void aio_release_item_args(QoreListNode*& args, const AsyncIoSandboxConte
     if (release_ctx->manager || release_ctx->policy_manager || release_ctx->isolation) {
         release_guard.emplace(*release_ctx);
     }
-    QoreSubmitterRestrictionsHelper release_restrictions(release_ctx->caller_restrictions);
+    QoreSubmitterRestrictionsHelper release_restrictions(release_ctx->caller_restrictions,
+        release_ctx->lent_to_restrictions);
     QoreWorkGenerationHelper release_gen(release_ctx->work_gen);
     a->deref(xsink);
 }
@@ -2576,7 +2579,9 @@ void QoreCallDispatcher::releaseWorkItem(AsyncWorkItem& item, ExceptionSink* xsi
     // (a deferred release of the controller's own references carries them with the references)
     QoreSubmitterRestrictionsHelper submitter_restrictions(item.sandbox_ctx
         ? item.sandbox_ctx->caller_restrictions
-        : (item.release ? item.release->caller_restrictions : QoreParseOptions()));
+        : (item.release ? item.release->caller_restrictions : QoreParseOptions()),
+        item.sandbox_ctx ? item.sandbox_ctx->lent_to_restrictions
+        : (item.release ? item.release->lent_to_restrictions : QoreParseOptions()));
     if (item.native_task) {
         // the task was never run
         item.native_task->discard(xsink);
@@ -8990,6 +8995,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         refs.spop_base = node->second.spop_base;
                         refs.setModuleCleanup(node->second.sandbox_ctx);
                         refs.caller_restrictions = async_io_caller_restrictions(node->second.sandbox_ctx);
+                        refs.lent_to_restrictions = async_io_lent_to_restrictions(node->second.sandbox_ctx);
                     }
                     releaseOffIoThread(refs, xsink);
                 };
@@ -9847,6 +9853,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                 cancel_refs.udata = it->second.cancel_cb;
                                 cancel_refs.setModuleCleanup(it->second.sandbox_ctx);
                                 cancel_refs.caller_restrictions = async_io_caller_restrictions(it->second.sandbox_ctx);
+                                cancel_refs.lent_to_restrictions = async_io_lent_to_restrictions(it->second.sandbox_ctx);
                                 it->second.cancel_cb = QoreValue();
                                 fired_cancel_refs.push_back(cancel_refs);
                             }
@@ -10104,6 +10111,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             refs.udata = tinfo.udata;
             refs.setModuleCleanup(tinfo.sandbox_ctx);
             refs.caller_restrictions = async_io_caller_restrictions(tinfo.sandbox_ctx);
+            refs.lent_to_restrictions = async_io_lent_to_restrictions(tinfo.sandbox_ctx);
             tinfo.udata = QoreValue();
             exit_timer_refs.push_back(refs);
             if (tinfo.cancel_cb.hasNode()) {
@@ -10112,6 +10120,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 cancel_refs.udata = tinfo.cancel_cb;
                 cancel_refs.setModuleCleanup(tinfo.sandbox_ctx);
                 cancel_refs.caller_restrictions = async_io_caller_restrictions(tinfo.sandbox_ctx);
+                cancel_refs.lent_to_restrictions = async_io_lent_to_restrictions(tinfo.sandbox_ctx);
                 tinfo.cancel_cb = QoreValue();
                 exit_timer_refs.push_back(cancel_refs);
             }
@@ -10658,6 +10667,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     if (found) {
                         refs.setModuleCleanup(pinfo_copy.sandbox_ctx);
                         refs.caller_restrictions = async_io_caller_restrictions(pinfo_copy.sandbox_ctx);
+                        refs.lent_to_restrictions = async_io_lent_to_restrictions(pinfo_copy.sandbox_ctx);
                         if (pinfo_copy.continue_poll_in_flight) {
                             // a step runs on a worker: the cancellation waits for its result, as for a Cancel
                             uint64_t op_id = pinfo_copy.op_id;
@@ -10696,6 +10706,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     if (found) {
                         refs.setModuleCleanup(pinfo_copy.sandbox_ctx);
                         refs.caller_restrictions = async_io_caller_restrictions(pinfo_copy.sandbox_ctx);
+                        refs.lent_to_restrictions = async_io_lent_to_restrictions(pinfo_copy.sandbox_ctx);
                         if (pinfo_copy.continue_poll_in_flight) {
                             // a step runs on a worker: the cancellation waits for its result, as for a Cancel
                             uint64_t op_id = pinfo_copy.op_id;
@@ -12147,6 +12158,7 @@ void AsyncIoControllerPriv::AbortThenDeliverTask::deliver(bool call_on_complete,
     refs.queue_obj = dd.queue_obj;
     refs.setModuleCleanup(dd.sandbox_ctx);
     refs.caller_restrictions = async_io_caller_restrictions(dd.sandbox_ctx);
+    refs.lent_to_restrictions = async_io_lent_to_restrictions(dd.sandbox_ctx);
     dd.spop_obj = nullptr;
     dd.result = nullptr;
     dd.queue = nullptr;

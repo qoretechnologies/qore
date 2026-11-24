@@ -9756,14 +9756,22 @@ QoreValue qore_sandbox_call_governed(const ResolvedCallReferenceNode* factory, Q
     return factory->execValue(args, xsink);
 }
 
-QoreSubmitterRestrictionsHelper::QoreSubmitterRestrictionsHelper(const QoreParseOptions& restrictions) {
+QoreSubmitterRestrictionsHelper::QoreSubmitterRestrictionsHelper(const QoreParseOptions& restrictions)
+        : QoreSubmitterRestrictionsHelper(restrictions, QoreParseOptions()) {
+}
+
+QoreSubmitterRestrictionsHelper::QoreSubmitterRestrictionsHelper(const QoreParseOptions& restrictions,
+        const QoreParseOptions& lent_to) {
     ThreadData* td = thread_data.get();
-    if (!td || !restrictions) {
+    if (!td || (!restrictions && !lent_to)) {
         return;
     }
     old_restrictions = td->thread_caller_restrictions;
+    old_lent_to = td->thread_lent_to_restrictions;
     old_gen = td->thread_caller_restrictions_gen;
     td->thread_caller_restrictions |= restrictions;
+    // the release is never less restricted than the thread's own code, also for the checks that do not lend
+    td->thread_lent_to_restrictions |= lent_to | restrictions;
     td->thread_caller_restrictions_gen = ++td->restriction_gen;
     active = true;
 }
@@ -9772,6 +9780,7 @@ QoreSubmitterRestrictionsHelper::~QoreSubmitterRestrictionsHelper() {
     if (active) {
         ThreadData* td = thread_data.get();
         td->thread_caller_restrictions = old_restrictions;
+        td->thread_lent_to_restrictions = old_lent_to;
         td->thread_caller_restrictions_gen = old_gen;
     }
 }

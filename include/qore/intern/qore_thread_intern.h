@@ -1051,6 +1051,9 @@ private:
 class QoreSubmitterRestrictionsHelper {
 public:
     DLLLOCAL explicit QoreSubmitterRestrictionsHelper(const QoreParseOptions& restrictions);
+    //! also adds \a lent_to, the restrictions of the submitter that a lent object's method does not lend
+    //! (QoreSandboxContext::lent_to_restrictions)
+    DLLLOCAL QoreSubmitterRestrictionsHelper(const QoreParseOptions& restrictions, const QoreParseOptions& lent_to);
     DLLLOCAL ~QoreSubmitterRestrictionsHelper();
 
     DLLLOCAL QoreSubmitterRestrictionsHelper(const QoreSubmitterRestrictionsHelper&) = delete;
@@ -1058,6 +1061,7 @@ public:
 
 private:
     QoreParseOptions old_restrictions;
+    QoreParseOptions old_lent_to;
     uint64_t old_gen = 0;
     bool active = false;
 };
