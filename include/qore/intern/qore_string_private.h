@@ -540,12 +540,17 @@ public:
         }
         if (i >= allocated) {
             size_t d = i >> 2;
-            size_t new_allocated = i + (d < STR_CLASS_BLOCK ? STR_CLASS_BLOCK : d);
-            new_allocated = (new_allocated / 0x10 + 1) * 0x10; // use complete cache line
-            // memory that cannot be allocated fails the operation and leaves the string unchanged: the buffer was
-            // replaced with a null pointer, and the next write ended the process (qore#7466)
-            ownedBuffer() = static_cast<char*>(qore_realloc_or_throw(ownedBuffer(), new_allocated * sizeof(char)));
-            allocated = new_allocated;
+            allocated = i + (d < STR_CLASS_BLOCK ? STR_CLASS_BLOCK : d);
+            allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
+            char* p = static_cast<char*>(qore_realloc_or_null(ownedBuffer(), allocated * sizeof(char)));
+            if (__builtin_expect(!p, 0)) {
+                // memory that cannot be allocated fails the operation and leaves the string's text unchanged: the
+                // buffer was replaced with a null pointer, and the next write ended the process (qore#7466); the
+                // string keeps its buffer, which holds at least its text and terminator (if it has one)
+                allocated = ownedBuffer() ? len + 1 : 0;
+                qore_throw_bad_alloc();
+            }
+            ownedBuffer() = p;
             sb.sync(allocated);
         }
     }

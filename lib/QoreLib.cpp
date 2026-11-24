@@ -5905,6 +5905,10 @@ void qore_apply_rounding_heuristic(QoreString& str, int round_threshold_1, int r
     return qore_number_private::applyRoundingHeuristicToString(str, round_threshold_1, round_threshold_2);
 }
 
+void qore_throw_bad_alloc() {
+    throw std::bad_alloc();
+}
+
 //! the size of the memory held back for the exception of an allocation that failed: address space only, as it is not
 //! written; without memory, each allocation of a thread whose malloc() arena cannot grow takes a page of its own
 static constexpr size_t QORE_ALLOC_FAILURE_RESERVE = 8 * 1024 * 1024;

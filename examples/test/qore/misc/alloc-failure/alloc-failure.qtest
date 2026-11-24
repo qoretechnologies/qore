@@ -63,7 +63,8 @@ class AllocFailureTest inherits QUnit::Test {
             hash<auto> r = run(sprintf("%s statement", interpreter(mode)), True);
             if (mode == "ast") {
                 assertEq(0, r.rc, sprintf("%s: the process goes on: %s", mode, r.out));
-                assertEq("caught MEMORY-ALLOCATION-ERROR\nagain: 100000\n", r.out, mode);
+                assertEq("caught MEMORY-ALLOCATION-ERROR\nlist: True\ncaught MEMORY-ALLOCATION-ERROR\nstring: True\n"
+                    "again: 100000\n", r.out, mode);
             } else {
                 assertNeq(0, r.rc, mode);
                 assertRegex("qore: MEMORY-ALLOCATION-ERROR: memory could not be allocated", r.out, mode);

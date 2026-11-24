@@ -774,14 +774,20 @@ struct qore_list_private {
     }
 
     //! grows the list's storage to hold \a num entries; memory that cannot be allocated fails the operation with
-    //! std::bad_alloc and leaves the list unchanged (the storage was replaced with a null pointer, and the next write
-    //! ended the process; qore#7466)
+    //! std::bad_alloc and leaves the list's entries unchanged (the storage was replaced with a null pointer, and the
+    //! next write ended the process; qore#7466)
     DLLLOCAL void grow(size_t num) {
         size_t d = num >> 2;
-        size_t new_allocated = num + (d < LIST_PAD ? LIST_PAD : d);
-        entry = static_cast<QoreValue*>(qore_realloc_or_throw(static_cast<void*>(entry),
-            sizeof(QoreValue) * new_allocated));
-        allocated = new_allocated;
+        allocated = num + (d < LIST_PAD ? LIST_PAD : d);
+        QoreValue* p = static_cast<QoreValue*>(qore_realloc_or_null(static_cast<void*>(entry),
+            sizeof(QoreValue) * allocated));
+        if (__builtin_expect(!p, 0)) {
+            // the list keeps its storage, which holds at least its entries; the capacity is set only on success, so
+            // that the code that does not fail stays as it was
+            allocated = length;
+            qore_throw_bad_alloc();
+        }
+        entry = p;
         sb.sync(sizeof(QoreValue) * allocated);
     }
 

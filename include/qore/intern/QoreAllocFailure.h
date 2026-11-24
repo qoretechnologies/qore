@@ -55,8 +55,23 @@ DLLLOCAL void qore_dbg_fail_allocation(int64 n, size_t min_size);
 DLLLOCAL bool qore_dbg_allocation_fails(size_t size);
 #endif
 
+//! Throws std::bad_alloc; out of line, so that the allocation functions below add only a test to the code that calls
+//! them
+[[noreturn]] DLLLOCAL void qore_throw_bad_alloc();
+
+//! realloc(), which the debug hook (qore_dbg_fail_allocation()) can make fail: for the growth paths that handle the
+//! failure themselves, so that the code that does not fail stays as it was
+DLLLOCAL inline void* qore_realloc_or_null(void* ptr, size_t size) {
+#ifdef DEBUG
+    if (qore_dbg_allocation_fails(size)) {
+        return nullptr;
+    }
+#endif
+    return realloc(ptr, size);
+}
+
 //! realloc() for the storage of a value: memory that cannot be allocated fails with std::bad_alloc, and \a ptr is then
-//! unchanged and still owned by the caller
+//! unchanged and still owned by the caller; \a size must not be 0
 DLLLOCAL inline void* qore_realloc_or_throw(void* ptr, size_t size) {
 #ifdef DEBUG
     if (qore_dbg_allocation_fails(size)) {
@@ -64,13 +79,14 @@ DLLLOCAL inline void* qore_realloc_or_throw(void* ptr, size_t size) {
     }
 #endif
     void* p = realloc(ptr, size);
-    if (!p && size) {
-        throw std::bad_alloc();
+    if (__builtin_expect(!p, 0)) {
+        qore_throw_bad_alloc();
     }
     return p;
 }
 
-//! malloc() for the storage of a value: memory that cannot be allocated fails with std::bad_alloc
+//! malloc() for the storage of a value: memory that cannot be allocated fails with std::bad_alloc; \a size must not be
+//! 0
 DLLLOCAL inline void* qore_malloc_or_throw(size_t size) {
 #ifdef DEBUG
     if (qore_dbg_allocation_fails(size)) {
@@ -78,8 +94,8 @@ DLLLOCAL inline void* qore_malloc_or_throw(size_t size) {
     }
 #endif
     void* p = malloc(size);
-    if (!p && size) {
-        throw std::bad_alloc();
+    if (__builtin_expect(!p, 0)) {
+        qore_throw_bad_alloc();
     }
     return p;
 }

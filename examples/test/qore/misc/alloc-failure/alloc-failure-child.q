@@ -87,6 +87,27 @@ class AllocFailureChild {
             printf("caught %s\n", ex.err);
         }
         disarm();
+        # the list that could not grow keeps its elements and grows again
+        int n = l.size();
+        bool ok = n > 0 && l[n - 1] == n - 1;
+        l += n;
+        printf("list: %y\n", ok && l.size() == n + 1 && l[n] == n);
+        # the same for a string
+        string str = "";
+        try {
+            fail_next_allocation();
+            for (int i = 0; i < 100000; ++i) {
+                str += "x";
+            }
+            printf("no exception: %d\n", str.size());
+        } catch (hash<ExceptionInfo> ex) {
+            printf("caught %s\n", ex.err);
+        }
+        disarm();
+        n = str.size();
+        ok = n > 0 && str == strmul("x", n);
+        str += "y";
+        printf("string: %y\n", ok && str.size() == n + 1 && str[n] == "y");
         l = ();
         printf("again: %d\n", strmul("x", 100000).size());
     }
