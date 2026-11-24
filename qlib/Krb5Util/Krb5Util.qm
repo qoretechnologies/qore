@@ -1716,9 +1716,14 @@ string authHeader = "Negotiate " + Krb5Util::negotiateSpnegoToken(step.token);
         @return a GSS initiator context
 
         @throw KRB5-GSS-ERROR if credentials or the target name cannot be
-        imported
-        @throw KRB5-CACHE-ERROR if \a credential_cache cannot be opened
-        @throw KRB5-KEYTAB-ERROR if \a keytab cannot be opened
+        imported, or neither \a credential_cache nor \a keytab is given and the calling code is restricted from
+        external information (see @ref Qore::SandboxManager::callerMayReadExternalInfo()
+        "SandboxManager::callerMayReadExternalInfo()"): the process's default Kerberos credential is the host's
+        @throw KRB5-CACHE-ERROR if \a credential_cache cannot be opened, or the calling code (also the code that a
+        lent object was lent to, see @ref Qore::SandboxManager::isLentToRestricted()
+        "SandboxManager::isLentToRestricted()") is restricted from the file system
+        @throw KRB5-KEYTAB-ERROR if \a keytab cannot be opened, or the calling code is restricted from the file system
+        (as for \a credential_cache)
     */
     public auto sub createHttpNegotiateClientContext(
             string service_principal, *string credential_cache = NOTHING,
@@ -1727,6 +1732,13 @@ string authHeader = "Negotiate " + Krb5Util::negotiateSpnegoToken(step.token);
             *Qore::Logger::LoggerInterface logger = NOTHING) {
         *Qore::Krb5::GssCredential cred;
         if (credential_cache.val() || keytab.val()) {
+            # a credential store that the caller names is opened only for a caller that may use the file system
+            # (qore#6844)
+            if (SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
+                throw credential_cache.val() ? "KRB5-CACHE-ERROR" : "KRB5-KEYTAB-ERROR",
+                    sprintf("the Kerberos %s cannot be opened for code restricted from the file system",
+                        credential_cache.val() ? "credential cache" : "keytab");
+            }
             Qore::Krb5::Krb5Context kctx();
             if (credential_cache.val()) {
                 cred = Qore::Krb5::GssCredential::fromCredentialCache(
@@ -1736,6 +1748,13 @@ string authHeader = "Negotiate " + Krb5Util::negotiateSpnegoToken(step.token);
                 cred = Qore::Krb5::GssCredential::fromKeytab(kctx.openKeytab(keytab));
                 logSpnego(logger, "created HTTP Negotiate client credential from keytab");
             }
+        }
+
+        # the process's default credential is the host's: not for a caller restricted from external information
+        # (qore#6844)
+        if (!cred && !SandboxManager::callerMayReadExternalInfo()) {
+            throw "KRB5-GSS-ERROR", "the process's default Kerberos credential is not available to code restricted "
+                "from external information; give a credential cache or keytab explicitly";
         }
 
         if (cred) {
