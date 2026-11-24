@@ -1370,12 +1370,13 @@ private:
     */
     DLLLOCAL bool expressionReadsReleasedObjectLocal(const QoreValue& expr) const;
 
-    //! Returns true if the cleanups of a return statement release the local and then release or run something else
-    //! that can see when the local's object is destroyed
-    /** The local is one of a block that the return leaves, or the variable of a catch block that it leaves; what
-        is released after it is a local declared before it in its block that can be or hold an object, or a cleanup of
-        an enclosing block (an object local, a catch variable, a handler, a foreach).  A temporary of the statement
-        that keeps the local's object is observable only then.
+    //! Returns true if the cleanups of a return statement release the local, which can be or hold an object whose
+    //! destructor sees when and where the object is destroyed
+    /** The local is one of a block that the return leaves, or the variable of a catch block that it leaves.  A
+        temporary of the statement that keeps the local's object (the value that a method call is made on) makes the
+        destructor run after the local is released, at the return statement, so the object is destroyed after the
+        locals declared before it (qore#6309) and in the location of the return instead of the one of the cleanup of
+        the local's block, as the AST interpreter, which releases the temporaries first, destroys it (qore#7481).
     */
     DLLLOCAL bool localReleaseObservedByReturn(const LocalVar* lv) const;
 

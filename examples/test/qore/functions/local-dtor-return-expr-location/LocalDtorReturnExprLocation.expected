@@ -1,0 +1,32 @@
+closure
+  destructor closure at line 31
+  result False
+plain
+  destructor plain at line 31
+  result 1
+stored
+  destructor stored at line 31
+  result False
+function
+  destructor call at line 31
+  result False
+member of the class
+  destructor member at line 31
+  result False
+nested block
+  destructor nested at line 59
+  result False
+two locals
+  destructor second at line 31
+  destructor first at line 31
+  result False
+in an expression
+  destructor expression at line 31
+  result 2
+method
+  destructor method local at line 90
+  result False
+destructor exception
+  destructor locked at line 31
+  exception LOCK-ERROR at line 31
+done
