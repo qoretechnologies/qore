@@ -56,3 +56,9 @@ named arguments, member holding no value, reference: False
 named arguments, direct call: "world"
 named arguments, reference: "world"
 list held by the reference: 2
+size operators: "abc1", "abc12", 0
+size operators: 2.5, 4.5, 3.0
+size operators: 3, 5, 4
+subclass typeCode: "child1"
+subtype size: "derived1"
+optional size: "optional1"

@@ -267,6 +267,16 @@ QoreValue QoreDotEvalOperatorNode::evalRuntimeNamedWithArgs(QoreListNode* args, 
     return call->execPseudoNamed({}, *base, xsink);
 }
 
+// A hash calls a code member of the same name before it tries the pseudo-method.
+static bool hashMayCallMember(const QoreTypeInfo* receiver) {
+    if (!QoreTypeInfo::parseAcceptsReturns(receiver, NT_HASH)) {
+        return false;
+    }
+    // A hashdecl can have a subtype that adds a callable member of this name.
+    const QoreTypeInfo* member_type = QoreTypeInfo::getComplexHashValueType(receiver);
+    return !QoreTypeInfo::hasType(member_type) || QoreTypeInfo::parseAccepts(member_type, codeTypeInfo);
+}
+
 int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     assert(!parse_context.typeInfo);
     // turn off "return value ignored" flags
@@ -378,6 +388,11 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                         static_cast<const MethodVariantBase*>(m->getParseCheckVariant()), func)
                     && !err) {
                     err = -1;
+                }
+                // Operators must use the result of the code member when the hash can supply one (#7362).
+                if (hashMayCallMember(typeInfo)) {
+                    parse_context.analysis.clear();
+                    parse_context.typeInfo = nullptr;
                 }
                 returnTypeInfo = parse_context.typeInfo;
                 return err;
@@ -557,6 +572,11 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
             func)
         && !err) {
         err = -1;
+    }
+    // A subclass may implement the name of an inherited pseudo-method with an unrelated return type.
+    if (m->isPseudo() && !QoreTypeInfo::getUniqueReturnClass(typeInfo)->isFinal()) {
+        parse_context.analysis.clear();
+        parse_context.typeInfo = nullptr;
     }
     returnTypeInfo = parse_context.typeInfo;
 
