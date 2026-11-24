@@ -150,8 +150,13 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     Whether the connection is kept after a response follows RFC 9112 section 9.3: an HTTP/1.1 response keeps it
     unless a \c Connection header has the \c close option, while an HTTP/1.0 response keeps it only if a
     \c Connection header has the \c keep-alive option and none has \c close.  Options are case-insensitive whole
-    tokens and are read from comma-separated lists and from every \c Connection header of the response.  The next
-    request after a response that does not keep the connection, including a redirect, opens a new connection.
+    tokens and are read from comma-separated lists and from every \c Connection header of the response.  An HTTP/1.x
+    connection is also not kept when more data follows the response on it, whether the response has no body (a
+    response to \c HEAD, or one with the status 204 or 304) or one that was read whole: data that the client has
+    already received after the end of the response, or that it can read at once, closes the connection, as does a
+    \c 101 response to a request that does not take the connection over, which ends HTTP on it.  The next
+    request after a response that does not keep the connection, including a redirect, opens a new connection.  The
+    HTTP/1.x connections of the @ref httpclientiointro "HttpClientIo" module are kept or closed alike.
 
     HTTP redirect responses are supported and can be limited with the \c max_redirects constructor hash key or by
     using the HTTPClient::setMaxRedirects() method. The default maximum number of redirects allowed is 5; see

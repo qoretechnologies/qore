@@ -4536,6 +4536,9 @@
       client and @ref httpserverintro "HttpServer": the chunked coding is recognized without regard to case and
       whitespace, a request whose framing is ambiguous or unsupported is refused, and a response whose final
       transfer coding is not chunked is read until the connection closes
+    - an HTTP/1.x client connection is not reused after a response, including one without a body, when more data
+      follows the response on it, nor after a \c 101 response that does not switch the connection over (see
+      @ref httpclient_persistence "HTTPClient connection persistence")
 
     @section qore_2_2_1 Qore 2.2.1
 
