@@ -1309,12 +1309,21 @@ QORE_INTERN_NOINLINE QORE_INTERN_COLD uint8_t QoreStorePathMode::set(const QoreV
 }
 
 int qore_store_resolve_lvalue(LValueHelper& lvh, const QoreValue& exp, const QoreStorePathKeys* keys) {
+    // NOTHING, which check_lvalue() accepts as an lvalue, has no lvalue: it is not resolved, as by the helper
+    // constructors, and the store changes nothing (issue #6480)
+    if (exp.isNothing() || !exp.hasNode()) {
+        return -1;
+    }
     int rc = keys ? lvh.resolveWithKeys(exp, *keys) : lvh.doLValue(exp, false);
     return rc || !lvh ? -1 : 0;
 }
 
 int qore_store_resolve_lvalue(LValueHelper& lvh, const QoreValue& exp, RuntimeConfig& rc,
         const QoreStorePathKeys* keys) {
+    // NOTHING has no lvalue (see above)
+    if (exp.isNothing() || !exp.hasNode()) {
+        return -1;
+    }
     int rv = keys ? lvh.resolveWithKeys(exp, rc, *keys) : lvh.doLValue(exp, rc, false);
     return rv || !lvh ? -1 : 0;
 }

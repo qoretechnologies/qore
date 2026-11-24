@@ -2277,8 +2277,10 @@ private:
 //! evaluated first (LValueHelper::resolveWithKeys(), qore#7391), so that it shares the code of its normal path
 DLLLOCAL extern const QoreValue qore_store_no_lvalue;
 
-//! resolves the AST lvalue \a exp in \a lvh, an empty helper, for a round of a store made again (qore#7391)
-/** With the keys that the store site evaluated first if \a keys is not nullptr, otherwise as any helper resolves it
+//! resolves the AST lvalue \a exp in \a lvh, an empty helper, for the first round of a store site that decides its mode
+//! or for a round of a store made again (qore#7391)
+/** With the keys that the store site evaluated first if \a keys is not nullptr, otherwise as any helper resolves it;
+    NOTHING, which has no lvalue, is not resolved, as by the helper constructors (issue #6480)
 
     @return -1 if the lvalue could not be resolved (an exception was raised, or there is no lvalue), 0 if it was
 */
