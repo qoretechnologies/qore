@@ -1478,6 +1478,14 @@ public:
         return has_active_input_streams_.load(std::memory_order_acquire);
     }
 
+    //! Returns true if a pass of processStreamInputStreams() can make progress without a socket event (qore#7435)
+    /** A stream whose send buffer is full waits for the peer's credit, which arrives as a frame (a read event); one
+        whose InputStream is a monitored descriptor, or which has an io_uring read in flight, waits for that.  Asking
+        to be woken for writability for such streams only made the connection's operation run again and again while
+        the socket was writable.
+    */
+    DLLLOCAL bool needsInputStreamPass() const;
+
     //! Process one chunk from each active InputStream (called by I/O thread)
     /** @since %Qore 3.0
     */
