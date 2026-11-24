@@ -389,6 +389,21 @@ public:
     //! Submit a RST_STREAM frame to cancel a stream
     DLLLOCAL int submitRstStream(int32_t stream_id, uint32_t error_code, ExceptionSink* xsink);
 
+    //! Releases the send state of a stream that the application has reset, before its RST_STREAM is sent
+    /** Called after submitRstStream() by Socket::resetHttp2Stream(), whose reset is only queued until the I/O thread
+        next writes the session's frames: nghttp2 keeps the stream until then, and onStreamCloseCallback() released
+        its buffered data only then.  The data not yet sent, the stream's pong, send limit and progress count are
+        released at once, and until nghttp2 closes the stream, the stream counts as gone: streamTakenBytes() and
+        waitForStreamDrain() return -1, streamSendFlushed() 0, sendStreamData() raises an exception as on a closed
+        stream, and the stream's data provider defers (qore#7532).  Nothing is done if nghttp2 has no such stream.
+        The other resets (client cancels, resetFailedInputStream()) do not call it: their stream's state is released
+        when nghttp2 closes the stream.
+
+        @param stream_id the stream
+        @param error_code the error code of the RST_STREAM, reported by a send on the stream
+    */
+    DLLLOCAL void releaseResetStream(int32_t stream_id, uint32_t error_code);
+
     //! Submit a GOAWAY frame for graceful shutdown
     DLLLOCAL int submitGoaway(uint32_t error_code, const char* opaque_data = nullptr,
         size_t len = 0, ExceptionSink* xsink = nullptr);
@@ -747,6 +762,11 @@ public:
         makes: its data and its end stayed unsent, and the peer's close waited for its timeout
     */
     DLLLOCAL static void dbgResumeHeldStreams();
+
+    //! Returns true if dbg_http2_hold_stream_reset() holds the RST_STREAM of a stream of this session
+    /** That is a stream with an RST_STREAM submitted by submitRstStream() that nghttp2 has not sent yet
+    */
+    DLLLOCAL bool dbgStreamResetHeld() const;
 #endif
 
     //! Returns true once @ref markClosed has been called.
@@ -1324,6 +1344,19 @@ private:
         reset.  Mirrors @ref QuicSession::peer_reset_streams_.
     */
     std::unordered_map<int32_t, uint32_t> peer_reset_streams;
+
+    //! the streams that the application has reset whose RST_STREAM nghttp2 has not sent yet: stream ID -> error code
+    /** Their send state was released by releaseResetStream(); an entry is removed when nghttp2 closes the stream
+        (onStreamCloseCallback()) (qore#7532)
+    */
+    std::unordered_map<int32_t, uint32_t> app_reset_unsent_streams;
+
+#ifdef DEBUG
+    //! the streams with an RST_STREAM submitted by submitRstStream() that nghttp2 has not closed yet
+    /** For dbg_http2_hold_stream_reset(), which holds the RST_STREAM of such a stream (qore#7532)
+    */
+    std::unordered_set<int32_t> dbg_rst_unsent_streams;
+#endif
 
     //! Returns true if the stream ID was used on this connection and the stream is no longer open
     /** Stream IDs are allocated in increasing order, so a stream that is not live and whose ID is not above the

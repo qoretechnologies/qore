@@ -269,8 +269,10 @@ public class AbstractStreamContext {
         none of the data for the send timeout (qore#7325): unlike @ref close(), which ends the stream after the data
         already queued, so that a peer that grants no flow-control credit is never told, and the stream and its send
         buffer stay until the session ends, the stream is reset at once (HTTP/2 \c RST_STREAM, HTTP/3
-        \c RESET_STREAM and \c STOP_SENDING) and its state and buffered data are released.  Errors are ignored, as
-        the peer or the session may have ended the stream already.
+        \c RESET_STREAM and \c STOP_SENDING) and its state and buffered data are released: an HTTP/2 stream's when
+        this method returns, an HTTP/3 stream's when the QUIC stream closes, once the peer has answered the reset, as
+        the HTTP/3 layer may refer to the data until then.  Errors are ignored, as the peer or the session may have
+        ended the stream already.
 
         The default implementation calls @ref close()
 

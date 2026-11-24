@@ -8378,6 +8378,12 @@ nothing Socket::cleanupHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
 /** Delegates RST_STREAM submission and stream cleanup to the async I/O
     controller.
 
+    The \c RST_STREAM frame is written by the socket's I/O thread with the session's next write, but the stream is
+    gone when this method returns: the data buffered for it and not yet sent is released, a send of data or
+    trailers on it raises an exception as on the stream once it has closed (\c HTTP2-STREAM-RESET for a stream that
+    the session still tracks, such as a WebSocket stream), and @ref getHttp2StreamTakenBytes() and
+    @ref waitForHttp2StreamDrain() return -1 for it.
+
     @param stream_id the HTTP/2 stream ID to reset
 
     @throw HTTP2-ERROR if the RST_STREAM submission fails
@@ -9115,7 +9121,8 @@ int Socket::waitForQuicClientStreamFlushed(int stream_id, timeout timeout_ms = 5
 
     @param stream_id the stream ID
 
-    @return the byte count, or -1 if the session is closed or has no such stream
+    @return the byte count, or -1 if the session is closed or has no such stream (also a stream reset with
+    @ref resetHttp2Stream())
 
     @throw HTTP2-ERROR no HTTP/2 session is active
     @throw SOCKET-SYNC-ON-IO-THREAD-ERROR called on the async I/O controller's I/O thread

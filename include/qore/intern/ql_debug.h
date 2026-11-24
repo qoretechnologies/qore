@@ -227,6 +227,15 @@ DLLLOCAL bool qore_dbg_io_uring_completions_deferred();
 //! Returns True if dbg_http2_hold_stream_data() holds the buffered data of this HTTP/2 stream back
 DLLLOCAL bool qore_dbg_h2_stream_data_held(int32_t stream_id);
 
+//! Returns True if dbg_http2_hold_stream_reset() holds the RST_STREAM of this HTTP/2 stream back (qore#7532)
+DLLLOCAL bool qore_dbg_h2_stream_reset_held(int32_t stream_id);
+
+//! Ends the hold of dbg_http2_hold_stream_reset() on this HTTP/2 stream; returns True if it held the stream
+/** Called when the application reads the stream's progress count (Socket::getHttp2StreamTakenBytes()), after it is
+    read; the caller then wakes the socket's I/O thread, which sends the RST_STREAM
+*/
+DLLLOCAL bool qore_dbg_h2_stream_reset_release(int32_t stream_id);
+
 //! Returns the number of objects in the async I/O controller's registry of submitted poll operations without a C++
 //! poll operation (those implemented in Qore)
 DLLLOCAL size_t qore_dbg_registered_qore_ops();

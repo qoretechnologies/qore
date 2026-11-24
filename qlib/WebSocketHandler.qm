@@ -3793,8 +3793,9 @@ handler.setCloseTimeout(2s);
         # Close the stream context: ends the stream (END_STREAM or FIN) unless the close handshake ended it; a
         # connection dropped with forceStop() (a client that takes no data for the send timeout, backpressure, a
         # listener or server stop) discards what it has not sent: its stream is reset, which tells the client and
-        # releases the stream and its send buffer at once, whereas an end of the stream queued behind data that the
-        # client grants no credit for would never reach it (qore#7325)
+        # releases the stream and its send buffer (HTTP/2: before connectionClosed() is called, qore#7532; HTTP/3: when
+        # the QUIC stream closes), whereas an end of the stream queued behind data that the client grants no credit
+        # for would never reach it (qore#7325)
         try {
             *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
             if (ctx) {
