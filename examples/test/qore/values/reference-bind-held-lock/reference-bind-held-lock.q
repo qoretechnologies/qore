@@ -384,7 +384,7 @@ show("relative date for an absolute date", auto sub () {
     try {
         c.d = x;
     } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.d, c.b.isRelative());
+        return (ex.err, c.d, is_date_relative(c.b));
     }
     return c.d.fullType();
 });
@@ -398,7 +398,7 @@ show("list of relative dates for a list of absolute dates", auto sub () {
     try {
         c.ld = x;
     } catch (hash<ExceptionInfo> ex) {
-        return (ex.err, c.ld, c.b.fullType(), c.b[0].isRelative());
+        return (ex.err, c.ld, c.b.fullType(), is_date_relative(c.b[0]));
     }
     return c.ld.fullType();
 });
