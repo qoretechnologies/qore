@@ -628,6 +628,13 @@ Content-Length: 16
 */
 
 #! the RestHandler namespace contains all the objects in the RestHandler module
+#! The body readers of the requests that REST handlers dispatch on the thread, the innermost last (qore#6843)
+/** Not public: the REST classes get the request without the server's objects (see @ref rest_request_credentials), so
+    the code of this module that reads the body of an HTTP/1.x request for a REST class (qore#7323) takes the server's
+    body reader of the request from here
+*/
+thread_local *list<*HttpServer::Http1BodyReader> rest_body_readers;
+
 public namespace RestHandler {
     #! The keys of the request context that the REST handler adds for its REST classes (see @ref rest_context_argument)
     /** The REST classes get the request context without the server's objects and the credentials of the request:
@@ -1269,7 +1276,8 @@ public namespace RestHandler {
                                     map ah{$1} = cx.body{$1}, keys cx.body, !exists ah{$1};
                                 }
                             }
-                        } else if (*HttpServer::Http1BodyReader body_reader = cx."header-info".body_reader) {
+                        } else if (*HttpServer::Http1BodyReader body_reader = rest_body_readers
+                                ? rest_body_readers.last() : NOTHING) {
                             # an HTTP/1.x body with a Content-Length that the server left to a stream request
                             # (see RestHandler::wantsBodyStreaming()) is read whole for a method without a stream
                             # handler, and given to it as a body read before dispatching is (qore#7323)
@@ -2007,6 +2015,9 @@ public namespace RestHandler {
                     }
                 }
                 rcx.hdr = filtered.hdr;
+                # the server's body reader of an HTTP/1.x request is read by the code of this module only
+                push rest_body_readers, cx."header-info".body_reader;
+                on_exit pop rest_body_readers;
                 rv = dispatchRequest(listener, s, cl, mn, path, rcx, args);
             } catch (hash<ExceptionInfo> ex) {
                 string desc = !cx.debug

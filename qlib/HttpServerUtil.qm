@@ -3139,6 +3139,10 @@ public class AbstractStreamRequest {
         }
         raw_cx = raw.cx;
         raw_hdr = raw.hdr;
+        # a body that the code that created the object gives deserialized (a REST stream request) is not decoded again
+        if (cx.deserialized) {
+            raw_cx.deserialized = True;
+        }
         # the socket of the request, which the code that created the object did not get for an HTTP/1.x request
         if (raw.s) {
             self.s = raw.s;
