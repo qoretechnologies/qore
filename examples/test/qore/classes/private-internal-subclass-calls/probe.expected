@@ -87,6 +87,20 @@ R13 ka: integer: C13a::m(int); string: R13::m(string); bool: RUNTIME-OVERLOAD-ER
 R13 kb: integer: C13a::m(int); string: R13::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
 R13 kc: integer: C13a::m(int); string: R13::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
 R13 rd: integer: RUNTIME-OVERLOAD-ERROR; string: R13::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
+C14 outside: integer: B14::m(softstring); string: B14::m(softstring); bool: B14::m(softstring); float: B14::m(softstring)
+C14 own: integer: B14::m(softstring); string: B14::m(softstring); bool: B14::m(softstring); float: B14::m(softstring)
+C14 selfcall: integer: B14::m(softstring); string: B14::m(softstring); bool: B14::m(softstring); float: B14::m(softstring)
+C14 cref: integer: B14::m(softstring); string: B14::m(softstring); bool: B14::m(softstring); float: B14::m(softstring)
+C14 com: integer: B14::m(softstring); string: B14::m(softstring); bool: B14::m(softstring); float: B14::m(softstring)
+C14 bdyn: integer: B14::m(softstring); string: B14::m(string); bool: B14::m(softstring); float: B14::m(softstring)
+C14 typed: B14::m(softstring); own string: B14::m(softstring)
+C15 outside: integer: RUNTIME-OVERLOAD-ERROR; string: RUNTIME-OVERLOAD-ERROR; bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
+C15 own: integer: B14::m(softstring); string: B14::m(softstring); bool: B14::m(softstring); float: B14::m(softstring)
+C15 selfcall: integer: B14::m(softstring); string: B14::m(softstring); bool: B14::m(softstring); float: B14::m(softstring)
+C15 cref: integer: B14::m(softstring); string: B14::m(softstring); bool: B14::m(softstring); float: B14::m(softstring)
+C15 com: integer: RUNTIME-OVERLOAD-ERROR; string: RUNTIME-OVERLOAD-ERROR; bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
+C15 bdyn: integer: METHOD-DOES-NOT-EXIST; string: METHOD-DOES-NOT-EXIST; bool: METHOD-DOES-NOT-EXIST; float: METHOD-DOES-NOT-EXIST
+C15 typed: B14::m(softstring); own string: B14::m(softstring)
 Other L2: integer: RUNTIME-OVERLOAD-ERROR; string: L2::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
 Other L3: integer: RUNTIME-OVERLOAD-ERROR; string: L2::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
 Other M2: integer: RUNTIME-OVERLOAD-ERROR; string: M2::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
@@ -97,3 +111,5 @@ Other A8: integer: RUNTIME-OVERLOAD-ERROR; string: A8::m(string); bool: RUNTIME-
 Other A9: integer: N9::m(int); string: A9::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
 Other R11: integer: RUNTIME-OVERLOAD-ERROR; string: R11::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
 Other R13: integer: RUNTIME-OVERLOAD-ERROR; string: R13::m(string); bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR
+Other C14: integer: B14::m(softstring); string: B14::m(softstring); bool: B14::m(softstring); float: B14::m(softstring)
+Other C15: integer: RUNTIME-OVERLOAD-ERROR; string: RUNTIME-OVERLOAD-ERROR; bool: RUNTIME-OVERLOAD-ERROR; float: RUNTIME-OVERLOAD-ERROR

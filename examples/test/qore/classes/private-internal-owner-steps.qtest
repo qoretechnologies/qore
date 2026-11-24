@@ -47,8 +47,9 @@ class PrivateInternalOwnerStepsTest inherits QUnit::Test {
     #! returns the source of the hierarchy
     /** \c M(l+1) is the top of a chain \c M1 ... \c M(l+1); each \c Xj inherits \c Mj with private:internal access;
         \c H inherits \c M1, and each of \c k classes \c Oi inherits \c H with private:internal access; \c R inherits
-        all the \c Oi and \c Xj and has \c t methods and \c m(string) (none if \c t is 0); \c q classes \c Qn inherit \c R with a method each.  \c M(l+1)
-        declares \c m(int), which the code of each \c Oi and \c Xj calls on an object of \c R.
+        all the \c Oi and \c Xj and has \c t methods and \c m(string) (none if \c t is 0); \c q classes \c Qn
+        inherit \c R with a method each.  \c M(l+1) declares \c m(int), which the code of each \c Oi and \c Xj
+        calls on an object of \c R.
     */
     private static string hierarchy(int k, int l, int t, int q) {
         string src = sprintf("class M%d { string m(int i) { return \"M%d\"; } }\n", l + 1, l + 1);
@@ -56,12 +57,13 @@ class PrivateInternalOwnerStepsTest inherits QUnit::Test {
             src += sprintf("class M%d inherits M%d {}\n", j, j + 1);
         }
         for (int j = 1; j <= l; ++j) {
-            src += sprintf("class X%d inherits private:internal M%d { static string c(object o) { return o.m(1); } }\n", j,
-                j);
+            src += sprintf("class X%d inherits private:internal M%d { "
+                "static string c(object o) { return o.m(1); } }\n", j, j);
         }
         src += "class H inherits M1 {}\n";
         for (int i = 0; i < k; ++i) {
-            src += sprintf("class O%d inherits private:internal H { static string c(object o) { return o.m(1); } }\n", i);
+            src += sprintf("class O%d inherits private:internal H { "
+                "static string c(object o) { return o.m(1); } }\n", i);
         }
         list<string> parents = (map "O" + $1, xrange(k)) + (map "X" + $1, xrange(1, l + 1));
         src += sprintf("class R inherits %s {\n", parents.join(", "));
@@ -119,9 +121,11 @@ class PrivateInternalOwnerStepsTest inherits QUnit::Test {
         int twenty = parseSteps(100, 100, 1, 20) - parseSteps(100, 100, 1, 0);
         # each subclass walks the hierarchy once
         assertTrue(twenty <= 3 * ten, sprintf("10 subclasses: %d steps, 20 subclasses: %d steps", ten, twenty));
-        # the classes and edges of the hierarchy: each subclass's walks visit each a bounded number of times
-        int size = (100 + 100) * 3 + 100 + 4;
-        assertTrue(twenty <= 20 * 10 * size, sprintf("20 subclasses: %d steps for %d classes and edges", twenty,
+        # the walks of each subclass visit each class and edge of its hierarchy a bounded number of times: its
+        # classes (the chain, the Xj, H, the Oi, R and itself) and edges (of the chain, the Xj, H, the Oi, R and
+        # itself)
+        int size = (101 + 100 + 1 + 100 + 1 + 1) + (100 + 100 + 1 + 100 + 200 + 1);
+        assertTrue(twenty <= 20 * 4 * size, sprintf("20 subclasses: %d steps for %d classes and edges", twenty,
             size));
     }
 

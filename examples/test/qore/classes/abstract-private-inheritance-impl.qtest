@@ -29,8 +29,9 @@
     replaces (\c METHOD-DOES-NOT-EXIST, \c BASE-CLASS-IS-PRIVATE, or \c RUNTIME-OVERLOAD-ERROR from the code of
     another parent class where a private method of a parent class implements it); the image now keeps it, and the
     loader resolves it again (also for a \c private:internal implementation, which the code of the class that declares
-    the abstract method cannot call: \c METHOD-IS-PRIVATE, where a qcc executable raised \c METHOD-DOES-NOT-EXIST and
-    the interpreter \c RUNTIME-OVERLOAD-ERROR).  The output of every execution mode and of qcc executables (-O0, -O3)
+    the abstract method cannot call: a call does not select it, so that it raises \c RUNTIME-OVERLOAD-ERROR when no
+    other variant matches (qore#7410), where a qcc executable raised \c METHOD-DOES-NOT-EXIST).  The output of every
+    execution mode and of qcc executables (-O0, -O3)
     must be the expected one.
 
     The program is in \c abstract-private-inheritance-impl/.

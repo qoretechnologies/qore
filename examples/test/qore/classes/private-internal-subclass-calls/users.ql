@@ -157,6 +157,31 @@ class R13 inherits K13a, K13b, K13c {
     string m(string s) { return "R13::m(string)"; }
     string rd(auto a) { object o = self; return o.m(a); }
 }
+# a private:internal variant of a parent class that implements an abstract variant is in the method that the class
+# creates for it, but it is called only by the code of its own class: the other variants are called (qore#7410)
+class B14 {
+    private:internal string m(string s) { return "B14::m(string)"; }
+    string m(softstring s) { return "B14::m(softstring)"; }
+    string bdyn(auto a) { object o = self; return o.m(a); }
+}
+class G14 { abstract string m(string s); }
+class C14 inherits B14, G14 {
+    string own(auto a) { return m(a); }
+    string selfcall(auto a) { auto o = self; return o.m(a); }
+    string typed() { C14 o = self; return o.m("x"); }
+    string ownstr() { return m("x"); }
+    string cref(auto a) { code c = self.getCallReference("m"); return c(a); }
+    string com(auto a) { return call_object_method(self, "m", a); }
+}
+# the same reached through a private:internal edge
+class C15 inherits private:internal B14, G14 {
+    string own(auto a) { return m(a); }
+    string selfcall(auto a) { auto o = self; return o.m(a); }
+    string typed() { C15 o = self; return o.m("x"); }
+    string ownstr() { return m("x"); }
+    string cref(auto a) { code c = self.getCallReference("m"); return c(a); }
+    string com(auto a) { return call_object_method(self, "m", a); }
+}
 # an unrelated class
 class Other {
     string call(object o, auto a) { return o.m(a); }
@@ -310,8 +335,23 @@ sub show_outside(string label, object o) {
         show("R13", r13, m);
     }
 
+    C14 c14();
+    show_outside("C14", c14);
+    foreach string m in ("own", "selfcall", "cref", "com", "bdyn") {
+        show("C14", c14, m);
+    }
+    printf("C14 typed: %s; own string: %s\n", trycall(auto sub () { return c14.typed(); }),
+        trycall(auto sub () { return c14.ownstr(); }));
+    C15 c15();
+    show_outside("C15", c15);
+    foreach string m in ("own", "selfcall", "cref", "com", "bdyn") {
+        show("C15", c15, m);
+    }
+    printf("C15 typed: %s; own string: %s\n", trycall(auto sub () { return c15.typed(); }),
+        trycall(auto sub () { return c15.ownstr(); }));
+
     Other other();
-    foreach object o in ((l2, l3, m2, h2, two, k7, a8, a9, r11, r13)) {
+    foreach object o in ((l2, l3, m2, h2, two, k7, a8, a9, r11, r13, c14, c15)) {
         printf("Other %s: %s\n", o.className(), results(auto sub (auto a) { return other.call(o, a); }));
     }
 }

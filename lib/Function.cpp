@@ -3438,6 +3438,12 @@ static bool skip_method_variant(const QoreFunction* f, const AbstractQoreFunctio
     assert(dynamic_cast<const MethodFunctionBase*>(f));
     const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(v);
     ClassAccess va = mvb->getAccess();
+    // a private:internal variant can be called only by the code of its own class, whichever method has it: the
+    // method that a class creates to implement an abstract variant has the variants of its parent classes, whose
+    // class is not the method's (qore#7410)
+    if (va == Internal) {
+        return !class_ctx || !qore_class_private::get(*mvb->getClass())->sameClass(*class_ctx);
+    }
     // a variant of a parent class that implements a more restrictive abstract variant of the method (qore#7277)
     const MethodFunctionBase* mf = static_cast<const MethodFunctionBase*>(f);
     if (mf->hasImplementedVariantAccess()) {
