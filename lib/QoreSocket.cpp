@@ -10154,6 +10154,7 @@ static void qore_socket_dbg_before_adopt(int where) {
 std::atomic<bool> qore_dbg_inert_socket_fails{false};
 std::atomic<bool> qore_dbg_inert_dup_fails{false};
 std::atomic<unsigned> qore_dbg_inert_socket_fallbacks{0};
+std::atomic<void (*)(qore_socket_private*)> qore_dbg_after_pre_close_shutdown{nullptr};
 
 QoreObject* qore_socket_dbg_new_controller_pollable(QoreSocket* s) {
     return new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), new QoreSocketControllerPollable(s));
