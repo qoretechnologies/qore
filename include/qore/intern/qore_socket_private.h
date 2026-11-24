@@ -59,6 +59,7 @@
 #include "qore/intern/QoreConnectionDestinations.h"
 #include "qore/intern/SseEventFramer.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cerrno>
 #include <atomic>
@@ -4497,12 +4498,17 @@ public:
         must be the final coding and must be applied once; it has no parameters (RFC 9112 section 7).  A message body
         with a coding other than chunked cannot be read, as the library implements no other transfer coding.
 
+        In a response, a chunked coding given more than once with no other coding is taken as a chunked body: some
+        intermediaries repeat the field of the origin server, and a client reads the response that it asked for.
+
         @param te the value of the field: a string, or a list of strings
         @param desc set to why the framing is not \c Chunked
+        @param response true for a response, false for a request
 
         @return the framing of the message body
     */
-    DLLLOCAL static HttpTransferCodingFraming getHttpTransferCodingFraming(QoreValue te, std::string& desc) {
+    DLLLOCAL static HttpTransferCodingFraming getHttpTransferCodingFraming(QoreValue te, std::string& desc,
+            bool response) {
         // the codings, in order
         std::vector<std::string> codings;
         auto add_value = [&codings](QoreValue v) {
@@ -4542,6 +4548,10 @@ public:
             return HttpTransferCodingFraming::Invalid;
         }
         const char* unsupported = nullptr;
+        if (response && std::all_of(codings.begin(), codings.end(),
+                [](const std::string& c) { return !strcasecmp(c.c_str(), "chunked"); })) {
+            return HttpTransferCodingFraming::Chunked;
+        }
         for (size_t i = 0, e = codings.size(); i < e; ++i) {
             const std::string& c = codings[i];
             // the name of the coding, without any parameters
@@ -4578,7 +4588,7 @@ public:
         - a request with both \c Transfer-Encoding and \c Content-Length (RFC 9112 section 6.3): \c SOCKET-HTTP-ERROR;
           in a response, the \c Transfer-Encoding overrides the \c Content-Length
         - a \c Transfer-Encoding whose framing cannot be determined (chunked not the final coding, given more than
-          once or with a parameter, or no coding): \c SOCKET-HTTP-ERROR
+          once in a request or with a parameter, or no coding): \c SOCKET-HTTP-ERROR
         - a \c Transfer-Encoding with a coding other than chunked: \c HTTP-UNSUPPORTED-TRANSFER-CODING
 
         A message with a valid \c Transfer-Encoding has a chunked body, and its field is given with the value
@@ -4602,7 +4612,7 @@ public:
             return -1;
         }
         std::string desc;
-        switch (getHttpTransferCodingFraming(te, desc)) {
+        switch (getHttpTransferCodingFraming(te, desc, !request)) {
             case HttpTransferCodingFraming::Invalid:
                 xsink->raiseException("SOCKET-HTTP-ERROR", "invalid HTTP %s header received: %s (RFC 9112 section "
                     "6.3)", request ? "request" : "response", desc.c_str());

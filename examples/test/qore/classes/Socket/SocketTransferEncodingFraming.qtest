@@ -28,8 +28,9 @@
     when the field is given in more than one line, and the field is then given with the value "chunked"; a request
     with both Transfer-Encoding and Content-Length, or with a Transfer-Encoding whose framing cannot be determined, is
     refused with SOCKET-HTTP-ERROR, and a message with a transfer coding other than chunked with
-    HTTP-UNSUPPORTED-TRANSFER-CODING.  The HTTP client reads a chunked response in the same way, and does not use the
-    connection again after a response that also has a Content-Length.
+    HTTP-UNSUPPORTED-TRANSFER-CODING; a response that repeats the chunked coding has a chunked body.  The HTTP client
+    reads a chunked response in the same way, and does not use the connection again after a response that also has a
+    Content-Length.
 */
 
 %modern
@@ -145,7 +146,11 @@ class SocketTransferEncodingFramingTest inherits QUnit::Test {
     }
 
     responseTest() {
-        foreach string field in (ChunkedFields + ("Transfer-Encoding: chunked\r\nContent-Length: 3\r\n",)) {
+        # a response with both fields, or with the chunked coding repeated (as some intermediaries repeat the field),
+        # has a chunked body
+        foreach string field in (ChunkedFields + ("Transfer-Encoding: chunked\r\nContent-Length: 3\r\n",
+                "Transfer-Encoding: chunked\r\nTransfer-Encoding: chunked\r\n",
+                "Transfer-Encoding: chunked, Chunked\r\n")) {
             foreach Reader reader in (Readers) {
                 string label = sprintf("%s: %y", reader, field);
                 hash<auto> client = startClient("HTTP/1.1 200 OK\r\n" + field + "\r\n" + Body);

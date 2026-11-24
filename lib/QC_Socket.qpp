@@ -5863,7 +5863,8 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     a line of a response header can end with LF alone (RFC 9112 section 2.2)
     @throw SOCKET-HTTP-ERROR a request with both \c Transfer-Encoding and \c Content-Length, or a message whose
     \c Transfer-Encoding does not give a framing that every recipient finds: the chunked transfer coding is not the
-    final coding, is given more than once or with a parameter, or no coding is given (RFC 9112 section 6.3)
+    final coding, is given more than once (in a request: a response that repeats it alone has a chunked body) or with
+    a parameter, or no coding is given (RFC 9112 section 6.3)
     @throw HTTP-UNSUPPORTED-TRANSFER-CODING a message with a transfer coding other than chunked (RFC 9112 section 6.1);
     a server answers such a request with 501 (Not Implemented)
     @throw SOCKET-HTTP-ERROR the read of a chunked message body on the socket stopped before the end of the body (see
