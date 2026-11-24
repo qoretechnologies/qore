@@ -1785,8 +1785,9 @@ bool QoreModuleManager::checkAOTModuleDependencyFiles(ExceptionSink& xsink, cons
             is_aot = qoreAOTReadModuleInfo(file, info, error) == QoreAOTModuleInfoStatus::FOUND;
         }
         if (!qore_aot_dependency_is_compiled_one(name, file, is_aot, compiled_against, fingerprints, allowed)) {
-            stale_desc = std::string("it was compiled against other files of module '") + name + "' than '" + file
-                + "', which is loaded for it now";
+            // the file is named as the code requesting the load may see it (qore#7507)
+            stale_desc = std::string("it was compiled against other files of module '") + name + "' than '"
+                + qore_msg_path(file.c_str()) + "', which is loaded for it now";
             return true;
         }
     }
@@ -7052,7 +7053,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
             // the module compiled against is not another module, so it does not get here
             xsink.raiseExceptionArg("AOT-MODULE-STALE", qore_msg_path_node(path), "AOT module '%s' for feature "
                 "'%s' is out of date: %s; rebuild the AOT module", qore_msg_path(path).c_str(), feature,
-                qore_msg_detail(stale_desc.c_str()));
+                stale_desc.c_str());
             return nullptr;
         }
     }

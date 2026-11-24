@@ -9844,7 +9844,17 @@ bool runtime_no_external_info() {
     }
     // the rule of every check of the caller's domains: the code runs for code with the restriction (library module
     // code called by it, a thread or a continuation of work that it started)
-    return qore_get_calling_code_restrictions(td).hasAny(QoreParseOptions(PO_NO_EXTERNAL_INFO));
+    if (qore_get_calling_code_restrictions(td).hasAny(QoreParseOptions(PO_NO_EXTERNAL_INFO))) {
+        return true;
+    }
+    // the code of a module whose own Program has the restriction, which it inherited from the Program that loaded it,
+    // where no other code is the caller: under the initialization barrier of a library module, which hides the
+    // loader (the init closure, the module code that it calls), and in a thread that such code started
+    if (pgm && qore_program_is_module_inline(pgm)
+            && (qore_program_private::getParseOptions(*pgm) & PO_NO_EXTERNAL_INFO)) {
+        return !qore_get_nearest_non_module_program(td, qore_get_caller_module_init_barrier(td));
+    }
+    return false;
 }
 
 std::string qore_path_file_name(const char* path) {

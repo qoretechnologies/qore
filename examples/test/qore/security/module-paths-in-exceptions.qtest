@@ -135,6 +135,67 @@ public *hash<CallStackInfo> sub pcl() {
 }
 ";
 
+        #! a library module whose initialization catches exceptions of module code; %s: its name (x5)
+        const InitLibModule = "%%requires MpInitThrow
+%%modern
+module %s {
+    version = \"1.0\";
+    desc = \"init probe\";
+    author = \"Qore Technologies\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+    init = sub () {
+        try {
+            MpInitThrow::t();
+        } catch (hash<ExceptionInfo> ex) {
+            %s::r.init = ex.file;
+        }
+        %s::run();
+    };
+}
+public namespace %s {
+public our hash<auto> r;
+nothing sub run() {
+    try {
+        MpInitThrow::t();
+    } catch (hash<ExceptionInfo> ex) {
+        r.func = ex.file;
+    }
+    Queue q();
+    background sub () {
+        try {
+            MpInitThrow::t();
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(ex.file);
+        }
+    }();
+    r.thread = q.get();
+}
+public hash<auto> sub get() {
+    return %s::r;
+}
+}
+";
+
+        #! the script that loads the library modules in restricted (R) and unrestricted (U) Programs
+        const InitLibScript = "%modern
+%no-child-restrictions
+const Modes = {\"ast\": EM_AST, \"ir\": EM_IR, \"jit\": EM_JIT, \"tiered\": EM_TIERED};
+foreach hash<auto> m in (Modes.pairIterator()) {
+    foreach string sfx in ((\"R\", \"U\")) {
+        Program p(PO_MODERN | (sfx == \"R\" ? PO_NO_EXTERNAL_INFO : 0));
+        p.setExecMode(m.value);
+        string name = \"MpInitLib\" + sfx + m.key;
+        p.parse(sprintf(\"our hash<auto> result; load_module(%y); result = call_function(%y);\", name,
+            name + \"::get\"), \"top-level\");
+        p.run();
+        foreach hash<auto> i in (p.getGlobalVariable(\"result\").pairIterator()) {
+            printf(\"RESULT %s %s %s=%s\\n\", sfx, m.key, i.key, i.value);
+        }
+    }
+}
+";
+
         #! a module with a child module that fails to load; %s: the child, its name (twice)
         const TryParentModule = "%%append-module-path \"${SCRIPT_DIR}\"
 %%try-child-module %s
@@ -246,6 +307,8 @@ sub run_t() {
         addTestCase("the host gets the full paths of the exceptions of restricted code", \hostTest());
         addTestCase("AOT modules, shadowing loads and reflection give restricted code no directories",
             \aotShadowReflectionTest());
+        addTestCase("the initialization of a library module loaded by restricted code gets no directories",
+            \libraryInitTest());
         set_return_value(main());
     }
 
@@ -359,6 +422,48 @@ sub run_t() {
         }
     }
 
+    #! a library module (in the process-wide module path, so in a child process) that a restricted Program loads:
+    #! its initialization runs under the module initialization barrier, which hides the loader, while the module's
+    #! own Program has the restriction that it inherited; the code of the init closure, the module code that it calls
+    #! and a thread that it starts catch exceptions
+    libraryInitTest() {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string lib_dir = tmp.path + DirSep + "initlib dir 7507";
+        mkdir(lib_dir);
+        host_dirs += lib_dir;
+        writeModuleTo(lib_dir, "MpInitThrow", sprintf(ThrowModule, "MpInitThrow", "MpInitThrow"));
+        foreach string mode in (keys Modes) {
+            foreach string sfx in (("R", "U")) {
+                string name = "MpInitLib" + sfx + mode;
+                writeModuleTo(lib_dir, name, sprintf(InitLibModule, name, name, name, name, name));
+            }
+        }
+        string script = tmp.path + DirSep + "init-lib.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(InitLibScript);
+        f.close();
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s %s 2>&1",
+            shellQuote(lib_dir + ":" + (ENV.QORE_MODULE_DIR ?? "")), shellQuote(libqore_dir), shellQuote(libqore_dir),
+            shellQuote(qore_bin), shellQuote(script)));
+        hash<string, hash<string, string>> results();
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = (line =~ x/^RESULT ([RU]) ([a-z]+) ([a-z_]+)=(.*)$/);
+            if (m) {
+                results{m[0] + " " + m[1]}{m[2]} = m[3];
+            }
+        }
+        assertEq(Modes.size() * 2, results.size(), "every Program reported: " + out);
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            foreach string key in (("init", "func", "thread")) {
+                assertEq("MpInitThrow.qm", results{"R " + m.key}{key}, sprintf("restricted %s: %s", m.key, key));
+                assertEq(lib_dir + DirSep + "MpInitThrow.qm", results{"U " + m.key}{key},
+                    sprintf("unrestricted %s: %s", m.key, key));
+            }
+        }
+    }
+
     aotShadowReflectionTest() {
         string qore_bin = TestInterpreter::qore_interpreter();
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -386,6 +491,71 @@ sub run_t() {
             shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(qore_bin),
             shellQuote(aot_dir + DirSep + "MpAotId.qmod"), shellQuote(src_dir + DirSep + "MpAotId.qm")));
         assertTrue(is_file(aot_dir + DirSep + "MpAotId.qmod"), "compiled the foreign-identity AOT module: " + out);
+
+        # AOT modules made stale by a rebuild of the AOT module of their dependency: one without its source (the
+        # error is raised to the caller) and, for each kind of loader, one with its source beside it (the source is
+        # loaded, with a warning)
+        string stale_dir = tmp.path + DirSep + "stale dir 7507";
+        string stale_src_dir = tmp.path + DirSep + "stale src 7507";
+        mkdir(stale_dir);
+        mkdir(stale_src_dir);
+        host_dirs += (stale_dir, stale_src_dir);
+        # one set for each kind of loader (R, U): a module that restricted code loaded from outside the module path is
+        # not used by other code
+        foreach string sfx in (("R", "U")) {
+            string dep = "MpStaleDep" + sfx;
+            f.open2(stale_src_dir + DirSep + dep + ".qm", O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(sprintf(Header + "public namespace %s {\npublic int sub v() { return 1; }\n}\n", dep, dep));
+            f.close();
+            compileModule(libqore_dir, stale_dir, stale_src_dir + DirSep + dep + ".qm",
+                stale_dir + DirSep + dep + ".qmod");
+            foreach string name in (("MpStale" + sfx, "MpStaleFb" + sfx)) {
+                f.open2(stale_src_dir + DirSep + name + ".qm", O_CREAT | O_WRONLY | O_TRUNC);
+                f.write(sprintf("%%requires %s\n" + Header + "public namespace %s {\npublic int sub v() { "
+                    "return %s::v(); }\n}\n", dep, name, name, dep));
+                f.close();
+                compileModule(libqore_dir, stale_dir, stale_src_dir + DirSep + name + ".qm",
+                    stale_dir + DirSep + name + ".qmod");
+            }
+            # the dependency changes and is rebuilt
+            f.open2(stale_src_dir + DirSep + dep + ".qm", O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(sprintf(Header + "public namespace %s {\npublic int sub v() { return 2; }\npublic int sub w() { "
+                "return 3; }\n}\n", dep, dep));
+            f.close();
+            compileModule(libqore_dir, stale_dir, stale_src_dir + DirSep + dep + ".qm",
+                stale_dir + DirSep + dep + ".qmod");
+        }
+        # an AOT module compiled against a dependency that is found in another file when it is loaded
+        string dep1_dir = tmp.path + DirSep + "dep one 7507";
+        string dep2_dir = tmp.path + DirSep + "dep two 7507";
+        mkdir(dep1_dir);
+        mkdir(dep2_dir);
+        host_dirs += (dep1_dir, dep2_dir);
+        # one for each kind of loader (R, U): a dependency that is loaded is not checked again
+        foreach string sfx in (("R", "U")) {
+            string dep = "MpStaleDep2" + sfx;
+            for (int i = 1; i <= 2; ++i) {
+                # each one from a source of its own, which does not change
+                string dep_src = stale_src_dir + DirSep + sfx + i;
+                mkdir(dep_src);
+                f.open2(dep_src + DirSep + dep + ".qm", O_CREAT | O_WRONLY | O_TRUNC);
+                f.write(sprintf(Header + "public namespace %s {\npublic int sub v() { return %d; }\n}\n", dep, dep,
+                    i));
+                f.close();
+                compileModule(libqore_dir, i == 1 ? dep1_dir : dep2_dir, dep_src + DirSep + dep + ".qm",
+                    (i == 1 ? dep1_dir : dep2_dir) + DirSep + dep + ".qmod");
+            }
+            string name = "MpStale2" + sfx;
+            f.open2(stale_src_dir + DirSep + name + ".qm", O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(sprintf("%%requires %s\n" + Header + "public namespace %s {\npublic int sub v() { return "
+                "%s::v(); }\n}\n", dep, name, name, dep));
+            f.close();
+            compileModule(libqore_dir, dep1_dir, stale_src_dir + DirSep + name + ".qm", stale_dir + DirSep + name
+                + ".qmod");
+        }
+        # the sources of the modules loaded with their source beside them
+        map copy_file(stale_src_dir + DirSep + $1 + ".qm", stale_dir + DirSep + $1 + ".qm"),
+            ("MpStaleFbR", "MpStaleFbU");
         # a module outside the module path named like a module in the module path that is not loaded
         string shadowed = "WebSocketUtil";
         assertFalse(get_module_hash().hasKey(shadowed), "the shadowed module is not loaded");
@@ -417,13 +587,29 @@ try {
 }
 result.loc = Function::forName(\"%s::t\").getVariants()[0].getSourceLocation();
 result.cls_loc = Class::forName(\"%s::Thrower\").getMethod(\"throwIt\").getVariants()[0].getSourceLocation();
-", mod_dir, aot_dir, thrower, shadow_dir + DirSep + shadowed + ".qm", thrower, thrower);
+%%append-module-path %y
+%%append-module-path %y
+", mod_dir, aot_dir, thrower, shadow_dir + DirSep + shadowed + ".qm", thrower, thrower, stale_dir, dep2_dir);
+        string stale_all = "try {
+    load_module(\"%s\");
+} catch (hash<ExceptionInfo> ex) {
+    result.stale = ex;
+}
+";
+        string stale_code = "result.stale_warn = load_module_warn(\"%s\");
+try {
+    load_module(\"%s\");
+} catch (hash<ExceptionInfo> ex) {
+    result.stale2 = ex;
+}
+";
 
         string dir = mod_dir + DirSep;
         foreach hash<auto> m in (Modes.pairIterator()) {
             string label = "restricted " + m.key;
             Program p = newProgram(PO_NO_EXTERNAL_INFO, m.value);
-            p.parse(code, "top-level");
+            p.parse(code + sprintf(stale_all, "MpStaleR")
+                + (m.key == "ast" ? sprintf(stale_code, "MpStaleFbR", "MpStale2R") : ""), "top-level");
             p.run();
             hash<auto> result = p.getGlobalVariable("result");
             checkNoHostPath(result, label);
@@ -438,6 +624,22 @@ result.cls_loc = Class::forName(\"%s::Thrower\").getMethod(\"throwIt\").getVaria
                 result.shadow.desc, label + ": shadowing load names the module path's module by its file name");
             assertEq(thrower + ".qm", result.loc.file, label + ": function variant location");
             assertEq(thrower + ".qm", result.cls_loc.file, label + ": method variant location");
+            assertEq("AOT-MODULE-STALE", result.stale.err, label + ": stale AOT module");
+            assertContains("AOT module 'MpStaleR.qmod' for feature 'MpStaleR' is out of date: its source "
+                "'MpStaleDepR.qmod' has changed", result.stale.desc, label + ": stale AOT module desc");
+            assertEq("MpStaleR.qmod", result.stale.arg, label + ": stale AOT module arg");
+            if (m.key == "ast") {
+                assertEq("AOT-MODULE-STALE", result.stale2.err, label + ": AOT module of another dependency");
+                assertContains("AOT module 'MpStale2R.qmod' for feature 'MpStale2R' is out of date: it was compiled "
+                    "against other files of module 'MpStaleDep2R' than 'MpStaleDep2R.qmod'", result.stale2.desc,
+                    label + ": AOT module of another dependency desc");
+            }
+            if (m.key == "ast") {
+                assertEq("BINARY-MODULE-SOURCE-FALLBACK", result.stale_warn.err, label + ": stale AOT module warning");
+                assertContains("AOT module 'MpStaleFbR.qmod' for feature 'MpStaleFbR' is out of date: its source "
+                    "'MpStaleDepR.qmod' has changed since it was compiled; loading source module 'MpStaleFbR.qm' "
+                    "instead", result.stale_warn.desc, label + ": stale AOT module warning desc");
+            }
         }
 
         # restricted in another domain only: the paths are given in full (after the restricted checks, as a module
@@ -445,7 +647,8 @@ result.cls_loc = Class::forName(\"%s::Thrower\").getMethod(\"throwIt\").getVaria
         foreach hash<auto> m in (Modes.pairIterator()) {
             string label = "other restriction " + m.key;
             Program p = newProgram(PO_NO_PROCESS_CONTROL, m.value);
-            p.parse(code, "top-level");
+            p.parse(code + sprintf(stale_all, "MpStaleU")
+                + (m.key == "ast" ? sprintf(stale_code, "MpStaleFbU", "MpStale2U") : ""), "top-level");
             p.run();
             hash<auto> result = p.getGlobalVariable("result");
             assertContains("AOT module '" + aot_dir + DirSep + "MpAotId.qmod': feature 'MpAotId'", result.aot_id.desc,
@@ -456,7 +659,41 @@ result.cls_loc = Class::forName(\"%s::Thrower\").getMethod(\"throwIt\").getVaria
                 result.shadow.desc, label + ": shadowing load names the module path's module with its directory");
             assertEq(dir + thrower + ".qm", result.loc.file, label + ": function variant location");
             assertEq(dir + thrower + ".qm", result.cls_loc.file, label + ": method variant location");
+            assertContains("AOT module '" + stale_dir + DirSep + "MpStaleU.qmod' for feature 'MpStaleU' is out of "
+                "date: its source '" + stale_dir + DirSep + "MpStaleDepU.qmod' has changed", result.stale.desc,
+                label + ": stale AOT module desc");
+            if (m.key == "ast") {
+                assertContains("AOT module '" + stale_dir + DirSep + "MpStale2U.qmod' for feature 'MpStale2U' is out "
+                    "of date: it was compiled against other files of module 'MpStaleDep2U' than '" + dep2_dir + DirSep
+                    + "MpStaleDep2U.qmod'", result.stale2.desc, label + ": AOT module of another dependency desc");
+            }
+            assertEq(stale_dir + DirSep + "MpStaleU.qmod", result.stale.arg, label + ": stale AOT module arg");
+            if (m.key == "ast") {
+                assertEq("BINARY-MODULE-SOURCE-FALLBACK", result.stale_warn.err, label + ": stale AOT module warning");
+                assertContains("AOT module '" + stale_dir + DirSep + "MpStaleFbU.qmod' for feature 'MpStaleFbU' is out "
+                    "of date: its source '" + stale_dir + DirSep + "MpStaleDepU.qmod' has changed since it was "
+                    "compiled; loading source module '" + stale_dir + DirSep + "MpStaleFbU.qm' instead",
+                    result.stale_warn.desc, label + ": stale AOT module warning desc");
+            }
         }
+    }
+
+    #! compiles a module with qcc, with the module directory \a dir in the module path and the depfile by which the
+    #! loader checks the modules that it was compiled against
+    private compileModule(string libqore_dir, string dir, string src, string qmod) {
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -m --depfile=%s -o %s "
+            "%s 2>&1", shellQuote(dir + ":" + (ENV.QORE_MODULE_DIR ?? "")), shellQuote(libqore_dir),
+            shellQuote(libqore_dir), shellQuote(TestInterpreter::qcc_compiler() ?? "qcc"), shellQuote(qmod + ".d"),
+            shellQuote(qmod), shellQuote(src)));
+        assertTrue(is_file(qmod), "compiled " + qmod + ": " + out);
+    }
+
+    #! writes a module to the given directory
+    private writeModuleTo(string dir, string name, string src) {
+        File f();
+        f.open2(dir + DirSep + name + ".qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(src);
+        f.close();
     }
 
     #! returns the string quoted for the shell

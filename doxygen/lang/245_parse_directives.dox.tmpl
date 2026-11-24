@@ -1936,12 +1936,14 @@ ArrayList l();
       @ref Qore::SourceLocationInfo "SourceLocationInfo" hashes of the reflection API (\c getSourceLocation()), name
       each file without its directory, whether the code is that of modules, of the Program itself or of the host;
       the code of the host gets the same exceptions with their full paths.  The code that receives a location decides:
-      the code of a Program with this option, and code that runs for it (module code that it calls, threads and
-      asynchronous work that it starts)
+      the code of a Program with this option, code that runs for it (module code that it calls, threads and
+      asynchronous work that it starts), and the code of a module that inherited this option from the Program that
+      loaded it, where no other code is its caller (its initialization, and threads that the module's code starts)
     - the directories of the files of modules in the messages of module loads (since %Qore 3.0): the exceptions and
       warnings of a load that code with this option requests, and of the loads that it makes (dependencies, child
-      modules, the initialization of AOT modules), name each file without its directory, and leave out the details
-      that the dynamic loader and the readers of module files give in text of their own; so do the errors of
+      modules, the initialization of AOT modules), name each file without its directory (also the files that an AOT
+      module that is out of date names), and leave out the details that the dynamic loader and the readers of module
+      files give in text of their own; so do the errors of
       \c %%include in the code that it parses; the \c desc of a child module in the \c "child-modules" of a module
       description is replaced by a note when the error was built for code without this option
 
@@ -1962,7 +1964,8 @@ ArrayList l();
     option: the \c error of the thread events (@ref Qore::Program::subscribeThreadEvents()
     "Program::subscribeThreadEvents()") of the threads of a Program with this option, which are made in the thread,
     and the messages of a module load that the host makes while a load for such code is in progress, or of a module
-    that such code loaded first (the \c desc of its child modules).
+    that such code loaded first (the \c desc of its child modules); and the exceptions caught in threads that the
+    code of a module that such code loaded first starts, as that module inherited the option.
 
     <hr>
     @section no-external-process %no-external-process
