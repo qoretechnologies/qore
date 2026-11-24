@@ -2476,6 +2476,9 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
         if (is_server_ && (rv == NGTCP2_ERR_RETRY || rv == NGTCP2_ERR_DROP_CONN)) {
             retry_requested_.store(rv == NGTCP2_ERR_RETRY, std::memory_order_release);
             dropped_.store(true, std::memory_order_release);
+#ifdef DEBUG
+            qore_dbg_quic_server_initial_drops.fetch_add(1, std::memory_order_relaxed);
+#endif
             xsink->raiseException("QUIC-DROP-CONN", "the client Initial does not start the ClientHello "
                 "(%s); dropping the connection without CONNECTION_CLOSE so the client retransmits",
                 ngtcp2_strerror(rv));
@@ -2611,6 +2614,10 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
             if (is_server_ && (rv == NGTCP2_ERR_RETRY || rv == NGTCP2_ERR_DROP_CONN)) {
                 retry_requested_.store(rv == NGTCP2_ERR_RETRY, std::memory_order_release);
                 dropped_.store(true, std::memory_order_release);
+#ifdef DEBUG
+                // see readPacketLocked()
+                qore_dbg_quic_server_initial_drops.fetch_add(1, std::memory_order_relaxed);
+#endif
                 break;
             }
             // Log per-packet errors and continue (matching existing batch error handling)

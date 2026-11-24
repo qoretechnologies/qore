@@ -29962,6 +29962,14 @@ static QoreValue f_dbg_quic_wait_idle(const QoreListNode* params, RuntimeConfig&
 std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent{0};
 std::atomic<int64_t> qore_dbg_quic_stateless_resets_received{0};
 std::atomic<int64_t> qore_dbg_quic_retries_received{0};
+std::atomic<int64_t> qore_dbg_quic_server_initial_drops{0};
+
+//! returns the number of connections that the QUIC servers of the process dropped since it started because a client
+//! Initial did not start the ClientHello (ngtcp2's NGTCP2_ERR_RETRY or NGTCP2_ERR_DROP_CONN)
+static QoreValue f_dbg_quic_server_initial_drops(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_quic_server_initial_drops.load(std::memory_order_relaxed);
+}
 
 //! returns the number of Retry packets that the QUIC clients of the process took since it started
 static QoreValue f_dbg_quic_retries_received(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
@@ -33210,6 +33218,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_quic_retries_received", f_dbg_quic_retries_received, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_server_initial_drops", f_dbg_quic_server_initial_drops, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_quic_fail_sends", f_dbg_quic_fail_sends, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 5, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", boolTypeInfo, QORE_PARAM_NO_ARG, "by_peer",
         listTypeInfo, QORE_PARAM_NO_ARG, "datagrams", bigIntTypeInfo, QORE_PARAM_NO_ARG, "err", boolTypeInfo,

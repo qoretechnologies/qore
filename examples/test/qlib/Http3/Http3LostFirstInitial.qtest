@@ -199,15 +199,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         testSkip("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS needs a DEBUG build");
     }
 
-    #! Returns the time in ms for one request on a new connection
-    private int timedRequest() {
-        int t0 = clock_get_monotonic_us();
-        hash<auto> resp = client().restGet("/ping");
-        assertEq(200, resp.status_code);
-        assertTrue(resp.body.ok);
-        return (clock_get_monotonic_us() - t0) / 1000;
-    }
-
     testLostFirst() {
         checkDropHook();
         setenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS", "0");
@@ -230,9 +221,18 @@ l50Xb2GWQesIt9k5jF5IOw==
         # 0: the first datagram of the first flight; 2: the first datagram of the flight answering the Retry
         setenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS", "0,2");
         on_exit unsetenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS");
-        # the server buffers the validated client's out-of-order ClientHello; the client's PTO resends the
-        # lost part
-        assertLt(5000, timedRequest());
+        int retries = call_function("dbg_quic_retries_received");
+        int drops = call_function("dbg_quic_server_initial_drops");
+        hash<auto> resp = client().restGet("/ping");
+        assertEq(200, resp.status_code);
+        assertTrue(resp.body.ok);
+        # the server buffers the validated client's out-of-order ClientHello, and the client's PTO resends the lost
+        # part; a server that dropped the connection again would ask for another Retry, which the client ignores, and
+        # it would do so for each retransmission (counted, not timed, so that the load of the machine does not change
+        # the result)
+        assertEq(retries + 1, call_function("dbg_quic_retries_received"), "the client took one Retry");
+        assertEq(drops + 1, call_function("dbg_quic_server_initial_drops"),
+            "the server dropped the connection only for the first datagram, which it answered with the Retry");
     }
 
     testBody() {
