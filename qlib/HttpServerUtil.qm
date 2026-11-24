@@ -193,9 +193,11 @@ module HttpServerUtil {
     requests to the code of other components withholds their credentials with
     @ref HttpServer::AbstractHttpRequestHandler::withholdRequestCredentials() "withholdRequestCredentials()"; both
     are private, and getRawRequest() refuses sandboxed callers.  The raw request is the request being served on the
-    thread while the code that serves it runs, which only the HTTP server's own dispatch makes current: a handler
-    that other code calls directly, also with a request that the caller made, has no raw request, and its stream
-    requests are refused (\c HTTP-SERVER-ERROR).  The request context that the serving code gets has no reference to
+    thread while the code that serves it runs, which only the HTTP server's own dispatch makes current, or the
+    trusted code of a host that dispatches requests to handlers itself with the capability that it claims
+    (@ref HttpServer::AbstractHttpRequestHandler::claimHostDispatch() "claimHostDispatch()"): a handler that other code
+    calls directly, also with a request that the caller made, has no raw request, and its stream requests are refused
+    (\c HTTP-SERVER-ERROR).  The request context that the serving code gets has no reference to
     it, and the concurrent streams of an HTTP/2 or HTTP/3 connection are served on threads of their own.  At most
     @ref HttpServer::HttpRawRequestScope::MaxDepth "8" requests can be dispatched in the dispatch of others on a
     thread; a further one is refused with \c HTTP-SERVER-ERROR.
@@ -2865,24 +2867,28 @@ class HttpRawRequestScope {
     }
 }
 
-#! The capability of the HTTP server's dispatch to make the raw request of a request current (qore#6843)
+#! The capability of a dispatch of requests to make the raw request of a request current (qore#6843)
 /** Not public: AbstractHttpRequestHandler::claimServerDispatch() gives it to the initialization of the HttpServer
-    module only, which keeps it in a \c private:internal member; no other code can create an object of the class or
-    reach one.
+    module only, and AbstractHttpRequestHandler::claimHostDispatch() to the trusted code of a host that dispatches
+    requests to handlers itself; each keeps it in a \c private:internal member; no other code can create an object of
+    the class.
 */
 class HttpServerDispatchCapability {
     private:internal {
-        #! the canonical path of the file of the module whose initialization claimed the capability
-        string path;
+        #! the canonical path of the file of the module whose initialization claimed the capability, if claimed by
+        #! the HttpServer module
+        *string path;
         #! True once the path was checked against the record of the loaded HttpServer module
         bool checked;
         #! a lock for the check
         Mutex lck();
     }
 
-    #! creates the object for the module at the given canonical path
-    constructor(string path) {
+    #! creates the object for the HttpServer module at the given canonical path, or for a host without a path
+    constructor(*string path) {
         self.path = path;
+        # a host's capability is not checked against the HttpServer module
+        checked = !path;
     }
 
     #! Makes the raw request of a request current on the thread until the object returned is destroyed
@@ -2972,9 +2978,10 @@ public hashdecl HttpFilteredRequestInfo {
 /** This class is the base class for handling HTTP stream requests; i.e. with chunked data
 
     An object of the class is created only in the dispatch of an HTTP server
-    (@ref HttpServer::HttpServer "HttpServer"), which makes the raw request of the request current: the constructor
-    raises \c HTTP-SERVER-ERROR for a request that the server did not dispatch (see
-    @ref httpserverutil_request_credentials).
+    (@ref HttpServer::HttpServer "HttpServer"), or of a host with a dispatch capability
+    (@ref HttpServer::AbstractHttpRequestHandler::claimHostDispatch() "claimHostDispatch()"), which makes the raw
+    request of the request current: the constructor raises \c HTTP-SERVER-ERROR for a request that was not
+    dispatched so (see @ref httpserverutil_request_credentials).
 
     The calling order is as follows:
     - constructor(): this is called when the request is received
@@ -5566,6 +5573,28 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
                 "own_headers": request_credential_headers,
             });
         return rv;
+    }
+
+    #! Returns the capability of trusted host code that dispatches requests to handlers itself to make the raw request
+    #! of each request current
+    /** A host that serves the requests of an HTTP server in a process of its own, and calls the handlers itself (a
+        handler's handleRequest()) instead of an @ref HttpServer::HttpServer "HttpServer", makes the raw request of each
+        request current with the object returned while it calls the handler, so that the handler serves stream
+        requests: \c enter(cx, hdr, s) returns an object that keeps the raw request current until it is destroyed.  The
+        host keeps the capability in a \c private:internal member and never gives it to other code, as the capability
+        lets its holder make a request of its own making current for the handlers that it calls (qore#6843).
+
+        @return the capability, which is of a class that is not public
+
+        @throw HTTP-SERVER-ERROR the caller is sandboxed: only trusted code can claim the capability
+
+        @since HttpServerUtil 1.6
+    */
+    static object claimHostDispatch() {
+        if (HttpRawRequestScope::callerIsSandboxed()) {
+            throw "HTTP-SERVER-ERROR", "a dispatch capability cannot be claimed by sandboxed code";
+        }
+        return new HttpServerDispatchCapability();
     }
 
     #! Internal: for the initialization of the HttpServer module only

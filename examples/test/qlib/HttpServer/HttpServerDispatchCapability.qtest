@@ -25,7 +25,8 @@
     directly, by trusted code or by sandboxed code with a request that it made, has no raw request
     (AbstractHttpRequestHandler::getRawRequest() is refused, a stream request is refused), and its REST classes get
     the filtered request only; the capability of the dispatch is claimed by the initialization of the HttpServer
-    module only, and no other code can claim it or reach it.
+    module only, and no other code can claim it or reach it; trusted host code that dispatches requests to handlers
+    itself claims a capability of its own, which sandboxed code cannot claim or reach either.
 */
 
 %modern
@@ -103,6 +104,21 @@ class ProbeRestClass inherits AbstractRestClass {
     }
 }
 
+#! trusted host code that dispatches requests to handlers itself, without an HTTP server
+class Host {
+    private:internal {
+        static object cap = AbstractHttpRequestHandler::claimHostDispatch();
+    }
+
+    #! dispatches the request to the handler with the raw request current
+    static hash<auto> dispatch(AbstractHttpRequestHandler h, hash<auto> cx, hash<auto> hdr) {
+        Socket s();
+        object scope = cap.enter(cx, hdr, s);
+        on_exit delete scope;
+        return h.handleRequest(new TestListener(), s, cx, hdr, NOTHING);
+    }
+}
+
 const TenantOpts = PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES;
 
 const Tenant = "%requires HttpServer
@@ -146,6 +162,17 @@ string sub claim() {
     return attempt(sub () { AbstractHttpRequestHandler::claimServerDispatch(); });
 }
 
+string sub claim_host() {
+    return attempt(sub () { AbstractHttpRequestHandler::claimHostDispatch(); });
+}
+
+string sub reflect_host() {
+    return attempt(sub () {
+        Reflection::Class cls = Reflection::Class::forName('Host');
+        cls.getStaticMember('cap').getValue();
+    });
+}
+
 string sub reflect() {
     return attempt(sub () {
         Reflection::Class cls = Reflection::Class::forName('HttpServer::HttpServer');
@@ -170,6 +197,7 @@ class HttpServerDispatchCapabilityTest inherits QUnit::Test {
         addTestCase("only the initialization of the HttpServer module claims the capability", \testClaim());
         addTestCase("sandboxed code cannot reach the capability", \testReach());
         addTestCase("a module named HttpServer that sandboxed code loads by its path", \testByPath());
+        addTestCase("a trusted host dispatches a stream request with its capability", \testHost());
 
         rest.addClass(new ProbeRestClass());
         server = new HttpServer(<HttpServerOptionInfo>{
@@ -181,6 +209,7 @@ class HttpServerDispatchCapabilityTest inherits QUnit::Test {
         on_exit server.stop();
 
         tenant = new Program(TenantOpts);
+        tenant.importClass("Host");
         tenant.setSandboxManager(new SandboxManager());
         tenant.parse(Tenant, "tenant");
 
@@ -235,6 +264,25 @@ class HttpServerDispatchCapabilityTest inherits QUnit::Test {
             p.setSandboxManager(new SandboxManager());
             assertThrows("PARSE-EXCEPTION", \p.parse(), ("%requires HttpServer\n" + i.value, i.key), i.key);
         }
+    }
+
+    testHost() {
+        stream_handler.raw = NOTHING;
+        hash<auto> rv = Host::dispatch(stream_handler, {"id": 7, "orig_path": "/stream", "user": "host-user",
+            "header-info": {}}, {"method": "POST"});
+        assertEq(200, rv.code, "the stream request is served");
+        assertEq({"user": "host-user", "id": 7}, stream_handler.raw, "the trusted code of the handler gets it");
+        # the raw request is current only while the host dispatches
+        assertThrows("HTTP-SERVER-ERROR", sub () { stream_handler.handleRequest(new TestListener(), new Socket(),
+            {"id": 7, "orig_path": "/stream", "header-info": {}}, {"method": "POST"}, NOTHING); });
+        # sandboxed code cannot claim one, nor reach the host's
+        assertEq("HTTP-SERVER-ERROR", tenant.callFunction("claim_host"));
+        assertEq("REFLECTION-ACCESS-ERROR", tenant.callFunction("reflect_host"));
+        Program p(TenantOpts);
+        p.importClass("Host");
+        p.setSandboxManager(new SandboxManager());
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("class T inherits Host { static auto f() { return cap; } }",
+            "host-subclass"));
     }
 
     testByPath() {
