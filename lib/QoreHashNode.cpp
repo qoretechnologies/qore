@@ -193,6 +193,30 @@ int qore_hash_private::checkClearingSave(ExceptionSink* xsink) const {
     return 0;
 }
 
+HashMember* qore_hash_private::findCreateMember(const char* key) {
+    qore_hash_lookup_key k(key);
+    HashMember* om = findMember(k);
+    return om ? om : createMemberKnownAbsent(k);
+}
+
+HashMember* qore_hash_private::findCreateMember(const char* key, bool& created) {
+    qore_hash_lookup_key k(key);
+    HashMember* om = findMember(k);
+    if (om) {
+        created = false;
+        return om;
+    }
+
+    created = true;
+    return createMemberKnownAbsent(k);
+}
+
+HashMember* qore_hash_private::findCreateMemberPrehashed(const char* key, size_t hash) {
+    qore_hash_lookup_key k(key, strlen(key), hash);
+    HashMember* om = findMember(k);
+    return om ? om : createMemberKnownAbsent(k);
+}
+
 HashMember* qore_hash_private::createMemberKnownAbsent(const char* key) {
     return addMemberKnownAbsent(new HashMember(qore_hash_lookup_key(key)));
 }
