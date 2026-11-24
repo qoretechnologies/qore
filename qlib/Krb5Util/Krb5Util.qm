@@ -1703,6 +1703,17 @@ string authHeader = "Negotiate " + Krb5Util::negotiateSpnegoToken(step.token);
         return rv;
     }
 
+    #! Returns @ref True "True" if the calling code may use the host's Kerberos credentials (qore#6844)
+    /** The process's default credential, the default keytab and the credential stores that are not files of the
+        caller's own are the host's secrets: they are used only for code that may receive them (see
+        @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"): not
+        for code restricted from external information, nor for sandboxed code, unless the host grants them with a
+        policy barrier or a system-policy capability; the classes of the \c krb5 module apply the same rule
+    */
+    public bool sub hostCredentialsAllowed() {
+        return SandboxManager::callerMayReceiveHostSecrets();
+    }
+
     #! Creates an initiator context for HTTP Negotiate client authentication
     /** @param service_principal Kerberos service principal, or a host-based
         service name when \a gss_opts.name_type is \c "hostbased-service"
@@ -1716,9 +1727,9 @@ string authHeader = "Negotiate " + Krb5Util::negotiateSpnegoToken(step.token);
         @return a GSS initiator context
 
         @throw KRB5-GSS-ERROR if credentials or the target name cannot be
-        imported, or neither \a credential_cache nor \a keytab is given and the calling code is restricted from
-        external information (see @ref Qore::SandboxManager::callerMayReadExternalInfo()
-        "SandboxManager::callerMayReadExternalInfo()"): the process's default Kerberos credential is the host's
+        imported, or neither \a credential_cache nor \a keytab is given and the calling code may not receive the
+        host's secrets (see @ref Krb5Util::hostCredentialsAllowed() "hostCredentialsAllowed()"): the process's default
+        Kerberos credential is the host's
         @throw KRB5-CACHE-ERROR if \a credential_cache cannot be opened, or the calling code (also the code that a
         lent object was lent to, see @ref Qore::SandboxManager::isLentToRestricted()
         "SandboxManager::isLentToRestricted()") is restricted from the file system
@@ -1750,11 +1761,10 @@ string authHeader = "Negotiate " + Krb5Util::negotiateSpnegoToken(step.token);
             }
         }
 
-        # the process's default credential is the host's: not for a caller restricted from external information
-        # (qore#6844)
-        if (!cred && !SandboxManager::callerMayReadExternalInfo()) {
-            throw "KRB5-GSS-ERROR", "the process's default Kerberos credential is not available to code restricted "
-                "from external information; give a credential cache or keytab explicitly";
+        # the process's default credential is the host's: only for a caller that may receive it (qore#6844)
+        if (!cred && !hostCredentialsAllowed()) {
+            throw "KRB5-GSS-ERROR", "the process's default Kerberos credential is not available to the calling "
+                "code; give a credential cache or keytab explicitly";
         }
 
         if (cred) {
@@ -1782,7 +1792,7 @@ string authHeader = "Negotiate " + Krb5Util::negotiateSpnegoToken(step.token);
         @param ctx optional existing initiator context
         @param credential_cache optional credential cache name
         @param keytab optional client keytab name
-        @param gss_opts optional @ref Qore::Krb5::GssClientContextOptions
+        @param gss_opts optional @ref Qore::Krb5::GssClientContextOptions, also as a plain hash with its keys
         @param logger optional logger for diagnostics; secrets and tokens are
         not logged
 
@@ -1793,11 +1803,13 @@ string authHeader = "Negotiate " + Krb5Util::negotiateSpnegoToken(step.token);
             string service_principal, *string www_authenticate_header = NOTHING,
             *Qore::Krb5::GssClientContext ctx = NOTHING,
             *string credential_cache = NOTHING, *string keytab = NOTHING,
-            *hash<Qore::Krb5::GssClientContextOptions> gss_opts = NOTHING,
+            *hash<auto> gss_opts = NOTHING,
             *Qore::Logger::LoggerInterface logger = NOTHING) {
         if (!ctx) {
+            # the options can be given as a plain hash, as the HTTP clients that load this module at run time do
             ctx = createHttpNegotiateClientContext(service_principal, credential_cache,
-                keytab, gss_opts, logger);
+                keytab, exists gss_opts ? cast<hash<Qore::Krb5::GssClientContextOptions>>(gss_opts) : NOTHING,
+                logger);
         }
 
         hash<NegotiateClientStepInfo> step = exists www_authenticate_header

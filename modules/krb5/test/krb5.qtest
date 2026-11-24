@@ -170,7 +170,7 @@ public class Krb5ModuleTest inherits QUnit::Test {
         addTestCase("list credential caches returns list", \testListCredentialCachesReturnsList());
         addTestCase("list credential caches contains memory cache",
             \testListCredentialCachesContainsMemoryCache());
-        addTestCase("list credential caches redacts sandbox denied cache",
+        addTestCase("list credential caches refused to sandboxed code",
             \testListCredentialCachesSandboxRedaction());
         addTestCase("gss invalid token hex", \testGssInvalidHex());
         addTestCase("gss empty target rejected", \testGssEmptyTarget());
@@ -2064,24 +2064,17 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
         sm.setFilesystemSandboxRoot("/var");
         p.setSandboxManager(sm);
 
-        list<hash<Qore::Krb5::Krb5CredentialCacheInfo>> caches = p.callFunction("test_collection_redaction");
-        if (exists oldCacheName) {
-            setenv("KRB5CCNAME", oldCacheName);
-        } else {
-            unsetenv("KRB5CCNAME");
-        }
-
-        bool foundRedacted = False;
-        foreach hash<Qore::Krb5::Krb5CredentialCacheInfo> entry in (caches) {
-            if (entry.type == "FILE" && !entry.accessible) {
-                foundRedacted = True;
-                assertEq("", entry.name);
-                assertEq("", entry.full_name);
-                assertFalse(entry.has_principal);
-                assertFalse(exists entry.principal);
+        # the credential caches of the host are not listed for sandboxed code at all (qore#6844), which supersedes
+        # the redaction of the caches that its sandbox denies
+        on_exit {
+            if (exists oldCacheName) {
+                setenv("KRB5CCNAME", oldCacheName);
+            } else {
+                unsetenv("KRB5CCNAME");
             }
         }
-        assertTrue(foundRedacted);
+        assertThrows("KRB5-CACHE-ERROR", "host's Kerberos credentials are not available",
+            \p.callFunction(), "test_collection_redaction");
     }
 
     private testInitialCredentialsBooleanOptionsAccepted() {

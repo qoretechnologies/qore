@@ -390,8 +390,70 @@ static bool krb5_cache_backend_is_non_filesystem(const char* type) {
         || !strcmp(type, "KEYRING") || !strcmp(type, "MSLSA");
 }
 
+//! Returns true if the calling code may use a credential of the host: the process's default credential cache,
+//! keytab or GSSAPI credential, or a credential store that is not a file of its own (qore#6844)
+/** Code that may not receive host secrets (see qore_caller_may_receive_host_secrets(): code restricted from external
+    information, also through a lent object, and sandboxed code, unless the host grants it) gets none; fails closed
+*/
+static bool krb5_caller_may_use_host_credentials() {
+#ifdef QORE_HAVE_CALLER_AMBIENT_PREDICATES
+    return qore_caller_may_receive_host_secrets();
+#else
+    return true;
+#endif
+}
+
+//! Raises \a err and returns false if the calling code may not use a credential of the host (qore#6844)
+static bool krb5_check_host_credential(ExceptionSink* xsink, const char* err, const char* what) {
+    if (krb5_caller_may_use_host_credentials()) {
+        return true;
+    }
+    xsink->raiseException(err, "%s: the host's Kerberos credentials are not available to the calling code; give a "
+        "credential cache or keytab of its own", what);
+    return false;
+}
+
+//! Checks a credential store that the calling code names when it may not use the host's credentials (qore#6844)
+/** Only a memory store, and a file store that the calling code may use itself (it is not restricted from the file
+    system, also through a lent object), are its own; the other backends (KCM, KEYRING, API, MSLSA) hold the host's
+    credentials
+*/
+static bool krb5_check_named_store(bool filesystem, bool memory, const char* err, const char* kind, const char* type,
+        ExceptionSink* xsink, const char* context) {
+    if (krb5_caller_may_use_host_credentials()) {
+        return true;
+    }
+    if (memory) {
+        return true;
+    }
+    if (!filesystem) {
+        xsink->raiseException(err, "%s: %s backend '%s' holds the host's credentials, which are not available to the "
+            "calling code", context, kind, type);
+        return false;
+    }
+#ifdef QORE_HAVE_CALLER_AMBIENT_PREDICATES
+    if (qore_caller_lent_to_restricts_domain(QDOM_FILESYSTEM)) {
+        xsink->raiseException(err, "%s: a %s file cannot be used by code restricted from the file system", context,
+            kind);
+        return false;
+    }
+#endif
+    return true;
+}
+
 static bool krb5_check_cache_access(krb5_context ctx, krb5_ccache cache, int mode, ExceptionSink* xsink,
         const char* context) {
+    {
+        const char* type = krb5_cc_get_type(ctx, cache);
+        if (type && *type && !krb5_check_named_store(krb5_cache_backend_uses_filesystem(type), !strcmp(type, "MEMORY"),
+                "KRB5-CACHE-ERROR", "credential cache", type, xsink, context)) {
+            return false;
+        }
+        if ((!type || !*type) && !krb5_caller_may_use_host_credentials()) {
+            xsink->raiseException("KRB5-CACHE-ERROR", "%s: credential cache metadata is unavailable", context);
+            return false;
+        }
+    }
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (!smh) {
         return true;
@@ -432,6 +494,17 @@ static const char* krb5_keytab_filesystem_path(const char* full_name) {
 
 static bool krb5_check_keytab_access(krb5_context ctx, krb5_keytab keytab, int mode, ExceptionSink* xsink,
         const char* context) {
+    {
+        const char* type = krb5_kt_get_type(ctx, keytab);
+        if (type && *type && !krb5_check_named_store(krb5_keytab_backend_uses_filesystem(type),
+                krb5_keytab_backend_is_non_filesystem(type), "KRB5-KEYTAB-ERROR", "keytab", type, xsink, context)) {
+            return false;
+        }
+        if ((!type || !*type) && !krb5_caller_may_use_host_credentials()) {
+            xsink->raiseException("KRB5-KEYTAB-ERROR", "%s: keytab metadata is unavailable", context);
+            return false;
+        }
+    }
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (!smh) {
         return true;
@@ -885,6 +958,11 @@ QoreHashNode* QoreGssClientContext::step(const char* token_hex, ExceptionSink* x
     OM_uint32 lifetime = 0;
     GssBufferHolder output_token;
     OM_uint32 min_stat = 0;
+    // the process's default credential is the host's (qore#6844)
+    if (!cred_ref && !krb5_check_host_credential(xsink, "KRB5-GSS-ERROR",
+            "initializing a GSSAPI security context with the default credential")) {
+        return nullptr;
+    }
     OM_uint32 maj = gss_init_sec_context(&min_stat, cred_ref ? cred_ref->cred : GSS_C_NO_CREDENTIAL, &ctx,
         target_name, mech, req_flags, lifetime_req, has_channel_bindings ? &channel_bindings : GSS_C_NO_CHANNEL_BINDINGS,
         input_token.length ? &input_token : GSS_C_NO_BUFFER, nullptr, &output_token.buf, &actual_flags, &lifetime);
@@ -1252,6 +1330,11 @@ QoreHashNode* QoreGssAcceptorContext::step(const char* token_hex, ExceptionSink*
     OM_uint32 lifetime = 0;
     GssBufferHolder output_token;
     OM_uint32 min_stat = 0;
+    // the default acceptor credential (the host's keytab) is the host's (qore#6844)
+    if (!cred_ref && !krb5_check_host_credential(xsink, "KRB5-GSS-ERROR",
+            "accepting a GSSAPI security context with the default acceptor credential")) {
+        return nullptr;
+    }
     OM_uint32 maj = gss_accept_sec_context(&min_stat, &ctx, cred_ref ? cred_ref->cred : GSS_C_NO_CREDENTIAL,
         &input_token, has_channel_bindings ? &channel_bindings : GSS_C_NO_CHANNEL_BINDINGS, &src_name,
         &mech_type, &output_token.buf, &actual_flags, &lifetime, &delegated_cred);
@@ -1998,6 +2081,9 @@ QoreStringNode* QoreKrb5Context::getDefaultRealm(ExceptionSink* xsink) const {
 }
 
 QoreStringNode* QoreKrb5Context::getDefaultCredentialCacheName(ExceptionSink* xsink) const {
+    if (!krb5_check_host_credential(xsink, "KRB5-CACHE-ERROR", "getting the default credential cache name")) {
+        return nullptr;
+    }
     const char* name = krb5_cc_default_name(ctx);
     if (!name || !*name) {
         xsink->raiseException("KRB5-CACHE-ERROR", "the default credential cache name is not available");
@@ -2008,6 +2094,9 @@ QoreStringNode* QoreKrb5Context::getDefaultCredentialCacheName(ExceptionSink* xs
 }
 
 QoreStringNode* QoreKrb5Context::getDefaultKeytabName(ExceptionSink* xsink) const {
+    if (!krb5_check_host_credential(xsink, "KRB5-KEYTAB-ERROR", "getting the default keytab name")) {
+        return nullptr;
+    }
     char name[MAX_KEYTAB_NAME_LEN] = {0};
     krb5_error_code rc = krb5_kt_default_name(ctx, name, sizeof(name));
     if (rc) {
@@ -2023,6 +2112,9 @@ QoreKrb5CredentialCache* QoreKrb5Context::openCredentialCache(const char* cache_
 }
 
 QoreKrb5CredentialCache* QoreKrb5Context::openDefaultCredentialCache(ExceptionSink* xsink) const {
+    if (!krb5_check_host_credential(xsink, "KRB5-CACHE-ERROR", "opening the default credential cache")) {
+        return nullptr;
+    }
     return new QoreKrb5CredentialCache(nullptr, true, xsink);
 }
 
@@ -2031,6 +2123,9 @@ QoreKrb5Keytab* QoreKrb5Context::openKeytab(const char* keytab_name, ExceptionSi
 }
 
 QoreKrb5Keytab* QoreKrb5Context::openDefaultKeytab(ExceptionSink* xsink) const {
+    if (!krb5_check_host_credential(xsink, "KRB5-KEYTAB-ERROR", "opening the default keytab")) {
+        return nullptr;
+    }
     return new QoreKrb5Keytab(nullptr, true, xsink);
 }
 
@@ -2533,6 +2628,9 @@ QoreKrb5Credentials* QoreKrb5Context::acquireS4U2ProxyCredentials(const QoreKrb5
 
 QoreListNode* QoreKrb5Context::listCredentialCaches(ExceptionSink* xsink) const {
     if (qore_check_cancel(xsink, "listing credential caches")) {
+        return nullptr;
+    }
+    if (!krb5_check_host_credential(xsink, "KRB5-CACHE-ERROR", "listing the credential caches of the host")) {
         return nullptr;
     }
 

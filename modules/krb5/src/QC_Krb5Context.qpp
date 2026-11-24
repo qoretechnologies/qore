@@ -126,14 +126,16 @@ string Krb5Context::getDefaultRealm() [flags=CONSTANT] {
 }
 
 //! Returns the configured default credential-cache name
-/** @throw KRB5-CACHE-ERROR if no default credential cache name is available
+/** @throw KRB5-CACHE-ERROR if no default credential cache name is available (also if the calling code may not receive the host's secrets, see
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"; qore#6844)
 */
 string Krb5Context::getDefaultCredentialCacheName() [flags=CONSTANT] {
     return ctx->getDefaultCredentialCacheName(xsink);
 }
 
 //! Returns the configured default keytab name
-/** @throw KRB5-KEYTAB-ERROR if no default keytab name is available
+/** @throw KRB5-KEYTAB-ERROR if no default keytab name is available (also if the calling code may not receive the host's secrets, see
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"; qore#6844)
 */
 string Krb5Context::getDefaultKeytabName() [flags=CONSTANT] {
     return ctx->getDefaultKeytabName(xsink);
@@ -141,7 +143,8 @@ string Krb5Context::getDefaultKeytabName() [flags=CONSTANT] {
 
 //! Opens the default credential cache
 /** @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
-    @throw KRB5-CACHE-ERROR if the default credential cache cannot be opened
+    @throw KRB5-CACHE-ERROR if the default credential cache cannot be opened (also if the calling code may not receive the host's secrets, see
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"; qore#6844)
 */
 Krb5CredentialCache Krb5Context::openDefaultCredentialCache() {
     SimpleRefHolder<QoreKrb5CredentialCache> cache(ctx->openDefaultCredentialCache(xsink));
@@ -178,7 +181,8 @@ Krb5CredentialCache Krb5Context::openCredentialCache(string cache_name) {
 
 //! Opens the default keytab
 /** @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
-    @throw KRB5-KEYTAB-ERROR if the default keytab cannot be opened
+    @throw KRB5-KEYTAB-ERROR if the default keytab cannot be opened (also if the calling code may not receive the host's secrets, see
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"; qore#6844)
 */
 Krb5Keytab Krb5Context::openDefaultKeytab() {
     SimpleRefHolder<QoreKrb5Keytab> keytab(ctx->openDefaultKeytab(xsink));
@@ -371,7 +375,8 @@ Krb5Credentials Krb5Context::acquireServiceCredentials(Krb5CredentialCache[QoreK
     @return a list of @ref Qore::Krb5::Krb5CredentialCacheInfo entries
 
     @throw KRB5-CACHE-ERROR if the collection cursor cannot be opened
-    or enumeration fails
+    or enumeration fails (also if the calling code may not receive the host's secrets, see
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"; qore#6844)
 */
 list<hash<Krb5CredentialCacheInfo>> Krb5Context::listCredentialCaches() {
     return ctx->listCredentialCaches(xsink);
