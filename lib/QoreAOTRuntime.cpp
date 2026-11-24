@@ -7923,10 +7923,28 @@ bool qore_aot_read_ir_catch_tables(const uint8_t*& ptr, const uint8_t* end, Qore
     for (const auto& block : func.blocks) {
         total += block->instructions.size();
     }
+    // every read is checked against the end of the data, as the reader of the function checks its other fields: a
+    // table cut short is refused before it is read (qore#7379)
+    auto need = [&ptr, end, &error](size_t bytes, const char* what, const char* field) -> bool {
+        size_t remaining = end >= ptr ? static_cast<size_t>(end - ptr) : 0;
+        if (remaining < bytes) {
+            error = std::string("truncated IR function while reading the ") + what + " table " + field + ": need "
+                + std::to_string(bytes) + " byte(s), have " + std::to_string(remaining);
+            return false;
+        }
+        return true;
+    };
     auto readTable = [&](std::unordered_map<const QoreIRInstruction*, uint32_t>& table, const char* what) -> bool {
+        if (!need(4, what, "count")) {
+            return false;
+        }
         uint32_t count = QoreAOTBinaryReader::readU32(ptr);
         if (count > total) {
             error = std::string("the ") + what + " table has more entries than the function has instructions";
+            return false;
+        }
+        // each entry is a u16 block, a u16 instruction and a u32 value
+        if (!need(static_cast<size_t>(count) * 8, what, "entries")) {
             return false;
         }
         for (uint32_t i = 0; i < count; ++i) {

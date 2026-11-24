@@ -27,7 +27,8 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
         uint32_t result_id = 3, uint64_t features = 0, const Payload* stmt_loc = nullptr,
         const Payload* unwind = nullptr, const std::function<bool(const QoreIRFunction&)>* inspect = nullptr,
         const Payload* exit_restores = nullptr,
-        QoreIRExceptionExitRestore expected_restore = QoreIRExceptionExitRestore::None) {
+        QoreIRExceptionExitRestore expected_restore = QoreIRExceptionExitRestore::None,
+        const Payload* tables = nullptr) {
     QoreAOTBinaryWriter writer;
     writer.feature_flags = features | (wide ? QORE_AOT_FEAT_WIDE_IR_OPERANDS : 0);
     uint32_t section = writer.beginSection(QoreAOTSectionType::TOPLEVEL);
@@ -140,19 +141,22 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
             writer.writeU8(0); // no value
         });
     }
-    if (version >= QORE_AOT_CATCH_TABLES_VERSION) {
+    // the case's own data after the instructions, which ends the function there: the tables cut short (qore#7379)
+    if (tables) {
+        (*tables)(writer);
+    } else if (version >= QORE_AOT_CATCH_TABLES_VERSION) {
         writer.writeU32(0); // catch-exit depths (qore#6733)
         writer.writeU32(0); // catch-cleanup results
     }
     // the exit restorations (QORE_AOT_EXIT_RESTORE_VERSION, qore#7379): none, unless the case gives them
-    if (version >= QORE_AOT_EXIT_RESTORE_VERSION) {
+    if (!tables && version >= QORE_AOT_EXIT_RESTORE_VERSION) {
         if (exit_restores) {
             (*exit_restores)(writer);
         } else {
             writer.writeU32(0);
         }
     }
-    if (version >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION) {
+    if (!tables && version >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION) {
         if (unwind) {
             (*unwind)(writer);
         } else {
@@ -422,6 +426,44 @@ int main() {
             ++count;
         }
     }
+    // the catch tables and the exit restorations cut short: each table without its count, and with a count of more
+    // entries than the bytes that remain (qore#7379); a table is a u32 count and 8 bytes per entry
+    {
+        struct TruncatedCase {
+            const char* label;
+            std::vector<uint32_t> u32s;
+            bool half_entry;
+            const char* error;
+        };
+        const TruncatedCase cases[] = {
+            {"catch-exit depth table without its count", {}, false,
+                "truncated IR function while reading the catch-exit depth table count: need 4 byte(s), have 0"},
+            {"catch-exit depth table with an entry beyond the data", {1}, false,
+                "truncated IR function while reading the catch-exit depth table entries: need 8 byte(s), have 0"},
+            {"catch-cleanup result table without its count", {0}, false,
+                "truncated IR function while reading the catch-cleanup result table count: need 4 byte(s), have 0"},
+            {"catch-cleanup result table with an entry cut short", {0, 1}, true,
+                "truncated IR function while reading the catch-cleanup result table entries: need 8 byte(s), have 2"},
+            {"exit restoration table without its count", {0, 0}, false,
+                "truncated IR function while reading the exit restoration table count: need 4 byte(s), have 0"},
+            {"exit restoration table with an entry beyond the data", {0, 0, 1}, false,
+                "truncated IR function while reading the exit restoration table entries: need 8 byte(s), have 0"},
+        };
+        for (const TruncatedCase& c : cases) {
+            Payload tables = [&c](QoreAOTBinaryWriter& w) {
+                for (uint32_t v : c.u32s) {
+                    w.writeU32(v);
+                }
+                if (c.half_entry) {
+                    w.writeU16(0);
+                }
+            };
+            ok = check(pgm, c.label, O::AddInt, static_cast<uint8_t>(G::Base), {1, 2}, empty, c.error, false, false,
+                QORE_AOT_BINARY_VERSION, 3, 0, nullptr, nullptr, nullptr, nullptr, QoreIRExceptionExitRestore::None,
+                &tables) && ok;
+            ++count;
+        }
+    }
     for (O op : {O::ConstInt, O::Br, O::BrIf, O::Return, O::Invoke, O::InvokeMethodDirect,
             O::ScopeEnter, O::MakeList, O::DebugStatement}) {
         run("wrong nested opcode", O::Invoke, G::Invoke, {}, invoke(op), pairing);
@@ -687,8 +729,9 @@ int main() {
         callee("helper callee below the markers", QORE_AOT_BINARY_VERSION, -3, 1, 0,
             "invalid background helper callee -3");
     }
-    // the v52 refusal, the three implicit element cases and the eight exit restoration cases of v53 (qore#7379)
-    constexpr unsigned expected_count = QORE_AOT_BINARY_VERSION >= QORE_AOT_EXIT_RESTORE_VERSION ? 190
+    // the v52 refusal, the three implicit element cases, the eight exit restoration cases and the six truncated tables
+    // of v53 (qore#7379)
+    constexpr unsigned expected_count = QORE_AOT_BINARY_VERSION >= QORE_AOT_EXIT_RESTORE_VERSION ? 196
         : (QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION ? 178 : 168);
     if (count != expected_count) {
         fprintf(stderr, "ran %u of %u expected checks for AOT format %u\n", count, expected_count,
