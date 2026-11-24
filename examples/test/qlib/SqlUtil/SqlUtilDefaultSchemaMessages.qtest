@@ -1,0 +1,265 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires MysqlSqlUtil
+%requires OracleSqlUtil
+%requires ./MysqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
+
+%try-module mysql
+%define NoMysql
+%endtry
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%ifndef NoOracle
+%requires ./OracleCatalogDatasource.qm
+%endif
+
+%exec-class SqlUtilDefaultSchemaMessagesTest
+
+%ifndef NoOracle
+#! the catalog of a user with table T1, whose columns cannot be read
+class NoColumnsCatalogDatasource inherits CatalogDatasource {
+    constructor() : CatalogDatasource(("T1",), (), (), (), {}, {}) {
+    }
+
+    *hash<auto> select(string sql) {
+        if (sql =~ /from dba_tab_columns/) {
+            return {"column_name": ()};
+        }
+        # the arguments of the query are given to the catalog as they were given
+        return call_function_args(\CatalogDatasource::select(), (sql,) + argv);
+    }
+}
+%endif
+
+#! a MySQL datasource for offline tests, whose database is "mtest"; no statement is expected
+class DefaultSchemaMysqlDatasource inherits Qore::SQL::AbstractDatasource {
+    *string getPassword() {}
+    *string getOSEncoding() {}
+    *string getDBName() { return "mtest"; }
+    *string getUserName() { return "muser"; }
+    *string getHostName() {}
+    *int getPort() {}
+    *string getDBEncoding() {}
+    string getDriverName() { return "mysql"; }
+    auto getServerVersion() {}
+    auto getClientVersion() {}
+    string getConfigString() { return "mysql:muser@mtest"; }
+    hash<auto> getConfigHash() { return {"type": "mysql", "user": "muser", "db": "mtest"}; }
+    auto getOption(string opt) {}
+    bool inTransaction() { return False; }
+    bool currentThreadInTransaction() { return False; }
+    nothing beginTransaction() {}
+    nothing commit() {}
+    nothing rollback() {}
+    auto exec(string sql, ...) { throw "UNEXPECTED-STATEMENT", sql; }
+    auto vexec(string sql, *softlist<auto> vargs) { throw "UNEXPECTED-STATEMENT", sql; }
+    auto execRaw(string sql) { throw "UNEXPECTED-STATEMENT", sql; }
+    auto select(string sql, ...) { throw "UNEXPECTED-STATEMENT", sql; }
+    auto vselect(string sql, *softlist<auto> vargs) { throw "UNEXPECTED-STATEMENT", sql; }
+    auto selectRow(string sql, ...) { throw "UNEXPECTED-STATEMENT", sql; }
+    auto vselectRow(string sql, *softlist<auto> vargs) { throw "UNEXPECTED-STATEMENT", sql; }
+    auto selectRows(string sql, ...) { throw "UNEXPECTED-STATEMENT", sql; }
+    auto vselectRows(string sql, *softlist<auto> vargs) { throw "UNEXPECTED-STATEMENT", sql; }
+    auto selectTyped(string sql, ...) { throw "UNEXPECTED-STATEMENT", sql; }
+    auto vselectTyped(string sql, *softlist<auto> vargs) { throw "UNEXPECTED-STATEMENT", sql; }
+    auto selectRowsTyped(string sql, ...) { throw "UNEXPECTED-STATEMENT", sql; }
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) { throw "UNEXPECTED-STATEMENT", sql; }
+}
+
+#! The messages of SqlUtil name a table without the default schema of the connection (issue #7018)
+/** The default schema of Oracle is the connection's user, and that of MySQL its database, which the messages do not
+    show, as the masked description of the datasource in them does not (issue #6988); a table in another schema is
+    named with its schema, and the SQL names every table with its schema as before.
+
+    The MySQL cases run offline with a datasource that answers no statement, and against a MySQL server in a database
+    of the run's own (\c -c / \c --conn or \c QORE_DB_CONNSTR_MYSQL; skipped without one); the Oracle cases run
+    offline with the in-memory catalog of OracleCatalogDatasource.qm (user \c qtest), which needs the \c oracle
+    module.
+*/
+class SqlUtilDefaultSchemaMessagesTest inherits QUnit::Test {
+    private {
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+
+        #! the MySQL connection of the run's own database; NOTHING if there is none
+        *Datasource mysql_ds;
+
+        #! the reason the MySQL server cases are skipped, if they are
+        string mysql_skip = "no MySQL connection";
+    }
+
+    constructor() : Test("SqlUtilDefaultSchemaMessagesTest", "1.0", \ARGV, MyOpts) {
+        addTestCase("MySQL: the connection's database is not shown in messages", \mysqlOffline());
+        addTestCase("MySQL server: the run's database is not shown in messages", \mysqlServer());
+        addTestCase("Oracle: the connection's user is not shown in messages", \oracleNames());
+        addTestCase("Oracle: a table that cannot be found is named without the user's schema", \oracleNotFound());
+        set_return_value(main());
+    }
+
+    #! asserts that a call raises the error with a description that names the table as expected
+    private hash<ExceptionInfo> assertDesc(string err, code call, string expected, *string absent) {
+        try {
+            call();
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(err, ex.err, ex.desc);
+            assertRegex(expected, ex.desc, "the message names the table");
+            if (absent) {
+                assertNRegex("(?i)" + absent, ex.desc, "the message does not show " + absent);
+            }
+            return ex;
+        }
+        fail(sprintf("no %s exception", err));
+    }
+
+    mysqlOffline() {
+%ifdef NoMysql
+        testSkip("the mysql module is not available");
+%else
+        DefaultSchemaMysqlDatasource ds();
+
+        # a table of the connection's database: the SQL has the database, the messages do not
+        MysqlTable t(ds, "t1");
+        assertEq("mtest.t1", t.getSqlName());
+        assertEq("t1", t.getMessageName());
+        assertNRegex("mtest", t.getDesc());
+        assertRegex("table t1$", t.getDesc());
+
+        # the connection's database given with the name is the default schema as well
+        t = new MysqlTable(ds, "mtest.t1");
+        assertEq("mtest.t1", t.getSqlName());
+        assertEq("t1", t.getMessageName());
+
+        # a table of another database is named with it
+        t = new MysqlTable(ds, "other.t1");
+        assertEq("other.t1", t.getSqlName());
+        assertEq("other.t1", t.getMessageName());
+        assertRegex("table other\\.t1$", t.getDesc());
+
+        # a name that needs quoting keeps its quotes
+        t = new MysqlTable(ds, "t 2");
+        assertEq("mtest.`t 2`", t.getSqlName());
+        assertEq("`t 2`", t.getMessageName());
+%endif
+    }
+
+    mysqlServer() {
+%ifdef NoMysql
+        testSkip("the mysql module is not available");
+%else
+        try {
+            *string connstr = MysqlRunDatabase::getConnectionString(m_options.connstr ?? ENV.QORE_DB_CONNSTR_MYSQL,
+                "SqlUtilDefaultSchemaMessages");
+            if (connstr) {
+                Datasource nds(connstr);
+                if (nds.getDriverName() != "mysql") {
+                    mysql_skip = sprintf("the connection uses driver %y, not mysql", nds.getDriverName());
+                } else {
+                    nds.open();
+                    mysql_ds = nds;
+                }
+            } else {
+                mysql_skip = "no MySQL connection configured (use -c or QORE_DB_CONNSTR_MYSQL)";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # a configured server that cannot be connected to is a failure, not a reason to skip (qore#6934)
+            if (ex.err == "TEST-EXCEPTION" && ex.desc =~ /^precondition failure: /) {
+                fail(ex.desc);
+            }
+            mysql_skip = sprintf("cannot connect to MySQL: %s: %s", ex.err, ex.desc);
+        }
+        if (!mysql_ds) {
+            testSkip(mysql_skip);
+        }
+        string db = mysql_ds.getDBName();
+        assertTrue(db.size() > 0, "the run's database has a name");
+        mysql_ds.exec("create table dsm_t1 (id int primary key)");
+        mysql_ds.exec("create table dsm_t2 (id int primary key, t1_id int)");
+        mysql_ds.commit();
+        on_exit {
+            mysql_ds.exec("drop table if exists dsm_t1");
+            mysql_ds.exec("drop table if exists dsm_t2");
+            mysql_ds.commit();
+        }
+
+        MysqlTable t(mysql_ds, "dsm_t1");
+        assertTrue(t.checkExistence(), "the table is found in the run's database");
+        assertEq("dsm_t1", t.getMessageName());
+        assertRegex("table dsm_t1$", t.getDesc());
+        assertNRegex(db, t.getDesc());
+        assertDesc("OPTION-ERROR", sub () { t.getDropSql({"cascade": True}); }, "table dsm_t1: cascade", db);
+        assertDesc("RETURNING-ERROR", sub () { t.insert({"id": 1}, {"returning": "id"}); },
+            "table dsm_t1: the mysql driver does not support", db);
+        # the database in another case is the default schema as well
+        assertEq("dsm_t1", new MysqlTable(mysql_ds, db.upr() + ".dsm_t1").getMessageName());
+
+        # a join error names both tables without the database
+        MysqlTable t2(mysql_ds, "dsm_t2");
+        assertDesc("SELECT-ERROR", sub () { t.select({"join": join_inner(t2, NOTHING, {"no_such_col": "id"})}); },
+            "cannot join on unknown column \"dsm_t1\"\\.\"no_such_col\"", db);
+
+        # a table of another database (the server's own catalog) is named with it
+        t = new MysqlTable(mysql_ds, "information_schema.tables");
+        assertEq("information_schema.tables", t.getMessageName());
+%endif
+    }
+
+    oracleNames() {
+%ifdef NoOracle
+        testSkip("the oracle module is not available");
+%else
+        CatalogDatasource ds(("T1",), (), (), (), {}, {"OTHER.T2": "TABLE"});
+        # the user's table: the SQL has the user's schema, the messages do not
+        OracleTable t(ds, "t1");
+        assertRegex("^qtest\\.", t.getSqlName());
+        assertEq("t1", t.getMessageName());
+        assertNRegex("(?i)qtest", t.getDesc());
+        # the user's schema given with the name, in another case, is the default schema as well
+        t = new OracleTable(ds, "QTEST.t1");
+        assertEq("t1", t.getMessageName());
+        # a table of another user's schema is named with its schema
+        t = new OracleTable(ds, "other.t2");
+        assertEq("other.t2", t.getMessageName());
+        assertRegex("table other\\.t2$", t.getDesc());
+%endif
+    }
+
+    oracleNotFound() {
+%ifdef NoOracle
+        testSkip("the oracle module is not available");
+%else
+        # the user's schema: the table is named without it
+        CatalogDatasource ds((), (), (), (), {}, {});
+        assertDesc("TABLE-ERROR", sub () { new OracleTable(ds, "missing").getComment(); },
+            "table \"missing\" or synonym \"missing\" does not exist", "qtest");
+        # another user's schema is shown
+        assertDesc("TABLE-ERROR", sub () { new OracleTable(ds, "other.missing").getComment(); },
+            "table \"other\"\\.\"missing\" does not exist");
+
+        # a table of the user whose columns cannot be read is named without the user's schema
+        ds = new NoColumnsCatalogDatasource();
+        assertDesc("TABLE-ERROR", sub () { new OracleTable(ds, "t1").describe(); },
+            "cannot retrieve table information for table \"t1\" in", "qtest");
+
+        # a synonym whose target in the user's schema is missing: the target is named without the schema
+        ds = new CatalogDatasource((), (), (), (), {"SYN1": {"owner": "QTEST", "name": "GONE", "type": "TABLE"}}, {});
+        assertDesc("TABLE-ERROR", sub () { new OracleTable(ds, "syn1").getComment(); },
+            "synonym pointing to table \"(?i:gone)\" which does not exist", "qtest");
+        # a synonym whose target in another schema is missing: the target is named with its schema
+        ds = new CatalogDatasource((), (), (), (), {"SYN2": {"owner": "OTHER", "name": "GONE", "type": "TABLE"}}, {});
+        assertDesc("TABLE-ERROR", sub () { new OracleTable(ds, "syn2").getComment(); },
+            "synonym pointing to table \"(?i:other)\"\\.\"(?i:gone)\" which does not exist");
+%endif
+    }
+}

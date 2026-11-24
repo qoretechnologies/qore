@@ -2426,6 +2426,9 @@
 
     - @ref sqlutilintro "SqlUtil" module
       - serialized objects keep no credentials of their datasource (see @ref sqlutil_serialization)
+      - messages name a table without the default schema of the connection, which Oracle and MySQL name after its
+        user or database (see @ref SqlUtil::AbstractTable::getMessageName() "AbstractTable::getMessageName()")
+        (<a href="https://github.com/qoretechnologies/qore/issues/7018">issue 7018</a>)
       - portable table partitioning APIs for PostgreSQL, Oracle, MySQL/MariaDB and SQL Server
       - deferrable foreign constraints for PostgreSQL and Oracle
         (<a href="https://github.com/qoretechnologies/qore/issues/5373">issue 5373</a>)
