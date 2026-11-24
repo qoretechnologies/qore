@@ -303,6 +303,9 @@ static Payload background_helper(uint16_t version, int32_t callee, uint32_t para
         w.writeU8(0);
         w.writeU32(0); // catch-exit depths
         w.writeU32(0); // catch-cleanup results
+        if (version >= QORE_AOT_EXIT_RESTORE_VERSION) {
+            w.writeU32(0); // exit restorations (qore#7379)
+        }
         w.writeU16(0); // local unwind locations
     };
 }
