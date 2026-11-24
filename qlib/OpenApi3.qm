@@ -1845,7 +1845,10 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
             content = call_function(try_import, ext_ref);
         else {
             # do environment variable substitution
-            map ext_ref = replace(ext_ref, "\$" + $1, ENV.$1), (ext_ref =~ x/\$(\w+)/g);
+            # the environment of the host only for a caller that could read it itself (qore#6844)
+            # (an empty value for each variable, as in the caller's own environment)
+            bool env_allowed = SandboxManager::callerMayReadExternalInfo();
+            map ext_ref = replace(ext_ref, "\$" + $1, env_allowed ? ENV.$1 : ""), (ext_ref =~ x/\$(\w+)/g);
             # derive target file name if def_path is set and the reference is not an absolute path
             if (def_path && !absolute_path(ext_ref))
                 ext_ref = def_path + DirSep + ext_ref;

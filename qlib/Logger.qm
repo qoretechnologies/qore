@@ -288,6 +288,8 @@ if (laq.isFull()) {
     @tableofcontents
 
     @section logger_v1_1 v1.1
+    - the \c %%E{VAR} field of the file names of the file appenders gives no value of the host's environment for an
+      appender that code restricted from external information created (see @ref sandbox_ambient_host_data)
     - @ref Logger::LoggerWrapper::logPreformatted() "LoggerWrapper::logPreformatted()" logs a message as it is, with no
       formatting (<a href="https://github.com/qoretechnologies/qore/issues/3420">issue 3420</a>)
     - @ref Logger::LoggerWrapper::assertLog() "LoggerWrapper::assertLog()" logs the message at the \c ERROR level when
@@ -2191,6 +2193,9 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
 
     private:internal {
         int count;
+        #! True if the code that created the appender could read the host's environment itself (qore#6844): the
+        #! \c %%E{VAR} field gives the values of the environment only then, wherever the file name is formatted
+        bool env_allowed = SandboxManager::callerMayReadExternalInfo();
     }
 
     #! Creates the object
@@ -2208,7 +2213,7 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
         |\c %%s|Used to output the OS directory separator, i.e. <tt>\\</tt> or <tt>/</tt>
         |\c %%c|Used to output the appender name
         |\c %%C|Used to output the appender class name
-        |\c %%E|Used to output the environment variable with name given by option, e.g. \c "%E{HOME}"
+        |\c %%E|Used to output the environment variable with name given by option, e.g. \c "%E{HOME}"; empty if code restricted from external information created the appender (see @ref sandbox_ambient_host_data)
         |\c %%|The literal percent sign. \c "%%" will print a \c "%" sign
 
         The following table explains the characters used in @ref Qore::Logger::LoggerPattern "LoggerPattern" for archive parameter only
@@ -2249,7 +2254,7 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
                 res = getName();
                 break;
             case "E":
-                res = ENV{option};
+                res = env_allowed ? ENV{option} : "";
                 break;
             case "s":
                 res = DirSep;
@@ -2370,6 +2375,9 @@ public class LoggerAppenderFileRing inherits public AbstractLoggerAppenderFileRo
 
     private:internal {
         hash<auto> patternData;
+        #! True if the code that created the appender could read the host's environment itself (qore#6844): the
+        #! \c %%E{VAR} field gives the values of the environment only then, wherever the file name is formatted
+        bool env_allowed = SandboxManager::callerMayReadExternalInfo();
     }
 
     #! Creates the object
@@ -2434,7 +2442,7 @@ public class LoggerAppenderFileRing inherits public AbstractLoggerAppenderFileRo
                 }
                 break;
             case "E":
-                res = ENV{option};
+                res = env_allowed ? ENV{option} : "";
                 break;
         }
         return res;
@@ -2535,6 +2543,12 @@ public class LoggerAppenderFileArchive inherits public LoggerAppenderFile, priva
         const string DEFAULT_ARCHIVE_PATTERN = "%p%f.%d";
     }
 
+    private:internal {
+        #! True if the code that created the appender could read the host's environment itself (qore#6844): the
+        #! \c %%E{VAR} field gives the values of the environment only then, wherever the file name is formatted
+        bool env_allowed = SandboxManager::callerMayReadExternalInfo();
+    }
+
     #! Creates the object
     /**
         @param name the name of the appender
@@ -2549,7 +2563,7 @@ public class LoggerAppenderFileArchive inherits public LoggerAppenderFile, priva
         |\c %%s|Used to output the OS directory separator, i.e. <tt>\\</tt> or <tt>/</tt>
         |\c %%c|Used to output the appender name
         |\c %%C|Used to output the appender class name
-        |\c %%E|Used to output the environment variable with name given by option, e.g. \c "%E{HOME}"
+        |\c %%E|Used to output the environment variable with name given by option, e.g. \c "%E{HOME}"; empty if code restricted from external information created the appender (see @ref sandbox_ambient_host_data)
         |\c %%|The literal percent sign. \c "%%" will print a \c "%" sign
 
         The following table explains the characters used in @ref Qore::Logger::LoggerPattern "LoggerPattern" for archive parameter only
@@ -2588,7 +2602,7 @@ public class LoggerAppenderFileArchive inherits public LoggerAppenderFile, priva
                 res = getName();
                 break;
             case "E":
-                res = ENV{option};
+                res = env_allowed ? ENV{option} : "";
                 break;
             case "s":
                 res = DirSep;

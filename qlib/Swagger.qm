@@ -144,6 +144,8 @@ RestHandler handler(NOTHING, swagger);
 
 
     @section swagger_2_6 Swagger v2.6
+    - the external references of a schema expand no environment variables of the host for code restricted from
+      external information (see @ref sandbox_ambient_host_data)
     - the server-side request validation reads the fields of a request, including the header parameters, which it
       checks and sets defaults for under \c "headers", from the \c "headers" key of its header hash, or from the top
       level of a hash built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with
@@ -1813,7 +1815,10 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
             content = call_function(try_import, ext_ref);
         else {
             # do environment variable substitution
-            map ext_ref = replace(ext_ref, "\$" + $1, ENV.$1), (ext_ref =~ x/\$(\w+)/g);
+            # the environment of the host only for a caller that could read it itself (qore#6844)
+            # (an empty value for each variable, as in the caller's own environment)
+            bool env_allowed = SandboxManager::callerMayReadExternalInfo();
+            map ext_ref = replace(ext_ref, "\$" + $1, env_allowed ? ENV.$1 : ""), (ext_ref =~ x/\$(\w+)/g);
             # derive target file name if def_path is set and the reference is not an absolute path
             if (def_path && !absolute_path(ext_ref))
                 ext_ref = def_path + DirSep + ext_ref;

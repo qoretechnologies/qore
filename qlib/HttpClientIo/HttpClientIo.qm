@@ -948,6 +948,11 @@ string target = encode_http_request_target("/files/my report.txt?q=a|b");
 
         @param url the URL to retrieve
 
+        For code restricted from external information (see @ref Qore::SandboxManager::callerMayReadExternalInfo()
+        "SandboxManager::callerMayReadExternalInfo()"), the environment is not read and @ref NOTHING is returned: the
+        proxy of the host, which can carry its credentials, is the host's; such code gives its proxy explicitly
+        (qore#6844)
+
         @return the proxy URL, or @ref NOTHING if no proxy is to be used; a proxy given without a scheme is returned
         with \c "http://"
 
@@ -959,6 +964,10 @@ HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
         @endcode
     */
     public *string sub get_proxy_url_from_environment(string url) {
+        # the host's proxy (and its credentials) only for a caller that could read the environment itself (qore#6844)
+        if (!SandboxManager::callerMayReadExternalInfo()) {
+            return;
+        }
         hash<UrlInfo> info = parse_url(url);
         string scheme = (info.protocol ?? "http").lwr();
         *string proxy;

@@ -1,0 +1,146 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+%requires HttpClientIo
+%requires UrlDownloader
+%requires ../../TestInterpreter.qm
+%requires ./ambient-host/AmbientCallers.qm
+
+%exec-class AmbientEnvironmentTest
+
+#! Library code gives code restricted from external information no values of the host's environment (qore#6844)
+/** The environment variables that library code expands for its caller (substitute_env_vars(), file URLs, the
+    external references of schemas, the \c %E{} field of the Logger file appenders) are empty for such code, as they
+    are in its own code, and the proxy of the environment is not used for it
+*/
+class AmbientEnvironmentTest inherits QUnit::Test {
+    public {
+        #! the code of the Programs that the proxy test runs
+        const Source = "%modern
+%requires HttpClientIo
+%requires UrlDownloader
+auto sub try_call(code c) {
+    try {
+        return c();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+*string sub proxy(string url) {
+    return HttpClientIo::get_proxy_url_from_environment(url);
+}
+auto sub download(string url) {
+    return try_call(auto sub () {
+        UrlDownloader::UrlDownloader dl(<UrlDownloader::UrlDownloadOptions>{\"output\": \"-\",
+            \"http_version\": \"1.1\", \"connect_timeout\": 5s, \"read_timeout\": 5s});
+        dl.download(url, NOTHING, new StringOutputStream());
+        return \"DONE\";
+    });
+}
+";
+    }
+
+    private {
+        TmpDir tmp("ambient-environment-");
+    }
+
+    constructor() : Test("AmbientEnvironment", "1.0", \ARGV) {
+        addTestCase("expansion of environment variables", \expansionTest());
+        addTestCase("proxy from the environment", \proxyTest());
+        set_return_value(main());
+    }
+
+    private writeFile(string name, string data) {
+        File f();
+        f.open2(tmp.path + DirSep + name, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+
+    #! substitute_env_vars(), file URLs, Logger file names and schema references, in a process that has the variables
+    #! from its start, as modules take the environment when they are loaded
+    expansionTest() {
+        writeFile("data.txt", "host data");
+        writeFile("ext.json", "{\"S\": {\"type\": \"string\"}}");
+        string dir = normalize_dir(get_script_dir()) + DirSep + "ambient-host" + DirSep;
+        string out = backquote(sprintf("Q6844_SECRET=host-secret-value Q6844_DIR='%s' QORE_MODULE_DIR='%s' '%s' '%s' "
+            "2>/dev/null", tmp.path, (normalize_dir(get_script_dir() + "/../../../../qlib"), ENV.QORE_MODULE_DIR)
+            .join(PathSep), TestInterpreter::qore_interpreter(), dir + "EnvironmentChild.q"));
+        hash<string, string> r = parse(out);
+        string full = tmp.path + DirSep + "host-secret-value.log";
+        string empty = tmp.path + DirSep + ".log";
+        hash<string, auto> may = {
+            "subst": "x host-secret-value y|x host-secret-value y|x host-secret-value y",
+            "subst_plain": "plain text",
+            "file_url": "host data",
+            "file_url_explicit": "host data",
+            "log_files": (full, full),
+            "openapi3": "OK",
+            "swagger": "OK",
+        };
+        # code that may not read the environment sees an empty one
+        hash<string, auto> may_not = may + {
+            "subst": "x  y|x  y|x  y",
+            "log_files": (empty, empty),
+        };
+        hash<string, string> expected;
+        foreach hash<auto> i in ({"host": may, "restricted": may_not, "sandboxed_restricted": may_not,
+                "sandboxed": may}.pairIterator()) {
+            foreach hash<auto> k in (i.value.pairIterator()) {
+                expected{i.key + "_" + k.key} = sprintf("%y", k.value);
+            }
+        }
+        # the file URL "file:///data.txt" and the schema reference "/ext.json" of an empty environment are not found
+        foreach string kind in (("restricted", "sandboxed_restricted")) {
+            foreach string k in (("file_url", "openapi3", "swagger")) {
+                assertNeq(expected{kind + "_" + k}, r{kind + "_" + k}, kind + ": " + k);
+                assertRegex("^\"[A-Z0-9-]+\"$", r{kind + "_" + k} ?? "", kind + ": " + k + ": an error");
+                expected{kind + "_" + k} = r{kind + "_" + k};
+            }
+        }
+        assertEq(expected, r, out);
+    }
+
+    proxyTest() {
+        hash<string, Program> pgms = AmbientCallers::make_programs(Source, "proxy");
+        AmbientCallers::FakeMetadataServer proxy();
+        AmbientCallers::EnvHelper penv({"http_proxy": proxy.url, "no_proxy": NOTHING, "NO_PROXY": NOTHING,
+            "all_proxy": NOTHING, "ALL_PROXY": NOTHING});
+        assertEq(proxy.url, get_proxy_url_from_environment("http://example.com/"), "host");
+        # a target where nothing listens: a request through the proxy reaches the proxy, which answers 404
+        string target = "http://127.0.0.1:1/x";
+        foreach string kind in (AmbientCallers::Kinds) {
+            bool r = AmbientCallers::restricted(kind);
+            assertEq(r ? NOTHING : proxy.url, pgms{kind}.callFunction("proxy", "http://example.com/"), kind);
+            int calls = proxy.handler.calls;
+            auto v = pgms{kind}.callFunction("download", target);
+            assertNeq("DONE", v, kind);
+            assertEq(r ? calls : calls + 1, proxy.handler.calls, kind);
+        }
+    }
+
+    #! parses the output of the child process: one line per result, with the key, \c "=" and the value written with
+    #! \c %y
+    private hash<string, string> parse(string out) {
+        hash<string, string> rv;
+        foreach string line in (out.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            *list<*string> kv = (line =~ x/^([a-z_0-9]+)=(.*)$/);
+            if (!kv) {
+                throw "CHILD-OUTPUT-ERROR", sprintf("unexpected output: %s", out);
+            }
+            rv{kv[0]} = kv[1];
+        }
+        return rv ?? {};
+    }
+}
