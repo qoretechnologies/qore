@@ -60,7 +60,8 @@ class QoreSandboxManager;
 /** @return 0 if allowed, -1 if denied (an exception is raised)
 */
 DLLLOCAL int qore_socket_check_unix_sandbox_rules(QoreSandboxManager& sm, const char* path, bool bind,
-        ExceptionSink* xsink);
+        ExceptionSink* xsink,
+        const char* canon = nullptr);
 #endif
 
 //! the sandboxes that restrict a connection, each once, with a reference to each (qore#5747)

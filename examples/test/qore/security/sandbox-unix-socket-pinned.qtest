@@ -1,0 +1,178 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - UNIX socket bind and connection relative to a pinned directory (bindat(), connectat())
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The UNIX socket paths of sandboxed code reach the socket file that the sandbox file-system policy checked: a
+# component of the path that is replaced by a link to a directory outside of the allowed directory after the check
+# does not make a connection reach a socket there, nor a bind create its socket file there, nor the close of the
+# bound socket remove a file there (qore#7518).  The replacement is made with dbg_fs_swap_on_open() (debug builds)
+# between the check and the operation.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%exec-class SandboxUnixSocketPinnedTest
+
+class SandboxUnixSocketPinnedTest inherits QUnit::Test {
+    private {
+        string dir;
+        string allowed;
+        string real;
+        string link;
+        string outside;
+        Program sandbox;
+    }
+
+    const SandboxCode = '
+Socket sub connect(string path) {
+    Socket s();
+    s.connectUNIX(path);
+    return s;
+}
+
+Socket sub bind(string path) {
+    Socket s();
+    s.bindUNIX(path);
+    return s;
+}
+';
+
+    constructor() : QUnit::Test("sandbox UNIX socket paths pinned", "1.0", \ARGV) {
+        addTestCase("a connection reaches the socket checked", \connectTest());
+        addTestCase("a bind creates the socket file in the directory checked", \bindTest());
+        addTestCase("a socket path through a link that is not a directory is not followed", \connectLinkTest());
+        addTestCase("the error of a bind names the path as given", \bindErrorTest());
+        addTestCase("the bind of a UNIX socket address (C++ API)", \sockaddrBindTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        # short names: a UNIX socket path is limited to about 100 bytes
+        dir = make_tmp_dir("q7518u-");
+        allowed = dir + DirSep + "a";
+        real = allowed + DirSep + "r";
+        link = allowed + DirSep + "l";
+        outside = dir + DirSep + "o";
+        mkdir(allowed);
+        mkdir(real);
+        mkdir(outside);
+
+        SandboxManager manager();
+        manager.setNetworkDefaultPolicy(True);
+        manager.setFilesystemDefaultPolicy(False);
+        manager.addFilesystemAllowedPath(allowed, QSEC_READ | QSEC_WRITE | QSEC_CREATE | QSEC_DELETE);
+        sandbox = new Program(PO_MODERN);
+        sandbox.setSandboxManager(manager);
+        sandbox.parse(SandboxCode, "sandbox");
+    }
+
+    globalTearDown() {
+        if (dir) {
+            remove_tree(dir);
+        }
+    }
+
+    setUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the replacement of the link needs dbg_fs_swap_on_open()");
+        }
+        if (!Option::HAVE_UNIX_FILEMGT) {
+            testSkip("no UNIX sockets");
+        }
+        unlink(link);
+        symlink(real, link);
+    }
+
+    tearDown() {
+        call_function("dbg_fs_swap_on_open", "", "");
+    }
+
+    connectTest() {
+        Socket inside();
+        inside.bindUNIX(real + DirSep + "s");
+        inside.listen();
+        Socket out();
+        out.bindUNIX(outside + DirSep + "s");
+        out.listen();
+        on_exit {
+            inside.close();
+            out.close();
+        }
+
+        arm();
+        Socket client = sandbox.callFunction("connect", link + DirSep + "s");
+        on_exit client.close();
+        # the connection is pending on the socket checked, and on no other
+        assertTrue(inside.isDataAvailable(0), "the socket checked has the connection");
+        assertFalse(out.isDataAvailable(0), "the socket outside gets no connection");
+        # the socket reports the path as given
+        assertEq(link + DirSep + "s", client.getPeerInfo().address);
+    }
+
+    bindTest() {
+        # a file of the same name outside, which the close must not remove
+        string decoy = outside + DirSep + "b";
+        File f();
+        f.open2(decoy, O_CREAT | O_WRONLY | O_TRUNC);
+        f.close();
+
+        arm();
+        Socket s = sandbox.callFunction("bind", link + DirSep + "b");
+        assertEq("SOCKET", hlstat(real + DirSep + "b").type, "the socket file is in the directory checked");
+        assertEq("REGULAR", hlstat(decoy).type, "nothing is created outside");
+        # the socket reports the path as given
+        assertEq(link + DirSep + "b", s.getSocketInfo().address);
+        # the link still reaches outside: the close removes the socket file from the directory checked
+        s.close();
+        assertFalse(exists hlstat(real + DirSep + "b"), "the socket file is removed on close");
+        assertEq("REGULAR", hlstat(decoy).type, "the file outside is not removed");
+    }
+
+    connectLinkTest() {
+        Socket out();
+        out.bindUNIX(outside + DirSep + "t");
+        out.listen();
+        on_exit out.close();
+        # a socket file replaced by a link to a socket outside after the check
+        Socket inside();
+        inside.bindUNIX(real + DirSep + "t");
+        inside.listen();
+        on_exit inside.close();
+        call_function("dbg_fs_swap_on_open", real + DirSep + "t", outside + DirSep + "t");
+        # the socket file was replaced by a link after the check
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \sandbox.callFunction(), ("connect", real + DirSep + "t"));
+        assertFalse(out.isDataAvailable(0), "the socket outside gets no connection");
+    }
+
+    bindErrorTest() {
+        string path = real + DirSep + "e";
+        Socket first = sandbox.callFunction("bind", path);
+        on_exit first.close();
+        try {
+            sandbox.callFunction("bind", path);
+            assertTrue(False, "a second bind of the same path fails");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SOCKET-BIND-ERROR", ex.err);
+            assertRegex(path, ex.desc, "the error names the path as given");
+            assertNRegex("/proc/", ex.desc, "the error does not name the address of the path pinned");
+        }
+    }
+
+    sockaddrBindTest() {
+        hash<auto> res = call_function("dbg_run_unix_sockaddr_bind_tests");
+        assertGt(0, res.test_count, "the C++ unit tests ran");
+        assertEq(0, res.fail_count, sprintf("C++ unit tests: %d/%d passed, %d failed", res.pass_count,
+            res.test_count, res.fail_count));
+    }
+
+    private arm() {
+        call_function("dbg_fs_swap_on_open", link + DirSep + "*", outside);
+    }
+}

@@ -59,7 +59,9 @@ public:
         @param addrlen the length of @a addr
         @param proto the protocol: @ref QSEC_NET_TCP, @ref QSEC_NET_UDP or @ref QSEC_NET_UNIX
     */
-    DLLLOCAL void add(const char* host, const struct sockaddr* addr, socklen_t addrlen, int proto);
+    //! @param canon the canonical path pinned for a UNIX socket destination, if any (qore#7518)
+    DLLLOCAL void add(const char* host, const struct sockaddr* addr, socklen_t addrlen, int proto,
+            const std::string& canon = std::string());
 
     //! Adds a destination that the client did not resolve
     /** A proxy resolves the destination of a request itself; the client resolves it only to check it against the
@@ -90,6 +92,9 @@ private:
         socklen_t addrlen = 0;
         //! the protocol (QSEC_NET_*)
         int proto = 0;
+        //! the canonical path of a UNIX socket that the policy checked when it was connected to (qore#7518), which
+        //! a check of the destination checks without resolving its path again
+        std::string canon;
     };
 
     std::vector<Destination> destinations;

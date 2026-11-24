@@ -27777,6 +27777,153 @@ private:
     }
 };
 
+//! The bind of a socket to a UNIX socket address with QoreSocket::bind(family, addr) (qore#7518)
+/** Under a sandbox policy, an address with a path is checked and pinned as a path; an abstract address (Linux) and an
+    address without a path (autobind) name no file; without a policy, the bind is unchanged
+*/
+class UnixSockaddrBindTest {
+public:
+    static void run(UnitTestCounters& c) {
+        runPathNoPolicy(c);
+        runPathPolicy(c);
+#ifdef __linux__
+        runAbstract(c);
+        runAutobind(c);
+#endif
+    }
+
+private:
+    static struct sockaddr_un makeAddr(const char* path, size_t len) {
+        struct sockaddr_un a = {};
+        a.sun_family = AF_UNIX;
+        memcpy(a.sun_path, path, std::min(len, sizeof(a.sun_path)));
+        return a;
+    }
+
+    //! without a policy, an address with a path binds as before: the socket file is kept on close
+    static void runPathNoPolicy(UnitTestCounters& c) {
+        UtSocketDir dir;
+        UT_ASSERT(c, !dir.socketPath().empty(), "sockaddr bind: the UNIX socket directory is made");
+        if (dir.socketPath().empty()) {
+            return;
+        }
+        const std::string& path = dir.socketPath();
+        struct sockaddr_un a = makeAddr(path.c_str(), path.size());
+        ExceptionSink xsink;
+        QoreSocket s;
+        int rc = qore_socket_bind_family_sockaddr_direct(&s, AF_UNIX, reinterpret_cast<struct sockaddr*>(&a),
+            sizeof(a), SOCK_STREAM, 0, nullptr, &xsink);
+        UT_ASSERT(c, !rc && !xsink, "sockaddr bind: an address with a path binds without a policy");
+        xsink.clear();
+        struct stat sbuf;
+        UT_ASSERT(c, !lstat(path.c_str(), &sbuf) && S_ISSOCK(sbuf.st_mode), "sockaddr bind: the socket file is made");
+        s.close();
+        UT_ASSERT(c, !lstat(path.c_str(), &sbuf), "sockaddr bind: without a policy, the socket file is kept on close");
+    }
+
+    //! under a policy, an address with a path is checked by the file-system policy
+    static void runPathPolicy(UnitTestCounters& c) {
+        UtSocketDir allowed;
+        UtSocketDir other;
+        UT_ASSERT(c, !allowed.socketPath().empty() && !other.socketPath().empty(),
+            "sockaddr bind: the UNIX socket directories are made");
+        if (allowed.socketPath().empty() || other.socketPath().empty()) {
+            return;
+        }
+        ExceptionSink xsink;
+        std::string allowed_dir = allowed.socketPath().substr(0, allowed.socketPath().size() - 2);
+        QoreSandboxManager* sm = new QoreSandboxManager;
+        sm->network().setDefaultPolicy(true);
+        sm->filesystem().setDefaultPolicy(false);
+        UT_ASSERT_EQ(c, 0, sm->filesystem().addAllowedPath(allowed_dir.c_str(), QSEC_ALL, &xsink),
+            "sockaddr bind: the allowed directory is set");
+        {
+            const std::string& path = allowed.socketPath();
+            struct sockaddr_un a = makeAddr(path.c_str(), path.size());
+            QoreSocket s;
+            int rc = qore_socket_bind_family_sockaddr_direct(&s, AF_UNIX, reinterpret_cast<struct sockaddr*>(&a),
+                sizeof(a), SOCK_STREAM, 0, sm, &xsink);
+            UT_ASSERT(c, !rc && !xsink, "sockaddr bind: a path in the allowed directory binds under a policy");
+            xsink.clear();
+            struct stat sbuf;
+            UT_ASSERT(c, !lstat(path.c_str(), &sbuf) && S_ISSOCK(sbuf.st_mode),
+                "sockaddr bind: the socket file is made in the allowed directory");
+            s.close();
+        }
+        {
+            const std::string& path = other.socketPath();
+            struct sockaddr_un a = makeAddr(path.c_str(), path.size());
+            QoreSocket s;
+            int rc = qore_socket_bind_family_sockaddr_direct(&s, AF_UNIX, reinterpret_cast<struct sockaddr*>(&a),
+                sizeof(a), SOCK_STREAM, 0, sm, &xsink);
+            UT_ASSERT(c, rc && xsink.isException(), "sockaddr bind: a path outside the allowed directory is denied");
+            xsink.clear();
+            struct stat sbuf;
+            UT_ASSERT(c, lstat(path.c_str(), &sbuf), "sockaddr bind: no socket file is made outside");
+        }
+        sm->deref(&xsink);
+        xsink.clear();
+    }
+
+#ifdef __linux__
+    //! an abstract address names no file: it binds that name, with or without a policy
+    static void runAbstract(UnitTestCounters& c) {
+        char name[32];
+        int len = snprintf(name, sizeof(name), "%cqore7518-%d", '\0', (int)getpid());
+        struct sockaddr_un a = makeAddr(name, len);
+        socklen_t size = offsetof(struct sockaddr_un, sun_path) + len;
+        ExceptionSink xsink;
+        QoreSandboxManager* sm = new QoreSandboxManager;
+        sm->network().setDefaultPolicy(true);
+        sm->filesystem().setDefaultPolicy(false);
+        for (QoreSandboxManager* m : {(QoreSandboxManager*)nullptr, sm}) {
+            QoreSocket s;
+            int rc = qore_socket_bind_family_sockaddr_direct(&s, AF_UNIX, reinterpret_cast<struct sockaddr*>(&a),
+                size, SOCK_STREAM, 0, m, &xsink);
+            UT_ASSERT(c, !rc && !xsink, m ? "sockaddr bind: an abstract address binds under a policy"
+                : "sockaddr bind: an abstract address binds without a policy");
+            xsink.clear();
+            struct sockaddr_un bound = {};
+            socklen_t blen = sizeof(bound);
+            int fd = s.getDescriptorForLibrary();
+            UT_ASSERT(c, fd >= 0 && !getsockname(fd, reinterpret_cast<struct sockaddr*>(&bound), &blen)
+                && blen == size && !memcmp(bound.sun_path, name, len), m
+                ? "sockaddr bind: the abstract name is bound under a policy"
+                : "sockaddr bind: the abstract name is bound without a policy");
+            s.close();
+        }
+        sm->deref(&xsink);
+        xsink.clear();
+    }
+
+    //! an address without a path (autobind) names no file
+    static void runAutobind(UnitTestCounters& c) {
+        struct sockaddr_un a = {};
+        a.sun_family = AF_UNIX;
+        ExceptionSink xsink;
+        QoreSandboxManager* sm = new QoreSandboxManager;
+        sm->network().setDefaultPolicy(true);
+        sm->filesystem().setDefaultPolicy(false);
+        QoreSocket s;
+        int rc = qore_socket_bind_family_sockaddr_direct(&s, AF_UNIX, reinterpret_cast<struct sockaddr*>(&a),
+            offsetof(struct sockaddr_un, sun_path), SOCK_STREAM, 0, sm, &xsink);
+        UT_ASSERT(c, !rc && !xsink, "sockaddr bind: an address without a path binds under a policy (autobind)");
+        xsink.clear();
+        s.close();
+        sm->deref(&xsink);
+        xsink.clear();
+    }
+#endif
+};
+
+//! Debug-only: runs the unit tests of the bind of a UNIX socket address (qore#7518)
+static QoreValue f_dbg_run_unix_sockaddr_bind_tests(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    UnitTestCounters c;
+    UnixSockaddrBindTest::run(c);
+    return make_unit_test_result(c, xsink);
+}
+
 //! Debug-only: runs the unit tests of the error that a failed connect reports (#6119)
 static QoreValue f_dbg_run_connect_error_tests(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -36695,6 +36842,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifndef _Q_WINDOWS
     qns.addBuiltinVariant("dbg_run_connect_error_tests", f_dbg_run_connect_error_tests, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_run_unix_sockaddr_bind_tests", f_dbg_run_unix_sockaddr_bind_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
 #endif
     qns.addBuiltinVariant("dbg_run_variant_search_tests", f_dbg_run_variant_search_tests, QCF_NO_FLAGS,
