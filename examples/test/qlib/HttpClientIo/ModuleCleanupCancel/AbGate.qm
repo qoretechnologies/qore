@@ -49,8 +49,21 @@ class GateWsConnection inherits WebSocketConnection {
             bool handed = call_function("dbg_module_cleanup_wait_handles", 1, 20s, GateHolder::gate_file);
             printf("server frame blocked: work handed over: %y\n", handed);
         } else {
-            printf("server got: %s\n", msg);
+            # the frame is processed in the pass that the gate's thread runs for the work handed over to it, as that
+            # work: its handler can hand work over in turn (qore#7339)
+            int nested = AsyncIoController::holdModuleCleanupWork();
+            printf("server got: %s: nested hand-over: %y\n", msg, nested != 0);
+            AsyncIoController::releaseModuleCleanupWork(nested);
         }
+        flush();
+    }
+
+    #! the end of the connection, which the cleanup canceled, runs in work that the cleanup waits for: the work that
+    #! ended the connection handed itself over to the thread that runs the end (qore#7339), taking its handle in the
+    #! file given
+    connectionClosed() {
+        printf("server connection closed: end handed over: %y\n",
+            call_function("dbg_module_cleanup_wait_handles", 1, 0, GateHolder::end_file));
         flush();
     }
 }
@@ -121,6 +134,8 @@ public class GateHolder {
         static string http_version = "2.0";
         #! the file of the admission gate of the server's stream for that version
         static string gate_file = "WebSocketHandler.qm";
+        #! the file that hands the end of the connection over for that version
+        static string end_file = "HttpAsyncSocketIoController.qc";
         #! starts the server when the cleanup deletes it
         static GateConnector connector();
     }

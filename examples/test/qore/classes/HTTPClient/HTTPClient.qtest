@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-platform: macos - HTTP client timeouts, UNIX-socket URLs, chunked disconnects, TLS client certs and HTTP/2
+# test-loopback: localhost - its Host header, proxy and URL tests use the name localhost, and the servers of their clients are bound to the name "localhost", which listens on its first address and holds the port on the other loopback address; its 127.0.0.1 servers have 127.0.0.1 clients
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -142,7 +143,8 @@ class TestDisconnectStreamRequest inherits AbstractStreamRequest {
     }
 
     hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
-        s.close();
+        # the server's code (not sandboxed) aborts the connection of its request (qore#7305)
+        http_abort_connection(s);
         return <HttpResponseInfo>{};
     }
 }
@@ -155,8 +157,10 @@ class EchoHandler inherits AbstractHttpRequestHandler {
     private:internal {
     }
 
-    # handle all requests as stream requests
+    # handle all requests as stream requests; the stream request that aborts the connection of its request gets the
+    # socket of the request (qore#7305)
     constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+        setHandlerSocketView();
     }
 
     # return the stream request handler

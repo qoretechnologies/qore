@@ -134,6 +134,7 @@ public class TogetherDataProviderTest inherits QUnit::Test {
         conn_name = LiveProvider::get("together", "TOGETHER_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + 197 actions registered", \registrationTest());
+        addTestCase("read-only operations declare that they change nothing", \readOnlyActionsTest());
         addTestCase("root provider lists 197 children",       \rootProviderTest());
         addTestCase("chat-completion converts created date", \chatRequestTest());
         addTestCase("create-embeddings forwards body unchanged",
@@ -171,6 +172,24 @@ public class TogetherDataProviderTest inherits QUnit::Test {
             "use a saved Together AI connection for explicitly enabled live tests; "
             "otherwise use TOGETHERAI_APIKEY",
             OptionColumn);
+    }
+
+    #! the POST operations that the vendored API description documents as pure queries, validations,
+    #! estimates or stateless inference declare mutates_state False; the others keep the default (qore#7454)
+    private readOnlyActionsTest() {
+        foreach string name in (("chat-completion", "text-completion", "create-embeddings", "generate-image", "estimate-fine-tune-price", "preview-fine-tune-data", "rerank", "generate-speech", "transcribe-audio", "translate-audio", "estimate-on-demand-model-resource-cost", "dedicated-preview-rollout-defaults",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("TogetherAi", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # operations that create, change or start something on the server still declare a change
+        foreach string name in (("create-fine-tune", "create-batch", "execute-code", "dedicated-create-rollout",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("TogetherAi", name);
+            assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
     }
 
     private registrationTest() {

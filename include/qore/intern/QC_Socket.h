@@ -618,6 +618,11 @@ public:
     //! Returns the size of a line of a chunked body read up to its line end, without the line end
     DLLLOCAL static size_t httpLinePayloadSize(const char* str, size_t len);
 
+    //! returns true if a response with the given \c Transfer-Encoding field value has a chunked body (RFC 9112
+    //! section 6.3: its final transfer coding is chunked); a response with another one is delimited by the end of the
+    //! connection
+    DLLLOCAL static bool isHttpResponseBodyChunked(QoreValue te);
+
     //! Parses the size of a chunk from its chunk size line without the line end (RFC 9112 section 7.1)
     DLLLOCAL static int parseHttpChunkSize(const char* line, size_t len, int64_t& chunk_size, ExceptionSink* xsink);
 

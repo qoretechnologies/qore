@@ -1480,6 +1480,9 @@ protected:
     */
     DLLLOCAL strset_t getUserModulesLeftForCleanup(const strset_t& held);
 
+    //! Collects direct dependencies and runtime-only edges for both phases of module teardown
+    DLLLOCAL void getTeardownModuleDependencies(struct QoreTeardownDependencies& graph);
+
     //! Gets the modules that the given binary module requires; returns true if it is a native binary module
     /** A native binary module is a binary module that is not an AOT user module; its dependencies are those declared
         with qore_module_dependencies, while those of an AOT user module are recorded by the AOT runtime

@@ -555,6 +555,30 @@ public:
         }
     }
 
+    //! grows the string to hold \a i bytes, as check_char() does, without ending the process if the memory cannot be
+    //! allocated
+    /** @return 0 for OK, -1 if the memory could not be allocated; the string is then unchanged
+    */
+    DLLLOCAL int tryGrow(size_t i) {
+        if (view_parent) {
+            materialize();
+        }
+        if (i < allocated) {
+            return 0;
+        }
+        size_t d = i >> 2;
+        size_t new_allocated = i + (d < STR_CLASS_BLOCK ? STR_CLASS_BLOCK : d);
+        new_allocated = (new_allocated / 0x10 + 1) * 0x10; // use complete cache line
+        char* nbuf = static_cast<char*>(realloc(ownedBuffer(), new_allocated));
+        if (!nbuf) {
+            return -1;
+        }
+        ownedBuffer() = nbuf;
+        allocated = new_allocated;
+        sb.sync(allocated);
+        return 0;
+    }
+
     DLLLOCAL size_t check_offset(qore_offset_t offset) {
         if (offset < 0) {
             offset = len + offset;

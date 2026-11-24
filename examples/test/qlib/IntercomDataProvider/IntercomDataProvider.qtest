@@ -209,6 +209,7 @@ public class IntercomDataProviderTest inherits QUnit::Test {
         addTestCase("schema", \schemaTest());
         addTestCase("drift", \driftTest());
         addTestCase("manifest", \manifestTest());
+        addTestCase("read-only operations declare that they change nothing", \readOnlyActionsTest());
         addTestCase("actionSurface", \actionSurfaceTest());
         addTestCase("referenceData", \referenceDataTest());
         addTestCase("paging", \pagingTest());
@@ -247,6 +248,24 @@ public class IntercomDataProviderTest inherits QUnit::Test {
         RestSchemaActionSet aset = IntercomSchema::getActionSet();
         list<hash<RestSchemaDriftInfo>> drift = RestSchemaDrift::compare(aset, IntercomSchema::getSchema());
         assertEq((), drift, "the manifest and the vendored schema agree");
+    }
+
+    #! the POST operations that the vendored API description documents as pure queries, validations,
+    #! estimates or stateless inference declare mutates_state False; the others keep the default (qore#7454)
+    private readOnlyActionsTest() {
+        foreach string name in (("SearchContacts", "listAllCompanies", "searchConversations",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("Intercom", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # operations that create, change or start something on the server still declare a change
+        foreach string name in (("attachTagToContact",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("Intercom", name);
+            assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
     }
 
     private manifestTest() {

@@ -520,6 +520,20 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
             assertEq(DPAT_EVENT, orderCreated.action_code);
             assertTrue(orderCreated.groups.contains("Triggers"));
         }
+
+        # these actions only make GET requests: they declare that they are read-only, which the catalogue reports
+        # as such (qore#7454)
+        list<string> read_only = ("get-customers-totals", "get-orders-totals", "get-products-totals",
+            "get-sales-report", "get-setting", "get-system-status", "get-tax-rate", "get-top-sellers-report",
+            "get-variation", "list-order-notes", "list-refunds", "list-shipping-methods", "list-shipping-zones",
+            "list-variations");
+        list<hash<DataProviderActionInfo>> ro_actions = select actions, inlist($1.action, read_only);
+        assertEq(read_only, sort(map $1.action, ro_actions));
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
+        # an action that creates a resource still changes state
+        assertTrue(DataProviderActionCatalog::actionMutatesState(createOrder));
     }
 
     #! Verify every event provider can produce fake example data without a live API

@@ -1,0 +1,211 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 chunked bodies and their trailer sections read from local sockets
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The trailer section of a chunked body ends where every reader ends it: its lines end with CRLF, and each is a
+    field line.  A trailer section with a line that ends with a bare LF, with an empty line before its end, or with a
+    line that is not a field line, is refused by every reader of a chunked body, and the bytes after it are not taken
+    for the next message: the body is not finished, so no header is read on the socket.  A valid trailer section
+    leaves the socket usable.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+
+%exec-class SocketChunkedTrailerSectionTest
+
+#! the chunked body readers
+enum Reader {
+    String = "string",
+    Binary = "binary",
+    OutputStream = "output-stream",
+    Callback = "callback",
+    BinaryCallback = "binary-callback",
+    Chunk = "chunk",
+    PollBody = "poll-body",
+    Pipeline = "pipeline",
+}
+
+class SocketChunkedTrailerSectionTest inherits QUnit::Test {
+    private {
+        #! the chunked body readers
+        const Readers = (
+            Reader::String,
+            Reader::Binary,
+            Reader::OutputStream,
+            Reader::Callback,
+            Reader::BinaryCallback,
+            Reader::Chunk,
+            Reader::PollBody,
+            Reader::Pipeline,
+        );
+
+        #! the header of a request with a chunked body, which the pipeline reader reads before the body
+        const PipelineHeader = "POST /body HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n";
+
+        #! a message that follows a body
+        const NextRequest = "GET /next HTTP/1.1\r\nHost: localhost\r\n\r\n";
+
+        #! a message that a reader that ended the trailer section early would lose
+        const LostRequest = "GET /lost HTTP/1.1\r\nHost: localhost\r\n\r\n";
+
+        #! the first chunk of each body
+        const FirstChunk = "5\r\nhello\r\n";
+
+        #! the ends of a body after its first chunk that are refused: the last chunk and a trailer section
+        const InvalidEnds = {
+            "an empty line with a bare LF": "0\r\n\n" + LostRequest,
+            "a field line with a bare LF": "0\r\nX-Trailer: a\n\r\n" + LostRequest,
+            "an empty line with a bare LF after a field line": "0\r\nX-Trailer: a\r\n\n" + LostRequest,
+            "a line that is not a field line": "0\r\nX-Trailer: a\r\nnot a field line\r\n\r\n",
+            "a line with a bare LF in it": "0\r\nX-Trailer: a\nX-Other: b\r\n\r\n",
+        };
+    }
+
+    constructor() : Test("SocketChunkedTrailerSectionTest", "1.0") {
+        addTestCase("a valid trailer section", \validTest());
+        addTestCase("a trailer section that is refused", \invalidTest());
+        set_return_value(main());
+    }
+
+    validTest() {
+        foreach string end in (("0\r\n\r\n", "0\r\nX-Trailer: a\r\nX-Other: b\r\n\r\n",
+                "0\r\nX-Trailer: a\r\n b\r\n\r\n")) {
+            foreach Reader reader in (Readers) {
+                string label = sprintf("%s: %y", reader, end);
+                hash<auto> client = startClient(reader, FirstChunk + end + NextRequest);
+                on_exit client.done.dec();
+                Socket conn = client.server.accept(5s);
+                on_exit conn.close();
+                *hash<auto> trailers;
+                *hash<ExceptionInfo> ex = readBody(conn, reader, \trailers);
+                assertNothing(ex, label);
+                if (end =~ /X-Trailer/ && (reader == Reader::String || reader == Reader::Binary)) {
+                    assertRegex("^a", trailers."x-trailer", label);
+                }
+                assertFalse(conn.unfinishedHttpChunkedBody(), label);
+                # the next message is read as such
+                hash<auto> hdr = conn.readHTTPHeader(5s);
+                assertEq("/next", hdr.path, label);
+            }
+        }
+    }
+
+    invalidTest() {
+        foreach hash<auto> i in (InvalidEnds.pairIterator()) {
+            foreach Reader reader in (Readers) {
+                string label = sprintf("%s: %s", reader, i.key);
+                hash<auto> client = startClient(reader, FirstChunk + i.value + NextRequest);
+                on_exit client.done.dec();
+                Socket conn = client.server.accept(5s);
+                on_exit conn.close();
+                *hash<ExceptionInfo> ex = readBody(conn, reader);
+                assertEq("READ-HTTP-CHUNK-ERROR", ex.err, label);
+                checkRefused(conn, label);
+            }
+        }
+    }
+
+    #! reads the body with the given reader; returns the exception raised, if any
+    private *hash<ExceptionInfo> readBody(Socket conn, Reader reader, *reference<*hash<auto>> trailers) {
+        code recv = sub (hash<auto> v) {};
+        try {
+            switch (reader) {
+                case Reader::String: trailers = conn.readHTTPChunkedBody(5s).trailers; break;
+                case Reader::Binary: trailers = conn.readHTTPChunkedBodyBinary(5s).trailers; break;
+                case Reader::OutputStream:
+                    conn.readHTTPChunkedBodyToOutputStream(new BinaryOutputStream(), 5s);
+                    break;
+                case Reader::Callback: conn.readHTTPChunkedBodyWithCallback(recv, 5s); break;
+                case Reader::BinaryCallback: conn.readHTTPChunkedBodyBinaryWithCallback(recv, 5s); break;
+                case Reader::Chunk:
+                    # each chunk is read with a call, the last one with its trailer section
+                    while (conn.readHTTPChunk(5s).body) {
+                    }
+                    break;
+                case Reader::PollBody: runPoll(conn.startPollReadHttpBody(-1, True, False)); break;
+                case Reader::Pipeline: {
+                    PollPipeline p(conn);
+                    p.addReadHttpHeader();
+                    p.addReadHttpBody("POST");
+                    runPoll(p);
+                    break;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    #! drives a poll operation to its end
+    private runPoll(AbstractPollOperation op) {
+        while (*hash<SocketPollInfo> pi = op.continuePoll()) {
+            if (!Socket::poll((pi,), 5s)) {
+                throw "SOCKET-TIMEOUT", "the poll operation timed out";
+            }
+        }
+    }
+
+    #! checks that no header is read on the socket after a body that was not finished
+    private checkRefused(Socket conn, string label) {
+        if (!conn.isOpen()) {
+            # a reader that stopped in the middle of a read operation closed the socket
+            assertThrows("SOCKET-NOT-OPEN", \conn.readHTTPHeader(), (5s,), label);
+            return;
+        }
+        assertTrue(conn.unfinishedHttpChunkedBody(), label);
+        assertThrows("SOCKET-HTTP-ERROR", "chunked message body", \conn.readHTTPHeader(), (5s,), label);
+    }
+
+    #! starts a client that sends the data and keeps the connection open until done
+    /** @return a hash with the listening socket in \c server and a Counter in \c done that the caller decrements
+        when it has finished reading
+    */
+    private hash<auto> startClient(Reader reader, string data) {
+        if (reader == Reader::Pipeline) {
+            data = PipelineHeader + data;
+        }
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        hash<auto> info = server.getSocketInfo(False);
+
+        Counter done(1);
+        background sub () {
+            try {
+                Socket client();
+                client.connectINET(info.address, info.port, 10s, info.family);
+                client.send(data, 5s);
+                # keep the connection open until the reader has finished
+                done.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                printf("client error: %s\n", get_exception_string(ex));
+            }
+        }();
+        return {"server": server, "done": done};
+    }
+}

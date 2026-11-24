@@ -1,0 +1,231 @@
+<string> size string: 3
+<string> size long string: 43
+<string> size string enum: 3
+<string> size int enum: RUNTIME-TYPE-ERROR
+<string> size list: RUNTIME-TYPE-ERROR
+<string> size hash: RUNTIME-TYPE-ERROR
+<string> size binary: RUNTIME-TYPE-ERROR
+<string> size date: RUNTIME-TYPE-ERROR
+<string> size number: RUNTIME-TYPE-ERROR
+<string> size buffer: RUNTIME-TYPE-ERROR
+<string> size object: RUNTIME-TYPE-ERROR
+<string> size callref: RUNTIME-TYPE-ERROR
+<string> size closure: RUNTIME-TYPE-ERROR
+<string> size char: RUNTIME-TYPE-ERROR
+<string> size int: RUNTIME-TYPE-ERROR
+<string> size float: RUNTIME-TYPE-ERROR
+<string> size large float: RUNTIME-TYPE-ERROR
+<string> size negative zero: RUNTIME-TYPE-ERROR
+<string> size bool: RUNTIME-TYPE-ERROR
+<string> size nothing: RUNTIME-TYPE-ERROR
+<string> size null: RUNTIME-TYPE-ERROR
+<list> size string: RUNTIME-TYPE-ERROR
+<list> size long string: RUNTIME-TYPE-ERROR
+<list> size string enum: RUNTIME-TYPE-ERROR
+<list> size int enum: RUNTIME-TYPE-ERROR
+<list> size list: 2
+<list> size hash: RUNTIME-TYPE-ERROR
+<list> size binary: RUNTIME-TYPE-ERROR
+<list> size date: RUNTIME-TYPE-ERROR
+<list> size number: RUNTIME-TYPE-ERROR
+<list> size buffer: RUNTIME-TYPE-ERROR
+<list> size object: RUNTIME-TYPE-ERROR
+<list> size callref: RUNTIME-TYPE-ERROR
+<list> size closure: RUNTIME-TYPE-ERROR
+<list> size char: RUNTIME-TYPE-ERROR
+<list> size int: RUNTIME-TYPE-ERROR
+<list> size float: RUNTIME-TYPE-ERROR
+<list> size large float: RUNTIME-TYPE-ERROR
+<list> size negative zero: RUNTIME-TYPE-ERROR
+<list> size bool: RUNTIME-TYPE-ERROR
+<list> size nothing: RUNTIME-TYPE-ERROR
+<list> size null: RUNTIME-TYPE-ERROR
+<hash> firstKey string: RUNTIME-TYPE-ERROR
+<hash> firstKey long string: RUNTIME-TYPE-ERROR
+<hash> firstKey string enum: RUNTIME-TYPE-ERROR
+<hash> firstKey int enum: RUNTIME-TYPE-ERROR
+<hash> firstKey list: RUNTIME-TYPE-ERROR
+<hash> firstKey hash: "a"
+<hash> firstKey binary: RUNTIME-TYPE-ERROR
+<hash> firstKey date: RUNTIME-TYPE-ERROR
+<hash> firstKey number: RUNTIME-TYPE-ERROR
+<hash> firstKey buffer: RUNTIME-TYPE-ERROR
+<hash> firstKey object: RUNTIME-TYPE-ERROR
+<hash> firstKey callref: RUNTIME-TYPE-ERROR
+<hash> firstKey closure: RUNTIME-TYPE-ERROR
+<hash> firstKey char: RUNTIME-TYPE-ERROR
+<hash> firstKey int: RUNTIME-TYPE-ERROR
+<hash> firstKey float: RUNTIME-TYPE-ERROR
+<hash> firstKey large float: RUNTIME-TYPE-ERROR
+<hash> firstKey negative zero: RUNTIME-TYPE-ERROR
+<hash> firstKey bool: RUNTIME-TYPE-ERROR
+<hash> firstKey nothing: RUNTIME-TYPE-ERROR
+<hash> firstKey null: RUNTIME-TYPE-ERROR
+<binary> size string: RUNTIME-TYPE-ERROR
+<binary> size long string: RUNTIME-TYPE-ERROR
+<binary> size string enum: RUNTIME-TYPE-ERROR
+<binary> size int enum: RUNTIME-TYPE-ERROR
+<binary> size list: RUNTIME-TYPE-ERROR
+<binary> size hash: RUNTIME-TYPE-ERROR
+<binary> size binary: 2
+<binary> size date: RUNTIME-TYPE-ERROR
+<binary> size number: RUNTIME-TYPE-ERROR
+<binary> size buffer: RUNTIME-TYPE-ERROR
+<binary> size object: RUNTIME-TYPE-ERROR
+<binary> size callref: RUNTIME-TYPE-ERROR
+<binary> size closure: RUNTIME-TYPE-ERROR
+<binary> size char: RUNTIME-TYPE-ERROR
+<binary> size int: RUNTIME-TYPE-ERROR
+<binary> size float: RUNTIME-TYPE-ERROR
+<binary> size large float: RUNTIME-TYPE-ERROR
+<binary> size negative zero: RUNTIME-TYPE-ERROR
+<binary> size bool: RUNTIME-TYPE-ERROR
+<binary> size nothing: RUNTIME-TYPE-ERROR
+<binary> size null: RUNTIME-TYPE-ERROR
+<date> years string: RUNTIME-TYPE-ERROR
+<date> years long string: RUNTIME-TYPE-ERROR
+<date> years string enum: RUNTIME-TYPE-ERROR
+<date> years int enum: RUNTIME-TYPE-ERROR
+<date> years list: RUNTIME-TYPE-ERROR
+<date> years hash: RUNTIME-TYPE-ERROR
+<date> years binary: RUNTIME-TYPE-ERROR
+<date> years date: 2026
+<date> years number: RUNTIME-TYPE-ERROR
+<date> years buffer: RUNTIME-TYPE-ERROR
+<date> years object: RUNTIME-TYPE-ERROR
+<date> years callref: RUNTIME-TYPE-ERROR
+<date> years closure: RUNTIME-TYPE-ERROR
+<date> years char: RUNTIME-TYPE-ERROR
+<date> years int: RUNTIME-TYPE-ERROR
+<date> years float: RUNTIME-TYPE-ERROR
+<date> years large float: RUNTIME-TYPE-ERROR
+<date> years negative zero: RUNTIME-TYPE-ERROR
+<date> years bool: RUNTIME-TYPE-ERROR
+<date> years nothing: RUNTIME-TYPE-ERROR
+<date> years null: RUNTIME-TYPE-ERROR
+<number> sign string: RUNTIME-TYPE-ERROR
+<number> sign long string: RUNTIME-TYPE-ERROR
+<number> sign string enum: RUNTIME-TYPE-ERROR
+<number> sign int enum: RUNTIME-TYPE-ERROR
+<number> sign list: RUNTIME-TYPE-ERROR
+<number> sign hash: RUNTIME-TYPE-ERROR
+<number> sign binary: RUNTIME-TYPE-ERROR
+<number> sign date: RUNTIME-TYPE-ERROR
+<number> sign number: 1
+<number> sign buffer: RUNTIME-TYPE-ERROR
+<number> sign object: RUNTIME-TYPE-ERROR
+<number> sign callref: RUNTIME-TYPE-ERROR
+<number> sign closure: RUNTIME-TYPE-ERROR
+<number> sign char: RUNTIME-TYPE-ERROR
+<number> sign int: RUNTIME-TYPE-ERROR
+<number> sign float: RUNTIME-TYPE-ERROR
+<number> sign large float: RUNTIME-TYPE-ERROR
+<number> sign negative zero: RUNTIME-TYPE-ERROR
+<number> sign bool: RUNTIME-TYPE-ERROR
+<number> sign nothing: RUNTIME-TYPE-ERROR
+<number> sign null: RUNTIME-TYPE-ERROR
+<buffer> size string: RUNTIME-TYPE-ERROR
+<buffer> size long string: RUNTIME-TYPE-ERROR
+<buffer> size string enum: RUNTIME-TYPE-ERROR
+<buffer> size int enum: RUNTIME-TYPE-ERROR
+<buffer> size list: RUNTIME-TYPE-ERROR
+<buffer> size hash: RUNTIME-TYPE-ERROR
+<buffer> size binary: RUNTIME-TYPE-ERROR
+<buffer> size date: RUNTIME-TYPE-ERROR
+<buffer> size number: RUNTIME-TYPE-ERROR
+<buffer> size buffer: 2
+<buffer> size object: RUNTIME-TYPE-ERROR
+<buffer> size callref: RUNTIME-TYPE-ERROR
+<buffer> size closure: RUNTIME-TYPE-ERROR
+<buffer> size char: RUNTIME-TYPE-ERROR
+<buffer> size int: RUNTIME-TYPE-ERROR
+<buffer> size float: RUNTIME-TYPE-ERROR
+<buffer> size large float: RUNTIME-TYPE-ERROR
+<buffer> size negative zero: RUNTIME-TYPE-ERROR
+<buffer> size bool: RUNTIME-TYPE-ERROR
+<buffer> size nothing: RUNTIME-TYPE-ERROR
+<buffer> size null: RUNTIME-TYPE-ERROR
+<object> keys string: RUNTIME-TYPE-ERROR
+<object> keys long string: RUNTIME-TYPE-ERROR
+<object> keys string enum: RUNTIME-TYPE-ERROR
+<object> keys int enum: RUNTIME-TYPE-ERROR
+<object> keys list: RUNTIME-TYPE-ERROR
+<object> keys hash: RUNTIME-TYPE-ERROR
+<object> keys binary: RUNTIME-TYPE-ERROR
+<object> keys date: RUNTIME-TYPE-ERROR
+<object> keys number: RUNTIME-TYPE-ERROR
+<object> keys buffer: RUNTIME-TYPE-ERROR
+<object> keys object: []
+<object> keys callref: RUNTIME-TYPE-ERROR
+<object> keys closure: RUNTIME-TYPE-ERROR
+<object> keys char: RUNTIME-TYPE-ERROR
+<object> keys int: RUNTIME-TYPE-ERROR
+<object> keys float: RUNTIME-TYPE-ERROR
+<object> keys large float: RUNTIME-TYPE-ERROR
+<object> keys negative zero: RUNTIME-TYPE-ERROR
+<object> keys bool: RUNTIME-TYPE-ERROR
+<object> keys nothing: RUNTIME-TYPE-ERROR
+<object> keys null: RUNTIME-TYPE-ERROR
+<callref> uniqueHash string: RUNTIME-TYPE-ERROR
+<callref> uniqueHash long string: RUNTIME-TYPE-ERROR
+<callref> uniqueHash string enum: RUNTIME-TYPE-ERROR
+<callref> uniqueHash int enum: RUNTIME-TYPE-ERROR
+<callref> uniqueHash list: RUNTIME-TYPE-ERROR
+<callref> uniqueHash hash: RUNTIME-TYPE-ERROR
+<callref> uniqueHash binary: RUNTIME-TYPE-ERROR
+<callref> uniqueHash date: RUNTIME-TYPE-ERROR
+<callref> uniqueHash number: RUNTIME-TYPE-ERROR
+<callref> uniqueHash buffer: RUNTIME-TYPE-ERROR
+<callref> uniqueHash object: RUNTIME-TYPE-ERROR
+<callref> uniqueHash callref: <unique hash>
+<callref> uniqueHash closure: <unique hash>
+<callref> uniqueHash char: RUNTIME-TYPE-ERROR
+<callref> uniqueHash int: RUNTIME-TYPE-ERROR
+<callref> uniqueHash float: RUNTIME-TYPE-ERROR
+<callref> uniqueHash large float: RUNTIME-TYPE-ERROR
+<callref> uniqueHash negative zero: RUNTIME-TYPE-ERROR
+<callref> uniqueHash bool: RUNTIME-TYPE-ERROR
+<callref> uniqueHash nothing: RUNTIME-TYPE-ERROR
+<callref> uniqueHash null: RUNTIME-TYPE-ERROR
+<char> ord string: RUNTIME-TYPE-ERROR
+<char> ord long string: RUNTIME-TYPE-ERROR
+<char> ord string enum: RUNTIME-TYPE-ERROR
+<char> ord int enum: RUNTIME-TYPE-ERROR
+<char> ord list: RUNTIME-TYPE-ERROR
+<char> ord hash: RUNTIME-TYPE-ERROR
+<char> ord binary: RUNTIME-TYPE-ERROR
+<char> ord date: RUNTIME-TYPE-ERROR
+<char> ord number: RUNTIME-TYPE-ERROR
+<char> ord buffer: RUNTIME-TYPE-ERROR
+<char> ord object: RUNTIME-TYPE-ERROR
+<char> ord callref: RUNTIME-TYPE-ERROR
+<char> ord closure: RUNTIME-TYPE-ERROR
+<char> ord char: 97
+<char> ord int: RUNTIME-TYPE-ERROR
+<char> ord float: RUNTIME-TYPE-ERROR
+<char> ord large float: RUNTIME-TYPE-ERROR
+<char> ord negative zero: RUNTIME-TYPE-ERROR
+<char> ord bool: RUNTIME-TYPE-ERROR
+<char> ord nothing: RUNTIME-TYPE-ERROR
+<char> ord null: RUNTIME-TYPE-ERROR
+<closure> typeCode string: 29
+<closure> typeCode long string: 29
+<closure> typeCode string enum: 29
+<closure> typeCode int enum: 29
+<closure> typeCode list: 29
+<closure> typeCode hash: 29
+<closure> typeCode binary: 29
+<closure> typeCode date: 29
+<closure> typeCode number: 29
+<closure> typeCode buffer: 29
+<closure> typeCode object: 29
+<closure> typeCode callref: 29
+<closure> typeCode closure: 29
+<closure> typeCode char: 29
+<closure> typeCode int: 29
+<closure> typeCode float: 29
+<closure> typeCode large float: 29
+<closure> typeCode negative zero: 29
+<closure> typeCode bool: 29
+<closure> typeCode nothing: 29
+<closure> typeCode null: 29

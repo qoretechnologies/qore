@@ -196,7 +196,8 @@ public:
     //! Cancel a stream: removes and notifies the action
     /** @param stream_id the HTTP/2 stream ID
         @param xsink for exception handling
-        @return true if the stream was found and cancelled
+        @return true if the stream was found and cancelled, or if its response had completed while this side of the
+        stream is still open (it must then still be reset with RST_STREAM; qore#7443)
     */
     DLLLOCAL bool cancelStream(int64_t stream_id, ExceptionSink* xsink);
 

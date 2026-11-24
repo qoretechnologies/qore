@@ -348,7 +348,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete server;
 
         HTTPClient client({
-            "url": sprintf("https://localhost:%d", setup.h2_port),
+            "url": sprintf("https://127.0.0.1:%d", setup.h2_port),
             "ssl_verify_cert": False,
         });
         on_exit client.disconnect();
@@ -378,7 +378,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete server;
 
         HTTPClient client({
-            "url": sprintf("https://localhost:%d", setup.h2_port),
+            "url": sprintf("https://127.0.0.1:%d", setup.h2_port),
             "ssl_verify_cert": False,
         });
         on_exit client.disconnect();
@@ -402,7 +402,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete server;
 
         HTTPClient client({
-            "url": sprintf("https://localhost:%d", setup.h2_port),
+            "url": sprintf("https://127.0.0.1:%d", setup.h2_port),
             "ssl_verify_cert": False,
         });
         on_exit client.disconnect();
@@ -429,7 +429,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete server;
 
         HTTPClient client({
-            "url": sprintf("https://localhost:%d", setup.h2_port),
+            "url": sprintf("https://127.0.0.1:%d", setup.h2_port),
             "ssl_verify_cert": False,
         });
         on_exit client.disconnect();
@@ -583,13 +583,13 @@ l50Xb2GWQesIt9k5jF5IOw==
             }
         } else {
             int port = server.addListener(<HttpListenerOptionInfo>{
-                "node": "localhost",
+                "node": "127.0.0.1",
                 "service": 0,
                 "cert": new SSLCertificate(CertPem),
                 "key": new SSLPrivateKey(KeyPem),
                 "enable_h3": False,
             }).port;
-            url = sprintf("https://localhost:%d", port);
+            url = sprintf("https://127.0.0.1:%d", port);
         }
         server.waitForAsyncIo();
 

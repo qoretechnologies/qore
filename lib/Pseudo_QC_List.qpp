@@ -34,6 +34,7 @@
 #include "qore/intern/RangeIterator.h"
 #include "qore/intern/SingleValueIterator.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/QorePseudoMethods.h"
 
 extern QoreClass* QC_LISTITERATOR;
 extern QoreClass* QC_RANGEITERATOR;
@@ -41,7 +42,7 @@ extern QoreClass* QC_RANGEITERATOR;
 //! Methods in this pseudo-class can be executed on @ref list "lists"
 /**
  */
-qclass <list> [arg=const QoreListNode* l = v.get<const QoreListNode>();vparent=<value>];
+qclass <list> [arg=const QoreListNode* l = qore_pseudo_receiver<QoreListNode>(v, NT_LIST, "<list>", xsink);vparent=<value>];
 
 //! Returns Qore::NT_LIST
 /**

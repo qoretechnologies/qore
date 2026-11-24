@@ -650,6 +650,11 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         hash<string, bool> method_names = {};
     }
 
+    private:internal {
+        #! The cancel handlers of the requests in progress; see @ref addCallCancelHandler()
+        McpCallCancelRegistry cancel_registry();
+    }
+
     #! Registers a list of JSON-RPC methods with this handler
     /** Reimplemented to track the registered method names; see @ref method_names.
 
@@ -1981,7 +1986,11 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
 
     private *hash<auto> resourcesRead(hash<auto> cx, *hash<auto> params) {
         try {
-            McpCallContextHelper mcch(makeRequestCallContext(cx, "resources/read", params));
+            # tracked so that a cancel of the session's requests reaches it too
+            *string active_rid = beginActiveRequest(cx);
+            on_exit endActiveRequest(cx, active_rid);
+            McpCallContextHelper mcch = enterCallContext(makeRequestCallContext(cx, "resources/read", params),
+                getRequestCancelScope(cx));
             return resourcesReadIntern(cx, params);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == InputRequiredException) {
@@ -2089,7 +2098,11 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
 
     private *hash<auto> promptsGet(hash<auto> cx, *hash<auto> params) {
         try {
-            McpCallContextHelper mcch(makeRequestCallContext(cx, "prompts/get", params));
+            # tracked so that a cancel of the session's requests reaches it too
+            *string active_rid = beginActiveRequest(cx);
+            on_exit endActiveRequest(cx, active_rid);
+            McpCallContextHelper mcch = enterCallContext(makeRequestCallContext(cx, "prompts/get", params),
+                getRequestCancelScope(cx));
             return promptsGetIntern(cx, params);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == InputRequiredException) {
@@ -3726,7 +3739,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             task.statusMessage = params.reason ?? "Cancelled by client";
             task.lastUpdatedAt = now_us();
             smap{sessionId}.tasks{params.taskId} = task;
-            if (task.requestId) {
+            if (exists getRequestIdString(task.requestId)) {
                 smap{sessionId}.cancellations{task.requestId} = <McpCancellationInfo>{
                     "requestId": task.requestId,
                     "reason": params.reason ?? "Cancelled by client",
@@ -3743,6 +3756,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             on_exit task.lck.unlock();
             task.cond.broadcast();
         }
+
+        callCancelHandlers((getTaskCancelKey(sessionId, params.taskId),), params.reason ?? "Cancelled by client");
 
         sendTaskStatusNotification(sessionId, params.taskId);
 
@@ -4132,18 +4147,17 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         # Collect cancelled task IDs and their condition/mutex for signaling after lock release
         list<hash<McpTaskInfo>> cancelledTasks;
         list<string> cancelledTaskIds;
+        # the requests whose cancel handlers are called
+        list<string> cancel_keys;
 
         # Record the cancellation
         {
             AutoWriteLock al(rwl);
-            if (smap{sessionId}) {
-                smap{sessionId}.cancellations{params.requestId} = <McpCancellationInfo>{
-                    "requestId": params.requestId,
-                    "reason": params.reason,
-                    "receivedAt": now_us(),
-                };
-                rememberCancellationTombstoneIntern(sessionId,
-                    params.requestId);
+            *string rid = getRequestIdString(params.requestId);
+            if (smap{sessionId} && exists rid) {
+                # only a request in progress is cancelled: a cancel of an unknown or finished request is ignored, so
+                # it is not kept, and a later request that reuses the ID does not start cancelled
+                bool active = smap{sessionId}.activeRequests{rid} ?? False;
 
                 # Find and cancel ONLY tasks associated with this specific requestId
                 foreach string tid in (keys smap{sessionId}.tasks) {
@@ -4162,23 +4176,23 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
                         # Collect for signaling after lock release
                         cancelledTasks += task;
                         cancelledTaskIds += tid;
+                        cancel_keys += getTaskCancelKey(sessionId, tid);
                     }
                 }
 
-                # Cancel any pending server-to-client requests with matching requestId
-                if (smap{sessionId}.pendingRequests{params.requestId}) {
-                    hash<McpPendingRequest> req = smap{sessionId}.pendingRequests{params.requestId};
-                    smap{sessionId}.pendingRequests{params.requestId}.error = {
-                        "code": -32800,
-                        "message": params.reason ?? "Request cancelled",
+                if (active || cancelledTaskIds) {
+                    smap{sessionId}.cancellations{rid} = <McpCancellationInfo>{
+                        "requestId": params.requestId,
+                        "reason": params.reason,
+                        "receivedAt": now_us(),
                     };
-                    smap{sessionId}.pendingRequests{params.requestId}.completed = True;
-
-                    # Signal waiters
-                    req.lck.lock();
-                    on_exit req.lck.unlock();
-                    req.cond.broadcast();
+                    rememberCancellationTombstoneIntern(sessionId, rid);
                 }
+                if (active) {
+                    cancel_keys += getRequestCancelKey(sessionId, rid);
+                }
+                # the server-to-client requests waiting for the client (pendingRequests) are keyed by the server's own
+                # request IDs, which are unrelated to the client's: they are not looked up with the client's ID
             }
         }
 
@@ -4190,6 +4204,9 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
                 task.cond.broadcast();
             }
         }
+
+        # call the cancel handlers of the requests outside the lock
+        callCancelHandlers(cancel_keys, params.reason ?? "Request cancelled");
 
         # Send status notifications for cancelled tasks
         foreach string tid in (cancelledTaskIds) {
@@ -4210,14 +4227,15 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
 
     private rememberCancellationTombstoneIntern(string sessionId,
             auto requestId) {
-        if (!requestId) {
+        # a JSON-RPC ID can be 0 or "0", which are False
+        if (!exists getRequestIdString(requestId)) {
             return;
         }
         cancelledRequestTombstones{sessionId}{requestId.toString()} = True;
     }
 
     private clearCancellationTombstone(string sessionId, auto requestId) {
-        if (!requestId) {
+        if (!exists getRequestIdString(requestId)) {
             return;
         }
         AutoWriteLock al(rwl);
@@ -4261,6 +4279,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         list<hash<McpTaskInfo>> cancelledTasks;
         list<string> cancelledTaskIds;
         int syncCount;
+        # the requests whose cancel handlers are called
+        list<string> cancel_keys;
 
         {
             AutoWriteLock al(rwl);
@@ -4280,9 +4300,10 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
                     smap{sessionId}.tasks{tid} = task;
                     cancelledTasks += task;
                     cancelledTaskIds += tid;
+                    cancel_keys += getTaskCancelKey(sessionId, tid);
 
                     # Also record as a cancellation for isRequestCancelled() checks
-                    if (task.requestId) {
+                    if (exists getRequestIdString(task.requestId)) {
                         smap{sessionId}.cancellations{task.requestId} = <McpCancellationInfo>{
                             "requestId": task.requestId,
                             "reason": reason,
@@ -4302,6 +4323,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
                     "receivedAt": now_us(),
                 };
                 rememberCancellationTombstoneIntern(sessionId, rid);
+                cancel_keys += getRequestCancelKey(sessionId, rid);
             }
             syncCount = smap{sessionId}.activeRequests.size();
 
@@ -4326,6 +4348,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             }
         }
 
+        callCancelHandlers(cancel_keys, reason);
+
         if (cancelledTaskIds || syncCount) {
             info("Session %y: cancelled %d task(s) and %d synchronous request(s): %s", sessionId,
                 cancelledTaskIds.size(), syncCount, reason);
@@ -4345,16 +4369,301 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         if (!ctx) {
             return False;
         }
-        if (!ctx.handler || !ctx.sid || !ctx.cx.id) {
-            ctx.handler.info("isCallCancelled: missing context: handler=%y sid=%y cx.id=%y",
-                exists ctx.handler, ctx.sid, ctx.cx.id);
+        # the JSON-RPC request ID (cx.id is the ID of the HTTP connection)
+        if (!ctx.handler || !ctx.sid || !exists ctx.cx.jsonid) {
+            ctx.handler.info("isCallCancelled: missing context: handler=%y sid=%y cx.jsonid=%y",
+                exists ctx.handler, ctx.sid, ctx.cx.jsonid);
             return False;
         }
-        bool rv = ctx.handler.isRequestCancelled(ctx.sid, ctx.cx.id);
+        bool rv = ctx.handler.isRequestCancelled(ctx.sid, ctx.cx.jsonid);
         if (rv) {
-            ctx.handler.info("isCallCancelled: request %y in session %y IS cancelled", ctx.cx.id, ctx.sid);
+            ctx.handler.info("isCallCancelled: request %y in session %y IS cancelled", ctx.cx.jsonid, ctx.sid);
         }
         return rv;
+    }
+
+    #! Registers code to call when the current request is cancelled
+    /** Can be called from within a tool implementation (or a resource reader or prompt handler) to be told
+        at once when its request is cancelled, instead of polling @ref isCallCancelled(): for example to close a
+        blocking call that the cancel should end.
+
+        The handler is called exactly once, with one argument, the reason for the cancel (a string), when the
+        request is cancelled while it is in progress, by any of:
+        - a \c notifications/cancelled notification for the request
+        - a \c tasks/cancel request for the task that runs the call (session tasks and
+          \c modern tasks)
+        - the cancel of all requests of the call's session (@ref cancelSessionRequests(): an HTTP \c DELETE of the
+          session, the expiry of the session, or a direct call)
+
+        It is called in the thread that cancels the request, after the server's locks were released, so it may
+        call the server's API; it should only signal the call to stop (cancel a token, close a connection) and
+        return: it must not wait for the call to end, since the end of the request waits for handlers that are
+        running (see below).  An exception it raises is caught and logged; the other handlers are called anyway.
+
+        A handler registered after the request was cancelled is called at once, in the calling thread, before
+        this method returns.
+
+        A handler that was not called is removed when its request ends, and no handler of a request runs after
+        its request ended: the end of a request waits for its own handlers that a cancel is calling at that time
+        (never for another request's), and a handler of a request that ends before the cancel calls it is not
+        called.  A handler can also be removed before with @ref removeCallCancelHandler().
+
+        Only a request in progress can be cancelled: a \c notifications/cancelled for a request that is not in
+        progress is ignored, and the cancel of a request is forgotten when the request ends, so a later request
+        with the same ID does not start cancelled.
+
+        @param handler the code to call when the request is cancelled; it is called with one argument, the reason
+        for the cancel, and its return value is ignored
+
+        @return the ID of the handler, for @ref removeCallCancelHandler(); NOTHING when there is no current call,
+        or the current call cannot be cancelled (a request with no session on a \c modern protocol
+        version, other than a task)
+
+        @par Example:
+        @code{.py}
+hash<auto> sub myTool(*hash<auto> args) {
+    QoreLlmUtils::LlmCancellation token();
+    *int id = McpServerHandler::addCallCancelHandler(sub (string reason) { token.cancel(reason); });
+    on_exit if (id) {
+        McpServerHandler::removeCallCancelHandler(id);
+    }
+    return callModel(args, token);
+}
+        @endcode
+
+        @note isCallCancelled() keeps working; a handler and polling can be used together
+
+        @since %McpServerHandler 1.1
+    */
+    static *int addCallCancelHandler(code handler) {
+        *hash<McpToolCallContext> ctx = McpCallContextHelper::get();
+        *hash<McpCallCancelScopeInfo> scope = McpCallContextHelper::getCancelScope();
+        if (!ctx.handler || !scope) {
+            return;
+        }
+        return ctx.handler.addCallCancelHandlerIntern(scope, handler);
+    }
+
+    #! Removes a handler registered with @ref addCallCancelHandler() that was not called
+    /** Must be called in the call that registered the handler: a handler of another request is not removed.
+
+        @param id the ID @ref addCallCancelHandler() returned
+
+        @return True when the handler was removed; False when it was called already, its request ended, it was
+        registered for another request than the current one, the ID is unknown, or there is no current call
+
+        @since %McpServerHandler 1.1
+    */
+    static bool removeCallCancelHandler(int id) {
+        *hash<McpToolCallContext> ctx = McpCallContextHelper::get();
+        *hash<McpCallCancelScopeInfo> scope = McpCallContextHelper::getCancelScope();
+        if (!ctx.handler || !scope) {
+            return False;
+        }
+        # only a handler of the current request
+        return ctx.handler.cancel_registry.removeHandler(id, scope.key);
+    }
+
+    #! Returns the number of requests in progress that can be cancelled and of cancel handlers not yet called
+    /** @return a hash with the keys \c requests (the requests in progress that can be cancelled) and
+        \c handlers (the handlers registered with @ref addCallCancelHandler() that were neither called nor
+        removed)
+
+        @since %McpServerHandler 1.1
+    */
+    hash<string, int> getCallCancelInfo() {
+        return cancel_registry.getInfo();
+    }
+
+    #! Called by @ref addCallCancelHandler() between reading the request's cancel state and registering the handler
+    /** Does nothing; a test reimplements it to cancel the request at that point.
+
+        @param scope_key the key of the request
+
+        @since %McpServerHandler 1.1
+    */
+    private nothing callCancelHandlerRegistering(string scope_key) {
+    }
+
+    #! Registers a cancel handler for a request in progress; see @ref addCallCancelHandler()
+    private:internal *int addCallCancelHandlerIntern(hash<McpCallCancelScopeInfo> scope, code handler) {
+        *string reason = getCallCancelScopeReason(scope);
+        callCancelHandlerRegistering(scope.key);
+        *hash<auto> rv = cancel_registry.add(scope.key, handler, exists reason);
+        if (!rv) {
+            return;
+        }
+        if (rv.run) {
+            on_exit cancel_registry.dispatched(scope.key);
+            callCancelHandler(scope.key, handler, reason ?? "Request cancelled");
+        }
+        return rv.id;
+    }
+
+    #! Returns the reason for the cancel of a request, or NOTHING when it was not cancelled
+    private:internal *string getCallCancelScopeReason(hash<McpCallCancelScopeInfo> scope) {
+        AutoReadLock al(rwl);
+        switch (scope.kind) {
+            case "m": {
+                *hash<McpTaskInfo> task = mtasks{scope.taskId};
+                if (task.status == McpTaskStatus::Cancelled) {
+                    return task.statusMessage ?? "Cancelled by client";
+                }
+                return;
+            }
+            case "t": {
+                *hash<McpTaskInfo> task = smap{scope.sid}.tasks{scope.taskId};
+                if (task.cancelled) {
+                    return task.statusMessage ?? "Request cancelled";
+                }
+                break;
+            }
+        }
+        if (!exists scope.requestId) {
+            return;
+        }
+        if (*hash<McpCancellationInfo> c = smap{scope.sid}.cancellations{scope.requestId}) {
+            return c.reason ?? "Request cancelled";
+        }
+        if (cancelledRequestTombstones{scope.sid}{scope.requestId}) {
+            return "Request cancelled";
+        }
+    }
+
+    #! Calls the cancel handlers of the given requests that were not cancelled before
+    /** Must be called without the server's locks held.
+    */
+    private:internal callCancelHandlers(*list<string> key_list, string reason) {
+        if (!key_list) {
+            return;
+        }
+        # each request's handlers are taken just before they are called, so the end of a request never waits for the
+        # handlers of the other requests cancelled with it
+        foreach string key in (cancel_registry.take(key_list)) {
+            list<code> handlers = cancel_registry.beginDispatch(key);
+            if (!handlers) {
+                continue;
+            }
+            on_exit cancel_registry.dispatched(key);
+            foreach code handler in (handlers) {
+                callCancelHandler(key, handler, reason);
+            }
+        }
+    }
+
+    #! Calls one cancel handler, logging any exception it raises
+    private:internal callCancelHandler(string key, code handler, string reason) {
+        try {
+            handler(reason);
+        } catch (hash<ExceptionInfo> ex) {
+            error("cancel handler of request %y raised an exception: %s", key, get_exception_string(ex));
+        }
+    }
+
+    #! Called when the end of a request must wait for its cancel handlers that a cancel is calling
+    /** Does nothing; a test reimplements it to see that the request waits.  Called with an internal lock held: it
+        must only signal.
+
+        @param scope_key the key of the request
+
+        @since %McpServerHandler 1.1
+    */
+    private nothing callCancelScopeEndWaiting(string scope_key) {
+    }
+
+    #! Makes a call context current in this thread, with the cancel scope of its request if it can be cancelled
+    private:internal McpCallContextHelper enterCallContext(hash<McpToolCallContext> call_info,
+            *hash<McpCallCancelScopeInfo> scope) {
+        return new McpCallContextHelper(call_info, cancel_registry, scope, sub (string key) {
+            callCancelScopeEndWaiting(key);
+        });
+    }
+
+    #! Returns a JSON-RPC request ID as a string, or NOTHING when there is none
+    /** An ID can be 0 or \c "0", which are False, so an ID is tested with this, not its truth value.
+    */
+    private:internal static *string getRequestIdString(auto requestId) {
+        switch (requestId.typeCode()) {
+            case NT_INT:
+            case NT_FLOAT:
+            case NT_NUMBER:
+            case NT_STRING: {
+                string rid = requestId.toString();
+                return rid.size() ? rid : NOTHING;
+            }
+        }
+    }
+
+    #! Tracks a request in a session as in progress for cancellation, if it has a session and an ID
+    /** @return the request ID to give endActiveRequest(), or NOTHING when the request is not tracked
+    */
+    private:internal *string beginActiveRequest(hash<auto> cx) {
+        *string rid = getRequestIdString(cx.jsonid);
+        if (!cx.mcp_session.val() || !exists rid) {
+            return;
+        }
+        AutoWriteLock al(rwl);
+        if (!smap{cx.mcp_session}) {
+            return;
+        }
+        smap{cx.mcp_session}.activeRequests{rid} = True;
+        return rid;
+    }
+
+    #! Ends the tracking of a request in a session; its cancel state ends with it
+    private:internal endActiveRequest(hash<auto> cx, *string rid) {
+        if (!exists rid) {
+            return;
+        }
+        {
+            AutoWriteLock al(rwl);
+            if (smap{cx.mcp_session}) {
+                remove smap{cx.mcp_session}.activeRequests{rid};
+            }
+        }
+        clearRequestCancellation(cx.mcp_session, rid);
+    }
+
+    #! Removes the cancel state of a request ID in a session: its cancellation and its tombstone
+    private:internal clearRequestCancellation(string sessionId, auto requestId) {
+        *string rid = getRequestIdString(requestId);
+        if (!exists rid) {
+            return;
+        }
+        AutoWriteLock al(rwl);
+        if (smap{sessionId}) {
+            remove smap{sessionId}.cancellations{rid};
+        }
+        if (cancelledRequestTombstones{sessionId}) {
+            remove cancelledRequestTombstones{sessionId}{rid};
+            if (!cancelledRequestTombstones{sessionId}) {
+                remove cancelledRequestTombstones{sessionId};
+            }
+        }
+    }
+
+    #! Returns the cancel registry key of a request in a session
+    private:internal static string getRequestCancelKey(string sessionId, auto requestId) {
+        return "r:" + sessionId + ":" + requestId.toString();
+    }
+
+    #! Returns the cancel registry key of a task in a session
+    private:internal static string getTaskCancelKey(string sessionId, string taskId) {
+        return "t:" + sessionId + ":" + taskId;
+    }
+
+    #! Returns the cancel scope of a request in a session, or NOTHING when it cannot be cancelled
+    private:internal *hash<McpCallCancelScopeInfo> getRequestCancelScope(hash<auto> cx) {
+        *string rid = getRequestIdString(cx.jsonid);
+        if (!cx.mcp_session.val() || !exists rid) {
+            return;
+        }
+        return <McpCallCancelScopeInfo>{
+            "key": getRequestCancelKey(cx.mcp_session, rid),
+            "kind": "r",
+            "sid": cx.mcp_session,
+            "requestId": rid,
+        };
     }
 
     #
@@ -4881,7 +5190,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             "params": params,
             "sessionId": "",
             "modern": True,
-            "requestId": cx.id,
+            "requestId": cx.jsonid,
             "progressToken": params._meta{MCP_MetaProgressToken},
             "clientOperationId": operation_id,
             "cond": new Qore::Thread::Condition(),
@@ -4919,7 +5228,11 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
                 "inputResponses": task.inputResponses,
                 "requestState": task.requestState,
             };
-            McpCallContextHelper mcch(call_info);
+            McpCallContextHelper mcch = enterCallContext(call_info, <McpCallCancelScopeInfo>{
+                "key": "m:" + taskId,
+                "kind": "m",
+                "taskId": taskId,
+            });
             hash<auto> result = makeToolCall(info, task.params, call_info);
             setModernTaskResult(taskId, McpTaskStatus::Completed, result);
         } catch (hash<ExceptionInfo> ex) {
@@ -5078,6 +5391,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
     #! Handle a modern \c tasks/cancel request
     private hash<auto> modernTasksCancel(hash<auto> cx, *hash<auto> params) {
         *hash<McpTaskInfo> task = requireModernTask(params.taskId);
+        bool cancelled;
         {
             AutoWriteLock al(rwl);
             if (!mtasks{params.taskId}) {
@@ -5094,8 +5408,12 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
                     mtasks{params.taskId}.statusMessage = params.reason;
                     mtasks{params.taskId}.lastUpdatedAt = now_us();
                     remove mtasks{params.taskId}.inputRequests;
+                    cancelled = True;
                     break;
             }
+        }
+        if (cancelled) {
+            callCancelHandlers(("m:" + params.taskId,), params.reason ?? "Cancelled by client");
         }
         notifyTaskStatus(params.taskId);
         return {};
@@ -5176,7 +5494,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             *hash<auto> task_params = getTaskAugmentation(params);
             if (exists task_params) {
                 # Pass the requestId from context for cancellation tracking
-                return toolsCallAsTask(cx, params, task_params, cx.id);
+                return toolsCallAsTask(cx, params, task_params, cx.jsonid);
             }
         }
 
@@ -5196,28 +5514,11 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             "inputResponses": mrtr.inputResponses,
             "requestState": mrtr.requestState,
         };
-        McpCallContextHelper mcch(call_info);
-
-        # Track this synchronous request for cancellation support
-        *string sessionId = cx.mcp_session;
-        *string requestId = exists cx.id ? cx.id.toString() : NOTHING;
-        if (sessionId.val() && requestId.val()) {
-            AutoWriteLock al(rwl);
-            if (smap{sessionId}) {
-                smap{sessionId}.activeRequests{requestId} = True;
-            }
-        }
-        on_exit {
-            if (sessionId.val() && requestId.val()) {
-                AutoWriteLock al(rwl);
-                if (smap{sessionId}) {
-                    remove smap{sessionId}.activeRequests{requestId};
-                }
-            }
-            if (sessionId.val() && requestId.val()) {
-                clearCancellationTombstone(sessionId, requestId);
-            }
-        }
+        # Track this synchronous request for cancellation support, before its call context opens so that a cancel
+        # recorded for it is seen by the context
+        *string active_rid = beginActiveRequest(cx);
+        on_exit endActiveRequest(cx, active_rid);
+        McpCallContextHelper mcch = enterCallContext(call_info, getRequestCancelScope(cx));
 
         return makeToolCall(info, params, call_info);
     }
@@ -5262,12 +5563,10 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
     #! Executes a tool in the background and sets the task result
     private executeToolInBackground(string sessionId, string taskId, hash<McpToolInfo> info, hash<auto> params,
             hash<auto> cx) {
-        *auto requestId = cx.id;
-        on_exit {
-            if (requestId) {
-                clearCancellationTombstone(sessionId, requestId);
-            }
-        }
+        # the JSON-RPC request ID, which notifications/cancelled names (cx.id is the ID of the HTTP connection)
+        *auto requestId = cx.jsonid;
+        # the task's cancel state for its request ID ends with it
+        on_exit clearRequestCancellation(sessionId, requestId);
         try {
             hash<McpToolCallContext> call_info = <McpToolCallContext>{
                 "name": info.name,
@@ -5277,7 +5576,13 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
                 "cx": cx,
                 "handler": self,
             };
-            McpCallContextHelper mcch(call_info);
+            McpCallContextHelper mcch = enterCallContext(call_info, <McpCallCancelScopeInfo>{
+                "key": "t:" + sessionId + ":" + taskId,
+                "kind": "t",
+                "sid": sessionId,
+                "requestId": exists requestId ? requestId.toString() : NOTHING,
+                "taskId": taskId,
+            });
 
             # Check if cancelled before starting
             *hash<McpTaskInfo> task = getTaskInfo(sessionId, taskId);
@@ -5531,18 +5836,50 @@ hashdecl McpSchemaDefinitionState {
 
 #! The definitions of the shared and recursive types of the tool input schema being built in this thread
 thread_local *hash<McpSchemaDefinitionState> _mcp_tddefs;
+#! The request of the call context current in this thread, for its cancel handlers
+thread_local *hash<McpCallCancelScopeInfo> _mcp_cancel_scope;
+
 class McpCallContextHelper {
     private {
         *hash<McpToolCallContext> old;
+        *hash<McpCallCancelScopeInfo> old_scope;
+        *McpCallCancelRegistry registry;
+        *hash<McpCallCancelScopeInfo> scope;
+        *code end_waiting;
     }
 
-    constructor(hash<McpToolCallContext> call_info) {
+    #! Makes the call context current in this thread
+    /** @param call_info the call context
+        @param registry the handler's cancel registry, when the request can be cancelled
+        @param scope the request, when it can be cancelled; its cancel handlers are removed when this object is
+        destroyed
+        @param end_waiting called when the end of the request must wait for its cancel handlers being called
+    */
+    constructor(hash<McpToolCallContext> call_info, *McpCallCancelRegistry registry,
+            *hash<McpCallCancelScopeInfo> scope, *code end_waiting) {
+        if (registry && scope) {
+            registry.begin(scope.key);
+            self.registry = registry;
+            self.scope = scope;
+            self.end_waiting = end_waiting;
+        }
         old = _mcp_call_context;
+        old_scope = _mcp_cancel_scope;
         _mcp_call_context = call_info;
+        # a context of a request that cannot be cancelled has no scope, also when nested in one that has
+        _mcp_cancel_scope = self.scope;
     }
 
     destructor() {
         _mcp_call_context = old;
+        _mcp_cancel_scope = old_scope;
+        if (scope) {
+            registry.end(scope.key, end_waiting);
+        }
+    }
+
+    static *hash<McpCallCancelScopeInfo> getCancelScope() {
+        return _mcp_cancel_scope;
     }
 
     static *hash<McpToolCallContext> get() {
