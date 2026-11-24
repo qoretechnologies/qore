@@ -6274,6 +6274,22 @@ static QORE_INTERN_NOINLINE QORE_INTERN_COLD void qore_reference_bind_record(Qor
     }
 }
 
+//! Binds or records the reference \a r accepted by the check of a reference type (qore#7391)
+/** Out of line, so that the check of a value of any other type in QoreTypeSpec::acceptInputImpl() executes no
+    instruction of the bind and keeps the register and stack use that it has without it: the check of a store that
+    holds an lvalue lock records the reference, which the store binds after it has released the lock, and any other
+    check binds it here
+*/
+template <typename FilterPolicy>
+static QORE_INTERN_NOINLINE void qore_reference_bind_accepted(ReferenceNode* r, const QoreTypeInfo* target_ti,
+        ExceptionSink* xsink, FilterPolicy policy) {
+    if (QoreReferenceBindProbe* probe = qore_reference_bind_probe) [[unlikely]] {
+        qore_reference_bind_record(*probe, r, target_ti, policy, xsink);
+        return;
+    }
+    qore_reference_bind_unlocked(r, target_ti, xsink, policy);
+}
+
 void qore_reference_bind_pair(const QoreReferenceBindPair& pair, ExceptionSink* xsink) {
     if (pair.lexical) {
         qore_reference_bind_unlocked(pair.ref, pair.type, xsink, LexicalTypeFilterPolicy{pair.policy});
@@ -6340,6 +6356,10 @@ bool QoreTypeInfo::mayBindReferenceWalk(const QoreTypeInfo* ti, std::vector<cons
 }
 
 bool QoreTypeInfo::mayBindReferenceIntern(const QoreTypeInfo* ti) {
+    signed char c = ti->may_bind_reference_cache.load(std::memory_order_relaxed);
+    if (c >= 0) {
+        return c;
+    }
     std::vector<const void*> seen;
     bool rv = mayBindReferenceWalk(ti, seen);
     ti->may_bind_reference_cache.store(rv ? 1 : 0, std::memory_order_relaxed);
@@ -6573,12 +6593,8 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                         break;
                     }
                     // the check of a store that holds an lvalue lock records the reference, which the store binds
-                    // after it has released the lock (qore#7391); any other check binds it here
-                    if (QoreReferenceBindProbe* probe = qore_reference_bind_probe) [[unlikely]] {
-                        qore_reference_bind_record(*probe, r, uTi(), policy, xsink);
-                    } else {
-                        qore_reference_bind_unlocked(r, uTi(), xsink, policy);
-                    }
+                    // after it has released the lock, and any other check binds it here; out of line (qore#7391)
+                    qore_reference_bind_accepted(r, uTi(), xsink, policy);
                     // the type of the reference has been accepted at this point, so this is never a type mismatch:
                     // an exception raised above, including one raised while resolving the lvalue, such as
                     // STACK-LIMIT-EXCEEDED in a long chain of references, is the error to report, and reporting a

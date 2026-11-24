@@ -435,21 +435,28 @@ public:
     /** True if the type is or contains, through list, softlist, hash and hashdecl member types and unions, a
         reference type (reference<T>, *reference<T>), whose check binds a reference to an lvalue of a wider type; a
         store whose target has such a type does not check its value with the target's lock held without a
-        QoreReferenceBindProbe.  Cached in the type: the normal path is one relaxed load of the cached byte, and a type
-        with no type restriction ("auto", "any") caches 0 like any other type that binds nothing.
+        QoreReferenceBindProbe.  Cached in the type: the normal path is one relaxed load and test of the cached byte
+        (see mayBindReferenceCached()), and a type with no type restriction ("auto", "any") caches 0 like any other
+        type that binds nothing.  A type that can bind, or whose byte is not known yet, is resolved out of line.
     */
     DLLLOCAL QORE_INTERN_ALWAYS_INLINE static bool mayBindReference(const QoreTypeInfo* ti) {
-        if (!ti) {
+        if (!mayBindReferenceCached(ti)) [[likely]] {
             return false;
-        }
-        signed char c = ti->may_bind_reference_cache.load(std::memory_order_relaxed);
-        if (c >= 0) [[likely]] {
-            return c;
         }
         return mayBindReferenceIntern(ti);
     }
 
-    //! computes and caches the value returned by mayBindReference(); out of line and cold: once per type
+    //! returns false if the type is known to bind no reference: one load and test of the cached byte (qore#7391)
+    /** Returns true if the type can bind a reference or if that is not known yet (the byte is -1 until the first
+        call of mayBindReference() for the type), so that the normal path costs a single test: a caller that finds true
+        calls mayBindReference() on its cold path for the answer
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE static bool mayBindReferenceCached(const QoreTypeInfo* ti) {
+        return ti && ti->may_bind_reference_cache.load(std::memory_order_relaxed);
+    }
+
+    //! returns the value of mayBindReference() for a type whose cached byte is not 0: the byte if it is known (1),
+    //! otherwise it is computed and cached; out of line and cold
     DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD static bool mayBindReferenceIntern(const QoreTypeInfo* ti);
 
     //! returns true if \a ti can bind a reference; \a seen holds the types and hashdecls being walked

@@ -66,12 +66,16 @@
     again out of line: LValueHelper::releaseForBindRetry() takes the retry and releases the helper with its locks, as
     its destructor does, and the retries are made with helpers of their own (qore_store_bind_retry_rounds()).
 
-    The keys and indices of the path of an AST store are evaluated once.  The steps of the first round leave the keys
-    that they evaluate with the QoreBindKeys of the store site, which releases them after the store, after the lvalue
-    locks (a move: no reference is taken, as the step would have released its key); a retry resolves the path with
-    them instead of evaluating the key expressions again.  They cannot be kept only when the store is made again: the
-    steps release their keys before the store checks its value.  The keys of the path of an IR or JIT/AOT instruction
-    are evaluated before the store, which resolves the path with them for each round.
+    The keys and indices of the path of an AST store are evaluated once.  The steps of the first round keep the keys
+    that they evaluate in the helper (LValueHelper::retainBindKey()): a key that the step holds a reference to is
+    handed to the values that the helper releases after the lvalue locks (a move: no reference is taken, as the step
+    would have released its key), and a borrowed key is referenced only before a check that can record references
+    (LValueHelper::holdBindKeys()).  When the store is made again, the keys are given to a QoreBindKeys with references
+    of its own (LValueHelper::transferBindKeys(): by deferBinds() for a store site that has one, by
+    releaseForBindRetry() for one that has none), and a retry resolves the path with them instead of evaluating the key
+    expressions again.  They cannot be kept only when the store is made again: the steps release their keys before the
+    store checks its value.  The keys of the path of an IR or JIT/AOT instruction are evaluated before the store, which
+    resolves the path with them for each round.
 
     A reference at the root of the path (a variable that holds a reference, or a reference given as the target) is
     resolved again by a retry, as by any other use of the reference.  The keys of the path of a reference are evaluated
@@ -79,15 +83,16 @@
     resolution of its path runs, such as the write gate of a member, and only when the store is made again: a store
     that records no reference resolves its target once.
 
-    A store site:
-        QoreBindKeys keys(xsink);
-        LValueHelper h(exp, xsink, true, keys);
+    An assignment (its helper is made with for_assignment true, which keeps the keys and enables the retry; a store
+    that is not an assignment uses LValueHelper::BindRetryStore), whose normal path is that of a store with no retry
+    and the test of a byte after a failed store:
+        LValueHelper h(exp, xsink, false, true);
         if (!h) {
             return ...;
         }
         if (h.assign(<value>, ...)) {
             if (h.isBindPending()) [[unlikely]] {
-                return <cold out-of-line function: h.releaseForBindRetry(retry), then the retries>;
+                return <cold out-of-line function: h.releaseForBindRetry(retry, &keys), then the retries>;
             }
             return ...;
         }
@@ -300,11 +305,12 @@ struct QoreBindKey {
 };
 
 //! The keys and indices of the path of an AST store, kept for a retry of the store (qore#7391)
-/** Declared by the store site before its helper, and given to the LValueHelper of each round.  The helper of the first
-    round leaves each key that a step of the path takes here, in the order that the steps take them, until a reference
-    is followed (the path of a reference is resolved again: see the top of this file): the step hands its key over
-    instead of releasing it, which costs no reference count operation.  A retry resolves the path with them.  The keys
-    are released when the store site leaves, after the lvalue locks.
+/** Declared by a store site that makes the store in rounds before its helper, and given to the LValueHelper of each
+    round, or by the cold function that makes the retries of an assignment.  It is given the keys that the steps of
+    the path of the first round kept in their helper, in the order that the steps took them, until a reference was
+    followed (the path of a reference is resolved again: see the top of this file), with a reference of its own to
+    each, when the store is made again (LValueHelper::transferBindKeys()).  A retry resolves the path with them.  The
+    keys are released when the store site leaves, after the lvalue locks.
 
     Constructing it costs one store, and destroying it the test of one byte: the exception sink and the keys after the
     first BufSize are set only when they are used.
@@ -345,9 +351,9 @@ public:
         addMore(key, owned, xsink);
     }
 
-    //! takes a reference to each key that is only borrowed, before code runs that could release its owner
-    /** Called before the check of a store that can record references (the cold path); a key borrowed from a variable
-        would otherwise be read again by a retry after the variable could have been assigned
+    //! takes a reference to each key that is only borrowed
+    /** Called when the keys are given to the retries of a store (LValueHelper::transferBindKeys(), the cold path): the
+        helper that kept them releases its own references
     */
     DLLLOCAL void hold(ExceptionSink* xsink);
 

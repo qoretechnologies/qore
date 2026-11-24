@@ -25112,17 +25112,17 @@ QoreValue QoreIRInterpreter::evalLValueLoad(const QoreValue& lvalue, ExceptionSi
 
 //! Makes the retries of QoreIRInterpreter::evalLValueStore() after its first round recorded references (qore#7391)
 /** Out of line and cold: \a first, the helper of the first round, is released with its locks, the references are bound
-    with no lvalue lock held, and \a lvalue is resolved again for each round with the keys that the first round kept in
-    \a keys; the store assigns the value that the last round converted
+    with no lvalue lock held, and \a lvalue is resolved again for each round with the keys that the first round kept,
+    which its helper gives the retries; the store assigns the value that the last round converted
 
     @return the value of the assignment with a reference if the store was made, otherwise no value
 */
 static QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue qore_ir_eval_lvalue_store_bind_retry(LValueHelper& first,
-        QoreBindKeys& keys, const QoreValue& lvalue, AssignmentMode mode, ExceptionSink* xsink) {
+        const QoreValue& lvalue, AssignmentMode mode, ExceptionSink* xsink) {
+    // the keys of the path that the first round evaluated, which the retries resolve it with
+    QoreBindKeys keys;
     QoreBindRetry retry;
-    first.releaseForBindRetry(retry);
-    // the first round resolved the path: the retries resolve it with the keys that it kept
-    keys.setRecorded();
+    first.releaseForBindRetry(retry, &keys);
     while (retry.again()) {
         LValueHelper helper(lvalue, xsink, false, retry, keys);
         if (!helper) {
@@ -25140,9 +25140,9 @@ static QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue qore_ir_eval_lvalue_store
 QoreValue QoreIRInterpreter::evalLValueStore(const QoreValue& lvalue, const QoreValue& value, ExceptionSink* xsink,
         AssignmentMode mode) {
     // a store whose check records reference elements is made again out of line after they have been bound with no
-    // lvalue lock held; the steps of the path keep their keys here, so that they are evaluated once (qore#7391)
-    QoreBindKeys keys;
-    LValueHelper helper(lvalue, xsink, false, keys);
+    // lvalue lock held; the steps of the path keep their keys in the helper, so that they are evaluated once
+    // (qore#7391)
+    LValueHelper helper(lvalue, xsink, LValueHelper::BindRetryStore());
     if (!helper) {
         return QoreValue();
     }
@@ -25161,7 +25161,7 @@ QoreValue QoreIRInterpreter::evalLValueStore(const QoreValue& lvalue, const Qore
     // values map would think they own the same single reference
     if (helper.assign(assign_value.refSelf(), "<lvalue>", true, mode)) {
         if (helper.isBindPending()) [[unlikely]] {
-            return qore_ir_eval_lvalue_store_bind_retry(helper, keys, lvalue, mode, xsink);
+            return qore_ir_eval_lvalue_store_bind_retry(helper, lvalue, mode, xsink);
         }
         return QoreValue();
     }

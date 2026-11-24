@@ -996,21 +996,17 @@ static QORE_INTERN_NOINLINE QoreValue qore_weak_assign_hold_copy(const QoreValue
     return rv;
 }
 
-//! makes the retries of an assignment whose first round recorded reference elements to bind (qore#7391)
-/** Out of line and cold: called only when the first round of the store left its helper \a v pending.  The helper is
-    released with its locks, the references are bound with no lvalue lock held (QoreBindRetry::again()), and the target
-    \a left is resolved again for each round with the keys that the first round kept in \a keys; the store assigns the
-    value that the last round converted.
-
-    @return the value of the assignment with a reference if \a ref_rv is true and the store was made, otherwise no value
-*/
-static QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue qore_assign_bind_retry(LValueHelper& v, QoreBindKeys& keys,
-        const QoreValue& left, const LexicalSemanticPolicy* policy, bool check_types, bool ref_rv, AssignmentMode mode,
-        ExceptionSink* xsink) {
+template <bool Lexical>
+QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue QoreAssignmentOperatorNode::evalBindRetry(LValueHelper& v,
+        AssignmentMode mode, ExceptionSink* xsink) const {
+    LexicalSemanticPolicy policy;
+    if constexpr (Lexical) {
+        policy = getSemanticPolicy();
+    }
+    // the keys of the path that the first round evaluated, which the retries resolve it with
+    QoreBindKeys keys;
     QoreBindRetry retry;
-    v.releaseForBindRetry(retry);
-    // the first round resolved the path: the retries resolve it with the keys that it kept
-    keys.setRecorded();
+    v.releaseForBindRetry(retry, &keys);
     while (retry.again()) {
         LValueHelper lvh(left, xsink, true, retry, keys);
         if (!lvh) {
@@ -1018,8 +1014,8 @@ static QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue qore_assign_bind_retry(LV
         }
         assert(retry.hasValue());
         QoreValue value = retry.hasValue() ? retry.takeValue() : QoreValue();
-        if (policy ? lvh.assign(value, "<lvalue>", *policy, check_types, mode)
-                : lvh.assign(value, "<lvalue>", check_types, mode)) {
+        if (Lexical ? lvh.assign(value, "<lvalue>", policy, !ident, mode)
+                : lvh.assign(value, "<lvalue>", !ident, mode)) {
             continue;
         }
         return ref_rv ? lvh.getReferencedValue() : QoreValue();
@@ -1095,29 +1091,25 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreAssignmentOperatorNode::evalInternImpl(E
         }
     }
 
-    // a store whose check records reference elements is made again after they have been bound with no lvalue lock
-    // held: the steps of the path keep their keys here, and the retries are made out of line (qore#7391)
-    QoreBindKeys keys;
-
-    // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    LValueHelper v(left, xsink, true, keys);
+    // get ptr to current value (lvalue is locked for the scope of the LValueHelper object); an assignment's helper
+    // keeps the keys of the path and enables the retry of the store, which is made again out of line after the
+    // reference elements that its check recorded have been bound with no lvalue lock held (qore#7391)
+    LValueHelper v(left, xsink, false, true);
     if (!v)
         return QoreValue();
 
     assert(!*xsink);
 
     // assign new value
+    int rc;
     if constexpr (Lexical) {
-        if (v.assign(new_value.takeReferencedValue(), "<lvalue>", getSemanticPolicy(), !ident, mode)) {
-            if (v.isBindPending()) [[unlikely]] {
-                LexicalSemanticPolicy policy = getSemanticPolicy();
-                return qore_assign_bind_retry(v, keys, left, &policy, !ident, ref_rv, mode, xsink);
-            }
-            return QoreValue();
-        }
-    } else if (v.assign(new_value.takeReferencedValue(), "<lvalue>", !ident, mode)) {
+        rc = v.assign(new_value.takeReferencedValue(), "<lvalue>", getSemanticPolicy(), !ident, mode);
+    } else {
+        rc = v.assign(new_value.takeReferencedValue(), "<lvalue>", !ident, mode);
+    }
+    if (rc) {
         if (v.isBindPending()) [[unlikely]] {
-            return qore_assign_bind_retry(v, keys, left, nullptr, !ident, ref_rv, mode, xsink);
+            return evalBindRetry<Lexical>(v, mode, xsink);
         }
         return QoreValue();
     }

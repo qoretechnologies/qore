@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -31,6 +31,8 @@
 
 #ifndef _QORE_QOREASSIGNMENTOPERATORNODE_H
 #define _QORE_QOREASSIGNMENTOPERATORNODE_H
+
+class LValueHelper;
 
 class QoreAssignmentOperatorNode : public QoreBinaryLValueOperatorNode {
 OP_COMMON
@@ -66,6 +68,17 @@ protected:
     //! (evalInternWeak(), evalLexicalWeak()) are their own, so that the other assignments keep their code (qore#7085)
     template <bool Lexical, bool Weak>
     DLLLOCAL QoreValue evalInternImpl(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
+
+    //! makes the retries of an assignment whose first round left its helper \a v pending (qore#7391)
+    /** Out of line and cold: the helper is released with its locks, the reference elements that the check recorded are
+        bound with no lvalue lock held (QoreBindRetry::again()), and the target is resolved again for each round with
+        the keys that the first round kept; the store assigns the value that the last round converted
+
+        @return the value of the assignment with a reference if ref_rv is true and the store was made, otherwise no
+        value
+    */
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalBindRetry(LValueHelper& v, AssignmentMode mode, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreValue evalIntern(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
 
