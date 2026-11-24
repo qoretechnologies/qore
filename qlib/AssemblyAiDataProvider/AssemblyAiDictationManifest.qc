@@ -36,6 +36,7 @@ public class AssemblyAiDictationManifest {
             <RestSchemaActionInfo>{
                 "action": "transcribe-dictation",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/transcribe/live",
                 "operation_id": "transcribeDictation",
                 "display_name": "Transcribe Dictation",

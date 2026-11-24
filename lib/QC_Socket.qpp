@@ -1785,10 +1785,9 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
             if (write_rc == -1 || *xsink) {
                 return nullptr;
             }
-        } else if (!recv_callback && binary_body) {
-            body_bin->append(chunk->getPtr(), chunk->size());
-        } else if (!recv_callback) {
-            body_str->concat(static_cast<const char*>(chunk->getPtr()), chunk->size());
+        } else if (!recv_callback && qore_socket_append_http_body(xsink, *body_bin,
+                binary_body ? nullptr : *body_str, chunk->getPtr(), chunk->size())) {
+            return nullptr;
         }
 
         SimpleRefHolder<BinaryNode> crlf(socket_exec_recv_bytes(self, s, 2, timeout_ms, xsink));
@@ -4704,7 +4703,9 @@ string data = sock.recv(-1); # read all data available
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-CLOSED the remote end has closed the connection.
-    @throw SOCKET-RECV-ERROR there was an error receiving the data.
+    @throw SOCKET-RECV-ERROR there was an error receiving the data, or the memory for the data could not be
+    allocated; the memory grows as the data arrives, and a read whose memory cannot grow shuts the connection down, as
+    the rest of the data cannot be told apart from what follows it
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR there was an SSL error while reading data from the socket
 
@@ -4734,7 +4735,9 @@ binary data = sock.recvBinary(-1); # read all data available
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-CLOSED the remote end has closed the connection.
-    @throw SOCKET-RECV-ERROR there was an error receiving the data.
+    @throw SOCKET-RECV-ERROR there was an error receiving the data, or the memory for the data could not be
+    allocated; the memory grows as the data arrives, and a read whose memory cannot grow shuts the connection down, as
+    the rest of the data cannot be told apart from what follows it
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR there was an SSL error while reading data from the socket
 
@@ -5819,7 +5822,7 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     - \c response-uri: (only set when parsing a response header) gives the response URI in an HTTP response
     - \c body-content-type: this is the  \c "Content-Type" header without any charset declaration
     - \c charset: if there is a charset declaration in the \c "Content-Type" header, the value is returned in this key; a quoted-string value is unquoted
-    - \c close: (only set when parsing a request header) set to @ref True "True" if the connection should be closed after responding, @ref False "False" if not; see notes below about how this value is calculated
+    - \c close: (only set when parsing a request header) set to @ref True "True" if the connection should be closed after responding, @ref False "False" if not; see notes below about how this value is calculated; an HTTP/1.0 request with a \c Transfer-Encoding closes the connection (RFC 9112 section 6.1)
     - \c accept-charset: the response encoding chosen from any \c "Accept-Charset" header by the rule of
       @ref Qore::get_http_accept_charset() "get_http_accept_charset()" (RFC 9110; \c "utf8" without one)
     - \c accept-encoding: this key will be set to a list of values from any \c "Accept-Encoding" header
@@ -5830,7 +5833,9 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     @return a hash of the header; a header value, as the \c status_message, that is not valid UTF-8 is given in
     ISO-8859-1 with its bytes unchanged, as RFC 9110 obs-text; the hash has the following keys:
     - \c headers: a hash of every header field, with lower-case names; a field given more than once is a list of its
-      values
+      values; a \c Transfer-Encoding field of the chunked coding alone is given as \c "chunked", as which it is
+      recognized without regard to case, to the whitespace around it and to the empty elements of its list, also when
+      it is given in more than one line (the value received is given in the \c headers-raw key of \a info)
     - the header fields with their lower-case names at the top level as well (deprecated; see
       @ref setHttpFieldsAtTopLevel()), except a field named \c body, \c headers, \c trailers, \c status_code,
       \c status_message, \c http_version, \c method or \c path, which is given only under \c headers (so that a field
@@ -5853,6 +5858,17 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     the name and the colon), a line without a colon or with an empty field name, a whitespace line before the first
     field line, or, in a request, an obsolete line folding (a line that starts with whitespace); in a response, an
     obsolete line folding is replaced with spaces
+    @throw SOCKET-HTTP-ERROR a header with an empty line before its end (a header ends at its first empty line, and is
+    read up to the first empty line with CRLF line ends), or a request header with a line that ends with a bare LF;
+    a line of a response header can end with LF alone (RFC 9112 section 2.2)
+    @throw SOCKET-HTTP-ERROR a request with more than one \c Host field or a list in it (RFC 9112 section 3.2), with
+    both \c Transfer-Encoding and \c Content-Length, or whose \c Transfer-Encoding does not give a framing that every
+    recipient finds: the chunked transfer coding is not the final coding, is given more than once or with a
+    parameter, or no coding is given (RFC 9112 section 6.3)
+    @throw HTTP-UNSUPPORTED-TRANSFER-CODING a request with a transfer coding other than chunked (RFC 9112 section 6.1);
+    a server answers such a request with 501 (Not Implemented); a response is never refused for its
+    \c Transfer-Encoding: its body is chunked if its final transfer coding is chunked, and is delimited by the end of
+    the connection if not (RFC 9112 section 6.3); a response with the status 1xx, 204 or 304 has no body
     @throw SOCKET-HTTP-ERROR the read of a chunked message body on the socket stopped before the end of the body (see
     unfinishedHttpChunkedBody()), whose rest cannot be told apart from the next message; the connection must be
     closed
@@ -5926,13 +5942,14 @@ hash<auto> ans = sock.readHTTPChunkedBody(20s);
 
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-CLOSED The remote end has closed the connection
-    @throw SOCKET-RECV-ERROR There was an error receiving the data
+    @throw SOCKET-RECV-ERROR There was an error receiving the data, or the memory for the body could not be allocated
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
     end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize()
     @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
 */
@@ -5960,13 +5977,14 @@ hash<auto> ans = sock.readHTTPChunkedBodyBinary(20s);
 
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-CLOSED The remote end has closed the connection
-    @throw SOCKET-RECV-ERROR There was an error receiving the data
+    @throw SOCKET-RECV-ERROR There was an error receiving the data, or the memory for the body could not be allocated
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
     end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize()
     @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
 */
@@ -6005,7 +6023,8 @@ hash<auto> ans = sock.readHTTPChunk(20s);
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
     end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the chunk exceeds the limit set with setMaxChunkedBodySize()
     @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
 */
@@ -6037,7 +6056,8 @@ hash<auto> ans = sock.readHTTPChunkedBodyToOutputStream(outputStream, 20s);
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
     end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
     @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
     no data over the limit is written to the stream
@@ -6077,7 +6097,8 @@ sock.readHTTPChunkedBodyWithCallback(recv_callback, 20s);
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
     end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
     @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
     no data over the limit is passed to the callback
@@ -6121,7 +6142,8 @@ sock.readHTTPChunkedBodyBinaryWithCallback(recv_callback, 20s);
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
     end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
     @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
     no data over the limit is passed to the callback

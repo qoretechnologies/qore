@@ -502,9 +502,14 @@ show("weak reference to a list", auto sub () {
     c.b := v;
     list<auto> i = (\c.b,);
     auto x = i;
-    c.lsi = x;
-    # the list is converted to a new list, which replaces the weak reference; the list it refers to stays as it is
-    return (c.lsi.fullType(), c.b.fullType(), c.b, v.fullType(), v);
+    # the type would convert the list to a new list, which the weak reference does not designate: the bind is
+    # refused, nothing is stored, and the weak reference and the list it refers to stay as they are (qore#7433)
+    try {
+        c.lsi = x;
+    } catch (hash<ExceptionInfo> ex) {
+        return (ex.err, c.lsi, c.b, v.fullType(), v);
+    }
+    return c.lsi.fullType();
 });
 
 show("weak reference to a plain list", auto sub () {

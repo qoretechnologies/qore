@@ -109,6 +109,7 @@ class FtpPollerTest inherits QUnit::Test {
         addTestCase("dropping the last reference to a started poller stops its thread", \lastReferenceTest());
         addTestCase("error logging test", \errorLoggingTest());
         addTestCase("data provider test", \dataProviderTest());
+        addTestCase("the file event declares that it can change the server", \eventMutatesStateTest());
         addTestCase("start_thread from the thread's capability", \capabilityTest());
         addTestCase("start_thread from the thread's capability in a restricted Program", \restrictedCapabilityTest());
         addTestCase("regex mask test", \regexMaskTest());
@@ -734,6 +735,18 @@ try {
     }
 }
 ";
+    }
+
+    #! remote_file_disposition DELETE or MOVE deletes or moves the remote file, so the event declares a change
+    #! (qore#7454)
+    private eventMutatesStateTest() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(FtpPoller::AppName,
+            "ftp-file-event");
+        assertEq(DPAT_EVENT, action.action_code);
+        assertEq(("DELETE", "MOVE", "NONE"), sort(map $1.value, action.options.remote_file_disposition.allowed_values));
+        assertEq(NT_BOOLEAN, action.mutates_state.typeCode());
+        assertTrue(action.mutates_state);
+        assertTrue(DataProviderActionCatalog::actionMutatesState(action));
     }
 
     private dataProviderTest() {

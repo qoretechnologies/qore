@@ -850,6 +850,19 @@ sub typed_mongodb_provider(MongoDbDataProvider::MongoDbCollectionDataProvider pr
             assertEq(sprintf("/databases/{database}/{collection}/%s", action_name), action.path,
                 sprintf("action %y addresses the collection", action_name));
         }
+
+        # find, findOne, countDocuments and the fixed vector search pipeline only read: the actions declare
+        # that they are read-only (qore#7454)
+        foreach string action_name in ("find", "find-one", "count", "vector-search") {
+            hash<DataProviderActionInfo> action = action_map{action_name};
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), action_name);
+            assertFalse(action.mutates_state, action_name);
+            assertFalse(DataProviderActionCatalog::actionMutatesState(action), action_name);
+        }
+        # the writes, and an aggregation pipeline, which can write with $out or $merge, change state
+        foreach string action_name in ("insert", "update", "delete", "aggregate", "bulk") {
+            assertTrue(DataProviderActionCatalog::actionMutatesState(action_map{action_name}), action_name);
+        }
     }
 
     #! Every action's path must resolve to a provider that supplies the option and result types

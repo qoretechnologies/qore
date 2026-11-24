@@ -2985,7 +2985,7 @@ int LValueHelper::doHashLValue(qore_type_t t, const char* mem, bool for_remove) 
                     // the container was created for this assignment; a rejected assignment removes it again
                     trackVivifiedContainer();
                 } else {
-                    const TypedHashDecl* thd = QoreTypeInfo::getUniqueReturnHashDecl(typeInfo);
+                    const TypedHashDecl* thd = QoreTypeInfo::getUniqueReturnHashDecl(qore_get_value_type(typeInfo));
                     if (thd) {
                         // we cannot initialize a hashdecl value here while holding lvalue locks
                         // so we have to throw an exception
@@ -3619,6 +3619,49 @@ bool qore_weak_local_container_store(const LocalVar* lv, const AbstractQoreNode*
     }
     lvh.assign(val.refSelf(), "<lvalue>");
     return true;
+}
+
+bool qore_try_read_unique_weak_path(const LVPathStep* steps, size_t size, QoreValue& result) {
+    if (size != 2 || steps[0].kind != LVPathStepKind::LocalVar || !steps[0].ref_ptr) {
+        return false;
+    }
+    const auto* local = static_cast<const LocalVar*>(steps[0].ref_ptr);
+    if (local->closureUse() || local->isReadOnly()) {
+        return false;
+    }
+    LocalVarValue* slot = thread_try_find_lvar(local);
+    if (!slot || slot->finalized || !slot->val.assigned || slot->val.static_assignment
+            || slot->val.type != QV_Node) {
+        return false;
+    }
+    // This root belongs to this thread. A reference, captured local, opaque value or shared
+    // container needs the ordinary navigation and its locking or copy-on-write.
+    QoreValue root = slot->val.getValue();
+    if (!root.isPlainPointer()) {
+        return false;
+    }
+    const LVPathStep& key = steps[1];
+    QoreValue value;
+    if (key.kind == LVPathStepKind::HashKeyConst) {
+        if (root.getType() == NT_OBJECT) {
+            return qore_object_private::get(*root.get<QoreObject>())->tryReadUniqueWeakMember(key.name, result);
+        }
+        if (root.getType() != NT_HASH || !root.get<const QoreHashNode>()->is_unique()) {
+            return false;
+        }
+        value = root.get<const QoreHashNode>()->getKeyValue(key.name.c_str());
+    } else if (key.kind == LVPathStepKind::ListIndex && root.getType() == NT_LIST
+            && (key.slice_values.empty() || key.slice_values.front().getType() == NT_INT)
+            && key.index >= 0 && root.get<const QoreListNode>()->is_unique()) {
+        const auto* list = root.get<const QoreListNode>();
+        if (static_cast<uint64_t>(key.index) >= list->size()) {
+            return false;
+        }
+        value = list->retrieveEntry(key.index);
+    } else {
+        return false;
+    }
+    return qore_try_ref_unique_container(value, result);
 }
 
 int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool for_remove, bool remove_root) {
@@ -5124,24 +5167,7 @@ int64 LValueHelper::shiftRightEqualsBigInt(int64 va, const char* desc) {
 }
 
 int64 LValueHelper::preIncrementBigInt(const char* desc) {
-    if (intResultNeedsConversion()) {
-        return storeIntResult(getAsBigInt() + 1, desc);
-    }
-    if (val) {
-        if (makeIntVal(desc)) {
-            return 0;
-        }
-        return val->preIncrementBigInt();
-    }
-    if (makeIntQv(desc)) {
-        return 0;
-    }
-    // computed from the old value, as in postIncrementBigInt(): the compiler keeps one register less than for a new
-    // value that is both stored and returned
-    int64 oldVal = qv->getAsBigInt();
-    saveTemp(*qv);
-    qv->set(oldVal + 1);
-    return oldVal + 1;
+    return preIncrementBigIntInline(desc);
 }
 
 int64 LValueHelper::preDecrementBigInt(const char* desc) {

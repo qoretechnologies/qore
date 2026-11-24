@@ -14,6 +14,7 @@ public class BedrockRuntimeManifest {
             <RestSchemaActionInfo>{
                 "action": "apply-guardrail",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/guardrail/{guardrailIdentifier}/version/{guardrailVersion}/apply",
                 "operation_id": "ApplyGuardrail",
                 "display_name": "Apply Guardrail",
@@ -27,6 +28,7 @@ public class BedrockRuntimeManifest {
             <RestSchemaActionInfo>{
                 "action": "converse",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/model/{modelId}/converse",
                 "operation_id": "Converse",
                 "display_name": "Converse",
@@ -40,6 +42,7 @@ public class BedrockRuntimeManifest {
             <RestSchemaActionInfo>{
                 "action": "count-tokens",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/model/{modelId}/count-tokens",
                 "operation_id": "CountTokens",
                 "display_name": "Count Tokens",
@@ -53,6 +56,7 @@ public class BedrockRuntimeManifest {
             <RestSchemaActionInfo>{
                 "action": "get-async-invoke",
                 "method": "GET",
+                "mutates_state": False,
                 "path": "/async-invoke/{invocationArn}",
                 "operation_id": "GetAsyncInvoke",
                 "display_name": "Get Async Invoke",
@@ -66,6 +70,7 @@ public class BedrockRuntimeManifest {
             <RestSchemaActionInfo>{
                 "action": "invoke-guardrail-checks",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/guardrail-checks/invoke",
                 "operation_id": "InvokeGuardrailChecks",
                 "display_name": "Invoke Guardrail Checks",
@@ -79,6 +84,7 @@ public class BedrockRuntimeManifest {
             <RestSchemaActionInfo>{
                 "action": "invoke-model",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/model/{modelId}/invoke",
                 "operation_id": "InvokeModel",
                 "display_name": "Invoke Model",
@@ -92,6 +98,7 @@ public class BedrockRuntimeManifest {
             <RestSchemaActionInfo>{
                 "action": "list-async-invokes",
                 "method": "GET",
+                "mutates_state": False,
                 "path": "/async-invoke",
                 "operation_id": "ListAsyncInvokes",
                 "display_name": "List Async Invokes",

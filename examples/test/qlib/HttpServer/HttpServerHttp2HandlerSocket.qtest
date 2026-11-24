@@ -177,6 +177,19 @@ AbstractHttpSocketHandler sub get_sse_handler(Queue to_host) {
 }
 ";
 
+        #! the class of the state of a handler socket, which the class of the handler socket of the module refers to
+        #! (qore#7305); a handler socket made without one has none
+        const StateStub = "
+class HandlerSocketState {
+    markStreamResponseStarted() {
+    }
+
+    bool isStreamResponseStarted() {
+        return False;
+    }
+}
+";
+
         #! a socket that stands for the connection's: its reset of a stream fails as for a connection that has ended,
         #! and its push promise gives a stream id that is not valid; with the class of the handler socket
         const FakeSource = "
@@ -344,7 +357,7 @@ hash<string, string> sub run_fake() {
         *string cls = (src =~ x/(\nclass Http2HandlerSocket inherits Qore::Socket \{.*?\n\}\n)/s)[0];
         assertTrue(exists cls, "the class is found in the module");
         Program p(PO_NO_CHILD_PO_RESTRICTIONS);
-        p.parse("%modern\n" + cls + FakeSource, "fake");
+        p.parse("%modern\n" + cls + StateStub + FakeSource, "fake");
         assertEq({
             "promise": "ok",
             "stream_0": "HTTP2-HANDLER-SOCKET-ERROR",

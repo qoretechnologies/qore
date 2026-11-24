@@ -21,9 +21,9 @@ relative date for an absolute date: ["RUNTIME-TYPE-ERROR", null, True]
 list of relative dates for a list of absolute dates: ["RUNTIME-TYPE-ERROR", null, "list<date>", True]
 object for a soft list: ["list<reference<softlist<object>>>", "list<object>", True]
 deleted object: ["RUNTIME-TYPE-ERROR", null, "object", False]
-weak reference to a list: ["list<reference<list<softint>>>", "list<softint>", [1], "list<string>", ["1"]]
-weak reference to a plain list: ["RUNTIME-TYPE-ERROR", null, 1]
-weak reference to a plain hash: ["RUNTIME-TYPE-ERROR", null, 1]
+weak reference to a list: ["RUNTIME-TYPE-ERROR", null, ["1"], "list<string>", ["1"]]
+weak reference to a plain list: "list<reference<list>>"
+weak reference to a plain hash: "list<reference<*hash>>"
 reference held in the referenced lvalue: "list<reference<*reference<int>>>"
 member notification of the same object: ["list<reference<softint>>", "integer", 4, ["b", "b", "s"]]
 member notification of another object: ["integer", 3, True]

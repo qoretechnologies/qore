@@ -59,6 +59,7 @@
 #include "qore/intern/QoreConnectionDestinations.h"
 #include "qore/intern/SseEventFramer.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cerrno>
 #include <atomic>
@@ -156,6 +157,17 @@ DLLLOCAL int qore_socket_exec_close_private(qore_socket_private* priv);
 //! Raises \a err and returns -1 if a UNIX socket path does not fit a socket address with its terminator (issue #6910)
 DLLLOCAL int qore_socket_check_unix_path(const char* path, const char* err, ExceptionSink* xsink);
 #endif
+
+//! Appends data received to an HTTP message body (the binary body, or the string body if \a body_bin is nullptr)
+/** The size of a body comes from the peer, so a body that cannot grow fails the read without ending the process or
+    losing data silently (issue 7417)
+
+    @return 0 for OK, -1 if the memory could not be allocated (a SOCKET-RECV-ERROR exception is raised; the body is
+    unchanged)
+*/
+DLLLOCAL int qore_socket_append_http_body(ExceptionSink* xsink, BinaryNode* body_bin, QoreString* body_str,
+        const void* data, size_t size);
+
 DLLLOCAL int do_read_error(ssize_t rc, const char* method_name, int timeout_ms, ExceptionSink* xsink);
 DLLLOCAL int sock_get_raw_error();
 #if defined(DEBUG) && !defined(_Q_WINDOWS)
@@ -228,6 +240,23 @@ private:
 */
 DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, const struct sockaddr* addr, int size,
     int sock_type, int protocol, QoreSandboxManager* sandbox_manager, ExceptionSink* xsink);
+
+//! Binds an open socket descriptor to a numeric address, with the network policy check of any bind
+/** The descriptor variant of qore_socket_bind_family_sockaddr_direct() for a descriptor that no socket owns yet, such
+    as a connection attempt of the address family race of a QUIC client connection; it neither resolves nor waits.
+
+    @param fd the open socket descriptor
+    @param addr the address to bind to
+    @param size the size of the address
+    @param sock_type the socket type (ex: \c SOCK_DGRAM)
+    @param sandbox_manager the sandbox manager whose network policy governs the bind, if any
+    @param xsink raises \c NETWORK-ACCESS-DENIED if the policy denies the bind
+
+    @return 0 for success, -1 for error; a failed bind leaves its error number in errno without raising an exception,
+    and the caller closes the descriptor
+*/
+DLLLOCAL int qore_socket_bind_descriptor_checked(int fd, const struct sockaddr* addr, int size, int sock_type,
+    QoreSandboxManager* sandbox_manager, ExceptionSink* xsink);
 
 //! Binds a socket descriptor so that, on macOS, a socket on all interfaces never shares its port with an IPv4 socket
 /** A socket on all interfaces shares its port with any socket bound to a more specific address of the same port,
@@ -776,6 +805,11 @@ DLLLOCAL bool qore_descriptor_hold_set_close_wake(const std::shared_ptr<void>& h
 /** For the C++ unit tests of a close of a registered connection (qore#7003)
 */
 DLLLOCAL extern std::atomic<void (*)()> qore_dbg_before_close_wakes;
+//! Debug builds: if set, called with the socket by the thread that closes it right after prepareForClose() shut the
+//! descriptor down, without the socket's close lock, before the close gives the descriptor up
+/** For the C++ unit tests of a connection step between the shutdown of a close and the close
+*/
+DLLLOCAL extern std::atomic<void (*)(qore_socket_private*)> qore_dbg_after_pre_close_shutdown;
 #endif
 
 #ifdef DEBUG
@@ -1282,8 +1316,15 @@ private:
         qore_socket_private::DescriptorHold): the descriptor is then closed when the I/O thread has removed it, so its
         number cannot be given to another object before; otherwise it is closed now.  If a concurrent close of the
         socket has released the descriptor already, nothing is closed here.
+
+        @return true if the socket gave the descriptor up, false if it was closed, or given another descriptor, since
+        this operation last gave it one
     */
-    DLLLOCAL void releasePrimaryFd(int fd, ConnAttempt* next);
+    DLLLOCAL bool releasePrimaryFd(int fd, ConnAttempt* next);
+
+    //! Raises the connection's error, or the close's if the socket was closed since this operation last gave it a
+    //! descriptor (whose effect, such as a shutdown's error, can be what made the attempts fail)
+    DLLLOCAL void raiseConnectErrorOrClosed(ExceptionSink* xsink);
 
     //! Returns true if the socket was closed, or given another descriptor, since this operation last gave it one
     /** Read with the socket's close lock held, where a close changes the generation (see @ref sock_gen)
@@ -1486,8 +1527,11 @@ private:
     //! Receives data; continuePoll() records received data on the socket
     DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
 
-    //! Makes room in the buffer for more data; returns -1 if the memory cannot be allocated
-    DLLLOCAL int grow(ExceptionSink* xsink);
+    //! Makes room in the buffer for more data
+    /** @return -1 if the memory cannot be allocated: a SOCKET-RECV-ERROR exception is raised, the data received is
+        lost, and the connection is shut down, as the rest of the data cannot be told apart from what follows it
+    */
+    DLLLOCAL int grow(ExceptionSink* xsink, int fd);
 
     //! the most memory allocated for the data before any of it has been received
     /** The size to receive can come from the peer (a Content-Length or a chunk size), so the buffer grows as the
@@ -1501,6 +1545,8 @@ private:
     //! the size of the buffer allocated for the data
     size_t allocated = 0;
     bool retry_tls_read = false;
+    //! true if the buffer could not grow: the data received is lost, and the read cannot continue
+    bool failed = false;
     size_t received = 0;
 };
 
@@ -2056,8 +2102,16 @@ struct qore_socket_private : public QoreReferenceCounter {
         std::shared_ptr<std::function<void()>> close_wake;
     };
 
+    using CloseWakes = std::vector<std::shared_ptr<std::function<void()>>>;
+    //! Waits on a socket without a descriptor (e.g. during DNS resolution), protected by close_m.
+    CloseWakes generation_wakes;
+
+    //! Registers a one-shot wake for the next close if the socket still has no descriptor.
+    //! Releasing the returned hold unregisters it.
+    DLLLOCAL std::shared_ptr<void> holdGenerationWake(std::function<void()> wake);
+
     //! the wakes that a close that gave the descriptor up while it was held runs once @ref close_m is released
-    std::vector<std::shared_ptr<std::function<void()>>> pending_close_wakes;
+    CloseWakes pending_close_wakes;
 
     //! Runs the wakes of a close that gave the descriptor up while it was held; called without @ref close_m held
     DLLLOCAL void runPendingCloseWakes() {
@@ -2066,6 +2120,10 @@ struct qore_socket_private : public QoreReferenceCounter {
             CloseLockHelper cl(*this);
             wakes.swap(pending_close_wakes);
         }
+        runCloseWakes(wakes);
+    }
+
+    DLLLOCAL static void runCloseWakes(const CloseWakes& wakes) {
         if (wakes.empty()) {
             return;
         }
@@ -2844,13 +2902,16 @@ public:
         @return true if the socket had no descriptor, false if it has one, which the caller then closes
     */
     DLLLOCAL bool endConnectIfNoDescriptor() {
-        CloseLockHelper cl(*this);
-        if (sock != QORE_INVALID_SOCKET) {
-            return false;
+        CloseWakes wakes;
+        {
+            CloseLockHelper cl(*this);
+            if (sock != QORE_INVALID_SOCKET) {
+                return false;
+            }
+            ++fd_generation;
+            wakes.swap(generation_wakes);
         }
-        // a close of a socket without a descriptor wakes no operation: one that waits for the resolver of its host
-        // ends at the resolver's next reply or timeout (no leak, no reuse of a descriptor; qore#7371)
-        ++fd_generation;
+        runCloseWakes(wakes);
         return true;
     }
 
@@ -2961,8 +3022,20 @@ public:
         // SSL_write currently in flight on this socket; if a racing close
         // has already released the fd, there is nothing to shut down.  A TLS
         // connection that no call is using sends its close_notify alert first.
-        CloseLockHelper cl(*this);
-        if (sock != QORE_INVALID_SOCKET) {
+#ifdef DEBUG
+        bool shut = false;
+#endif
+        {
+            CloseLockHelper cl(*this);
+            if (sock == QORE_INVALID_SOCKET) {
+                return;
+            }
+            // the shutdown is the start of the close: the descriptor generation changes with it, so that a connection
+            // that sees its effect on the descriptor (a connection attempt that reads the shutdown's error) sees the
+            // socket closed, and fails as closed, not with the error that the shutdown caused; the close changes it
+            // again when it gives the descriptor up.  Nothing takes a changed generation for a released descriptor:
+            // the descriptor stays the socket's, open, until the close
+            ++fd_generation;
 #ifdef DEBUG
             if (dbgAbortiveCloseLocked()) {
                 return;
@@ -2970,23 +3043,34 @@ public:
 #endif
             sendTlsCloseNotifyLocked();
             ::shutdown(sock, SHUTDOWN_ARG);
+#ifdef DEBUG
+            shut = true;
+#endif
         }
+#ifdef DEBUG
+        // a test holds the close here, after the shutdown and before the close, without the close lock
+        if (shut) {
+            if (void (*hook)(qore_socket_private*) = qore_dbg_after_pre_close_shutdown.load(std::memory_order_acquire)) {
+                hook(this);
+            }
+        }
+#endif
     }
 
     //! Closes the descriptor and resets the connection state; does nothing if the descriptor is already released
     DLLLOCAL int close_and_reset() {
-        int rc;
+        int rc = 0;
+        CloseWakes wakes;
         {
             CloseLockHelper cl(*this);
+            wakes.swap(generation_wakes);
             if (sock == QORE_INVALID_SOCKET) {
-                // a connection that is being made (ex: resolving its host) gives the socket no descriptor after a
-                // close (see SocketConnectInetHappyEyeballsPollState::socketChanged(), qore#7003); the close wakes no
-                // operation: one that waits for the resolver ends at its next reply or timeout (qore#7371)
                 ++fd_generation;
-                return 0;
+            } else {
+                rc = close_and_reset_locked();
             }
-            rc = close_and_reset_locked();
         }
+        runCloseWakes(wakes);
         runPendingCloseWakes();
         return rc;
     }
@@ -3109,6 +3193,26 @@ public:
             *new_generation = fd_generation;
         }
         fd_nonblocking.store(nonblocking, std::memory_order_relaxed);
+    }
+
+    //! Makes a connected UDP descriptor, an owned descriptor, the descriptor of the socket, which has none
+    /** Used by the address family race of a QUIC client connection (SocketQuicClientPollOperation) for the
+        connection attempt that wins: the socket is then as if it had been bound to the wildcard address of the family
+        and connected
+
+        @param fd the descriptor, which is non-blocking
+        @param adopt the owned descriptor (see qore_owned_descriptor_create()), which is reset
+        @param family the address family of the descriptor
+    */
+    DLLLOCAL void adoptDatagramDescriptor(int fd, std::shared_ptr<SharedDescriptor>& adopt, int family) {
+        assert(sock == QORE_INVALID_SOCKET);
+        setDescriptor(fd, adopt, true);
+        resetCloseInterrupt();
+        sfamily = family;
+        stype = SOCK_DGRAM;
+        sprot = 0;
+        port = -1;
+        listening = false;
     }
 
     //! Closes a socket descriptor that is not the socket's own descriptor
@@ -3363,6 +3467,7 @@ public:
         QoreStringNode* old_ssl_err_str;
         QoreObject* old_remote_cert;
         std::shared_ptr<Http2Session> old_h2_session;
+        CloseWakes wakes;
         std::function<void(int32_t, Http2StreamInfo*, ExceptionSink*)> old_h2_stream_complete_callback;
         int rc = 0;
         {
@@ -3372,6 +3477,7 @@ public:
             old_remote_cert = remote_cert;
             remote_cert = nullptr;
             old_h2_session = h2_session.take();
+            wakes.swap(generation_wakes);
             old_h2_stream_complete_callback.swap(h2_stream_complete_callback);
 
             if (sock >= 0) {
@@ -3418,9 +3524,6 @@ public:
 
                 rc = close_and_reset_locked();
             } else {
-                // a connection that is being made (ex: resolving its host) gives the socket no descriptor after a
-                // close (see SocketConnectInetHappyEyeballsPollState::socketChanged(), qore#7003); the close wakes no
-                // operation: one that waits for the resolver ends at its next reply or timeout (qore#7371)
                 ++fd_generation;
             }
         }
@@ -3443,6 +3546,7 @@ public:
             old_ssl_err_str->deref();
         }
         // the async I/O registrations of a descriptor given up while it was held (see close_and_reset_locked())
+        runCloseWakes(wakes);
         runPendingCloseWakes();
         return rc;
     }
@@ -4781,14 +4885,17 @@ public:
 
     //! checks the lines of an HTTP header or trailer section as RFC 9112 requires
     /** - a CR is allowed only before the LF that ends a line; a bare CR is invalid (RFC 9112 section 2.2)
-        - a line may end with LF instead of CRLF (section 2.2)
+        - a line may end with LF instead of CRLF (section 2.2), unless \a reject_bare_lf is true
         - a field line has a colon, the field name before it is not empty and has no whitespace, as between the name
           and the colon (sections 5 and 5.1)
         - a line that starts with whitespace is an obsolete line folding (section 5.2); it is refused if
           \a reject_obs_fold is true (a request), and is otherwise replaced in place with spaces; a whitespace line
           before the first field line is refused (section 2.2)
 
-        The check ends at the first empty line, which ends the section.
+        The check ends at the first empty line, which ends the section; if \a end_at_empty_line is true, text after
+        it is refused: the readers find the end of a section where its line ends are CRLF, and a parser that ended it
+        at an earlier empty line would lose the text after it, which the sender meant as something else (the next
+        message, or the rest of the section)
 
         @param xsink for the exception
         @param str the text received, NUL-terminated; obsolete line foldings are replaced with spaces in it
@@ -4796,11 +4903,13 @@ public:
         @param reject_obs_fold true to refuse an obsolete line folding, false to replace it with spaces
         @param err the error code of the exception
         @param what what the text is: \c "header" or \c "chunked body trailer"
+        @param reject_bare_lf true to refuse a line that ends with LF alone
+        @param end_at_empty_line true to refuse text after the first empty line
 
         @return 0 if the text is valid, -1 if an exception was raised
     */
     DLLLOCAL static int checkHttpFieldLines(ExceptionSink* xsink, char* str, bool skip_start_line, bool reject_obs_fold,
-            const char* err, const char* what) {
+            const char* err, const char* what, bool reject_bare_lf = false, bool end_at_empty_line = false) {
         assert(str);
         bool first_field = true;
         bool start_line = skip_start_line;
@@ -4822,8 +4931,18 @@ public:
                 ++e;
             }
             char* le = (e > line && e[-1] == '\r') ? e - 1 : e;
+            if (reject_bare_lf && *e == '\n' && le == e) {
+                xsink->raiseException(err, "invalid HTTP %s received with a line that ends with a bare LF character "
+                    "at byte offset %zu; a line must end with CRLF", what, static_cast<size_t>(e - str));
+                return -1;
+            }
             // an empty line ends the section
             if (le == line) {
+                if (end_at_empty_line && *e && e[1]) {
+                    xsink->raiseException(err, "invalid HTTP %s received with text after the empty line at byte "
+                        "offset %zu that ends it", what, static_cast<size_t>(line - str));
+                    return -1;
+                }
                 break;
             }
             if (start_line) {
@@ -4877,6 +4996,225 @@ public:
         return 0;
     }
 
+    //! the framing that the \c Transfer-Encoding field of an HTTP/1.x message gives its body
+    enum class HttpTransferCodingFraming {
+        Chunked,        //!< the chunked transfer coding alone
+        Invalid,        //!< the framing cannot be determined: chunked is not the final coding, is given more than once
+                        //!< or with a parameter, or there is no coding
+        Unsupported,    //!< a transfer coding other than chunked
+        CloseDelimited, //!< a response whose final transfer coding is not chunked: its body ends when the
+                        //!< connection is closed (RFC 9112 section 6.3)
+    };
+
+    //! returns the framing that the value of the \c Transfer-Encoding field of an HTTP/1.x message gives its body
+    /** The field is a list of transfer codings, which can be given in more than one field line (\a te is then a list
+        of the values of the lines); empty elements are ignored, and the codings are compared without the whitespace
+        around them and without regard to case (RFC 9112 section 6.1, RFC 9110 section 5.6.1).  The chunked coding
+        must be the final coding and must be applied once; it has no parameters (RFC 9112 section 7).  A message body
+        with a coding other than chunked cannot be read, as the library implements no other transfer coding.
+
+        A response is never refused, as RFC 9112 section 6.3 requires of a client: its body is chunked if its final
+        coding is chunked without parameters (the codings before it are not decoded, and a repeated chunked coding,
+        as some intermediaries repeat the field of the origin server, is taken once); any other response body is
+        delimited by the end of the connection (\c CloseDelimited).
+
+        @param te the value of the field: a string, or a list of strings
+        @param desc set to why the framing is not \c Chunked
+        @param response true for a response, false for a request
+        @param only_chunked if not null, set to true if every coding of the field is the chunked coding
+
+        @return the framing of the message body
+    */
+    DLLLOCAL static HttpTransferCodingFraming getHttpTransferCodingFraming(QoreValue te, std::string& desc,
+            bool response, bool* only_chunked = nullptr) {
+        // the codings, in order
+        std::vector<std::string> codings;
+        auto add_value = [&codings](QoreValue v) {
+            QoreStringValueHelper str(v);
+            const char* p = str->c_str();
+            const char* end = p + str->size();
+            while (p <= end) {
+                const char* e = static_cast<const char*>(memchr(p, ',', end - p));
+                if (!e) {
+                    e = end;
+                }
+                const char* s = p;
+                const char* t = e;
+                while (s < t && (*s == ' ' || *s == '\t')) {
+                    ++s;
+                }
+                while (t > s && (t[-1] == ' ' || t[-1] == '\t')) {
+                    --t;
+                }
+                if (s < t) {
+                    codings.emplace_back(s, t - s);
+                }
+                p = e + 1;
+            }
+        };
+        if (te.getType() == NT_LIST) {
+            ConstListIterator li(te.get<const QoreListNode>());
+            while (li.next()) {
+                add_value(li.getValue());
+            }
+        } else {
+            add_value(te);
+        }
+
+        bool all_chunked = !codings.empty() && std::all_of(codings.begin(), codings.end(),
+            [](const std::string& c) { return !strcasecmp(c.c_str(), "chunked"); });
+        if (only_chunked) {
+            *only_chunked = all_chunked;
+        }
+        if (response) {
+            if (!codings.empty() && !strcasecmp(codings.back().c_str(), "chunked")) {
+                return HttpTransferCodingFraming::Chunked;
+            }
+            desc = "the final transfer coding of the response is not chunked";
+            return HttpTransferCodingFraming::CloseDelimited;
+        }
+        if (codings.empty()) {
+            desc = "the Transfer-Encoding field has no transfer coding";
+            return HttpTransferCodingFraming::Invalid;
+        }
+        const char* unsupported = nullptr;
+        for (size_t i = 0, e = codings.size(); i < e; ++i) {
+            const std::string& c = codings[i];
+            // the name of the coding, without any parameters
+            size_t n = c.find(';');
+            std::string name = c.substr(0, n);
+            while (!name.empty() && (name.back() == ' ' || name.back() == '\t')) {
+                name.pop_back();
+            }
+            if (!strcasecmp(name.c_str(), "chunked")) {
+                if (n != std::string::npos) {
+                    desc = "the chunked transfer coding is given with a parameter";
+                    return HttpTransferCodingFraming::Invalid;
+                }
+                if (i != e - 1) {
+                    desc = "the chunked transfer coding is not the final transfer coding, or is given more than once";
+                    return HttpTransferCodingFraming::Invalid;
+                }
+            } else if (!unsupported) {
+                unsupported = c.c_str();
+            }
+        }
+        if (unsupported) {
+            desc = "the transfer coding \"";
+            desc += unsupported;
+            desc += "\" is not supported; only the chunked transfer coding is";
+            return HttpTransferCodingFraming::Unsupported;
+        }
+        return HttpTransferCodingFraming::Chunked;
+    }
+
+    //! returns true if a response with the given \c Transfer-Encoding field value has a chunked body
+    /** @see getHttpTransferCodingFraming()
+    */
+    DLLLOCAL static bool isHttpResponseBodyChunked(QoreValue te) {
+        std::string desc;
+        return !te.isNothing()
+            && getHttpTransferCodingFraming(te, desc, true) == HttpTransferCodingFraming::Chunked;
+    }
+
+    //! checks how the body of an HTTP/1.x message is framed (RFC 9112 section 6), after its header was parsed
+    /** A request with more than one \c Host field, or with a list in it, is refused with \c SOCKET-HTTP-ERROR
+        (RFC 9112 section 3.2).  A request whose body cannot be framed as every other recipient would frame it is
+        refused, so that the bytes that follow its header are never taken for another request:
+        - a request with both \c Transfer-Encoding and \c Content-Length (RFC 9112 section 6.3): \c SOCKET-HTTP-ERROR
+        - a \c Transfer-Encoding whose framing cannot be determined (chunked not the final coding, given more than
+          once or with a parameter, or no coding): \c SOCKET-HTTP-ERROR
+        - a \c Transfer-Encoding with a coding other than chunked: \c HTTP-UNSUPPORTED-TRANSFER-CODING
+
+        A response is never refused for its \c Transfer-Encoding (RFC 9112 section 6.3): a response with the status
+        1xx, 204 or 304 has no body; otherwise its body is chunked if its final coding is chunked, which overrides
+        any \c Content-Length, and is delimited by the end of the connection if not.
+
+        A message with a \c Transfer-Encoding of the chunked coding alone has its field given with the value
+        \c "chunked" (also when it was received in another case, with whitespace or in more than one field line), so
+        that every reader of the message finds the same framing; the \c "headers-raw" key of the information hash
+        has the value received.  A connection that receives an HTTP/1.0 request with a \c Transfer-Encoding is closed
+        after the request (RFC 9112 section 6.1).
+
+        @return 0 if the message can be read, -1 if an exception was raised
+    */
+    DLLLOCAL int checkHttpMessageFraming(ExceptionSink* xsink, QoreHashNode& h, QoreHashNode& fields, int flags,
+            bool& close) {
+        // a request has one Host field, whose value is one host (RFC 9112 section 3.2): a server or an intermediary
+        // that took another one than this one would apply the request to another target
+        if (flags & CHF_REQUEST) {
+            QoreValue host = fields.getKeyValue("host");
+            if (host.getType() == NT_LIST) {
+                xsink->raiseException("SOCKET-HTTP-ERROR", "invalid HTTP request header received with more than one "
+                    "Host field (RFC 9112 section 3.2)");
+                return -1;
+            }
+            if (host.getType() == NT_STRING) {
+                QoreStringValueHelper str(host);
+                if (strchr(str->c_str(), ',')) {
+                    xsink->raiseException("SOCKET-HTTP-ERROR", "invalid HTTP request header received with a list "
+                        "of hosts in the Host field (RFC 9112 section 3.2)");
+                    return -1;
+                }
+            }
+        }
+        QoreValue te = fields.getKeyValue("transfer-encoding");
+        if (te.isNothing()) {
+            return 0;
+        }
+        bool request = flags & CHF_REQUEST;
+        if (!request) {
+            // a response with one of these statuses has no body, whatever its fields say
+            int64 status = h.getKeyValue("status_code").getAsBigInt();
+            if ((status >= 100 && status < 200) || status == 204 || status == 304) {
+                return 0;
+            }
+        }
+        if (request && !fields.getKeyValue("content-length").isNothing()) {
+            xsink->raiseException("SOCKET-HTTP-ERROR", "invalid HTTP request header received with both "
+                "Transfer-Encoding and Content-Length (RFC 9112 section 6.3)");
+            return -1;
+        }
+        std::string desc;
+        bool only_chunked = false;
+        switch (getHttpTransferCodingFraming(te, desc, !request, &only_chunked)) {
+            case HttpTransferCodingFraming::Invalid:
+                xsink->raiseException("SOCKET-HTTP-ERROR", "invalid HTTP request header received: %s (RFC 9112 "
+                    "section 6.3)", desc.c_str());
+                return -1;
+            case HttpTransferCodingFraming::Unsupported:
+                xsink->raiseException("HTTP-UNSUPPORTED-TRANSFER-CODING", "HTTP request header received with an "
+                    "unsupported Transfer-Encoding: %s (RFC 9112 section 6.1)", desc.c_str());
+                return -1;
+            case HttpTransferCodingFraming::CloseDelimited:
+                // the body of the response ends when the connection is closed
+                return 0;
+            case HttpTransferCodingFraming::Chunked:
+                break;
+        }
+        http_exp_chunked_body = true;
+        // the value is given as "chunked", where it is given, if it has no other coding
+        if (only_chunked) {
+            bool normalized = false;
+            if (te.getType() == NT_STRING) {
+                // note: the value can be held in inline short string storage, which the value helper reads
+                QoreStringValueHelper str(te);
+                normalized = !strcmp(str->c_str(), "chunked");
+            }
+            if (!normalized) {
+                fields.setKeyValue("transfer-encoding", new QoreStringNode("chunked"), nullptr);
+                if (!h.getKeyValue("transfer-encoding").isNothing()) {
+                    h.setKeyValue("transfer-encoding", new QoreStringNode("chunked"), nullptr);
+                }
+            }
+        }
+        // a recipient of an HTTP/1.0 message with a Transfer-Encoding closes the connection after it
+        if (request && !(flags & CHF_HTTP11)) {
+            close = true;
+        }
+        return 0;
+    }
+
     //! processes a header string to a hash and raises socket events
     DLLLOCAL QoreHashNode* processHttpHeaderString(ExceptionSink* xsink, QoreStringNodeHolder& hdr,
             QoreHashNode* info, int source, const char* headers_raw_key = "headers-raw") {
@@ -4891,9 +5229,14 @@ public:
             return nullptr;
         }
         // the field lines are checked as RFC 9112 requires; an obsolete line folding is refused in a request and
-        // replaced with spaces in a response, which a user agent must do (RFC 9112 section 5.2)
-        if (checkHttpFieldLines(xsink, const_cast<char*>(hdr->c_str()), true, strncmp(hdr->c_str(), "HTTP/", 5) != 0,
-                "SOCKET-HTTP-ERROR", "header")) {
+        // replaced with spaces in a response, which a user agent must do (RFC 9112 section 5.2); the readers end a
+        // header at its first empty line with CRLF line ends, so a line of a request that ends with a bare LF is
+        // refused, as is text after the first empty line of any header: a parser that took a bare LF as a line end
+        // would end the header there, and the text after it, which can be another message, would be lost; a line of
+        // a response can end with LF, which a recipient may accept (RFC 9112 section 2.2)
+        bool is_request = strncmp(hdr->c_str(), "HTTP/", 5) != 0;
+        if (checkHttpFieldLines(xsink, const_cast<char*>(hdr->c_str()), true, is_request, "SOCKET-HTTP-ERROR",
+                "header", is_request, true)) {
             return nullptr;
         }
         const char* buf = hdr->c_str();
@@ -4991,8 +5334,12 @@ public:
         // (qore#6761)
         QoreHashNode* fields = new QoreHashNode(autoTypeInfo);
         h->setKeyValue("headers", fields, nullptr);
-        bool close = convertHeaderToHash(*h, p, flags, info, &http_exp_chunked_body, headers_raw_key, fields,
+        bool close = convertHeaderToHash(*h, p, flags, info, nullptr, headers_raw_key, fields,
             http_fields_at_top_level.load(std::memory_order_relaxed));
+        // the framing of the body is checked once the fields are known (RFC 9112 section 6)
+        if (checkHttpMessageFraming(xsink, **h, *fields, flags, close)) {
+            return nullptr;
+        }
         do_read_http_header(QORE_EVENT_HTTP_MESSAGE_RECEIVED, *h, source);
 
         // process header info
@@ -5722,6 +6069,11 @@ DLLLOCAL extern std::atomic<bool> qore_dbg_connect_complete_before_immediate_che
     SocketConnectInetHappyEyeballsPollState::continuePoll()
 */
 DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_before_check_attempts;
+//! Debug builds: if set, called by a happy-eyeballs connect step right after it checked that the socket was not
+//! closed, before it checks its attempts
+/** For the C++ unit tests of a close by another thread that lands after the step's check of the socket
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_after_socket_check;
 
 //! Debug builds: if set, called by a happy-eyeballs connect step right before the socket takes the winning attempt's
 //! descriptor over

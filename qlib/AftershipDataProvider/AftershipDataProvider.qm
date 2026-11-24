@@ -94,6 +94,7 @@ module AftershipDataProvider {
             "short_desc": "Get a tracking by ID",
             "desc": "Retrieve a single tracking record by its Aftership tracking ID",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Tracking",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AftershipGetTrackingRequestDataType::Fields, {
@@ -317,6 +318,7 @@ module AftershipDataProvider {
             "short_desc": "Get the last checkpoint of a tracking",
             "desc": "Retrieve the most recent checkpoint event for a tracking",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Tracking",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AftershipGetLastCheckpointRequestDataType::Fields, {
@@ -350,6 +352,8 @@ module AftershipDataProvider {
             "short_desc": "Auto-detect courier from tracking number",
             "desc": "Automatically detect the courier for a given tracking number",
             "action_code": DPAT_API,
+            # POST couriers/detect only matches the tracking number against the courier formats (qore#7454)
+            "mutates_state": False,
             "groups": ("Couriers",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AftershipDetectCourierRequestDataType::Fields{"tracking_number",}, {
@@ -485,6 +489,7 @@ module AftershipDataProvider {
             "short_desc": "Get a return by ID",
             "desc": "Retrieve a single return record by its ID or RMA number",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Returns",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AftershipGetReturnRequestDataType::Fields, {

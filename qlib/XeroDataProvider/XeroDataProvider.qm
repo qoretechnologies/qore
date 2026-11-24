@@ -118,6 +118,9 @@ module XeroDataProvider {
                     "short_desc": XeroEmployeesDataProvider::ShortDescs{action},
                     "desc": XeroEmployeesDataProvider::Descs{action},
                     "action_code": DPAT_API,
+                    # getEmployees only GETs the employee list; updateOrCreateEmployees POSTs employees
+                    # (qore#7454)
+                    "mutates_state": action != XeroEmployeesDataProvider::ActionGetEmployees,
                     "groups": ("Payroll",),
                 });
             }

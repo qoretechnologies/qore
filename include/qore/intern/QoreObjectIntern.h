@@ -656,6 +656,9 @@ public:
     //! returns the value of the member \a mem of \a len bytes as QoreObject::evalMember() (qore#7194)
     DLLLOCAL QoreValue evalMember(const char* mem, size_t len, ExceptionSink* xsink);
 
+    //! Reads a unique container from an ordinary stored member under the object lock (qore#7301).
+    DLLLOCAL bool tryReadUniqueWeakMember(const std::string& name, QoreValue& result);
+
     //! returns the value of the member \a mem of \a obj as QoreObject::evalMember() (qore#7194)
     /** Not inline, so that a call from the IR interpreter's dispatch loop is as small as a call of
         QoreObject::evalMember(); \a mem is a key without a NUL character (made from a C string)

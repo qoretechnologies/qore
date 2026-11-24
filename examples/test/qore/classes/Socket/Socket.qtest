@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-platform: macos - TCP, UNIX-domain and IPv6 sockets, TLS, timeouts, pipes as sockets, async socket I/O
+# test-loopback: localhost - it tests connecting to the name localhost, including the Happy Eyeballs fallback from a ::1 blackhole to 127.0.0.1 at the same port; the servers of its localhost clients are bound to the name "localhost", which listens on its first address and holds the port on the other loopback address, and its 127.0.0.1 servers have 127.0.0.1 clients
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 

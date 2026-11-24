@@ -1,0 +1,191 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%requires ../../TestInterpreter.qm
+
+%exec-class CircularHierarchyCodeTest
+
+#! Tests that a circular class hierarchy is a parse error also when the code of its classes is parsed (qore#7464)
+/** The code of the classes of a circular hierarchy is parsed after the hierarchy is found to be circular, and a lookup
+    that does not check that a hierarchy is valid (as the private access check of the pseudo-method lookup of a call
+    of a method that the class does not have) followed the cycle forever, so the parse never ended.  Each program is
+    parsed in every execution mode and compiled with qcc, each run bounded by a timeout, and must fail with the parse
+    error.
+*/
+class CircularHierarchyCodeTest inherits QUnit::Test {
+    public {
+        #! the error of a circular hierarchy
+        const Circular = "circular reference in class hierarchy";
+
+        #! the programs with an invalid hierarchy and the parse error that each must end with
+        const Cases = {
+            # the issue's program: a typed call of a method of the other class of the cycle
+            "typed-call": ("class B3 inherits K3 {\n    string m(softstring s) { return \"B3s\"; }\n"
+                "    static auto t(K3 k) { return k.m(\"a\"); }\n}\nclass K3 inherits B3 {}\n", Circular),
+            # a call of a method that no class has, through self
+            "self-call": ("class B3 inherits K3 {\n    auto u() { return self.nosuch(); }\n}\n"
+                "class K3 inherits B3 {}\n", Circular),
+            # a cycle of three classes, the call in the class where the cycle is entered
+            "three-classes": ("class A inherits C {\n    m(softstring s) {}\n"
+                "    static auto t(C k) { return k.m(\"a\"); }\n}\nclass B inherits A {}\nclass C inherits B {}\n",
+                Circular),
+            # a cycle of three classes, the call in a class in the middle of the cycle
+            "three-classes-middle": ("class A inherits C { m(softstring s) {} }\n"
+                "class B inherits A {\n    static auto t(A k) { return k.nosuch(); }\n}\nclass C inherits B {}\n",
+                Circular),
+            # a class outside the cycle that inherits one of its classes
+            "outside-class": ("class D inherits A {\n    static auto t(K k) { return k.m(\"a\"); }\n}\n"
+                "class A inherits K { m(softstring s) {} }\nclass K inherits A {}\n", Circular),
+            # a class outside the cycle that calls a static method that the classes have
+            "outside-static-call": ("class D inherits A {\n    auto s() { return K::sm(); }\n}\n"
+                "class A inherits K { static sm() {} }\nclass K inherits A { static sm() {} }\n", Circular),
+            # a class of the cycle that reads a private member of a class outside it
+            "private-member": ("class D inherits A { private { int x; } }\nclass A inherits K {}\n"
+                "class K inherits A {\n    auto p(D k) { return k.x; }\n}\n", Circular),
+            # a cycle through a diamond
+            "diamond": ("class A inherits L, R {\n    static auto t(T k) { return k.nosuch(); }\n}\n"
+                "class L inherits T {}\nclass R inherits T {}\nclass T inherits A {}\n", Circular),
+            # a cycle in a namespace
+            "namespace": ("namespace N {\nclass P {}\nclass A inherits K, P {\n"
+                "    auto u() { return self.nosuch(); }\n}\nclass K inherits A {}\n}\n", Circular),
+            # a cycle through the second parent class, which the lookups reach after a miss through the first one
+            "second-parent": ("class P {}\nclass A inherits P, K {\n    auto u() { return self.nosuch(); }\n}\n"
+                "class K inherits A {}\n", Circular),
+            # a cycle of generic classes
+            "generic": ("class A<T> inherits B<T> {\n    auto u() { return self.nosuch(); }\n"
+                "    static auto t(B<int> k) { return k.m(\"a\"); }\n}\n"
+                "class B<T> inherits A<T> { m(softstring s) {} }\n", Circular),
+            # a class of an invalid hierarchy that a type argument names is retired by the rollback of the parse,
+            # after its parent class is freed: the record of the retired class must not read the parent class
+            "retired-class-cycle": ("class G<T> {}\nclass C inherits G<Z>, Y {}\nclass Y inherits C {}\n"
+                "class Z inherits Y {}\n", Circular),
+            # the same with a parent class that inherits itself
+            "retired-class-self": ("class G<T> {}\nclass C inherits G<Z>, Y {}\nclass Y inherits Y {}\n"
+                "class Z inherits Y {}\n", "class 'Y' cannot inherit itself"),
+        };
+
+        #! a cycle completed by the last of three pending parses; the Program is used after the rollback
+        const PendingCycle = "Program p(PO_NEW_STYLE);\n"
+            "try {\n"
+            "    p.parsePending(\"class A inherits B { auto u() { return self.nosuch(); } }\", \"a\");\n"
+            "    p.parsePending(\"class B inherits C { auto u() { return self.nosuch(); } }\", \"b\");\n"
+            "    p.parsePending(\"class C inherits A { auto u() { return self.nosuch(); } }\", \"c\");\n"
+            "    p.parseCommit();\n"
+            "    printf(\"commit\\n\");\n"
+            "} catch (hash<ExceptionInfo> ex) {\n"
+            "    printf(\"%s: %s\\n\", ex.err, ex.desc =~ /circular reference in class hierarchy/ ? \"circular\" "
+            ": ex.desc);\n"
+            "}\n"
+            "p.parse(\"class A {} class B inherits A {} printf(\\\"after: %y\\\\n\\\", (new B()) instanceof A);\", "
+            "\"d\");\n"
+            "p.run();\n";
+
+        #! the exit status of the interpreter for a parse error
+        const ParseErrorStatus = 2;
+        #! the exit status of qcc for a parse error
+        const QccErrorStatus = 1;
+
+        #! the seconds that a run may take: a parse that does not end is stopped
+        const Timeout = 60;
+    }
+
+    private {
+        string qore_bin;
+        *string qcc_bin;
+        string libqore_dir;
+        #! the command that bounds a run; empty if there is none
+        string timeout_cmd;
+        TmpDir tmp("qore-circular-hierarchy-code-");
+    }
+
+    constructor() : QUnit::Test("CircularHierarchyCodeTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler();
+        timeout_cmd = trim(backquote("command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true"));
+        if (!timeout_cmd) {
+            string perl = trim(backquote("command -v perl 2>/dev/null || true"));
+            if (perl) {
+                timeout_cmd = perl + " -e 'alarm shift; exec @ARGV'";
+            }
+        }
+
+        foreach hash<auto> i in (Cases.pairIterator()) {
+            addTestCase("circular hierarchy with code: " + i.key, \testCase(), (i.key, i.value[0], i.value[1]));
+        }
+        addTestCase("circular hierarchy completed by a pending parse", \testPendingCycle());
+        set_return_value(main());
+    }
+
+    testCase(string name, string code, string error) {
+        if (!timeout_cmd) {
+            testSkip("no timeout command (timeout, gtimeout or perl) is available to bound the runs");
+        }
+        string file = tmp.path + DirSep + name + ".q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n" + code + "printf(\"ran\\n\");\n");
+        f.close();
+
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkRun(sprintf("%s -b --exec-mode=%s %s", qore_bin, mode, file), sprintf("%s (%s)", name, mode), error,
+                ParseErrorStatus);
+        }
+        if (qcc_bin) {
+            checkRun(sprintf("%s -o %s %s", qcc_bin, tmp.path + DirSep + name, file), name + " (qcc)", error,
+                QccErrorStatus);
+        }
+    }
+
+    #! the pending parse that completes a cycle fails with the error, and the Program can then be parsed again
+    testPendingCycle() {
+        if (!timeout_cmd) {
+            testSkip("no timeout command (timeout, gtimeout or perl) is available to bound the runs");
+        }
+        string file = tmp.path + DirSep + "pending.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n" + PendingCycle);
+        f.close();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string what = sprintf("pending parse (%s)", mode);
+            hash<auto> r = runBounded(sprintf("%s -b --exec-mode=%s %s", qore_bin, mode, file));
+            assertFalse(r.rc == 124 || r.rc == 142, sprintf("%s: the parse ends (status %d): %s", what, r.rc, r.out));
+            assertEq(0, r.rc, what + ": " + r.out);
+            assertEq(("PARSE-EXCEPTION: circular", "after: True"), (select r.out.split("\n"), $1), what);
+        }
+    }
+
+    #! runs a command bounded by the timeout, with a limited address space
+    private hash<auto> runBounded(string cmd) {
+        # the address space is limited, so that a parse that does not end fails instead of using all memory;
+        # sanitizers reserve address space of their own, so it is not limited under them
+        string limit = (!ENV.ASAN_OPTIONS && !ENV.TSAN_OPTIONS && !ENV.MSAN_OPTIONS)
+            ? "ulimit -v 4000000 2>/dev/null; "
+            : "";
+        int rc;
+        string out = backquote(sprintf("%sLD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %d %s 2>&1", limit, libqore_dir,
+            libqore_dir, timeout_cmd, Timeout, cmd), \rc);
+        return {"rc": rc, "out": out};
+    }
+
+    #! runs a parse of a program with an invalid hierarchy, which must end with the parse error
+    private checkRun(string cmd, string what, string error, int status) {
+        hash<auto> r = runBounded(cmd);
+        # the timeout ends the run with status 124 (timeout, gtimeout) or SIGALRM (perl)
+        assertFalse(r.rc == 124 || r.rc == 142, sprintf("%s: the parse ends (status %d): %s", what, r.rc, r.out));
+        # the status of the parse error, not that of a crash
+        assertEq(status, r.rc, sprintf("%s: the parse fails: %s", what, r.out));
+        assertRegex(error, r.out, what);
+        assertFalse(r.out =~ /^ran$/m, what + ": the program does not run: " + r.out);
+    }
+}

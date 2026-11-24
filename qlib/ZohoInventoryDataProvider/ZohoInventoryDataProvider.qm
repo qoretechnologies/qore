@@ -196,6 +196,7 @@ module ZohoInventoryDataProvider {
             "short_desc": "Get contact details",
             "desc": "Retrieve details of a specific contact from Zoho Inventory",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -451,6 +452,7 @@ module ZohoInventoryDataProvider {
             "short_desc": "Get contact person details",
             "desc": "Retrieve details of a specific contact person from Zoho Inventory",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -724,6 +726,7 @@ module ZohoInventoryDataProvider {
             "short_desc": "Get item details",
             "desc": "Retrieve details of a specific item from Zoho Inventory",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -969,6 +972,7 @@ module ZohoInventoryDataProvider {
             "short_desc": "Get item group details",
             "desc": "Retrieve details of a specific item group from Zoho Inventory",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -1179,6 +1183,7 @@ module ZohoInventoryDataProvider {
             "short_desc": "Get inventory adjustment details",
             "desc": "Retrieve details of a specific inventory adjustment from Zoho Inventory",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -1330,6 +1335,7 @@ module ZohoInventoryDataProvider {
             "short_desc": "Get package details",
             "desc": "Retrieve details of a specific package from Zoho Inventory",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -1544,6 +1550,7 @@ module ZohoInventoryDataProvider {
             "short_desc": "Get purchase order details",
             "desc": "Retrieve details of a specific purchase order from Zoho Inventory",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -1778,6 +1785,7 @@ module ZohoInventoryDataProvider {
             "short_desc": "Get sales order details",
             "desc": "Retrieve details of a specific sales order from Zoho Inventory",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -2043,6 +2051,7 @@ module ZohoInventoryDataProvider {
             "short_desc": "Get invoice details",
             "desc": "Retrieve details of a specific invoice from Zoho Inventory",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -2290,6 +2299,7 @@ module ZohoInventoryDataProvider {
             "short_desc": "Get shipment order details",
             "desc": "Retrieve details of a specific shipment order from Zoho Inventory",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",

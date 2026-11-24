@@ -6117,6 +6117,54 @@ bool QoreTypeInfo::unionHasEnumTypeFor(const QoreTypeInfo* ti, const QoreValue& 
     return n.isEnum() && getUnionType(ti) && qore_type_info_has_enum_spec_for(*ti, n);
 }
 
+//! checks the target of a weak reference that an lvalue holds for the binding of a reference to it (qore#7433)
+/** The weak reference has the type of its target: the target is checked as the assignment of the reference's type
+    checks it, and the lvalue keeps the weak reference.  A destroyed object is its target, as when a weak reference is
+    read, and as for an lvalue that holds a destroyed object.  A target that the type would convert to another value
+    (ex: a hash<string, int> for a reference<hash>) is refused, as the weak reference would not designate the converted
+    value.
+
+    @param weak the weak reference
+    @param target set to the target, with a reference of its own; the caller releases it (with no lvalue lock held,
+    qore#7391: the release of the last reference to the target runs its destructors)
+    @param conv set to the target converted by the type, with a reference of its own; released as \a target
+
+    @return 0 if the target is accepted as it is, -1 if an exception was raised
+*/
+template <typename FilterPolicy>
+static __attribute__((noinline)) int qore_reference_bind_weak_check(const QoreTypeInfo* target_ti,
+        const QoreValue& weak, FilterPolicy policy, ValueHolder& target, ValueHolder& conv, ExceptionSink* xsink) {
+    switch (weak.getType()) {
+        case NT_WEAKREF:
+            // the object, also if it has been destroyed
+            if (QoreObject* obj = weak.get<const WeakReferenceNode>()->get()) {
+                target = QoreValue(obj).refSelf();
+            }
+            break;
+        case NT_WEAKREF_HASH:
+            // a hash freed under the weak reference is an empty one
+            target = QoreValue(weak.get<const WeakHashReferenceNode>()->lock());
+            break;
+        default:
+            assert(weak.getType() == NT_WEAKREF_LIST);
+            // a list freed under the weak reference is an empty one
+            target = QoreValue(weak.get<const WeakListReferenceNode>()->lock());
+            break;
+    }
+    conv = target->refSelf();
+    policy.assignment(target_ti, "<reference>", *conv, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (!qore_value_unchanged_by_conversion(*target, *conv)) {
+        xsink->raiseException("RUNTIME-TYPE-ERROR", "<reference> expects type '%s', but got a weak reference to type "
+            "'%s', which the type would convert to another value that the weak reference does not designate",
+            QoreTypeInfo::getName(target_ti), target->getFullTypeName());
+        return -1;
+    }
+    return 0;
+}
+
 #ifdef DEBUG
 std::atomic<qore_dbg_reference_bind_hook_t> qore_dbg_reference_bind_hook{nullptr};
 std::atomic<bool> qore_dbg_reference_bind_strict{false};
@@ -6199,6 +6247,20 @@ static void qore_reference_bind_unlocked(ReferenceNode* r, const QoreTypeInfo* t
         // (qore#5664)
         std::optional<LValueHelper> lvh;
         lvh.emplace(*r, xsink, LValueHelper::ReadAccess(), true);
+        if (*lvh) {
+            qore_type_t vt = lvh->getType();
+            if (vt == NT_WEAKREF || vt == NT_WEAKREF_HASH || vt == NT_WEAKREF_LIST) [[unlikely]] {
+                // the variable keeps a weak reference whose target is accepted (qore#7433): nothing is written, and
+                // the target is checked after the variable's lock has been released, as the check can bind the
+                // references of the target and the release of the references taken for it can run destructors
+                ValueHolder val(lvh->getReferencedValue(), xsink);
+                lvh.reset();
+                ValueHolder target(xsink);
+                ValueHolder conv(xsink);
+                qore_reference_bind_weak_check(target_ti, *val, policy, target, conv, xsink);
+                break;
+            }
+        }
         if (*lvh && lvh->isWriteProtected()) {
             bool needs_write = false;
             {
