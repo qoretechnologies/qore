@@ -38,6 +38,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -278,6 +279,19 @@ DLLLOCAL bool qore_type_owner_is_live(const QoreTypeOwner* owner);
     on purpose (a Program held at static scope)
 */
 DLLLOCAL size_t qore_count_live_user_type_owners();
+
+//! Returns the process-wide lock of the type retirement machinery with the given name, or nullptr (debug builds)
+/** The names are those of the locks' fork handlers: \c "type_wait_entry", \c "type_epoch_holds",
+    \c "type_tombstones", \c "generic_cache_registry", \c "type_owner_registry" and \c "type_info_registry"; for
+    dbg_fork_while_type_lock_held() (qore#7549)
+*/
+DLLLOCAL std::mutex* qore_type_dbg_fork_lock(const char* name);
+//! Returns the lock of qore_type_dbg_fork_lock() that thread.cpp owns, or nullptr (debug builds)
+DLLLOCAL std::mutex* qore_thread_type_dbg_fork_lock(const char* name);
+//! Returns the lock of the registry of tombstones (debug builds)
+DLLLOCAL std::mutex* qore_type_tombstone_dbg_fork_lock();
+//! Returns the number of armed epoch holds (QoreTypeEpochHold) of type retirement (debug builds, qore#7549)
+DLLLOCAL size_t qore_type_epoch_hold_count();
 #endif
 
 //! Called by a declaration whose last reference was released; see QoreTypeOwner

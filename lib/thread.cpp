@@ -2104,6 +2104,24 @@ uint64_t qore_type_epoch_hold_min() {
     return rv;
 }
 
+#ifdef DEBUG
+std::mutex* qore_thread_type_dbg_fork_lock(const char* name) {
+    if (!strcmp(name, "type_wait_entry")) {
+        return &qore_type_wait_entry_lock;
+    }
+    if (!strcmp(name, "type_epoch_holds")) {
+        return &type_epoch_hold_registry().m;
+    }
+    return nullptr;
+}
+
+size_t qore_type_epoch_hold_count() {
+    QoreTypeEpochHoldRegistry& r = type_epoch_hold_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    return r.holds.size();
+}
+#endif
+
 uint64_t qore_type_retirement_scan(uint64_t below, std::vector<QoreTypeRetirementThread>* threads) {
     // the holds of work handed to threads without an epoch count as threads (see QoreTypeEpochHold)
     uint64_t min_epoch = qore_type_epoch_hold_min();

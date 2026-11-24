@@ -1067,6 +1067,12 @@ const QoreTypeInfo* qore_type_tombstone(const QoreTypeInfo* ti, bool& ok) {
     return ok ? rv : ti;
 }
 
+#ifdef DEBUG
+std::mutex* qore_type_tombstone_dbg_fork_lock() {
+    return &tombstone_registry().m;
+}
+#endif
+
 bool qore_is_type_tombstone(const void* decl) {
     QoreTombstoneRegistry& r = tombstone_registry();
     std::lock_guard<std::mutex> lock(r.m);

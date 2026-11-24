@@ -817,6 +817,13 @@ public:
         return by_type.size();
     }
 
+#ifdef DEBUG
+    //! the registry's lock, for qore_type_dbg_fork_lock()
+    std::mutex& dbgMutex() {
+        return m;
+    }
+#endif
+
     //! Returns true if an entry of a cache names one of the given types
     bool hasType(const QoreTypeInfo* ti1, const QoreTypeInfo* ti2) {
         if (empty.load(std::memory_order_acquire)) {
@@ -1177,6 +1184,22 @@ bool qore_type_info_is_live(const QoreTypeInfo* ti) {
     QoreTypeInfoRegistry& r = type_info_registry();
     std::lock_guard<std::mutex> lock(r.m);
     return r.live.count(ti) > 0;
+}
+
+std::mutex* qore_type_dbg_fork_lock(const char* name) {
+    if (!strcmp(name, "type_tombstones")) {
+        return qore_type_tombstone_dbg_fork_lock();
+    }
+    if (!strcmp(name, "generic_cache_registry")) {
+        return &qore_generic_cache_registry().dbgMutex();
+    }
+    if (!strcmp(name, "type_owner_registry")) {
+        return &type_owner_registry().m;
+    }
+    if (!strcmp(name, "type_info_registry")) {
+        return &type_info_registry().m;
+    }
+    return qore_thread_type_dbg_fork_lock(name);
 }
 #endif
 

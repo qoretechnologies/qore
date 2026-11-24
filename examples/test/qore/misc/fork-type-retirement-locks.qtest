@@ -1,0 +1,192 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - fork() and the fork handlers of the process-wide locks and epoch holds of type retirement
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ForkTypeRetirementLocksTest
+
+#! A child of fork() can use type retirement after another thread of the parent held one of its locks (qore#7549)
+/** The freeing of the retired declarations of deleted Programs (issue #6419) and the bookkeeping of declarations and
+    types (qore#5765, qore#5790) use process-wide locks: the lock of the entries of threads into the quiescent waits
+    (debug builds), the registry of epoch holds, the registry of tombstones, the registry of the generic caches and the
+    debug registries of the live types and declarations.  A child of a fork() made while another thread held one of
+    them inherited it held, and the child's first use of it waited forever, since the thread holding it does not exist
+    in the child: a Counter::waitForZero() in a child of fork-thread-churn.qtest hung so (the lock of the entries of
+    quiescent waits).  Each lock now has a fork handler, which waits for its holder before fork().
+
+    dbg_fork_while_type_lock_held() (debug builds) holds the lock in another thread while fork() is called; the child
+    exits with 98 at once if it inherited the lock held, so the test fails without waiting, and otherwise runs code that
+    takes the lock, and exits with 0 if it ran.
+
+    A background JIT compile of a specialized function holds back the free of the declarations that its IR names with
+    an epoch hold; a child of a fork() made while the compile was in progress lost the compile with its thread, but
+    kept the hold, so that nothing retired after the hold's epoch could ever be freed in the child.
+*/
+class ForkTypeRetirementLocksTest inherits QUnit::Test {
+    public {
+        #! milliseconds to wait for a step of the background JIT compiler
+        const StepTimeout = 60000;
+    }
+
+    constructor() : QUnit::Test("ForkTypeRetirementLocksTest", "1.0") {
+        addTestCase("a quiescent wait in a child after another thread held the lock of the wait entries",
+            \waitEntryTest());
+        addTestCase("a scan of the epoch holds in a child after another thread held their registry",
+            \epochHoldsTest());
+        addTestCase("the tombstones in a child after another thread held their registry", \tombstonesTest());
+        addTestCase("a generic hashdecl in a child after another thread held the generic cache registry",
+            \genericCacheRegistryTest());
+        addTestCase("declarations in a child after another thread held the debug registry of declarations",
+            \typeOwnerRegistryTest());
+        addTestCase("types in a child after another thread held the debug registry of types", \typeInfoRegistryTest());
+        addTestCase("the epoch hold of a background JIT compile in progress at fork()", \jitEpochHoldTest());
+        addTestCase("an unknown lock name", \unknownLockTest());
+        set_return_value(main());
+    }
+
+    waitEntryTest() {
+        # the debug count of a thread's entries into the quiescent waits takes the lock in every such wait
+        forkWhileHeld("type_wait_entry", int sub () {
+            Counter c();
+            c.waitForZero();
+            return c.waitForZero(1ms);
+        });
+    }
+
+    epochHoldsTest() {
+        # the scan of the threads for the freeing of retired declarations reads the epoch holds
+        forkWhileHeld("type_epoch_holds", int sub () {
+            int freed = call_function("dbg_type_retirement_free");
+            return freed >= 0 ? call_function("dbg_type_epoch_holds") : 1;
+        });
+    }
+
+    tombstonesTest() {
+        # the bookkeeping of type retirement counts the tombstones
+        forkWhileHeld("type_tombstones", int sub () {
+            hash<auto> info = call_function("dbg_type_retirement_info");
+            return info."tombstone classes" >= 0 ? 0 : 1;
+        });
+    }
+
+    genericCacheRegistryTest() {
+        # the concrete declaration of a generic hashdecl is registered with the types of its key
+        forkWhileHeld("generic_cache_registry", int sub () {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+            p.parse("class ForkTypeRetirementC {} hashdecl ForkTypeRetirementH<T> { T v; } "
+                "int sub f() { hash<ForkTypeRetirementH<ForkTypeRetirementC>> h(); "
+                "return exists h.v ? 1 : 0; }", "fork-type-retirement-generic");
+            int rc = p.callFunction("f");
+            hash<auto> counts = call_function("dbg_generic_cache_counts");
+            return rc ?? (counts.registered_types > 0 ? 0 : 1);
+        });
+    }
+
+    typeOwnerRegistryTest() {
+        # every class, hashdecl and enum is registered when it is created
+        forkWhileHeld("type_owner_registry", \ForkTypeRetirementLocksTest::parseDeclarations());
+    }
+
+    typeInfoRegistryTest() {
+        # every type is registered when it is created
+        forkWhileHeld("type_info_registry", \ForkTypeRetirementLocksTest::parseDeclarations());
+    }
+
+    jitEpochHoldTest() {
+        checkFork();
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the background compile holds need a debug build of the library");
+        }
+        # the specialized method of a generic class: its IR names the type argument, so its background compile arms an
+        # epoch hold
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setExecMode(EM_TIERED);
+        p.parse("class ForkTypeRetirementArg {} "
+            "class ForkTypeRetirementBox<T> { int f(T v, int x) { int s = 0; for (int i = 0; i < x; ++i) { s += i; } "
+            "return s; } } "
+            "int sub run() { ForkTypeRetirementBox<ForkTypeRetirementArg> b(); ForkTypeRetirementArg a(); int s = 0; "
+            "for (int i = 0; i < 5000; ++i) { s += b.f(a, 10); } return s; }", "fork-type-retirement-jit");
+        int holds0 = call_function("dbg_type_epoch_holds");
+        call_function("dbg_hold_bg_compile", "lowering");
+        on_exit {
+            # the compile continues in the parent whatever happened
+            if (call_function("dbg_bg_compile_held")) {
+                call_function("dbg_continue_bg_compile", StepTimeout);
+            }
+            call_function("dbg_wait_bg_compile_idle");
+        }
+        assertEq(225 * 5000, p.callFunction("run"));
+        bool held = call_function("dbg_wait_bg_compile_held", "lowering", StepTimeout);
+        if (!held) {
+            testSkip("no background JIT compile of the specialized method was started in this build");
+        }
+        int holds = call_function("dbg_type_epoch_holds");
+        assertEq(holds0 + 1, holds, "the compile in progress holds an epoch hold");
+
+        hash<PipeInfo> pipe = File::getPipe();
+        # the child must not write the parent's buffered output again when it exits
+        flush();
+        int pid = fork();
+        if (!pid) {
+            pipe.read.close();
+            pipe.write.write(sprintf("%d", call_function("dbg_type_epoch_holds")));
+            Qore::exit(0);
+        }
+        pipe.write.close();
+        assertGt(0, pid);
+        string result;
+        # the read ends when the child has exited and closed its end of the pipe
+        while (*binary data = pipe.read.readBinary(4096)) {
+            result += data.toString();
+        }
+        assertEq(holds0, result.toInt(), "the child does not keep the epoch hold of the lost compile");
+        # the parent keeps it until the compile ends
+        assertEq(holds, call_function("dbg_type_epoch_holds"), "the parent keeps the hold of the compile");
+        assertTrue(call_function("dbg_continue_bg_compile", StepTimeout));
+        call_function("dbg_wait_bg_compile_idle");
+        assertEq(holds0, call_function("dbg_type_epoch_holds"), "the finished compile released its hold");
+    }
+
+    unknownLockTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+        assertThrows("DBG-FORK-ERROR", "no type retirement lock named", sub () {
+            call_function("dbg_fork_while_type_lock_held", "no-such-lock");
+        });
+    }
+
+    #! parses a Program with declarations and types of its own; returns 0 if it was parsed
+    static int parseDeclarations() {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.parse("class ForkTypeRetirementD { list<ForkTypeRetirementD> l; } hashdecl ForkTypeRetirementE { int a; } "
+            "enum ForkTypeRetirementF { A = 1 } "
+            "int sub f() { hash<string, ForkTypeRetirementD> h(); return h.size(); }",
+            "fork-type-retirement-declarations");
+        return p.callFunction("f");
+    }
+
+    private checkFork() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+    }
+
+    private forkWhileHeld(string name, code child) {
+        checkFork();
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+        hash<auto> r = call_function("dbg_fork_while_type_lock_held", name, child);
+        assertNeq(98, r.status, sprintf("the child did not inherit the %y lock held", name));
+        assertEq(0, r.status, sprintf("the child used the %y lock", name));
+        assertTrue(r.waited, sprintf("fork() waited for the thread holding the %y lock", name));
+    }
+}
