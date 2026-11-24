@@ -968,21 +968,23 @@ static QoreStringNode* q_dbi_shown_pool_size_option(const QoreValue v) {
         rv->sprintf(QLLD, i);
         return rv;
     }
-    if (v.getType() != NT_STRING) {
+    // the value can be an inline short string, which has no QoreStringNode: the helper holds its bytes either way, and
+    // gives nullptr for a value that is not a string
+    QoreStringDataHelper str(v);
+    if (!str) {
         return nullptr;
     }
-    const QoreStringNode* str = v.get<const QoreStringNode>();
     // at most 18 digits: a value that cannot be an int64 pool size is masked
-    size_t len = str->size();
+    size_t len = str.size();
     if (!len || len > 18) {
         return nullptr;
     }
-    for (const char* p = str->c_str(), *e = p + len; p < e; ++p) {
+    for (const char* p = str.c_str(), *e = p + len; p < e; ++p) {
         if (*p < '0' || *p > '9') {
             return nullptr;
         }
     }
-    return new QoreStringNode(str->c_str());
+    return new QoreStringNode(str.c_str());
 }
 
 // the one path for the value of a driver option in every masked form of a datasource (the safe URL, the masked hash,
