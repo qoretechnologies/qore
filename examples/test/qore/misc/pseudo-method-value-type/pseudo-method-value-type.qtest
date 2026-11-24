@@ -213,11 +213,11 @@ class PseudoMethodValueTypeTest inherits QUnit::Test {
         assertEq(NOTHING, fastPathResultError(ast, "0", "binary", "s_to_string", "\"\""));
         assertEq(NOTHING, fastPathResultError(ast, "0", "int", "fk_substr", "\"12345\""));
         # never for a value of the parse type: a wrong result there is a failure
-        assertNotEq(NOTHING, fastPathResultError(ast, "0", "list", "k_size", "0"));
-        assertNotEq(NOTHING, fastPathResultError(ast, "0", "string", "fk_size", "0"));
-        assertNotEq(NOTHING, fastPathResultError(ast, "0", "int", "s_to_string", "\"\""));
+        assertNeq(NOTHING, fastPathResultError(ast, "0", "list", "k_size", "0"));
+        assertNeq(NOTHING, fastPathResultError(ast, "0", "string", "fk_size", "0"));
+        assertNeq(NOTHING, fastPathResultError(ast, "0", "int", "s_to_string", "\"\""));
         # nor another result for a value of another type
-        assertNotEq(NOTHING, fastPathResultError(ast, "0", "buffer", "k_size", "7"));
+        assertNeq(NOTHING, fastPathResultError(ast, "0", "buffer", "k_size", "7"));
     }
 
     private hash<ExecModeHarness::ModeRunResult> runMode(string command, *string env) {
