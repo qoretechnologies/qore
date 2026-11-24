@@ -3189,6 +3189,11 @@ bool QoreJIT::dbgHoldBgCompile(BgCompileHoldPoint point, const std::string& func
     return true;
 }
 
+void QoreJIT::dbgForceBgCompileEpochHold(const std::string& func) {
+    std::lock_guard<std::mutex> lock(bg_queue_mutex);
+    dbg_bg_force_epoch_hold = func;
+}
+
 bool QoreJIT::dbgWaitBgCompileHeld(BgCompileHoldPoint point, int64_t timeout_ms) {
     std::unique_lock<std::mutex> lock(bg_queue_mutex);
     return bg_queue_empty_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this, point]() {
@@ -3604,6 +3609,14 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
         for (size_t i = 0, e = work.callees.size(); !specialized && i < e; ++i) {
             specialized = work.callees[i].ir_func && work.callees[i].ir_func->hasTypeSpecialization();
         }
+#ifdef DEBUG
+        // a test's hold, as the compile of a specialization makes
+        if (!dbg_bg_force_epoch_hold.empty() && work.ir_func
+                && !work.ir_func->name.compare(0, work.ir_func->name.find('@'), dbg_bg_force_epoch_hold)) {
+            dbg_bg_force_epoch_hold.clear();
+            specialized = true;
+        }
+#endif
         if (specialized) {
             work.type_epoch_hold.arm();
         }
@@ -4021,6 +4034,7 @@ void QoreJIT::forkChild(bool compile_lock_acquired) noexcept {
     dbg_bg_held = -1;
     dbg_bg_hold_release = false;
     dbg_bg_teardown_waits = 0;
+    dbg_bg_force_epoch_hold.clear();
 #endif
     // only the queued work is pending in the child
     bg_active_work.store(static_cast<int>(bg_compile_queue.size()), std::memory_order_relaxed);
