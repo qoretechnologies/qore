@@ -1495,9 +1495,18 @@ bool LValueHelper::finishWeakSourceRead(QoreValue& res) {
         rest->clear(xsink);
         return true;
     }
-    ValueHolder v(rest->read(getProgram(), xsink), xsink);
-    if (!*xsink) {
-        res = qore_weak_source_read_operand(*v);
+    {
+        ValueHolder v(rest->read(getProgram(), xsink), xsink);
+        if (!*xsink) {
+            res = qore_weak_source_read_operand(*v);
+        }
+    }
+    // a list or a hash that the path holds is held weakly while the target is resolved, as the source of a weak
+    // assignment that an lvalue holds is; one that the read made, which only the operand holds once the read's value
+    // is released, is the statement's own (qore#7405)
+    qore_type_t t = res.getType();
+    if ((t == NT_HASH || t == NT_LIST) && !res.getInternalNode()->is_unique()) {
+        res = qore_weak_assignment_source(res, xsink);
     }
     return true;
 }

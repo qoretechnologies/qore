@@ -3003,8 +3003,24 @@ extern "C" DLLEXPORT void qore_rt_sync_local(LocalVar* var, uint64_t value) {
 
 //! the container that a weak assignment of \a value designates, owned by the caller (see
 //! qore_weak_source_container(), qore#7318)
-extern "C" DLLEXPORT uint64_t qore_rt_weak_source_container(uint64_t value) {
-    return toBits(qore_weak_source_container(fromBits(value)));
+extern "C" DLLEXPORT uint64_t qore_rt_weak_source_container(uint64_t value, ExceptionSink* xsink) {
+    QoreValue v = fromBits(value);
+    switch (v.getType()) {
+        // the source of a weak assignment, held weakly while its target was resolved (qore#7405): its container, as
+        // LValueHelper::assign() gives it, or a new empty one if another thread released it meanwhile (qore#7163)
+        case NT_WEAKREF_HASH: {
+            // the reference taken is released with the exception sink of the code: another thread can have released
+            // the container's last owner meanwhile
+            ValueHolder target(v.get<const WeakHashReferenceNode>()->lock(), xsink);
+            return toBits(qore_weak_source_container(*target));
+        }
+        case NT_WEAKREF_LIST: {
+            ValueHolder target(v.get<const WeakListReferenceNode>()->lock(), xsink);
+            return toBits(qore_weak_source_container(*target));
+        }
+        default:
+            return toBits(qore_weak_source_container(v));
+    }
 }
 
 //! takes \a value, a weakly designated container that the compiled code stores in a local variable, and returns it if

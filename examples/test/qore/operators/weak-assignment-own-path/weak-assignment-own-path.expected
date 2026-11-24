@@ -17,3 +17,5 @@ reference to a missing key: [] null
 weak object source: True
 global: ["w", "k"]
 closure: ["w", "k"]
+value list: src [1, 2] v [9, 2]
+value hash: src {a: 1} v {a: 9}

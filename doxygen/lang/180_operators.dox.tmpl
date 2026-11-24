@@ -2599,8 +2599,9 @@ if (x || y)
     <tt>h + {...}</tt>, but not that of <tt>() + l</tt>, <tt>l[0..]</tt>, <tt>sort_stable(l)</tt>,
     @ref map "map", <tt>{...} + h</tt>, a hash slice (<tt>h{"x",}</tt>) or <tt>h.values()</tt>; code should not rely on
     either.\n<br>
-    The operator does not keep the hash or the list of such a variable or path alive while it resolves its lvalue: it
-    holds it through a weak reference until it assigns it.  An lvalue whose path passes through the source (ex:
+    The operator does not keep the hash or the list of a variable or a path that is its source (also the operand that
+    a ?: or ?? operator chooses) alive while it resolves its lvalue: it holds it through a weak reference until it
+    assigns it.  An lvalue whose path passes through the source (ex:
     <tt>h.w := h</tt>, <tt>h.a.b.w := h</tt>) is therefore changed in place: the weak reference designates the
     container that the variable holds, and the weak references to the containers below it on the path (ex:
     <tt>h.a.x := h.a.b</tt>) keep designating them.  If another thread releases the source meanwhile (ex: while a key

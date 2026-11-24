@@ -1764,7 +1764,7 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     module.getOrInsertFunction("qore_rt_make_opaque_value",
             llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_weak_source_container",
-            llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_weak_share_copy",
             llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_take_store_value",
@@ -21627,8 +21627,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         // container of an expression, held until the end of the statement as the value of the
                         // assignment (qore#7318)
                         auto source_fn = module.getOrInsertFunction("qore_rt_weak_source_container",
-                                llvm::FunctionType::get(i64_type, {i64_type}, false));
-                        llvm::Value* source = builder->CreateCall(source_fn, {boxed});
+                                llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                        llvm::Value* source = builder->CreateCall(source_fn, {boxed, xsink_arg});
                         track_owned_value_cleanup(source, "weak_source_cleanup_outer");
                         boxed = source;
                     }
@@ -22119,8 +22119,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (linst->mode == AssignmentMode::Weak) {
                     // see the store of an outer-scope local above (qore#7318)
                     auto source_fn = module.getOrInsertFunction("qore_rt_weak_source_container",
-                            llvm::FunctionType::get(i64_type, {i64_type}, false));
-                    llvm::Value* source = builder->CreateCall(source_fn, {boxed});
+                            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                    llvm::Value* source = builder->CreateCall(source_fn, {boxed, xsink_arg});
                     llvm::AllocaInst* source_cleanup = track_owned_value_cleanup(source, "weak_source_cleanup");
                     if (block_scoped_locals.count(key)) {
                         local_cleanup_allocas[key].push_back(source_cleanup);

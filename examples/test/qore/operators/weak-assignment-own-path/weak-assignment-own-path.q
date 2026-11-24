@@ -142,6 +142,21 @@ sub weak_object_source() {
     printf("weak object source: %y\n", o instanceof C);
 }
 
+#! the value of the operator is the value assigned, which a variable that is given it holds as a value of its own
+sub operator_value() {
+    list<auto> src = (1, 2);
+    auto wl;
+    auto v = (wl := src);
+    v[0] = 9;
+    printf("value list: src %y v %y\n", src, v);
+
+    hash<auto> hs = {"a": 1};
+    auto wh;
+    auto hv = (wh := hs);
+    hv.a = 9;
+    printf("value hash: src %y v %y\n", hs, hv);
+}
+
 our hash<auto!> g = {};
 
 #! the source is a global variable or a variable that a closure captures, on the path of the lvalue
@@ -169,3 +184,4 @@ uncaptured();
 reference_source();
 weak_object_source();
 global_and_closure();
+operator_value();
