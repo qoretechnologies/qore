@@ -2833,6 +2833,11 @@
       resolved the call from another type, and the code of a pseudo-class refuses a value of another type with an
       exception (see the note on pseudo-classes in @ref qore_classes;
       <a href="https://github.com/qoretechnologies/qore/issues/7363">issue 7363</a>)
+    - AOT-compiled code that calls methods by name no longer makes memory grow without bound in a process that keeps
+      creating and destroying @ref Qore::Program "Program" objects (for example by loading and unloading services):
+      each call site kept every method lookup it had ever cached, adding one for each new Program, until the process
+      ended; replaced lookups are now freed
+      (<a href="https://github.com/qoretechnologies/qore/issues/7459">issue 7459</a>)
     - @ref RestClient::AbstractRestConnection::getAsync() "RestConnection::getAsync(False, rtopts)" accepts
       string-valued runtime options when it adds the default \c skip_login flag (issue #7408).
     - the frames of the calls that the initialization of a module makes name the module's
