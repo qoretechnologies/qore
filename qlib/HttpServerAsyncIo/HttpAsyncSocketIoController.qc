@@ -162,6 +162,10 @@ public class HttpAsyncSocketIoController {
         #! by subclasses
         static *code<nothing(HttpAsyncSocketIoController, string)> dbg_lingering_close_hook;
 
+        #! the test hook that startDrain() calls after its snapshot of the connections, before it stops accepting (see
+        #! dbgSetDrainSnapshotHook()): not readable by subclasses
+        static *code<nothing(HttpAsyncSocketIoController)> dbg_drain_snapshot_hook;
+
         #! the test hook that the destructor calls first (see dbgSetDestructorHook()): not readable by subclasses
         static *code<nothing(HttpAsyncSocketIoController)> dbg_destructor_hook;
 
@@ -322,6 +326,27 @@ public class HttpAsyncSocketIoController {
 
 %ifdef QoreDebug
     #! @cond nodoc
+    #! Sets the test hook that startDrain() calls after its snapshot of the connections (debug builds of the library only)
+    /** For tests: the hook runs after the drain has taken its snapshot of the connections and before it stops
+        accepting, so that a test can have a connection accepted in between (qore#7438).  It is process-wide (it is
+        called by every controller in the process), so only trusted code with process control can set it, and the
+        method exists only in a debug build of the library
+
+        @param hook the hook, called with the controller in the thread of the drain, or @ref nothing to remove it; an
+        exception that it raises is ignored
+
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+    */
+    static dbgSetDrainSnapshotHook(*code<nothing(HttpAsyncSocketIoController)> hook) [dom=PROCESS_CONTROL] {
+        SandboxManager::checkProcessWideRegistration("set the drain snapshot hook of HTTP servers");
+        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+            throw "PERMISSION-DENIED", "cannot set the drain snapshot hook of HTTP servers from a context with "
+                "restricted process control";
+        }
+        dbg_drain_snapshot_hook = hook;
+    }
+
     #! Sets the test hook that the completion of a lingering close calls (debug builds of the library only)
     /** For tests: the hook is process-wide (it is called for the connections of every server in the process), so
         only trusted code with process control can set it, and the method exists only in a debug build of the library
@@ -549,6 +574,14 @@ public class HttpAsyncSocketIoController {
                 }
             }
         }
+        # test hook (a debug build of the library only): between the snapshot of the connections and the cancel of the
+        # accept operations (qore#7438)
+        if (Option::HAVE_LIBRARY_DEBUGGING && dbg_drain_snapshot_hook) {
+            try {
+                dbg_drain_snapshot_hook(self);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
         log(LoggerLevel::INFO, "Async HTTP drain started: %d connection(s) to drain, %d HTTP/2, %d idle, %d HTTP/3 "
             "listener(s)", drain_conns.getCount(), h2ops.size(), idle_socks.size() + fused_socks.size(),
             h3_socks.size());
@@ -647,6 +680,16 @@ public class HttpAsyncSocketIoController {
         return True;
     }
 
+    #! Drains an HTTP/1.x connection that was registered after the drain started (qore#7438)
+    /** The drain's snapshot of the connections (startDrain()) did not have it: as for a connection that waits for a
+        request in the snapshot, the operation that waits for its first request ends at once if none has arrived
+        (and reads it otherwise), and is woken to see the drain
+    */
+    private drainNewH1Connection(Socket sock, string uh) {
+        sock.drainHttpConnection(True);
+        wakeSocketIfPresent(sock, uh, "drain");
+    }
+
     #! Starts the drain of an HTTP/2 connection (a GOAWAY; the connection closes when its streams end)
     private startH2Drain(Http2PollOperation h2op) {
         try {
@@ -685,9 +728,8 @@ public class HttpAsyncSocketIoController {
             case HttpConnectionState::Http3Sending:
                 return ci;
             # an HTTP/1.1 connection that was written after the drain started: its keep-alive operation must end after
-            # its response too (see startDrain()); the first request of a new connection (one that the fused operation
-            # reads, or after its TLS handshake) is served, as the drain flag set here (level 1) closes a connection
-            # only after a response
+            # its response too (see startDrain()); a new connection that waits for its first request is drained by its
+            # registration after this (drainNewH1Connection(), level 2: closed if no request has arrived, qore#7438)
             case HttpConnectionState::KeepAlive:
             case HttpConnectionState::ReadBody:
             case HttpConnectionState::SendAndReadHeader:
@@ -2211,15 +2253,18 @@ public class HttpAsyncSocketIoController {
                 "ssl": output.secure ?? False,
             };
             hash<HttpActiveConnectionInfo> cinfo;
+            # set if the drain had started when the connection was registered
+            bool drain_new;
             {
                 AutoWriteLock al(m);
                 cinfo = (connections{uh} @= (draining ? withDrainToken(uh, new_cinfo) : new_cinfo));
+                drain_new = draining;
             }
 
             log(LoggerLevel::DEBUG, "Starting HTTP/2 connection handling for %y", uh);
             submitConnectionOp(uh, cinfo);
             # a connection set up while the server drains is drained as well (it raced startDrain())
-            if (draining) {
+            if (drain_new) {
                 startH2Drain(h2op);
             }
             return;
@@ -2249,13 +2294,20 @@ public class HttpAsyncSocketIoController {
             new_cinfo.ttl = first_request_wait;
         }
         hash<HttpActiveConnectionInfo> cinfo;
+        # set if the drain had started when the connection was registered: the drain's snapshot of the connections
+        # did not have it (qore#7438)
+        bool drain_new;
         {
             AutoWriteLock al(m);
             cinfo = (connections{uh} @= (draining ? withDrainToken(uh, new_cinfo) : new_cinfo));
+            drain_new = draining;
         }
 
         log(LoggerLevel::DEBUG, "Starting HTTP/1.x header reading for %y", uh);
         submitConnectionOp(uh, cinfo);
+        if (drain_new) {
+            drainNewH1Connection(sock, uh);
+        }
     }
 
     #! Returns the settings of the bound of a listener's streams, for the header info of a request (qore#7280)
@@ -3054,6 +3106,8 @@ public class HttpAsyncSocketIoController {
 
         try {
             hash<HttpActiveConnectionInfo> cinfo;
+            # set if the drain had started when the connection was registered (qore#7438)
+            bool drain_new;
             if (is_http2) {
                 Http2PollOperation h2op(sock, True);
                 {
@@ -3078,6 +3132,7 @@ public class HttpAsyncSocketIoController {
                         remove conn_info.cx{"peer-info-future"};
                     }
                     cinfo = (connections{uh} @= (draining ? withDrainToken(uh, conn_info) : conn_info));
+                    drain_new = draining;
                 }
             } else {
                 # the listener has fast routes: the first request is read by the fused idle + read header operation,
@@ -3114,13 +3169,19 @@ public class HttpAsyncSocketIoController {
                         remove conn_info.cx{"peer-info-future"};
                     }
                     cinfo = (connections{uh} @= (draining ? withDrainToken(uh, conn_info) : conn_info));
+                    drain_new = draining;
                 }
             }
 
             submitConnectionOp(uh, cinfo);
-            # a TLS handshake that was in progress when the drain started: an HTTP/2 connection is drained as well
-            if (draining && cinfo.stream_op instanceof Http2PollOperation) {
-                startH2Drain(cast<Http2PollOperation>(cinfo.stream_op));
+            # a TLS handshake that was in progress when the drain started, which the drain's snapshot of the
+            # connections did not have as a connection that waits for a request: it is drained as well (qore#7438)
+            if (drain_new) {
+                if (cinfo.stream_op instanceof Http2PollOperation) {
+                    startH2Drain(cast<Http2PollOperation>(cinfo.stream_op));
+                } else {
+                    drainNewH1Connection(sock, uh);
+                }
             }
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "SSL post-handshake setup failed for %s: %s: %s", uh, ex.err, ex.desc);

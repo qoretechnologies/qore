@@ -886,6 +886,40 @@ static int qore_socket_check_sse_event_size(const QoreString& event_data, int64 
     return 0;
 }
 
+//! Raises the exception of a read whose data could not be made a string, as the memory could not be allocated
+/** The size of the data read can come from the peer, so the read fails without ending the process (issue 7417)
+*/
+static void qore_socket_raise_recv_string_memory_error(ExceptionSink* xsink, size_t len) {
+    xsink->raiseException("SOCKET-RECV-ERROR", "the memory for a string of the " QLLD " bytes received could not "
+        "be allocated", (int64)len);
+}
+
+int qore_socket_append_http_body(ExceptionSink* xsink, BinaryNode* body_bin, QoreString* body_str,
+        const void* data, size_t size) {
+    if (!size) {
+        return 0;
+    }
+    if (body_bin) {
+        size_t old_size = body_bin->size();
+        // the body is unchanged if the memory cannot be allocated
+        body_bin->append(data, size);
+        if (body_bin->size() == old_size + size) {
+            return 0;
+        }
+    } else {
+        // the memory for the data and the terminator is allocated first, so that the concatenation does not grow the
+        // string
+        if (size <= SIZE_MAX - body_str->size() - 1
+            && !qore_string_private::get(*body_str)->tryGrow(body_str->size() + size + 1)) {
+            body_str->concat(static_cast<const char*>(data), size);
+            return 0;
+        }
+    }
+    xsink->raiseException("SOCKET-RECV-ERROR", "the memory for an HTTP message body of " QLLD " bytes could not be "
+        "allocated", (int64)((body_bin ? body_bin->size() : body_str->size()) + size));
+    return -1;
+}
+
 static int qore_socket_close_private_from_controller(qore_socket_private* priv) {
     priv->prepareForClose();
     return priv->close();
@@ -2025,7 +2059,8 @@ public:
                 char* buf = reinterpret_cast<char*>(bin->giveBuffer());
                 char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
                 if (!nbuf) {
-                    xsink->outOfMemory();
+                    // the size read can come from the peer (issue 7417)
+                    qore_socket_raise_recv_string_memory_error(xsink, len);
                 } else {
                     nbuf[len] = '\0';
                     data = new QoreStringNode(nbuf, len, len + 1, enc);
@@ -5424,12 +5459,11 @@ private:
         }
 
         priv.do_data_event(QORE_EVENT_HTTP_CHUNKED_DATA_READ, source, bin->getPtr(), chunk_size);
-        if (binary_body) {
-            body_bin->append(bin->getPtr(), chunk_size);
-        } else {
-            body_str->concat(static_cast<const char*>(bin->getPtr()), chunk_size);
-        }
         bytes_consumed = true;
+        if (qore_socket_append_http_body(xsink, binary_body ? *body_bin : nullptr,
+                binary_body ? nullptr : *body_str, bin->getPtr(), chunk_size)) {
+            return -1;
+        }
 
         int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
         int64 max_chunked_body_size = priv.max_chunked_body_size.load(std::memory_order_relaxed);
@@ -7710,6 +7744,12 @@ const char* QoreCaresSockets::aif_indextoname(unsigned int ifindex, char* ifname
     @param channel the channel of an unfinished lookup, after its events were processed
 */
 static bool qore_cares_channel_lost_query(ares_channel_t* channel) {
+    struct timeval tv;
+    return !ares_timeout(channel, nullptr, &tv) && ares_queue_active_queries(channel) > 0;
+}
+
+//! Claims a simulated loss while the lookup is still pending, before c-ares can complete it (#7449).
+static inline bool qore_cares_inject_query_loss() {
 #ifdef DEBUG
     // a lookup made to lose its query by dbg_cares_lose_query()
     for (int n = qore_dbg_cares_lost_query_count.load(); n > 0;) {
@@ -7718,8 +7758,30 @@ static bool qore_cares_channel_lost_query(ares_channel_t* channel) {
         }
     }
 #endif
-    struct timeval tv;
-    return !ares_timeout(channel, nullptr, &tv) && ares_queue_active_queries(channel) > 0;
+    return false;
+}
+
+//! Processes one poll and restarts an unfinished lookup whose query was lost.
+/** A debug loss takes precedence over a ready answer or an expired timer. A real loss is detected
+    after events are processed. Each restart replaces the channel and can also complete the lookup.
+*/
+template <typename Process, typename Restart>
+static int qore_cares_poll_query(ares_channel_t* const& channel, const bool& done, ExceptionSink* xsink,
+        Process process, Restart restart) {
+    bool lost = qore_cares_inject_query_loss();
+    if (!lost) {
+        process();
+        if (*xsink) {
+            return -1;
+        }
+    }
+    while (!done && (lost || qore_cares_channel_lost_query(channel))) {
+        if (restart()) {
+            return -1;
+        }
+        lost = !done && qore_cares_inject_query_loss();
+    }
+    return done ? 0 : 1;
 }
 
 QoreCaresAddrInfoResolver::QoreCaresAddrInfoResolver(std::string host, std::string service, int family, int type,
@@ -7776,18 +7838,8 @@ int QoreCaresAddrInfoResolver::continuePoll(ExceptionSink* xsink) {
         return status == ARES_SUCCESS ? 0 : -1;
     }
 
-    process(xsink);
-    if (*xsink) {
-        return -1;
-    }
-    // a new channel always has a timeout for the query it sent; the check is repeated so that a restart that
-    // cannot help is ended by the restart limit
-    while (!done && qore_cares_channel_lost_query(channel)) {
-        if (restart(xsink)) {
-            return -1;
-        }
-    }
-    return done ? (status == ARES_SUCCESS ? 0 : -1) : 1;
+    int rc = qore_cares_poll_query(channel, done, xsink, [&] { process(xsink); }, [&] { return restart(xsink); });
+    return rc == 0 && status != ARES_SUCCESS ? -1 : rc;
 }
 
 int QoreCaresAddrInfoResolver::restart(ExceptionSink* xsink) {
@@ -8783,15 +8835,7 @@ public:
             return 0;
         }
 
-        process();
-        // a new channel always has a timeout for the query it sent; the check is repeated so that a restart that
-        // cannot help is ended by the restart limit
-        while (!done && qore_cares_channel_lost_query(channel)) {
-            if (restart(xsink)) {
-                return -1;
-            }
-        }
-        return done ? 0 : 1;
+        return qore_cares_poll_query(channel, done, xsink, [&] { process(); }, [&] { return restart(xsink); });
     }
 
     DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& fds) const {
@@ -9352,15 +9396,7 @@ int QoreCaresNameInfoResolver::continuePoll(ExceptionSink* xsink) {
         return 0;
     }
 
-    process();
-    // a new channel always has a timeout for the query it sent; the check is repeated so that a restart that
-    // cannot help is ended by the restart limit
-    while (!done && qore_cares_channel_lost_query(channel)) {
-        if (restart(xsink)) {
-            return -1;
-        }
-    }
-    return done ? 0 : 1;
+    return qore_cares_poll_query(channel, done, xsink, [&] { process(); }, [&] { return restart(xsink); });
 }
 
 int QoreCaresNameInfoResolver::restart(ExceptionSink* xsink) {
@@ -10118,6 +10154,7 @@ static void qore_socket_dbg_before_adopt(int where) {
 std::atomic<bool> qore_dbg_inert_socket_fails{false};
 std::atomic<bool> qore_dbg_inert_dup_fails{false};
 std::atomic<unsigned> qore_dbg_inert_socket_fallbacks{0};
+std::atomic<void (*)(qore_socket_private*)> qore_dbg_after_pre_close_shutdown{nullptr};
 
 QoreObject* qore_socket_dbg_new_controller_pollable(QoreSocket* s) {
     return new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), new QoreSocketControllerPollable(s));
@@ -10904,14 +10941,21 @@ int SocketRecvPollState::continuePoll(ExceptionSink* xsink) {
     return rc;
 }
 
-int SocketRecvPollState::grow(ExceptionSink* xsink) {
+int SocketRecvPollState::grow(ExceptionSink* xsink, int fd) {
     // the buffer is doubled up to the size to receive, so that the memory follows the data received
     size_t new_size = allocated > size / 2 ? size : QORE_MAX(allocated * 2, static_cast<size_t>(4096));
     if (new_size > size) {
         new_size = size;
     }
     if (bin->preallocate(new_size)) {
-        xsink->outOfMemory();
+        // the size to receive can come from the peer, so the read fails without ending the process; the data
+        // received is lost, and the rest of it cannot be told apart from what follows it, so the connection is shut
+        // down: no more data is read from it (issue 7417)
+        failed = true;
+        ::shutdown(fd, SHUTDOWN_ARG);
+        xsink->raiseException("SOCKET-RECV-ERROR", "the memory for the data to receive could not be allocated "
+            "after " QLLD " of " QLLD " bytes were received; the connection has been shut down", (int64)received,
+            (int64)size);
         return -1;
     }
     allocated = new_size;
@@ -10919,6 +10963,11 @@ int SocketRecvPollState::grow(ExceptionSink* xsink) {
 }
 
 int SocketRecvPollState::continuePollIntern(ExceptionSink* xsink) {
+    if (failed) {
+        xsink->raiseException("SOCKET-RECV-ERROR", "the read failed, as the memory for its data could not be "
+            "allocated");
+        return -1;
+    }
     if (received == size) {
         return 0;
     }
@@ -10934,7 +10983,7 @@ int SocketRecvPollState::continuePollIntern(ExceptionSink* xsink) {
     unsigned loop = 0;
 
     while (true) {
-        if (received == allocated && grow(xsink)) {
+        if (received == allocated && grow(xsink, io_use.getDescriptor())) {
             return -1;
         }
         ssize_t rc;
@@ -19929,7 +19978,8 @@ QoreHashNode* qore_socket_poll_events_ops::continuePollImpl(SocketRecvPollOperat
             char* buf = reinterpret_cast<char*>(d->giveBuffer());
             char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
             if (!nbuf) {
-                xsink->outOfMemory();
+                // the size read can come from the peer (issue 7417)
+                qore_socket_raise_recv_string_memory_error(xsink, len);
                 ok = false;
             } else {
                 nbuf[len] = '\0';
@@ -20708,12 +20758,11 @@ int SocketReadHttpChunkedBodyPollOperation::handleChunkData(ExceptionSink* xsink
 
     my_socket_priv* priv = my_socket_priv::getPriv(*sock);
     priv->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_READ, source, bin->getPtr(), chunk_size);
-    if (binary_body) {
-        body_bin->append(bin->getPtr(), chunk_size);
-    } else {
-        body_str->concat(static_cast<const char*>(bin->getPtr()), chunk_size);
-    }
     bytes_consumed = true;
+    if (qore_socket_append_http_body(xsink, binary_body ? *body_bin : nullptr, binary_body ? nullptr : *body_str,
+            bin->getPtr(), chunk_size)) {
+        return -1;
+    }
 
     int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
     int64 max_chunked_body_size = priv->getMaxChunkedBodySize();
@@ -21108,7 +21157,8 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvLength(ExceptionSink* x
     if (data->getType() == NT_BINARY) {
         const BinaryNode* bin = data->get<const BinaryNode>();
         if (bin->size() > 0) {
-            body->append(bin->getPtr(), bin->size());
+            // an exception is raised if the memory cannot be allocated (issue 7417)
+            qore_socket_append_http_body(xsink, body, nullptr, bin->getPtr(), bin->size());
         }
     }
 
@@ -21201,7 +21251,10 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkData(ExceptionSink
         body_state = BodyState::DONE;
         return nullptr;
     }
-    body->append(bin->getPtr(), chunk_size);
+    if (qore_socket_append_http_body(xsink, body, nullptr, bin->getPtr(), chunk_size)) {
+        body_state = BodyState::DONE;
+        return nullptr;
+    }
     remaining = 0;
 
     // Read next chunk size
@@ -21261,7 +21314,10 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvClose(ExceptionSink* xs
         const BinaryNode* bin = data_val->get<const BinaryNode>();
         if (bin->size() > 0) {
             has_data = true;
-            body->append(bin->getPtr(), bin->size());
+            if (qore_socket_append_http_body(xsink, body, nullptr, bin->getPtr(), bin->size())) {
+                body_state = BodyState::DONE;
+                return nullptr;
+            }
         }
     }
 

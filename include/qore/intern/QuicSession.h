@@ -840,6 +840,11 @@ public:
     */
     DLLLOCAL uint64_t getBytesInFlight() const;
 
+    //! true for a server session, false for a client session
+    DLLLOCAL bool isServer() const {
+        return is_server_;
+    }
+
 #ifdef DEBUG
     //! Debug-only, for tests: the packets that the connection sent, and those of them that it declared lost
     /** @return false if the connection is not set up
@@ -933,8 +938,8 @@ public:
         Idle       = 1,  //!< local NGTCP2_ERR_IDLE_CLOSE — our own idle timer expired
         LocalClose = 2,  //!< we sent CONNECTION_CLOSE (in_closing_period)
         PeerClose  = 3,  //!< peer sent CONNECTION_CLOSE (in_draining_period)
-        //! a client connection on which the peer sent nothing for its peer response timeout after a request was
-        //! submitted (see setPeerResponseTimeout()): the peer's connection state is gone (ex: it restarted)
+        //! a client connection whose peer did not show within its peer response timeout that it received a request
+        //! (see setPeerResponseTimeout()): the peer's connection state is gone (ex: it restarted)
         Unresponsive = 4,
         //! a client connection that the server reset with a stateless reset (RFC 9000 section 10.3): it has no state
         //! for the connection (ex: it restarted) (qore#6931)
@@ -945,18 +950,34 @@ public:
     static constexpr uint64_t QUIC_DEFAULT_PEER_RESPONSE_TIMEOUT_NS = 30ULL * NGTCP2_SECONDS;
 
     //! Sets the peer response timeout of a client connection (qore#6930)
-    /** A request submitted on the connection arms a deadline this long after its submission, which any packet
-        received from the peer disarms: a live peer acknowledges the request within its maximum ACK delay.  If the
-        deadline passes, the peer has not received the request (QUIC acknowledges every packet it receives), so its
-        connection state is gone (ex: the server restarted, which a stateless reset reports only if the server can
-        still compute one), and the connection is closed with @ref CloseReason::Unresponsive, instead of waiting for
-        the idle timeout.  0 disables it; it is at most the connection's idle timeout.
+    /** Each request submitted on the connection must show within this time after its submission that the peer
+        received it: the peer acknowledges data of the request's stream, sends data on it, or the stream closes; a
+        live peer acknowledges the request within its maximum ACK delay.  If the time passes for a request, the peer
+        has not received it (QUIC acknowledges every packet it receives), so its connection state is gone (ex: the
+        server restarted, which a stateless reset reports only if the server can still compute one), and the
+        connection is closed with @ref CloseReason::Unresponsive, instead of waiting for the idle timeout.  Another
+        packet from the peer does not show it: one that the peer sent before it received the request (or before it
+        stopped) can arrive after the submission (qore#7452).  0 disables it; it is at most the connection's idle
+        timeout.
     */
     DLLLOCAL void setPeerResponseTimeout(uint64_t timeout_ns);
 
 private:
-    //! arms the deadline for a packet from the peer after a request, if it is not armed (client connections only)
-    DLLLOCAL void armPeerResponseDeadlineLocked();
+    //! records a request submitted on the stream for the peer response timeout (client connections only)
+    DLLLOCAL void notePeerResponseWaitLocked(int64_t stream_id);
+
+    //! the peer showed that it received the request of the stream, if it waits for that (see setPeerResponseTimeout())
+    DLLLOCAL void endPeerResponseWaitLocked(int64_t stream_id) {
+        if (!peer_response_waits_.empty()) {
+            peer_response_waits_.erase(stream_id);
+        }
+    }
+
+    //! the time by which the peer must show that it received the oldest request that it has not shown to have received,
+    //! or 0 if none (see setPeerResponseTimeout())
+    DLLLOCAL ngtcp2_tstamp peerResponseDeadlineLocked() const {
+        return peer_response_waits_.empty() ? 0 : peer_response_waits_.begin()->second + peer_response_timeout_ns_;
+    }
 
 public:
 
@@ -1521,9 +1542,15 @@ public:
     DLLLOCAL bool hasActiveStreamInputStreams() const;
 
     //! Process one chunk from each active InputStream (called by I/O thread)
-    /** @since %Qore 3.0
+    /** An error of one stream ends that stream only: it is logged and the stream is reset for the client; no error
+        is raised in \a xsink, which is unused (qore#7434)
+
+        @since %Qore 3.0
     */
     DLLLOCAL void processStreamInputStreams(ExceptionSink* xsink);
+
+    //! Reads and sends the next chunk of one stream's InputStream; an error is the stream's alone (qore#7434)
+    DLLLOCAL void processStreamInputStream(int64_t stream_id, StreamInputStreamInfo& info, ExceptionSink* xsink);
 
     //! Clean up all InputStreams (called on session destruction)
     /** @since %Qore 3.0
@@ -1767,12 +1794,10 @@ private:
         the stream closed, which needs the peer's acknowledgment of that RESET_STREAM, so a response could be read
         whole while a send still went out unreported.  See @ref recordPeerStopSending().
     */
-    //! Returns the number of packets that the connection took (decrypted and processed); the caller holds the lock
-    /** A packet that ngtcp2_conn_read_pkt() discards without an error (one that cannot be decrypted, or a stateless
-        reset with another token) is not counted: it does not show that the peer's connection state is alive, so it
-        does not end the wait for the peer's response (see setPeerResponseTimeout(); qore#6931)
-    */
-    DLLLOCAL uint64_t processedPacketsLocked() const;
+#ifdef DEBUG
+    //! a Retry taken by a client connection: counted for dbg_quic_retries_received() before ngtcp2's callback takes it
+    DLLLOCAL static int recvRetryCallback(ngtcp2_conn* conn, const ngtcp2_pkt_hd* hd, void* user_data);
+#endif
 
     //! a stateless reset that ends a client connection (qore#6931): its close reason is then StatelessReset
     DLLLOCAL static int recvStatelessResetCallback(ngtcp2_conn* conn, const ngtcp2_pkt_stateless_reset* sr,
@@ -2003,8 +2028,10 @@ private:
     ngtcp2_duration local_idle_timeout_ns_ = QUIC_IDLE_TIMEOUT_NS; //!< advertised idle timeout for this session
     //! the peer response timeout (see setPeerResponseTimeout()); mtx_ must be held to access it
     uint64_t peer_response_timeout_ns_ = 0;
-    //! the deadline armed by a request for a packet from the peer, 0 if none; mtx_ must be held to access it
-    ngtcp2_tstamp peer_response_deadline_ = 0;
+    //! the submission times of the requests that the peer has not shown to have received, by stream ID (in the order
+    //! of their submission, as a client opens its streams in order); mtx_ must be held to access it (see
+    //! setPeerResponseTimeout())
+    std::map<int64_t, ngtcp2_tstamp> peer_response_waits_;
     //! set when the connection was closed because the peer did not respond (see setPeerResponseTimeout())
     std::atomic<bool> peer_unresponsive_{false};
     //! set when the server reset the client connection with a stateless reset (qore#6931)

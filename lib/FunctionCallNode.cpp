@@ -2208,16 +2208,10 @@ __attribute__((noinline, cold)) QoreValue MethodCallNode::execPseudoNamed(Lexica
     QoreRcCallSiteHelper call_site(rc, loc);
     // the pseudo-method that a call with positional arguments would call (see pseudo_classes_eval()), with its
     // variants bound to the arguments by name
-    const qore_class_private* pseudo_cls = qore_class_private::get(*qore_pseudo_get_class(n.getType()));
-    const QoreMethod* w = pseudo_cls->runtimeFindPseudoMethod(n, c_str, xsink);
-    if (!w) {
-        assert(*xsink);
-        return QoreValue();
-    }
     ReferenceHolder<QoreListNode> args_copy(xsink);
     const QoreListNode* call_args = tmp_args ? getEvalTmpArgs(args_copy) : args;
-    return NMETHF(qore_method_private::get(*w)->func)->evalPseudoMethodNamed(xsink, rc, n, call_args, tmp_args,
-        runtime_get_class(), *runtime_arg_names, policy);
+    return pseudo_classes_eval_named(n, c_str, call_args, tmp_args, runtime_get_class(), *runtime_arg_names, policy, rc,
+        xsink);
 }
 
 QoreValue MethodCallNode::exec(QoreObject* o, ExceptionSink* xsink) const {
@@ -2229,23 +2223,34 @@ QoreValue MethodCallNode::exec(LexicalSemanticPolicy policy, QoreObject* o, Exce
 }
 
 template <bool Lexical>
-QORE_INTERN_ALWAYS_INLINE QoreValue MethodCallNode::execPseudoImpl(LexicalSemanticPolicy policy, const QoreValue n, ExceptionSink* xsink) const {
+QORE_INTERN_ALWAYS_INLINE QoreValue MethodCallNode::execPseudoImpl(LexicalSemanticPolicy policy, const QoreValue n,
+        qore_type_t t, ExceptionSink* xsink) const {
    //printd(5, "MethodCallNode::execPseudo() %s::%s() variant: %p\n", qc->getName(), method->getName(), variant);
    // if n is nothing make sure and use the "<nothing>" class with a dynamic method lookup
    RuntimeConfig& rc = rc_get_current_ref();
    QoreRcCallSiteHelper call_site(rc, loc);
-   if (n.isNothing() && qc != QC_PSEUDONOTHING)
+   // the type is the caller's (QoreDotEvalOperatorNode::evalWithBase())
+   if (t == NT_NOTHING && qc != QC_PSEUDONOTHING)
       return qore_class_private::get(*QC_PSEUDONOTHING)->evalPseudoMethodWithPolicy<Lexical>(policy, n, method->getName(), args, rc, xsink);
    else
       return qore_class_private::get(*qc)->evalPseudoMethodWithPolicy<Lexical>(policy, method, variant, n, args, rc, xsink);
 }
 
-QoreValue MethodCallNode::execPseudo(const QoreValue n, ExceptionSink* xsink) const {
-    return execPseudoImpl<false>({}, n, xsink);
+bool MethodCallNode::pseudoAcceptsTypeSlow(qore_type_t t) const {
+    if (!qore_pseudo_class_accepts_type(qc, t)) {
+        return false;
+    }
+    pseudo_accepted_type.store(t, std::memory_order_relaxed);
+    return true;
 }
 
-QoreValue MethodCallNode::execPseudo(LexicalSemanticPolicy policy, const QoreValue n, ExceptionSink* xsink) const {
-    return execPseudoImpl<true>(policy, n, xsink);
+QoreValue MethodCallNode::execPseudo(const QoreValue n, qore_type_t t, ExceptionSink* xsink) const {
+    return execPseudoImpl<false>({}, n, t, xsink);
+}
+
+QoreValue MethodCallNode::execPseudo(LexicalSemanticPolicy policy, const QoreValue n, qore_type_t t,
+        ExceptionSink* xsink) const {
+    return execPseudoImpl<true>(policy, n, t, xsink);
 }
 
 AbstractQoreNode* StaticMethodCallNode::makeReferenceNodeAndDeref() {

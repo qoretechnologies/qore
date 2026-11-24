@@ -33,11 +33,12 @@
 #include "qore/intern/QC_TimeZone.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_date_private.h"
+#include "qore/intern/QorePseudoMethods.h"
 
 //! Methods in this pseudo-class can be executed on @ref date "date/time value types"
 /**
  */
-qclass <date> [arg=const DateTimeNode *dt = v.get<DateTimeNode>();vparent=<value>];
+qclass <date> [arg=const DateTimeNode* dt = qore_pseudo_receiver<DateTimeNode>(v, NT_DATE, "<date>", xsink);vparent=<value>];
 
 //! Returns Qore::NT_DATE
 /**

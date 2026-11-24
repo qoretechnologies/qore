@@ -156,6 +156,17 @@ DLLLOCAL int qore_socket_exec_close_private(qore_socket_private* priv);
 //! Raises \a err and returns -1 if a UNIX socket path does not fit a socket address with its terminator (issue #6910)
 DLLLOCAL int qore_socket_check_unix_path(const char* path, const char* err, ExceptionSink* xsink);
 #endif
+
+//! Appends data received to an HTTP message body (the binary body, or the string body if \a body_bin is nullptr)
+/** The size of a body comes from the peer, so a body that cannot grow fails the read without ending the process or
+    losing data silently (issue 7417)
+
+    @return 0 for OK, -1 if the memory could not be allocated (a SOCKET-RECV-ERROR exception is raised; the body is
+    unchanged)
+*/
+DLLLOCAL int qore_socket_append_http_body(ExceptionSink* xsink, BinaryNode* body_bin, QoreString* body_str,
+        const void* data, size_t size);
+
 DLLLOCAL int do_read_error(ssize_t rc, const char* method_name, int timeout_ms, ExceptionSink* xsink);
 DLLLOCAL int sock_get_raw_error();
 #if defined(DEBUG) && !defined(_Q_WINDOWS)
@@ -776,6 +787,11 @@ DLLLOCAL bool qore_descriptor_hold_set_close_wake(const std::shared_ptr<void>& h
 /** For the C++ unit tests of a close of a registered connection (qore#7003)
 */
 DLLLOCAL extern std::atomic<void (*)()> qore_dbg_before_close_wakes;
+//! Debug builds: if set, called with the socket by the thread that closes it right after prepareForClose() shut the
+//! descriptor down, without the socket's close lock, before the close gives the descriptor up
+/** For the C++ unit tests of a connection step between the shutdown of a close and the close
+*/
+DLLLOCAL extern std::atomic<void (*)(qore_socket_private*)> qore_dbg_after_pre_close_shutdown;
 #endif
 
 #ifdef DEBUG
@@ -1486,8 +1502,11 @@ private:
     //! Receives data; continuePoll() records received data on the socket
     DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
 
-    //! Makes room in the buffer for more data; returns -1 if the memory cannot be allocated
-    DLLLOCAL int grow(ExceptionSink* xsink);
+    //! Makes room in the buffer for more data
+    /** @return -1 if the memory cannot be allocated: a SOCKET-RECV-ERROR exception is raised, the data received is
+        lost, and the connection is shut down, as the rest of the data cannot be told apart from what follows it
+    */
+    DLLLOCAL int grow(ExceptionSink* xsink, int fd);
 
     //! the most memory allocated for the data before any of it has been received
     /** The size to receive can come from the peer (a Content-Length or a chunk size), so the buffer grows as the
@@ -1501,6 +1520,8 @@ private:
     //! the size of the buffer allocated for the data
     size_t allocated = 0;
     bool retry_tls_read = false;
+    //! true if the buffer could not grow: the data received is lost, and the read cannot continue
+    bool failed = false;
     size_t received = 0;
 };
 
@@ -2961,8 +2982,20 @@ public:
         // SSL_write currently in flight on this socket; if a racing close
         // has already released the fd, there is nothing to shut down.  A TLS
         // connection that no call is using sends its close_notify alert first.
-        CloseLockHelper cl(*this);
-        if (sock != QORE_INVALID_SOCKET) {
+#ifdef DEBUG
+        bool shut = false;
+#endif
+        {
+            CloseLockHelper cl(*this);
+            if (sock == QORE_INVALID_SOCKET) {
+                return;
+            }
+            // the shutdown is the start of the close: the descriptor generation changes with it, so that a connection
+            // that sees its effect on the descriptor (a connection attempt that reads the shutdown's error) sees the
+            // socket closed, and fails as closed, not with the error that the shutdown caused; the close changes it
+            // again when it gives the descriptor up.  Nothing takes a changed generation for a released descriptor:
+            // the descriptor stays the socket's, open, until the close
+            ++fd_generation;
 #ifdef DEBUG
             if (dbgAbortiveCloseLocked()) {
                 return;
@@ -2970,7 +3003,18 @@ public:
 #endif
             sendTlsCloseNotifyLocked();
             ::shutdown(sock, SHUTDOWN_ARG);
+#ifdef DEBUG
+            shut = true;
+#endif
         }
+#ifdef DEBUG
+        // a test holds the close here, after the shutdown and before the close, without the close lock
+        if (shut) {
+            if (void (*hook)(qore_socket_private*) = qore_dbg_after_pre_close_shutdown.load(std::memory_order_acquire)) {
+                hook(this);
+            }
+        }
+#endif
     }
 
     //! Closes the descriptor and resets the connection state; does nothing if the descriptor is already released

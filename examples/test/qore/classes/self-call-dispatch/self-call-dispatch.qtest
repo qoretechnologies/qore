@@ -40,6 +40,7 @@ class SelfCallDispatchTest inherits QUnit::Test {
             string execution_mode = mode;
             addTestCase("execution mode " + mode, sub () {
                 assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+                checkUncaught(command(execution_mode));
             });
         }
         addTestCase("IR tier", sub () {
@@ -68,6 +69,15 @@ class SelfCallDispatchTest inherits QUnit::Test {
             shellQuote(fixture)));
         assertTrue(is_file(program), "the fixture compiled: " + output);
         assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+        checkUncaught(shellQuote(program));
+    }
+
+    #! checks the diagnostic printed when the caller lets the block-return exception escape
+    private checkUncaught(string cmd) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(cmd + " uncaught");
+        assertEq(3, r.rc, "uncaught exception exit status");
+        assertTrue(r.stderr =~ /in MethodFrame::checked\(\).*\(Qore user code\)/, r.stderr);
+        assertTrue(r.stderr =~ /call stack:\n  1: MethodFrame::checked\(\).*\(Qore user code\)/, r.stderr);
     }
 
     private static string shellQuote(string value) {

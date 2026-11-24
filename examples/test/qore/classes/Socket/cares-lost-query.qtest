@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - c-ares socket polling, query timeouts and asynchronous resolver restarts
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -19,7 +20,8 @@
     have again.
 
     The defect itself happens for about one query in 65536, so the debug hook dbg_cares_lose_query() makes the next
-    checks find the query lost; the test only runs against a debug build.  Only lookups that wait for a DNS answer
+    pending lookups lose their query before c-ares processes an answer or a timeout, even if the poll thread
+    is delayed past the deadline (#7449). The test only runs against a debug build.  Only lookups that wait for a DNS answer
     are checked for a lost query, so the lookups ask a local DNS server that drops every query
     (DnsTestServer, dbg_cares_set_servers()), and each query is tried once with a short timeout: no lookup asks the
     DNS servers of the host, and every lookup waits.

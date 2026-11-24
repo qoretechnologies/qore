@@ -2496,7 +2496,7 @@ int LValueHelper::doHashLValue(qore_type_t t, const char* mem, bool for_remove) 
                     // the container was created for this assignment; a rejected assignment removes it again
                     trackVivifiedContainer();
                 } else {
-                    const TypedHashDecl* thd = QoreTypeInfo::getUniqueReturnHashDecl(typeInfo);
+                    const TypedHashDecl* thd = QoreTypeInfo::getUniqueReturnHashDecl(qore_get_value_type(typeInfo));
                     if (thd) {
                         // we cannot initialize a hashdecl value here while holding lvalue locks
                         // so we have to throw an exception

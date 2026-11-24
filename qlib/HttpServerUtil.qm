@@ -164,6 +164,12 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - added @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "AbstractHttpRequestHandler::setHandlerSocketView()"
+      and @ref HttpServer::AbstractHttpRequestHandler::needsHandlerSocketView() "needsHandlerSocketView()": the handler
+      of an HTTP/1.x request that is declared by sandboxed code, or that asks for it, gets a socket of its request
+      (see @ref httpserver_handler_socket; <a href="https://github.com/qoretechnologies/qore/issues/7305">issue 7305</a>),
+      as does one that runs the code of objects of classes of a sandboxed Program
+      (@ref HttpServer::AbstractHttpRequestHandler::hostsSandboxedCode() "hostsSandboxedCode()")
     - added @ref HttpServer::Http1BodyReader "Http1BodyReader",
       @ref HttpServer::DefaultBodyStreamThreshold "DefaultBodyStreamThreshold" and
       @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize": a stream request
@@ -4068,6 +4074,11 @@ public class AbstractHttpRequestHandler {
     private:internal {
         #! the thread-local key of the handlers that set persistence on the thread (a PersistentThreadHandlers object)
         const PersistentThreadHandlersKey = "_AHRH_pth";
+
+        #! set by setHostsCode(): the handler runs the code of objects of other code (see hostedObjects(); qore#7305)
+        bool host_code = False;
+        #! set by setHandlerSocketView(): the handler's code gets the socket of its HTTP/1.x request (qore#7305)
+        bool handler_socket_view = False;
     }
 
     #! create the object optionally with the given AbstractAuthenticator
@@ -4079,6 +4090,104 @@ public class AbstractHttpRequestHandler {
     constructor(*AbstractAuthenticator n_auth, softbool n_stream = False) {
         auth = n_auth;
         stream = n_stream;
+    }
+
+    #! Makes the handler's code get the socket of its HTTP/1.x request instead of the connection's socket (qore#7305)
+    /** The server gives the handler of an HTTP/1.x request a socket that acts on the connection for the request only
+        (see @ref httpserver_handler_socket) when the handler object is declared by sandboxed code, which needs no call
+        of this method, or when this method was called before the handler was registered with the server; other
+        handlers get the connection's socket.  A handler that passes the socket of a request to code that is not
+        trusted calls it in its constructor (a trusted @ref RestHandler::RestHandler "RestHandler" whose REST classes
+        are such code, for example, which does not call it itself).  It cannot be undone.
+
+        @warning A trusted handler that hands the socket of its HTTP/1.x request to code that is not trusted (such as
+        code of a tenant) <b>must</b> call this method in its constructor: without it, that code gets the
+        connection's socket, with which it can read the next request on the connection (with its \c Authorization
+        header) and write responses to other requests; see @ref httpserver_handler_socket and
+        <a href="https://github.com/qoretechnologies/qore/issues/7338">issue 7338</a>
+
+        @since HttpServerUtil 1.6
+    */
+    final setHandlerSocketView() {
+        handler_socket_view = True;
+    }
+
+    #! Returns @ref True "True" if the handler's code gets the socket of its HTTP/1.x request (qore#7305)
+    /** True if the handler object is declared by sandboxed code (the call of this method on the object is sandboxed:
+        see @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()", or a sandbox governs the Program
+        that created the object: see
+        @ref Qore::SandboxManager::isFromSandboxedProgram() "SandboxManager::isFromSandboxedProgram()"), or if
+        setHandlerSocketView() was called; also True if this cannot be decided.  The method is final, so that a subclass cannot change the
+        decision; the server calls it when the handler is registered
+
+        @since HttpServerUtil 1.6
+    */
+    final bool needsHandlerSocketView() {
+        try {
+            return handler_socket_view || SandboxManager::isSandboxed() || SandboxManager::isFromSandboxedProgram(self)
+                || hostsSandboxedCode();
+        } catch (hash<ExceptionInfo> ex) {
+            # the decision fails closed
+            return True;
+        }
+    }
+
+    #! Returns @ref True "True" if the handler runs the code of other objects (see setHostsCode()) (qore#7305)
+    /** The server asks for each request whether one of them is of a class of a sandboxed Program
+        (hostsSandboxedCode()) only for a handler that runs the code of other objects
+
+        @since HttpServerUtil 1.6
+    */
+    final bool hostsCode() {
+        return host_code;
+    }
+
+    #! Returns @ref True "True" if an object whose code the handler runs (see hostedObjects()) is of a class of a
+    #! sandboxed Program (qore#7305)
+    /** Also True if this cannot be decided
+
+        @see @ref Qore::SandboxManager::isFromSandboxedProgram() "SandboxManager::isFromSandboxedProgram()"
+
+        @since HttpServerUtil 1.6
+    */
+    final bool hostsSandboxedCode() {
+        try {
+            if (!host_code) {
+                return False;
+            }
+            foreach object obj in (hostedObjects()) {
+                if (SandboxManager::isFromSandboxedProgram(obj)) {
+                    return True;
+                }
+            }
+            return False;
+        } catch (hash<ExceptionInfo> ex) {
+            # the decision fails closed
+            return True;
+        }
+    }
+
+    #! Makes the handler run the code of other objects, which can be of classes of sandboxed Programs (qore#7305)
+    /** A handler that calls the code of objects that other code gives it (as
+        @ref RestHandler::RestHandler "RestHandler" does with its REST classes) calls it in its constructor and
+        returns them from hostedObjects(); the server then asks for each request whether one of them is of a class of a
+        sandboxed Program, and if so, the handler's code gets the socket of its HTTP/1.x request (see
+        @ref httpserver_handler_socket).  It cannot be undone
+
+        @since HttpServerUtil 1.6
+    */
+    final private setHostsCode() {
+        host_code = True;
+    }
+
+    #! Returns the objects whose code the handler runs, for a handler that called setHostsCode() (qore#7305)
+    /** The objects of classes of sandboxed Programs make the handler's code get the socket of its HTTP/1.x request;
+        a subclass that runs the code of other objects returns them
+
+        @since HttpServerUtil 1.6
+    */
+    private list<object> hostedObjects() {
+        return ();
     }
 
     #! Returns @ref True "True" if this handler wants to receive streaming requests without waiting for the full

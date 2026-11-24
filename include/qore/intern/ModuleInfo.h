@@ -1274,6 +1274,14 @@ public:
     */
     DLLLOCAL void getModuleDependencies(const char* name, strset_t& deps);
 
+    //! Gets the modules that the module requires for the order of the teardown at the end of the process (qore#7432)
+    /** As getModuleDependencies(), with the requirements that modules recorded at run time, which cleanup() also
+        orders by: the binary modules that an AOT module required at run time, the user modules applied to the
+        Program of an AOT module at run time, and the user modules applied at run time to the Program of a module that
+        they require (runtime_importer_map); not for the compile-time dependencies of a module
+    */
+    DLLLOCAL void getTeardownModuleDependencies(const char* name, strset_t& deps);
+
     //! Returns true if the module dependency map already has a path from \a from to \a to
     /** A path from \a from to \a to means that \a to must be deleted before \a from; adding the reverse edge
         would make a cycle, which module teardown (delUser()) cannot resolve.  The mutex must be held when

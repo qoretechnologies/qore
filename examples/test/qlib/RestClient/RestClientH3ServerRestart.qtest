@@ -25,14 +25,21 @@
     qore#6930: a RestClient on http_version "auto" that had upgraded to HTTP/3 kept sending on its QUIC connection
     after the server restarted, as a server process that is killed sends no CONNECTION_CLOSE and a new one knows
     nothing of the connection, and the request failed with HTTP3-IDLE-CLOSE when the idle timer expired (75 s).  The
-    connection is now closed when the server sends nothing, not even an acknowledgement, within the connect timeout of
-    the request (HTTP3-PEER-UNRESPONSIVE); an idempotent request is repeated once on a new connection, while another
+    connection is now closed when the server does not acknowledge the request within its connect timeout
+    (HTTP3-PEER-UNRESPONSIVE); an idempotent request is repeated once on a new connection, while another
     one, which the old server may have processed before it went away, raises the error, and the next request takes a
     new connection.  The server is stopped as a killed one is with dbg_quic_silent_server_close() (debug
     builds): it sends no GOAWAY and no CONNECTION_CLOSE.  The new server has another private key: a server with the
     same key would reset the old connection at once with a stateless reset (qore#6931, see
     RestClientH3StatelessReset.qtest), while the resets of this one have tokens that the client does not take, and
     neither they nor any other packet that the client discards end the wait for the server's response.
+
+    qore#7452: only a sign that the server received the request ends the wait for it (an acknowledgment of its data,
+    data of its response, or the close of its stream): a packet that the server sent for something else, such as the
+    response to another request, ended it too, and a request that the server never received waited for its own
+    timeout.  The server is made to receive nothing more from the client by dropping the client's datagrams
+    (QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS="*", debug builds), and the order of the events is set by waiting for them
+    (dbg_quic_wait_all_idle(), dbg_quic_wait_dropped_client_datagrams()), with no clock involved.
 */
 
 %modern
@@ -118,16 +125,38 @@ class CountingHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Answers each request with its method, and holds a request for "/slow" until it is released
+class HoldingHandler inherits CountingHandler {
+    public {
+        #! a request for "/slow" arrived
+        Queue reached();
+        #! releases the requests for "/slow"
+        Queue release();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        if (hdr.path == "slow") {
+            reached.push(True);
+            release.get(HangGuard);
+            return makeResponse(200, make_json({"method": hdr.method}), {"Content-Type": "application/json"});
+        }
+        return CountingHandler::handleRequest(listener, s, cx, hdr, body);
+    }
+}
+
 class RestClientH3ServerRestartTest inherits QUnit::Test {
     constructor() : QUnit::Test("RestClientH3ServerRestartTest", "1.0") {
         addTestCase("a GET is repeated on a new connection after the server restarted", \restartTest(), "GET");
         addTestCase("a POST raises the error after the server restarted, and the next request takes a new connection",
             \restartTest(), "POST");
+        addTestCase("the response to another request does not end the wait for a request that the server did not "
+            "receive", \otherResponseTest());
         set_return_value(main());
     }
 
     #! starts an HTTPS server with HTTP/3 on the given port (0: assigned by the OS); returns the server and its port
-    private list<auto> startServer(int port, CountingHandler handler, bool other_key = False) {
+    private list<auto> startServer(int port, AbstractHttpRequestHandler handler, bool other_key = False) {
         HttpServer server(<HttpServerOptionInfo>{});
         server.setDefaultHandler("count", handler);
         server.waitForAsyncIo();
@@ -193,5 +222,72 @@ class RestClientH3ServerRestartTest inherits QUnit::Test {
         assertEq("POST", rv.method, "the new server answered the next request");
         assertEq("payload", parse_json(rv.body), "the request body was sent");
         assertEq(1, handler.requests.getCount(), "the new server received the next request once");
+    }
+
+    #! qore#7452: a request that the server did not receive ends the connection although another response arrives
+    otherResponseTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the client's datagrams are dropped only with QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS");
+        }
+        HoldingHandler handler();
+        HttpServer server;
+        int port;
+        (server, port) = startServer(0, handler);
+        on_exit server.stop();
+        # the requests held by the handler are released however the test ends
+        on_exit handler.release.push(True);
+        RestClient rc({
+            "url": "https://127.0.0.1:" + port,
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+            "connect_timeout": ConnectTimeout,
+            "serialization": "json",
+        });
+        # the first response offers HTTP/3 (Alt-Svc), which the next request takes
+        for (int i = 0; i < 2; ++i) {
+            assertEq("GET", rc.get("/").body.method);
+        }
+        assertTrue(rc.isHttp3Active(), "the client uses HTTP/3");
+
+        # a request that the server holds: its response comes later, on the same connection
+        Queue held_done();
+        background sub () {
+            try {
+                rc.get("/slow");
+            } catch (hash<ExceptionInfo> ex) {
+                # the connection can be closed before the response arrives (see below); the held request is only the
+                # source of the response's packets
+            }
+            held_done.push(True);
+        }();
+        assertTrue(handler.reached.get(HangGuard), "the server received the held request");
+        # neither side has anything to send until the next request: the next datagram of the client is its request
+        assertTrue(call_function("dbg_quic_wait_all_idle", HangGuard), "nothing is in flight");
+
+        # from now on the server receives nothing from the client, as a server whose connection state is gone
+        int requests = handler.requests.getCount();
+        int dropped = call_function("dbg_quic_dropped_client_datagrams");
+        setenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS", "*");
+        on_exit unsetenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS");
+        Queue result();
+        background sub () {
+            try {
+                rc.post("/", "payload");
+                result.push("no error");
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err);
+            }
+        }();
+        # the request was submitted: its first datagram was dropped
+        assertTrue(call_function("dbg_quic_wait_dropped_client_datagrams", dropped + 1, HangGuard),
+            "the request was sent");
+        # the response to the held request arrives after the request was submitted, and again and again, as the
+        # server sends it again while the client's acknowledgments are dropped; it does not show that the server
+        # received the request, which is not idempotent: it raises the error instead of waiting for its timeout
+        handler.release.push(True);
+        assertEq("HTTP3-PEER-UNRESPONSIVE", result.get(HangGuard), "the request ended with the connection");
+        unsetenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS");
+        held_done.get(HangGuard);
+        assertEq(requests, handler.requests.getCount(), "the server did not receive the request");
     }
 }

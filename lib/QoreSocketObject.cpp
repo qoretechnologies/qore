@@ -4203,10 +4203,9 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
             if (write_rc == -1 || *xsink) {
                 return nullptr;
             }
-        } else if (!recv_callback && binary_body) {
-            body_bin->append(chunk->getPtr(), chunk->size());
-        } else if (!recv_callback) {
-            body_str->concat(static_cast<const char*>(chunk->getPtr()), chunk->size());
+        } else if (!recv_callback && qore_socket_append_http_body(xsink, *body_bin,
+                binary_body ? nullptr : *body_str, chunk->getPtr(), chunk->size())) {
+            return nullptr;
         }
 
         SimpleRefHolder<BinaryNode> crlf(qore_socket_object_exec_recv_bytes(s, 2, timeout_ms, xsink));

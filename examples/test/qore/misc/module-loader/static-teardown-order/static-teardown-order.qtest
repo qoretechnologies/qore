@@ -1,0 +1,189 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - module and AOT module loading and the teardown of module Programs at process exit
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# The static variables of the classes of a module are cleared at process exit after those of the modules that require
+# it (qore#7432): TsoZHolder requires TsoAStatic and holds a TsoAStatic::Resource in a static variable of its own class;
+# the destructor of the resource locks the static Mutex of its class.  The static variables of the modules were
+# cleared in the order of the module names, the AOT modules after the others, so that the Mutex of TsoAStatic, whose
+# name sorts first, was gone when the resource was released: the destructor raised RUNTIME-OVERLOAD-ERROR
+# (AutoLock::constructor(nothing)) at exit, and the process exited with status 3.  The child program runs (in the
+# execution mode of this test) with both modules loaded from their sources, from their AOT modules, and with one of
+# them loaded from its AOT module and the other from its source.  In the cycle layouts, TsoZHolder then loads TsoZCyc,
+# which requires it, at run time: the two modules make a cycle, which requires TsoAStatic, and the cycle is broken at
+# one of its own modules, never at TsoAStatic (with TsoZCyc loaded from its AOT module, a cycle was broken at the
+# module of the lowest name, TsoAStatic, in the first version of the fix).  In the run-time layout, the AOT module
+# TsoZRtHolder, which does not require TsoAStatic, loads it at run time and holds a TsoAStatic::Resource in a static
+# variable: only the requirement recorded at run time orders the two modules.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../../../TestInterpreter.qm
+
+%exec-class StaticTeardownOrderTest
+
+#! a layout of the modules of the test
+hashdecl StaticTeardownOrderLayout {
+    #! the modules, a required module first: module -> True if it is loaded from its AOT module, False if from its
+    #! source
+    hash<string, bool> modules;
+    #! the argument of the child program: "cycle" if TsoZHolder loads TsoZCyc at run time, "runtime" if the program
+    #! loads TsoZRtHolder, which loads TsoAStatic at run time, instead of TsoZHolder
+    *string arg;
+}
+
+#! the result of a qore subprocess
+hashdecl StaticTeardownOrderResult {
+    #! the exit status
+    int rc;
+    #! the output on stdout
+    string out;
+    #! the output on stderr
+    string err;
+}
+
+class StaticTeardownOrderTest inherits QUnit::Test {
+    public {
+        #! the layouts: name -> layout
+        const Layouts = {
+            "source modules": <StaticTeardownOrderLayout>{
+                "modules": {"TsoAStatic": False, "TsoZHolder": False},
+            },
+            "AOT modules": <StaticTeardownOrderLayout>{
+                "modules": {"TsoAStatic": True, "TsoZHolder": True},
+            },
+            "AOT required module, source module requiring it": <StaticTeardownOrderLayout>{
+                "modules": {"TsoAStatic": True, "TsoZHolder": False},
+            },
+            "source required module, AOT module requiring it": <StaticTeardownOrderLayout>{
+                "modules": {"TsoAStatic": False, "TsoZHolder": True},
+            },
+            "cycle of source modules": <StaticTeardownOrderLayout>{
+                "modules": {"TsoAStatic": False, "TsoZHolder": False, "TsoZCyc": False},
+                "arg": "cycle",
+            },
+            "cycle with an AOT module loaded at run time": <StaticTeardownOrderLayout>{
+                "modules": {"TsoAStatic": False, "TsoZHolder": False, "TsoZCyc": True},
+                "arg": "cycle",
+            },
+            "cycle of AOT modules": <StaticTeardownOrderLayout>{
+                "modules": {"TsoAStatic": True, "TsoZHolder": True, "TsoZCyc": True},
+                "arg": "cycle",
+            },
+            "AOT module requiring a source module at run time": <StaticTeardownOrderLayout>{
+                "modules": {"TsoAStatic": False, "TsoZRtHolder": True},
+                "arg": "runtime",
+            },
+        };
+
+        #! the output of the child program: the resource is released, by its destructor, after the main code
+        const Expected = ("main done", "holder resource released; live: 0");
+
+        #! the output of the child program by argument
+        const ExpectedByArg = {
+            "cycle": ("cycle loaded",) + Expected,
+            "runtime": ("main done", "run-time resource released; live: 0"),
+        };
+    }
+
+    private {
+        string qore_bin;
+        *string qcc_bin;
+        string libqore_dir;
+        *string exec_mode;
+        TmpDir tmp("qore-static-teardown-order-");
+        #! the number of subprocesses run
+        int runs;
+    }
+
+    constructor() : Test("StaticTeardownOrderTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler();
+        exec_mode = TestInterpreter::exec_mode(get_script_path());
+        foreach string layout in (keys Layouts) {
+            addTestCase(layout, makeTestCase(layout));
+        }
+        set_return_value(main());
+    }
+
+    #! returns the code of a test case; each case has its own copy of the argument
+    private code makeTestCase(string layout) {
+        return sub () { testLayout(layout); };
+    }
+
+    #! runs the child program with the modules of a layout, and checks its exit status and output
+    private testLayout(string layout) {
+        hash<StaticTeardownOrderLayout> l = Layouts{layout};
+        hash<string, bool> aot = l.modules;
+        if ((foldl $1 || $2, aot.values()) && !qcc_bin) {
+            testSkip("no qcc found");
+        }
+        string dir = tmp.path + DirSep + replace(layout, " ", "-");
+        mkdir(dir, 0700);
+        foreach string mod in (keys aot) {
+            string src = dir + DirSep + mod + ".qm";
+            StaticTeardownOrderTest::copyFile(get_script_dir() + mod + ".qm", src);
+            if (aot{mod}) {
+                # compiled with the modules that it requires as they are loaded at run time
+                string qmod = dir + DirSep + mod + ".qmod";
+                string out = backquote(sprintf("env LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+                    "QORE_MODULE_DIR=%s %s --module -o %s %s 2>&1", shellQuote(libqore_dir), shellQuote(libqore_dir),
+                    shellQuote(libqore_dir), shellQuote(dir), shellQuote(qcc_bin), shellQuote(qmod),
+                    shellQuote(src)));
+                assertTrue(is_file(qmod), sprintf("qcc compiles %s: %s", mod, out));
+                if (!is_file(qmod)) {
+                    return;
+                }
+                # the module is loaded from its AOT module only
+                unlink(src);
+            }
+        }
+        hash<StaticTeardownOrderResult> r = run(dir, l.arg);
+        assertEq(0, r.rc, "exit status; stderr: " + r.err);
+        assertEq(l.arg ? ExpectedByArg{l.arg} : Expected, getLines(r.out), "output; stderr: " + r.err);
+        assertEq("", r.err, "stderr");
+    }
+
+    #! returns the non-empty lines of the given output
+    private static list<string> getLines(string out) {
+        return map $1, out.split("\n"), $1.val();
+    }
+
+    #! copies a file
+    private static copyFile(string from, string to) {
+        File f();
+        f.open2(to, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write(ReadOnlyFile::readTextFile(from));
+    }
+
+    #! runs the child program with the modules in the given directory and the given argument, if any
+    private hash<StaticTeardownOrderResult> run(string dir, *string arg) {
+        string err_file = tmp.path + DirSep + sprintf("run-%d.err", ++runs);
+        on_exit if (is_file(err_file)) {
+            unlink(err_file);
+        }
+        string cmd = sprintf("env LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s%s%s 2>%s; "
+            "echo \"rc=$?\"", shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(dir), shellQuote(qore_bin),
+            exec_mode ? "--exec-mode=" + exec_mode + " " : "",
+            shellQuote(get_script_dir() + "static-teardown-order.q"), arg ? " " + arg : "", shellQuote(err_file));
+        string out = backquote(cmd);
+        *list<*string> m = (out =~ x/^(.*)rc=([0-9]+)\n$/s);
+        assertTrue(exists m, "exit status: " + out);
+        return <StaticTeardownOrderResult>{
+            "rc": int(m[1]),
+            "out": m[0] ?? "",
+            "err": is_file(err_file) ? ReadOnlyFile::readTextFile(err_file) : "",
+        };
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}
