@@ -1398,6 +1398,16 @@ static list<auto> ReadOnlyFile::stat(string path) [flags=NAMED_ARGS;dom=FILESYST
       return QoreValue();
    }
    struct stat sbuf;
+#ifndef _Q_WINDOWS
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+   if (smh) {
+      // the status of the path checked, pinned against a concurrent change (qore#7518)
+      if (q_sandbox_pinned_stat(*smh.get(), path->c_str(), true, sbuf, xsink)) {
+         return *xsink ? QoreValue() : xsink->raiseErrnoException("FILE-STAT-ERROR", errno, "stat() command failed");
+      }
+      return stat_to_list(sbuf);
+   }
+#endif
    if (stat(path->c_str(), &sbuf))
       return xsink->raiseErrnoException("FILE-STAT-ERROR", errno, "stat() command failed");
 
@@ -1432,6 +1442,16 @@ static list<auto> ReadOnlyFile::lstat(string path) [flags=NAMED_ARGS;dom=FILESYS
       return QoreValue();
    }
    struct stat sbuf;
+#ifndef _Q_WINDOWS
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+   if (smh) {
+      // the status of the path checked, pinned against a concurrent change (qore#7518)
+      if (q_sandbox_pinned_stat(*smh.get(), path->c_str(), false, sbuf, xsink)) {
+         return *xsink ? QoreValue() : xsink->raiseErrnoException("FILE-LSTAT-ERROR", errno, "lstat() command failed");
+      }
+      return stat_to_list(sbuf);
+   }
+#endif
 #ifdef HAVE_LSTAT
    if (lstat(path->c_str(), &sbuf))
 #else
@@ -1469,6 +1489,16 @@ static hash<StatInfo> ReadOnlyFile::hstat(string path) [flags=NAMED_ARGS;dom=FIL
       return QoreValue();
    }
    struct stat sbuf;
+#ifndef _Q_WINDOWS
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+   if (smh) {
+      // the status of the path checked, pinned against a concurrent change (qore#7518)
+      if (q_sandbox_pinned_stat(*smh.get(), path->c_str(), true, sbuf, xsink)) {
+         return *xsink ? QoreValue() : xsink->raiseErrnoException("FILE-HSTAT-ERROR", errno, "stat() command failed");
+      }
+      return stat_to_hash(sbuf);
+   }
+#endif
    if (stat(path->c_str(), &sbuf))
       return xsink->raiseErrnoException("FILE-HSTAT-ERROR", errno, "stat() command failed");
 
@@ -1503,6 +1533,16 @@ static hash<StatInfo> ReadOnlyFile::hlstat(string path) [flags=NAMED_ARGS;dom=FI
       return QoreValue();
    }
    struct stat sbuf;
+#ifndef _Q_WINDOWS
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+   if (smh) {
+      // the status of the path checked, pinned against a concurrent change (qore#7518)
+      if (q_sandbox_pinned_stat(*smh.get(), path->c_str(), false, sbuf, xsink)) {
+         return *xsink ? QoreValue() : xsink->raiseErrnoException("FILE-HLSTAT-ERROR", errno, "lstat() command failed");
+      }
+      return stat_to_hash(sbuf);
+   }
+#endif
 #ifdef HAVE_LSTAT
    if (lstat(path->c_str(), &sbuf))
 #else
@@ -1541,6 +1581,19 @@ static hash<FilesystemInfo> ReadOnlyFile::statvfs(string path) [flags=NAMED_ARGS
       return QoreValue();
    }
    struct statvfs vfs;
+#ifndef _Q_WINDOWS
+   {
+      QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+      if (smh) {
+         // the file system of the path checked, pinned against a concurrent change (qore#7518)
+         if (q_sandbox_pinned_statvfs(*smh.get(), path->c_str(), vfs, xsink)) {
+            return *xsink ? QoreValue() : xsink->raiseErrnoException("FILE-STATVFS-ERROR", errno,
+               "statvfs() call failed");
+         }
+         return statvfs_to_hash(vfs);
+      }
+   }
+#endif
    if (statvfs(path->c_str(), &vfs))
       return xsink->raiseErrnoException("FILE-STATVFS-ERROR", errno, "statvfs() call failed");
 
