@@ -330,6 +330,7 @@ class HttpServerH3BindFailureTest inherits QUnit::Test {
 
         hash<HttpListenerOptionInfo> info = h3Options();
         info.stopc = stops.getCallback();
+        # all-interfaces: none; h3Options() listens on "node": "localhost" (the scanner does not follow the helper)
         srv.addListener(info);
         assertEq(10, srv.ports.size(), "the tenth attempt was bound");
         # the nine listeners that were created and stopped again because their QUIC listener could not be bound did
