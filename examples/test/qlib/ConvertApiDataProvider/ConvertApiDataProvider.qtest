@@ -527,6 +527,15 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         assertTrue(actionMap."convert-pdf-to-image".options.format.required);
         assertTrue(actionMap."merge-pdf".options.files.preselected);
 
+        # get-converter-info only reads the converter description (GET info/<from>/to/<to>), and the conversions
+        # (POST convert/<from>/to/<to>) return new output files and change nothing; with store_file the output is
+        # only kept in ConvertAPI's temporary storage for download (qore#7454)
+        foreach string action in (ExpectedChildren) {
+            assertEq(NT_BOOLEAN, actionMap{action}.mutates_state.typeCode(), action);
+            assertFalse(actionMap{action}.mutates_state, action);
+            assertFalse(DataProviderActionCatalog::actionMutatesState(actionMap{action}), action);
+        }
+
         # the source options come first and are preselected, and a single input is either a file or a URL
         foreach string action in (("convert-word-to-pdf", "convert-excel-to-pdf", "convert-powerpoint-to-pdf",
                 "convert-pdf-to-image", "compress-pdf")) {

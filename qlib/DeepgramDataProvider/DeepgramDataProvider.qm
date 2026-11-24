@@ -105,6 +105,7 @@ module DeepgramDataProvider {
                 "audio bytes in the requested encoding.  Uses the Aura voice model "
                 "family (12+ voices in English plus other languages).",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Speech Synthesis",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 DeepgramSynthesizeSpeechRequestDataType::Fields{"text",}, {

@@ -80,6 +80,7 @@ module PerplexityDataProvider {
             "desc": "Chat with a Perplexity AI model by sending multiple messages at once and getting "
                 "web-grounded responses with citations",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 PerplexityChatCompletionRequestType.getFields(){"model", "messages"}, {
                     "preselected": True,
@@ -106,6 +107,7 @@ module PerplexityDataProvider {
             "desc": "Chat with a Perplexity AI model by sending a single message and receiving a single "
                 "web-grounded reply with citations",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 PerplexitySimpleChatCompletionRequestType.getFields(){"model", "role", "content"}, {
                     "preselected": True,
@@ -159,6 +161,7 @@ module PerplexityDataProvider {
             "desc": "Search the web using Perplexity's dedicated search API returning structured results with "
                 "titles, URLs, and snippets",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 PerplexitySearchRequestType.getFields(){"query",}, {
                     "preselected": True,

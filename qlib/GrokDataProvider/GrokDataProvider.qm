@@ -211,6 +211,7 @@ module GrokDataProvider {
             "short_desc": "Retrieve a previously stored response by ID",
             "desc": "Retrieve a previously stored response by its unique identifier",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "path_vars": {
                 "response": <DataProviderPathVarInfo>{
                     "display_name": "Response",
@@ -261,6 +262,7 @@ module GrokDataProvider {
             "short_desc": "Retrieve a deferred chat completion result by request ID",
             "desc": "Retrieve the result of a deferred chat completion request using the request ID",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GrokDeferredCompletionRequestType.getFields(){"request_id",}, {
                     "preselected": True,
