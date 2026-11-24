@@ -1006,10 +1006,9 @@ QuicSession::QuicSession() : session_id_(next_session_id_.fetch_add(1, std::memo
 
 QuicSession::~QuicSession() {
 #ifdef DEBUG
-    // server sessions are recorded for dbg_quic_wait_idle() (see createServer()), which only a debug build has
-    if (is_server_) {
-        qore_dbg_quic_unregister_session(session_id_);
-    }
+    // sessions are recorded for dbg_quic_wait_idle() and dbg_quic_wait_all_idle() (see createServer() and
+    // createClient()), which only a debug build has
+    qore_dbg_quic_unregister_session(session_id_);
     // the extended-CONNECT buffers are released with the session (issue #5821)
     for (auto& i : connect_stream_data_) {
         qore_dbg_quic_connect_buffered.fetch_sub(static_cast<int64_t>(i.second.size()), std::memory_order_relaxed);
@@ -1161,6 +1160,10 @@ std::shared_ptr<QuicSession> QuicSession::createClient(
     }
     // Clear the temporary socket pointer; it was only needed during init
     session->clearSockPtr();
+#ifdef DEBUG
+    // dbg_quic_wait_all_idle() waits for client sessions too (qore#7452), which only a debug build has
+    qore_dbg_quic_register_session(session);
+#endif
     return session;
 }
 
@@ -1445,8 +1448,8 @@ const char* QuicSession::raiseSettingsWaitCloseError(ExceptionSink* xsink) const
                 "server's HTTP/3 SETTINGS were received; the request was not sent");
             return "HTTP3-IDLE-CLOSE";
         case CloseReason::Unresponsive:
-            xsink->raiseException("HTTP3-PEER-UNRESPONSIVE", "QUIC connection closed: the server sent nothing "
-                "after a request before its HTTP/3 SETTINGS were received; the request was not sent");
+            xsink->raiseException("HTTP3-PEER-UNRESPONSIVE", "QUIC connection closed: the server did not "
+                "acknowledge a request before its HTTP/3 SETTINGS were received; the request was not sent");
             return "HTTP3-PEER-UNRESPONSIVE";
         case CloseReason::PeerClose:
             xsink->raiseException("HTTP3-PEER-CLOSE", "QUIC connection closed by the server before its HTTP/3 "
@@ -2446,13 +2449,7 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
     // raiseReadErrorLocked() can tell why it failed (the queue is per thread, and this thread drives other
     // connections too)
     ERR_clear_error();
-    // the packets that the connection took before this one, while the peer is waited for
-    uint64_t taken = peer_response_deadline_ ? processedPacketsLocked() : 0;
     int rv = ngtcp2_conn_read_pkt(conn_, &path, &pi, data, len, last_rx_ts_);
-    if (!rv && peer_response_deadline_ && processedPacketsLocked() > taken) {
-        // the peer answered: its connection state is alive (see setPeerResponseTimeout())
-        peer_response_deadline_ = 0;
-    }
     if (rv != 0) {
         // Handle specific error codes
         if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
@@ -2594,14 +2591,8 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
             break;  // a dropped connection processes no further packets (see dropped_)
         }
         last_rx_ts_ = nowLocked();
-        // the packets that the connection took before this one, while the peer is waited for
-        uint64_t taken = peer_response_deadline_ ? processedPacketsLocked() : 0;
         int rv = ngtcp2_conn_read_pkt(conn_, &packets[i].path, &pi,
                                        packets[i].data, packets[i].len, last_rx_ts_);
-        if (!rv && peer_response_deadline_ && processedPacketsLocked() > taken) {
-            // the peer answered: its connection state is alive (see setPeerResponseTimeout())
-            peer_response_deadline_ = 0;
-        }
         if (rv != 0) {
             if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
                 // see readPacketLocked()
@@ -2956,9 +2947,10 @@ ngtcp2_tstamp QuicSession::getExpiryLocked() const {
         return UINT64_MAX;
     }
     ngtcp2_tstamp expiry = ngtcp2_conn_get_expiry2(conn_);
-    // the deadline for a packet from the peer after a request (see setPeerResponseTimeout())
-    if (peer_response_deadline_ && peer_response_deadline_ < expiry) {
-        expiry = peer_response_deadline_;
+    // the time by which the peer must show that it received a request (see setPeerResponseTimeout())
+    ngtcp2_tstamp peer_response_deadline = peerResponseDeadlineLocked();
+    if (peer_response_deadline && peer_response_deadline < expiry) {
+        expiry = peer_response_deadline;
     }
     return expiry;
 }
@@ -2968,9 +2960,9 @@ void QuicSession::setPeerResponseTimeout(uint64_t timeout_ns) {
     peer_response_timeout_ns_ = std::min<uint64_t>(timeout_ns, local_idle_timeout_ns_);
 }
 
-void QuicSession::armPeerResponseDeadlineLocked() {
-    if (!is_server_ && peer_response_timeout_ns_ && !peer_response_deadline_) {
-        peer_response_deadline_ = nowLocked() + peer_response_timeout_ns_;
+void QuicSession::notePeerResponseWaitLocked(int64_t stream_id) {
+    if (!is_server_ && peer_response_timeout_ns_) {
+        peer_response_waits_.emplace(stream_id, nowLocked());
     }
 }
 
@@ -3029,13 +3021,15 @@ int QuicSession::handleExpiryLocked(ExceptionSink* xsink) {
         return -1;
     }
 
-    // a request was sent, and the peer has sent nothing since for the peer response timeout: it did not receive the
-    // request, and its connection state is gone (see setPeerResponseTimeout()); the connection is closed as by its
-    // idle timer, which it would otherwise wait for, with the cause recorded
-    if (peer_response_deadline_ && nowLocked() >= peer_response_deadline_) {
-        printd(5, "QuicSession::handleExpiryLocked(): no packet from the peer within %lld ms of a request (session "
-            "%lld)\n", (long long)(peer_response_timeout_ns_ / 1000000), (long long)session_id_);
-        peer_response_deadline_ = 0;
+    // a request was submitted, and the peer has not shown for the peer response timeout that it received it: its
+    // connection state is gone (see setPeerResponseTimeout()); the connection is closed as by its idle timer, which it
+    // would otherwise wait for, with the cause recorded
+    ngtcp2_tstamp peer_response_deadline = peerResponseDeadlineLocked();
+    if (peer_response_deadline && nowLocked() >= peer_response_deadline) {
+        printd(5, "QuicSession::handleExpiryLocked(): the peer did not show within %lld ms that it received the "
+            "request of stream %lld (session %lld)\n", (long long)(peer_response_timeout_ns_ / 1000000),
+            (long long)peer_response_waits_.begin()->first, (long long)session_id_);
+        peer_response_waits_.clear();
         peer_unresponsive_.store(true, std::memory_order_release);
         closeIdleLocked();
         return 0;
@@ -3454,7 +3448,7 @@ int64_t QuicSession::submitRequest(const char* method, const char* path,
     stream->method = method;
     stream->path = path;
     stream->state = QuicStreamState::Open;
-    armPeerResponseDeadlineLocked();
+    notePeerResponseWaitLocked(stream_id);
 
     // Signal that there's data to write
     pending_write_.store(true, std::memory_order_release);
@@ -3596,7 +3590,7 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
         stream->connect_protocol = *proto_val;
         stream->connect_tunnel_active = true;
     }
-    armPeerResponseDeadlineLocked();
+    notePeerResponseWaitLocked(stream_id);
 
     // Signal that there's data to write (headers)
     pending_write_.store(true, std::memory_order_release);
@@ -5178,12 +5172,6 @@ bool QuicSession::isHandshakeComplete() const {
     return handshake_completed_.load(std::memory_order_acquire);
 }
 
-uint64_t QuicSession::processedPacketsLocked() const {
-    ngtcp2_conn_info cinfo;
-    ngtcp2_conn_get_conn_info(conn_, &cinfo);
-    return cinfo.pkt_recv;
-}
-
 bool QuicSession::isClosed() const {
     return getCloseReason() != CloseReason::Open;
 }
@@ -5576,6 +5564,11 @@ int QuicSession::recvStreamDataCallback(ngtcp2_conn* conn, uint32_t flags,
     auto* session = static_cast<QuicSession*>(user_data);
     bool fin = (flags & NGTCP2_STREAM_DATA_FLAG_FIN) != 0;
 
+    // data of the response: the peer received the request (see setPeerResponseTimeout())
+    if (!session->is_server_) {
+        session->endPeerResponseWaitLocked(stream_id);
+    }
+
     // Track 0-RTT data reception on existing streams only (don't create entries
     // for HTTP/3 internal uni-streams — they never complete and would leak)
     if (flags & NGTCP2_STREAM_DATA_FLAG_0RTT) {
@@ -5684,6 +5677,8 @@ int QuicSession::ackedStreamDataOffsetCallback(ngtcp2_conn* /* conn */,
         if (it != session->streams_.end()) {
             it->second->acked_bytes += datalen;
         }
+        // the peer received the request's data (see setPeerResponseTimeout())
+        session->endPeerResponseWaitLocked(stream_id);
     }
     return 0;
 }
@@ -5700,6 +5695,12 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
 
     bool peer_reset = (flags & NGTCP2_STREAM_CLOSE_FLAG_APP_ERROR_CODE_SET)
         && app_error_code != NGHTTP3_H3_NO_ERROR;
+
+    // a stream closes when the peer has acknowledged or answered what was sent on it: it received the request (see
+    // setPeerResponseTimeout())
+    if (!session->is_server_) {
+        session->endPeerResponseWaitLocked(stream_id);
+    }
 
     // a closed stream takes no more stream credit: the credit deferred until the data is consumed is settled
     // (issue #5820); data consumed later is reported in vain
@@ -7029,6 +7030,10 @@ int QuicSession::recvStopSendingCallback(ngtcp2_conn* /* conn */, int64_t stream
     ASYNC_IO_TRACE("QuicSession::recvStopSendingCallback session=%lld stream_id=%lld app_error=%llu\n",
         static_cast<long long>(session->getSessionId()), static_cast<long long>(stream_id),
         static_cast<unsigned long long>(app_error_code));
+    // the peer stopped reading the stream: it received the request (see setPeerResponseTimeout())
+    if (!session->is_server_) {
+        session->endPeerResponseWaitLocked(stream_id);
+    }
     session->recordPeerStopSending(stream_id, app_error_code);
     return 0;
 }
@@ -7058,6 +7063,10 @@ int QuicSession::streamResetCallback(ngtcp2_conn* /* conn */, int64_t stream_id,
     ASYNC_IO_TRACE("QuicSession::streamResetCallback session=%lld stream_id=%lld app_error=%llu\n",
         (long long)session->getSessionId(), (long long)stream_id,
         (unsigned long long)app_error_code);
+    // the peer reset the response: it received the request (see setPeerResponseTimeout())
+    if (!session->is_server_) {
+        session->endPeerResponseWaitLocked(stream_id);
+    }
     // RFC 9114 §4.1.2: a reset QUIC stream abandons the HTTP/3 message on it.
     // Tell nghttp3 so it releases its stream state instead of waiting for data
     // that will never arrive.

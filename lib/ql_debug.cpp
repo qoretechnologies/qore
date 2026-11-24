@@ -29959,6 +29959,85 @@ static QoreValue f_dbg_quic_wait_idle(const QoreListNode* params, RuntimeConfig&
     return dbg_quic_wait_until([&session]() { return !session->getBytesInFlight(); }, static_cast<int>(timeout_ms));
 }
 
+//! Debug-only: waits until no QUIC session of the process has data in flight (qore#7452)
+/** When a client and a server in the process have nothing in flight, each has had all its packets that need an
+    acknowledgment acknowledged by the other: neither has a packet left to send or to receive until it sends something
+    new (a request, or the response to one)
+
+    @param timeout_ms the maximum time to wait in milliseconds
+
+    @return True if no session has data in flight, False if the wait timed out
+*/
+static QoreValue f_dbg_quic_wait_all_idle(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t timeout_ms = get_param_value(params, 0).getAsBigInt();
+    if (timeout_ms < 0 || timeout_ms > INT_MAX) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_wait_all_idle(): invalid timeout %lld",
+            (long long)timeout_ms);
+        return QoreValue();
+    }
+    SocketSyncPoll::assertNotOnIoThread("Qore", "dbg_quic_wait_all_idle", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dbg_quic_wait_until([]() {
+        std::vector<std::shared_ptr<QuicSession>> sessions;
+        {
+            std::lock_guard<std::mutex> lk(dbg_quic_sessions_m);
+            for (auto& i : dbg_quic_sessions) {
+                if (std::shared_ptr<QuicSession> session = i.second.lock()) {
+                    sessions.push_back(std::move(session));
+                }
+            }
+        }
+        // checked without the registry's lock: getBytesInFlight() takes the session's lock
+        for (auto& session : sessions) {
+            if (!session->isClosed() && session->getBytesInFlight()) {
+                return false;
+            }
+        }
+        return true;
+    }, static_cast<int>(timeout_ms));
+}
+
+namespace {
+//! the client datagrams dropped by the QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS test hook (qore#7452)
+std::atomic<int64_t> dbg_quic_dropped_client_datagrams{0};
+}
+
+void qore_dbg_quic_note_dropped_client_datagram() {
+    dbg_quic_dropped_client_datagrams.fetch_add(1, std::memory_order_acq_rel);
+    if (qore_dbg_quic_idle_waiters.load(std::memory_order_acquire)) {
+        qore_dbg_quic_notify_idle_waiters();
+    }
+}
+
+//! Debug-only: the number of client datagrams that the QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS test hook dropped
+static QoreValue f_dbg_quic_dropped_client_datagrams(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return dbg_quic_dropped_client_datagrams.load(std::memory_order_acquire);
+}
+
+//! Debug-only: waits until the QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS test hook has dropped at least the given number of
+//! client datagrams since the process started (qore#7452)
+/** @param count the number of datagrams
+    @param timeout_ms the maximum time to wait in milliseconds
+
+    @return True if they have been dropped, False if the wait timed out
+*/
+static QoreValue f_dbg_quic_wait_dropped_client_datagrams(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64_t count = get_param_value(params, 0).getAsBigInt();
+    int64_t timeout_ms = get_param_value(params, 1).getAsBigInt();
+    if (timeout_ms < 0 || timeout_ms > INT_MAX) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_wait_dropped_client_datagrams(): invalid timeout %lld",
+            (long long)timeout_ms);
+        return QoreValue();
+    }
+    return dbg_quic_wait_until([count]() {
+        return dbg_quic_dropped_client_datagrams.load(std::memory_order_acquire) >= count;
+    }, static_cast<int>(timeout_ms));
+}
+
 std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent{0};
 std::atomic<int64_t> qore_dbg_quic_stateless_resets_received{0};
 std::atomic<int64_t> qore_dbg_quic_retries_received{0};
@@ -30104,7 +30183,9 @@ static QoreValue f_dbg_quic_server_session_packets(const QoreListNode* params, R
     {
         std::lock_guard<std::mutex> lk(dbg_quic_sessions_m);
         for (auto& i : dbg_quic_sessions) {
-            if (std::shared_ptr<QuicSession> session = i.second.lock()) {
+            std::shared_ptr<QuicSession> session = i.second.lock();
+            // client sessions are recorded too (qore#7452)
+            if (session && session->isServer()) {
                 sessions.push_back(std::move(session));
             }
         }
@@ -33230,6 +33311,13 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_quic_wait_idle", f_dbg_quic_wait_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_quic_wait_all_idle", f_dbg_quic_wait_all_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_quic_dropped_client_datagrams", f_dbg_quic_dropped_client_datagrams, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_wait_dropped_client_datagrams", f_dbg_quic_wait_dropped_client_datagrams,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count", timeoutTypeInfo,
+        QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_http3_client_hide_error", f_dbg_http3_client_hide_error, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
     qns.addBuiltinVariant("dbg_http3_client_error_hidden", f_dbg_http3_client_error_hidden, QCF_NO_FLAGS,

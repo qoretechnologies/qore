@@ -202,7 +202,8 @@ DLLLOCAL void qore_dbg_quic_notify_idle_waiters();
 
 class QuicSession;
 
-//! records a QUIC server session, so that dbg_quic_wait_idle() can find it by its ID (issue #7354)
+//! records a QUIC session, so that dbg_quic_wait_idle() can find it by its ID (issue #7354), and
+//! dbg_quic_wait_all_idle() can wait for it (qore#7452)
 /** Only a weak reference is kept; the record is removed by qore_dbg_quic_unregister_session() when the session is
     destroyed.  A session that cannot be recorded works all the same.
 */
@@ -210,6 +211,10 @@ DLLLOCAL void qore_dbg_quic_register_session(const std::shared_ptr<QuicSession>&
 
 //! removes the record of a QUIC session made by qore_dbg_quic_register_session(), if any
 DLLLOCAL void qore_dbg_quic_unregister_session(int64_t session_id) noexcept;
+
+//! counts a client datagram dropped by the QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS test hook and wakes the threads waiting
+//! in dbg_quic_wait_dropped_client_datagrams() (qore#7452)
+DLLLOCAL void qore_dbg_quic_note_dropped_client_datagram();
 
 //! Returns True if dbg_http2_hold_stream_data() holds the buffered data of this HTTP/2 stream back
 DLLLOCAL bool qore_dbg_h2_stream_data_held(int32_t stream_id);

@@ -894,12 +894,15 @@ int SocketQuicClientPollOperation::sendPendingPackets(
 
 #ifdef DEBUG
     // Test hook: QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS=i[,j...] silently drops the listed datagrams of each
-    // connection attempt (0-based), modelling datagrams lost on the path.  Read on every call because tests
-    // scope the variable to one case in a shared test process.
+    // connection attempt (0-based), modelling datagrams lost on the path, and "*" drops all of them, modelling a peer
+    // that receives nothing more (qore#7452); each datagram dropped is counted for
+    // dbg_quic_wait_dropped_client_datagrams().  Read on every call because tests scope the variable to one case in a
+    // shared test process.
     if (QoreEnvironmentValue drop_holder("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS");
             const char* drop = drop_holder.c_str()) {
+        bool drop_all = !strcmp(drop, "*");
         std::set<int> dropped;
-        for (const char* p = drop; *p; ) {
+        for (const char* p = drop_all ? "" : drop; *p; ) {
             char* end;
             long v = strtol(p, &end, 10);
             if (end == p) {
@@ -911,9 +914,16 @@ int SocketQuicClientPollOperation::sendPendingPackets(
         // the datagrams kept by an earlier send were already counted
         QuicPacketBatch passed;
         for (int i = 0; i < pkt_batch_.size(); ++i) {
-            if (i < result.kept || !dropped.count(test_datagram_seq_++)) {
+            if (i < result.kept) {
+                passed.addPacket(pkt_batch_.packetData(i), pkt_batch_.packetLen(i));
+                continue;
+            }
+            if (drop_all || dropped.count(test_datagram_seq_)) {
+                qore_dbg_quic_note_dropped_client_datagram();
+            } else {
                 passed.addPacket(pkt_batch_.packetData(i), pkt_batch_.packetLen(i));
             }
+            ++test_datagram_seq_;
         }
         pkt_batch_.swap(passed);
         if (pkt_batch_.empty()) {
