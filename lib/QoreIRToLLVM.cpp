@@ -28608,9 +28608,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 i, raw_args, raw_arg_ids, boxed_args, module));
                     }
                     call_args.push_back(xsink_arg);
-                    // a reference parameter fast entry is called by itself: its callee takes no argument over
-                    // (qore_ir_collect_take_over_params() excludes reference parameters, and the call is made only
-                    // if the callee does not refuse given arguments)
+                    // a reference parameter fast entry takes no argument over: callCanTakeOverToFastEntry() requires
+                    // a callee that is approach_b_eligible or guarded_method_entry, which a JIT reference parameter
+                    // fast entry never is (QoreJIT::compileFunctionBatchInternal() sets ref_fast_entry only when
+                    // approach_b_eligible is false), so jit_take_over is false even for the callee's parameters that
+                    // are not references; the call is also made only if the callee does not refuse given arguments
                     assert(!ref_params_bound || !jit_take_over);
                     return emitNativeCall(fast_fn, call_args, direct_inst->variant, module,
                             llvm_func, "", has_arg_cleanups ? arg_cleanups : nullptr, nargs,
