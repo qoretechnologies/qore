@@ -1,0 +1,161 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The functions that report the host's installation and build of the library are external information
+# (qoretechnologies/qore#7502)
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class LibraryInfoRestrictionTest
+
+class LibraryInfoRestrictionTest inherits QUnit::Test {
+    private {
+        #! the keys of get_qore_library_info() that describe the host's installation and build of the library
+        const HostKeys = ("UserModuleVerDir", "UserModuleDir", "BinaryModuleVerDir", "BinaryModuleDir",
+            "ModulePath", "BuildHost", "Compiler", "CFLAGS", "LDFLAGS");
+
+        #! restrictions that include PO_NO_EXTERNAL_INFO
+        const Restrictions = (
+            ("name": "PO_NO_EXTERNAL_INFO", "po": PO_NO_EXTERNAL_INFO),
+            ("name": "PO_LOCKDOWN", "po": PO_LOCKDOWN),
+        );
+    }
+
+    constructor() : QUnit::Test("library info restriction", "1.0") {
+        addTestCase("get_qore_library_info() is refused at parse time", \parseTest());
+        addTestCase("get_qore_library_info() is refused in calls resolved at run time", \dynamicTest());
+        addTestCase("get_qore_library_info() is unchanged without the restriction", \unrestrictedTest());
+        addTestCase("module lists carry no module paths with the restriction", \moduleHashTest());
+        addTestCase("the library option lists stay available", \optionTest());
+        set_return_value(main());
+    }
+
+    parseTest() {
+        foreach hash<auto> r in (Restrictions) {
+            Program p(PO_NEW_STYLE | r.po);
+            assertThrows("PARSE-EXCEPTION", "get_qore_library_info", \p.parse(),
+                ("hash<auto> sub t() { return get_qore_library_info(); }", "direct"), r.name + " direct call");
+
+            p = new Program(PO_NEW_STYLE | r.po);
+            assertThrows("PARSE-EXCEPTION", "get_qore_library_info", \p.parse(),
+                ("code sub t() { return \\get_qore_library_info(); }", "call-ref"), r.name + " call reference");
+
+            p = new Program(PO_NEW_STYLE | r.po);
+            assertThrows("PARSE-EXCEPTION", "get_qore_library_info", \p.parse(),
+                ("const C = get_qore_library_info();", "constant"), r.name + " constant initializer");
+        }
+    }
+
+    dynamicTest() {
+        foreach hash<auto> r in (Restrictions) {
+            Program p(PO_NEW_STYLE | r.po);
+            p.parse("auto sub by_name() { return call_function(\"get_qore_library_info\"); }
+auto sub by_args() { return call_function_args(\"get_qore_library_info\"); }
+auto sub by_builtin() { return call_builtin_function(\"get_qore_library_info\"); }
+auto sub by_ref() { return get_call_reference(\"get_qore_library_info\")(); }
+auto sub by_untyped(auto name) { return call_function(name); }
+", "dynamic");
+            foreach string f in (("by_name", "by_args", "by_builtin", "by_ref")) {
+                *hash<ExceptionInfo> ex = callCatch(p, f);
+                assertEq(Type::Hash, ex.type(), sprintf("%s: %s() is refused", r.name, f));
+                assertRegex("get_qore_library_info", ex.desc ?? "", sprintf("%s: %s() names the function", r.name,
+                    f));
+            }
+            *hash<ExceptionInfo> ex = callCatch(p, "by_untyped", "get_qore_library_info");
+            assertEq(Type::Hash, ex.type(), r.name + ": an untyped name is refused");
+        }
+    }
+
+    unrestrictedTest() {
+        Program p(PO_NEW_STYLE);
+        p.parse("hash<auto> sub direct() { return get_qore_library_info(); }
+hash<auto> sub dynamic() { return call_function(\"get_qore_library_info\"); }
+", "unrestricted");
+        hash<auto> local = get_qore_library_info();
+        foreach string f in (("direct", "dynamic")) {
+            hash<auto> h = p.callFunction(f);
+            assertEq(local, h, f + " returns the same info as the caller gets");
+            foreach string key in (HostKeys) {
+                assertTrue(h.hasKey(key), sprintf("%s: %s is present", f, key));
+            }
+            assertEq(Qore::VersionString, h.VersionString, f + ": the version");
+            assertEq(Qore::BuildHost, h.BuildHost, f + ": the build host");
+            assertEq(sprintf("%s:%s:%s:%s", h.UserModuleVerDir, h.UserModuleDir, h.BinaryModuleVerDir,
+                h.BinaryModuleDir), h.ModulePath, f + ": the module path");
+        }
+    }
+
+    moduleHashTest() {
+        # a module that this Program has loaded, whose filename and path the restricted Program must not see
+        string mod = "QUnit";
+        hash<auto> local = get_module_hash(){mod};
+        assertTrue(local.filename.val(), "the unrestricted caller sees the filename");
+        assertTrue(local.path.val(), "the unrestricted caller sees the path");
+
+        string code = sprintf("hash<auto> sub mh() { return get_module_hash(){'%s'}; }
+hash<auto> sub ml() { return (select get_module_list(), $1.name == '%s')[0]; }
+", mod, mod);
+
+        Program up(PO_NEW_STYLE);
+        up.parse(code, "unrestricted");
+        foreach string f in (("mh", "ml")) {
+            hash<auto> h = up.callFunction(f);
+            assertEq(local.filename, h.filename, "unrestricted " + f + ": filename");
+            assertEq(local.path, h.path, "unrestricted " + f + ": path");
+        }
+
+        foreach hash<auto> r in (Restrictions) {
+            Program p(PO_NEW_STYLE | r.po);
+            p.parse(code, "restricted");
+            foreach string f in (("mh", "ml")) {
+                hash<auto> h = p.callFunction(f);
+                assertEq(mod, h.name, sprintf("%s %s: the module is listed", r.name, f));
+                assertEq(local.version, h.version, sprintf("%s %s: its version", r.name, f));
+                assertFalse(h.hasKey("filename"), sprintf("%s %s: no filename", r.name, f));
+                assertFalse(h.hasKey("path"), sprintf("%s %s: no path", r.name, f));
+            }
+        }
+    }
+
+    optionTest() {
+        # the option lists give only the library's compile-time features, nothing of the host
+        foreach hash<auto> r in (Restrictions) {
+            Program p(PO_NEW_STYLE | r.po);
+            p.parse("hash<auto> sub oh() { return get_qore_option_hash(); }
+list<auto> sub ol() { return get_qore_option_list(); }
+", "options");
+            hash<auto> h = p.callFunction("oh");
+            assertEq(get_qore_option_hash(), h, r.name + ": the option hash");
+            assertEq(get_qore_option_list(), p.callFunction("ol"), r.name + ": the option list");
+            foreach hash<auto> opt in (h.iterator()) {
+                assertEq(("option", "constant", "type", "value"), keys opt, r.name + ": " + opt.constant);
+                assertEq(Type::Boolean, opt.value.type(), r.name + ": " + opt.constant + " value");
+            }
+        }
+    }
+
+    #! calls the function in the Program and returns the exception that it raises, if any
+    private *hash<ExceptionInfo> callCatch(Program p, string f) {
+        try {
+            auto v = p.callFunction(f);
+            assertNothing(v, f + "() must not return a value");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    #! calls the function in the Program with an argument and returns the exception that it raises, if any
+    private *hash<ExceptionInfo> callCatch(Program p, string f, auto arg) {
+        try {
+            auto v = p.callFunction(f, arg);
+            assertNothing(v, f + "() must not return a value");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+}

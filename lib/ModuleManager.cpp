@@ -1932,10 +1932,11 @@ QoreHashNode* QoreAbstractModule::getHashIntern(bool with_filename) const {
 
     qore_hash_private* ph = qore_hash_private::get(*h);
 
+    // the paths of the module are external information
     if (with_filename) {
         ph->setKeyValueIntern("filename", new QoreStringNode(filename));
+        ph->setKeyValueIntern("path", new QoreStringNode(path));
     }
-    ph->setKeyValueIntern("path", new QoreStringNode(path));
     ph->setKeyValueIntern("name", new QoreStringNode(name));
     ph->setKeyValueIntern("desc", new QoreStringNode(desc));
     ph->setKeyValueIntern("version", new QoreStringNode(*version_list));
