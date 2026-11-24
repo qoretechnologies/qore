@@ -2657,9 +2657,13 @@ public class LlmAsyncOperation {
             handle = AsyncIoController::holdModuleCleanupWork();
             pending += {"task": task, "is_final": is_final, "handle": handle};
             if (draining) {
-                return;
+                # work of the module cleanup does not wait for a drain requested through the watch (see below)
+                if (!handle) {
+                    return;
+                }
+            } else {
+                draining = True;
             }
-            draining = True;
         }
         # the drain is handed to the executor by the starter's watch, with the context of the code that created the
         # operation, not by this thread, whose code may have another context (qore#7497)
