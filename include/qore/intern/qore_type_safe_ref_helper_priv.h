@@ -38,8 +38,13 @@
 struct qore_type_safe_ref_helper_priv_t {
     // A non-overlapping member can be transparently replaced by finishForCallback(); a base subobject cannot.
     LValueHelper lvalue;
+    //! the reference that the helper resolved, while its lvalue is the lvalue of the reference (qore#7391)
+    /** A store whose check records reference elements to bind is made again through it: see assignWithBindRetry()
+    */
+    const ReferenceNode* ref = nullptr;
+
     DLLLOCAL qore_type_safe_ref_helper_priv_t(const ReferenceNode* ref, ExceptionSink* xsink)
-            : lvalue(*ref, xsink) {
+            : lvalue(*ref, xsink), ref(ref) {
     }
 
     DLLLOCAL qore_type_safe_ref_helper_priv_t(const AbstractQoreNode* exp, ExceptionSink* xsink)
@@ -66,16 +71,36 @@ struct qore_type_safe_ref_helper_priv_t {
 
     DLLLOCAL int assign(QoreValue val) {
         lvalue.disableRemovalScanSkip();
+        // the lvalue of a reference whose type can bind a reference element is assigned out of line (qore#7391)
+        if (ref && QoreTypeInfo::mayBindReference(lvalue.getTypeInfo())) [[unlikely]] {
+            return assignWithBindRetry(val);
+        }
         return lvalue.assignNative(val, "<reference>");
+    }
+
+    //! assigns \a val to the lvalue of the reference, binding its reference elements with no lvalue lock held
+    /** If the check of the value records reference elements to bind, the helper is reset, which releases its locks,
+        the references are bound, and the reference is resolved again and the value that the first round converted
+        assigned (qore#7391).  The helper then holds the lvalue of the reference again, as before the assignment.
+    */
+    DLLLOCAL int assignWithBindRetry(QoreValue val);
+
+    //! records that the helper resolved the lvalue of \a r (qore#7391)
+    DLLLOCAL void setReference(const ReferenceNode* r) {
+        ref = r;
     }
 
     DLLLOCAL int doHashLValue(qore_type_t t, const char* mem, bool for_remove) {
         lvalue.disableRemovalScanSkip();
+        // the lvalue is not that of the reference anymore
+        ref = nullptr;
         return lvalue.doHashLValue(t, mem, for_remove);
     }
 
     DLLLOCAL int doObjLValue(QoreObject* obj, const char* mem, bool for_remove) {
         lvalue.disableRemovalScanSkip();
+        // the lvalue is not that of the reference anymore
+        ref = nullptr;
         return lvalue.doObjLValue(obj, mem, for_remove);
     }
 
@@ -92,8 +117,9 @@ struct qore_type_safe_ref_helper_priv_t {
     }
 
     DLLLOCAL static LValueHelper& get(QoreTypeSafeReferenceHelper& ref) {
-        // the caller can use the helper in any way
+        // the caller can use the helper in any way, also to resolve another lvalue with it
         ref.priv->lvalue.disableRemovalScanSkip();
+        ref.priv->ref = nullptr;
         return ref.priv->lvalue;
     }
 };

@@ -4265,11 +4265,15 @@ int qore_program_private::setGlobalVarValue(const char* name, QoreValue val, Exc
       return -1;
    }
 
-   LValueHelper lvh(xsink);
-   if (v->getLValue(lvh, false))
-      return -1;
-
-   return lvh.assign(holder.release(), "<API assignment>");
+   // a store whose check records reference elements is made again after they have been bound with no lvalue lock
+   // held (qore#7391)
+   return qore_store_with_bind_retry(xsink, false, holder.release(),
+      [v](LValueHelper& lvh) -> int {
+         return v->getLValue(lvh, false);
+      },
+      [](LValueHelper& lvh, QoreValue val) -> int {
+         return lvh.assign(val, "<API assignment>");
+      });
 }
 
 QoreHashNode* qore_program_private::getTopLevelLocalVars(ExceptionSink* xsink) {

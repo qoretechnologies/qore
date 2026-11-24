@@ -954,19 +954,31 @@ QORE_INTERN_ALWAYS_INLINE QoreValue VarRefNewObjectNode::evalImplInternal(Runtim
     if (*xsink)
         return QoreValue();
 
-    LValueHelper lv(QoreValue(const_cast<VarRefNewObjectNode*>(this)), rc, xsink);
-    if (!lv)
-        return QoreValue();
-    AbstractQoreNode* rv;
-    if constexpr (Lexical) {
-        lv.assign(rv = value.release(), "<lvalue>", getSemanticPolicy());
-    } else {
-        lv.assign(rv = value.release());
-    }
-    if (*xsink)
-        return QoreValue();
-    needs_deref = false;
-    return QoreValue(rv);
+    // a store whose check records reference elements is made again after they have been bound with no lvalue lock
+    // held (qore#7391)
+    QoreBindRetry retry(xsink);
+    do {
+        LValueHelper lv(QoreValue(const_cast<VarRefNewObjectNode*>(this)), rc, xsink, false, retry);
+        if (!lv)
+            return QoreValue();
+        // a retry assigns the value that the first round converted
+        QoreValue v = retry.hasValue() ? retry.takeValue() : QoreValue(value.release());
+        AbstractQoreNode* rv = v.getInternalNode();
+        int arc;
+        if constexpr (Lexical) {
+            arc = lv.assign(v, "<lvalue>", getSemanticPolicy());
+        } else {
+            arc = lv.assign(v);
+        }
+        if (arc && retry.isPending()) {
+            continue;
+        }
+        if (*xsink)
+            return QoreValue();
+        needs_deref = false;
+        return QoreValue(rv);
+    } while (retry.again());
+    return QoreValue();
 }
 
 int qore_parse_check_unassigned_read(QoreProgram* pgm, const QoreProgramLocation* loc, const QoreValue& expr,

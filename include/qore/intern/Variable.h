@@ -1249,6 +1249,11 @@ public:
         bind_retry = &retry;
     }
 
+    //! removes the retry given with setBindRetry(), for a helper that outlives it (qore#7391)
+    DLLLOCAL void clearBindRetry() {
+        bind_retry = nullptr;
+    }
+
     //! returns the retry of the store that this helper makes, or nullptr (qore#7391)
     DLLLOCAL QoreBindRetry* getBindRetry() const {
         return bind_retry;
@@ -2050,6 +2055,82 @@ private:
     //! getRemovalHash() for a weak reference to a hash
     DLLLOCAL __attribute__((cold)) QoreHashNode* getWeakRemovalHash();
 };
+
+//! Makes a store whose target has no key expressions to evaluate, binding its reference elements outside its locks
+/** The store is made with a QoreBindRetry (see QoreReferenceBind.h): if the check of the value records reference
+    elements to bind under the lvalue lock of the target, nothing is stored, the helper is destroyed, which releases
+    the locks, the references are bound, and the target is resolved and the store made again with the value that the
+    first round converted (qore#7391).  For a store whose target is resolved from values that the caller evaluated
+    already (a variable, a member, the path of an IR or a JIT/AOT instruction with its evaluated keys, a reference),
+    which are resolved again for each round with no expression evaluated again.
+
+    @param xsink the exception sink of the store
+    @param for_assignment the \a for_assignment argument of the helper
+    @param value the value, which this function owns in every case: it is released after the locks of the helper if
+    the store is not made
+    @param resolve <tt>int (LValueHelper&)</tt>: resolves the target of the store; returns non-zero, with an exception,
+    if it cannot be
+    @param assign <tt>int (LValueHelper&, QoreValue)</tt>: assigns the value given, which it owns, with
+    LValueHelper::assign() or assignNative() and returns its result; when the store is made, it also takes what the
+    caller needs from the helper, such as the value of the assignment
+
+    @return 0 if the store was made, -1 if not (an exception was raised)
+*/
+template <typename Resolve, typename Assign>
+QORE_INTERN_ALWAYS_INLINE int qore_store_with_bind_retry(ExceptionSink* xsink, bool for_assignment, QoreValue value,
+        Resolve&& resolve, Assign&& assign) {
+    // released after the locks of the helper if the store is not made
+    ValueHolder holder(value, xsink);
+    QoreBindRetry retry(xsink);
+    do {
+        LValueHelper lvh(xsink, for_assignment);
+        lvh.setBindRetry(retry);
+        if (resolve(lvh)) {
+            return -1;
+        }
+        // a retry assigns the value that the first round converted
+        QoreValue v = retry.hasValue() ? retry.takeValue() : holder.release();
+        if (assign(lvh, v)) {
+            continue;
+        }
+        return 0;
+    } while (retry.again());
+    return -1;
+}
+
+//! Makes a store through the reference \a ref, binding its reference elements outside its locks (qore#7391)
+/** As qore_store_with_bind_retry(), for a target named by a reference, which is resolved again for each round, as for
+    any use of the reference
+
+    @param ref the reference
+    @param xsink the exception sink of the store
+    @param value the value, which this function owns in every case
+    @param assign <tt>int (LValueHelper&, QoreValue)</tt>: see qore_store_with_bind_retry()
+    @param for_assignment the \a for_assignment argument of the helper
+
+    @return 0 if the store was made, -1 if not (an exception was raised)
+*/
+template <typename Assign>
+QORE_INTERN_ALWAYS_INLINE int qore_reference_store_with_bind_retry(const ReferenceNode& ref, ExceptionSink* xsink,
+        QoreValue value, Assign&& assign, bool for_assignment = false) {
+    // released after the locks of the helper if the store is not made
+    ValueHolder holder(value, xsink);
+    QoreBindRetry retry(xsink);
+    do {
+        LValueHelper lvh(ref, xsink, false, for_assignment);
+        if (!lvh) {
+            return -1;
+        }
+        lvh.setBindRetry(retry);
+        // a retry assigns the value that the first round converted
+        QoreValue v = retry.hasValue() ? retry.takeValue() : holder.release();
+        if (assign(lvh, v)) {
+            continue;
+        }
+        return 0;
+    } while (retry.again());
+    return -1;
+}
 
 class LValueRemoveHelper {
 private:

@@ -69,6 +69,11 @@
         } while (retry.again());
         return ...;
 
+    A store whose target is resolved with no key expression to evaluate (a variable, a member, a reference, or the path
+    of an IR or JIT/AOT instruction, whose keys are evaluated already) uses qore_store_with_bind_retry() or
+    qore_reference_store_with_bind_retry() (Variable.h), which make this loop.  A merge into an object binds the
+    references of its values before it takes the object's lock (qore_object_private::mergeBindReferences()).
+
     A store made with a helper that has no QoreBindRetry and that records a reference fails closed: it raises
     REFERENCE-BIND-ERROR and leaves its target unchanged.
 */
@@ -144,6 +149,11 @@ public:
     //! installs the probe; \a retry gives the references that were bound already, if any
     DLLLOCAL explicit QoreReferenceBindProbe(const QoreBindRetry* retry);
 
+    //! installs the probe; \a bound gives the references that were bound already, if any (qore#7391)
+    /** For a store that binds the references of its values before it takes its lock, such as a merge into an object
+    */
+    DLLLOCAL QoreReferenceBindProbe(const QoreBindRetry* retry, const QoreReferenceBindPairList* bound);
+
     //! uninstalls the probe if it is still installed; the pairs left are released with no exception sink
     DLLLOCAL ~QoreReferenceBindProbe();
 
@@ -167,6 +177,8 @@ public:
 private:
     //! the retry of the store, which holds the references bound already, or nullptr
     const QoreBindRetry* retry;
+    //! the references bound already by a store that binds them before it takes its lock, or nullptr
+    const QoreReferenceBindPairList* bound = nullptr;
     //! the probe that this one replaced
     QoreReferenceBindProbe* prev;
     //! true while the probe is installed

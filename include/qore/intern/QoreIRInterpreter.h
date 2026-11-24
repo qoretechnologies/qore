@@ -156,6 +156,62 @@ DLLLOCAL uint64_t qore_ir_list_selector_step(uint64_t result_val, uint64_t seq_v
 DLLLOCAL QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh, LVCompoundOp compound_op,
         ValueHolder& rhs_holder, ExceptionSink* xsink);
 
+//! Returns true if += of \a right to the lvalue of \a lvh can store a value that needs a reference element bound
+/** A container whose element or member types can bind a reference, or an lvalue with no value whose type can, as for
+    the += operator of the AST interpreter: the values added are then checked with a probe first (qore#7391)
+*/
+DLLLOCAL bool qore_plus_equals_may_bind(LValueHelper& lvh, const QoreValue& right);
+
+//! Applies a compound assignment to the lvalue that \a resolve resolves, binding reference elements outside its locks
+/** As qore_rt_apply_lvalue_compound(), with the LValueHelper made here: += that stores values that need a reference
+    element bound (appended to a container whose element or member types can bind a reference, or assigned to an
+    lvalue with no value whose type can) is made again after they have been bound with no lvalue lock held, and the
+    target is resolved again with \a resolve for each round, which evaluates nothing again (qore#7391)
+
+    @param compound_op the operation
+    @param rhs_holder the value, see qore_rt_apply_lvalue_compound()
+    @param xsink for exceptions
+    @param resolve resolves the target in the helper given; returns non-zero if it cannot be
+    @param resolve_arg the argument of \a resolve
+    @param resolve_failed set to true if \a resolve failed
+
+    @return the new value of the lvalue, holding a reference, or no value
+*/
+DLLLOCAL QoreValue qore_rt_lvalue_compound_with_bind_retry(LVCompoundOp compound_op, ValueHolder& rhs_holder,
+        ExceptionSink* xsink, int (*resolve)(LValueHelper& lvh, void* arg), void* resolve_arg,
+        bool& resolve_failed);
+
+//! Applies push or unshift to the lvalue at \a path as the AST interpreter does
+/** An lvalue with no value whose type accepts a list is assigned an empty list first.  A value that needs a reference
+    element bound for the element type of the list is added after it has been bound with no lvalue lock held: the path
+    is resolved again with the keys evaluated already (qore#7391).
+
+    @param path the path, with its keys evaluated
+    @param push true for push, false for unshift
+    @param rhs_holder holds a reference for the value added, which the list takes; it must be declared before any
+    LValueHelper of the caller
+    @param want_result true to return the list
+    @param xsink for exceptions
+    @param navigation_failed set to true if the path could not be resolved
+
+    @return the list with a reference for the caller if \a want_result is true and no exception was raised, otherwise
+    no value
+*/
+DLLLOCAL QoreValue qore_rt_lv_path_push_unshift(const IRLVPath& path, bool push, ValueHolder& rhs_holder,
+        bool want_result, ExceptionSink* xsink, bool& navigation_failed);
+
+//! Replaces elements of the list \a vl, which \a lvh holds, as qore_list_private::replace() does (splice, extract)
+/** A list whose element type can bind a reference has the values of \a replacement checked with a probe first: if a
+    reference element needs a bind, the list is not changed, and the caller leaves its helper and makes the operation
+    again after QoreBindRetry::again() has bound it (qore#7391)
+
+    @param rv the list that replace() returns, owned by the caller, or nullptr
+
+    @return -1 if the list was not changed (the operation is made again, or an exception was raised), 0 if not
+*/
+DLLLOCAL int qore_rt_list_replace_with_bind_probe(LValueHelper& lvh, QoreListNode& vl, size_t offset, size_t length,
+        const QoreValue& replacement, bool extract, QoreListNode*& rv, ExceptionSink* xsink);
+
 //! Applies ++ or -- (LVUnaryOp::PreInc, PreDec, PostInc or PostDec) to an lvalue as the AST interpreter does
 /** The operation follows the type of the value, as QorePreIncrementOperatorNode::evalImpl() and the other operators
     do, and an error that the lvalue's type raises names the operator as they do (ex: <tt><++ (pre) operator></tt>

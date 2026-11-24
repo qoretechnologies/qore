@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -167,16 +167,18 @@ int ThreadLocalVariableData::setVarValue(int frame, const char* name, const Qore
                     qore_raise_native_local_set_error(name, xsink);
                     return -1;
                 }
-                LValueHelper lvh(xsink);
                 // the value is assigned as an assignment in the code assigns it: converted to the type of the
-                // variable, or refused, as is a read-only variable
-                if (var.local_var
-                    ? static_cast<const LocalVar*>(var.local_var)->getLValueForValue(var, lvh)
-                    : var.getLValue(lvh, false, nullptr, nullptr)) {
-                    return -1;
-                }
-
-                return lvh.assign(val.refSelf(), "<API assignment>");
+                // variable, or refused, as is a read-only variable; a store whose check records reference elements
+                // is made again after they have been bound with no lvalue lock held (qore#7391)
+                return qore_store_with_bind_retry(xsink, false, val.refSelf(),
+                    [&var](LValueHelper& lvh) -> int {
+                        return var.local_var
+                            ? static_cast<const LocalVar*>(var.local_var)->getLValueForValue(var, lvh)
+                            : var.getLValue(lvh, false, nullptr, nullptr);
+                    },
+                    [](LValueHelper& lvh, QoreValue v) -> int {
+                        return lvh.assign(v, "<API assignment>");
+                    });
             }
         }
         w = w->prev;

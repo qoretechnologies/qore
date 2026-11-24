@@ -33,6 +33,8 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 
+#include <new>
+
 QoreTypeSafeReferenceHelper::QoreTypeSafeReferenceHelper(ExceptionSink* xsink)
         : priv(new qore_type_safe_ref_helper_priv_t(xsink)) {
 }
@@ -41,12 +43,67 @@ QoreTypeSafeReferenceHelper::QoreTypeSafeReferenceHelper(const ReferenceNode* re
         : priv(new qore_type_safe_ref_helper_priv_t(ref, xsink)) {
 }
 
+QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_type_safe_ref_helper_priv_t::assignWithBindRetry(QoreValue val) {
+    assert(ref);
+    ExceptionSink* xsink = lvalue.vl.xsink;
+    QoreBindRetry retry(xsink);
+    // the helper outlives the retry: the retry is removed from it however the assignment ends
+    class BindRetryScope {
+    public:
+        BindRetryScope(qore_type_safe_ref_helper_priv_t& priv, QoreBindRetry& retry) : priv(priv) {
+            priv.lvalue.setBindRetry(retry);
+        }
+
+        ~BindRetryScope() {
+            priv.lvalue.clearBindRetry();
+        }
+
+    private:
+        qore_type_safe_ref_helper_priv_t& priv;
+    };
+
+    // a check that records reference elements stores nothing, and the store is made again after they have been bound
+    // with no lvalue lock held
+    int rc = 0;
+    {
+        BindRetryScope scope(*this, retry);
+        rc = lvalue.assignNative(val, "<reference>");
+    }
+    while (rc && retry.isPending()) {
+        // the helper is reset, which releases its locks, and empty if the reference cannot be resolved again
+        lvalue.~LValueHelper();
+        new (&lvalue) LValueHelper(xsink);
+        if (!retry.again()) {
+            return -1;
+        }
+        lvalue.~LValueHelper();
+        try {
+            new (&lvalue) LValueHelper(*ref, xsink);
+        } catch (...) {
+            // the empty constructor allocates nothing
+            new (&lvalue) LValueHelper(xsink);
+            throw;
+        }
+        if (!lvalue) {
+            return -1;
+        }
+        lvalue.disableRemovalScanSkip();
+        BindRetryScope scope(*this, retry);
+        rc = lvalue.assignNative(retry.hasValue() ? retry.takeValue() : QoreValue(), "<reference>");
+    }
+    return rc;
+}
+
 QoreTypeSafeReferenceHelper::~QoreTypeSafeReferenceHelper() {
     delete priv;
 }
 
 int QoreTypeSafeReferenceHelper::set(const ReferenceNode* ref) {
-    return priv->lvalue.set(*ref);
+    int rc = priv->lvalue.set(*ref);
+    if (!rc) {
+        priv->setReference(ref);
+    }
+    return rc;
 }
 
 int QoreTypeSafeReferenceHelper::reset(const ReferenceNode* ref, ExceptionSink* xsink) {

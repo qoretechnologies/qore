@@ -1042,6 +1042,11 @@ QoreReferenceBindProbe::QoreReferenceBindProbe(const QoreBindRetry* retry) : ret
     qore_reference_bind_probe = this;
 }
 
+QoreReferenceBindProbe::QoreReferenceBindProbe(const QoreBindRetry* retry, const QoreReferenceBindPairList* bound)
+        : retry(retry), bound(bound), prev(qore_reference_bind_probe) {
+    qore_reference_bind_probe = this;
+}
+
 QoreReferenceBindProbe::~QoreReferenceBindProbe() {
     uninstall();
 }
@@ -1058,7 +1063,8 @@ void QoreReferenceBindProbe::record(ReferenceNode* r, const QoreTypeInfo* ti, Le
         bool lexical) {
     // a reference bound by an earlier round of the store, or being bound by a bind of this thread that runs this
     // check, is accepted as it is; a reference found twice in the value is recorded once
-    if ((retry && retry->isBound(r, ti)) || QoreReferenceBindFrame::active(r, ti) || pairs.contains(r, ti)) {
+    if ((retry && retry->isBound(r, ti)) || (bound && bound->contains(r, ti)) || QoreReferenceBindFrame::active(r, ti)
+            || pairs.contains(r, ti)) {
         return;
     }
     pairs.add(r, ti, policy, lexical);
@@ -4193,11 +4199,12 @@ bool qore_assign_through_element_reference(const QoreValue& cur, const QoreValue
     }
     // the reference is held for the assignment, which can replace the container that holds it
     ValueHolder ref(cur.refSelf(), xsink);
-    // an assignment: a member behind a write gate is not read first, as the AST interpreter assigns it
-    LValueHelper lvh(*ref->get<const ReferenceNode>(), xsink, false, true);
-    if (lvh) {
-        lvh.assign(val.refSelf(), "<lvalue>");
-    }
+    // an assignment: a member behind a write gate is not read first, as the AST interpreter assigns it; a store whose
+    // check records reference elements is made again after they have been bound with no lvalue lock held (qore#7391)
+    qore_reference_store_with_bind_retry(*ref->get<const ReferenceNode>(), xsink, val.refSelf(),
+        [](LValueHelper& lvh, QoreValue v) -> int {
+            return lvh.assign(v, "<lvalue>");
+        }, true);
     return true;
 }
 
