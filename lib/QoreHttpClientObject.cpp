@@ -4119,7 +4119,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             if (q_check_path(**path, "HTTP-CLIENT-OPTION-ERROR", xsink)) {
                 return -1;
             }
-            if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_restricts_domain(QDOM_FILESYSTEM)) {
+            // a method of a lent object (a capability frame, qore#7052) lends nothing here: the file is opened for
+            // the code that the object was lent to, which can be restricted (qore#7052 follow-up)
+            if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_lent_to_restricts_domain(QDOM_FILESYSTEM)) {
                 xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the ssl_cert_path option requires filesystem access "
                     "in the current Program and its caller");
                 return -1;
@@ -4195,7 +4197,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             if (q_check_path(**path, "HTTP-CLIENT-OPTION-ERROR", xsink)) {
                 return -1;
             }
-            if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_restricts_domain(QDOM_FILESYSTEM)) {
+            // a method of a lent object (a capability frame, qore#7052) lends nothing here: the file is opened for
+            // the code that the object was lent to, which can be restricted (qore#7052 follow-up)
+            if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_lent_to_restricts_domain(QDOM_FILESYSTEM)) {
                 xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the ssl_key_path option requires filesystem access "
                     "in the current Program and its caller");
                 return -1;
@@ -4244,9 +4248,11 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             return -1;
         }
         const char* path = path_str->c_str();
-        if (runtime_check_parse_option(PO_NO_FILESYSTEM)) {
-            xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"%s\" option = \"%s\" when "
-                "sandboxing restriction PO_NO_FILESYSTEM is set", key, path);
+        // as for the client certificate and key paths: the code that calls the code that creates the client counts,
+        // also through the method of a lent object (qore#7052)
+        if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_lent_to_restricts_domain(QDOM_FILESYSTEM)) {
+            xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the \"%s\" option requires filesystem access in the "
+                "current Program and its caller", key);
             return -1;
         }
         QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);

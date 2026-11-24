@@ -172,6 +172,51 @@ Internal composite managers are enforcement views: filesystem/network checks, in
 accounting fan out to the constituent managers. Configure, inspect and revoke the original managers, not these
 temporary views. Cleanup retains provenance, including when releasing a bound closure runs destructors.
 
+## Objects that the host lends are grants (qore#7052)
+
+An object of a class of a library module (or a class with a module base class, `qore_class_private::spansPrograms()`)
+that code of a non-module Program creates, while no restriction other than `PO_NO_UNCONTROLLED_APIS` applies to that
+code, has `qore_object_private::capability_origin` set; so does an object that a method of such an object creates
+(nested lending). The flag is computed with the creation origin in `qore_capture_sandbox_provenance()`;
+`qore_creation_by_lending_code()` requires a non-module Program on the stack, or a capability frame that is newer
+(by grant `seq`) than the innermost module initialization barrier, so the state that a library creates in its
+initialization, also in a first load inside a lent method, or for nobody is not lent.
+
+The grant is not set per call: `ProgramThreadCountContextHelper::set()` with the receiver (the method-call entry points:
+`CodeEvaluationHelper`, the JIT fast method paths and the IR interpreter's inline method calls) pushes a
+`ThreadData::CapabilityFrame` only when the call switches to the Program of the method's code, the object has the flag,
+and the Program that calls it is not a module's and can be restricted (`qore_lent_method_call_needs_frame()`): only the
+code that the object was handed to uses it as a grant, while library code acting on an object that it holds or was given
+lends nothing. `qore_program_restrictions_seen` (no Program ever restricted a domain) and the monotonic per-Program
+kinds of `SyncParseOptions::optionsSeen()` (a domain restriction, a module's Program) make the decision without reading
+the 128-bit options. Such a call sets the call's runtime parse options override (the restrictions of a sandboxed caller)
+before the frame (`CodeEvaluationHelper`), so the frame's snapshot holds it in every mode: the JIT and IR fast method
+paths, which would set it after the Program was entered, are not taken by calls that enter another Program, and would
+only fail closed. Outside a lent method, an object created while a policy barrier is active (also that of a
+system-policy capability, whose code runs for the host that created it) is not lent, so a grant does not outlive itself.
+Calls within a Program never read the flag, and the object's provenance pointer (which the JIT/AOT direct-call guards
+test) is unchanged, so calls of lent and other objects cost what they did; `restoreContext()`, which runs only for a
+switched context, pops the frame. No frame is pushed when the innermost provenance frame (apart from the object's own)
+is a call reference that restricted code created (`QoreSandboxContext::reference`), so such a reference cannot launder
+its restrictions through a lent object; `std::bad_alloc` leaves the frame out (fail closed). No frame is pushed for a
+call made while the object's destructor runs (the object's status is no longer `OS_OK` once its deletion or the release
+of its last reference started): the code that deletes the object or releases its last reference does not call it as a
+capability. The frame records the Program of the lent method's code (`CapabilityFrame::code_pgm`, the Program of the
+class that declares the method, so for an inherited method the base class's module): in a lent method, only an object
+of a class of that module Program is lent, not one of another module's class or of a class that the caller supplies,
+so a factory that creates an object of a class that its caller names cannot mint a capability of another module's
+class; every class of its own module stays reachable through it (and through a deserializer, with caller-chosen member
+state). A call from module code pushes no frame, so a base-class method that calls an override in the subclass's
+module keeps the base module's frame, and the objects the override creates are not lent (fails closed). A thread that
+a lent method starts keeps the grant for its life; the objects it creates are not lent (no frame on that thread).
+
+The innermost capability frame is a grant like a policy barrier, ordered with them by `GrantSnapshot::seq`
+(`qore_get_innermost_capability_frame()`): the walk stops at the context entered for the method, so the caller's
+Program is not counted, the provenance frames from the one innermost at entry down are not counted, and only
+`QORE_GRANT_LENT_DOMAINS` (file system, network, external information) are lent; the other domains and the loading
+of native code are decided as without it. The user-facing text is `sandbox_lent_objects` in
+doxygen/lang/222_sandboxing.dox.tmpl. Tests: examples/test/qore/security/caller-restriction-capability.qtest.
+
 ## Isolation domains (qore#6536)
 
 A tenant is an isolation domain that trusted host code sets on a sandbox (`QoreSandboxManager::setIsolationDomain()`):
