@@ -333,6 +333,95 @@ int StatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value, Excepti
     return execIntern(rc, return_value, xsink);
 }
 
+namespace {
+// An outer return can survive a debugger's break or continue that drops a nested return. Data values can
+// be retained for that path. A value whose release can run a destructor has to be released by the return
+// statement that replaced it (#5992). Observe its slot without taking a reference to it.
+class PendingReturnSnapshot {
+public:
+    explicit PendingReturnSnapshot(ExceptionSink* xsink) : saved(xsink) {
+    }
+
+    ~PendingReturnSnapshot() {
+        stopObserving();
+    }
+
+    void capture(QoreValue& slot) {
+        assert(!observed);
+        if (!slot.isNothing()) {
+            observed = &slot;
+            previous = active;
+            active = this;
+            replaced = false;
+        }
+    }
+
+    void reset() {
+        stopObserving();
+        saved = QoreValue();
+    }
+
+    void restore(QoreValue& slot, ExceptionSink* xsink) {
+        bool unchanged = observed && !replaced;
+        stopObserving();
+        if (!unchanged) {
+            replacing(slot);
+            ValueHolder abandoned(slot, xsink);
+            slot = saved.release();
+        }
+    }
+
+    static void replacing(QoreValue& slot) {
+        for (auto* p = active; p; p = p->previous) {
+            if (p->observed == &slot && !p->replaced) {
+                if (!qore_return_release_observable(slot)) {
+                    p->saved = slot.refSelf();
+                }
+                p->replaced = true;
+            }
+        }
+    }
+
+private:
+    static thread_local PendingReturnSnapshot* active;
+    QoreValue* observed = nullptr;
+    PendingReturnSnapshot* previous = nullptr;
+    bool replaced = false;
+    ValueHolder saved;
+
+    void stopObserving() {
+        if (observed) {
+            assert(active == this);
+            active = previous;
+            observed = nullptr;
+        }
+    }
+};
+
+thread_local PendingReturnSnapshot* PendingReturnSnapshot::active = nullptr;
+}
+
+void qore_replacing_return(QoreValue& slot) {
+    PendingReturnSnapshot::replacing(slot);
+}
+
+int StatementBlock::execLoopBody(QoreValue& return_value, ExceptionSink* xsink, bool takes_continue) {
+    return execLoopBody(rc_get_current_ref(), return_value, xsink, takes_continue);
+}
+
+int StatementBlock::execLoopBody(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink,
+        bool takes_continue) {
+    // A loop inside an exit handler can already have an enclosing return. Restore it when this iteration
+    // abandons a different return, before the next iteration or the statement following the loop (#7022).
+    PendingReturnSnapshot enclosing(xsink);
+    enclosing.capture(return_value);
+    int flow = execImpl(rc, return_value, xsink);
+    if (flow == RC_BREAK || (takes_continue && flow == RC_CONTINUE)) {
+        enclosing.restore(return_value, xsink);
+    }
+    return flow;
+}
+
 int StatementBlock::execIntern(QoreValue& return_value, ExceptionSink* xsink) {
     RuntimeConfig& rc = rc_get_current_ref();
     return execIntern(rc, return_value, xsink);
@@ -380,73 +469,83 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
             if (stmt_rc) break;
         }
     }
-    // execute "on block exit" code if applicable
-    if (obe) {
-        ExceptionSink obe_xsink;
-        int nrc = 0;
-        bool error = xsink->isException();
-        int ast_on_exit_count = 0;
-        for (block_list_t::iterator i = popBlock(), e = on_block_exit_list.end(); i != e; ++i) {
-            enum obe_type_e type = (*i).first;
-            if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
-                if ((*i).second) {
-                    ast_on_exit_count++;
+    return obe ? execExitHandlers(rc, stmt_rc, return_value, xsink) : stmt_rc;
+}
+
+int StatementBlock::execExitHandlers(RuntimeConfig& rc, int stmt_rc, QoreValue& return_value, ExceptionSink* xsink) {
+    ExceptionSink obe_xsink;
+    int nrc = 0;
+    // A break or continue from a handler carries its value until it reaches a loop or another
+    // handler replaces its request. Keep the return that was pending before that handler (#7022).
+    PendingReturnSnapshot before_request(&obe_xsink);
+    bool error = xsink->isException();
+    int ast_on_exit_count = 0;
+    for (block_list_t::iterator i = popBlock(), e = on_block_exit_list.end(); i != e; ++i) {
+        enum obe_type_e type = (*i).first;
+        if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
+            if ((*i).second) {
+                ast_on_exit_count++;
+                {
+                    // instantiate exception for on_error blocks as an implicit arg
+                    std::unique_ptr<SingleArgvContextHelper> argv_helper;
+                    std::unique_ptr<CatchExceptionHelper> ex_helper;
+                    if (type == OBE_Error) {
+                        QoreException* except = qore_exception_sink_ops(xsink).getException();
+                        assert(except);
+                        ex_helper.reset(new CatchExceptionHelper(except));
+                        argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
+                    }
                     {
-                        // instantiate exception for on_error blocks as an implicit arg
-                        std::unique_ptr<SingleArgvContextHelper> argv_helper;
-                        std::unique_ptr<CatchExceptionHelper> ex_helper;
-                        if (type == OBE_Error) {
-                            QoreException* except = qore_exception_sink_ops(xsink).getException();
-                            assert(except);
-                            ex_helper.reset(new CatchExceptionHelper(except));
-                            argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
+                        // the handler is a statement of its own
+                        QoreStatementTempScope temps(&obe_xsink);
+                        // a handler that completes normally keeps the return of a handler that ran before it
+                        // (#6677), whose value a return in a later handler replaces (#5992); otherwise the block
+                        // takes the request of the last handler run (a debugger's break or continue: #6201)
+                        if (nrc == RC_BREAK || nrc == RC_CONTINUE) {
+                            before_request.restore(return_value, &obe_xsink);
                         }
-                        {
-                            // the handler is a statement of its own
-                            QoreStatementTempScope temps(&obe_xsink);
-                            // a handler that completes normally keeps the return of a handler that ran before it
-                            // (#6677), whose value a return in a later handler replaces (#5992); otherwise the block
-                            // takes the request of the last handler run (a debugger's break or continue: #6201)
-                            int hrc = (*i).second->execImpl(rc, return_value, &obe_xsink);
-                            if (hrc || nrc != RC_RETURN) {
-                                nrc = hrc;
-                            }
+                        if (std::next(i) != e) {
+                            before_request.capture(return_value);
                         }
-                        if (type == OBE_Error) {
-                            if (qore_es_private::get(obe_xsink)->rethrown) {
-                                qore_es_private::clearForRethrow(*xsink);
-                            }
+                        int hrc = (*i).second->execImpl(rc, return_value, &obe_xsink);
+                        if (hrc != RC_BREAK && hrc != RC_CONTINUE) {
+                            before_request.reset();
+                        }
+                        if (hrc || nrc != RC_RETURN) {
+                            nrc = hrc;
                         }
                     }
-                    // bug 380: make sure and merge every exception after every conditional execution to ensure
-                    // that all on_(exit|error) statements are executed even if exceptions are thrown
-                    if (obe_xsink) {
-                        xsink->assimilate(obe_xsink);
-                        // a thread_exit is not an exception: the block's on_error handlers do not run after it, as
-                        // when the block raises it itself (#5893)
-                        if (!error && xsink->isException())
-                            error = true;
+                    if (type == OBE_Error) {
+                        if (qore_es_private::get(obe_xsink)->rethrown) {
+                            qore_es_private::clearForRethrow(*xsink);
+                        }
                     }
+                }
+                // bug 380: make sure and merge every exception after every conditional execution to ensure
+                // that all on_(exit|error) statements are executed even if exceptions are thrown
+                if (obe_xsink) {
+                    xsink->assimilate(obe_xsink);
+                    // a thread_exit is not an exception: the block's on_error handlers do not run after it, as
+                    // when the block raises it itself (#5893)
+                    if (!error && xsink->isException())
+                        error = true;
                 }
             }
         }
-        if (ast_on_exit_count > 0) {
-            static constinit QoreLazyValue<bool> debug_on_exit_setting([]() -> bool {
-                QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
-                const char* debug_env = debug_env_holder.c_str();
-                return debug_env && strstr(debug_env, "on_exit");
-            });
-            const bool debug_on_exit = debug_on_exit_setting.get();
-            if (debug_on_exit) {
-                fprintf(stderr, "[ON_EXIT-AST] executed %d on_exit handlers\n", ast_on_exit_count);
-                fflush(stderr);
-            }
-        }
-        if (nrc)
-            stmt_rc = nrc;
     }
-
-    return stmt_rc;
+    if (ast_on_exit_count > 0) {
+        static constinit QoreLazyValue<bool> debug_on_exit_setting([]() -> bool {
+            QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
+            const char* debug_env = debug_env_holder.c_str();
+            return debug_env && strstr(debug_env, "on_exit");
+        });
+        const bool debug_on_exit = debug_on_exit_setting.get();
+        if (debug_on_exit) {
+            fprintf(stderr, "[ON_EXIT-AST] executed %d on_exit handlers\n", ast_on_exit_count);
+            fflush(stderr);
+        }
+    }
+    return nrc ? nrc : stmt_rc;
 }
 
 // top-level block (program) execution member function

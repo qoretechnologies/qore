@@ -80,7 +80,7 @@ QORE_INTERN_ALWAYS_INLINE int DoWhileStatement::execCommon(QoreValue& return_val
         }
 
         if (code) {
-            rc = code->execImpl(return_value, xsink);
+            rc = code->execLoopBody(return_value, xsink);
             if (*xsink || rc == RC_BREAK) {
                 rc = 0;
                 break;
@@ -117,7 +117,7 @@ QORE_INTERN_ALWAYS_INLINE int DoWhileStatement::execCommon(RuntimeConfig& rc, Qo
         }
 
         if (code) {
-            rc_state = code->execImpl(rc, return_value, xsink);
+            rc_state = code->execLoopBody(rc, return_value, xsink);
             if (*xsink || rc_state == RC_BREAK) {
                 rc_state = 0;
                 break;

@@ -19104,6 +19104,7 @@ load_local_done:
             case QoreIROpcode::ReleaseOwnedTemp: {
                 uint32_t id = inst->operands.front().id;
                 if (id < values.size() && values[id].needsRef() && hasCleanupEntry(cleanup, id)
+                        && (!inst->element_type || qore_return_release_observable(values[id]))
                         && (weak_load_temp_slots.empty() || !weak_load_temp_slots.count(id))
                         && !(id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)
                         // a value that is the kept value (a second operand, see

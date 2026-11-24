@@ -1163,6 +1163,14 @@ extern "C" DLLEXPORT void qore_rt_decref(uint64_t val, ExceptionSink* xsink) {
     v.discard(xsink);
 }
 
+extern "C" DLLEXPORT void qore_rt_release_replaced_return(uint64_t* slot, uint64_t expected, uint64_t empty,
+        ExceptionSink* xsink) {
+    if (*slot == expected && qore_return_release_observable(fromBits(expected))) {
+        *slot = empty;
+        qore_rt_decref(expected, xsink);
+    }
+}
+
 extern "C" DLLEXPORT void qore_rt_release_reference_read(uint64_t* slot, uint64_t val, ExceptionSink* xsink) {
     if (!val || *slot != val) {
         return;

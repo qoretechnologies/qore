@@ -207,7 +207,7 @@ int SwitchStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
 
         while (w && !rc && !*xsink) {
             if (w->code) {
-                rc = w->code->execImpl(return_value, xsink);
+                rc = w->code->execLoopBody(return_value, xsink, semantic_policy.brokenLoop());
             }
 
             w = w->next;
@@ -250,7 +250,7 @@ int SwitchStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Except
 
         while (w && !rc_state && !*xsink) {
             if (w->code) {
-                rc_state = w->code->execImpl(rc, return_value, xsink);
+                rc_state = w->code->execLoopBody(rc, return_value, xsink, semantic_policy.brokenLoop());
             }
 
             w = w->next;

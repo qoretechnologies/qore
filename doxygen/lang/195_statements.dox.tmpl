@@ -634,6 +634,11 @@ int sub check(int i) {
     the block, which is released at the end of the return statement, and a return without a value replaces it with no
     value; a handler that runs later can replace it again.  A return in a @ref try "try statement" in the handler
     replaces it when the try statement ends (see @ref try_return).\n\n
+    When a debugger requests a break or continue in a handler and a loop or a later handler takes the request,
+    the return that ran the handler is abandoned. Its value is released before execution continues. A subsequent
+    debugger return gives @ref nothing if there is no pending return. If an enclosing return resumes, it gives its
+    pending data value. A nested return releases an object, or a container that owns an object, at the usual point
+    described above. If its return reference was released, the enclosing return gives @ref nothing.\n\n
     A return in a handler returns from the function, as a return in the block would, also when the block ends
     without a return or is left by a @ref break "break" or @ref continue "continue": the remaining handlers of the
     block run, and a handler that completes normally keeps the value, which the next handler's return replaces.  When

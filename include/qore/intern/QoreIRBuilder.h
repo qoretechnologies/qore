@@ -531,6 +531,9 @@ public:
     //! Releases a temporary that the function owns on the path of a return (QoreIROpcode::ReleaseOwnedTemp)
     QoreIRInstruction* createReleaseOwnedTemp(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
 
+    //! The object-typed ReleaseOwnedTemp of a replaced pending return in debug IR (#7022).
+    void createReleaseReplacedReturn(QoreIRValue value, const QoreProgramLocation* loc);
+
     //! Hands the value of a return statement in a handler run out of line to its function (QoreIROpcode::HandlerReturn,
     //! #6074); an invalid \a value is a return without a value
     QoreIRInstruction* createHandlerReturn(QoreIRValue value, const QoreProgramLocation* loc = nullptr);

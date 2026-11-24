@@ -671,6 +671,10 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        executable or script object calls qore_aot_run_v4(), qore_aot_script_register_v2() and
 //!        qore_aot_script_register_native_v2() and checks the AOT runtime identity, and the earlier entry points refuse
 //!        (qore#6898)
+//! v53 (AOT2):
+//!      - the debug IR of a replaced pending return can use ReleaseOwnedTemp (411) in the existing TypedBase
+//!        group with type object and one operand. This releases an object or an object-owning value eagerly and
+//!        keeps ordinary data available if a debugger request resumes the enclosing return (qore#7022).
 //! The shared format version for the changes of the AOT-identity batch (see v52 above).
 constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY_VERSION = 52;
 //! The shared format version for the changes in batch AL (see v48 above).

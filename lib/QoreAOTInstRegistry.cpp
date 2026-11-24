@@ -511,7 +511,7 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::UnwindTemps, {G::Base}},
     {O::CheckReturnValue, {G::Base, G::TypedBase}},
     {O::IteratorRelease, {G::Base}},
-    {O::ReleaseOwnedTemp, {G::Base}},
+    {O::ReleaseOwnedTemp, {G::Base, G::TypedBase}},
     {O::DebugStatement, {G::DebugStatement}},
     {O::ListSetCommonType, {G::Base, G::TypedBase}},
     {O::HashSetKeyValueFold, {G::Base}},
@@ -899,6 +899,11 @@ static std::unique_ptr<QoreIRInstruction> readTypedBase(
                 + "': " + type_error;
             return nullptr;
         }
+    }
+    if (inst->opcode == QoreIROpcode::ReleaseOwnedTemp
+            && (inst->element_type != objectTypeInfo || operands.size() != 1)) {
+        ctx.error = "a typed ReleaseOwnedTemp requires object and one operand";
+        return nullptr;
     }
     inst->result = QoreIRValue(result_id);
     inst->operands = std::move(operands);

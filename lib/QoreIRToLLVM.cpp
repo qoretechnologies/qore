@@ -39853,6 +39853,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             // the element of an iterator lives in the iterator's output slot, which the next IteratorNext and the end
             // of the frame release
+            // The typed release keeps data available to a debugger path that resumes the outer return.
+            auto release_replaced = [&](llvm::Value* slot, llvm::Value* expected, uint64_t empty) {
+                auto fn = module.getOrInsertFunction("qore_rt_release_replaced_return",
+                    llvm::FunctionType::get(void_type, {ptr_type, i64_type, i64_type, ptr_type}, false));
+                builder->CreateCall(fn, {slot, expected, llvm::ConstantInt::get(i64_type, empty), xsink_arg});
+            };
             llvm::Value* slot = nullptr;
             auto element_it = iterator_element_allocas.find(value_id);
             auto ref_read_it = reference_read_slots.find(value_id);
@@ -39866,16 +39872,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (val_it == values.end() || !val_it->second) {
                         return true;
                     }
-                    auto release_fn = module.getOrInsertFunction("qore_rt_release_reference_read",
+                    llvm::Value* expected = boxValue(val_it->second, value_id);
+                    if (inst->element_type) {
+                        release_replaced(ref_read_it->second, expected, 0);
+                    } else {
+                        auto release_fn = module.getOrInsertFunction("qore_rt_release_reference_read",
                             llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false));
-                    builder->CreateCall(release_fn, {ref_read_it->second, boxValue(val_it->second, value_id),
-                        xsink_arg});
+                        builder->CreateCall(release_fn, {ref_read_it->second, expected, xsink_arg});
+                    }
                 }
                 // the reference of its own that a read overwritten before its last use took (overwritten_local_reads)
                 auto alloca_it = invoke_alloca_map.find(value_id);
                 if (alloca_it != invoke_alloca_map.end() && alloca_it->second) {
                     llvm::Value* own_slot = alloca_it->second;
                     llvm::Value* own_val = builder->CreateLoad(i64_type, own_slot);
+                    if (inst->element_type) {
+                        release_replaced(own_slot, own_val, VAL_NOTHING);
+                        return true;
+                    }
                     builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), own_slot);
                     auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
@@ -39903,6 +39917,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     released_constructor_slots.insert(slot);
                     return true;
                 }
+            }
+            if (inst->element_type) {
+                release_replaced(slot, builder->CreateLoad(i64_type, slot), VAL_NOTHING);
+                return true;
             }
             auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                     llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
