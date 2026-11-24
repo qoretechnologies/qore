@@ -1,0 +1,14 @@
+static integer: K: C5::s(int); L2: RUNTIME-OVERLOAD-ERROR; outside: RUNTIME-OVERLOAD-ERROR
+static string: K: L2::s(string); L2: L2::s(string); outside: L2::s(string)
+child l2c_dyn: integer: RUNTIME-OVERLOAD-ERROR; string: L2c::m(string)
+child l2c_kdyn: integer: C5::m(int); string: L2c::m(string)
+child l2_dyn: integer: RUNTIME-OVERLOAD-ERROR; string: L2::m(string)
+child l2_kdyn: integer: C5::m(int); string: L2::m(string)
+child l2_outside: integer: RUNTIME-OVERLOAD-ERROR; string: L2::m(string)
+typed subclass: PARSE-TYPE-ERROR
+typed subclass code: PARSE-TYPE-ERROR
+typed copy: PARSE-TYPE-ERROR
+typed K code: C5::m(int)
+typed K code on subclass: C5::m(int)
+typed as K in subclass code: RUNTIME-OVERLOAD-ERROR
+typed as K outside: METHOD-DOES-NOT-EXIST

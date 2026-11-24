@@ -1,0 +1,35 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the module of private-internal-subclass-calls.qtest, loaded from the source and as a qcc -m .qmod
+
+%modern
+
+module PrivateInternalSubclassA {
+    version = "1.0";
+    desc = "classes with private:internal parent classes for private-internal-subclass-calls.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace PIS {
+public class C5 {
+    string m(int i) { return "C5::m(int)"; }
+    static string s(int i) { return "C5::s(int)"; }
+}
+public class P3 {
+    string m(bool b) { return "P3::m(bool)"; }
+    string pdyn(auto a) { object o = self; return o.m(a); }
+}
+public class Y { string m(int i) { return "Y::m(int)"; } }
+public class A {
+    string m(string s) { return "A::m(string)"; }
+    string adyn(auto a) { object o = self; return o.m(a); }
+}
+# the class that inherits C5 with private:internal access: only its code calls C5's methods
+public class K inherits private:internal C5 {
+    string kdyn(auto a) { object o = self; return o.m(a); }
+    string kcom(auto a) { return call_object_method(self, "m", a); }
+    string kcoma(auto a) { return call_object_method_args(self, "m", (a,)); }
+    string kref(auto a) { code c = self.getCallReference("m"); return c(a); }
+}
+}

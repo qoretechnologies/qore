@@ -3705,6 +3705,11 @@ int qore_root_ns_private::parseInit() {
     }
     qore_ns_private::parseResolveAbstract();
 
+    // the calls of methods that resolving the abstract methods can create are bound now (qore#7411)
+    if (parseRunDeferredMethodBinds() && !err) {
+        err = -1;
+    }
+
     parseCheckDeferredAbstractNew();
 
     parseResolveClassMembers();

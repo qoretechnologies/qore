@@ -1,0 +1,15 @@
+private subclass typed: 1
+private subclass untyped: 1
+private subclass call reference: 1
+public subclass typed: 1
+public subclass untyped: 1
+created method typed: 1
+created method overload: "f(int)"
+created method call reference: 1
+created method untyped: 1
+no private:internal variants typed: "NK::m(softstring)"
+no private:internal variants untyped: "NK::m(softstring)"
+parent class object typed: "PA::m(string)"
+parent class object untyped: "PA::m(string)"
+parent class object call reference: "PA::m(string)"
+decorator: "PB(PA::m(string))"

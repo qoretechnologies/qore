@@ -110,6 +110,9 @@ private:
         return callReferenceTypeInfo;
     }
 
+    //! binds the method of a reference deferred by parseInitImpl() once the abstract methods are resolved (qore#7411)
+    DLLLOCAL int parseDeferredMethodBind(QoreParseContext& parse_context);
+
 protected:
     //! optionally evaluates the argument
     /** return value requires a deref(xsink) if needs_deref is true

@@ -3475,6 +3475,36 @@ uint8_t qore_aot_dot_target_flags(const QoreMethod* method, bool pseudo, bool na
         | (name_dispatch ? QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH : 0);
 }
 
+//! returns true if \a method is a method that resolving the abstract methods of its class created, which has only the
+//! variants of its parent classes (AbstractMethodMap::parseInit(), qore#7411)
+static bool qore_aot_method_created_by_abstract(const QoreMethod* method) {
+    if (!method || method->isStatic()) {
+        return false;
+    }
+    const qore_class_private* cls = qore_class_private::get(*method->getClass());
+    QoreFunctionIterator fi(*qore_method_private::get(*method)->getFunction());
+    bool any = false;
+    while (fi.next()) {
+        const MethodVariantBase* v = METHVB_const(fi.getVariant());
+        if (!v->getClass() || qore_class_private::get(*v->getClass())->sameClass(*cls)) {
+            return false;
+        }
+        any = true;
+    }
+    return any;
+}
+
+const QoreMethod* qore_aot_dot_target_method(const QoreMethod* method, const AbstractQoreFunctionVariant* variant) {
+    // the loader reads the expressions of member initializers before it resolves the abstract methods of the classes,
+    // which creates such a method: the call is written with the method of the variant bound at parse time, which it
+    // calls, or, without one, with no method, so that it is resolved by name at run time on the class of the object,
+    // as the call of the created method is (qore#7411)
+    if (!qore_aot_method_created_by_abstract(method)) {
+        return method;
+    }
+    return variant ? METHVB_const(variant)->method() : nullptr;
+}
+
 void qore_aot_write_dot_target_family(QoreAOTBinaryWriter& writer, const QoreMethod* method, bool pseudo) {
     writer.writeU8(qore_aot_dot_target_flags(method, pseudo, false));
     if (method) {
@@ -14910,15 +14940,16 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
             // so that the node read back is the node parsed: the messages of a call on an object that has been
             // deleted name the variant (issue #5823), and the explicit type arguments of the call (obj.method<T>()),
             // which come last (qore#5865)
-            std::string method_ref = qore_aot_dot_method_ref(mc->getName(), mc->getMethod(), mc->getVariant(),
-                mc->isPseudo());
+            const QoreMethod* target_method = qore_aot_dot_target_method(mc->getMethod(), mc->getVariant());
+            std::string method_ref = qore_aot_dot_method_ref(mc->getName(), target_method,
+                target_method ? mc->getVariant() : nullptr, mc->isPseudo());
             qore_aot_append_call_type_args(method_ref, mc->getExplicitTypeParamInstantiation());
             // the arguments are written in source order (the order of their evaluation): a named call keeps the
             // positions of their parameters (bound at parse time) or their names (resolved at run time by parameter
             // name) first (read by read_expr_dot_eval_target())
             method_ref.insert(0, qore_aot_named_call_arg_prefix(mc));
             writer.writeStringRef(method_ref.c_str());
-            qore_aot_write_dot_target_family(writer, mc->getMethod(), mc->isPseudo());
+            qore_aot_write_dot_target_family(writer, target_method, mc->isPseudo());
             // Target expression (left-hand side of the dot)
             if (!classifyAndWriteExpr(writer, de->getExpression(),
                     parent_locals, parent_globals, const_reverse_map)) {
@@ -21633,14 +21664,16 @@ bool QoreAOTBinaryDeserializer::commitClassesPrepare(std::string& error) {
         // Special methods (constructor/destructor/copy) are skipped by
         // initializeHierarchy; mirror that via checkSpecial().
         if (priv->scl) {
+            // the access of the ancestors is computed once for the lists of the methods (qore#7410)
+            AncestorAccessCache ancestor_access;
             for (auto& mi : priv->hm) {
                 const char* mn = mi.second->getName();
                 if (strcmp(mn, "constructor") && strcmp(mn, "destructor") && strcmp(mn, "copy")) {
-                    priv->parseAddAncestors(mi.second);
+                    priv->parseAddAncestors(mi.second, &ancestor_access);
                 }
             }
             for (auto& mi : priv->shm) {
-                priv->parseAddStaticAncestors(mi.second);
+                priv->parseAddStaticAncestors(mi.second, &ancestor_access);
             }
         }
         // The hierarchy is resolved above, as initializeHierarchy() resolves it in source parsing, so the class is

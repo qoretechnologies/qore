@@ -2914,6 +2914,10 @@
       caller cannot access, such as one inherited privately, came before it, for example a method that a class
       creates to implement an abstract variant with a privately inherited class's variant (see
       @ref multiple_path_inheritance; <a href="https://github.com/qoretechnologies/qore/issues/7381">issue 7381</a>)
+    - the methods of a class inherited with \c private:internal access are called only by the code of the inheriting
+      class, also on the objects of its subclasses, and no longer by the code of other classes in the hierarchy; the
+      methods of a class that a public path also reaches are public (see @ref private_inheritance;
+      <a href="https://github.com/qoretechnologies/qore/issues/7410">issue 7410</a>)
     - @ref Qore::call_static_method() "call_static_method()" and the related calls call the static method that a static
       method call in the caller's code calls: they refused a later parent class's public method behind a private one,
       and called a method of a privately inherited class from outside it
@@ -4606,6 +4610,10 @@
       (@ref Qore::Socket::unfinishedHttpChunkedBody() "unfinishedHttpChunkedBody()"), chunk sizes are checked alike,
       and a body read allocates memory as its data arrives, so that a body can neither be taken for another message
       nor end the process (<a href="https://github.com/qoretechnologies/qore/issues/7417">issue 7417</a>)
+    - a typed call or a call reference in the code of a class with \c private:internal variants of a method calls the
+      class's own method, as the untyped call does, on an object of a subclass that overrides the method, and no call
+      calls it on an object of a parent class (<a href="https://github.com/qoretechnologies/qore/issues/7440">issue
+      7440</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

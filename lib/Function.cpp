@@ -1088,14 +1088,65 @@ static const QoreTypeInfo* getParamLocalTypeInfo(const QoreTypeInfo* ti) {
     return ti == referenceOrNothingTypeInfo ? anyTypeInfo : ti;
 }
 
-bool IList::hasInternalBefore(const_iterator aqfi) const {
-    assert(aqfi != begin());
-    for (const_iterator i = begin() + 1; i != aqfi; ++i) {
-        if ((*i).access == Internal) {
+size_t InternalOwnerIndex::get(const qore_class_private* qc) {
+    std::pair<std::unordered_map<qore_classid_t, size_t>::iterator, bool> i
+        = ids.insert(std::make_pair(qc->classID, classes.size()));
+    if (i.second) {
+        classes.push_back(qc);
+        if (qc->injectedClass && qc->injectedClass != qc) {
+            injected.push_back(i.first->second);
+        }
+    }
+    return i.first->second;
+}
+
+bool InternalOwnerSet::contains(const qore_class_private& qc) const {
+    // the same class or a copy of it, which has its ID
+    std::unordered_map<qore_classid_t, size_t>::const_iterator i = index->ids.find(qc.classID);
+    if (i != index->ids.end() && test(i->second)) {
+        return true;
+    }
+    // a class injected in place of a class of the set, or the class context's injected class: as sameClass()
+    for (size_t j : index->injected) {
+        if (test(j) && index->classes[j]->sameClass(qc)) {
             return true;
         }
     }
+    if (qc.injectedClass && qc.injectedClass != &qc) {
+        for (size_t j = 0, e = index->classes.size(); j < e; ++j) {
+            if (test(j) && index->classes[j]->sameClass(qc)) {
+                return true;
+            }
+        }
+    }
     return false;
+}
+
+void MethodFunctionBase::resolveOwnerCopies() {
+    // an index and a set shared by several entries are copied once; a class's copy keeps its ID
+    std::unordered_map<const InternalOwnerIndex*, std::shared_ptr<InternalOwnerIndex>> indexes;
+    std::unordered_map<const InternalOwnerSet*, owner_set_t> copies;
+    // the sets copied are kept until the end, so that their addresses, the keys of the copies, are not reused
+    std::vector<owner_set_t> copied;
+    for (INode& n : ilist) {
+        if (!n.owners()) {
+            continue;
+        }
+        owner_set_t& c = copies[n.owners()];
+        if (!c) {
+            copied.push_back(owner_set_t(n.owners()));
+            std::shared_ptr<InternalOwnerIndex>& ci = indexes[n.owners()->index.get()];
+            if (!ci) {
+                ci = std::make_shared<InternalOwnerIndex>();
+                for (const qore_class_private* qc : n.owners()->index->classes) {
+                    ci->get(qore_class_private_get_new_copy(qc));
+                }
+            }
+            c = make_owner_set(ci);
+            c->bits = n.owners()->bits;
+        }
+        n.setOwners(c);
+    }
 }
 
 QoreFunction* IList::getFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
@@ -1104,12 +1155,16 @@ QoreFunction* IList::getFunction(const qore_class_private* class_ctx, const qore
     // path that it cannot access does not hide another path from it; the ancestors on the inaccessible path have its
     // access or a more restrictive one, unless another path reaches them (qore#7381)
     for (; aqfi != aqfe; ++aqfi) {
-        if (last_class && (*aqfi).access != Public && !(class_ctx && (*aqfi).access == Private)
-                && ((*aqfi).access != Internal || !internal_access || hasInternalBefore(aqfi))) {
+        const INode& n = *aqfi;
+        // a private:internal ancestor is accessible only to the code of the classes whose private:internal
+        // inheritance reaches it, by identity (qore#7036), not to the code of the other classes of the hierarchy
+        // (qore#7410)
+        if (last_class && n.access() != Public && !(class_ctx && (n.access() == Private
+                || (n.access() == Internal && n.owners()->contains(*class_ctx))))) {
             continue;
         }
 
-        QoreFunction* rv = (*aqfi).func;
+        QoreFunction* rv = n.func;
         const QoreClass* fc = rv->getClass();
         if (fc) {
             // get the function's class
@@ -3397,6 +3452,12 @@ static bool skip_method_variant(const QoreFunction* f, const AbstractQoreFunctio
     assert(dynamic_cast<const MethodFunctionBase*>(f));
     const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(v);
     ClassAccess va = mvb->getAccess();
+    // a private:internal variant can be called only by the code of its own class, whichever method has it: the
+    // method that a class creates to implement an abstract variant has the variants of its parent classes, whose
+    // class is not the method's (qore#7410)
+    if (va == Internal) {
+        return !class_ctx || !qore_class_private::get(*mvb->getClass())->sameClass(*class_ctx);
+    }
     // a variant of a parent class that implements a more restrictive abstract variant of the method (qore#7277)
     const MethodFunctionBase* mf = static_cast<const MethodFunctionBase*>(f);
     if (mf->hasImplementedVariantAccess()) {
@@ -5904,9 +5965,13 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
 
 const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(const type_vec_t& argTypeInfo,
         const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
-        QoreTypeParamInstantiation* type_param_inst, const type_vec_t* explicit_type_args) const {
+        QoreTypeParamInstantiation* type_param_inst, const type_vec_t* explicit_type_args,
+        bool* runtime_possible) const {
     if (type_param_inst) {
         type_param_inst->clear();
+    }
+    if (runtime_possible) {
+        *runtime_possible = false;
     }
 
     int score_len = -1;
@@ -6125,13 +6190,19 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
         variant = pvariant;
     }
     // a variant is committed only when no other variant could be resolved at run time (see parseFindVariant())
+    bool other_variant_may_match = false;
     if (variant && parseOtherVariantMayMatch(variant, receiver_type_info, &best_type_param_inst, argTypeInfo,
             class_ctx, parse_get_parse_options())) {
         variant = nullptr;
+        other_variant_may_match = true;
     }
 
     if (variant && type_param_inst) {
         *type_param_inst = best_type_param_inst;
+    }
+
+    if (runtime_possible && !variant) {
+        *runtime_possible = runtime_match || other_variant_may_match;
     }
 
     return variant;

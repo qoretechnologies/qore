@@ -2840,6 +2840,28 @@ typedef std::vector<BCNode*> bclist_t;
 //  note that this data structure cannot be modified even if the class is
 //  copied to a subprogram object and extended
 //  this class is a QoreReferenceCounter so it won't be copied when the class is copied
+//! The access of the ancestors of a class, computed once for the inheritance lists of several of its methods
+//! (qore#7410)
+/** It depends only on the hierarchy, not on the method; a caller that builds the lists of several methods of a class
+    passes one to each of the walks, which computes it on the first one
+*/
+struct AncestorAccessCache {
+    //! an ancestor of the class
+    struct Entry {
+        //! the class
+        qore_class_private* cls;
+        //! the access of its methods in the lists
+        ClassAccess access;
+        //! the classes whose code can call its methods through the lists if \a access is Internal
+        owner_set_t owners;
+    };
+
+    //! true if the access has been computed
+    bool valid = false;
+    //! the ancestors in the order of the lists
+    std::vector<Entry> entries;
+};
+
 class BCList : public bclist_t {
 protected:
 public:
@@ -2959,11 +2981,12 @@ public:
     DLLLOCAL bool inAccessHierarchy(const qore_class_private& qc, ClassAccess& n_access) const;
 
     DLLLOCAL void addNewAncestors(QoreMethod* m);
-    DLLLOCAL void addAncestors(QoreMethod* m);
+    //! @param cache the access of the ancestors, computed once for the methods of a class (qore#7410)
+    DLLLOCAL void addAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr);
     DLLLOCAL void addNewStaticAncestors(QoreMethod* m);
-    DLLLOCAL void addStaticAncestors(QoreMethod* m);
-    DLLLOCAL void parseAddAncestors(QoreMethod* m);
-    DLLLOCAL void parseAddStaticAncestors(QoreMethod* m);
+    DLLLOCAL void addStaticAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr);
+    DLLLOCAL void parseAddAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr);
+    DLLLOCAL void parseAddStaticAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr);
 
     //! Returns true if resolution changed method dispatch in this uncommitted hierarchy.
     DLLLOCAL bool parseResolveAbstract();
@@ -3934,6 +3957,55 @@ public:
     DLLLOCAL bool hasUnimplementedAbstractVariants(const char* mname) const {
         return ahm.find(mname) != ahm.end();
     }
+
+    //! returns true if resolving the class's abstract methods can give it a method of the name that it does not have
+    //! yet (qore#7411)
+    /** The abstract methods of the classes are resolved once all the code of the parse is initialized; then a class
+        that has an abstract variant of the name that a parent class implements gets a method of its own of the name,
+        which has the variants of all its parent classes and hides their methods of the name (AbstractMethodMap::
+        parseInit()).  Before, a parse-time lookup finds the method of the first parent class that has one, so a call
+        of the method of such a class is bound once the abstract methods are resolved
+        (qore_root_ns_private::parseDeferMethodBind()), so that it calls the method that it calls at run time.
+    */
+    DLLLOCAL bool parseAbstractMethodPending(const char* mname) const;
+
+    //! returns true if the code of the class context \a class_ctx calls its own method \a m first, before the method of
+    //! the name of the class of the object (qore#7440)
+    /** As the lookups do at run time (runtimeFindCommittedMethodForEval()) and parseFindAnyMethod() at parse time: a
+        private:internal method of the class context, or one of its normal methods with private:internal variants
+        that is not abstract; the method that such a call calls does not depend on the abstract methods of the class
+        of the object, so the call is not bound once they are resolved (parseAbstractMethodPending())
+    */
+    DLLLOCAL static bool parseCalledAsOwnMethod(const QoreMethod& m, const qore_class_private* class_ctx);
+
+    //! returns true if the class inherits the class context \a class_ctx (another class)
+    /** The code of a class calls its own method of a name with private:internal variants first only on an object of
+        a class that inherits it, as its private:internal variants are those of its objects; on an object of another
+        class (a parent class of the class context, whose private declarations it can access), the method of the
+        object's class is called (qore#7440)
+    */
+    DLLLOCAL bool inheritsClassContext(const qore_class_private& class_ctx) const {
+        // the access of the path, raised by the search
+        ClassAccess access = Public;
+        return scl && scl->inAccessHierarchy(class_ctx, access);
+    }
+
+    //! returns true if the run-time lookups of the class call the method \a m of the class context \a class_ctx, which
+    //! has private:internal variants, in place of the method of the class: if it is private:internal as a whole, or
+    //! if the class inherits the class context (qore#7440)
+    /** out of line and cold, so that the lookups, which call it only for such a method, cost nothing more otherwise
+    */
+    DLLLOCAL QORE_INTERN_COLD QORE_INTERN_NOINLINE bool runtimeCallsOwnMethod(const QoreMethod& m,
+            const qore_class_private& class_ctx) const;
+
+    //! returns the type of a call of the method \a mname before it is bound, for a class for which
+    //! parseAbstractMethodPending() is true (qore#7411)
+    /** The method that resolving the abstract methods gives the class has the variants of the methods of the name of
+        its parent classes: the type is the return type of the variant that each parent class's method selects for the
+        arguments when they all have the same, otherwise nullptr (a type known only once the call is bound)
+    */
+    DLLLOCAL const QoreTypeInfo* parseAbstractMethodPendingReturnType(const char* mname, const type_vec_t& arg_types,
+            const qore_class_private* class_ctx) const;
 
     //! records a public member declaration in the class: the class then declares its members (see
     //! hasPublicMembersInHierarchy())
@@ -5074,16 +5146,20 @@ public:
     }
 
     //! adds the static methods of the base classes that the method overrides, to the most distant base class
-    DLLLOCAL void parseAddStaticAncestors(QoreMethod* m) {
+    /** @param cache the access of the ancestors, computed once for the methods of the class (qore#7410)
+    */
+    DLLLOCAL void parseAddStaticAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr) {
         if (!scl) {
             return;
         }
 
-        scl->parseAddStaticAncestors(m);
+        scl->parseAddStaticAncestors(m, cache);
     }
 
     //! adds the methods of the base classes that the method overrides, to the most distant base class
-    DLLLOCAL void parseAddAncestors(QoreMethod* m) {
+    /** @param cache the access of the ancestors, computed once for the methods of the class (qore#7410)
+    */
+    DLLLOCAL void parseAddAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr) {
         //printd(5, "qore_class_private::parseAddAncestors(%p %s) this: %p cls: %p %s scl: %p\n", m, m->getName(), this, cls, name.c_str(), scl);
         assert(strcmp(m->getName(), "constructor"));
 
@@ -5091,7 +5167,7 @@ public:
             return;
         }
 
-        scl->parseAddAncestors(m);
+        scl->parseAddAncestors(m, cache);
     }
 
     DLLLOCAL int initMembers(QoreObject& o, bool& need_scan, ExceptionSink* xsink) const;
