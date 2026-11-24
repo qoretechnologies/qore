@@ -3468,8 +3468,9 @@ public:
         //! set when the class or one of its ancestors has created a method by resolving an abstract method
         /** The inheritance lists of the methods of its subclasses are built again then (see
             parseUpdateAbstractAncestors(); qore#7307).  It is kept when the class is committed, as a class created at
-            runtime checks it in its committed parent classes (runtimeUpdateAbstractAncestors()).  A variant installed in an existing method does not set it: the method
-            is in the subclasses' lists already.  See also abstract_dispatch_changed.
+            runtime checks it in its committed parent classes (runtimeUpdateAbstractAncestors()).  A variant installed in
+            an existing method does not set it: the method is in the subclasses' lists already.  See also
+            abstract_dispatch_changed.
         */
         abstract_method_created : 1 = false,
         //! set when abstract resolution installed concrete variants in this class or an uncommitted ancestor
