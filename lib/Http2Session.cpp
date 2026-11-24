@@ -4243,7 +4243,8 @@ bool Http2Session::needsInputStreamPass() const {
             }
             continue;
         }
-        // a read in flight completes by itself
+        // a read in flight completes by itself, and the I/O thread that delivers its completion runs the connection's
+        // operation again
         if (info.iouring_read_pending) {
             continue;
         }
