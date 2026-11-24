@@ -2791,6 +2791,10 @@ public class LlmAsyncSseRequest {
 
         #! Guards the fields that cancellation handlers and finish hooks read
         Mutex m();
+        #! Transport notifications waiting for the operation, in arrival order
+        list<hash<auto>> reports = ();
+        #! Handles one notification in the context in which the request was started
+        *code<nothing()> process_report;
         #! The sequence number of the current attempt
         int attempt_seq = 0;
         #! Reports the end of the current attempt's start to the retry policy
@@ -2887,6 +2891,10 @@ public class LlmAsyncSseRequest {
     #! Starts the request; must be called in a task of the operation
     start() {
         LlmAsyncSseRequest req = self;
+        {
+            AutoLock al(m);
+            process_report = sub () { req.processReport(); };
+        }
         hook_id = op.addFinishHook(sub () { req.release(); });
         if (deadline_ms) {
             LlmAsyncOperation o = op;
@@ -2907,8 +2915,7 @@ public class LlmAsyncSseRequest {
     /** @param attempt the attempt number given to the code that opened the stream
     */
     sseConnected(int attempt) {
-        LlmAsyncSseRequest req = self;
-        op.post(sub () { req.handleConnected(attempt); });
+        postReport({"attempt": attempt, "kind": "connected"});
     }
 
     #! Reports an event of the stream of an attempt; can be called in any thread
@@ -2916,8 +2923,7 @@ public class LlmAsyncSseRequest {
         @param event the event: a hash with \c event and \c data keys, as in @ref Qore::SseMessageInfo
     */
     sseEvent(int attempt, hash<auto> event) {
-        LlmAsyncSseRequest req = self;
-        op.post(sub () { req.handleEvent(attempt, event); });
+        postReport({"attempt": attempt, "kind": "event", "event": event});
     }
 
     #! Reports the end of the stream of an attempt; can be called in any thread
@@ -2926,8 +2932,43 @@ public class LlmAsyncSseRequest {
         @param ex the error, for a stream that failed
     */
     sseClosed(int attempt, string how, *hash<ExceptionInfo> ex) {
-        LlmAsyncSseRequest req = self;
-        op.post(sub () { req.handleClosed(attempt, how, ex); });
+        postReport({"attempt": attempt, "kind": "closed", "how": how, "error": ex});
+    }
+
+    #! The transport posts data; only the request's own task calls the provider.
+    private:internal postReport(hash<auto> report) {
+        code<nothing()> task;
+        {
+            AutoLock al(m);
+            if (!process_report || ended || report.attempt != attempt_seq) {
+                return;
+            }
+            push reports, report;
+            task = process_report;
+        }
+        op.post(task);
+    }
+
+    private:internal processReport() {
+        hash<auto> report;
+        {
+            AutoLock al(m);
+            if (!reports) {
+                return;
+            }
+            report = shift reports;
+        }
+        switch (report.kind) {
+            case "connected":
+                handleConnected(report.attempt);
+                break;
+            case "event":
+                handleEvent(report.attempt, report.event);
+                break;
+            case "closed":
+                handleClosed(report.attempt, report.how, report.error);
+                break;
+        }
     }
 
     #! Starts an attempt; called by the retry policy in a task of the operation
@@ -2940,11 +2981,17 @@ public class LlmAsyncSseRequest {
             streaming = False;
         }
         code<nothing()> stop_attempt = open(self, attempt);
+        bool abandoned;
         {
             AutoLock al(m);
-            if (attempt == attempt_seq && !ended) {
+            abandoned = ended || attempt != attempt_seq;
+            if (!abandoned) {
                 stop = stop_attempt;
             }
+        }
+        # A finish hook may have ended the request while open() was obtaining the stopper.
+        if (abandoned) {
+            runStop(stop_attempt);
         }
         LlmAsyncSseRequest req = self;
         LlmAsyncOperation o = op;
@@ -3126,6 +3173,8 @@ public class LlmAsyncSseRequest {
                 return False;
             }
             ended = True;
+            reports = ();
+            remove process_report;
             id = cancel_id;
             cancel_id = 0;
             timer = deadline_timer;
@@ -3146,29 +3195,26 @@ public class LlmAsyncSseRequest {
         so that a thread of the controller never waits for the controller.
     */
     private:internal stopTransport() {
-        *code<nothing()> s;
+        bool in_task = op.inTask();
+        code<nothing()> s;
         {
             AutoLock al(m);
-            s = remove stop;
-        }
-        if (!s) {
-            return;
-        }
-        if (op.inTask()) {
-            LlmAsyncSseRequest::runStop(s);
-            return;
-        }
-        try {
-            background LlmAsyncSseRequest::runStop(s);
-        } catch (hash<ExceptionInfo> ex) {
-            # no thread can be started (a thread limit of the caller's sandbox): the transport is not stopped in this
-            # thread, which may be a thread of the async I/O controller that stopping it waits for; it is put back for
-            # the task that the caller, a cancellation handler, still posts, which ends the request and stops it in a
-            # thread of the executor
-            AutoLock al(m);
             if (!stop) {
-                stop = s;
+                return;
             }
+            s = stop;
+            if (!in_task) {
+                try {
+                    background LlmAsyncSseRequest::runStop(s);
+                } catch (hash<ExceptionInfo> ex) {
+                    # No worker could start. Leave the stopper in place for the operation's ending task.
+                    return;
+                }
+            }
+            remove stop;
+        }
+        if (in_task) {
+            runStop(s);
         }
     }
 
