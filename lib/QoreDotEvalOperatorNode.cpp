@@ -328,6 +328,7 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 // it a method of the name: the names are bound once they are resolved (qore#7411)
                 if (!meth->isStatic()
                         && !qore_class_private::get(*meth->getClass())->sameClass(*qore_class_private::get(*nqc))
+                        && !qore_class_private::parseCalledAsOwnMethod(*meth, class_ctx)
                         && qore_class_private::get(*nqc)->parseAbstractMethodPending(mname)) {
                     QoreParseCallArgs call_args;
                     if (m->parseInitCallArgs(parse_context, call_args) && !err) {
@@ -521,6 +522,7 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     // (qore#7411); its type is not known before
     if (!meth->isStatic() && !m->isPseudo()
             && !qore_class_private::get(*meth->getClass())->sameClass(*qore_class_private::get(*qc))
+            && !qore_class_private::parseCalledAsOwnMethod(*meth, class_ctx)
             && qore_class_private::get(*qc)->parseAbstractMethodPending(mname)) {
         QoreParseCallArgs call_args;
         if (m->parseInitCallArgs(parse_context, call_args) && !err) {

@@ -6935,11 +6935,25 @@ static bool parse_lookup_callable(const QoreMethod* m, const qore_class_private*
 const QoreMethod* qore_class_private::parseFindAnyMethod(const char* nme, const qore_class_private* class_ctx) {
     const QoreMethod* m = nullptr;
 
-    // if we have a class context, first we have to check here for an internal method
+    // if we have a class context, first we have to check here for an internal method; the code of a class calls its
+    // own normal method first also when only some of its variants are private:internal, as at run time
+    // (runtimeFindCommittedMethodForEval(); qore#7440), for a receiver of a class that inherits it: on an object of
+    // a parent class, the parent class's method is called
     if (class_ctx) {
         m = class_ctx->parseFindAnyLocalMethod(nme);
-        if (m && qore_method_private::getAccess(*m) != Internal)
-            m = nullptr;
+        if (m && qore_method_private::getAccess(*m) != Internal) {
+            if (class_ctx == this || m->isStatic()
+                    || !qore_method_private::get(*m)->getFunction()->hasPrivateInternalVariants()
+                    || qore_method_private::get(*m)->isAbstract()) {
+                m = nullptr;
+            } else {
+                // the hierarchy of the class is set up
+                initialize();
+                if (!inheritsClassContext(*class_ctx)) {
+                    m = nullptr;
+                }
+            }
+        }
     }
 
     if (!m) {
@@ -8152,7 +8166,10 @@ const QoreMethod* qore_class_private::runtimeFindCommittedStaticMethod(const cha
     }
     if (class_ctx && class_ctx != this) {
         const QoreMethod* m = class_ctx->findLocalCommittedStaticMethod(nme);
-        if (m && qore_method_private::get(*m)->getFunction()->hasPrivateInternalVariants()) {
+        // a method with private:internal variants beside others only for a class that inherits the class context
+        // (qore#7440)
+        if (m && qore_method_private::get(*m)->getFunction()->hasPrivateInternalVariants()
+                && runtimeCallsOwnMethod(*m, *class_ctx)) {
             return m;
         }
     }
@@ -8167,7 +8184,10 @@ const QoreMethod* qore_class_private::runtimeFindCommittedMethod(const char* nme
     }
     if (class_ctx && class_ctx != this) {
         const QoreMethod* m = class_ctx->findLocalCommittedMethod(nme);
-        if (m && qore_method_private::get(*m)->getFunction()->hasPrivateInternalVariants()) {
+        // a method with private:internal variants beside others only for a class that inherits the class context
+        // (qore#7440)
+        if (m && qore_method_private::get(*m)->getFunction()->hasPrivateInternalVariants()
+                && runtimeCallsOwnMethod(*m, *class_ctx)) {
             return m;
         }
     }
@@ -8185,7 +8205,12 @@ const QoreMethod* qore_class_private::runtimeFindCommittedMethodForEval(const ch
         if (m) {
             const qore_method_private* meth = qore_method_private::get(*m);
             //printd(5, "qore_class_private::runtimeFindCommittedMethodForEval() '%s::%s': %p (pi: %d a: %d)\n", name.c_str(), nme, meth, meth->getFunction()->hasPrivateInternalVariants(), meth->isAbstract());
-            if (meth->getFunction()->hasPrivateInternalVariants() && !meth->isAbstract()) {
+            // a method with private:internal variants beside others only on an object of a class that inherits the
+            // class context: on an object of another class (a parent class of the class context), the method of the
+            // object's class is called (qore#7440); a method that is private:internal as a whole is called for any
+            // object, as the parse-time lookup binds it (parseFindAnyMethod())
+            if (meth->getFunction()->hasPrivateInternalVariants() && !meth->isAbstract()
+                    && runtimeCallsOwnMethod(*m, *class_ctx)) {
                 return m;
             }
         }
@@ -10638,6 +10663,19 @@ static bool parse_abstract_creates_method(const qore_class_private& qc, const ch
         }
     }
     return false;
+}
+
+bool qore_class_private::runtimeCallsOwnMethod(const QoreMethod& m, const qore_class_private& class_ctx) const {
+    return m.getAccess() == Internal || inheritsClassContext(class_ctx);
+}
+
+bool qore_class_private::parseCalledAsOwnMethod(const QoreMethod& m, const qore_class_private* class_ctx) {
+    if (!class_ctx || !qore_class_private::get(*m.getClass())->sameClass(*class_ctx)) {
+        return false;
+    }
+    const qore_method_private* mp = qore_method_private::get(m);
+    return mp->getAccess() == Internal
+        || (!m.isStatic() && mp->getFunction()->hasPrivateInternalVariants() && !mp->isAbstract());
 }
 
 bool qore_class_private::parseAbstractMethodPending(const char* mname) const {

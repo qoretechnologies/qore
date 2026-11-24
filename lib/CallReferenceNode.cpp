@@ -826,6 +826,7 @@ int ParseObjectMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseConte
                         if (!m->isStatic()
                                 && !qore_class_private::get(*m->getClass())->sameClass(
                                     *qore_class_private::get(*n_qc))
+                                && !qore_class_private::parseCalledAsOwnMethod(*m, class_ctx)
                                 && qore_class_private::get(*n_qc)->parseAbstractMethodPending(method.c_str())) {
                             QoreDeferredMethodBindContext ctx(parse_context);
                             qore_root_ns_private::get(*getRootNS())->parseDeferMethodBind(this,
@@ -2570,6 +2571,7 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
         // calls at run time (qore#7411)
         const qore_class_private* qcp = qore_class_private::get(*qc);
         if (!qore_class_private::get(*qm->getClass())->sameClass(*qcp)
+                && !qore_class_private::parseCalledAsOwnMethod(*qm, class_ctx)
                 && qcp->parseAbstractMethodPending(scope->getIdentifier())) {
             QoreDeferredMethodBindContext ctx(parse_context);
             std::string mname = scope->getIdentifier();

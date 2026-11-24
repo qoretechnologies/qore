@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation and linking of method calls bound when parsing, module loading
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class OwnPrivateInternalMethodTypedCallTest
+
+#! a typed call in the code of a class with private:internal variants of a method calls the class's own method first,
+#! as the untyped call does (qore#7440)
+/** The code of a class with a private:internal variant of a method calls its own method first at run time, also on an
+    object of a subclass that overrides the method (qore_class_private::runtimeFindCommittedMethodForEval()), whereas
+    a typed call (and a call reference) was bound when parsing to the method of the subclass when the method also had
+    other variants: the untyped call called the class's private:internal variant, the typed call the subclass's
+    variant.  The calls now call the same variant, also when the subclass's method is created by resolving its
+    abstract methods (qore#7411), where the type of the call selects the overload of a function called with it.  A
+    class without private:internal variants calls the subclass's method, as before, and the code of a class calls its
+    own method only on an object of a class that inherits it: on an object of a parent class (a decorator holding an
+    object of its parent class), the parent class's method is called, also by the untyped call, which called the
+    class's own method there.  named-call.q checks that a named call whose names match more than one variant of the
+    class's own method is refused, as the same call through self is.
+
+    The output of every execution mode, of qcc executables (-O0, -O3) and of the program whose classes are loaded from
+    the module's source and from a qcc -m .qmod must be the same: probe.expected.  The programs, the calls that they
+    share (users.ql) and the module are in \c own-private-internal-method-typed-call/.
+*/
+class OwnPrivateInternalMethodTypedCallTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/own-private-internal-method-typed-call";
+
+        const Name = "probe";
+    }
+
+    constructor() : QUnit::Test("OwnPrivateInternalMethodTypedCallTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT, tiered and IR-tier execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        addTestCase("the parent classes in a module and in a qcc -m .qmod", \testModule());
+        addTestCase("a named call is refused as through self", \testNamedCall());
+        set_return_value(main());
+    }
+
+    private string qccBin() {
+        string qcc_bin = ENV.QCC ?? ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        return is_file(qcc_bin) ? qcc_bin : "qcc";
+    }
+
+    private string expected() {
+        return ReadOnlyFile::readTextFile(dir + "/" + Name + ".expected");
+    }
+
+    private string command(string mode, string script = Name, *string module_dir) {
+        return sprintf("%s%s -b --enable-debug --exec-mode=%s %s/%s.q", module_dir ? "QORE_MODULE_DIR="
+            + module_dir + " " : "", qore_bin, mode, dir, script);
+    }
+
+    private string run(string mode, string script = Name, *string module_dir) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command(mode, script, module_dir));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        ExecModeHarness::check_native(r);
+        return r.stdout;
+    }
+
+    testAst() {
+        assertEq(expected(), run("ast"), "ast");
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), run(mode), mode);
+        }
+        # the IR tier of tiered execution runs the calls in the IR interpreter
+        assertEq(expected(), ExecModeHarness::run_ir_tier(command("tiered")), ExecModeHarness::IRTierName);
+    }
+
+    testNamedCall() {
+        string exp = ReadOnlyFile::readTextFile(dir + "/named-call.expected");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, run(mode, "named-call"), "named-call: " + mode);
+        }
+    }
+
+    testModule() {
+        # the module's source
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), run(mode, "module-user", dir), "source module: " + mode);
+        }
+
+        # the module compiled by qcc -m
+        TmpDir tmp("qore-own-private-internal-method-typed-call-qmod-");
+        string mod = "OwnInternalTypedCallA";
+        int rc;
+        string out = backquote(sprintf("%s -m -o %s/%s.qmod %s/%s.qm 2>&1", qccBin(), tmp.path, mod, dir, mod), \rc);
+        if (rc || !is_file(tmp.path + "/" + mod + ".qmod")) {
+            testSkip("qcc is not available or cannot compile the module " + mod + ": " + out);
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), run(mode, "module-user", tmp.path), "qmod: " + mode);
+        }
+    }
+
+    testCompiled() {
+        string qcc_bin = qccBin();
+        TmpDir tmp("qore-own-private-internal-method-typed-call-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/%s-O%s", tmp.path, Name, opt);
+            int rc;
+            string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, Name), \rc);
+            if (rc || !is_file(exe)) {
+                testSkip("qcc is not available or cannot compile " + Name + ": " + out);
+            }
+            # -b must be the first argument of a compiled program
+            string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
+            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
+            assertEq(expected(), result, sprintf("-O%s", opt));
+        }
+    }
+}

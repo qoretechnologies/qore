@@ -3944,6 +3944,35 @@ public:
     */
     DLLLOCAL bool parseAbstractMethodPending(const char* mname) const;
 
+    //! returns true if the code of the class context \a class_ctx calls its own method \a m first, before the method of
+    //! the name of the class of the object (qore#7440)
+    /** As the lookups do at run time (runtimeFindCommittedMethodForEval()) and parseFindAnyMethod() at parse time: a
+        private:internal method of the class context, or one of its normal methods with private:internal variants
+        that is not abstract; the method that such a call calls does not depend on the abstract methods of the class
+        of the object, so the call is not bound once they are resolved (parseAbstractMethodPending())
+    */
+    DLLLOCAL static bool parseCalledAsOwnMethod(const QoreMethod& m, const qore_class_private* class_ctx);
+
+    //! returns true if the class inherits the class context \a class_ctx (another class)
+    /** The code of a class calls its own method of a name with private:internal variants first only on an object of
+        a class that inherits it, as its private:internal variants are those of its objects; on an object of another
+        class (a parent class of the class context, whose private declarations it can access), the method of the
+        object's class is called (qore#7440)
+    */
+    DLLLOCAL bool inheritsClassContext(const qore_class_private& class_ctx) const {
+        // the access of the path, raised by the search
+        ClassAccess access = Public;
+        return scl && scl->inAccessHierarchy(class_ctx, access);
+    }
+
+    //! returns true if the run-time lookups of the class call the method \a m of the class context \a class_ctx, which
+    //! has private:internal variants, in place of the method of the class: if it is private:internal as a whole, or
+    //! if the class inherits the class context (qore#7440)
+    /** out of line and cold, so that the lookups, which call it only for such a method, cost nothing more otherwise
+    */
+    DLLLOCAL QORE_INTERN_COLD QORE_INTERN_NOINLINE bool runtimeCallsOwnMethod(const QoreMethod& m,
+            const qore_class_private& class_ctx) const;
+
     //! returns the type of a call of the method \a mname before it is bound, for a class for which
     //! parseAbstractMethodPending() is true (qore#7411)
     /** The method that resolving the abstract methods gives the class has the variants of the methods of the name of

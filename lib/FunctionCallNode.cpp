@@ -1384,6 +1384,7 @@ int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_
     if (method && !is_copy && !method->isStatic()) {
         const qore_class_private* lookup_cls = self_call_lookup_class(class_ctx, qc, ns.size() == 1);
         if (lookup_cls && !qore_class_private::get(*method->getClass())->sameClass(*lookup_cls)
+                && !qore_class_private::parseCalledAsOwnMethod(*method, class_ctx)
                 && lookup_cls->parseAbstractMethodPending(ns.getIdentifier())) {
             QoreParseCallArgs call_args;
             int err = parseInitCallArgs(parse_context, call_args);
