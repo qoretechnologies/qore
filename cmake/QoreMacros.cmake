@@ -3923,58 +3923,26 @@ MACRO (QORE_USER_MODULE _module_file)
                 "@INCLUDE = \"${MOD_DOXYFILE}\"\nWARN_IF_DOC_ERROR = NO\n")
         endif()
 
-        # add CMake target for the documentation
-        if (WIN32 AND (NOT MINGW) AND (NOT MSYS))
-            add_custom_target(docs-${f}
+        set(_html "${CMAKE_BINARY_DIR}/docs/modules/${f}/html")
+        set(_prune_search)
+        if (QORE_DOC_PRUNE_SEARCH)
+            set(_prune_search COMMAND ${QORE_DOC_PRUNE_SEARCH} "${_html}")
+        endif()
+        foreach(_target docs-${f} docs-fast-${f})
+            add_custom_target(${_target}
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
+                ${_prune_search}
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post "${_html}/*.html" "${_html}/*.js"
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post "${_html}/search/*.html" "${_html}/search/*.js"
                 ${_qore_user_java_step}
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
             )
-            add_dependencies(docs-${f} qore)
-            add_custom_target(docs-fast-${f}
-                COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
-                COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
-                ${_qore_user_java_step}
-                COMMENT "Generating API documentation with Doxygen for module: ${f}"
-                VERBATIM
-            )
-            add_dependencies(docs-fast-${f} qore)
-        else (WIN32 AND (NOT MINGW) AND (NOT MSYS))
-            add_custom_target(docs-${f}
-                COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
-                COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
-                ${_qore_user_java_step}
-                COMMENT "Generating API documentation with Doxygen for module: ${f}"
-                VERBATIM
-            )
-            add_dependencies(docs-${f} qore)
-            add_custom_target(docs-fast-${f}
-                COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
-                COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
-                ${_qore_user_java_step}
-                COMMENT "Generating API documentation with Doxygen for module: ${f}"
-                VERBATIM
-            )
-            add_dependencies(docs-fast-${f} qore)
-        endif (WIN32 AND (NOT MINGW) AND (NOT MSYS))
+            add_dependencies(${_target} qore)
+        endforeach()
         if (QORE_GENERATE_JAVA_BINDINGS)
             _qore_java_bindings_clean(docs-${f})
             _qore_java_bindings_clean(docs-fast-${f})
@@ -4220,8 +4188,13 @@ function(QORE_FINALIZE_USER_MODULE_DEPENDENCIES)
             file(WRITE "${_base}.final"
                 "@INCLUDE = \"${_base}\"\nTAGFILES += ${_quoted_doc_tags}\n"
                 "WARN_IF_DOC_ERROR = YES\nGENERATE_TAGFILE =\n")
+            set(_prune_search)
+            if (QORE_DOC_PRUNE_SEARCH)
+                set(_prune_search COMMAND ${QORE_DOC_PRUNE_SEARCH} "${_html}")
+            endif()
             add_custom_target(docs-${_mod}-final
                 COMMAND ${DOXYGEN_EXECUTABLE} "${_base}.final"
+                ${_prune_search}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND}
                     --post "${_html}" "${_html}/search"
                 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
