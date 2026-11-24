@@ -17092,6 +17092,9 @@ bool QoreAOTBinaryDeserializer::resolveConstants(std::string& error) {
 // import inherited base-class members — that must wait until sibling sessions
 // have finished their own resolveInstanceMembers (cross-session sync point).
 bool QoreAOTBinaryDeserializer::resolveMembers(std::string& error) {
+    if (!resolveHashdeclMemberExprDefaults(error)) {
+        return false;
+    }
     if (!resolveInstanceMembers(error)) {
         return false;
     }
@@ -19293,13 +19296,23 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                 phm.pending_complex_default_path.clear();
             }
 
-            resolveDeferredExprTreeDefault(phm.pending_expr_tree_blob,
-                phm.default_val, getProgram(), "hashdecl", hd->getName(),
-                phm.name.c_str());
-            if (!resolveDeferredNativeExprDefault(reader, phm.pending_expr_native_blob,
-                    phm.default_val, getProgram(), "hashdecl", hd->getName(),
-                    phm.name.c_str(), error, true)) {
-                return false;
+            // an expression default can reference functions, global variables, static class members and methods,
+            // which are not registered yet: a global variable read now is NOTHING and a function is called through
+            // call_function(); the member is added without its default value, which is read in resolveMembers()
+            // (qore#7493)
+            if (!phm.pending_expr_tree_blob.empty() || !phm.pending_expr_native_blob.empty()) {
+                if (phm.default_val.needsRef()) {
+                    phm.default_val.discard(nullptr);
+                }
+                phm.default_val = QoreValue();
+                PendingHashdeclMemberExpr pending_expr;
+                pending_expr.hd = hd;
+                pending_expr.name = phm.name.c_str();
+                pending_expr.expr_tree_blob = std::move(phm.pending_expr_tree_blob);
+                pending_expr.expr_native_blob = std::move(phm.pending_expr_native_blob);
+                phm.pending_expr_tree_blob.clear();
+                phm.pending_expr_native_blob.clear();
+                pending_hashdecl_member_exprs.push_back(std::move(pending_expr));
             }
 
             const QoreTypeInfo* mti = type_resolver->resolve(phm.type_path.c_str(), error);
@@ -19394,6 +19407,41 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
 
     // Clear pending data
     pending_hashdecl_members.clear();
+    return true;
+}
+
+bool QoreAOTBinaryDeserializer::resolveHashdeclMemberExprDefaults(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
+    // the pending entries hold no values, so they are released on any return
+    struct PendingClearGuard {
+        std::vector<PendingHashdeclMemberExpr>& pending;
+        ~PendingClearGuard() {
+            pending.clear();
+        }
+    } pending_guard{pending_hashdecl_member_exprs};
+    size_t i = 0;
+    for (auto& pe : pending_hashdecl_member_exprs) {
+        // each iteration deserializes a whole expression tree, so check every 10
+        if (i && !(i % 10) && qore_check_cancel(nullptr, "AOT hashdecl member default expression resolution")) {
+            error = "AOT hashdecl member default expression resolution cancelled";
+            return false;
+        }
+        ++i;
+        // the expression is read as it was when it was read with the members of the hashdecl, with constant
+        // references kept lazy (see resolveHashdeclMembers()), now that the functions, global variables, static
+        // class members and methods that it can reference are registered (qore#7493); the native form keeps them
+        // lazy with its last argument (wrap_const_ref_in_rcr), and the tree form never wraps them
+        // (deserializeExprTreeFromBlob() does not read the flag of the reader), so no RcrWrapGuard is needed here
+        QoreValue v;
+        resolveDeferredExprTreeDefault(pe.expr_tree_blob, v, getProgram(), "hashdecl", pe.hd->getName(),
+            pe.name.c_str());
+        if (!resolveDeferredNativeExprDefault(reader, pe.expr_native_blob, v, getProgram(), "hashdecl",
+                pe.hd->getName(), pe.name.c_str(), error, true)) {
+            return false;
+        }
+        // the member takes over the value
+        typed_hash_decl_private::get(*pe.hd)->setAOTMemberDefault(pe.name.c_str(), v);
+    }
     return true;
 }
 

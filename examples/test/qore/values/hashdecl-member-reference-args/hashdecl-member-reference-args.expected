@@ -1,0 +1,7 @@
+hashdecl: {fg: 5, fh: 7, fl: 11, fs: 3, sm: 5, om: 105, cl: 1005, rd: 4, wr: 1}
+g: 5 w: "w"
+generic hashdecl: {a: 5, b: "x"}
+class: fg=5 fh=7 fl=11 fs=3 sm=5 om=105 cl=1005 rd=4 wr=1
+w2: "w2"
+inherited hashdecl: {fg: 5, fh: 7, fl: 11, fs: 3, sm: 5, om: 105, cl: 1005, rd: 4, wr: 1, x: 6}
+generic child hashdecl: {a: 5, b: "y", c: 11}

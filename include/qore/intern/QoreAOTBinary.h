@@ -4072,6 +4072,24 @@ class QoreAOTBinaryDeserializer {
     // Map from hashdecl pointer to pending members
     std::vector<std::pair<TypedHashDecl*, std::vector<PendingHashdeclMember>>> pending_hashdecl_members;
 
+    //! The expression default value of a hashdecl member, which is read after the member is added (qore#7493)
+    /** The expression can reference functions, global variables, static class members and methods, which are
+        registered after the members of the hashdecl (resolveTypes()); it is read by
+        resolveHashdeclMemberExprDefaults() in resolveMembers(), when they are all registered
+    */
+    struct PendingHashdeclMemberExpr {
+        //! the hashdecl
+        TypedHashDecl* hd;
+        //! the name of the member
+        std::string name;
+        //! a VT_EXPR_TREE default value
+        std::vector<uint8_t> expr_tree_blob;
+        //! a VT_EXPR_NATIVE default value
+        std::vector<uint8_t> expr_native_blob;
+    };
+    //! the hashdecl member expression default values that are read in resolveMembers() (qore#7493)
+    std::vector<PendingHashdeclMemberExpr> pending_hashdecl_member_exprs;
+
     // Pending typedef info for two-pass resolution
     struct PendingTypedef {
         QoreAOTStringRef name;
@@ -4223,6 +4241,8 @@ private:
     bool resolveNamespaceConstants(std::string& error);
     bool resolveClassConstants(std::string& error);
     bool resolveHashdeclMembers(std::string& error);
+    //! reads the expression default values of hashdecl members (qore#7493); see PendingHashdeclMemberExpr
+    bool resolveHashdeclMemberExprDefaults(std::string& error);
     bool resolveTypedefs(std::string& error);
     bool resolveEnumBaseTypes(std::string& error);
     bool resolveBCAExpressions(std::string& error);
@@ -4388,10 +4408,12 @@ public:
         the first successful call. */
     bool resolveStaticsAndConstants(std::string& error);
 
-    //! Phase-split 2a-3 — resolve this session's OWN instance members.
+    //! Phase-split 2a-3 — resolve this session's OWN instance members and the expression defaults of its hashdecl
+    //! members.
     /** Must run after resolveConstants() and resolveStaticMembersPhase() so
         expression-tree member defaults can resolve constants and static vars,
-        and after deserializeFunctionsAndMethods() so defaults can call class
+        after resolveStaticsAndConstants() so they can reference global variables (qore#7493),
+        and after deserializeFunctionsAndMethods() so defaults can call functions and class
         static methods. */
     bool resolveMembers(std::string& error);
 
