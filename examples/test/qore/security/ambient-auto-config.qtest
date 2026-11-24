@@ -13,10 +13,11 @@
 
 %exec-class AmbientAutoConfigTest
 
-#! The data providers take no options from the host's environment for code restricted from external information
+#! The data providers take no options from the host's environment for code that may not receive the host's secrets
 #! (qore#6844)
 /** With DataProvider::setAutoConfig() in effect, the ServiceNow, Salesforce, Dataverse and Business Central data
-    providers took missing options, including passwords and client secrets, from the environment also for such code
+    providers took missing options, including passwords and client secrets, from the environment also for such code;
+    they are the host's secrets, so sandboxed code does not get them either, unless the host grants them
 */
 class AmbientAutoConfigTest inherits QUnit::Test {
     constructor() : Test("AmbientAutoConfig", "1.0", \ARGV) {
@@ -37,13 +38,15 @@ class AmbientAutoConfigTest inherits QUnit::Test {
             "host_auto_config": "True",
             "host_servicenow": host,
         };
-        # code that could read the environment itself (a sandbox that does not restrict external information)
-        # gets the options, other code its own only
+        # the options include the host's secrets: only code that may receive them gets them, other code (also
+        # sandboxed code that may read the environment) its own only; the host's grants give them to any code
         foreach hash<auto> k in (AmbientCallers::KindInfo.pairIterator()) {
             foreach string mode in (keys AmbientCallers::Modes) {
                 string key = replace(k.key, " ", "_") + "_" + mode;
-                expected{key + "_auto_config"} = k.value.read ? "True" : "False";
-                expected{key + "_servicenow"} = k.value.read ? host : none;
+                expected{key + "_auto_config"} = k.value.secrets ? "True" : "False";
+                expected{key + "_auto_config_barrier"} = "True";
+                expected{key + "_auto_config_capability"} = "True";
+                expected{key + "_servicenow"} = k.value.secrets ? host : none;
                 expected{key + "_servicenow_explicit"} = own;
             }
         }

@@ -16,8 +16,16 @@
 const Source = "%modern
 %requires DataProvider
 %requires ServiceNowRestDataProvider
+%requires AmbientCallers
 bool sub auto_config() {
     return DataProvider::DataProvider::getAutoConfig();
+}
+# the host's grants: library code that establishes a policy barrier or calls a system-policy capability (no closure:
+# a policy barrier does not mask the provenance of a callback of the calling code)
+bool sub auto_config_grant(string how) {
+    return how == \"barrier\"
+        ? AmbientCallers::invoke_barrier(\"DataProvider::DataProvider\", \"getAutoConfig\")
+        : AmbientCallers::invoke_capability(\"DataProvider::DataProvider\", \"getAutoConfig\");
 }
 hash<auto> sub servicenow(*hash<auto> opts) {
     ServiceNowRestDataProvider::ServiceNowRestDataProvider dp({\"url\": \"http://localhost:1\"} + opts);
@@ -35,6 +43,8 @@ hash<string, Program> pgms = AmbientCallers::make_programs(Source, "auto-config"
 foreach hash<auto> i in (pgms.pairIterator()) {
     string kind = replace(replace(i.key, ": ", "_"), " ", "_");
     printf("%s_auto_config=%y\n", kind, i.value.callFunction("auto_config"));
+    printf("%s_auto_config_barrier=%y\n", kind, i.value.callFunction("auto_config_grant", "barrier"));
+    printf("%s_auto_config_capability=%y\n", kind, i.value.callFunction("auto_config_grant", "capability"));
     printf("%s_servicenow=%y\n", kind, i.value.callFunction("servicenow"));
     # options that the caller gives are its own
     printf("%s_servicenow_explicit=%y\n", kind, i.value.callFunction("servicenow", {"username": "me",
