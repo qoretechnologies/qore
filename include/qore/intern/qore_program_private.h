@@ -2423,9 +2423,41 @@ public:
     };
 
     typedef section_sline_statement_map section_sline_statement_map_t;
-    // map for filenames
-    typedef vector_map_t<const char*, section_sline_statement_map_t*> name_section_sline_statement_map_t;
-    //typedef std::map<const char*, section_sline_statement_map_t*, ltstr> name_section_sline_statement_map_t;
+    // Keep insertion order for debugger enumeration and first-match file suffix lookups. Exact lookups run for
+    // every statement location in a debugger-enabled AOT program, so index the interned names by their contents.
+    class name_section_sline_statement_map_t {
+        using entries_t = std::vector<std::pair<const char*, section_sline_statement_map_t*>>;
+        entries_t entries;
+        std::unordered_map<std::string_view, size_t> by_name;
+
+    public:
+        using const_iterator = entries_t::const_iterator;
+        DLLLOCAL const_iterator begin() const { return entries.begin(); }
+        DLLLOCAL const_iterator end() const { return entries.end(); }
+        DLLLOCAL bool empty() const { return entries.empty(); }
+        DLLLOCAL size_t size() const { return entries.size(); }
+
+        DLLLOCAL const_iterator find(const char* name) const {
+            auto it = by_name.find(name);
+            return it == by_name.end() ? end() : begin() + it->second;
+        }
+
+        DLLLOCAL void add(const char* name, section_sline_statement_map_t* sections) {
+            auto result = by_name.emplace(name, entries.size());
+            assert(result.second);
+            try {
+                entries.emplace_back(name, sections);
+            } catch (...) {
+                by_name.erase(result.first);
+                throw;
+            }
+        }
+
+        DLLLOCAL void clear() {
+            by_name.clear();
+            entries.clear();
+        }
+    };
 
     DLLLOCAL qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
             QoreProgram* p_pgm = nullptr, const QoreParseOptions* p_parse_options = nullptr,
@@ -7544,7 +7576,7 @@ public:
     DLLLOCAL AbstractStatement* getStatementFromIndex(const char* name, int line) {
         printd(5, "qore_program_private::getStatementFromIndex('%s',%d), this: %p, file#: %d, label#: %d\n", name, line, this, (int)(statementByFileIndex.size()), (int)(statementByLabelIndex.size()));
         AutoLocker al(&plock);
-        name_section_sline_statement_map_t::iterator it;
+        name_section_sline_statement_map_t::const_iterator it;
         if (statementByFileIndex.empty()) {
             return nullptr;
         }
