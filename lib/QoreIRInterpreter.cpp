@@ -6811,17 +6811,6 @@ private:
     QoreProgramLocationHelper loc_helper;
 };
 
-//! Runs a plain function inline in the interpreter, if it can
-/** @param thread_data the current thread's data (RuntimeLocationCache::thread_data), for the switch of the object and
-    class context (CalleeContextHelper)
-    @param caller_ir the IR of the caller, whose context the callee's body keeps when it is a plain function
-    @param arg_cleanups the references of the temporary arguments that the caller gives to the call (see
-    IRGivenCallArgs), released in the callee's frame once its body has run and its parameters were released, as the
-    AST interpreter releases the parameters that took them over (issue #5882); if the call is not made here, they are
-    left to the caller
-    @tparam GIVEN true if the caller gives the references of temporary arguments (\a arg_cleanups); a call that gives
-    none runs the code instantiated for false, which has no test for them
-*/
 //! Runs the body of a plain function that an inline call of the IR interpreter runs in another Program with the call
 //! Program context of that Program (qore#7394)
 /** Out of line, so that the frames of the inline calls within one Program, such as the levels of a recursion, hold
@@ -6838,6 +6827,17 @@ static QORE_INTERN_NOINLINE bool qore_ir_execute_inline_body_in_call_program_con
         nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
 }
 
+//! Runs a plain function inline in the interpreter, if it can
+/** @param thread_data the current thread's data (RuntimeLocationCache::thread_data), for the switch of the object and
+    class context (CalleeContextHelper)
+    @param caller_ir the IR of the caller, whose context the callee's body keeps when it is a plain function
+    @param arg_cleanups the references of the temporary arguments that the caller gives to the call (see
+    IRGivenCallArgs), released in the callee's frame once its body has run and its parameters were released, as the
+    AST interpreter releases the parameters that took them over (issue #5882); if the call is not made here, they are
+    left to the caller
+    @tparam GIVEN true if the caller gives the references of temporary arguments (\a arg_cleanups); a call that gives
+    none runs the code instantiated for false, which has no test for them
+*/
 template <bool GIVEN = false>
 static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* inst,
         QoreProgram* caller_pgm, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
