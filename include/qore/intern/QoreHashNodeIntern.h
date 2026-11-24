@@ -619,8 +619,12 @@ public:
         qhlist_t::iterator li = i->second;
         hm.erase(i);
 
-        // dereference node if present
+        // the value is taken and the member deleted before the value is released, as releasing it can run code
+        // that changes the hash
         AbstractQoreNode* n = (*li)->val.assignNothing();
+        internDeleteKey(li);
+
+        // dereference node if present
         if (n) {
             if (needs_scan(n))
                 incScanCount(-1);
@@ -629,8 +633,6 @@ public:
                 reinterpret_cast<QoreObject*>(n)->doDelete(xsink);
             n->deref(xsink);
         }
-
-        internDeleteKey(li);
     }
 
     // removes the value and dereferences it, without performing a delete on it

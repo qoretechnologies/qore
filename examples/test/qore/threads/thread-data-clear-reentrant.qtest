@@ -16,7 +16,8 @@
     the destructors of its values can use it.  The probe's destructors add values to keys that the clearing has
     passed (and the destructors of those add more members, which a later destructor looks up), delete and remove
     their own key and a later key, clear all thread data and add many keys, read the keys freed before and after
-    them, and save new values again and again.  A destructor reads the values not freed yet and never a freed member,
+    them, save new values again and again, and delete and remove a key whose value's destructor clears all thread
+    data.  A destructor reads the values not freed yet and never a freed member,
     and the values saved during the release are freed while nothing can be saved, so that the release ends; the
     output must be the expected one in every execution mode.  The children run with the macOS allocator scribbling
     freed memory, so that a read of a freed member shows.
@@ -56,6 +57,12 @@ class ThreadDataClearReentrantTest inherits QUnit::Test {
             # destructor cannot save another one, so the release ends
             assertTrue(out =~ /^resave same pool: \[\x22resave 0 freed\x22, \x22resave 1 freed\x22, /m
                 && out =~ /^resave same pool: [^\n]*\x22save r: DESTRUCTOR-ERROR\x22, /m, mode + " resave");
+            # a key is deleted whose value's destructor clears all thread data, from plain code and from a destructor
+            # run in the second phase of a release
+            assertTrue(out =~ /^delete plain \(keys after: \[\x22w\x22\]\): \[\x22clear-all: keys \[\]\x22\]$/m,
+                mode + " delete plain");
+            assertTrue(out =~ /^remove phase 2 pool: \[\x22clear-all: keys \[\]\x22, \x22remove x: keys \[\]\x22\]$/m,
+                mode + " remove phase 2");
             # the thread data of the main thread is empty after its clearing
             assertTrue(out =~ /^main keys: \[\]$/m, mode + " main keys");
         }

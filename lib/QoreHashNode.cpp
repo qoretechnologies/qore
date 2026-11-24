@@ -108,8 +108,8 @@ void qore_hash_private::clear(ExceptionSink* xsink) {
         return;
     }
 
-    // the first phase: the values that the hash has now are freed in order: each is taken, and its member deleted, as
-    // deleteKey() does, before it is freed, so that no member or iterator is held while code runs; their
+    // the first phase: the values that the hash has now are freed in order: each is taken, and its member deleted,
+    // before it is freed, so that no member or iterator is held while code runs; their
     // destructors can read the values not freed yet and save values, which are added at the end.  The number of
     // values freed here is that of the members when it starts, so that it ends
     // the nodes of the member list of the members released (see takeFreeMemberForClear())
@@ -1499,11 +1499,10 @@ void HashIterator::deleteKey(ExceptionSink* xsink) {
 
     assert(h->is_unique());
 
-    if (needs_scan((*(priv->i))->val)) {
+    QoreValue v = (*(priv->i))->val;
+    if (needs_scan(v)) {
         h->priv->incScanCount(-1);
     }
-
-    (*(priv->i))->val.discard(xsink);
 
     qhlist_t::iterator ni = priv->i;
     priv->prev(h->priv->member_list);
@@ -1511,7 +1510,9 @@ void HashIterator::deleteKey(ExceptionSink* xsink) {
     hm_hm_t::iterator i = h->priv->hm.find(*ni);
     assert(i != h->priv->hm.end());
     h->priv->hm.erase(i);
+    // the member is deleted before the value is released, as releasing it can run code that changes the hash
     h->priv->internDeleteKey(ni);
+    v.discard(xsink);
 }
 
 int HashIterator::assign(QoreValue val, ExceptionSink* xsink) {

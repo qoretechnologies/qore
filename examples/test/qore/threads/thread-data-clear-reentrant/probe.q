@@ -151,6 +151,62 @@ class Spawn {
     }
 }
 
+# a value whose destructor clears all thread data
+class ClearAll {
+    private {
+        Queue events;
+    }
+
+    constructor(Queue events) {
+        self.events = events;
+    }
+
+    destructor() {
+        delete_all_thread_data();
+        events.push(sprintf("clear-all: keys %y", keys get_all_thread_data()));
+    }
+}
+
+# a value whose destructor deletes (mode "delete") or removes (mode "remove") the key "x"
+class DeleteX {
+    private {
+        string mode;
+        Queue events;
+    }
+
+    constructor(string mode, Queue events) {
+        self.mode = mode;
+        self.events = events;
+    }
+
+    destructor() {
+        if (mode == "delete") {
+            delete_thread_data("x");
+        } else {
+            remove_thread_data("x");
+        }
+        events.push(sprintf("%s x: keys %y", mode, keys get_all_thread_data()));
+    }
+}
+
+# a value whose destructor saves a DeleteX value and then the ClearAll value "x", which the second phase frees
+class SaveLate {
+    private {
+        string mode;
+        Queue events;
+    }
+
+    constructor(string mode, Queue events) {
+        self.mode = mode;
+        self.events = events;
+    }
+
+    destructor() {
+        save_thread_data("late", new DeleteX(mode, events));
+        save_thread_data("x", new ClearAll(events));
+    }
+}
+
 # runs the code that fills the thread data in the way given, and clears the thread data there: with
 # delete_all_thread_data(), or at the end of a pool task (the data of a thread that ends is freed after the thread's
 # Program context, so its destructors do not use it)
@@ -220,6 +276,40 @@ foreach string how in ("direct", "pool") {
         }
     });
     printf("spawn %s: freed %d\n", how, freed.getCount());
+}
+# a key is deleted or removed whose value's destructor clears all thread data: from plain code, and from the
+# destructors of values freed in the first and in the second phase of a release
+foreach string mode in ("delete", "remove") {
+    # plain code
+    for (int i = 0; i < 3; ++i) {
+        save_thread_data("a" + i, i);
+    }
+    save_thread_data("x", new ClearAll(events));
+    save_thread_data("z", 1);
+    if (mode == "delete") {
+        delete_thread_data("x");
+    } else {
+        remove_thread_data("x");
+    }
+    save_thread_data("w", 1);
+    show(sprintf("%s plain (keys after: %y)", mode, keys get_all_thread_data()));
+    delete_all_thread_data();
+    foreach string how in ("direct", "pool") {
+        # the first phase: the value of "d", freed before "x", deletes or removes "x"
+        run(how, sub () {
+            save_thread_data("p0", 0);
+            save_thread_data("d", new DeleteX(mode, events));
+            save_thread_data("x", new ClearAll(events));
+            save_thread_data("p1", 1);
+        });
+        show(sprintf("%s phase 1 %s", mode, how));
+        # the second phase: values saved in the first phase delete or remove "x"
+        run(how, sub () {
+            save_thread_data("s", new SaveLate(mode, events));
+            save_thread_data("p0", 0);
+        });
+        show(sprintf("%s phase 2 %s", mode, how));
+    }
 }
 # the thread data of this thread is empty after the clearing
 printf("main keys: %y\n", keys get_all_thread_data());

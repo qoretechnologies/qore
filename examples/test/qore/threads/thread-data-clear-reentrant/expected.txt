@@ -18,4 +18,14 @@ resave same pool: ["resave 0 freed", "resave 1 freed", "save r: DESTRUCTOR-ERROR
 resave new pool: ["resave 0 freed", "resave 1 freed", "save r2: DESTRUCTOR-ERROR", "resave 2 freed", "save r3: DESTRUCTOR-ERROR", "resave 3 freed", "save r4: DESTRUCTOR-ERROR", "resave 4 freed", "save r5: DESTRUCTOR-ERROR", "resave 5 freed", "save r6: DESTRUCTOR-ERROR", "resave 6 freed", "save r7: DESTRUCTOR-ERROR", "resave 7 freed", "save r8: DESTRUCTOR-ERROR", "resave 8 freed", "save r9: DESTRUCTOR-ERROR", "resave 9 freed", "save r10: DESTRUCTOR-ERROR", "resave 10 freed"]
 spawn direct: freed 4000
 spawn pool: freed 4000
+delete plain (keys after: ["w"]): ["clear-all: keys []"]
+delete phase 1 direct: ["clear-all: keys []", "delete x: keys []"]
+delete phase 2 direct: ["clear-all: keys []", "delete x: keys []"]
+delete phase 1 pool: ["clear-all: keys []", "delete x: keys []"]
+delete phase 2 pool: ["clear-all: keys []", "delete x: keys []"]
+remove plain (keys after: ["w"]): ["clear-all: keys []"]
+remove phase 1 direct: ["clear-all: keys []", "remove x: keys []"]
+remove phase 2 direct: ["clear-all: keys []", "remove x: keys []"]
+remove phase 1 pool: ["clear-all: keys []", "remove x: keys []"]
+remove phase 2 pool: ["clear-all: keys []", "remove x: keys []"]
 main keys: []
