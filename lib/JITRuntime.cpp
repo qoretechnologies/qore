@@ -13439,12 +13439,18 @@ extern "C" DLLEXPORT void qore_rt_pop_native_function_context_v1(void* storage) 
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
 namespace {
+//! sets the receiver type of a call for its frame (execJITWithDeopt(), QoreNativeMethodContext)
+/** The constructor and the destructor are always inlined: when this type replaced the function-local struct of
+    execJITWithDeopt() to be shared with QoreNativeMethodContext, without it, GCC 15 made every fast-call frame that
+    inlines execJITWithDeopt() (try_dispatch_method_fast(), qore_rt_call_fast() and the other fast call paths) 16
+    bytes larger, which each level of a recursion of interpreted code pays (issue #7514)
+*/
 struct QoreRtReceiverTypeInfoGuard {
     const QoreTypeInfo* old = nullptr;
     bool restore = false;
     bool unsafe = false;
 
-    explicit QoreRtReceiverTypeInfoGuard(const QoreTypeInfo* ti) {
+    QORE_INTERN_ALWAYS_INLINE explicit QoreRtReceiverTypeInfoGuard(const QoreTypeInfo* ti) {
         if (ti) {
             old = runtime_set_receiver_type_info(ti);
             restore = true;
@@ -13456,7 +13462,7 @@ struct QoreRtReceiverTypeInfoGuard {
         }
     }
 
-    ~QoreRtReceiverTypeInfoGuard() {
+    QORE_INTERN_ALWAYS_INLINE ~QoreRtReceiverTypeInfoGuard() {
         if (restore) {
             runtime_set_receiver_type_info(old);
             if (unsafe) {

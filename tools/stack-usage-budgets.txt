@@ -27,6 +27,11 @@
 # one that identical code folding merged into another (only a branch to it) as FOLDED, and one that allocates stack of
 # a size known only at run time (a "dynamic" record) as DYNAMIC; see tools/check-stack-usage.py.
 
+# Calibrated in the toolchain of CI's build-perf job, which runs this check (test/docker_test/build-perf.sh): the image
+# registry.qoretechnologies.com/infrastructure/qore-test-base/qore-test-base:develop (Ubuntu 26.04, GCC
+# 15.2.0-16ubuntu1, glibc 2.43), configured with -DCMAKE_BUILD_TYPE=Release -DSINGLE_COMPILATION_UNIT=1
+# -DQORE_QCC_TEST_HOOKS=ON -DQORE_STACK_USAGE_REPORT=ON; measure a recalibration in that image, as a build of the same
+# compiler version on another host matches the settings below and can still give other frames
 @compiler GNU
 # the major version must match
 @compiler-version 15.2.0

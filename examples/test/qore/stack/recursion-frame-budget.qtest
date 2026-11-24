@@ -140,6 +140,14 @@ int sub run(string f) {
         #! the budgets in bytes per level: target triple and build type -> execution mode -> recursion
         /** measured with GCC 15.2 on x86_64 (glibc and musl alike) and on aarch64 (in CI's Ubuntu and Alpine arm64
             images); see the comment at the top
+
+            The x86_64-linux-gnu release budgets are calibrated in the toolchain of CI's build-perf job, whose
+            performance tests check them: the image
+            registry.qoretechnologies.com/infrastructure/qore-test-base/qore-test-base:develop (Ubuntu 26.04, GCC
+            15.2.0-16ubuntu1, glibc 2.43) and the configuration of test/docker_test/build-perf.sh
+            (-DCMAKE_BUILD_TYPE=Release -DSINGLE_COMPILATION_UNIT=1 -DQORE_QCC_TEST_HOOKS=ON
+            -DQORE_STACK_USAGE_REPORT=ON).  Measure a recalibration in that image: a build of the same compiler
+            version on another host passes getCalibrationMismatch() and can still give other frames
         */
         const Budgets = {
             # measured: ast 2639, 2559, 2528 (develop d1539bd5c1); the ir budgets are the measured values plus 56 bytes
