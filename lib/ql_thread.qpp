@@ -91,6 +91,19 @@ struct CallAsyncParams {
     }
 };
 
+// the call stacks of all threads as the calling code may see them: code restricted from external information is
+// given the file names of the sources only, as their directories are the host's layout (qore#7507)
+static QoreHashNode* q_get_all_call_stacks_for_caller() {
+    QoreHashNode* rv = getAllCallStacks();
+    if (runtime_no_external_info()) {
+        HashIterator i(rv);
+        while (i.next()) {
+            qore_restrict_call_stack_paths_in_place(*i.get().get<QoreListNode>());
+        }
+    }
+    return rv;
+}
+
 // thread function for call_async
 static void call_async_thread(ExceptionSink* xsink, void* arg) {
     CallAsyncParams* params = static_cast<CallAsyncParams*>(arg);
@@ -209,10 +222,15 @@ static QoreHashNode* remove_thread_data_intern(const QoreListNode* args, Excepti
     at a location of its line in the other execution modes
     (<a href="https://github.com/qoretechnologies/qore/issues/5746">issue 5746</a>).
 
+    Code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" is given the \c file and \c source of
+    each frame with the file names of the sources only, as their directories are external information; see
+    @ref no-external-info "%no-external-info"
+
     @since %Qore 0.8.13
 
     @since %Qore 3.0 a frame of a call is located at the call expression; before, at the statement that makes the call
-    in the AST interpreter, and at a location of its line in other execution modes
+    in the AST interpreter, and at a location of its line in other execution modes; the files are named without their
+    directories for code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"
 */
 hashdecl CallStackInfo {
     //! function or method name
@@ -663,7 +681,7 @@ hash<auto> get_all_thread_data() [flags=RET_VALUE_ONLY,OWN_PROGRAM_STATE;dom=THR
     @deprecated use get_all_thread_call_stacks(); camel-case function names were deprecated in %Qore 0.8.12
 */
 hash<string, list<hash<CallStackInfo>>> getAllThreadCallStacks() [dom=THREAD_CONTROL,THREAD_INFO;flags=DEPRECATED] {
-    return getAllCallStacks();
+    return q_get_all_call_stacks_for_caller();
 }
 
 //! Returns a hash of lists of @ref CallStackInfo hashes keyed by TID (thread ID)
@@ -689,7 +707,7 @@ foreach string tid in (cs.keyIterator()) {
     @since %Qore 0.8.12 as a replacement for deprecated camel-case getAllThreadCallStacks()
 */
 hash<string, list<hash<CallStackInfo>>> get_all_thread_call_stacks() [dom=THREAD_CONTROL,THREAD_INFO] {
-    return getAllCallStacks();
+    return q_get_all_call_stacks_for_caller();
 }
 
 //! Returns a list of @ref CallStackInfo hashes for the current TID (thread ID)
@@ -715,7 +733,12 @@ foreach hash<CallStackInfo> l in (cs) {
     @since %Qore 0.8.13
 */
 list<hash<CallStackInfo>> get_thread_call_stack() [dom=THREAD_CONTROL,THREAD_INFO] {
-    return qore_get_thread_call_stack();
+    ReferenceHolder<QoreListNode> rv(qore_get_thread_call_stack(), xsink);
+    if (runtime_no_external_info()) {
+        // the directories of the sources are external information (qore#7507)
+        qore_restrict_call_stack_paths_in_place(**rv);
+    }
+    return rv.release();
 }
 
 //! Returns information about the code in the callstack according to the offset argument
@@ -725,7 +748,12 @@ list<hash<CallStackInfo>> get_thread_call_stack() [dom=THREAD_CONTROL,THREAD_INF
     have an entry at the given offset, @ref NOTHING is returned
 */
 *hash<CallStackInfo> get_parent_caller_location(int offset = 1) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=THREAD_CONTROL,THREAD_INFO] {
-    return qore_get_parent_caller_location(offset);
+    QoreHashNode* rv = qore_get_parent_caller_location(offset);
+    if (rv && runtime_no_external_info()) {
+        // the directories of the sources are external information (qore#7507)
+        qore_restrict_location_paths(*rv);
+    }
+    return rv;
 }
 
 //! Immediately runs all thread resource cleanup routines for the current thread and throws all associated exceptions

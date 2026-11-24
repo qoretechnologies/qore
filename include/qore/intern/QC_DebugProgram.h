@@ -221,7 +221,8 @@ public:
       */
       QoreException* except = qore_exception_sink_ops(xsink).getException();
       {
-         QoreHashNode* h = except->makeExceptionObject();
+         // a debugger is the host's tool: it is given the locations in full (qore#7507)
+         QoreHashNode* h = except->makeExceptionObjectFor(false);
          // the ID of the exception, which is the same in each event of the exception, also after a rethrow (#5906)
          qore_hash_private::get(*h)->setKeyValueIntern("debug_id", except->getDebugId());
          params[1] = h;

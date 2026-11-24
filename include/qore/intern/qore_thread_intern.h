@@ -1602,6 +1602,65 @@ DLLLOCAL QoreParseOptions parse_get_parse_options();
 DLLLOCAL QoreParseOptions runtime_get_parse_options();
 DLLLOCAL QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n);
 
+//! Returns true if the code running on the current thread is restricted from external information
+/** The runtime parse options of the thread have @ref PO_NO_EXTERNAL_INFO (the code of a Program with the restriction,
+    or module code that runs with the restrictions of such a caller), or the code runs for code with the restriction,
+    by the rule of every check of the caller's domains (see qore_caller_restricts_domain()): library module code that
+    such code calls, a thread or a continuation of work that it started.  Returns false on a thread without thread
+    data.
+
+    The locations of code (the \c file and \c source of exceptions and call stacks) are given to code with this
+    restriction with the file names of the sources only, as the directories are the host's layout (see
+    qore_path_file_name(), qore#7507).
+*/
+DLLLOCAL bool runtime_no_external_info();
+
+//! Returns the last component of \a path (the file name), without the directories
+/** Both \c / and \c \\ separate components, wherever the path comes from (UNC paths included); separators at the
+    end of the path are ignored.  A path without a separator is returned unchanged.
+*/
+DLLLOCAL std::string qore_path_file_name(const char* path);
+
+//! Gives the module loader's messages the form that the code requesting the load may be given (qore#7507)
+/** The messages that the module loader builds (exception descriptions and arguments, warnings) name files of the host
+    when the code that requests the load may know them; while one of these helpers is active for code restricted from
+    external information (@ref PO_NO_EXTERNAL_INFO), and in every module load it makes in its scope (dependencies,
+    child modules), they name each file without its directory (qore_msg_path()) and leave out the details that other
+    subsystems give in text of their own (qore_msg_detail()), which can name files of the host.
+*/
+class QoreRestrictedMessageScopeHelper {
+public:
+    //! Starts a scope for messages restricted from external information if \a restricted
+    /** A scope that is already active stays active
+    */
+    DLLLOCAL QoreRestrictedMessageScopeHelper(bool restricted);
+
+    DLLLOCAL ~QoreRestrictedMessageScopeHelper();
+
+private:
+    bool old;
+};
+
+//! Returns true if the messages built on this thread are for code restricted from external information
+DLLLOCAL bool qore_msg_restricted();
+
+//! Returns \a path for a message: its file name only for code restricted from external information
+/** @see QoreRestrictedMessageScopeHelper
+*/
+DLLLOCAL std::string qore_msg_path(const char* path);
+
+//! Returns a new string with \a path for a message, as qore_msg_path() gives it
+DLLLOCAL QoreStringNode* qore_msg_path_node(const char* path);
+
+//! Returns \a text, a detail of a message that another subsystem gave as text, or a note that it was left out
+/** The text that the dynamic loader, the readers of module files and the checks of modules give is not built by the
+    module loader and can name files of the host anywhere in it, so it is left out of the messages for code restricted
+    from external information.
+
+    @see QoreRestrictedMessageScopeHelper
+*/
+DLLLOCAL const char* qore_msg_detail(const char* text);
+
 DLLLOCAL bool parse_check_parse_option(const QoreParseOptions& o);
 //! Records that the code being parsed uses functionality that the given restriction forbids, and returns true if the
 //! restriction is set

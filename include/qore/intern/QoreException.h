@@ -4,7 +4,7 @@
 
     Qore programming language exception handling support
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -149,7 +149,18 @@ public:
 
     // called for generic exceptions
     DLLLOCAL QoreHashNode* makeExceptionObjectAndDelete(ExceptionSink *xsink);
+    //! Returns a hash<ExceptionInfo> of this exception for the code running on the thread
+    /** The code running on the thread receives the exception (a catch block, for example): code restricted from
+        external information (see runtime_no_external_info()) is given the locations with the file names of the
+        sources only (qore#7507)
+    */
     DLLLOCAL QoreHashNode* makeExceptionObject(int level = 0) const;
+    //! Returns a hash<ExceptionInfo> of this exception for code restricted from external information or not
+    /** @param no_external_info if true, the locations (\c file, \c source, the \c callstack, those of the chained
+        exceptions) are given with the file names of the sources only (qore#7507)
+        @param level the level of the exception in the chain
+    */
+    DLLLOCAL QoreHashNode* makeExceptionObjectFor(bool no_external_info, int level = 0) const;
     //! Returns a hash<ExceptionInfo> of this exception without the exceptions chained to it
     DLLLOCAL QoreHashNode* makeExceptionObjectWithoutChain() const;
 
@@ -484,5 +495,17 @@ public:
         return &xsink;
     }
 };
+
+//! Replaces the paths of the location hash \a h (\c file and \c source), which the caller owns alone, with the file
+//! names of the sources, for code restricted from external information (qore#7507)
+DLLLOCAL void qore_restrict_location_paths(QoreHashNode& h);
+
+//! Returns a copy of the call stack \a stack with the file names of the sources only, for code restricted from
+//! external information (qore#7507)
+DLLLOCAL QoreListNode* qore_restrict_call_stack_paths(const QoreListNode& stack);
+
+//! Replaces the paths of the call stack \a stack, whose list and hashes the caller owns alone, with the file names of
+//! the sources, for code restricted from external information (qore#7507)
+DLLLOCAL void qore_restrict_call_stack_paths_in_place(QoreListNode& stack);
 
 #endif

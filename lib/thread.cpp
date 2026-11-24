@@ -9825,6 +9825,76 @@ QoreParseOptions runtime_get_parse_options() {
     return (thread_data.get())->runtime_po_state.po;
 }
 
+bool runtime_no_external_info() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // the code running has the restriction itself
+    if (td->runtime_po_state.po & PO_NO_EXTERNAL_INFO) {
+        return true;
+    }
+    // the code of a Program that is not a module's, without the restriction, with no restrictions of a sandboxed
+    // caller and no provenance of restricted code: the rule below decides on the Program's options alone, without
+    // walking further (see qore_get_caller_domain_restrictions()), so the common case of an exception that code without
+    // the restriction catches costs no walk
+    const QoreProgram* pgm = td->current_pgm;
+    if (pgm && !td->runtime_po_state.caller_restrictions && !td->sandbox_provenance
+            && !qore_program_is_module_inline(pgm)) {
+        return !!(qore_program_private::getParseOptions(*pgm) & PO_NO_EXTERNAL_INFO);
+    }
+    // or it runs for code with it: library module code called by it, a thread or a continuation of work that it
+    // started; the rule of every check of the caller's domains
+    return qore_get_calling_code_restrictions(td).hasAny(QoreParseOptions(PO_NO_EXTERNAL_INFO));
+}
+
+std::string qore_path_file_name(const char* path) {
+    const char* end = path + strlen(path);
+    // separators at the end of the path (a directory) are not part of the last component
+    while (end > path + 1 && (end[-1] == '/' || end[-1] == '\\')) {
+        --end;
+    }
+    const char* last = end;
+    while (last > path && last[-1] != '/' && last[-1] != '\\') {
+        --last;
+    }
+    return last == end ? std::string(path, end - path) : std::string(last, end - last);
+}
+
+// true while the module loader builds messages for code restricted from external information (qore#7507)
+static thread_local bool qore_msg_restricted_scope = false;
+
+QoreRestrictedMessageScopeHelper::QoreRestrictedMessageScopeHelper(bool restricted)
+        : old(qore_msg_restricted_scope) {
+    if (restricted) {
+        qore_msg_restricted_scope = true;
+    }
+}
+
+QoreRestrictedMessageScopeHelper::~QoreRestrictedMessageScopeHelper() {
+    qore_msg_restricted_scope = old;
+}
+
+bool qore_msg_restricted() {
+    return qore_msg_restricted_scope;
+}
+
+std::string qore_msg_path(const char* path) {
+    if (!path) {
+        return std::string();
+    }
+    return qore_msg_restricted_scope ? qore_path_file_name(path) : std::string(path);
+}
+
+QoreStringNode* qore_msg_path_node(const char* path) {
+    return new QoreStringNode(qore_msg_path(path));
+}
+
+const char* qore_msg_detail(const char* text) {
+    return qore_msg_restricted_scope ? "(the details name files of the host, which code restricted from external "
+        "information is not given)" : text;
+}
+
 QoreParseOptions runtime_get_effective_program_parse_options() {
     return runtime_get_effective_parse_options_for(thread_data.get()->current_pgm);
 }

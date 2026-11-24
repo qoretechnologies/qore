@@ -13074,7 +13074,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
                 if (!dep_err) {
                     dep_err = new QoreStringNodeMaker("AOT module '%s' (%s) requires module '%s', "
                         "whose initialization failed (%s)", mod_name ? mod_name : "<unknown>",
-                        (label && *label) ? label : "<unknown path>", dep.c_str(),
+                        label && *label ? qore_msg_path(label).c_str() : "<unknown path>", dep.c_str(),
                         init_error.empty() ? "its initialization failed" : init_error.c_str());
                 }
                 continue;
@@ -13090,7 +13090,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
                         "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
                         "and cannot be loaded without it",
                         mod_name ? mod_name : "<unknown>",
-                        (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
+                        label && *label ? qore_msg_path(label).c_str() : "<unknown path>", dep.c_str(), dep.c_str());
                     missing_dep = dep;
                 }
                 continue;
@@ -13922,8 +13922,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
             QoreStringNode* err = new QoreStringNodeMaker(
                 "AOT module-command replay error for module '%s' (%s): %s",
                 mod_name ? mod_name : "<unknown>",
-                (label && *label) ? label : "<unknown path>",
-                cmd_error.c_str());
+                label && *label ? qore_msg_path(label).c_str() : "<unknown path>",
+                qore_msg_detail(cmd_error.c_str()));
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }
@@ -13938,8 +13938,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         QoreStringNode* err = new QoreStringNodeMaker(
             "AOT module dependency read error for module '%s' (%s): %s",
             mod_name ? mod_name : "<unknown>",
-            (label && *label) ? label : "<unknown path>",
-            dep_error.c_str());
+            label && *label ? qore_msg_path(label).c_str() : "<unknown path>",
+            qore_msg_detail(dep_error.c_str()));
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
@@ -13950,7 +13950,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         QoreStringNode* err = new QoreStringNodeMaker(
             "AOT module import dependency read error for module '%s' (%s): %s",
             mod_name ? mod_name : "<unknown>",
-            (label && *label) ? label : "<unknown path>", dep_error.c_str());
+            label && *label ? qore_msg_path(label).c_str() : "<unknown path>",
+            qore_msg_detail(dep_error.c_str()));
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
@@ -13972,17 +13973,18 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
             err = aotThreadStackInitError(load_result.stack_error, mod_name);
         } else if (load_result.cancelled) {
             err = new QoreStringNodeMaker("AOT module '%s' (%s) dependency loading was cancelled",
-                mod_name ? mod_name : "<unknown>", (label && *label) ? label : "<unknown path>");
+                mod_name ? mod_name : "<unknown>", label && *label ? qore_msg_path(label).c_str() : "<unknown path>");
         } else if (!load_result.init_error.empty()) {
             err = new QoreStringNodeMaker("AOT module '%s' (%s) requires module '%s', whose initialization "
-                "failed (%s)", mod_name ? mod_name : "<unknown>", (label && *label) ? label : "<unknown path>",
-                load_result.dependency.c_str(), load_result.init_error.c_str());
+                "failed (%s)", mod_name ? mod_name : "<unknown>",
+                label && *label ? qore_msg_path(label).c_str() : "<unknown path>", load_result.dependency.c_str(),
+                load_result.init_error.c_str());
         } else {
             err = aotMissingDependencyInitError(new QoreStringNodeMaker(
                 "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
                 "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
                 "and cannot be loaded without it",
-                mod_name ? mod_name : "<unknown>", (label && *label) ? label : "<unknown path>",
+                mod_name ? mod_name : "<unknown>", label && *label ? qore_msg_path(label).c_str() : "<unknown path>",
                 load_result.dependency.c_str(), load_result.dependency.c_str()), load_result.dependency);
         }
         local_pgm->waitForTerminationAndDeref(nullptr);
@@ -15941,8 +15943,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             QoreStringNode* err = new QoreStringNodeMaker(
                 "AOT module metadata read error for module '%s' (%s): %s",
                 mod_name ? mod_name : "<unknown>",
-                (module_context_path && *module_context_path) ? module_context_path : "<unknown path>",
-                reader_error.c_str());
+                module_context_path && *module_context_path ? qore_msg_path(module_context_path).c_str()
+                : "<unknown path>",
+                qore_msg_detail(reader_error.c_str()));
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }
@@ -16030,8 +16033,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             QoreStringNode* err = new QoreStringNodeMaker(
                 "AOT module-command replay error for module '%s' (%s): %s",
                 mod_name ? mod_name : "<unknown>",
-                (module_context_path && *module_context_path) ? module_context_path : "<unknown path>",
-                cmd_error.c_str());
+                module_context_path && *module_context_path ? qore_msg_path(module_context_path).c_str()
+                : "<unknown path>",
+                qore_msg_detail(cmd_error.c_str()));
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }
@@ -16046,8 +16050,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         QoreStringNode* err = new QoreStringNodeMaker(
             "AOT module dependency read error for module '%s' (%s): %s",
             mod_name ? mod_name : "<unknown>",
-            (module_context_path && *module_context_path) ? module_context_path : "<unknown path>",
-            dep_error.c_str());
+            module_context_path && *module_context_path ? qore_msg_path(module_context_path).c_str()
+                : "<unknown path>",
+            qore_msg_detail(dep_error.c_str()));
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
@@ -16057,8 +16062,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         QoreStringNode* err = new QoreStringNodeMaker(
             "AOT module import dependency read error for module '%s' (%s): %s",
             mod_name ? mod_name : "<unknown>",
-            (module_context_path && *module_context_path) ? module_context_path : "<unknown path>",
-            dep_error.c_str());
+            module_context_path && *module_context_path ? qore_msg_path(module_context_path).c_str()
+                : "<unknown path>",
+            qore_msg_detail(dep_error.c_str()));
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
