@@ -136,6 +136,13 @@ string sub take_own(string form) {
     return take(form, new Program());
 }
 
+#! takes over or deletes a Program object of the tenant's own a second time
+string sub take_twice(string form) {
+    Program p();
+    take(form, p);
+    return take(form, p);
+}
+
 #! makes a Program object of the tenant's own
 Program sub make_program() {
     return new Program();
@@ -323,5 +330,12 @@ class SandboxObjectDeleteTest inherits QUnit::Test {
             };
         }
         assertEq(take_expected, take_results, mode + ": Program objects taken over or deleted");
+
+        # a Program object that a call took over or deleted already
+        foreach string form in (TakeForms) {
+            assertEq("OBJECT-ALREADY-DELETED", a.callFunction("take_twice", form), mode + " " + form + ": twice");
+            assertEq("OBJECT-ALREADY-DELETED", c.callFunction("take_twice", form), mode + " " + form
+                + ": twice in a code-safety Program");
+        }
     }
 }

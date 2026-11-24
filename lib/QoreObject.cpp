@@ -348,9 +348,9 @@ void qore_object_private::cleanup(ExceptionSink* xsink, QoreHashNode* td, cdmap_
         printd(5, "qore_object_private::cleanup() this: %p privateData: %p\n", this, privateData);
         privateData->derefAll(xsink);
         delete privateData;
-#ifdef DEBUG
+        // the private data of a deleted object is looked up later as well, for example when the object is passed to a
+        // function that takes it over
         privateData = nullptr;
-#endif
     }
 
     if (td) {
