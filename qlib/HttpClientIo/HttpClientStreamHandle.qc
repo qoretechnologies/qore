@@ -343,14 +343,31 @@ public class HttpClientStreamHandle {
         if (ready_wait_deadline_bound) {
             request_deadline_expired = True;
         }
+        hash<auto> h = getConnectWaitTimeout(waited_ms);
+        throw "HTTPCLIENT-TIMEOUT", h.desc, h.arg;
+    }
+
+    #! Returns the description and the argument of a timeout that ended the wait for the stream's connection
+    /** The description names the target of the connection and the time waited, and the argument has \c host, \c port
+        and \c timeout_ms; the connection manager gives the same timeout for an attempt whose connection error the
+        time of the request ended (qore#7475)
+
+        @param waited_ms the time waited for the connection, in milliseconds
+
+        @return a hash with \c desc (the description) and \c arg (the argument)
+    */
+    hash<auto> getConnectWaitTimeout(int waited_ms) {
         hash<HttpClientConnectionInfo> info = conn.getConnectionInfo();
         # a UNIX domain socket has no port
         string target = info.port ? sprintf("%s:%d", info.host, info.port) : info.host;
-        throw "HTTPCLIENT-TIMEOUT", sprintf("connection establishment timed out: the connection to %s was not "
-            "established before the time of the request ran out (after a wait of %d ms)", target, waited_ms), {
-            "host": info.host,
-            "port": info.port,
-            "timeout_ms": waited_ms,
+        return {
+            "desc": sprintf("connection establishment timed out: the connection to %s was not established before the "
+                "time of the request ran out (after a wait of %d ms)", target, waited_ms),
+            "arg": {
+                "host": info.host,
+                "port": info.port,
+                "timeout_ms": waited_ms,
+            },
         };
     }
 

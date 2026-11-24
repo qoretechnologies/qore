@@ -5700,6 +5700,14 @@ ws.setEventQueue();
         return ui.path ?? "/";
     }
 
+    #! Returns the target of the connections of the URL as the connection manager names it (\c host:port)
+    /** For the timeout of a connect whose time ran out when an attempt failed (qore#7475)
+    */
+    private string getHcioTargetKey() {
+        hash<UrlInfo> ui = parse_url(http_opts.url);
+        return sprintf("%s:%d", ui.host, ui.port ?? (isUrlTls() ? 443 : 80));
+    }
+
     #! Returns True if the current URL uses TLS (https)
     private bool isUrlTls() {
         return http_opts.url =~ /^https:/i;
@@ -5802,8 +5810,15 @@ ws.setEventQueue();
                 }
                 # a connection that could not be established is retried on a fresh one while there is time, as an
                 # HTTP/1.1 connect retries it
-                if (retries < getHcioMaxConnectRetries() && !connectDeadlinePassed(deadline)
+                if (retries < getHcioMaxConnectRetries()
                         && HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
+                    # one that would be retried when the time of the connect has run out is the timeout of the
+                    # connect, with its error, as the manager raises it for a request (qore#7475)
+                    if (connectDeadlinePassed(deadline)) {
+                        HttpClientIo::HttpClientConnectionManager::throwAttemptTimeout(sprintf("no connection to %s "
+                            "was acquired within the request's time: the time ran out when an attempt failed",
+                            getHcioTargetKey()), NOTHING, ex);
+                    }
                     ++retries;
                     logInfo("WebSocket connection error (%s: %s); retrying on a fresh connection (%d/%d)",
                         ex.err, ex.desc, retries, getHcioMaxConnectRetries());
@@ -5838,6 +5853,14 @@ ws.setEventQueue();
                 if (stream.requestDeadlineExpired() || (!stream.isSubmitted() && connectDeadlinePassed(deadline))) {
                     if (ex.err == "HTTPCLIENT-TIMEOUT" && retried_error) {
                         throwRetriedConnectTimeout(ex, retried_error);
+                    }
+                    # a connection error that would be retried if the connect had time left is the timeout of the
+                    # connect, with its error (qore#7475)
+                    if (ex.err != "HTTPCLIENT-TIMEOUT" && !stream.isSubmitted()
+                            && retries < getHcioMaxConnectRetries()
+                            && HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
+                        hash<auto> to = stream.getConnectWaitTimeout(timeout_ms);
+                        HttpClientIo::HttpClientConnectionManager::throwAttemptTimeout(to.desc, to.arg, ex);
                     }
                     rethrow;
                 }
