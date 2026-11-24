@@ -46,14 +46,16 @@ hashdecl McpCallCancelScopeState {
     bool cancelled = False;
     #! The handlers not yet called, by handler ID
     hash<string, code> handlers = {};
-    #! The number of threads calling the request's handlers
+    #! The number of threads calling this request's handlers
     int dispatching = 0;
 }
 
 #! The cancel handlers of the requests in progress of one McpServerHandler (internal)
 /** A request's entry exists while a call context for it is open (begin() .. end()).  Handlers are called by the
     handler, outside this object's lock; this object only decides which handlers a cancel or a registration calls,
-    so each handler is called at most once.
+    so each handler is called at most once.  A handler leaves the request's entry when it is taken to be called
+    (beginDispatch(), add()), removed (removeHandler()) or when the request ends (end()); the end of a request waits
+    only for its own handlers being called, never for another request's.
 */
 class McpCallCancelRegistry {
     private:internal {
@@ -79,16 +81,23 @@ class McpCallCancelRegistry {
     }
 
     #! A call context for the request closes; the last one removes the request's handlers
-    /** Waits until the handlers of the request being called by a cancel have returned, so no handler of a request
-        runs after its request ended.
+    /** Waits until the request's handlers being called have returned, so no handler of a request runs after its
+        request ended; handlers not yet taken to be called are dropped.
+
+        @param key the request
+        @param waiting called with the key, with this object's lock held, when the end must wait for handlers being
+        called (a test hook; it must only signal)
     */
-    end(string key) {
+    end(string key, *code waiting) {
         AutoLock al(m);
         if (!scopes{key}) {
             return;
         }
         if (--scopes{key}.refs > 0) {
             return;
+        }
+        if (scopes{key}.dispatching > 0 && waiting) {
+            waiting(key);
         }
         while (scopes{key}.dispatching > 0) {
             cond.wait(m);
@@ -128,47 +137,64 @@ class McpCallCancelRegistry {
         return {"id": id, "run": False};
     }
 
-    #! Removes a handler not yet called
-    /** @return True when the handler was removed; False when it was called already, its request ended, or the ID
-        is unknown
+    #! Removes a handler of the given request not yet called
+    /** @param id the handler's ID
+        @param key the request the handler must belong to; a handler of another request is not removed
+
+        @return True when the handler was removed; False when it was called already, its request ended, it belongs
+        to another request, or the ID is unknown
     */
-    bool removeHandler(int id) {
+    bool removeHandler(int id, string key) {
         AutoLock al(m);
-        *string key = remove handler_keys{id};
-        if (!key) {
+        if (handler_keys{id} != key) {
             return False;
         }
+        remove handler_keys{id};
         remove scopes{key}.handlers{id};
         return True;
     }
 
-    #! Marks the requests cancelled and takes the handlers each cancel must call
-    /** @return the handlers to call, in the order they were registered, by key; the caller must call dispatched()
-        for every key returned, after its handlers were called
+    #! Marks the requests cancelled
+    /** @return the keys of the requests cancelled now that have handlers to call, in the order given; for each, the
+        caller calls beginDispatch(), calls the handlers it returns, then calls dispatched()
     */
-    hash<string, list<code>> take(list<string> key_list) {
-        hash<string, list<code>> rv = {};
+    list<string> take(list<string> key_list) {
+        list<string> rv = ();
         AutoLock al(m);
         foreach string key in (key_list) {
             if (!scopes{key} || scopes{key}.cancelled) {
                 continue;
             }
             scopes{key}.cancelled = True;
-            list<code> handlers = ();
-            foreach string id in (sort(keys scopes{key}.handlers, int sub (string l, string r) {
-                    return l.toInt() <=> r.toInt();
-                })) {
-                handlers += scopes{key}.handlers{id};
-                remove handler_keys{id};
+            if (scopes{key}.handlers) {
+                rv += key;
             }
-            scopes{key}.handlers = {};
-            ++scopes{key}.dispatching;
-            rv{key} = handlers;
         }
         return rv;
     }
 
-    #! The call of a request's handlers taken by take() or add() has ended
+    #! Takes the handlers of a cancelled request to call them
+    /** @return the handlers, in the order they were registered; when it returns any, the caller must call
+        dispatched() after calling them; none when the request ended or its handlers were removed meanwhile
+    */
+    list<code> beginDispatch(string key) {
+        AutoLock al(m);
+        if (!scopes{key} || !scopes{key}.handlers) {
+            return ();
+        }
+        list<code> handlers = ();
+        foreach string id in (sort(keys scopes{key}.handlers, int sub (string l, string r) {
+                return l.toInt() <=> r.toInt();
+            })) {
+            handlers += scopes{key}.handlers{id};
+            remove handler_keys{id};
+        }
+        scopes{key}.handlers = {};
+        ++scopes{key}.dispatching;
+        return handlers;
+    }
+
+    #! The call of a request's handlers taken by beginDispatch() or add() has ended
     dispatched(string key) {
         AutoLock al(m);
         if (!scopes{key}) {

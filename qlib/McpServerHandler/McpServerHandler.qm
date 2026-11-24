@@ -263,6 +263,11 @@ hash<auto> sub myTool(*hash<auto> args) {
     - fixed cancelling a request with \c notifications/cancelled: the request ID it names was compared with the ID
       of the HTTP connection instead of the JSON-RPC ID of the request, so
       @ref McpServerHandler::McpServerHandler::isCallCancelled() "isCallCancelled()" did not report the cancel
+    - fixed cancelling requests: the cancel of the requests of a session reaches resource reads and prompt requests
+      in progress too; a cancel of a request that is not in progress is ignored and the cancel of a request is
+      forgotten when it ends (cancels were kept for the life of the session, and a later request with the same ID
+      started cancelled); a request ID of \c 0 is handled like any other; and a client's cancel no longer fails a
+      request the server sent to the client that happens to have the same ID
     - reads the fields of a request from the \c "headers" key of its header hash, or from the top level of a hash
       built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with the HttpServer
       option \c http_fields_at_top_level set to @ref False

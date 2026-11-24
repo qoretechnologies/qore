@@ -37,6 +37,14 @@ class Probe {
         bool handler_done = False;
         #! True when the registration is to be held (callCancelHandlerRegistering())
         bool hold_registration = False;
+        #! reaches zero when the end of the tool's request waits for its running handler
+        Counter end_waiting(1);
+        #! the ID of the tool's handler
+        *int handler_id;
+        #! what isCallCancelled() returned after the handler was called
+        *bool polled;
+        #! reaches zero once the tool set polled
+        Counter done(1);
         #! the handler calls: reason and thread
         list<hash<auto>> calls = ();
         Mutex m();
@@ -69,6 +77,8 @@ class CancelTestHandler inherits McpServerHandler {
         registerTool("hold_task", "registers a cancel handler in a task", NOTHING, \holdTool(), NOTHING,
             {"execution": {"taskSupport": "required"}}, NOTHING);
         registerResource("file:///hold.txt", "hold", "registers a cancel handler", "text/plain", \holdResource());
+        registerPrompt("hold", "registers a cancel handler", ({"name": "probe", "required": True},),
+            \holdPrompt());
     }
 
     Probe newProbe(string name) {
@@ -95,6 +105,43 @@ class CancelTestHandler inherits McpServerHandler {
         smap{sid}.last_activity = 2000-01-01;
     }
 
+    #! Adds a server-to-client request waiting for the client, with the server's request ID
+    addPendingRequest(string sid, string request_id) {
+        AutoWriteLock al(rwl);
+        smap{sid}.pendingRequests{request_id} = <McpPendingRequest>{
+            "requestId": request_id,
+            "method": "elicitation/create",
+            "sentAt": now_us(),
+            "timeout_ms": 60000,
+            "cond": new Condition(),
+            "lck": new Mutex(),
+        };
+    }
+
+    *hash<McpPendingRequest> getPendingRequest(string sid, string request_id) {
+        AutoReadLock al(rwl);
+        return smap{sid}.pendingRequests{request_id};
+    }
+
+    #! Returns the cancellations kept for the session
+    *hash<auto> getCancellations(string sid) {
+        AutoReadLock al(rwl);
+        return smap{sid}.cancellations;
+    }
+
+    #! Runs in the request's thread after its tool returned; the request ID is the probe's name
+    private nothing callCancelScopeEndWaiting(string scope_key) {
+        *string name = (scope_key =~ x/:([^:]+)$/)[0];
+        *Probe p;
+        {
+            AutoLock al(pm);
+            p = probes{name};
+        }
+        if (p) {
+            p.end_waiting.dec();
+        }
+    }
+
     private nothing callCancelHandlerRegistering(string scope_key) {
         *Probe p = _probe;
         if (p && p.hold_registration) {
@@ -111,7 +158,24 @@ class CancelTestHandler inherits McpServerHandler {
         });
         p.started.dec();
         bool fired = !p.fired.waitForZero(Bound);
-        return sprintf("id=%y fired=%y", id, fired);
+        return sprintf("id=%y fired=%y polled=%y", id, fired, McpServerHandler::isCallCancelled());
+    }
+
+    private list<hash<auto>> holdPrompt(hash<auto> cx, *hash<auto> arguments) {
+        Probe p = getProbe(arguments.probe);
+        *int id = McpServerHandler::addCallCancelHandler(sub (string reason) {
+            p.record(reason);
+            p.fired.dec();
+        });
+        p.started.dec();
+        bool fired = !p.fired.waitForZero(Bound);
+        return ({
+            "role": "user",
+            "content": {
+                "type": "text",
+                "text": sprintf("id=%y fired=%y polled=%y", id, fired, McpServerHandler::isCallCancelled()),
+            },
+        },);
     }
 
     private hash<auto> holdTool(*hash<auto> args) {
@@ -125,9 +189,12 @@ class CancelTestHandler inherits McpServerHandler {
         switch (args.mode) {
             case "wait": {
                 *int id = McpServerHandler::addCallCancelHandler(record);
+                p.handler_id = id;
                 p.started.dec();
                 bool fired = !p.fired.waitForZero(Bound);
-                return {"id": id, "fired": fired, "polled": McpServerHandler::isCallCancelled()};
+                p.polled = McpServerHandler::isCallCancelled();
+                p.done.dec();
+                return {"id": id, "fired": fired, "polled": p.polled};
             }
             case "late": {
                 p.started.dec();
@@ -153,6 +220,18 @@ class CancelTestHandler inherits McpServerHandler {
                     "removed_again": removed_again,
                     "polled": McpServerHandler::isCallCancelled(),
                 };
+            }
+            case "noreg": {
+                p.started.dec();
+                p.go.waitForZero(Bound);
+                return {"polled": McpServerHandler::isCallCancelled()};
+            }
+            case "poll": {
+                return {"polled": McpServerHandler::isCallCancelled()};
+            }
+            case "steal": {
+                Probe target = getProbe(args.target);
+                return {"removed": McpServerHandler::removeCallCancelHandler(target.handler_id)};
             }
             case "quick": {
                 *int id = McpServerHandler::addCallCancelHandler(record);
@@ -233,6 +312,14 @@ public class McpCallCancelHandlerTest inherits QUnit::Test {
         addTestCase("cancel racing registration", \raceTest());
         addTestCase("end waits for a running handler", \endWaitsTest());
         addTestCase("no cancellable call", \noCallTest());
+        addTestCase("session delete and expiry during resource reads", \resourceSessionCancelTest());
+        addTestCase("prompts/get", \promptCancelTest());
+        addTestCase("integer and zero request IDs", \requestIdTest());
+        addTestCase("batch request", \batchTest());
+        addTestCase("one request's end does not wait for another's handler", \independentEndTest());
+        addTestCase("a handler of another request cannot be removed", \foreignRemovalTest());
+        addTestCase("a cancel is not kept for an unknown or ended request", \cancelStateTest());
+        addTestCase("a client cancel does not cancel the server's own requests", \pendingRequestTest());
         set_return_value(main());
     }
 
@@ -257,7 +344,7 @@ public class McpCallCancelHandlerTest inherits QUnit::Test {
     }
 
     #! Posts a JSON-RPC message; returns {"status", "body", "session"}
-    private hash<auto> post(hash<auto> msg, *string sid, *hash<auto> hdr) {
+    private hash<auto> post(auto msg, *string sid, *hash<auto> hdr) {
         HTTPClient hc({"url": url});
         on_exit hc.disconnect();
         hash<auto> h = {
@@ -294,7 +381,7 @@ public class McpCallCancelHandlerTest inherits QUnit::Test {
     }
 
     #! Calls a tool in a background thread; the result arrives on the queue returned
-    private Queue callInBackground(string sid, string id, string tool, hash<auto> args) {
+    private Queue callInBackground(string sid, auto id, string tool, hash<auto> args) {
         Queue q();
         background sub () {
             try {
@@ -319,7 +406,7 @@ public class McpCallCancelHandlerTest inherits QUnit::Test {
         return sprintf("p%d", ++seq);
     }
 
-    private notifyCancelled(string sid, string request_id, string reason) {
+    private notifyCancelled(string sid, auto request_id, string reason) {
         hash<auto> r = post({"jsonrpc": "2.0", "method": "notifications/cancelled", "params": {
             "requestId": request_id,
             "reason": reason,
@@ -559,6 +646,10 @@ public class McpCallCancelHandlerTest inherits QUnit::Test {
             nq.push(True);
         }();
         assertEq(0, p.in_handler.waitForZero(Bound), "the handler runs");
+        # the tool returned; its request's end waits for the handler (the hook says so)
+        assertEq(0, p.end_waiting.waitForZero(Bound), "the end of the request waits for the running handler");
+        assertEq(0, q.size(), "the request has not ended while its handler runs");
+        assertFalse(p.handler_done);
         p.release.dec();
         hash<auto> res = toolResult(q.get(Bound));
         assertTrue(p.handler_done, "the request ended only after its running handler returned");
@@ -578,5 +669,251 @@ public class McpCallCancelHandlerTest inherits QUnit::Test {
             "arguments": {"probe": name, "mode": "quick"},
         }});
         assertNothing(toolResult(r).id, "a call that cannot be cancelled gets no ID");
+    }
+
+    #! Reads the resource in a background thread
+    private Queue readInBackground(string sid, string id) {
+        Queue q();
+        background sub () {
+            try {
+                q.push(post({"jsonrpc": "2.0", "id": id, "method": "resources/read",
+                    "params": {"uri": "file:///hold.txt"}}, sid));
+            } catch (hash<ExceptionInfo> ex) {
+                q.push({"error": get_exception_string(ex)});
+            }
+        }();
+        return q;
+    }
+
+    resourceSessionCancelTest() {
+        # session DELETE
+        {
+            string sid = openSession();
+            Probe p = mcp.newProbe("resource");
+            Queue q = readInBackground(sid, "res-del");
+            assertEq(0, p.started.waitForZero(Bound), "the reader runs");
+            HTTPClient hc({"url": url});
+            on_exit hc.disconnect();
+            hash<auto> info;
+            hc.send("", "DELETE", "/", {McpSessionHeader: sid}, False, \info);
+            assertEq(0, p.fired.waitForZero(Bound), "the session delete calls the reader's handler");
+            assertEq("session deleted by client", p.getCalls()[0].reason);
+            q.get(Bound);
+            assertEq(1, p.getCalls().size(), "the handler is called once");
+        }
+        # session expiry
+        {
+            string sid = openSession();
+            Probe p = mcp.newProbe("resource");
+            Queue q = readInBackground(sid, "res-exp");
+            assertEq(0, p.started.waitForZero(Bound), "the reader runs");
+            mcp.expireSession(sid);
+            assertGt(0, mcp.cleanupExpiredSessions(), "the session expires");
+            assertEq(0, p.fired.waitForZero(Bound), "the expiry calls the reader's handler");
+            assertEq("session expired", p.getCalls()[0].reason);
+            q.get(Bound);
+            assertEq(1, p.getCalls().size(), "the handler is called once");
+        }
+        # cancelSessionRequests(), with isCallCancelled() in the reader
+        {
+            string sid = openSession();
+            Probe p = mcp.newProbe("resource");
+            Queue q = readInBackground(sid, "res-csr");
+            assertEq(0, p.started.waitForZero(Bound), "the reader runs");
+            mcp.cancelSessionRequests(sid, "user deleted");
+            hash<auto> r = q.get(Bound);
+            on_error printf("response: %N\n", r);
+            assertRegex("fired=True polled=True", r.body.result.contents[0].text,
+                "the reader's handler is called and the reader sees the cancel");
+        }
+    }
+
+    promptCancelTest() {
+        foreach string how in ("notification", "delete") {
+            string sid = openSession();
+            string name = nextName();
+            Probe p = mcp.newProbe(name);
+            Queue q();
+            background sub () {
+                try {
+                    q.push(post({"jsonrpc": "2.0", "id": name, "method": "prompts/get",
+                        "params": {"name": "hold", "arguments": {"probe": name}}}, sid));
+                } catch (hash<ExceptionInfo> ex) {
+                    q.push({"error": get_exception_string(ex)});
+                }
+            }();
+            assertEq(0, p.started.waitForZero(Bound), "the prompt handler runs");
+            if (how == "notification") {
+                notifyCancelled(sid, name, "prompt stopped");
+                hash<auto> r = q.get(Bound);
+                on_error printf("response: %N\n", r);
+                assertRegex("fired=True polled=True", r.body.result.messages[0].content.text,
+                    "notifications/cancelled calls the prompt handler's handler");
+                assertEq("prompt stopped", p.getCalls()[0].reason);
+            } else {
+                HTTPClient hc({"url": url});
+                on_exit hc.disconnect();
+                hash<auto> info;
+                hc.send("", "DELETE", "/", {McpSessionHeader: sid}, False, \info);
+                assertEq(0, p.fired.waitForZero(Bound), "the session delete calls the prompt handler's handler");
+                assertEq("session deleted by client", p.getCalls()[0].reason);
+                q.get(Bound);
+            }
+            assertEq(1, p.getCalls().size(), "the handler is called once");
+        }
+    }
+
+    requestIdTest() {
+        string sid = openSession();
+        # an integer ID, 0 as an integer and as a string
+        foreach auto id in (7, 0, "0") {
+            string name = nextName();
+            Probe p = mcp.newProbe(name);
+            Queue q = callInBackground(sid, id, "hold", {"probe": name, "mode": "wait"});
+            assertEq(0, p.started.waitForZero(Bound), sprintf("the call with ID %y runs", id));
+            assertEq(Type::Int, p.handler_id.type(), sprintf("the call with ID %y can be cancelled", id));
+            notifyCancelled(sid, id, sprintf("cancel %y", id));
+            hash<auto> res = toolResult(q.get(Bound));
+            assertTrue(res.fired, sprintf("the cancel of ID %y calls the handler", id));
+            assertTrue(res.polled, sprintf("isCallCancelled() sees the cancel of ID %y", id));
+            assertEq(1, p.getCalls().size());
+        }
+        # tasks created by requests with ID 0, cancelled by notification and by tasks/cancel
+        foreach auto id in (0, "0") {
+            foreach string how in ("tasks/cancel", "notification") {
+                # a session of its own, so no state of an earlier case is seen
+                sid = openSession();
+                string name = nextName();
+                Probe p = mcp.newProbe(name);
+                hash<auto> r = post({"jsonrpc": "2.0", "id": id, "method": "tools/call", "params": {
+                    "name": "hold",
+                    "arguments": {"probe": name, "mode": "wait"},
+                    "task": {"ttl": 60000},
+                }}, sid);
+                on_error printf("response: %N\n", r);
+                string task_id = r.body.result.task.taskId;
+                assertTrue(task_id.val(), sprintf("the call with ID %y runs as a task", id));
+                assertEq(0, p.started.waitForZero(Bound), "the task runs");
+                if (how == "notification") {
+                    notifyCancelled(sid, id, "task stopped");
+                } else {
+                    post({"jsonrpc": "2.0", "id": name + "-c", "method": "tasks/cancel", "params": {
+                        "taskId": task_id,
+                        "reason": "task stopped",
+                    }}, sid);
+                }
+                assertEq(0, p.done.waitForZero(Bound), sprintf("the %s of request %y cancels its task", how, id));
+                assertEq("task stopped", p.getCalls()[0].reason);
+                assertTrue(p.polled, sprintf("the task of request %y sees its cancel after %s", id, how));
+            }
+        }
+    }
+
+    batchTest() {
+        string sid = openSession();
+        string name = nextName();
+        Probe p = mcp.newProbe(name);
+        Queue q();
+        background sub () {
+            try {
+                q.push(post((
+                    {"jsonrpc": "2.0", "id": name, "method": "tools/call", "params": {
+                        "name": "hold",
+                        "arguments": {"probe": name, "mode": "wait"},
+                    }},
+                    {"jsonrpc": "2.0", "id": name + "-ping", "method": "ping"},
+                ), sid));
+            } catch (hash<ExceptionInfo> ex) {
+                q.push({"error": get_exception_string(ex)});
+            }
+        }();
+        assertEq(0, p.started.waitForZero(Bound), "the batch's call runs");
+        notifyCancelled(sid, name, "batch stop");
+        hash<auto> r = q.get(Bound);
+        on_error printf("response: %N\n", r);
+        assertEq(Type::List, r.body.type(), "the batch gets a batch response");
+        hash<auto> call = (select r.body, $1.id == name)[0];
+        hash<auto> res = parse_json(call.result.content[0].text);
+        assertTrue(res.fired, "the cancel of a call in a batch calls its handler");
+        assertTrue(res.polled, "the call sees its cancel");
+    }
+
+    independentEndTest() {
+        string sid = openSession();
+        string a_name = nextName();
+        Probe a = mcp.newProbe(a_name);
+        Queue qa = callInBackground(sid, a_name, "hold", {"probe": a_name, "mode": "block"});
+        # A is in progress before B, so the cancel reaches A first
+        assertEq(0, a.started.waitForZero(Bound), "call A runs");
+        string b_name = nextName();
+        Probe b = mcp.newProbe(b_name);
+        Queue qb = callInBackground(sid, b_name, "hold", {"probe": b_name, "mode": "noreg"});
+        assertEq(0, b.started.waitForZero(Bound), "call B runs");
+        # one cancel covers both: A's handler blocks the cancelling thread
+        Queue dq();
+        background sub () {
+            mcp.cancelSessionRequests(sid, "both");
+            dq.push(True);
+        }();
+        assertEq(0, a.in_handler.waitForZero(Bound), "A's handler runs");
+        # B, which has no handler, ends while A's handler is still running
+        b.go.dec();
+        hash<auto> res = toolResult(qb.get(Bound));
+        assertTrue(res.polled, "B was cancelled");
+        assertFalse(a.handler_done, "A's handler is still running when B ends");
+        a.release.dec();
+        toolResult(qa.get(Bound));
+        assertTrue(dq.get(Bound), "the cancel returns");
+    }
+
+    foreignRemovalTest() {
+        string sid = openSession();
+        string a_name = nextName();
+        Probe a = mcp.newProbe(a_name);
+        Queue qa = callInBackground(sid, a_name, "hold", {"probe": a_name, "mode": "wait"});
+        assertEq(0, a.started.waitForZero(Bound), "call A runs");
+        string b_name = nextName();
+        mcp.newProbe(b_name);
+        hash<auto> res = toolResult(callInBackground(sid, b_name, "hold",
+            {"probe": b_name, "mode": "steal", "target": a_name}).get(Bound));
+        assertFalse(res.removed, "another request cannot remove A's handler");
+        assertEq(1, mcp.getCallCancelInfo().handlers, "A's handler is still registered");
+        notifyCancelled(sid, a_name, "A stopped");
+        assertTrue(toolResult(qa.get(Bound)).fired, "A's handler is called");
+    }
+
+    cancelStateTest() {
+        string sid = openSession();
+        # a cancel of a request that is not in progress is not kept
+        notifyCancelled(sid, "future", "too early");
+        assertEq(0, mcp.getCancellations(sid).size(), "nothing is kept for an unknown request");
+        string name = nextName();
+        mcp.newProbe(name);
+        hash<auto> res = toolResult(callInBackground(sid, "future", "hold", {"probe": name, "mode": "poll"})
+            .get(Bound));
+        assertFalse(res.polled, "a request does not start cancelled by an earlier cancel of its ID");
+
+        # the cancel of a request is removed when it ends, so a later request with its ID starts uncancelled
+        name = nextName();
+        Probe p = mcp.newProbe(name);
+        Queue q = callInBackground(sid, "reused", "hold", {"probe": name, "mode": "wait"});
+        assertEq(0, p.started.waitForZero(Bound), "the call runs");
+        notifyCancelled(sid, "reused", "stop");
+        assertTrue(toolResult(q.get(Bound)).polled, "the call was cancelled");
+        assertEq(0, mcp.getCancellations(sid).size(), "its cancel is removed when it ends");
+        name = nextName();
+        mcp.newProbe(name);
+        res = toolResult(callInBackground(sid, "reused", "hold", {"probe": name, "mode": "poll"}).get(Bound));
+        assertFalse(res.polled, "a request reusing the ID starts uncancelled");
+    }
+
+    pendingRequestTest() {
+        string sid = openSession();
+        # the server's own request 1 waits for the client; the client cancels its own request 1
+        mcp.addPendingRequest(sid, "1");
+        notifyCancelled(sid, 1, "client request");
+        *hash<McpPendingRequest> req = mcp.getPendingRequest(sid, "1");
+        assertFalse(req.completed, "the server's request is not completed by the client's cancel");
+        assertEq(NOTHING, req.error, "and not failed");
     }
 }
