@@ -121,7 +121,9 @@ printf("%Y\n", ans.body);
       \c aws_imds_disabled, \c aws_imds_timeout, \c aws_sts_region and \c aws_sts_endpoint options for role
       assumption and the IMDS and STS endpoints,
       and static credential helpers such as
-      @ref AwsRestClient::AwsRestClientBase::applyEnvCredentials() "AwsRestClientBase::applyEnvCredentials()"
+      @ref AwsRestClient::AwsRestClientBase::applyEnvCredentials() "AwsRestClientBase::applyEnvCredentials()";
+      the chain resolves no credentials of the host for code restricted from external information, which gives its
+      own (see @ref sandbox_ambient_host_data)
 
     @subsection awsrestclientv1_2 AwsRestClient v1.2
     - added support for the DataProvider API
@@ -419,10 +421,17 @@ public class AwsRestClientBase {
         (fallback for \c aws_region) — the standard AWS SDK / CLI convention.
         Values explicitly passed in \a opts always win over the environment.
 
+        For code restricted from external information (see
+        @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), the
+        key, secret and session token are not taken from the environment, as they are the host's credentials: such
+        code gives its own credentials (the region, which is not a credential, is still taken from the environment)
+
         @return \a opts with any missing AWS credential keys filled in from
         the environment
     */
     static hash<auto> applyEnvCredentials(hash<auto> opts) {
+        # the host's credentials are not resolved for a caller restricted from external information (qore#6844)
+        bool ambient = SandboxManager::callerMayReadExternalInfo();
         # Read via getenv() rather than the ENV hash: ENV is a snapshot
         # captured at module load, while getenv() always queries the live
         # process environment so callers that bridge env state at runtime
@@ -430,6 +439,9 @@ public class AwsRestClientBase {
         foreach hash<auto> i in (AwsEnvVarMap.pairIterator()) {
             string opt_key = i.key;
             string env_key = i.value;
+            if (!ambient && opt_key != "aws_region") {
+                continue;
+            }
             if (!opts{opt_key}) {
                 *string v = getenv(env_key);
                 if (v.val()) {
@@ -667,9 +679,13 @@ public class AwsRestClientBase {
 
         @return hash with \c aws_keyid, \c aws_secret, \c aws_token, \c expires
 
-        @throw AWSRESTCLIENT-IMDS-ERROR IMDS unreachable or returned an error
+        @throw AWSRESTCLIENT-IMDS-ERROR IMDS unreachable or returned an error, or the calling code is restricted from
+        external information (see
+        @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"): the
+        instance's credentials are the host's
     */
     static hash<auto> getImdsCredentials(*hash<auto> opts) {
+        AwsRestClientBase::checkAmbientCredentials("instance metadata");
         string endpoint = opts.aws_imds_url ?? ImdsV2Endpoint;
         int ttl = opts.aws_imds_token_ttl_seconds ?? ImdsTokenTtlSeconds;
         int timeout_ms = opts.aws_imds_timeout ?? ImdsTimeoutMs;
@@ -751,9 +767,13 @@ public class AwsRestClientBase {
         \c AWS_CONTAINER_CREDENTIALS_RELATIVE_URI env var is set.
 
         @return hash with \c aws_keyid, \c aws_secret, \c aws_token, \c expires
-        @throw AWSRESTCLIENT-IMDS-ERROR endpoint unreachable or response unparseable
+        @throw AWSRESTCLIENT-IMDS-ERROR endpoint unreachable or response unparseable, or the calling code is restricted
+        from external information (see
+        @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"): the
+        task's credentials are the host's
     */
     static hash<auto> getEcsCredentials() {
+        AwsRestClientBase::checkAmbientCredentials("container (task-role)");
         *string rel = getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI");
         *string full = getenv("AWS_CONTAINER_CREDENTIALS_FULL_URI");
         string url;
@@ -867,6 +887,10 @@ public class AwsRestClientBase {
         disabling credential auto-discovery on a real instance
     */
     static *bool isEc2Compute() {
+        # the host's hardware identity is not read for a caller restricted from external information (qore#6844)
+        if (!SandboxManager::callerMayReadExternalInfo()) {
+            return;
+        }
         *string asset_tag = AwsRestClientBase::tryReadLocalFile(
             "/sys/devices/virtual/dmi/id/board_asset_tag");
         if (asset_tag.val()) {
@@ -896,12 +920,22 @@ public class AwsRestClientBase {
         rejected, so a doomed probe burns a full \c connect_timeout instead of
         failing fast. An explicit \c aws_imds_url override is always honored
         regardless (e.g. tests pointing at a fake IMDS server).
+
+        For code restricted from external information (see
+        @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"),
+        neither endpoint is queried and \a opts is returned unchanged: the task's and the instance's credentials are
+        the host's, and such code gives its own
     */
     static hash<auto> applyInstanceCredentials(hash<auto> opts) {
         if (opts.aws_keyid.val()) {
             return opts;
         }
         if (opts.aws_imds_disabled) {
+            return opts;
+        }
+        # the host's task-role and instance credentials are not resolved for a caller restricted from external
+        # information (qore#6844)
+        if (!SandboxManager::callerMayReadExternalInfo()) {
             return opts;
         }
         # ECS first: it only takes one HTTP round trip and is the common path
@@ -938,6 +972,25 @@ public class AwsRestClientBase {
             # the canonical "missing required option" error fires
         }
         return opts;
+    }
+
+    #! Throws \c AWSRESTCLIENT-IMDS-ERROR if the calling code is restricted from external information (qore#6844)
+    private:internal static checkAmbientCredentials(string what) {
+        if (!SandboxManager::callerMayReadExternalInfo()) {
+            throw "AWSRESTCLIENT-IMDS-ERROR", sprintf("%s credentials of the host are not available to code "
+                "restricted from external information; give the credentials explicitly", what);
+        }
+    }
+
+    #! Throws \c AWSRESTCLIENT-ERROR for a missing required option, saying that the host's credentials are not used
+    #! for a caller restricted from external information (qore#6844)
+    private static missingOption(string key) {
+        if (key != "aws_region" && !SandboxManager::callerMayReadExternalInfo()) {
+            throw "AWSRESTCLIENT-ERROR", sprintf("missing required option %y in option argument; the host's AWS "
+                "credentials (environment variables, container and instance metadata) are not available to code "
+                "restricted from external information", key);
+        }
+        throw "AWSRESTCLIENT-ERROR", sprintf("missing required option %y in option argument", key);
     }
 
     #! Extracts a text body from a RestClient response (hash, binary, or string)
@@ -1084,7 +1137,7 @@ AwsRestClient rest({
         foreach string key in (RequiredOptions) {
             auto v = opts{key};
             if (!exists v || v == "") {
-                throw "AWSRESTCLIENT-ERROR", sprintf("missing required option %y in option argument", key);
+                AwsRestClientBase::missingOption(key);
             }
             if (v.typeCode() != NT_STRING) {
                 throw "AWSRESTCLIENT-ERROR", sprintf("required option %y was passed as a %s; expecting "
@@ -1577,7 +1630,7 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         foreach string key in (AwsRestClientBase::RequiredOptions) {
             auto v = opts{key};
             if (!exists v || v == "") {
-                throw "AWSRESTCLIENT-ERROR", sprintf("missing required option %y in option argument", key);
+                AwsRestClientBase::missingOption(key);
             }
             if (v.typeCode() != NT_STRING) {
                 throw "AWSRESTCLIENT-ERROR", sprintf("required option %y was passed as a %s; expecting "

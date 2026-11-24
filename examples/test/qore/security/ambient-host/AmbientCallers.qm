@@ -1,0 +1,143 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# helpers of the ambient host data tests (qore#6844): the Programs of the kinds of calling code and a fake metadata
+# server of the clouds
+
+%modern
+%requires HttpServerUtil
+%requires HttpServer
+%requires Logger
+%requires json
+
+module AmbientCallers {
+    version = "1.0";
+    desc = "ambient host data test helpers (qore#6844)";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AmbientCallers {
+    #! the kinds of calling code that may not read external information, and one that may
+    public const Kinds = ("restricted", "sandboxed restricted", "sandboxed");
+
+    #! returns True if code of the given kind may not read external information
+    public bool sub restricted(string kind) {
+        return kind != "sandboxed";
+    }
+
+    #! creates a Program of each kind with the given source
+    /** a sandbox that allows everything governs the sandboxed kinds: it governs the code without restricting it
+    */
+    public hash<string, Program> sub make_programs(string source, string label) {
+        hash<string, Program> rv = {
+            "restricted": new Program(PO_NEW_STYLE | PO_NO_EXTERNAL_INFO),
+            "sandboxed restricted": new Program(PO_NEW_STYLE | PO_NO_EXTERNAL_INFO),
+            "sandboxed": new Program(PO_NEW_STYLE),
+        };
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.setFilesystemDefaultPolicy(True);
+        rv."sandboxed restricted".setSandboxManager(sm);
+        rv.sandboxed.setSandboxManager(sm);
+        map $1.parse(source, label), rv.iterator();
+        return rv;
+    }
+
+    #! sets the given environment variables while the returned object exists, and restores them after
+    public class EnvHelper {
+        private {
+            hash<string, *string> saved;
+        }
+
+        constructor(hash<string, *string> vars) {
+            saved = map {$1: getenv($1)}, keys vars;
+            set(vars);
+        }
+
+        destructor() {
+            set(saved);
+        }
+
+        set(hash<string, *string> vars) {
+            foreach hash<auto> i in (vars.pairIterator()) {
+                if (exists i.value) {
+                    setenv(i.key, i.value);
+                } else {
+                    unsetenv(i.key);
+                }
+            }
+        }
+    }
+
+    #! a fake metadata server of the clouds: AWS IMDSv2 and ECS, the GCP metadata server and the Azure IMDS
+    public class FakeMetadataHandler inherits AbstractHttpRequestHandler {
+        public {
+            #! the number of requests
+            int calls = 0;
+        }
+
+        hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+            ++calls;
+            string path = cx.raw_path;
+            if (hdr.method == "PUT" && path == "/latest/api/token") {
+                return makeResponse({"Content-Type": "text/plain"}, 200, "imds-session-token");
+            }
+            if (path =~ /^\/latest\/meta-data\/iam\/security-credentials\/?$/) {
+                return makeResponse({"Content-Type": "text/plain"}, 200, "host-role");
+            }
+            if (path == "/latest/meta-data/iam/security-credentials/host-role") {
+                return makeResponse({"Content-Type": "application/json"}, 200, make_json({
+                    "Code": "Success",
+                    "AccessKeyId": "HOST-IMDS-KEY",
+                    "SecretAccessKey": "host-imds-secret",
+                    "Token": "host-imds-token",
+                    "Expiration": "2099-01-01T00:00:00Z",
+                }));
+            }
+            if (path =~ /^\/ecs/) {
+                return makeResponse({"Content-Type": "application/json"}, 200, make_json({
+                    "AccessKeyId": "HOST-ECS-KEY",
+                    "SecretAccessKey": "host-ecs-secret",
+                    "Token": "host-ecs-token",
+                    "Expiration": "2099-01-01T00:00:00Z",
+                }));
+            }
+            if (path =~ /^\/computeMetadata\//) {
+                return makeResponse({"Content-Type": "application/json"}, 200,
+                    "{\"access_token\":\"host-gcp-token\",\"expires_in\":1800,\"token_type\":\"Bearer\"}");
+            }
+            if (path =~ /^\/metadata\/identity\//) {
+                return makeResponse({"Content-Type": "application/json"}, 200,
+                    "{\"access_token\":\"host-azure-token\",\"expires_in\":\"1800\",\"token_type\":\"Bearer\"}");
+            }
+            return makeResponse({"Content-Type": "text/plain"}, 404, "not found");
+        }
+    }
+
+    #! a fake metadata server that listens on localhost while it exists
+    public class FakeMetadataServer {
+        public {
+            #! the URL of the server
+            string url;
+            #! the handler
+            FakeMetadataHandler handler();
+        }
+
+        private {
+            HttpServer http;
+        }
+
+        constructor() {
+            http = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("fake", LoggerLevel::getLevelError())});
+            http.setDefaultHandler("metadata", handler);
+            url = "http://localhost:" + http.addListener(<HttpListenerOptionInfo>{"node": "localhost",
+                "service": 0}).port;
+        }
+
+        destructor() {
+            http.stop();
+        }
+    }
+}
