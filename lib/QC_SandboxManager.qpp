@@ -1785,10 +1785,11 @@ static *int SandboxManager::getCallerProgramId() [flags=RET_VALUE_ONLY] {
 
     Only an object that was created while the caller was served (whose provenance names the caller's sandbox) can be
     transferred, so that an object that exists already, such as a shared object, is never handed to a sandbox by
-    mistake; to give the caller such an object, create a new one while serving the caller (a copy, for example) and
-    transfer that.  Only sandboxed code at the @ref sandbox_enforcement_level "enforcement level" of tenant isolation
-    owns objects: an object cannot be transferred to code that only sandboxes at the level of code safety govern.  The
-    object is then owned by the sandboxes that govern the caller.
+    mistake; to give the caller such an object, create a new object while serving the caller and transfer that (a copy
+    of such an object cannot be transferred either, as it keeps the provenance of the object that it copies).  Only
+    sandboxed code at the @ref sandbox_enforcement_level "enforcement level" of tenant isolation owns objects: an
+    object cannot be transferred to code that only sandboxes at the level of code safety govern.  The object is then
+    owned by the sandboxes that govern the caller.
 
     @param obj the object to hand over
 
