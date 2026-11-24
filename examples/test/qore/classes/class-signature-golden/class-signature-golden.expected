@@ -48,6 +48,22 @@ hash c66f29b03d42f0d182aa926ed3aea7a101fe6a5b
   pub m(float f)
   pub static s(hash<string, int> h, *object<::SigA::Empty> e, softlist<string> l = <EMPTY LIST>) -> list<int>
   priv static s(union<int, bool> v) -> nothing
+=== SigA::ManyMethods
+hash f44f7dbab03d1e3fbc439796edfcb67cad244c4d
+--- part 1
+  class ::SigA::ManyMethods
+  pub alpha(int a) -> string
+  pub alpha() -> string
+  priv beta()
+  pub constructor()
+  pub copy()
+  pub destructor()
+  pub memberGate(string m)
+  pub mid(string s) -> *int
+  pub zeta() -> int
+  pub static salpha() -> string
+  priv static smid(int i)
+  pub static szeta() -> int
 === SigA::Ctor
 hash e9cd3d2fd28782cbb3a274316b915f24caa2ccd6
 --- part 1

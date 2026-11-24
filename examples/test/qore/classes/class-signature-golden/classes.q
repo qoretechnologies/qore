@@ -3,12 +3,10 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 
 # the classes whose signature strings class-signature-golden.qtest pins (class-signature-golden.expected); parsed in a
-# Program of their own.  The non-static methods of a class are kept in a hash map, whose order is not that of the
-# declarations, so a class here declares methods of one name at most (variants of one name keep their order), and of
-# one static method name at most; a constructor is a method too.  The declared types of members and static
-# variables and the declared return types of methods are in the signature with namespace paths (qore#7457), not a
-# return type implied by %require-types; the synchronized flag is not, as it is not part of the type of a class,
-# like the code of a method
+# Program of their own.  The methods of a class are in the signature in the order of their names, the variants of a
+# method in the order of their declarations (qore#7458).  The declared types of members and static variables and the
+# declared return types of methods are in the signature with namespace paths (qore#7457), not a return type implied
+# by %require-types; the synchronized flag is not, as it is not part of the type of a class, like the code of a method
 
 %new-style
 %require-types
@@ -110,6 +108,50 @@ namespace SigA {
         }
     }
 
+    #! several method names, declared out of the order of their names, with the special methods (qore#7458)
+    class ManyMethods {
+        constructor() {
+        }
+
+        destructor() {
+        }
+
+        copy() {
+        }
+
+        int zeta() {
+            return 0;
+        }
+
+        string alpha(int a) {
+            return "";
+        }
+
+        string alpha() {
+            return "";
+        }
+
+        *int mid(string s) {
+        }
+
+        private beta() {
+        }
+
+        static int szeta() {
+            return 0;
+        }
+
+        static string salpha() {
+            return "";
+        }
+
+        private static smid(int i) {
+        }
+
+        memberGate(string m) {
+        }
+    }
+
     #! a constructor
     class Ctor {
         constructor(int i, string s = "a") {
@@ -183,6 +225,7 @@ const ClassPaths = (
     "SigA::Members",
     "SigA::Statics",
     "SigA::Methods",
+    "SigA::ManyMethods",
     "SigA::Ctor",
     "SigA::Abs",
     "SigA::Child",

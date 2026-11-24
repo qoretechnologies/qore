@@ -2620,6 +2620,25 @@ static void do_sig(QoreString& csig, const QoreVarMap::member_list_element_t& i)
         i.first, i.second->exp.getTypeName());
 }
 
+// process signature entries for the methods of a method map
+/** The methods are added in the order of their names, and the variants of a method in the order of its variant list
+    (that of their declarations), so that the signature depends only on the declarations, not on the iteration order
+    of the method map (a hash map whose order depends on its hash function and bucket count) (qore#7458)
+*/
+static void do_method_sigs(QoreString& csig, const hm_method_t& m, const char* mod) {
+    std::vector<const hm_method_t::value_type*> v;
+    v.reserve(m.size());
+    for (auto& i : m) {
+        v.push_back(&i);
+    }
+    std::sort(v.begin(), v.end(), [](const hm_method_t::value_type* a, const hm_method_t::value_type* b) {
+        return a->first < b->first;
+    });
+    for (const hm_method_t::value_type* i : v) {
+        qore_method_private::get(*i->second)->getFunction()->parseSignatures(csig, mod);
+    }
+}
+
 // process signature entries for class constants
 static void do_sig(QoreString& csig, ConstantList& clist) {
     ConstantListIterator cli(clist);
@@ -2967,11 +2986,9 @@ int qore_class_private::initializeIntern() {
     if (has_sig_changes) {
         // add methods to class signature
         // pending "normal" (non-static) method variants
-        for (auto& i : hm)
-            i.second->priv->func->parseSignatures(csig, nullptr);
+        do_method_sigs(csig, hm, nullptr);
         // pending static method variants
-        for (auto& i : shm)
-            i.second->priv->func->parseSignatures(csig, "static");
+        do_method_sigs(csig, shm, "static");
     }
 
     // the declared types of the static variables and members are resolved before they are added to the signature,
@@ -3167,10 +3184,8 @@ void qore_class_private::generateBuiltinSignature(const char* nspath) {
         }
     }
 
-    for (auto& i : hm)
-        i.second->priv->func->parseSignatures(csig, nullptr);
-    for (auto& i : shm)
-        i.second->priv->func->parseSignatures(csig, "static");
+    do_method_sigs(csig, hm, nullptr);
+    do_method_sigs(csig, shm, "static");
 
     // add committed vars to signature first before members
     for (auto& i : vars.member_list) {
@@ -3746,13 +3761,16 @@ void qore_class_private::parseCommit() {
                 }
             }
 
+            // add the pending method variants to the signature in the order of the method names (qore#7458)
+            if (has_sig_changes) {
+                do_method_sigs(csig, hm, nullptr);
+                do_method_sigs(csig, shm, "static");
+            }
+
             // commit pending "normal" (non-static) method variants
             for (auto& i : hm) {
                 bool is_new = i.second->priv->func->committedEmpty();
-                if (has_sig_changes)
-                    i.second->priv->func->parseCommitMethod(csig, 0);
-                else
-                    i.second->priv->func->parseCommitMethod();
+                i.second->priv->func->parseCommitMethod();
                 if (is_new) {
                     checkAssignSpecial(i.second);
                     ++num_methods;
@@ -3763,10 +3781,7 @@ void qore_class_private::parseCommit() {
             // commit pending static method variants
             for (auto& i : shm) {
                 bool is_new = i.second->priv->func->committedEmpty();
-                if (has_sig_changes)
-                    i.second->priv->func->parseCommitMethod(csig, "static");
-                else
-                    i.second->priv->func->parseCommitMethod();
+                i.second->priv->func->parseCommitMethod();
                 if (is_new) {
                     ++num_static_methods;
                     ++num_static_user_methods;
@@ -12012,11 +12027,6 @@ void MethodFunctionBase::parseSignatures(QoreString& csig, const char* mod) cons
         const MethodVariantBase* v = METHVB_const(*i);
         do_variant_sig(csig, name, v, mod);
     }
-}
-
-void MethodFunctionBase::parseCommitMethod(QoreString& csig, const char* mod) {
-    parseSignatures(csig, mod);
-    parseCommitMethod();
 }
 
 void MethodFunctionBase::parseCommitMethod() {

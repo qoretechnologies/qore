@@ -682,6 +682,9 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        the return types of its methods, with namespace paths (qore#7457): the hashes of an earlier image have
 //!        \c any for the member types that were not resolved yet, and its classes that differ only in such a type
 //!        would be one type
+//!      - the methods of a user class are in its signature in the order of their names (qore#7458), not in the
+//!        iteration order of its method map: the hashes of an earlier image of a class with several method names
+//!        depend on the hash map of the compiler's build
 //! The shared format version for the changes of the AOT-identity batch (see v52 above).
 constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY_VERSION = 52;
 //! The shared format version for the changes of the second AOT-identity batch (see v53 above).
@@ -719,7 +722,7 @@ static_assert(QORE_AOT_WILDCARD_BOUND_VERSION == QORE_AOT_BATCH_AOT_IDENTITY_VER
 //! (qore#6672), the owner-qualified wildcard bounds of its type paths (qore#7184), the declaration index of each
 //! METHODS record (qore#7169), the callee of each background helper (qore#7087) and class signature hashes with the
 //! namespace path of their class (qore#7397) and the declared types of their members, static variables and method
-//! return types (qore#7457)
+//! return types (qore#7457) and their methods in the order of their names (qore#7458)
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AOT_IDENTITY2_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;

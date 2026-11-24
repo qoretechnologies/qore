@@ -97,6 +97,16 @@ sub check_parse_options() {
     }
 }
 
+#! true if the signature hash of a class of this program is that of the class of a Program (true without the debug
+#! hook dbg_class_signature() of a debug build)
+bool sub same_hash(Program p, string path) {
+    if (!exists_function("dbg_class_signature")) {
+        return True;
+    }
+    *string h = call_function("dbg_class_signature", path).hash;
+    return exists h && h == p.callFunction("sig_hash", path);
+}
+
 #! the classes of this program (compiled by qcc in an executable or a module) are those of the same source parsed at
 #! run time
 sub check_same_source(string dir) {
@@ -104,8 +114,14 @@ sub check_same_source(string dir) {
         + "string sub take(MTC::Full f) { return \"accepted \" + f.count(); } "
         + "string sub take_later(MTC::Later l) { return \"accepted\"; } "
         + "string sub take_derived(MTC::Derived d) { return \"accepted\"; } "
-        + "MTC::Full sub make() { MTC::Full f(); f.li = (1, 2); return f; }";
+        + "string sub take_many(MTC::Many m) { return \"accepted \" + m.alpha(1); } "
+        + "MTC::Full sub make() { MTC::Full f(); f.li = (1, 2); return f; } "
+        + "*string sub sig_hash(string path) { return call_function(\"dbg_class_signature\", path).hash; }";
     Program p = parse_program(src, "classes.ql");
+    foreach string path in (("MTC::Full", "MTC::Many", "MTC::Later", "MTC::Base", "MTC::Derived")) {
+        printf("the signature hash of %s in a runtime parse: %s\n", path, same_hash(p, path) ? "same" : "different");
+    }
+    printf("this program's Many in a runtime parse: %s\n", p.callFunction("take_many", new MTC::Many()));
     MTC::Full f();
     f.li = (1, 2, 3);
     printf("this program's Full in a runtime parse: %s\n", p.callFunction("take", f));

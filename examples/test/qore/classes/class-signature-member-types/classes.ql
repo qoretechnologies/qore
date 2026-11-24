@@ -58,6 +58,41 @@ public class Derived inherits Base {
     }
 }
 
+#! several method names, declared out of the order of their names (qore#7458)
+public class Many {
+    constructor() {
+    }
+
+    int zeta() {
+        return 1;
+    }
+
+    string alpha(int a) {
+        return "alpha " + a;
+    }
+
+    string alpha() {
+        return "alpha";
+    }
+
+    *int mid(string s) {
+    }
+
+    private beta() {
+    }
+
+    static int szeta() {
+        return 2;
+    }
+
+    static string salpha() {
+        return "salpha";
+    }
+
+    private static smid(int i) {
+    }
+}
+
 #! declared after the class whose member types refer to it
 public class Later {
     public {

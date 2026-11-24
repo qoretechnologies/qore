@@ -842,8 +842,10 @@ while (i.next) {}  # parse exception: the call is i.next()
     constants) and parent classes.  The types are compared by their names with the namespace paths of the classes,
     hashdecls and enums that they name, so classes that differ only in the type of a member, of a static variable or
     of the return value of a method, such as a member declared <tt>list<int> v</tt> in one %Program and
-    <tt>hash<string, int> v</tt> in the other, are different types (since %Qore 3.0).  Two classes
-    with the same name and declarations in different namespaces, such as \c NA::Foo and \c NB::Foo of
+    <tt>hash<string, int> v</tt> in the other, are different types (since %Qore 3.0).  The signature depends only on
+    the declarations, not on the build of %Qore (its methods are in it in the order of their names), so a class
+    compiled by \c qcc is compatible with the same source parsed at run time.  Two classes with the same name and
+    declarations in different namespaces, such as \c NA::Foo and \c NB::Foo of
     <tt>namespace NA { class Foo {} } namespace NB { class Foo {} }</tt>, are different types: an object of
     \c NB::Foo is not a value of the type \c NA::Foo, and a method overloaded on the two classes calls the variant of
     the object's class, in every @ref execution_modes "execution mode".  A class

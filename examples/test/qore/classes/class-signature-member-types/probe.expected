@@ -46,6 +46,12 @@ parsed with PO_REQUIRE_TYPES, taken by a parse with no option: accepted
 parsed with PO_REQUIRE_TYPES, taken by a parse with PO_REQUIRE_PROTOTYPES: accepted
 parsed with PO_REQUIRE_PROTOTYPES, taken by a parse with no option: accepted
 parsed with PO_REQUIRE_PROTOTYPES, taken by a parse with PO_REQUIRE_TYPES: accepted
+the signature hash of MTC::Full in a runtime parse: same
+the signature hash of MTC::Many in a runtime parse: same
+the signature hash of MTC::Later in a runtime parse: same
+the signature hash of MTC::Base in a runtime parse: same
+the signature hash of MTC::Derived in a runtime parse: same
+this program's Many in a runtime parse: accepted alpha 1
 this program's Full in a runtime parse: accepted 3
 this program's Later in a runtime parse: accepted
 this program's Derived in a runtime parse: accepted
