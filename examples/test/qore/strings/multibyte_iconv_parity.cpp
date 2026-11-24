@@ -40,7 +40,9 @@
     decode-only" if it decodes but cannot encode it (such an encoding is not probed), or "<encoding>
     no-character-functions" for an encoding that Qore handles without the character functions of a family (its
     conversions are not validated: EUC-TW, whose characters of four bytes are handled as stateful text).  The test
-    that runs it (multibyte-iconv-parity.qtest) decides which differences are allowed on the platform.
+    that runs it (multibyte-iconv-parity.qtest) decides which differences are allowed on the platform.  An encoding
+    named with conversion flags (ex: SJIS//IGNORE) is decoded by iconv without them, as they are not part of the
+    encoding: its character functions are those of the encoding (qore#7155).
 */
 
 #include <qore/Qore.h>
@@ -115,8 +117,16 @@ int main(int argc, char** argv) {
     }
     for (const char* name : encs) {
         const QoreEncoding* enc = QoreEncodingManager::findCreate(name);
+        // the sequences of the encoding are those that iconv decodes from the encoding itself: the conversion flags
+        // after "//" are not part of the encoding (its character functions are the same with them), and they change
+        // what a conversion does with input that is not valid: GNU libiconv's //IGNORE (macOS with MacPorts)
+        // discards it and reports success, so that every sequence would be "decoded" (qore#7155)
+        std::string code = enc->getCode();
+        std::string::size_type flags = code.find("//");
+        // as Qore does (qore_encoding_private::iconvCodeWithoutFlags()): a name that is only flags is kept
+        std::string iconv_code = (flags == std::string::npos || !flags) ? code : code.substr(0, flags);
         // an encoding that iconv does not know is not probed, so it has no character functions either
-        iconv_t cd = iconv_open("UTF-8", enc->getCode());
+        iconv_t cd = iconv_open("UTF-8", iconv_code.c_str());
         if (cd == reinterpret_cast<iconv_t>(static_cast<intptr_t>(-1))) {
             std::printf("%s unavailable\n", name);
             continue;
@@ -124,7 +134,7 @@ int main(int argc, char** argv) {
         if (!enc->isMultiByte()) {
             iconv_close(cd);
             // an encoding that iconv decodes but cannot encode is not probed either (musl's EUC-KR, GB18030, Big5)
-            iconv_t ecd = iconv_open(enc->getCode(), "UTF-8");
+            iconv_t ecd = iconv_open(iconv_code.c_str(), "UTF-8");
             if (ecd == reinterpret_cast<iconv_t>(static_cast<intptr_t>(-1))) {
                 std::printf("%s decode-only\n", name);
                 continue;
