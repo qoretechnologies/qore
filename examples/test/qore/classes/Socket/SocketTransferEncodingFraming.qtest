@@ -152,7 +152,7 @@ class SocketTransferEncodingFramingTest inherits QUnit::Test {
 
     hostTest() {
         # a Host field with a list of hosts is refused; one host is served
-        foreach hash<auto> i in ({"localhost, other": True, "localhost:8080": False}.pairIterator()) {
+        foreach hash<auto> i in ({"example.com, other": True, "example.com:8080": False}.pairIterator()) {
             foreach Reader reader in (Readers) {
                 string label = sprintf("%s: %y", reader, i.key);
                 hash<auto> client = startClient(sprintf("GET /host HTTP/1.1\r\nHost: %s\r\n\r\n", i.key));
@@ -362,7 +362,7 @@ class SocketTransferEncodingFramingTest inherits QUnit::Test {
     #! starts a client that sends the data and keeps the connection open until done
     private hash<auto> startClient(string data) {
         Socket server();
-        server.bind("localhost:0");
+        server.bind("127.0.0.1:0");
         server.listen();
         hash<auto> info = server.getSocketInfo(False);
 

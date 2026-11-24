@@ -147,7 +147,7 @@ class SocketHttpHeaderTextAllocFailureTest inherits QUnit::Test {
     #! starts a client that sends the data, reads what it is sent and keeps the connection open until done
     private hash<auto> startClient(string data) {
         Socket server();
-        server.bind("localhost:0");
+        server.bind("127.0.0.1:0");
         server.listen();
         hash<auto> info = server.getSocketInfo(False);
 
