@@ -176,8 +176,10 @@ private:
     class before it; a class where paths merge gets the union of their sets, a bit set over an index of the classes of
     the private:internal edges.  The work is linear in the hierarchy apart from the unions, each of which takes one
     operation for each 64 classes of the index.
+
+    @return true when owner sets from different paths were combined, so the table is worth retaining for siblings
 */
-static void compute_ancestor_access(const BCList* list, qore_class_private* root, AncestorAccessCache& cache) {
+static bool compute_ancestor_access(const BCList* list, qore_class_private* root, AncestorAccessCache& cache) {
     assert(!cache.valid);
     assert(root->scl == list);
 
@@ -219,6 +221,7 @@ static void compute_ancestor_access(const BCList* list, qore_class_private* root
     // (which is rejected with an error) is not followed, which only removes access
     std::shared_ptr<InternalOwnerIndex> index = std::make_shared<InternalOwnerIndex>();
     std::vector<const qore_class_private*> ready;
+    bool merged = false;
     ready.push_back(root);
     for (size_t ri = 0; ri < ready.size(); ++ri) {
         const qore_class_private* x = ready[ri];
@@ -240,6 +243,7 @@ static void compute_ancestor_access(const BCList* list, qore_class_private* root
             if (n.access == Internal) {
                 // only the code of the edge's child class follows it, on a path without another such edge
                 if (xs.access < Internal) {
+                    merged = merged || bool(ps.owners);
                     ps.addOwner(index, index->get(x));
                 }
             } else if (xs.access < Internal) {
@@ -248,6 +252,7 @@ static void compute_ancestor_access(const BCList* list, qore_class_private* root
                     ps.access = a;
                 }
             } else if (xs.owners) {
+                merged = merged || (ps.owners && !(ps.owners == xs.owners));
                 ps.addOwners(index, xs.owners);
             }
             assert(ps.pending);
@@ -267,6 +272,52 @@ static void compute_ancestor_access(const BCList* list, qore_class_private* root
         }
     }
     cache.valid = true;
+    return merged;
+}
+
+//! Reuse the owner sets below a chain of ordinary inheritance edges (qore#7439).
+/** An ordinary edge can raise the ordinary access to an ancestor, but an internal edge below it has the same
+    owner.  Store one table at the first branch or internal edge so that a chain of single parents does not keep
+    a full table at every level.  A direct internal edge makes the current class an owner and a branch must
+    combine paths; both use the topological computation.
+*/
+static bool inherit_ancestor_access(const BCList* list, AncestorAccessCache& cache) {
+    if (list->size() != 1 || list->front()->access >= Internal || !list->front()->sclass) {
+        return false;
+    }
+    const BCNode* edge = list->front();
+    auto* base = qore_class_private::get(*edge->sclass);
+    if (!base->scl || !base->scl->has_internal_inheritance) {
+        return false;
+    }
+    ClassAccess access = edge->access;
+    const BCList* bases = base->scl;
+    cache.entries.push_back({base, access, {}});
+    while (bases->size() == 1 && bases->front()->access < Internal) {
+        edge = bases->front();
+        base = qore_class_private::get(*edge->sclass);
+        access = std::max(access, edge->access);
+        cache.entries.push_back({base, access, {}});
+        bases = base->scl;
+        assert(bases && bases->has_internal_inheritance);
+    }
+    // Once published the table lives as long as the base list, which outlives this walk.
+    const AncestorAccessCache* shared = bases->descendant_access.load(std::memory_order_acquire);
+    if (!shared) {
+        auto table = std::make_unique<AncestorAccessCache>();
+        if (!compute_ancestor_access(bases, base, *table)) {
+            // Keeping a table without a merge at every internal edge in a chain would cost quadratic space.
+            shared = table.get();
+            cache.local_tail = std::move(table);
+        } else if (bases->descendant_access.compare_exchange_strong(shared, table.get(),
+                std::memory_order_acq_rel, std::memory_order_acquire)) {
+            shared = table.release();
+        }
+    }
+    cache.tail = shared;
+    cache.tail_access = access;
+    cache.valid = true;
+    return true;
 }
 
 //! Builds the inheritance list of a method from the access of the ancestors of its class (qore#7410)
@@ -279,21 +330,28 @@ static void walk_method_ancestors(const BCList* list, QoreMethod* m, AncestorAcc
     if (!cache) {
         cache = &local;
     }
-    if (!cache->valid) {
+    if (!cache->valid && !inherit_ancestor_access(list, *cache)) {
         compute_ancestor_access(list, qore_class_private::get(*const_cast<QoreClass*>(m->getClass())), *cache);
     }
     const char* name = m->getName();
     MethodFunctionBase* mf = qore_method_private::get(*m)->getFunction();
-    for (const AncestorAccessCache::Entry& e : cache->entries) {
+    auto add = [&](const AncestorAccessCache::Entry& e, ClassAccess access) {
         const QoreMethod* w = find(e.cls, name);
-        if (!w) {
-            continue;
+        if (w) {
+            QoreFunction* af = qore_method_private::get(*w)->getFunction();
+            if (Parse) {
+                mf->addAncestor(af, access, e.owners);
+            } else {
+                mf->addNewAncestor(af, access, e.owners);
+            }
         }
-        QoreFunction* af = qore_method_private::get(*w)->getFunction();
-        if (Parse) {
-            mf->addAncestor(af, e.access, e.owners);
-        } else {
-            mf->addNewAncestor(af, e.access, e.owners);
+    };
+    for (const auto& e : cache->entries) {
+        add(e, e.access);
+    }
+    if (cache->tail) {
+        for (const auto& e : cache->tail->entries) {
+            add(e, std::max(cache->tail_access, e.access));
         }
     }
 }
@@ -2494,14 +2552,17 @@ int qore_class_private::initializeHierarchy(qcp_set_t& qcp_set) {
     // is initialized again, so that the error is reported again for each subclass, as before
     if (!committed && !sys) {
         bool resolved = true;
+        bool internal = false;
         for (auto& i : *scl) {
             const qore_class_private* bc = i->sclass ? i->sclass->priv : nullptr;
             if (!bc || (bc->scl && !bc->hierarchy_initialized && !bc->committed && !bc->sys)) {
                 resolved = false;
                 break;
             }
+            internal = internal || i->access == Internal || (bc->scl && bc->scl->has_internal_inheritance);
         }
         if (resolved) {
+            scl->has_internal_inheritance = internal;
             hierarchy_initialized = true;
         }
     }
@@ -10302,6 +10363,7 @@ void collect_hierarchy_functions(const qore_class_private& qc, const std::string
 #ifdef DEBUG
 std::atomic<int64> qore_generic_parent_check_steps{0};
 std::atomic<int64> qore_class_hierarchy_walk_steps{0};
+std::atomic<int64> qore_live_internal_owner_sets{0};
 #endif
 
 namespace {

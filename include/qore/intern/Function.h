@@ -2541,6 +2541,11 @@ struct InternalOwnerIndex {
     DLLLOCAL size_t get(const qore_class_private* qc);
 };
 
+#ifdef DEBUG
+//! Number of live owner sets for the memory regression test (qore#7439).
+DLLLOCAL extern std::atomic<int64> qore_live_internal_owner_sets;
+#endif
+
 //! The classes whose private:internal inheritance makes an ancestor of a method accessible to their code (qore#7410)
 /** The child classes of the private:internal edges of the paths from the list's class to the ancestor's class (a path
     with two such edges gives the ancestor Inaccessible access), as bits of an index shared by the sets of one
@@ -2553,7 +2558,16 @@ struct InternalOwnerSet {
     std::vector<uint64_t> bits;
 
     DLLLOCAL InternalOwnerSet(std::shared_ptr<InternalOwnerIndex> i) : index(std::move(i)) {
+#ifdef DEBUG
+        qore_live_internal_owner_sets.fetch_add(1, std::memory_order_relaxed);
+#endif
     }
+
+#ifdef DEBUG
+    DLLLOCAL ~InternalOwnerSet() {
+        qore_live_internal_owner_sets.fetch_sub(1, std::memory_order_relaxed);
+    }
+#endif
 
     //! adds a reference
     DLLLOCAL void ref() const {

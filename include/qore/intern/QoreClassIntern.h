@@ -2855,6 +2855,12 @@ struct AncestorAccessCache {
     bool valid = false;
     //! the ancestors in the order of the lists
     std::vector<Entry> entries;
+    //! The remaining ancestors, in the immutable table below the chain of ordinary edges (qore#7439).
+    const AncestorAccessCache* tail = nullptr;
+    //! Owns the tail if it contains no merges and was only computed for this walk.
+    std::unique_ptr<AncestorAccessCache> local_tail;
+    //! Most restrictive access of the ordinary edges leading to that base.
+    ClassAccess tail_access = Public;
 };
 
 class BCList : public bclist_t {
@@ -2879,6 +2885,12 @@ public:
     //! sml_complete (true, conservatively, for a hierarchy not known to be complete; qore#6798)
     bool private_edge = true;
 
+    //! Set after the parent classes have been resolved, if some edge of the hierarchy is private:internal.
+    bool has_internal_inheritance = false;
+    //! The immutable access table of a resolved class at a branch or internal edge, shared by classes that inherit its hierarchy (#7439).
+    //! A copy of the base list builds its own table after its base class pointers have been resolved.
+    mutable std::atomic<const AncestorAccessCache*> descendant_access{nullptr};
+
     DLLLOCAL BCList(BCNode* n) {
         push_back(n);
     }
@@ -2887,7 +2899,8 @@ public:
     }
 
     DLLLOCAL BCList(const BCList& old) : sml(old.sml), sml_complete(old.sml_complete),
-            diamond_free(old.diamond_free), private_edge(old.private_edge) {
+            diamond_free(old.diamond_free), private_edge(old.private_edge),
+            has_internal_inheritance(old.has_internal_inheritance) {
         assert(old.valid);
         reserve(old.size());
         for (bclist_t::const_iterator i = old.begin(), e = old.end(); i != e; ++i)
@@ -2895,6 +2908,7 @@ public:
     }
 
     DLLLOCAL ~BCList() {
+        delete descendant_access.load(std::memory_order_relaxed);
         for (bclist_t::iterator i = begin(), e = end(); i != e; ++i)
             delete *i;
     }
