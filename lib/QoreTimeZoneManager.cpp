@@ -45,6 +45,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#ifndef _Q_WINDOWS
+#include <fcntl.h>
+#endif
 
 #ifdef HAVE_GLOB_H
 #include <glob.h>
@@ -563,13 +566,25 @@ QoreZoneInfo::QoreZoneInfo(QoreString& root, std::string& n_name, ExceptionSink*
     }
     // no data is returned for an empty file
     size_t len = data ? data->size() : 0;
+    init(len ? static_cast<const unsigned char*>(data->getPtr()) : nullptr, len, fn.c_str(), xsink);
+}
+
+QoreZoneInfo::QoreZoneInfo(std::string& n_name, const unsigned char* data, size_t len, const char* fn,
+        ExceptionSink* xsink) : AbstractQoreZoneInfo(n_name), valid(false) {
+    assert(fn);
+    init(data, len, fn, xsink);
+}
+
+void QoreZoneInfo::init(const unsigned char* data, size_t len, const char* fn, ExceptionSink* xsink) {
+    assert(!valid);
+    assert(data || !len);
     if (len > MaxFileSize) {
         xsink->raiseException("TZINFO-ERROR", "%s: the file is larger than the maximum TZif file size of %llu "
-            "bytes", fn.c_str(), static_cast<unsigned long long>(MaxFileSize));
+            "bytes", fn, static_cast<unsigned long long>(MaxFileSize));
         return;
     }
 
-    if (parse(len ? static_cast<const unsigned char*>(data->getPtr()) : nullptr, len, fn.c_str(), xsink)) {
+    if (parse(data, len, fn, xsink)) {
         return;
     }
 
@@ -2113,20 +2128,62 @@ int QoreTimeZoneManager::readAll(ExceptionSink* xsink) {
     return 0;
 }
 
-int QoreTimeZoneManager::checkRegion(const QoreString& region, bool is_path, ExceptionSink* xsink) {
-    if (q_check_no_nul(region.c_str(), region.size(), "time zone region or path", "time zone regions and paths",
-            "TZINFO-ERROR", xsink)) {
-        return -1;
+bool QoreTimeZoneManager::isRegionName(const char* region, size_t len) {
+    assert(region);
+    // an empty name and a leading '/' (an empty first component) are refused by the component check below
+    size_t component = 0;
+    for (size_t i = 0; i < len; ++i) {
+        unsigned char c = static_cast<unsigned char>(region[i]);
+        if (c == '/') {
+            // an empty component: a leading, trailing or repeated '/'
+            if (!component) {
+                return false;
+            }
+            component = 0;
+            continue;
+        }
+        // ASCII letters, digits, '_', '+' and '-' only: no '.', backslash, NUL or any other character
+        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '+'
+                || c == '-')) {
+            return false;
+        }
+        ++component;
     }
-    if (is_path || region.empty()) {
+    return component > 0;
+}
+
+void QoreTimeZoneManager::raiseUnknownRegion(const char* region, ExceptionSink* xsink) {
+    assert(region);
+    xsink->raiseException("TZINFO-ERROR", "unknown time zone region \"%s\"", region);
+}
+
+int QoreTimeZoneManager::checkRegion(const QoreString& region, bool is_path, ExceptionSink* xsink) {
+    if (is_path) {
+        return q_check_no_nul(region.c_str(), region.size(), "time zone region or path",
+            "time zone regions and paths", "TZINFO-ERROR", xsink);
+    }
+    if (region.empty()) {
         return 0;
     }
     // a region names a file under the zoneinfo directory, so it cannot have a component that leaves the directory;
-    // no region has a ".." or empty path component or a backslash
+    // no region has a NUL character, a ".." or empty path component or a backslash; findLoadRegion() accepts only a
+    // canonical region name, but a cached zone is returned by its exact name, which can be a path
     const char* str = region.c_str();
+    if (strlen(str) != region.size()) {
+        // the region is shown with each NUL character as "\x00", as cut at the first one it would be another name
+        std::string shown;
+        for (size_t i = 0, e = region.size(); i < e; ++i) {
+            if (str[i]) {
+                shown += str[i];
+            } else {
+                shown += "\\x00";
+            }
+        }
+        raiseUnknownRegion(shown.c_str(), xsink);
+        return -1;
+    }
     if (strchr(str, '\\')) {
-        xsink->raiseException("TZINFO-ERROR", "time zone region \"%s\" contains a backslash; a time zone region "
-            "cannot contain a backslash", str);
+        raiseUnknownRegion(str, xsink);
         return -1;
     }
     // a leading '/' is accepted for an absolute path under the zoneinfo directory
@@ -2134,14 +2191,8 @@ int QoreTimeZoneManager::checkRegion(const QoreString& region, bool is_path, Exc
     while (true) {
         const char* end = strchr(p, '/');
         size_t len = end ? static_cast<size_t>(end - p) : strlen(p);
-        if (!len) {
-            xsink->raiseException("TZINFO-ERROR", "time zone region \"%s\" contains an empty path component; a "
-                "time zone region cannot contain an empty path component", str);
-            return -1;
-        }
-        if (len == 2 && p[0] == '.' && p[1] == '.') {
-            xsink->raiseException("TZINFO-ERROR", "time zone region \"%s\" contains a \"..\" path component; a "
-                "time zone region cannot name a file outside of the zoneinfo directory", str);
+        if (!len || (len == 2 && p[0] == '.' && p[1] == '.')) {
+            raiseUnknownRegion(str, xsink);
             return -1;
         }
         if (!end) {
@@ -2152,10 +2203,136 @@ int QoreTimeZoneManager::checkRegion(const QoreString& region, bool is_path, Exc
     return 0;
 }
 
+#ifndef _Q_WINDOWS
+//! reads the zoneinfo file of a canonical region name if it resolves to a regular file under the zoneinfo directory
+/** This is the runtime's own read of its time zone database, so the file-system policy of the calling code does not
+    apply; it resolves the directory and the file and reads the file, nothing else.
+
+    @param root the zoneinfo directory
+    @param region a canonical region name (QoreTimeZoneManager::isRegionName())
+    @param data the data of the file, at most QoreZoneInfo::MaxFileSize + 1 bytes
+
+    @return 0 if the file was read, -1 if it cannot be read: missing, outside of the directory, not a regular file or
+    an I/O error, which the caller does not distinguish
+*/
+static int read_region_file(const char* root, const char* region, std::string& data) {
+    assert(QoreTimeZoneManager::isRegionName(region, strlen(region)));
+    assert(data.empty());
+#ifdef HAVE_REALPATH
+    // the directory is resolved for each load, as the operating system can replace the zoneinfo directory that a
+    // symbolic link names (macOS)
+    std::unique_ptr<char, decltype(&free)> real_root(realpath(root, nullptr), &free);
+    if (!real_root) {
+        return -1;
+    }
+    std::string path = root;
+    path += '/';
+    path += region;
+    std::unique_ptr<char, decltype(&free)> real_path(realpath(path.c_str(), nullptr), &free);
+    if (!real_path) {
+        return -1;
+    }
+    // the resolved file must be under the resolved directory; symbolic links inside of the directory are followed
+    std::string prefix = real_root.get();
+    if (prefix.empty() || prefix.back() != '/') {
+        prefix += '/';
+    }
+    if (strncmp(real_path.get(), prefix.c_str(), prefix.size()) || !real_path.get()[prefix.size()]) {
+        return -1;
+    }
+
+    // the resolved path has no symbolic link, so the file is not opened if one replaces it; a FIFO does not block the
+    // open
+    int fd;
+    do {
+        fd = open(real_path.get(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
+    } while (fd < 0 && errno == EINTR);
+    if (fd < 0) {
+        return -1;
+    }
+    ON_BLOCK_EXIT(close, fd);
+    struct stat sbuf;
+    if (fstat(fd, &sbuf) || !S_ISREG(sbuf.st_mode)) {
+        return -1;
+    }
+    // one byte more than the maximum shows a file that is too large
+    char buf[8192];
+    while (data.size() <= QoreZoneInfo::MaxFileSize) {
+        size_t want = std::min(sizeof buf, QoreZoneInfo::MaxFileSize + 1 - data.size());
+        ssize_t rc = read(fd, buf, want);
+        if (rc < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return -1;
+        }
+        if (!rc) {
+            break;
+        }
+        data.append(buf, static_cast<size_t>(rc));
+    }
+    return 0;
+#else
+    return -1;
+#endif
+}
+
+const AbstractQoreZoneInfo* QoreTimeZoneManager::loadRegionIntern(const char* region, ExceptionSink* xsink) {
+    // the name is checked before anything is accessed
+    if (!isRegionName(region, strlen(region))) {
+        raiseUnknownRegion(region, xsink);
+        return nullptr;
+    }
+    std::string data;
+    if (read_region_file(root.c_str(), region, data)) {
+        raiseUnknownRegion(region, xsink);
+        return nullptr;
+    }
+
+    // errors in the data of a zoneinfo file name the region, not the resolved path of the file
+    QoreStringMaker label("time zone region \"%s\"", region);
+    std::string name = region;
+    std::unique_ptr<QoreZoneInfo> tzi(new QoreZoneInfo(name, reinterpret_cast<const unsigned char*>(data.data()),
+        data.size(), label.c_str(), xsink));
+    if (!*tzi) {
+        assert(*xsink);
+        return nullptr;
+    }
+    QoreZoneInfo* rv = tzi.get();
+    tzmap[name] = rv;
+    tzi.release();
+    ++tzsize;
+    return rv;
+}
+#endif
+
 const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadRegion(const char* name, ExceptionSink* xsink) {
+    assert(name);
+#ifdef _Q_WINDOWS
     QoreAutoRWWriteLocker al(rwl);
     // find or load region
     return processFile(name, false, xsink);
+#else
+    // an empty region is UTC
+    if (!*name) {
+        return nullptr;
+    }
+    // a path under the zoneinfo directory names the region after it; the directory does not change after
+    // construction
+    const char* region = name;
+    size_t root_len = root.strlen();
+    if (root_len && !strncmp(name, root.c_str(), root_len) && name[root_len] == '/') {
+        region = name + root_len + 1;
+    }
+
+    QoreAutoRWWriteLocker al(rwl);
+    // a cached zone needs no file access
+    tzmap_t::iterator i = tzmap.find(region);
+    if (i != tzmap.end()) {
+        return i->second;
+    }
+    return loadRegionIntern(region, xsink);
+#endif
 }
 
 const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadRegionFromPath(const char* name, ExceptionSink* xsink) {

@@ -10,6 +10,7 @@
 %requires cppapiuser
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires Util
 
 %exec-class FindCreateTimeZoneTest
 
@@ -74,9 +75,10 @@ class FindCreateTimeZoneTest inherits QUnit::Test {
         foreach string name in ("+01:0", "+01:xx", "+01:00:", "+01:00:00x", "-05:3") {
             assertThrows("PARSE-SET-TIME-ZONE-ERROR", \cpp_api_find_create_timezone(), name, name);
         }
-        # not an offset: the name is looked up as a zoneinfo region and not found
-        foreach string name in ("+1", "+x1", "-", "No/Such_Region") {
-            assertThrows("FILE-OPEN2-ERROR", \cpp_api_find_create_timezone(), name, name);
+        # not an offset: the name is looked up as a zoneinfo region and not found, or it is not a region name
+        foreach string name in ("+1", "+x1", "-", "No/Such_Region", "../../etc/passwd", "/etc/passwd", "a.b") {
+            assertThrows("TZINFO-ERROR", sprintf("^unknown time zone region \"%s\"$", regex_escape(name)),
+                \cpp_api_find_create_timezone(), name, name);
         }
     }
 }

@@ -8,8 +8,22 @@ immutable after construction; lookups need no lock.
 
 ## Reading
 
-The whole file is read with `QoreFile::readBinary()`, up to `QoreZoneInfo::MaxFileSize` (1 MiB; real zoneinfo
-files are less than 8 KiB), and parsed from memory:
+The whole file is read, up to `QoreZoneInfo::MaxFileSize` (1 MiB; real zoneinfo files are less than 8 KiB), and
+parsed from memory (`QoreZoneInfo::init()`):
+
+- A path (`findLoadRegionFromPath()`, the local zone at startup) is read with `QoreFile::open2()` and
+  `QoreFile::readBinary()`, subject to the file-system policy of the calling code.
+- A region (`QoreTimeZoneManager::findLoadRegion()`, also `find_create_timezone()`) is the runtime's own read of its
+  time zone database, not subject to the file-system policy of the code that names it, so that sandboxed code can
+  deserialize a date in a region that is not cached yet (qore#7442). A cached zone is returned by its exact name
+  without file access (the local zone is cached by the path of its file, a region by its name). Otherwise, in this
+  order: `isRegionName()` accepts only a canonical name (components of `[A-Za-z0-9_+-]` separated by single `/`), the
+  zoneinfo directory and the region's file are resolved with `realpath()` and the file must be under the directory,
+  and `read_region_file()` opens the resolved path with `O_NOFOLLOW | O_NONBLOCK`, requires a regular file and reads
+  it with `read()`; nothing else is accessed. Every failure up to there raises the same `TZINFO-ERROR`
+  `unknown time zone region "<name>"` (`raiseUnknownRegion()`), so the error does not show whether a path exists;
+  errors in the data name the region, not the resolved path. `checkRegion()` gives the same error for a region
+  string with a NUL character, a `..` or empty component or a backslash.
 
 - `parse()` checks the version 1 header, computes the size of each data block from the header counts in 64-bit
   arithmetic and checks it against the file size before anything in the block is read. A version 1 file is read

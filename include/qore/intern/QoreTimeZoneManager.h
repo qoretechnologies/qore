@@ -312,11 +312,24 @@ protected:
    // sets the standard UTC offset of the zone and the DST flag after the data has been read
    DLLLOCAL int setStandardInfo(ExceptionSink* xsink);
 
+   // checks the size of and parses the TZif data read from a file and sets the object valid if it can be used
+   DLLLOCAL void init(const unsigned char* data, size_t len, const char* fn, ExceptionSink* xsink);
+
 public:
    //! the maximum size of a TZif file that is read; real zoneinfo files are less than 8 KiB
    DLLLOCAL static constexpr size_t MaxFileSize = 1024 * 1024;
 
    DLLLOCAL QoreZoneInfo(QoreString& root, std::string& n_name, ExceptionSink *xsink);
+
+   //! creates the zone from the TZif data of a file that was read already
+   /** @param n_name the name of the zone
+       @param data the data of the file
+       @param len the length of \a data in bytes
+       @param fn the name of the file for error messages
+       @param xsink an exception is raised here if the data cannot be used; the object is then not valid
+   */
+   DLLLOCAL QoreZoneInfo(std::string& n_name, const unsigned char* data, size_t len, const char* fn,
+         ExceptionSink* xsink);
 
    DLLLOCAL QoreZoneInfo(const QoreZoneInfo&) = delete;
    DLLLOCAL QoreZoneInfo& operator=(const QoreZoneInfo&) = delete;
@@ -426,6 +439,14 @@ protected:
 
     DLLLOCAL void init_intern(QoreString& TZ);
 
+#ifndef _Q_WINDOWS
+    //! loads a region that is not cached; the write lock must be held
+    /** Reads the zoneinfo file of a canonical region name that resolves under the zoneinfo directory; see
+        findLoadRegion()
+    */
+    DLLLOCAL const AbstractQoreZoneInfo* loadRegionIntern(const char* region, ExceptionSink* xsink);
+#endif
+
 public:
     DLLLOCAL QoreTimeZoneManager();
 
@@ -465,13 +486,50 @@ public:
         return localtzname.empty() ? nullptr : localtzname.c_str();
     }
 
+    //! finds or loads a time zone region: a name in the zoneinfo database (ex: \c "Europe/Prague")
+    /** A region that is not cached is loaded by the runtime itself, not by the code that names it, so the
+        file-system policy of a sandbox does not apply to its file (qore#7442); therefore only a canonical region
+        name (see isRegionName()) whose file, with all symbolic links resolved, is a regular file under the zoneinfo
+        directory (also resolved) is read; nothing else is accessed.  An invalid, escaping or missing region raises
+        the same \c TZINFO-ERROR (see raiseUnknownRegion()), which does not show whether a file exists.
+
+        A name that starts with the zoneinfo directory and a \c "/" names the region after it.  A cached zone is
+        returned by its exact name (the local zone is cached by the path of its file), without any file access.  An
+        empty name is UTC (\c nullptr, no exception).
+
+        @param name the region name
+        @param xsink an exception is raised here if the region cannot be loaded
+
+        @return the zone or \c nullptr for UTC or if an exception was raised
+    */
     DLLLOCAL const AbstractQoreZoneInfo* findLoadRegion(const char* name, ExceptionSink* xsink);
+
+    //! finds or loads a time zone from a zoneinfo file given as a path
+    /** The file is opened subject to the file-system policy of the calling code
+    */
     DLLLOCAL const AbstractQoreZoneInfo* findLoadRegionFromPath(const char* name, ExceptionSink* xsink);
+
+    //! returns true if the string is a canonical time zone region name
+    /** A canonical name is one or more components separated by single \c "/" characters, each component made of
+        ASCII letters, digits, \c "_", \c "+" and \c "-" (ex: \c "Etc/GMT+5", \c "America/Port-au-Prince"); so it
+        has no \c "." or \c ".." component, no leading, trailing or repeated \c "/", no backslash and no NUL
+        character
+
+        @param region the string
+        @param len the length of \a region in bytes
+    */
+    DLLLOCAL static bool isRegionName(const char* region, size_t len);
+
+    //! raises the error for a region that cannot be loaded: invalid, outside of the zoneinfo directory or missing
+    /** The same error for all of them, so that it does not show whether a file exists
+    */
+    DLLLOCAL static void raiseUnknownRegion(const char* region, ExceptionSink* xsink);
 
     //! checks a region name or zoneinfo file path given as a string before it is passed to findLoadRegion*()
     /** A region or path with a NUL character would be cut at the NUL character and load another zoneinfo file; a
         region (a name under the zoneinfo directory, as opposed to a path) with a \c ".." or empty path component or
-        a backslash could name a file outside of the zoneinfo directory; raises \c TZINFO-ERROR in these cases
+        a backslash could name a file outside of the zoneinfo directory; a path with a NUL character raises
+        \c TZINFO-ERROR, a region in these cases the error of raiseUnknownRegion()
 
         @param region the region name or path
         @param is_path true if \a region is loaded as a path (findLoadRegionFromPath()), false if it is loaded as a
