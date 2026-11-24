@@ -566,6 +566,11 @@ public:
     /** The functions that create members are not inline, so that their code is not copied into the inline code of
         their callers (qore#7265)
     */
+    // not inline: the key and its hash would otherwise be on the stack frames of its inline callers, such as the IR
+    // interpreter's (via setKeyValueKnownAbsent())
+#if defined(__GNUC__) || defined(__clang__)
+    __attribute__((noinline))
+#endif
     DLLLOCAL HashMember* createMemberKnownAbsent(const char* key);
 
     //! creates the member of the key \a key, which the hash does not have
