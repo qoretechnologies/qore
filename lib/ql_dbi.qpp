@@ -216,7 +216,7 @@ nothing getDBIDriverCapabilities() [flags=NOOP,DEPRECATED] {
     |character encoding|not shown|shown
     |option names|not shown|shown
     |option values|not shown|\c "****", except the values of options that the loaded driver declares not \
-        sensitive (see below)
+        sensitive and the pool size options \c "min" and \c "max" (see below)
 
     A driver option can hold a credential, such as a full connection string, so an option value is shown only if all
     of these hold (since %Qore 3.0, issue #7070):
@@ -232,13 +232,18 @@ nothing getDBIDriverCapabilities() [flags=NOOP,DEPRECATED] {
       \c "@", \c "%", \c "{", \c "}", \c "(", \c ")", \c ",", \c "=", \c ";" or \c "://", so that a URL or a
       connection string with credentials is not shown; the value is then given as a string
 
+    The values of the pool size options \c "min" and \c "max", which %Qore takes as the size of a
+    @ref Qore::SQL::DatasourcePool "DatasourcePool" and never gives to the driver, have their own rule, whatever the
+    driver: a non-negative integer, or a string of decimal digits, is shown, as a pool size is not a credential; any
+    other value of these options is masked (since %Qore 3.0, issue #7545).
+
     Masking is fail-closed: every other option value is masked.  The same rule applies to every form: the masked
     string and hash, the safe URL and the information and ping results of a \c db:// connection, and
     @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()".  As the result depends on the drivers that
     are loaded, these functions are not evaluated when the code is parsed.
 
-    (ex: <tt>pgsql:****</tt><tt>/****</tt><tt>\@orders%dbhost:5432{min=****}</tt> if the \c pgsql driver is not
-    loaded)
+    (ex: <tt>pgsql:****</tt><tt>/****</tt><tt>\@orders%dbhost:5432{min=2,application-name=****}</tt> if the
+    \c pgsql driver is not loaded)
 */
 ///@{
 namespace Qore::SQL;
@@ -595,7 +600,7 @@ hash<auto> mask_datasource_options(string driver, *hash<auto> options) [flags=RE
 
     @par Example:
     @code{.py}
-# {"type": "pgsql", "user": "****", "db": "orders", "host": "dbhost", "port": 5432, "options": {"min": "****"}}
+# {"type": "pgsql", "user": "****", "db": "orders", "host": "dbhost", "port": 5432, "options": {"min": "2"}}
 hash<auto> h = mask_datasource_hash("pgsql:user/pass@orders%dbhost:5432{min=2}",
     {"show_db": True, "show_options": True});
     @endcode
