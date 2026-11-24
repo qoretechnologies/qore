@@ -14472,7 +14472,7 @@ static X509* ut_tls_make_cert(EVP_PKEY* key);
 //! attempt (qore#7480)
 /** When the I/O thread gets to an operation's readiness only after the operation's deadline has passed (a stalled
     I/O thread), the timeout wins: the operation ends with SOCKET-TIMEOUT without a step.  Only an operation that
-    opted in to a last attempt (SocketPollOperationBase::completesInLastAttempt(): a plain TCP accept), whose step
+    opted in to a last attempt (QoreLastAttemptPollOperation: a plain TCP accept), whose step
     completes it or asks to wait again without starting anything, gets one more step at its deadline, also when the
     iteration did not report its descriptor ready: a step that completes it delivers its result, and a step that
     asks to wait again ends it with SOCKET-TIMEOUT.  Without it, Socket::accept(timeout) returned NOTHING while a
@@ -14498,7 +14498,7 @@ class AsyncIoDeadlineReadyTest {
     //! Waits for the readability of a pollable object that it never reads (a notifier that it never acknowledges, a
     //! socket whose peer has closed), which is ready again at each poll, and asks to wait again each time it is
     //! continued; opts in to a last attempt at its deadline if so made
-    class LevelReadyOp : public SocketPollOperationBase {
+    class LevelReadyOp : public SocketPollOperationBase, public QoreLastAttemptPollOperation {
     public:
         DLLLOCAL LevelReadyOp(QoreObject* poll_obj, bool opt_in) : poll_obj(poll_obj), opt_in(opt_in) {
         }
@@ -14850,7 +14850,7 @@ public:
             return;
         }
         accept->setSelf(*op_obj);
-        UT_ASSERT(c, accept->completesInLastAttempt() == !tls,
+        UT_ASSERT(c, qore_poll_op_completes_in_last_attempt(accept) == !tls,
             ("only an accept without TLS opts in to a last attempt" + when).c_str());
         ReferenceHolder<QoreObject> queue_obj(submit(*ctrl, *listener_obj, *op_obj, tls ? "accept-ssl" : "accept",
             "deadline-ready-accept-unit-test", xsink), &xsink);
@@ -14975,7 +14975,7 @@ public:
             return;
         }
         recv->setSelf(*op_obj);
-        UT_ASSERT(c, !recv->completesInLastAttempt(), ("a receive does not opt in to a last attempt" + when).c_str());
+        UT_ASSERT(c, !qore_poll_op_completes_in_last_attempt(recv), ("a receive does not opt in to a last attempt" + when).c_str());
         ReferenceHolder<QoreObject> queue_obj(submit(*ctrl, *client_obj, *op_obj, "recv",
             "deadline-ready-recv-unit-test", xsink), &xsink);
         UT_ASSERT(c, !xsink && queue_obj, ("the receive is submitted" + when).c_str());
@@ -15133,7 +15133,7 @@ public:
             return;
         }
         accept->setSelf(*op_obj);
-        UT_ASSERT(c, accept->completesInLastAttempt(), ("a plain TCP accept opts in to a last attempt" + when).c_str());
+        UT_ASSERT(c, qore_poll_op_completes_in_last_attempt(accept), ("a plain TCP accept opts in to a last attempt" + when).c_str());
         ReferenceHolder<QoreObject> queue_obj(submit(*ctrl, *listener_obj, *op_obj, "accept",
             "deadline-not-reported-accept-unit-test", xsink), &xsink);
         UT_ASSERT(c, !xsink && queue_obj, ("the accept is submitted" + when).c_str());
