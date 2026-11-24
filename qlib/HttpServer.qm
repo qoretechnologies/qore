@@ -11949,21 +11949,21 @@ class Http1HandlerSocket inherits Qore::Socket {
     }
 
     hash<auto> readHTTPChunkedBody(timeout timeout_ms = -1) {
-        enterChunkedRead("readHTTPChunkedBody");
+        rh.h1EnterChunkedRead(gen, "readHTTPChunkedBody", real);
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
         # the connection's socket decodes the body in the object's encoding
         if (ownEncoding()) {
-            useOwnEncoding();
-            on_exit restoreEncoding();
+            real.setEncoding(enc);
+            on_exit real.setEncoding(conn_enc);
             return real.readHTTPChunkedBody(recvTimeout(timeout_ms));
         }
         return real.readHTTPChunkedBody(recvTimeout(timeout_ms));
     }
 
     hash<auto> readHTTPChunkedBodyBinary(timeout timeout_ms = -1) {
-        enterChunkedRead("readHTTPChunkedBodyBinary");
+        rh.h1EnterChunkedRead(gen, "readHTTPChunkedBodyBinary", real);
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
@@ -11971,7 +11971,7 @@ class Http1HandlerSocket inherits Qore::Socket {
     }
 
     hash<auto> readHTTPChunkedBodyToOutputStream(OutputStream output_stream, timeout timeout_ms = -1) {
-        enterChunkedRead("readHTTPChunkedBodyToOutputStream");
+        rh.h1EnterChunkedRead(gen, "readHTTPChunkedBodyToOutputStream", real);
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
@@ -11979,14 +11979,14 @@ class Http1HandlerSocket inherits Qore::Socket {
     }
 
     nothing readHTTPChunkedBodyWithCallback(code receive_callback, timeout timeout_ms = -1) {
-        enterChunkedRead("readHTTPChunkedBodyWithCallback");
+        rh.h1EnterChunkedRead(gen, "readHTTPChunkedBodyWithCallback", real);
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
         # the connection's socket decodes the chunks in the object's encoding
         if (ownEncoding()) {
-            useOwnEncoding();
-            on_exit restoreEncoding();
+            real.setEncoding(enc);
+            on_exit real.setEncoding(conn_enc);
             real.readHTTPChunkedBodyWithCallback(receive_callback, recvTimeout(timeout_ms));
             return;
         }
@@ -11994,7 +11994,7 @@ class Http1HandlerSocket inherits Qore::Socket {
     }
 
     nothing readHTTPChunkedBodyBinaryWithCallback(code receive_callback, timeout timeout_ms = -1) {
-        enterChunkedRead("readHTTPChunkedBodyBinaryWithCallback");
+        rh.h1EnterChunkedRead(gen, "readHTTPChunkedBodyBinaryWithCallback", real);
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
@@ -12002,23 +12002,15 @@ class Http1HandlerSocket inherits Qore::Socket {
     }
 
     #! Returns True if the object's encoding is not the connection's
+    /** A send or read of strings in the object's own encoding gives the connection's socket the object's encoding
+        for the call (\c real.setEncoding(enc)), and its encoding again at its end, before it leaves the operation
+        (an on_exit statement: also when it raises).  The server uses the connection's socket only after the sends
+        and reads of the socket of a request that are in progress ended (see HandlerSocketState::endHandlerSocket()),
+        and finds it in the connection's encoding; two sends or reads of the object of more than one thread can only
+        affect the strings of each other
+    */
     private:internal bool ownEncoding() {
         return enc && enc != conn_enc;
-    }
-
-    #! Gives the connection's socket the object's encoding for a send or read of strings in progress
-    /** The caller calls restoreEncoding() at its end, before it leaves the operation.  The server uses the
-        connection's socket only after the sends and reads of the socket of a request that are in progress ended (see
-        HandlerSocketState::endHandlerSocket()), and finds it in the connection's encoding; two sends or reads of the
-        object of more than one thread can only affect the strings of each other
-    */
-    private:internal useOwnEncoding() {
-        real.setEncoding(enc);
-    }
-
-    #! Gives the connection's socket its encoding again after a send or read of strings of the object
-    private:internal restoreEncoding() {
-        real.setEncoding(conn_enc);
     }
 
     #! Returns the bytes of a string in the object's encoding
@@ -12097,10 +12089,10 @@ class Http1HandlerSocket inherits Qore::Socket {
         # the connection's socket sends the strings that the callback returns in the object's encoding
         bool own = ownEncoding();
         if (own) {
-            useOwnEncoding();
+            real.setEncoding(enc);
         }
         on_exit if (own) {
-            restoreEncoding();
+            real.setEncoding(conn_enc);
         }
         sendChecked(sub () {
             real.sendHTTPResponseWithCallback(send_callback, status_code, status_description, http_version, headers,
@@ -12135,15 +12127,6 @@ class Http1HandlerSocket inherits Qore::Socket {
     }
 
     #! Admits the read of the request's chunked body, which is refused if the request has none, or if it is read or
-    #! was read
-    private:internal enterChunkedRead(string method) {
-        rh.h1Enter(gen, method);
-        if (!rh.h1TakeChunkedBody(real)) {
-            rh.h1Leave();
-            throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): the HTTP/1.x request of this socket has no "
-                "chunked body to read", method);
-        }
-    }
 
     #! Raises the exception of a method that the handler's code cannot call on the connection's socket
     private:internal static refuse(string method) {
@@ -13553,8 +13536,10 @@ class HandlerSocketState {
         bool h1_head = False;
         #! True for an HTTP/1.0 request, which has no chunked framing and no interim responses
         bool h1_http10 = False;
-        #! counts the sends and reads of the socket in progress; made at the first one
-        *Counter h1_ops;
+        #! the number of the sends and reads of the socket in progress
+        int h1_ops = 0;
+        #! made by the end of the socket when sends or reads are in progress; the last of them that ends releases it
+        *Counter h1_waiter;
         #! the longest time that the end of the socket waits for its sends and reads in progress, in milliseconds (the
         #! server's handler_socket_max_timeout option)
         int h1_max_to = 30000;
@@ -13585,7 +13570,9 @@ class HandlerSocketState {
         if (h1_live) {
             h1_live = False;
             ++h1_gen;
-            if (h1_ops && h1_ops.getCount()) {
+            if (h1_ops) {
+                # the last send or read in progress that ends releases the end of the socket
+                h1_waiter = new Counter(1);
                 return -1;
             }
         }
@@ -13603,20 +13590,19 @@ class HandlerSocketState {
     */
     int endHandlerSocket() {
         int state;
-        h1EndLocked(\state);
         # a send or read of another thread in progress, also one that h1End() found: the response is broken
         # whatever it does
-        if (h1_ops && h1_ops.getCount()) {
+        if (*Counter waiter = h1EndLocked(\state)) {
             h1Broken();
             # at most the longest timeout of the socket: a send or read whose callback or stream (code of the
             # handler) does not return is not waited for longer
-            h1_ops.waitForZero(h1_max_to);
+            waiter.waitForZero(h1_max_to);
             try {
                 h1_real.shutdown();
             } catch (hash<ExceptionInfo> ex) {
                 # the connection has already ended
             }
-            if (h1_ops.getCount()) {
+            if (h1OpsInProgress()) {
                 # a send or read still in progress (in its callback or stream), which a shutdown does not end: the
                 # connection's socket is closed, so that it fails when it goes on, and the server closes the
                 # connection
@@ -13639,15 +13625,21 @@ class HandlerSocketState {
             throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): the HTTP/1.x request of this socket has ended",
                 method);
         }
-        if (!h1_ops) {
-            h1_ops = new Counter();
-        }
-        h1_ops.inc();
+        ++h1_ops;
     }
 
-    #! Ends a send or read admitted by h1Enter()
-    h1Leave() {
-        h1_ops.dec();
+    #! Ends a send or read admitted by h1Enter() or h1EnterChunkedRead()
+    synchronized h1Leave() {
+        # the last one in progress when the socket ended releases the end
+        if (!--h1_ops && h1_waiter) {
+            h1_waiter.dec();
+            remove h1_waiter;
+        }
+    }
+
+    #! Returns the number of the sends and reads of the socket in progress
+    private synchronized int h1OpsInProgress() {
+        return h1_ops;
     }
 
     #! Returns True if the socket of the given generation is not ended
@@ -13683,14 +13675,22 @@ class HandlerSocketState {
         return h1_chunk_taken;
     }
 
-    #! Returns True for the first reader of the request's chunked body, if it has one
-    synchronized bool h1TakeChunkedBody(Socket real) {
+    #! Admits a chunked read of the socket of the given generation, which takes the request's chunked body
+    /** Refused if that request ended, or if it has no chunked body that was not taken; the caller calls h1Leave() at
+        the end of the read
+    */
+    synchronized h1EnterChunkedRead(int gen, string method, Socket real) {
+        if (!h1_live || gen != h1_gen) {
+            throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): the HTTP/1.x request of this socket has ended",
+                method);
+        }
         if (h1_chunk_taken || !real.pendingHttpChunkedBody()) {
-            return False;
+            throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): the HTTP/1.x request of this socket has no "
+                "chunked body to read", method);
         }
         h1_chunk_taken = True;
         h1_chunk_open = True;
-        return True;
+        ++h1_ops;
     }
 
     #! Records that the response is broken: a send failed, or the connection was aborted
@@ -13876,11 +13876,15 @@ class HandlerSocketState {
     }
 
     #! Ends the socket of the current HTTP/1.x request; returns its counter of sends and reads, if any
-    private synchronized h1EndLocked(reference<int> state) {
+    private synchronized *Counter h1EndLocked(reference<int> state) {
         state = h1_resp;
         if (h1_live) {
             h1_live = False;
             ++h1_gen;
+        }
+        # the sends and reads in progress: the last one that ends releases the returned object
+        if (h1_ops) {
+            return h1_waiter ?? (h1_waiter = new Counter(1));
         }
     }
 
