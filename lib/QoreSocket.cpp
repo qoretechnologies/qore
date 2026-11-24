@@ -7710,6 +7710,12 @@ const char* QoreCaresSockets::aif_indextoname(unsigned int ifindex, char* ifname
     @param channel the channel of an unfinished lookup, after its events were processed
 */
 static bool qore_cares_channel_lost_query(ares_channel_t* channel) {
+    struct timeval tv;
+    return !ares_timeout(channel, nullptr, &tv) && ares_queue_active_queries(channel) > 0;
+}
+
+//! Claims a simulated loss while the lookup is still pending, before c-ares can complete it (#7449).
+static inline bool qore_cares_inject_query_loss() {
 #ifdef DEBUG
     // a lookup made to lose its query by dbg_cares_lose_query()
     for (int n = qore_dbg_cares_lost_query_count.load(); n > 0;) {
@@ -7718,8 +7724,30 @@ static bool qore_cares_channel_lost_query(ares_channel_t* channel) {
         }
     }
 #endif
-    struct timeval tv;
-    return !ares_timeout(channel, nullptr, &tv) && ares_queue_active_queries(channel) > 0;
+    return false;
+}
+
+//! Processes one poll and restarts an unfinished lookup whose query was lost.
+/** A debug loss takes precedence over a ready answer or an expired timer. A real loss is detected
+    after events are processed. Each restart replaces the channel and can also complete the lookup.
+*/
+template <typename Process, typename Restart>
+static int qore_cares_poll_query(ares_channel_t* const& channel, const bool& done, ExceptionSink* xsink,
+        Process process, Restart restart) {
+    bool lost = qore_cares_inject_query_loss();
+    if (!lost) {
+        process();
+        if (*xsink) {
+            return -1;
+        }
+    }
+    while (!done && (lost || qore_cares_channel_lost_query(channel))) {
+        if (restart()) {
+            return -1;
+        }
+        lost = !done && qore_cares_inject_query_loss();
+    }
+    return done ? 0 : 1;
 }
 
 QoreCaresAddrInfoResolver::QoreCaresAddrInfoResolver(std::string host, std::string service, int family, int type,
@@ -7776,18 +7804,8 @@ int QoreCaresAddrInfoResolver::continuePoll(ExceptionSink* xsink) {
         return status == ARES_SUCCESS ? 0 : -1;
     }
 
-    process(xsink);
-    if (*xsink) {
-        return -1;
-    }
-    // a new channel always has a timeout for the query it sent; the check is repeated so that a restart that
-    // cannot help is ended by the restart limit
-    while (!done && qore_cares_channel_lost_query(channel)) {
-        if (restart(xsink)) {
-            return -1;
-        }
-    }
-    return done ? (status == ARES_SUCCESS ? 0 : -1) : 1;
+    int rc = qore_cares_poll_query(channel, done, xsink, [&] { process(xsink); }, [&] { return restart(xsink); });
+    return rc == 0 && status != ARES_SUCCESS ? -1 : rc;
 }
 
 int QoreCaresAddrInfoResolver::restart(ExceptionSink* xsink) {
@@ -8783,15 +8801,7 @@ public:
             return 0;
         }
 
-        process();
-        // a new channel always has a timeout for the query it sent; the check is repeated so that a restart that
-        // cannot help is ended by the restart limit
-        while (!done && qore_cares_channel_lost_query(channel)) {
-            if (restart(xsink)) {
-                return -1;
-            }
-        }
-        return done ? 0 : 1;
+        return qore_cares_poll_query(channel, done, xsink, [&] { process(); }, [&] { return restart(xsink); });
     }
 
     DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& fds) const {
@@ -9352,15 +9362,7 @@ int QoreCaresNameInfoResolver::continuePoll(ExceptionSink* xsink) {
         return 0;
     }
 
-    process();
-    // a new channel always has a timeout for the query it sent; the check is repeated so that a restart that
-    // cannot help is ended by the restart limit
-    while (!done && qore_cares_channel_lost_query(channel)) {
-        if (restart(xsink)) {
-            return -1;
-        }
-    }
-    return done ? 0 : 1;
+    return qore_cares_poll_query(channel, done, xsink, [&] { process(); }, [&] { return restart(xsink); });
 }
 
 int QoreCaresNameInfoResolver::restart(ExceptionSink* xsink) {
