@@ -153,6 +153,81 @@ class Host {
         on_exit delete scope;
         return h.handleRequest(new TestListener(), s, cx, hdr, NOTHING);
     }
+
+    #! calls the handler directly for a stream request of the given ID; returns the error, if any
+    static string serve(AbstractHttpRequestHandler h, int id) {
+        try {
+            h.handleRequest(new TestListener(), new Socket(), {"id": id, "orig_path": "/stream", "header-info": {}},
+                {"method": "POST"}, NOTHING);
+            return "OK";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! the scopes of two requests ended out of order, and the copy of a scope
+    static hash<auto> scopeOrder(AbstractHttpRequestHandler h) {
+        hash<auto> rv;
+        object a = cap.enter({"id": 1, "orig_path": "/stream", "header-info": {}}, {"method": "POST"});
+        rv."copy" = Host::attempt(sub () { object c = a.copy(); });
+        rv."after copy" = Host::serve(h, 1);
+        object b = cap.enter({"id": 2, "orig_path": "/stream", "header-info": {}}, {"method": "POST"});
+        rv."inner" = Host::serve(h, 2);
+        rv."outer ends first" = Host::attempt(sub () { delete a; });
+        rv."inner after" = Host::serve(h, 2);
+        rv."inner ends" = Host::attempt(sub () { delete b; });
+        return rv;
+    }
+
+    #! nested scopes up to the limit and one more
+    static hash<auto> nesting(AbstractHttpRequestHandler h) {
+        hash<auto> rv;
+        list<object> scopes = ();
+        for (int i = 1; i <= 9; ++i) {
+            try {
+                scopes += cap.enter({"id": i, "orig_path": "/stream", "header-info": {}}, {"method": "POST"});
+            } catch (hash<ExceptionInfo> ex) {
+                rv.refused = sprintf("%d: %s", i, ex.err);
+            }
+        }
+        rv.depth = scopes.size();
+        rv."innermost" = Host::serve(h, 8);
+        # the scopes end innermost first
+        while (scopes) {
+            object s = pop scopes;
+            delete s;
+        }
+        rv."after" = Host::serve(h, 1);
+        return rv;
+    }
+
+    static string attempt(code c) {
+        try {
+            c();
+            return "OK";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+#! a host that exposes a wrapper of its dispatch to other code by mistake
+class ExposedHost {
+    private:internal {
+        static object cap = AbstractHttpRequestHandler::claimHostDispatch();
+    }
+
+    static string dispatch(AbstractHttpRequestHandler h, hash<auto> cx, hash<auto> hdr) {
+        try {
+            Socket s();
+            object scope = cap.enter(cx, hdr, s);
+            on_exit delete scope;
+            h.handleRequest(new TestListener(), s, cx, hdr, NOTHING);
+            return "OK";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
 }
 
 const TenantOpts = PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES;
@@ -240,9 +315,14 @@ string sub claim_host() {
 
 string sub reflect_host() {
     return attempt(sub () {
-        Reflection::Class cls = Reflection::Class::forName('Host');
+        Reflection::Class cls = Reflection::Class::forName('ExposedHost');
         cls.getStaticMember('cap').getValue();
     });
+}
+
+#! the tenant calls the wrapper of a host's dispatch with a request that it made
+string sub exposed(AbstractHttpRequestHandler h) {
+    return ExposedHost::dispatch(h, forged_cx() + {'orig_path': '/stream'}, {'method': 'POST'});
 }
 
 string sub reflect() {
@@ -270,6 +350,7 @@ class HttpServerDispatchCapabilityTest inherits QUnit::Test {
         addTestCase("sandboxed code cannot reach the capability", \testReach());
         addTestCase("a module named HttpServer that sandboxed code loads by its path", \testByPath());
         addTestCase("a trusted host dispatches a stream request with its capability", \testHost());
+        addTestCase("the scopes of the raw requests of a host", \testScopes());
         addTestCase("the code that serves a stream request cannot mark the body that the server reads",
             \testDeserializedFlag());
 
@@ -283,7 +364,7 @@ class HttpServerDispatchCapabilityTest inherits QUnit::Test {
         on_exit server.stop();
 
         tenant = new Program(TenantOpts);
-        tenant.importClass("Host");
+        tenant.importClass("ExposedHost");
         tenant.setSandboxManager(new SandboxManager());
         tenant.parse(Tenant, "tenant");
 
@@ -357,6 +438,19 @@ class HttpServerDispatchCapabilityTest inherits QUnit::Test {
         # no part that the server read is marked deserialized
         assertEq(-1, body.find("True"), body);
         assertRegex("False", body);
+
+        # a body with a Content-Length, which the server reads before the request is dispatched and which the code
+        # creating the stream request gives itself, is marked as that code says
+        Socket s2();
+        s2.connect("127.0.0.1:" + port);
+        on_exit s2.close();
+        s2.send("POST /flag HTTP/1.1\r\nHost: x\r\nContent-Type: text/plain\r\nContent-Length: 5\r\n\r\nhello");
+        resp = s2.readHTTPHeader(10s);
+        assertEq(200, resp.status_code);
+        body = resp."transfer-encoding" == "chunked"
+            ? s2.readHTTPChunkedBody(10s).body
+            : s2.recv(resp."content-length".toInt(), 10s);
+        assertEq("[True]", body);
     }
 
     testHost() {
@@ -381,10 +475,33 @@ class HttpServerDispatchCapabilityTest inherits QUnit::Test {
         assertEq("HTTP-SERVER-ERROR", tenant.callFunction("claim_host"));
         assertEq("REFLECTION-ACCESS-ERROR", tenant.callFunction("reflect_host"));
         Program p(TenantOpts);
-        p.importClass("Host");
+        p.importClass("ExposedHost");
         p.setSandboxManager(new SandboxManager());
-        assertThrows("PARSE-EXCEPTION", \p.parse(), ("class T inherits Host { static auto f() { return cap; } }",
-            "host-subclass"));
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("class T inherits ExposedHost { static auto f() { return cap; } "
+            "}", "host-subclass"));
+        # a wrapper of the host's dispatch that the tenant reaches makes no request current for it
+        stream_handler.raw = NOTHING;
+        assertEq("HTTP-SERVER-ERROR", tenant.callFunction("exposed", stream_handler));
+        assertNothing(stream_handler.raw, "the handler is not called");
+    }
+
+    testScopes() {
+        # the scope of a request cannot be copied; scopes that end out of order leave no request current
+        assertEq({
+            "copy": "HTTP-SERVER-ERROR",
+            "after copy": "OK",
+            "inner": "OK",
+            "outer ends first": "HTTP-SERVER-ERROR",
+            "inner after": "HTTP-SERVER-ERROR",
+            "inner ends": "HTTP-SERVER-ERROR",
+        }, Host::scopeOrder(stream_handler));
+        # at most MaxDepth requests are current at once; the nested scopes end in order
+        assertEq({
+            "refused": "9: HTTP-SERVER-ERROR",
+            "depth": 8,
+            "innermost": "OK",
+            "after": "HTTP-SERVER-ERROR",
+        }, Host::nesting(stream_handler));
     }
 
     testByPath() {

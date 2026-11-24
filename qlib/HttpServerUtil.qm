@@ -2800,6 +2800,9 @@ public class Http1BodyReader {
 #! The raw requests being served on the thread, the innermost last (qore#6843); see HttpRawRequestScope
 thread_local *list<hash<auto>> http_raw_requests;
 
+#! The last token of a raw request scope on the thread; see HttpRawRequestScope
+thread_local int http_raw_request_seq;
+
 #! Keeps the raw request of a request current on the thread while the code that serves it runs (qore#6843)
 /** Not public: only the code of this module creates it, for the HTTP server's own dispatch of a request
     (HttpServerDispatchCapability), so that no other code can make a request current, such as a request that it
@@ -2818,6 +2821,8 @@ class HttpRawRequestScope {
 
     private:internal {
         bool active;
+        #! the token of the scope's entry in the raw requests of the thread
+        int token;
     }
 
     #! makes the raw request current on the thread
@@ -2832,27 +2837,50 @@ class HttpRawRequestScope {
             throw "HTTP-SERVER-ERROR", sprintf("more than %d requests cannot be dispatched in the dispatch of other "
                 "requests on a thread", MaxDepth);
         }
-        http_raw_requests += ({"cx": cx, "hdr": hdr, "s": s},);
+        token = ++http_raw_request_seq;
+        http_raw_requests += ({"cx": cx, "hdr": hdr, "s": s, "token": token},);
         active = True;
     }
 
-    #! returns @ref True if the socket is the handler socket of an HTTP/2 or HTTP/3 request: a view of its own stream
+    #! a scope cannot be copied: a copy would end the entry of the original
+    /** @throw HTTP-SERVER-ERROR always
+    */
+    copy() {
+        active = False;
+        throw "HTTP-SERVER-ERROR", "a raw request scope cannot be copied";
+    }
+
+    #! returns @ref True if the socket is a socket of the request alone (a view), not the socket of a connection
     static bool isStreamView(*Socket s) {
-        # the views (classes of the HttpServer module that inherit Qore::Socket) are not visible here: the socket of a
-        # connection is a Qore::Socket itself
+        # a socket of the request alone is a view of a class of its own: the handler socket of an HTTP/2 or HTTP/3
+        # stream, the handler socket of an HTTP/1.x request (Http1HandlerSocket) or a socket of a host that
+        # dispatches requests itself; the socket of a connection is a Qore::Socket itself
         return exists s && s.className() != "Socket";
     }
 
     #! the raw request is no longer current
+    /** The scopes end in the reverse order of their creation on the thread that created them; a scope that is not the
+        innermost one of the thread when it ends fails closed: no raw request is current on the thread any more
+
+        @throw HTTP-SERVER-ERROR the scope is not the innermost one of the thread
+    */
     destructor() {
-        if (active) {
-            pop http_raw_requests;
+        if (!active) {
+            return;
         }
+        active = False;
+        if (http_raw_requests && http_raw_requests.last().token == token) {
+            pop http_raw_requests;
+            return;
+        }
+        remove http_raw_requests;
+        throw "HTTP-SERVER-ERROR", "a raw request scope ended that is not the innermost one of the thread; no raw "
+            "request is current on the thread any more";
     }
 
     #! returns the raw request of the request being served on the thread, if any
     static *hash<auto> current() {
-        return http_raw_requests ? http_raw_requests.last() : NOTHING;
+        return http_raw_requests ? http_raw_requests.last() - "token" : NOTHING;
     }
 
     #! returns the number of the raw requests current on the thread
@@ -2901,10 +2929,15 @@ class HttpServerDispatchCapability {
 
         @return the object that keeps the raw request current
 
-        @throw HTTP-SERVER-ERROR the capability does not belong to the loaded HttpServer module, or too many requests
-        are dispatched in the dispatch of others on the thread
+        @throw HTTP-SERVER-ERROR the calling code is sandboxed (fails closed: also if this cannot be decided), the
+        capability does not belong to the loaded HttpServer module, or too many requests are dispatched in the dispatch
+        of others on the thread
     */
     object enter(hash<auto> cx, hash<auto> hdr, *Socket s) {
+        # a capability that trusted code exposes by mistake still makes no request current for sandboxed code
+        if (HttpRawRequestScope::callerIsSandboxed()) {
+            throw "HTTP-SERVER-ERROR", "sandboxed code cannot make a raw request current";
+        }
         if (!checked) {
             check();
         }
@@ -2984,7 +3017,10 @@ public hashdecl HttpFilteredRequestInfo {
     (@ref HttpServer::HttpServer "HttpServer"), or of a host with a dispatch capability
     (@ref HttpServer::AbstractHttpRequestHandler::claimHostDispatch() "claimHostDispatch()"), which makes the raw
     request of the request current: the constructor raises \c HTTP-SERVER-ERROR for a request that was not
-    dispatched so (see @ref httpserverutil_request_credentials).
+    dispatched so (see @ref httpserverutil_request_credentials).  A stream request of a class of a sandboxed %Program,
+    or that sandboxed code creates, cannot serve an HTTP/1.x request on the socket of the connection
+    (\c HTTP-HANDLER-ERROR): a handler that hands its requests to such code asks for a socket of each request with
+    @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()".
 
     The calling order is as follows:
     - constructor(): this is called when the request is received
@@ -3136,6 +3172,14 @@ public class AbstractStreamRequest {
             throw "HTTP-SERVER-ERROR", "a stream request can only be served in the dispatch of the HTTP server, which "
                 "makes its raw request current; none is current for this request: the request was not dispatched by "
                 "the HTTP server, or the server's dispatch has no capability to make it current";
+        }
+        # the socket of the connection of an HTTP/1.x request is not driven by a stream request that sandboxed code
+        # creates or declares, as the handler of a sandboxed Program does not get it either (qore#7305)
+        if (raw.s && !HttpRawRequestScope::isStreamView(raw.s) && (SandboxManager::isFromSandboxedProgram(self)
+                || HttpRawRequestScope::callerIsSandboxed())) {
+            throw "HTTP-HANDLER-ERROR", "a stream request of a class of a sandboxed Program, or that sandboxed code "
+                "creates, cannot serve an HTTP/1.x request on the socket of the connection; the handler gets a socket "
+                "of its request with setHandlerSocketView()";
         }
         raw_cx = raw.cx;
         raw_hdr = raw.hdr;

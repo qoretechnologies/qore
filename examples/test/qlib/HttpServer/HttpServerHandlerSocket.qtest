@@ -148,8 +148,12 @@ class HostStreamHandler inherits AbstractHttpRequestHandler {
         Program tenant;
     }
 
-    constructor(Program tenant) : AbstractHttpRequestHandler(NOTHING, True) {
+    constructor(Program tenant, *bool view) : AbstractHttpRequestHandler(NOTHING, True) {
         self.tenant = tenant;
+        # a handler that hands its requests to the code of a tenant gets a socket of each request (qore#7305)
+        if (view) {
+            setHandlerSocketView();
+        }
     }
 
     private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
@@ -159,17 +163,52 @@ class HostStreamHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! a stream handler of the host whose own (trusted) code serves the request
+class TrustedPlaceholderHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! what the socket that the code serving the request got allows
+        *hash<auto> ops;
+    }
+
+    private {
+        Program tenant;
+    }
+
+    constructor(Program tenant) : AbstractHttpRequestHandler(NOTHING, True) {
+        self.tenant = tenant;
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        ops = tenant.callStaticMethod("Ops", "ops", s);
+        return new TrustedOkRequest(listener, self, s, cx, hdr, body);
+    }
+}
+
+#! a stream request of the host that answers 200
+class TrustedOkRequest inherits AbstractStreamRequest {
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, auto body) : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpResponseInfo>{"code": 200, "body": "ok"};
+    }
+}
+
 class HttpServerHandlerSocketTest inherits QUnit::Test {
     private {
         Program tenant;
         HttpServer server;
         HostStreamHandler host;
+        TrustedPlaceholderHandler placeholder;
         int port;
     }
 
     constructor() : Test("HttpServerHandlerSocketTest", "1.0") {
         addTestCase("a handler class that sandboxed code declares", \testTenantHandler());
         addTestCase("the code that serves a stream request", \testStreamRequest());
+        addTestCase("the trusted code that serves a stream request", \testTrustedStreamRequest());
         addTestCase("a stream handler class that sandboxed code declares", \testTenantStreamHandler());
 
         tenant = new Program(TenantOpts);
@@ -179,8 +218,12 @@ class HttpServerHandlerSocketTest inherits QUnit::Test {
 
         server = new HttpServer(<HttpServerOptionInfo>{"debug": True});
         server.setHandler("tenant", "^tenant", NOTHING, tenant.callFunction("handler"));
-        host = new HostStreamHandler(tenant);
+        host = new HostStreamHandler(tenant, True);
         server.setHandler("stream", "^stream", NOTHING, host);
+        # a handler that hands its requests to the code of a tenant without a socket of the request
+        server.setHandler("noview", "^noview", NOTHING, new HostStreamHandler(tenant));
+        placeholder = new TrustedPlaceholderHandler(tenant);
+        server.setHandler("placeholder", "^placeholder", NOTHING, placeholder);
         server.setHandler("tenant-stream", "^tsh", NOTHING, tenant.callFunction("stream_handler"));
         port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         server.waitForAsyncIo();
@@ -218,13 +261,35 @@ class HttpServerHandlerSocketTest inherits QUnit::Test {
         assertEq(200, r.next.status_code);
     }
 
+    testTrustedStreamRequest() {
+        # the code that serves the request gets a placeholder in place of the socket of the connection, and the next
+        # request is served
+        hash<auto> r = pipelined("/placeholder/x");
+        assertEq(200, r.first.status_code);
+        assertEq(PlaceholderOps, placeholder.ops);
+        assertEq(200, r.next.status_code);
+    }
+
     testStreamRequest() {
+        # the handler asks for a socket of the request, which the stream request of the tenant uses
         hash<auto> r = pipelined("/stream/x");
         assertEq(200, r.first.status_code);
-        assertEq(sprintf("%y", PlaceholderOps), r.first.body);
+        assertEq(sprintf("%y", TenantViewOps), r.first.body);
         assertEq(200, r.next.status_code);
-        # the trusted code of the host's handler got the connection's socket
+        # the trusted code of the host's handler got the socket of the request
         assertTrue(host.raw_open);
+        # without a socket of the request, the stream request of the tenant cannot serve the request on the socket of
+        # the connection
+        HTTPClient c({"url": "http://127.0.0.1:" + port});
+        on_exit c.disconnect();
+        hash<auto> info;
+        try {
+            c.send("x", "POST", "/noview/x", NOTHING, False, \info);
+            assertTrue(False, "the request is refused");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(500, ex.arg.status_code);
+            assertRegex("HTTP-HANDLER-ERROR: a stream request of a class of a sandboxed Program", ex.arg.body);
+        }
     }
 
     testTenantStreamHandler() {
