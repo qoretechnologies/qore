@@ -25,7 +25,9 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
         const std::vector<uint32_t>& operands, const Payload& payload, const char* expected,
         bool tag_only = false, bool wide = false, uint16_t version = QORE_AOT_BINARY_VERSION,
         uint32_t result_id = 3, uint64_t features = 0, const Payload* stmt_loc = nullptr,
-        const Payload* unwind = nullptr, const std::function<bool(const QoreIRFunction&)>* inspect = nullptr) {
+        const Payload* unwind = nullptr, const std::function<bool(const QoreIRFunction&)>* inspect = nullptr,
+        const Payload* exit_restores = nullptr,
+        QoreIRExceptionExitRestore expected_restore = QoreIRExceptionExitRestore::None) {
     QoreAOTBinaryWriter writer;
     writer.feature_flags = features | (wide ? QORE_AOT_FEAT_WIDE_IR_OPERANDS : 0);
     uint32_t section = writer.beginSection(QoreAOTSectionType::TOPLEVEL);
@@ -142,6 +144,14 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
         writer.writeU32(0); // catch-exit depths (qore#6733)
         writer.writeU32(0); // catch-cleanup results
     }
+    // the exit restorations (QORE_AOT_EXIT_RESTORE_VERSION, qore#7379): none, unless the case gives them
+    if (version >= QORE_AOT_EXIT_RESTORE_VERSION) {
+        if (exit_restores) {
+            (*exit_restores)(writer);
+        } else {
+            writer.writeU32(0);
+        }
+    }
     if (version >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION) {
         if (unwind) {
             (*unwind)(writer);
@@ -194,6 +204,15 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
         }, nullptr, error);
     bool ok = expected ? !ir && error.find(expected) != std::string::npos
         : ir && error.empty() && ptr == end;
+    // the instruction under test, after the constants of its operands, has the exit restoration that was read
+    if (ok && !expected && exit_restores) {
+        size_t index = defined.size();
+        ok = ir->blocks.front()->instructions.size() > index
+            && ir->blocks.front()->instructions[index]->restore_on_exception_exit == expected_restore;
+        if (!ok) {
+            fprintf(stderr, "%s: the exit restoration of the instruction was not read\n", label);
+        }
+    }
     if (ok && unwind && !expected) {
         // The nested local must reuse the precise location written for the instruction before the catch tables.
         const auto* loc = ir->blocks.front()->instructions.front()->stmt_loc;
@@ -338,6 +357,60 @@ int main() {
         false, false, QORE_AOT_BATCH_AN_VERSION);
     run("AO v51 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 51 ",
         false, false, QORE_AOT_BATCH_AO_VERSION);
+    run("AOT-identity v52 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 52 ",
+        false, false, QORE_AOT_BATCH_AOT_IDENTITY_VERSION);
+    // the exit restorations of the instructions (qore#7379): (block, instruction, kind) entries; the instruction under
+    // test is the second of the block, after the constant of its operand
+    auto exitRestore = [](uint16_t inst, uint32_t kind) -> Payload {
+        return [inst, kind](QoreAOTBinaryWriter& w) {
+            w.writeU32(1);
+            w.writeU16(0);
+            w.writeU16(inst);
+            w.writeU32(kind);
+        };
+    };
+    {
+        struct ExitRestoreCase {
+            const char* label;
+            O op;
+            uint16_t inst;
+            uint32_t kind;
+            const char* error;
+            QoreIRExceptionExitRestore restore;
+        };
+        const ExitRestoreCase cases[] = {
+            {"foreach element restored after the handlers", O::PushImplicitElement, 1,
+                static_cast<uint32_t>(QoreIRExceptionExitRestore::AfterHandlers), nullptr,
+                QoreIRExceptionExitRestore::AfterHandlers},
+            {"operator element restored before the handlers", O::PushImplicitElement, 1,
+                static_cast<uint32_t>(QoreIRExceptionExitRestore::BeforeHandlers), nullptr,
+                QoreIRExceptionExitRestore::BeforeHandlers},
+            {"operator argument restored before the handlers", O::PushImplicitArg, 1,
+                static_cast<uint32_t>(QoreIRExceptionExitRestore::BeforeHandlers), nullptr,
+                QoreIRExceptionExitRestore::BeforeHandlers},
+            {"argument restored after the handlers", O::PushImplicitArg, 1,
+                static_cast<uint32_t>(QoreIRExceptionExitRestore::AfterHandlers),
+                "an entry of the exit restoration table has an invalid kind", QoreIRExceptionExitRestore::None},
+            {"unknown restoration kind", O::PushImplicitElement, 1, 3,
+                "an entry of the exit restoration table has an invalid kind", QoreIRExceptionExitRestore::None},
+            {"no restoration kind", O::PushImplicitElement, 1, 0,
+                "an entry of the exit restoration table has an invalid kind", QoreIRExceptionExitRestore::None},
+            {"restoration of a constant", O::PushImplicitElement, 0,
+                static_cast<uint32_t>(QoreIRExceptionExitRestore::BeforeHandlers),
+                "an entry of the exit restoration table is an instruction that sets no implicit context",
+                QoreIRExceptionExitRestore::None},
+            {"restoration beyond the block", O::PushImplicitElement, 9,
+                static_cast<uint32_t>(QoreIRExceptionExitRestore::BeforeHandlers),
+                "an entry of the exit restoration table is beyond the instructions of the function",
+                QoreIRExceptionExitRestore::None},
+        };
+        for (const ExitRestoreCase& c : cases) {
+            Payload table = exitRestore(c.inst, c.kind);
+            ok = check(pgm, c.label, c.op, static_cast<uint8_t>(G::Base), {1}, empty, c.error, false, false,
+                QORE_AOT_BINARY_VERSION, 3, 0, nullptr, nullptr, nullptr, &table, c.restore) && ok;
+            ++count;
+        }
+    }
     for (O op : {O::ConstInt, O::Br, O::BrIf, O::Return, O::Invoke, O::InvokeMethodDirect,
             O::ScopeEnter, O::MakeList, O::DebugStatement}) {
         run("wrong nested opcode", O::Invoke, G::Invoke, {}, invoke(op), pairing);
@@ -583,11 +656,14 @@ int main() {
                 &inspect) && ok;
             ++count;
         };
-        static_assert(QORE_AOT_BINARY_MIN_VERSION == QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION,
+        static_assert(QORE_AOT_BINARY_MIN_VERSION >= QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION,
             "the reader refuses the layout before the callee");
         constexpr uint16_t old_version = QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION - 1;
-        callee("v51 helper without a callee", old_version, 0, 2, 0,
-            "unsupported binary format version 51 (supported 52-52); rebuild the artifact with this version of qcc");
+        // the versions that the reader supports, which a later batch can raise (qore#7379)
+        const std::string old_error = "unsupported binary format version " + std::to_string(old_version)
+            + " (supported " + std::to_string(QORE_AOT_BINARY_MIN_VERSION) + "-"
+            + std::to_string(QORE_AOT_BINARY_VERSION) + "); rebuild the artifact with this version of qcc";
+        callee("v51 helper without a callee", old_version, 0, 2, 0, old_error.c_str());
         callee("helper callee parameter 0", QORE_AOT_BINARY_VERSION, 0, 2, 0);
         callee("helper callee parameter 1", QORE_AOT_BINARY_VERSION, 1, 2, 1);
         callee("helper callee checked in the thread", QORE_AOT_BINARY_VERSION, QBH_CHECK_IN_THREAD, 2,
@@ -600,8 +676,9 @@ int main() {
         callee("helper callee below the markers", QORE_AOT_BINARY_VERSION, -3, 1, 0,
             "invalid background helper callee -3");
     }
-    constexpr unsigned expected_count =
-        QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION ? 178 : 168;
+    // the v52 refusal and the eight exit restoration cases of v53 (qore#7379)
+    constexpr unsigned expected_count = QORE_AOT_BINARY_VERSION >= QORE_AOT_EXIT_RESTORE_VERSION ? 187
+        : (QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION ? 178 : 168);
     if (count != expected_count) {
         fprintf(stderr, "ran %u of %u expected checks for AOT format %u\n", count, expected_count,
             static_cast<unsigned>(QORE_AOT_BINARY_VERSION));

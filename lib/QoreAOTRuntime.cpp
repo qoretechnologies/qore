@@ -7944,8 +7944,54 @@ bool qore_aot_read_ir_catch_tables(const uint8_t*& ptr, const uint8_t* end, Qore
         }
         return true;
     };
-    return readTable(func.catch_exit_depths, "catch-exit depth")
-        && readTable(func.catch_cleanup_results, "catch-cleanup result");
+    if (!readTable(func.catch_exit_depths, "catch-exit depth")
+            || !readTable(func.catch_cleanup_results, "catch-cleanup result")) {
+        return false;
+    }
+    // the implicit contexts that the frame's exit on an exception restores (see QORE_AOT_EXIT_RESTORE_VERSION,
+    // qore#7379): only an instruction that sets one, and the restoration after the handlers only for the element of a
+    // foreach statement
+    std::unordered_map<const QoreIRInstruction*, uint32_t> exit_restores;
+    if (!readTable(exit_restores, "exit restoration")) {
+        return false;
+    }
+    for (const auto& block : func.blocks) {
+        for (auto& inst : block->instructions) {
+            auto i = exit_restores.find(inst.get());
+            if (i == exit_restores.end()) {
+                continue;
+            }
+            bool sets_context = false;
+            switch (inst->opcode) {
+                case QoreIROpcode::PushImplicitArg:
+                case QoreIROpcode::SetImplicitArgv:
+                case QoreIROpcode::PushImplicitElement:
+                case QoreIROpcode::IteratorCreate:
+                case QoreIROpcode::IteratorCreateReverse:
+                case QoreIROpcode::IteratorCreateIterate:
+                case QoreIROpcode::IteratorCreateSelectors:
+                case QoreIROpcode::IteratorCreateSource:
+                    sets_context = true;
+                    break;
+                default:
+                    break;
+            }
+            if (!sets_context) {
+                error = "an entry of the exit restoration table is an instruction that sets no implicit context";
+                return false;
+            }
+            if (i->second == static_cast<uint32_t>(QoreIRExceptionExitRestore::BeforeHandlers)) {
+                inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
+            } else if (i->second == static_cast<uint32_t>(QoreIRExceptionExitRestore::AfterHandlers)
+                    && inst->opcode == QoreIROpcode::PushImplicitElement) {
+                inst->restore_on_exception_exit = QoreIRExceptionExitRestore::AfterHandlers;
+            } else {
+                error = "an entry of the exit restoration table has an invalid kind";
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 //! Sets the runtime locations of the instructions of IR deserialized from an image of a format before

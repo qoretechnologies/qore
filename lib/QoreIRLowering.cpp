@@ -3700,6 +3700,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             popExceptionAnchor();
         }
 
+        // QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT keeps the setting for every loop: it makes
+        // qore_ir_foreach_elides_implicit_element() false (so body_reads_implicit_element is true) and disables the
+        // analysis of the virtual reads, as before qore#7379
         bool elide_implicit_element = !body_reads_implicit_element
             || (analyze_implicit_element
                 && implicit_observers_before != std::numeric_limits<size_t>::max()
@@ -5784,8 +5787,10 @@ bool QoreIRLowering::lowerLoopJump(bool is_break, const LoopJumpTarget& jt, cons
     if (blockHasTerminator(builder.getBlock())) {
         return true;
     }
-    // Restore $# for foreach loops before breaking out; a continue needs no restore here: the continue target
-    // (latch_block) already calls PopImplicitElement before incrementing the index and branching back to the header
+    // Restore $# for foreach loops before breaking out (the element that a value loop saved before it began, or the
+    // element of the iteration of a loop over a reference; a loop over a lazy pipeline restores it at its exit block,
+    // see lowerForeachLazyPipelineFused()); a continue needs no restore here: the continue target (latch_block) sets
+    // the index of the next element of a value loop, and restores the element of a loop over a reference (qore#7379)
     if (is_break && jt.old_elem.isValid()) {
         builder.createPopImplicitElement(jt.old_elem, loc);
     }
@@ -26847,7 +26852,11 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         }
         again_block->loop_cancel = QoreIRLoopCancel::Foreach;
         auto* br = builder.createBranch(again_block, loc);
-        setLoopCheckpointExceptionTarget(br, again_block, foreach_exception_cleanup_block);
+        // after the SetImplicitElement of the next element: without an iteration cleanup, the check goes to the
+        // element exception block, which restores the saved element, as the exception scopes of the loop have ended
+        // (qore#7379); without a handler of this function, the frame's exit restores it
+        setLoopCheckpointExceptionTarget(br, again_block, foreach_exception_cleanup_block
+            ? foreach_exception_cleanup_block : element_exception_block);
         builder.setBlock(again_block);
         builder.createBranch(header_block, loc);
         latch_exit_block = again_block;
@@ -26933,7 +26942,6 @@ void QoreIRLowering::releasePredicateValue(QoreIRValue value, const QoreValue& e
 }
 
 // documented in QoreIRLowering.h
-// documented in QoreIRLowering.h
 void QoreIRLowering::pushForeachElementCleanup(QoreIRValue old_element, size_t exception_depth,
         QoreIRBasicBlock* outer_target, const QoreProgramLocation* loc) {
     BlockCleanupEntry elem_entry;
@@ -26948,6 +26956,7 @@ void QoreIRLowering::pushForeachElementCleanup(QoreIRValue old_element, size_t e
     cleanup_stack.back().outer_exception_target = outer_target;
 }
 
+// documented in QoreIRLowering.h
 QoreIRBasicBlock* QoreIRLowering::beginForeachElementExceptionRestore(QoreIRBasicBlock*& next, std::string& error) {
     next = getCurrentExceptionTarget();
     if (!next) {

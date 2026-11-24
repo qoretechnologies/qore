@@ -673,6 +673,18 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        (qore#6898)
 //! The shared format version for the changes of the AOT-identity batch (see v52 above).
 constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY_VERSION = 52;
+//! v53 (the second AOT batch; the reader refuses v52 and older images, also those that a qcc executable embeds):
+//!      - the catch tables of each serialized IR function (QORE_AOT_CATCH_TABLES_VERSION) end with a third table of the
+//!        same form, the exit restorations: the instructions whose implicit context the frame's exit on an exception
+//!        restores (QoreIRInstruction::restore_on_exception_exit) with its QoreIRExceptionExitRestore value (1 before
+//!        the frame's handlers: the implicit arguments, element and iterator of an operator; 2 after them: the
+//!        element of a foreach statement), so that the IR interpreter that runs a module's debug IR restores them as
+//!        the IR that it was made from (qore#7379)
+//!      - debug IR can encode SetImplicitElement (opcode 444, Base group, one operand), which sets the index of the
+//!        next element of a foreach statement (qore#7379); the maximum opcode in the AOT header is 444
+//! The shared format version for the changes of the second AOT batch (see v53 above); the batch's assembly can
+//! renumber it when another change of the batch bumps the format, as the changes of the batch refer to it by name.
+constexpr uint16_t QORE_AOT_BATCH_AOT2_VERSION = 53;
 //! The shared format version for the changes in batch AL (see v48 above).
 constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
 //! The shared format version for the changes in batch AM (see v49 above).
@@ -700,12 +712,16 @@ static_assert(QORE_AOT_WILDCARD_BOUND_VERSION == QORE_AOT_BATCH_AOT_IDENTITY_VER
     && QORE_AOT_METHOD_DECL_INDEX_VERSION == QORE_AOT_BATCH_AOT_IDENTITY_VERSION
     && QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION == QORE_AOT_BATCH_AOT_IDENTITY_VERSION,
     "the format changes of the AOT-identity batch share one format version (v52)");
-//! Old compiled artifacts must be rebuilt (see v52 above): the reader refuses older images, the program image of a qcc
+//! Serialized IR functions record the implicit contexts that the frame's exit on an exception restores (see v53 above,
+//! qore#7379)
+constexpr uint16_t QORE_AOT_EXIT_RESTORE_VERSION = QORE_AOT_BATCH_AOT2_VERSION;
+//! Old compiled artifacts must be rebuilt (see v53 above): the reader refuses older images, the program image of a qcc
 //! executable included (qore_aot_run_v4() reads it before anything else), before it reads any record; the reader of a
-//! v52 image always has the temp scopes of its IR (qore#6742), the local unwind locations of its IR functions
+//! v53 image always has the temp scopes of its IR (qore#6742), the local unwind locations of its IR functions
 //! (qore#6672), the owner-qualified wildcard bounds of its type paths (qore#7184), the declaration index of each
-//! METHODS record (qore#7169) and the callee of each background helper (qore#7087)
-constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AOT_IDENTITY_VERSION;
+//! METHODS record (qore#7169), the callee of each background helper (qore#7087) and the exit restorations of its IR
+//! functions (qore#7379)
+constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AOT2_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
 //! Variant-flags bit of FUNCTIONS and METHODS records (QORE_AOT_FEAT_METHOD_SYNC): the variant is synchronized
@@ -854,7 +870,7 @@ static_assert(QORE_AOT_TEMP_SCOPES_VERSION == QORE_AOT_BATCH_AN_VERSION,
 constexpr uint16_t QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION = 51;
 static_assert(QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION == QORE_AOT_BATCH_AO_VERSION,
     "the format changes of batch AO share one format version (v51)");
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AOT_IDENTITY_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AOT2_VERSION;
 
 //! The tag of the runtime location of a serialized IR instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
 enum class QoreAOTStmtLocTag : uint8_t {
@@ -5409,8 +5425,8 @@ typedef std::function<QoreValue(const QoreAOTBinaryReader& reader, const uint8_t
 bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func,
     const AOTExprWriteFunc& writeExpr);
 
-//! Writes the catch-exit depths and the catch-cleanup results of an IR function, after its blocks (see
-//! QORE_AOT_CATCH_TABLES_VERSION, qore#6733)
+//! Writes the catch-exit depths, the catch-cleanup results and the exit restorations of an IR function, after its
+//! blocks (see QORE_AOT_CATCH_TABLES_VERSION, qore#6733, and QORE_AOT_EXIT_RESTORE_VERSION, qore#7379)
 /** Each table is a u32 count and (u16 block index, u16 instruction index, u32 value) entries sorted by position; the
     index of an instruction is that of the written IR, in which a PushTempMarkPair is two instructions.
 
@@ -5423,7 +5439,8 @@ bool qore_aot_write_ir_catch_tables(QoreAOTBinaryWriter& writer, const QoreIRFun
     @param end the end of the data
     @param func the function read, whose blocks and instructions are complete
     @param error receives the error message if an entry is malformed: an index beyond the blocks or the instructions
-    of a block, or an instruction given twice
+    of a block, an instruction given twice, or an exit restoration of an instruction that sets no implicit context or
+    with an invalid kind
 
     @return true on success, false otherwise
 */

@@ -99,6 +99,29 @@ class ForeachImplicitElementExceptionExitTest inherits QUnit::Test {
             "ends 2 2",
             "thread_exit on_exit 0 0",
             "thread_exit on_exit 1 1",
+            "cancel fused THREAD-CANCELLED 1 1",
+            "cancel plain THREAD-CANCELLED 1 1",
+        );
+    }
+
+    public {
+        #! the output of the script that a debugger runs (foreach-implicit-element-debugger.q)
+        const DebuggerExpected = (
+            "b0",
+            "k0",
+            "on_error 2 2",
+            "h0",
+            "m0",
+            "b1",
+            "k1",
+            "on_error 2 2",
+            "h1",
+            "m1",
+            "b2",
+            "k2",
+            "on_error 2 2",
+            "h2",
+            "m2",
         );
     }
 
@@ -107,6 +130,7 @@ class ForeachImplicitElementExceptionExitTest inherits QUnit::Test {
         string qcc_bin;
         string env;
         string script;
+        string debugger_script;
     }
 
     constructor() : QUnit::Test("foreach implicit element exception exit", "1.0", \ARGV) {
@@ -116,11 +140,15 @@ class ForeachImplicitElementExceptionExitTest inherits QUnit::Test {
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
         env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
         script = get_script_dir() + "/foreach-implicit-element-exception-exit.q";
+        debugger_script = get_script_dir() + "/foreach-implicit-element-debugger.q";
 
         addTestCase("AST interpreter", \astTest());
         addTestCase("execution modes", \modesTest());
         addTestCase("AOT executable -O0", \aotTest(), "-O0");
         addTestCase("AOT executable -O3", \aotTest(), "-O3");
+        addTestCase("debugger: execution modes", \debuggerModesTest());
+        addTestCase("debugger: AOT executable -O0", \debuggerAotTest(), "-O0");
+        addTestCase("debugger: AOT executable -O3", \debuggerAotTest(), "-O3");
         set_return_value(main());
     }
 
@@ -153,6 +181,37 @@ class ForeachImplicitElementExceptionExitTest inherits QUnit::Test {
         string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, script));
         assertTrue(is_file(exe), "qcc " + opt + " compiles the script: " + out);
         assertEq(ast(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+    }
+
+    #! runs the debugger script in every execution mode with a debugger attached, which gives the output of the AST
+    #! interpreter without one
+    private debuggerModesTest() {
+        string exp = debuggerAst();
+        assertEq(DebuggerExpected, (select exp.split("\n"), $1));
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s --exec-mode=%s %s debug", env, qore_bin, mode,
+                debugger_script)), mode + " with a debugger");
+        }
+    }
+
+    #! an AOT function that a debugger runs executes its debug IR in the IR interpreter, which restores the elements
+    #! of the foreach statements as the IR that it was made from (the exit restorations of the module's IR)
+    private debuggerAotTest(string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("foreach-implicit-element-debugger-aot-");
+        string exe = dir.path + "/foreach-implicit-element-debugger";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, debugger_script));
+        assertTrue(is_file(exe), "qcc " + opt + " compiles the script: " + out);
+        string exp = debuggerAst();
+        assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s nodebug", env, exe)), "AOT " + opt);
+        assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s debug", env, exe)), "AOT " + opt + " with a debugger");
+    }
+
+    #! returns the output of the debugger script with the AST interpreter without a debugger
+    private string debuggerAst() {
+        return ExecModeHarness::run_any(sprintf("%s %s --exec-mode=ast %s nodebug", env, qore_bin, debugger_script));
     }
 
     #! returns the output of the script with the AST interpreter

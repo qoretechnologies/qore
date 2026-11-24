@@ -436,4 +436,64 @@ sub thread_exit_caller() {
     c.waitForZero();
 }
 
+# a cancellation that the check at the start of the next iteration raises: the latch has set the index of the next
+# element, and the exception restores the enclosing element before the catch block runs; a loop over a list of ints
+# has no exception cleanup of its own (qore#7379)
+our Queue cancel_tid();
+our Queue cancel_go();
+
+class CancelPoint {
+    destructor() {
+        cancel_tid.push(gettid());
+        cancel_go.get();
+    }
+}
+
+sub cancel_fused() {
+    foreach auto o in ((20, 21, 22)) {
+        if ($# == 1) {
+            try {
+                foreach int a in (select Src, $1 > 0) {
+                    if ((find %a in Data where (%a == $#)) == 3) {
+                        CancelPoint c();
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                log += sprintf("cancel fused %s %d %d", ex.err, $#, (find %a in Data where (%a == $#)));
+            }
+        }
+    }
+}
+
+sub cancel_plain() {
+    foreach auto o in ((20, 21, 22)) {
+        if ($# == 1) {
+            try {
+                foreach int a in (Src) {
+                    if ((find %a in Data where (%a == $#)) == 3) {
+                        CancelPoint c();
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                log += sprintf("cancel plain %s %d %d", ex.err, $#, (find %a in Data where (%a == $#)));
+            }
+        }
+    }
+}
+
+foreach code c in ((\cancel_fused(), \cancel_plain())) {
+    Counter done(1);
+    background sub () {
+        on_exit done.dec();
+        # the cancellation is raised again in the enclosing loop
+        try {
+            c();
+        } catch () {
+        }
+    }();
+    cancel_thread(cancel_tid.get());
+    cancel_go.push(True);
+    done.waitForZero();
+}
+
 map printf("%s\n", $1), log;
