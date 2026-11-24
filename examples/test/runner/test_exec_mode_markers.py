@@ -364,7 +364,10 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   modes and as a qcc executable, which arm a debug hook and whose failed module load ends the process
         # - module-init-frames (#7289): its probes run in child processes that set their own --exec-mode, with the
         #   modules loaded from source and compiled with qcc, as a module is initialized once in a process
+        # - type-retirement-aot-parent (#7464): its script runs in child processes without an execution mode, with the
+        #   modules loaded from source and compiled with qcc
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
+                                 "examples/test/qore/classes/type-retirement-aot-parent.qtest",
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
                                  "examples/test/ir/AOTModuleHeaderRequests.qtest",

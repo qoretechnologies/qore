@@ -4520,6 +4520,9 @@
       (@ref Qore::Socket::unfinishedHttpChunkedBody() "unfinishedHttpChunkedBody()"), chunk sizes are checked alike,
       and a body read allocates memory as its data arrives, so that a body can neither be taken for another message
       nor end the process (<a href="https://github.com/qoretechnologies/qore/issues/7417">issue 7417</a>)
+    - the parse of a circular @ref inheritance "class hierarchy" whose code looks up a method or member of a class
+      of the cycle ends with the parse error of the circular hierarchy instead of never ending or exhausting the
+      stack (<a href="https://github.com/qoretechnologies/qore/issues/7464">issue 7464</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 
