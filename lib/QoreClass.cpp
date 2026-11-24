@@ -11877,6 +11877,91 @@ bool UserConstructorVariant::evalConstructor(const QoreClass &thisclass, QoreObj
     return evalConstructorImpl<false>({}, thisclass, self, ceh, bcl, bceal, xsink);
 }
 
+const UserConstructorVariant* UserConstructorVariant::getDirectUserConstructor() const {
+    // computed once: the variant is called only after it has been parse-initialized, which sets what it depends on
+    int8_t rv = direct_call.load(std::memory_order_relaxed);
+    if (rv < 0) {
+        // a variant with lexical parameter policies checks its arguments with them (LexicalUserVariant::
+        // prepareCallArguments()): it is called through CodeEvaluationHelper
+        rv = (isStaticallyFastCallEligible() && !(getFlags() & QCF_NO_DOMAIN_THROW)
+            && !dynamic_cast<const LexicalUserVariant<UserConstructorVariant>*>(this)) ? 1 : 0;
+        direct_call.store(rv, std::memory_order_relaxed);
+    }
+    return rv ? this : nullptr;
+}
+
+namespace {
+//! Uninstantiates the parameters of a direct constructor call, as ~UserVariantExecHelper() does
+class QoreDirectConstructorParams {
+public:
+    QoreDirectConstructorParams(const UserSignature& sig, ExceptionSink* xsink) : sig(sig), xsink(xsink) {
+    }
+
+    ~QoreDirectConstructorParams() {
+        for (unsigned i = 0; i < bound; ++i) {
+            sig.lv[i]->uninstantiate(xsink);
+        }
+    }
+
+    //! the number of parameters instantiated
+    unsigned bound = 0;
+
+private:
+    const UserSignature& sig;
+    ExceptionSink* xsink;
+};
+}
+
+bool UserConstructorVariant::evalDirectConstructor(const QoreClass& thisclass, QoreObject* self, QoreListNode* args,
+        bool take_args, BCList* bcl, BCEAList* bceal, RuntimeConfig& rc, QoreProgram* exec_pgm,
+        ExceptionSink* xsink) const {
+    // as UserVariantExecHelper(): the Program that the call runs in is entered, unless the expression of the
+    // background operator makes the call itself (qore#7087), which is refused; then the frame boundary is set and the
+    // parameters are instantiated
+    ProgramThreadCountContextHelper ptcch(xsink, qore_check_background_direct_entry(pgm, true, xsink) ? nullptr
+        : (exec_pgm ? exec_pgm : pgm), true);
+    ThreadFrameBoundaryHelper tfbh(!*xsink);
+    // declared after the helpers above, so that the parameters are uninstantiated before them, as in
+    // UserVariantExecHelper
+    QoreDirectConstructorParams params(signature, xsink);
+    if (*xsink) {
+        return false;
+    }
+    // as UserVariantBase::setupCall(): the arguments need no conversion (see qore_eval_direct_user_constructor()), so
+    // each parameter takes its argument: the value itself from a temporary list that the call can edit, otherwise a
+    // reference
+    unsigned num_params = signature.numParams();
+    assert((args ? args->size() : 0) == num_params);
+    for (unsigned i = 0; i < num_params; ++i) {
+        QoreValue val = take_args ? qore_list_private::get(*args)->takeExists(i) : args->retrieveEntry(i).refSelf();
+        signature.lv[i]->instantiate(val, signature.getParamTypeInfo(i));
+        params.bound = i + 1;
+    }
+
+    // as evalConstructorImpl()
+    CodeContextHelper cch(xsink, CT_USER, "constructor", self, qore_class_private::get(thisclass), false);
+
+    assert(signature.selfid);
+    SelfInstantiationHelper self_helper(signature.selfid, self);
+
+    // argv for base class constructors: the call has no arguments beyond its parameters
+    if (bcl) {
+        signature.argvid->instantiate(static_cast<QoreListNode*>(nullptr));
+        ArgvContextHelper argv_helper(nullptr, xsink);
+    }
+
+    bool completed = false;
+    ReferenceHolder<QoreListNode> argv(xsink);
+    if (!constructorPreludeImpl<false>({}, thisclass, rc, self, bcl, bceal, xsink)) {
+        evalIntern("constructor", argv, nullptr, xsink, QoreConstructorCompletion{completed}).discard(xsink);
+    }
+
+    if (bcl)
+        signature.argvid->uninstantiate(xsink);
+
+    return completed;
+}
+
 bool UserConstructorVariant::evalConstructor(LexicalSemanticPolicy policy, const QoreClass &thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     return evalConstructorImpl<true>(policy, thisclass, self, ceh, bcl, bceal, xsink);
@@ -12092,7 +12177,7 @@ namespace {
 class QoreDirectBuiltinCall : public QoreStackLocation {
 public:
     //! takes the call site (\a hide_call_site: hides it, as for a destructor) and the pending call reference call
-    DLLLOCAL QoreDirectBuiltinCall(RuntimeConfig& rc, const qore_class_private* qc, const QoreFunction* func,
+    QoreDirectBuiltinCall(RuntimeConfig& rc, const qore_class_private* qc, const QoreFunction* func,
             bool hide_call_site) : rc(rc), qc(qc), func(func),
             // the thread's data is looked up once for the whole call (qore#7336)
             td(get_thread_data_for_native_calls()),
@@ -12102,7 +12187,7 @@ public:
     }
 
     //! sets up the call of \a variant on \a self; returns -1 with an exception raised if the call cannot be made
-    DLLLOCAL int enter(QoreObject* self, const AbstractQoreFunctionVariant* variant, ExceptionSink* xsink) {
+    int enter(QoreObject* self, const AbstractQoreFunctionVariant* variant, ExceptionSink* xsink) {
         assert(&rc == &rc_get_tls_ref());
         assert(!self->getInstantiatedTypeInfo());
 #ifdef DEBUG
@@ -12135,7 +12220,7 @@ public:
         return 0;
     }
 
-    DLLLOCAL ~QoreDirectBuiltinCall() {
+    ~QoreDirectBuiltinCall() {
         if (restore_stack) {
             update_runtime_stack_location(td, stack_loc, old_runtime_loc);
         }
@@ -12153,26 +12238,26 @@ public:
         }
     }
 
-    DLLLOCAL QoreDirectBuiltinCall(const QoreDirectBuiltinCall&) = delete;
-    DLLLOCAL QoreDirectBuiltinCall& operator=(const QoreDirectBuiltinCall&) = delete;
+    QoreDirectBuiltinCall(const QoreDirectBuiltinCall&) = delete;
+    QoreDirectBuiltinCall& operator=(const QoreDirectBuiltinCall&) = delete;
 
-    DLLLOCAL virtual QoreProgram* getProgram() const override {
+    virtual QoreProgram* getProgram() const override {
         return pgm;
     }
 
-    DLLLOCAL virtual const AbstractStatement* getStatement() const override {
+    virtual const AbstractStatement* getStatement() const override {
         return stmt;
     }
 
-    DLLLOCAL virtual const std::string& getCallName() const override {
+    virtual const std::string& getCallName() const override {
         return call_name.get(qc, func);
     }
 
-    DLLLOCAL virtual qore_call_t getCallType() const override {
+    virtual qore_call_t getCallType() const override {
         return CT_BUILTIN;
     }
 
-    DLLLOCAL virtual const QoreProgramLocation& getLocation() const override {
+    virtual const QoreProgramLocation& getLocation() const override {
         return loc ? *loc : loc_builtin;
     }
 
@@ -12200,6 +12285,272 @@ private:
     bool restore_receiver_type_info = false;
     bool restore_return_type_info = false;
 };
+
+//! A call of a user constructor made without a CodeEvaluationHelper (qore#7336)
+/** Makes what CodeEvaluationHelper makes for the call of a user constructor whose variant is known and whose arguments
+    need no conversion, in the same order, and restores it in the same order when it is destroyed: the call site and
+    the pending call of a call reference are taken, the object's creation context (sandbox provenance) is applied and
+    checked for isolation, the stack is checked, the pending caller parse options are taken, the Program context of the
+    class is entered (the call Program context, the Program, and its parse options), the receiver type, the return type
+    and the runtime flags of the variant are set, and the variant's frame is pushed on the call stack, with the same
+    name, call type, location, statement and Program.  A call that enters a module's Program from another Program,
+    which sets the module call's parse options override, is not made here (see qore_eval_direct_user_constructor()).
+
+    Keep this in sync with CodeEvaluationHelper::CodeEvaluationHelper(), CodeEvaluationHelper::initImpl() and
+    CodeEvaluationHelper::~CodeEvaluationHelper() (lib/Function.cpp); see design/object-construction-cost.md
+*/
+class QoreDirectUserCall : public QoreStackLocation {
+public:
+    //! takes the call site and the pending call reference call
+    QoreDirectUserCall(RuntimeConfig& rc, const qore_class_private* qc, const QoreFunction* func)
+            : rc(rc), qc(qc), func(func), td(get_thread_data_for_native_calls()), loc(take_runtime_call_location(td)) {
+        rc_take_call_reference_call(rc, nullptr);
+    }
+
+    //! sets up the call of \a variant on \a self in \a pgm_ctx, the Program of the class; returns -1 with an exception
+    //! raised if the call cannot be made
+    int enter(QoreObject* self, const AbstractQoreFunctionVariant* variant, QoreProgram* pgm_ctx,
+            ExceptionSink* xsink) {
+        assert(&rc == &rc_get_tls_ref());
+        assert(!self->getInstantiatedTypeInfo());
+#ifdef DEBUG
+        qore_dbg_runtime_chosen_variant = false;
+#endif
+        provenance.set(self);
+        // the receiver's code is of another tenant than the trusted build that a tenant called (qore#6536)
+        if (provenance.getContext() && qore_sandbox_check_isolation(td, xsink, "calling a method")) {
+            return -1;
+        }
+#ifdef QORE_MANAGE_STACK
+        if (check_stack(td, xsink)) {
+            return -1;
+        }
+#endif
+        // the pending caller options are taken by the call, as by any call
+        {
+            const QoreProgram* code_pgm;
+            runtime_take_call_caller_parse_options(td, code_pgm);
+        }
+        // the Program context of the class (see CodeEvaluationHelper::initImpl()); the caller has checked that the
+        // call enters no module's Program from another one
+        QoreProgram* old_pgm = pgm_ctx ? qore_get_call_program_context() : nullptr;
+        if (pgm_ctx) {
+            if (old_pgm) {
+                old_call_program_context = get_set_program_call_context(old_pgm);
+                restore_call_program_context = true;
+            }
+            ptcch.set(xsink, pgm_ctx, true);
+            if (*xsink) {
+                return -1;
+            }
+            exec_pgm = pgm_ctx;
+            QoreParseOptions pgm_po = qore_program_private::getParseOptions(*pgm_ctx);
+            if (pgm_ctx != old_pgm || runtime_get_parse_options() != pgm_po) {
+                old_rc_po = rc.getParseOptions();
+                rc.setParseOptions(pgm_po);
+                swap_runtime_parse_options(pgm_po, old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
+                restore_runtime_ctx = true;
+            }
+        }
+        old_receiver_type_info = runtime_set_receiver_type_info(td, self->getClass()->getTypeInfo());
+        restore_receiver_type_info = true;
+        old_return_type_info = saveReturnTypeInfo(td, variant->getSignature()->getReturnTypeInfo());
+        restore_return_type_info = true;
+        old_rtflags = QoreRuntimeFlags::get(rc);
+        QoreRuntimeFlags::set(rc, static_cast<q_rt_flags_t>(variant->getFlags()));
+        restore_rtflags = true;
+        // the frame shows the caller's Program for a call that entered the class's Program
+        stack_loc = update_get_runtime_stack_location(this, stmt, pgm, pgm_ctx ? old_pgm : nullptr);
+        restore_stack = true;
+        return 0;
+    }
+
+    ~QoreDirectUserCall() {
+        if (restore_stack) {
+            update_runtime_stack_location(stack_loc);
+        }
+        if (restore_runtime_ctx) {
+            rc.setParseOptions(old_rc_po);
+            update_runtime_statement_location(old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
+        }
+        if (restore_rtflags) {
+            QoreRuntimeFlags::set(rc, old_rtflags);
+        }
+        if (restore_call_program_context) {
+            set_program_call_context(old_call_program_context);
+        }
+        if (restore_receiver_type_info) {
+            runtime_set_receiver_type_info(td, old_receiver_type_info);
+        }
+        if (restore_return_type_info) {
+            saveReturnTypeInfo(td, old_return_type_info);
+        }
+    }
+
+    QoreDirectUserCall(const QoreDirectUserCall&) = delete;
+    QoreDirectUserCall& operator=(const QoreDirectUserCall&) = delete;
+
+    //! returns the Program that the call runs in (CodeEvaluationHelper::getExecutionProgram())
+    QoreProgram* getExecutionProgram() const {
+        return exec_pgm;
+    }
+
+    virtual QoreProgram* getProgram() const override {
+        return pgm;
+    }
+
+    virtual const AbstractStatement* getStatement() const override {
+        return stmt;
+    }
+
+    virtual const std::string& getCallName() const override {
+        return call_name.get(qc, func);
+    }
+
+    virtual qore_call_t getCallType() const override {
+        return CT_USER;
+    }
+
+    virtual const QoreProgramLocation& getLocation() const override {
+        return loc ? *loc : loc_builtin;
+    }
+
+private:
+    RuntimeConfig& rc;
+    const qore_class_private* qc;
+    const QoreFunction* func;
+    //! the current thread's data (get_thread_data_for_native_calls())
+    void* td;
+    const QoreProgramLocation* loc;
+    // destroyed after the Program context (in reverse order), as the bases of CodeEvaluationHelper
+    QoreSandboxProvenanceHelper provenance;
+    ProgramThreadCountContextHelper ptcch;
+    CodeEvaluationCallName call_name;
+    QoreProgram* pgm = nullptr;
+    QoreProgram* exec_pgm = nullptr;
+    const AbstractStatement* stmt = nullptr;
+    const QoreStackLocation* stack_loc = nullptr;
+    QoreProgram* old_call_program_context = nullptr;
+    const AbstractStatement* old_runtime_stmt = nullptr;
+    const QoreProgramLocation* old_runtime_ctx_loc = nullptr;
+    QoreParseOptions old_runtime_po;
+    QoreParseOptions old_rc_po;
+    const QoreTypeInfo* old_receiver_type_info = nullptr;
+    const QoreTypeInfo* old_return_type_info = nullptr;
+    q_rt_flags_t old_rtflags = 0;
+    bool restore_stack = false;
+    bool restore_runtime_ctx = false;
+    bool restore_rtflags = false;
+    bool restore_call_program_context = false;
+    bool restore_receiver_type_info = false;
+    bool restore_return_type_info = false;
+};
+
+//! Calls a user constructor without a CodeEvaluationHelper (qore#7336)
+/** @return true if the call was made (\a completed is set as evalConstructor() returns it), false if the variant or the
+    call is not one that QoreDirectUserCall makes, and the caller makes the call through CodeEvaluationHelper; then
+    nothing has been changed
+
+    What the variant search and CodeEvaluationHelper check at run time for the call of a user constructor, and how the
+    call here keeps it:
+    - the object must not be deleted: one that is is called through CodeEvaluationHelper, which raises the error
+    - the variant: the one resolved at parse time, or, for a call without arguments and without one (the implicit
+      constructor call of a base class), the function's only variant with no inherited variants, if it is public (the
+      access check of the variant search, which a private constructor of a base class could fail)
+    - the variant's own checks: see UserConstructorVariant::getDirectUserConstructor(); a variant that declares a
+      functional domain, which the call checks against the caller, is not called here
+    - the arguments: values that need no evaluation, one for each parameter, none of them a hash or a list (which
+      UserVariantBase::setupCall() filters), each accepted by its parameter's type without a filter, exactly as
+      CodeEvaluationHelper::prepareDefaultArgsImpl() tests it (QoreTypeInfo::acceptsRuntimeValueWithoutFilter()), or
+      an object that the filter of its parameter's type, run with the same function
+      (QoreTypeInfo::acceptInputParam()) before anything else is done for the call, accepts as it is: CodeEvaluationHelper
+      then converts nothing and evaluates no default argument, and no argument is in excess
+    - a generic receiver (an object with an instantiated type): called through CodeEvaluationHelper
+    - the Program context of the class (qore_get_method_pgm_context()): entered by QoreDirectUserCall as
+      CodeEvaluationHelper enters it, except for a call that enters a module's Program from another Program (the module
+      call's parse options override): called through CodeEvaluationHelper
+    - the sandbox isolation of the object's creation context, the stack, the call frame, the runtime flags:
+      QoreDirectUserCall; the background-entry check, the Program entry and the frame boundary of
+      UserVariantExecHelper: UserConstructorVariant::evalDirectConstructor()
+    - the body: UserVariantBase::evalIntern(), as in evalConstructorImpl() (tiers, debugger, gate, cancellation)
+*/
+static bool qore_eval_direct_user_constructor(const ConstructorMethodFunction* f,
+        const AbstractQoreFunctionVariant* variant, const QoreClass& thisclass, QoreObject* self,
+        const QoreListNode* args, bool tmp_args, BCList* bcl, BCEAList* bceal, RuntimeConfig& rc,
+        ExceptionSink* xsink, bool& completed) {
+    unsigned nargs = args ? args->size() : 0;
+    if (!variant) {
+        if (nargs || !f->hasSingleCallVariant()) {
+            return false;
+        }
+        variant = f->first();
+        if (CONMV_const(variant)->getAccess() != Public) {
+            return false;
+        }
+    }
+    const UserConstructorVariant* uv = CONMV_const(variant)->getDirectUserConstructor();
+    if (!uv || !self->isValid() || self->getInstantiatedTypeInfo()) {
+        return false;
+    }
+    const UserSignature* sig = uv->getUserSignature();
+    // the arguments of a named call bound at parse time are placed by CodeEvaluationHelper
+    if (nargs != sig->numParams() || (args && qore_list_private::get(*args)->hasCallArgEvalMap())) {
+        return false;
+    }
+    for (unsigned i = 0; i < nargs; ++i) {
+        QoreValue n = args->retrieveEntry(i);
+        if (n.needsEval()) {
+            return false;
+        }
+        qore_type_t t = n.getType();
+        if (t == NT_HASH || t == NT_LIST) {
+            return false;
+        }
+        const QoreTypeInfo* pti = sig->getParamTypeInfo(i);
+        if (!QoreTypeInfo::hasType(pti) || pti->acceptsRuntimeValueWithoutFilter(n)) {
+            continue;
+        }
+        // an object is checked against a class type by the type's filter, which CodeEvaluationHelper runs for it
+        // (prepareDefaultArgsImpl()): it is run here with the same function on a reference of the value, in a sink of
+        // its own, before anything else is done for the call; an object that it refuses or replaces takes the general
+        // path, which runs it again, raises its error and resolves the variant again; one that it accepts as it is
+        // needs nothing more.  The filter of a class type depends on the value and the type only: the general path
+        // runs it with the same class context, and before the code context of the call is set
+        if (t != NT_OBJECT) {
+            return false;
+        }
+        ExceptionSink filter_xsink;
+        QoreValue v = n.refSelf();
+        QoreTypeInfo::acceptInputParam(pti, i, sig->getName(i), v, &filter_xsink);
+        bool same = !filter_xsink && v.getType() == NT_OBJECT && v.get<const QoreObject>() == n.get<const QoreObject>();
+        v.discard(&filter_xsink);
+        if (!same || filter_xsink) {
+            filter_xsink.clear();
+            return false;
+        }
+    }
+    QoreSourceProgramHolder spgm_holder(xsink);
+    QoreProgram* mpgm = qore_get_method_pgm_context(thisclass, spgm_holder);
+    if (!*xsink && mpgm) {
+        // a call that enters a module's Program from another Program sets the module call's parse options override
+        // (CodeEvaluationHelper::initImpl()), which is not made here
+        QoreProgram* old_pgm = qore_get_call_program_context();
+        QoreProgram* caller_pgm = (old_pgm && old_pgm != mpgm) ? old_pgm : ::getProgram();
+        if (caller_pgm && caller_pgm != mpgm && qore_program_is_module_inline(mpgm)) {
+            return false;
+        }
+    }
+    QoreDirectUserCall call(rc, qore_class_private::get(thisclass), f);
+    // the Program of the class is being deleted (qore_get_method_pgm_context() raised the error)
+    if (*xsink || call.enter(self, variant, mpgm, xsink)) {
+        completed = false;
+        return true;
+    }
+    // a temporary list with one reference gives its values to the parameters (see CodeEvaluationHelper)
+    completed = uv->evalDirectConstructor(thisclass, self, const_cast<QoreListNode*>(args), tmp_args && args, bcl,
+        bceal, rc, call.getExecutionProgram(), xsink);
+    return true;
+}
 
 //! Calls a builtin constructor without arguments without a CodeEvaluationHelper (qore#7336)
 /** @return true if the call was made (\a completed is set as evalConstructor() returns it), false if the variant or the
@@ -12269,8 +12620,11 @@ QORE_INTERN_ALWAYS_INLINE bool ConstructorMethodFunction::evalConstructorImpl(Le
     // a builtin constructor called without arguments is called without a CodeEvaluationHelper (qore#7336)
     if constexpr (!Lexical) {
         bool completed;
-        if (!args && !qore_direct_object_calls_disabled() && qore_eval_direct_builtin_constructor(this, variant,
-                thisclass, self, bcl, bceal, rc, xsink, completed)) {
+        if (!qore_direct_object_calls_disabled()
+                && ((!args && qore_eval_direct_builtin_constructor(this, variant, thisclass, self, bcl, bceal, rc,
+                        xsink, completed))
+                    || qore_eval_direct_user_constructor(this, variant, thisclass, self, args, tmp_args, bcl, bceal,
+                        rc, xsink, completed))) {
             return completed;
         }
     }

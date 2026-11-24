@@ -64,3 +64,40 @@ it looks it up (`thread_data.get()`, a call through the thread-local storage).  
 overloads of the helpers that take it (`take_runtime_call_location(void*)`, `update_get_runtime_stack_builtin_location
 (void*, ...)` and the others with a `thread_data_ptr` parameter, from `get_thread_data_for_native_calls()`); each helper
 without it calls its overload with the thread's data.
+
+## User constructors
+
+`ConstructorMethodFunction::evalConstructor()` calls a user constructor without a `CodeEvaluationHelper` and without
+a `UserVariantExecHelper` (`qore_eval_direct_user_constructor()`, `QoreDirectUserCall`,
+`UserConstructorVariant::evalDirectConstructor()`) when its variant is known (resolved at parse time, or the only
+public variant for a call without arguments, such as the implicit constructor call of a base class) and its arguments
+need no conversion.  `QoreDirectUserCall` makes what `CodeEvaluationHelper` makes for the call, in the same order and
+with the same helpers, and restores it in the same order: as for a builtin call (call site, call reference, sandbox
+provenance and isolation, stack, caller parse options, receiver and return types, runtime flags, a `CT_USER` frame),
+and the Program context of the class: the call Program context (`get_set_program_call_context()`), the entry of the
+Program (`ProgramThreadCountContextHelper::set()`) and its parse options (`swap_runtime_parse_options()`); the frame
+shows the caller's Program.  `UserConstructorVariant::evalDirectConstructor()` then makes what `UserVariantExecHelper`
+makes (the background-entry check `qore_check_background_direct_entry()`, the entry of the Program that the call runs
+in, the frame boundary, the parameters) and what `UserConstructorVariant::evalConstructorImpl()` makes (the code
+context with `CodeContextHelper`, `self`, the base class constructors) and runs the body with
+`UserVariantBase::evalIntern()`, as the general path does: execution tiers, debugger events, the gate and
+cancellation are those of the general path.
+
+Mirrored sequences (keep them in sync): `QoreDirectUserCall::enter()` and `~QoreDirectUserCall()` with
+`CodeEvaluationHelper::CodeEvaluationHelper()`, `CodeEvaluationHelper::initImpl()` and
+`CodeEvaluationHelper::~CodeEvaluationHelper()` (`lib/Function.cpp`); `UserConstructorVariant::evalDirectConstructor()`
+with `UserVariantExecHelper` (`include/qore/intern/Function.h`), `UserVariantBase::setupCall()` and
+`UserConstructorVariant::evalConstructorImpl()`.  The rules themselves (the call Program context of a class's code,
+Program entry, parse options) are in the helpers that both paths call.
+
+|!Check|!Where (general path)|!Shortcut
+|the object is not deleted|`CodeEvaluationHelper::CodeEvaluationHelper()`|a deleted object takes the general path
+|the variant search and its access check|`runtimeFindVariantImpl()`, `CodeEvaluationHelper::findVariantImpl()`|the variant resolved at parse time; without one, only a call without arguments of the only public variant with no inherited variants
+|functional domains declared on the variant, checked against the caller|`runtimeFindVariantImpl()`, `UserVariantBase::evalIntern()`|a variant that declares one takes the general path (`isStaticallyFastCallEligible()`)
+|synchronized variants, reads of the implicit arguments, type parameters, default arguments, no-narrow container parameters|`UserVariantBase`|take the general path (`isStaticallyFastCallEligible()`)
+|argument conversion and the retry of the variant search when an argument does not match|`prepareCallArgumentsImpl()`, `prepareDefaultArgsImpl()`|only arguments that need no evaluation, one for each parameter, no hash or list (`setupCall()` filters them), each accepted by its type without a filter (`acceptsRuntimeValueWithoutFilter()`, the test of `prepareDefaultArgsImpl()`); the arguments of a named call take the general path
+|a generic receiver|`setObjectReceiverTypeInfo()`|takes the general path
+|a call that enters a module's Program from another Program (the module call's parse options override)|`CodeEvaluationHelper::initImpl()`|takes the general path
+|`QCF_NO_DOMAIN_THROW`, verified in debug builds|`~CodeEvaluationHelper()`|takes the general path
+|the background-entry check, the Program entry and the frame boundary of the call|`UserVariantExecHelper`|`evalDirectConstructor()` with the same functions
+|lexical semantic policies of the variant: lexical parameter policies (`LexicalUserVariant::prepareCallArguments()`) and base class constructors invoked with the declaration's policy (`LexicalBaseConstructorVariant::evalConstructor()`)|`include/qore/intern/Function.h`, `QoreClassIntern.h`|such variants take the general path; a call made with a lexical invocation policy is not made here either

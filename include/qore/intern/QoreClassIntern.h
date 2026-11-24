@@ -445,6 +445,7 @@ public:
 #define METHV_const(f) (reinterpret_cast<const MethodVariant*>(f))
 
 class BuiltinConstructorValueVariant;
+class UserConstructorVariant;
 
 class ConstructorMethodVariant : public MethodVariantBase {
 protected:
@@ -477,6 +478,12 @@ public:
     //! returns the variant if it is a builtin constructor that ConstructorMethodFunction::evalConstructor() can call
     //! without a CodeEvaluationHelper when it is called without arguments (qore#7336), otherwise nullptr
     DLLLOCAL virtual const BuiltinConstructorValueVariant* getDirectBuiltinConstructor() const {
+        return nullptr;
+    }
+
+    //! returns the variant if it is a user constructor that ConstructorMethodFunction::evalConstructor() can call
+    //! without a CodeEvaluationHelper (qore#7336), otherwise nullptr
+    DLLLOCAL virtual const UserConstructorVariant* getDirectUserConstructor() const {
         return nullptr;
     }
 };
@@ -594,6 +601,9 @@ protected:
     // base class argument list for constructors
     BCAList* bcal;
 
+    //! the cached result of getDirectUserConstructor(): -1 if not computed yet, 1 if the variant is eligible, else 0
+    mutable std::atomic<int8_t> direct_call{-1};
+
     DLLLOCAL virtual ~UserConstructorVariant();
 
 public:
@@ -626,6 +636,27 @@ public:
     template <bool Lexical>
     DLLLOCAL bool evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
+    //! see ConstructorMethodVariant::getDirectUserConstructor()
+    /** Only a variant that the fast call paths take (UserVariantBase::isStaticallyFastCallEligible(): not
+        synchronized, no read of the implicit arguments, no declared functional domain, no type parameters, no default
+        arguments, no parameter of a no-narrow container type), without QCF_NO_DOMAIN_THROW (which a debug build's
+        CodeEvaluationHelper verifies); the arguments are checked by the caller (see
+        ConstructorMethodFunction::evalConstructor())
+    */
+    DLLLOCAL const UserConstructorVariant* getDirectUserConstructor() const override;
+
+    //! runs the constructor as evalConstructor() does, with the call set up by the caller (qore#7336)
+    /** Makes what UserVariantExecHelper makes (the entry of the Program the call runs in, \a exec_pgm, or the
+        variant's, the frame boundary, the parameters, which take the arguments, which need no conversion: see
+        qore_eval_direct_user_constructor()) and what evalConstructorImpl() makes
+
+        @param take_args true if \a args is a temporary list whose values the parameters take over, as
+        UserVariantBase::setupCall() takes them over from a list it can edit
+    */
+    DLLLOCAL bool evalDirectConstructor(const QoreClass& thisclass, QoreObject* self, QoreListNode* args,
+            bool take_args, BCList* bcl, BCEAList* bceal, RuntimeConfig& rc, QoreProgram* exec_pgm,
+            ExceptionSink* xsink) const;
+
     DLLLOCAL virtual int parseInit(QoreFunction* f) override;
 
     //! Set the BCAList for AOT deserialization (takes ownership)
@@ -640,6 +671,12 @@ public:
     DLLLOCAL bool evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh,
             BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override {
         return evalLexicalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
+    }
+
+    //! the base class constructors of the variant are invoked with its declaration's policy (evalConstructor()): it
+    //! is called through CodeEvaluationHelper (qore#7336)
+    DLLLOCAL const UserConstructorVariant* getDirectUserConstructor() const override {
+        return nullptr;
     }
 };
 

@@ -21,6 +21,11 @@
       stack frames and the call stacks of the code that runs around them
     - \c domains.q: builtin base class constructors that the functional domains of a restricted or sandboxed caller
       refuse, with \c DCMod.qm
+    - \c users.q: user constructors called directly and through the general path (arguments that are converted,
+      default arguments, extra arguments, arguments that do not match), base class constructor arguments and implicit
+      base class constructors, constructors and destructors that throw, abstract methods, copies, call stacks, and
+      classes imported into a child Program
+    - \c debug.q: the debugger events of constructors and destructors, with the call stacks of their code
 */
 class ObjectConstructionShortcutsTest inherits QUnit::Test {
     private {
@@ -29,12 +34,20 @@ class ObjectConstructionShortcutsTest inherits QUnit::Test {
         string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? libdir + DirSep + "qcc";
         TmpDir tmp("object-construction-shortcuts-");
 
-        #! the scripts run, with the arguments for qore and qcc
+        #! the scripts run
         const Scripts = (
             "members",
             "builtin",
             "domains",
+            "users",
+            "debug",
         );
+
+        #! the scripts that do not run on the IR tier: a call that starts while a debugger is attached runs on the AST
+        #! interpreter (see UserVariantBase::evalTiered())
+        const NoIrTier = {
+            "debug": True,
+        };
 
         #! the environment that turns the shortcuts off
         const NoShortcuts = "QORE_DISABLE_DIRECT_OBJECT_CALLS=1 ";
@@ -76,6 +89,9 @@ class ObjectConstructionShortcutsTest inherits QUnit::Test {
                 assertEq(0, r.rc, label + ": exit status: " + r.out);
                 assertEq(exp, r.out, label);
             }
+        }
+        if (NoIrTier{name}) {
+            return;
         }
         foreach string off in (("", NoShortcuts)) {
             string out = ExecModeHarness::run_ir_tier(sprintf("%s%s%s --exec-mode=tiered %s", env(), off,
