@@ -29916,6 +29916,41 @@ static QoreValue f_dbg_class_member_late_add(const QoreListNode* params, Runtime
     return (int64)qcp->members.dbgLateAdd(strdup(name->c_str()), mi);
 }
 
+//! Debug-only: returns the strings that the signature hash of a class was computed from (qore#7397)
+/** The signature hash identifies a class across Programs and is stored in AOT images, so that a change in these
+    strings needs a new AOT binary format version; examples/test/qore/classes/class-signature-golden.qtest pins them.
+
+    @param path the path of the class, resolved in the current Program
+
+    @return a hash with \c parts (the strings hashed in order: the hash is the XOR of their SHA1 digests; empty for a
+    hash loaded from an AOT image) and \c hash (the hash as a hex string, or \c NOTHING if the class has none)
+*/
+static QoreValue f_dbg_class_signature(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    DbgStringNodeHelper path_param(get_param_value(params, 0));
+    const QoreStringNode* path = *path_param;
+    const QoreClass* qc = getProgram()->findClass(path->c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!qc) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "class '%s' not found", path->c_str());
+        return QoreValue();
+    }
+    const SignatureHash& sh = qore_class_private::get(*qc)->hash;
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreListNode> parts(new QoreListNode(stringTypeInfo), xsink);
+    for (const std::string& i : sh.dbgGetParts()) {
+        parts->push(new QoreStringNode(i), xsink);
+    }
+    rv->setKeyValue("parts", parts.release(), xsink);
+    if (sh) {
+        QoreStringNode* hex = new QoreStringNode;
+        sh.toString(*hex);
+        rv->setKeyValue("hash", hex, xsink);
+    }
+    return rv.release();
+}
+
 //! Debug-only: compares two byte strings with the comparison of hash keys and member names (qore#7194)
 /** @param a the first string
     @param b the second string
@@ -35474,6 +35509,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_class_member_late_add", f_dbg_class_member_late_add, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "path", stringTypeInfo,
         QORE_PARAM_NO_ARG, "name");
+    qns.addBuiltinVariant("dbg_class_signature", f_dbg_class_signature, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "path");
     qns.addBuiltinVariant("dbg_key_equal", f_dbg_key_equal, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         binaryTypeInfo, QORE_PARAM_NO_ARG, "a", binaryTypeInfo, QORE_PARAM_NO_ARG, "b");
     qns.addBuiltinVariant("dbg_hash_lookup_with_hash_of", f_dbg_hash_lookup_with_hash_of, QCF_NO_FLAGS,

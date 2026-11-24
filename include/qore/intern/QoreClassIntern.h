@@ -1449,6 +1449,14 @@ public:
         return typeInfo;
     }
 
+    //! resolves the declared type, if it is not resolved yet, without initializing the initializer
+    /** Called by qore_class_private::initializeIntern() before the class signature is made, which includes the
+        resolved type (qore#7457); parseInit() resolves the type itself if this was not called
+
+        @return 0 for OK, -1 if the type could not be resolved (a parse exception has been raised)
+    */
+    DLLLOCAL int parseResolveDeclaredType();
+
     DLLLOCAL const QoreTypeInfo* parseGetTypeInfo() const {
         // we cannot tell if the member has been initialized, so we return anyTypeInfo here for potential references
         return QoreTypeInfo::isReference(typeInfo) ? anyTypeInfo : typeInfo;
@@ -2840,6 +2848,28 @@ typedef std::vector<BCNode*> bclist_t;
 //  note that this data structure cannot be modified even if the class is
 //  copied to a subprogram object and extended
 //  this class is a QoreReferenceCounter so it won't be copied when the class is copied
+//! The access of the ancestors of a class, computed once for the inheritance lists of several of its methods
+//! (qore#7410)
+/** It depends only on the hierarchy, not on the method; a caller that builds the lists of several methods of a class
+    passes one to each of the walks, which computes it on the first one
+*/
+struct AncestorAccessCache {
+    //! an ancestor of the class
+    struct Entry {
+        //! the class
+        qore_class_private* cls;
+        //! the access of its methods in the lists
+        ClassAccess access;
+        //! the classes whose code can call its methods through the lists if \a access is Internal
+        owner_set_t owners;
+    };
+
+    //! true if the access has been computed
+    bool valid = false;
+    //! the ancestors in the order of the lists
+    std::vector<Entry> entries;
+};
+
 class BCList : public bclist_t {
 protected:
 public:
@@ -2959,11 +2989,12 @@ public:
     DLLLOCAL bool inAccessHierarchy(const qore_class_private& qc, ClassAccess& n_access) const;
 
     DLLLOCAL void addNewAncestors(QoreMethod* m);
-    DLLLOCAL void addAncestors(QoreMethod* m);
+    //! @param cache the access of the ancestors, computed once for the methods of a class (qore#7410)
+    DLLLOCAL void addAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr);
     DLLLOCAL void addNewStaticAncestors(QoreMethod* m);
-    DLLLOCAL void addStaticAncestors(QoreMethod* m);
-    DLLLOCAL void parseAddAncestors(QoreMethod* m);
-    DLLLOCAL void parseAddStaticAncestors(QoreMethod* m);
+    DLLLOCAL void addStaticAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr);
+    DLLLOCAL void parseAddAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr);
+    DLLLOCAL void parseAddStaticAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr);
 
     //! Returns true if resolution changed method dispatch in this uncommitted hierarchy.
     DLLLOCAL bool parseResolveAbstract();
@@ -3094,6 +3125,13 @@ class SignatureHash {
 protected:
     unsigned char buf[SH_SIZE];
     bool is_set;
+#ifdef DEBUG
+    //! the strings hashed by update() in order, for the dbg_class_signature() debug hook only
+    /** The hash is the XOR of the SHA1 digests of these strings; an AOT-loaded hash (setRawHash()) has none
+        (examples/test/qore/classes/class-signature-golden.qtest)
+    */
+    std::vector<std::string> dbg_parts;
+#endif
 
     DLLLOCAL void set(const QoreString& str);
 
@@ -3113,6 +3151,9 @@ public:
     DLLLOCAL SignatureHash(const SignatureHash& old) : is_set(old.is_set) {
         if (is_set)
             copyHash(old);
+#ifdef DEBUG
+        dbg_parts = old.dbg_parts;
+#endif
     }
 
     DLLLOCAL void update(const QoreString& str);
@@ -3138,6 +3179,9 @@ public:
             if (!is_set)
                 is_set = true;
             copyHash(other);
+#ifdef DEBUG
+            dbg_parts = other.dbg_parts;
+#endif
         }
         return *this;
     }
@@ -3163,6 +3207,11 @@ public:
         }
         return str.c_str();
     }
+
+    //! returns the strings hashed by update() in order (for the dbg_class_signature() debug hook)
+    DLLLOCAL const std::vector<std::string>& dbgGetParts() const {
+        return dbg_parts;
+    }
 #endif
 
     DLLLOCAL char* getHash() const {
@@ -3173,6 +3222,9 @@ public:
     DLLLOCAL void setRawHash(const void* data) {
         memcpy(buf, data, SH_SIZE);
         is_set = true;
+#ifdef DEBUG
+        dbg_parts.clear();
+#endif
     }
 
     DLLLOCAL void clear() {
@@ -3180,6 +3232,9 @@ public:
             is_set = false;
             clearHash();
         }
+#ifdef DEBUG
+        dbg_parts.clear();
+#endif
     }
 };
 
@@ -5074,16 +5129,20 @@ public:
     }
 
     //! adds the static methods of the base classes that the method overrides, to the most distant base class
-    DLLLOCAL void parseAddStaticAncestors(QoreMethod* m) {
+    /** @param cache the access of the ancestors, computed once for the methods of the class (qore#7410)
+    */
+    DLLLOCAL void parseAddStaticAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr) {
         if (!scl) {
             return;
         }
 
-        scl->parseAddStaticAncestors(m);
+        scl->parseAddStaticAncestors(m, cache);
     }
 
     //! adds the methods of the base classes that the method overrides, to the most distant base class
-    DLLLOCAL void parseAddAncestors(QoreMethod* m) {
+    /** @param cache the access of the ancestors, computed once for the methods of the class (qore#7410)
+    */
+    DLLLOCAL void parseAddAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr) {
         //printd(5, "qore_class_private::parseAddAncestors(%p %s) this: %p cls: %p %s scl: %p\n", m, m->getName(), this, cls, name.c_str(), scl);
         assert(strcmp(m->getName(), "constructor"));
 
@@ -5091,7 +5150,7 @@ public:
             return;
         }
 
-        scl->parseAddAncestors(m);
+        scl->parseAddAncestors(m, cache);
     }
 
     DLLLOCAL int initMembers(QoreObject& o, bool& need_scan, ExceptionSink* xsink) const;
@@ -6292,9 +6351,11 @@ public:
     //! Returns true if \a qc is this class, a copy of its declaration or a class with the same name and signature
     /** The type compatibility of classes (the class of a value for a declared type, casts and the calls of a base
         class's methods on an object): the same declaration loaded in two Programs (an included source parsed by each
-        of them, for example) is the same type.  Never used to give private access, which a class with the name and
-        the signature of another class (a look-alike, which any code that sees the declaration of the class can
-        declare) must not get: see sameClass() (qore#7036)
+        of them, for example) is the same type.  The signature of a user class includes the path of its namespace, so
+        that classes with the same name and declarations in different namespaces are different types (qore#7397).
+        Never used to give private access, which a class with the name and the signature of another class (a
+        look-alike, which any code that sees the declaration of the class can declare) must not get: see sameClass()
+        (qore#7036)
     */
     DLLLOCAL bool equal(const qore_class_private& qc) const {
         if (&qc == this) {

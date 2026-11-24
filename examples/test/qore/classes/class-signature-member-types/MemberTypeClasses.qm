@@ -1,0 +1,15 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the module of class-signature-member-types.qtest with the classes of classes.ql, loaded from the source and as a
+# qcc -m .qmod
+
+%modern
+
+module MemberTypeClasses {
+    version = "1.0";
+    desc = "classes with member types of every kind for class-signature-member-types.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+%include classes.ql

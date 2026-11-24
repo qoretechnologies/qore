@@ -21633,14 +21633,16 @@ bool QoreAOTBinaryDeserializer::commitClassesPrepare(std::string& error) {
         // Special methods (constructor/destructor/copy) are skipped by
         // initializeHierarchy; mirror that via checkSpecial().
         if (priv->scl) {
+            // the access of the ancestors is computed once for the lists of the methods (qore#7410)
+            AncestorAccessCache ancestor_access;
             for (auto& mi : priv->hm) {
                 const char* mn = mi.second->getName();
                 if (strcmp(mn, "constructor") && strcmp(mn, "destructor") && strcmp(mn, "copy")) {
-                    priv->parseAddAncestors(mi.second);
+                    priv->parseAddAncestors(mi.second, &ancestor_access);
                 }
             }
             for (auto& mi : priv->shm) {
-                priv->parseAddStaticAncestors(mi.second);
+                priv->parseAddStaticAncestors(mi.second, &ancestor_access);
             }
         }
         // The hierarchy is resolved above, as initializeHierarchy() resolves it in source parsing, so the class is

@@ -116,6 +116,188 @@ struct HierarchyWalkFrame {
     ClassAccess access;
 };
 
+//! The state of a class of the hierarchy when the access of the ancestors of a class is computed (qore#7410)
+struct AncestorWalkClass {
+    //! the number of the edges to the class that the topological pass has not followed yet
+    size_t pending = 0;
+    //! the least restrictive access of the paths to the class that have no private:internal edge; Inaccessible if
+    //! there is none
+    ClassAccess access = Inaccessible;
+    //! the classes of the private:internal edges of the paths to the class that have one: the classes whose code can
+    //! call its methods if \a access is Inaccessible
+    owner_set_t owners;
+    //! true if \a owners is the class's own set, made for it, which can be added to before the class is followed
+    bool own_owners = false;
+    //! true if the topological pass has followed the edges of the class
+    bool done = false;
+
+    //! adds the class of the given index, the class of a private:internal edge to the class
+    void addOwner(const std::shared_ptr<InternalOwnerIndex>& index, size_t i) {
+        makeOwn(index);
+        owners->add(i);
+    }
+
+    //! adds the classes of the private:internal edges of the paths of a class with an edge to the class
+    void addOwners(const std::shared_ptr<InternalOwnerIndex>& index, const owner_set_t& o) {
+        if (!owners) {
+            // shared until another path reaches the class
+            owners = o;
+            return;
+        }
+        if (owners == o) {
+            return;
+        }
+        makeOwn(index);
+        owners->add(*o);
+    }
+
+private:
+    void makeOwn(const std::shared_ptr<InternalOwnerIndex>& index) {
+        if (own_owners) {
+            return;
+        }
+        owner_set_t o = make_owner_set(index);
+        if (owners) {
+            o->bits = owners->bits;
+        }
+        owners = o;
+        own_owners = true;
+    }
+};
+
+//! Computes the access of the ancestors of a class for the inheritance lists of its methods (qore#6488, qore#6498,
+//! qore#7410)
+/** The classes are listed in the order of a depth-first walk of the hierarchy in the order of the base classes, each
+    once, at its first position (issue #6488).  The access of each is then computed exactly in a topological pass over
+    the hierarchy: the least restrictive access of the paths to the class that have no private:internal edge
+    (qore#6498), or, if there is none, the set of the classes of the private:internal edges of the paths that have one
+    edge of the kind, whose code can call the methods; a path with two private:internal edges gives no access, as
+    each edge is followed only from the code of its child class.  A class that one path reaches shares the set of the
+    class before it; a class where paths merge gets the union of their sets, a bit set over an index of the classes of
+    the private:internal edges.  The work is linear in the hierarchy apart from the unions, each of which takes one
+    operation for each 64 classes of the index.
+*/
+static void compute_ancestor_access(const BCList* list, qore_class_private* root, AncestorAccessCache& cache) {
+    assert(!cache.valid);
+    assert(root->scl == list);
+
+    typedef std::unordered_map<const qore_class_private*, AncestorWalkClass> class_map_t;
+    class_map_t classes;
+    classes[root].access = Public;
+    // the classes in the order of the lists
+    std::vector<qore_class_private*> order;
+
+    // the depth-first walk: the order of the lists and the number of the edges to each class
+    HierarchyWalkStack<HierarchyWalkFrame> stack;
+    stack.push({list, 0, Public});
+    while (!stack.empty()) {
+        HierarchyWalkFrame& f = stack.back();
+        if (f.next == f.list->size()) {
+            stack.pop();
+            continue;
+        }
+        const BCNode& n = *(*f.list)[f.next++];
+        QoreClass* qc = n.sclass;
+        // a class can be unresolved after a parse error
+        if (!qc) {
+            continue;
+        }
+        QORE_CLASS_HIERARCHY_WALK_STEP();
+        qore_class_private* qcp = qore_class_private::get(*qc);
+        std::pair<class_map_t::iterator, bool> i = classes.insert(class_map_t::value_type(qcp, AncestorWalkClass()));
+        ++i.first->second.pending;
+        if (!i.second) {
+            continue;
+        }
+        order.push_back(qcp);
+        if (qcp->scl) {
+            stack.push({qcp->scl, 0, Public});
+        }
+    }
+
+    // the topological pass: a class's edges are followed when all the edges to it have been; a class in a cycle
+    // (which is rejected with an error) is not followed, which only removes access
+    std::shared_ptr<InternalOwnerIndex> index = std::make_shared<InternalOwnerIndex>();
+    std::vector<const qore_class_private*> ready;
+    ready.push_back(root);
+    for (size_t ri = 0; ri < ready.size(); ++ri) {
+        const qore_class_private* x = ready[ri];
+        AncestorWalkClass& xs = classes.find(x)->second;
+        assert(!xs.done);
+        xs.done = true;
+        if (!x->scl) {
+            continue;
+        }
+        for (const auto& np : *x->scl) {
+            const BCNode& n = *np;
+            if (!n.sclass) {
+                continue;
+            }
+            QORE_CLASS_HIERARCHY_WALK_STEP();
+            class_map_t::iterator pi = classes.find(qore_class_private::get(*n.sclass));
+            assert(pi != classes.end());
+            AncestorWalkClass& ps = pi->second;
+            if (n.access == Internal) {
+                // only the code of the edge's child class follows it, on a path without another such edge
+                if (xs.access < Internal) {
+                    ps.addOwner(index, index->get(x));
+                }
+            } else if (xs.access < Internal) {
+                ClassAccess a = xs.access < n.access ? n.access : xs.access;
+                if (a < ps.access) {
+                    ps.access = a;
+                }
+            } else if (xs.owners) {
+                ps.addOwners(index, xs.owners);
+            }
+            assert(ps.pending);
+            if (!--ps.pending && !ps.done && pi->first != root) {
+                ready.push_back(pi->first);
+            }
+        }
+    }
+
+    cache.entries.reserve(order.size());
+    for (qore_class_private* qcp : order) {
+        const AncestorWalkClass& c = classes.find(qcp)->second;
+        if (c.access == Inaccessible && c.owners) {
+            cache.entries.push_back({qcp, Internal, c.owners});
+        } else {
+            cache.entries.push_back({qcp, c.access, owner_set_t()});
+        }
+    }
+    cache.valid = true;
+}
+
+//! Builds the inheritance list of a method from the access of the ancestors of its class (qore#7410)
+/** @param Parse true for the walks of a class being parsed: the list is built from scratch
+    @param cache the access of the ancestors, computed once for the methods of the class, or nullptr
+*/
+template <bool Parse, typename Find>
+static void walk_method_ancestors(const BCList* list, QoreMethod* m, AncestorAccessCache* cache, Find find) {
+    AncestorAccessCache local;
+    if (!cache) {
+        cache = &local;
+    }
+    if (!cache->valid) {
+        compute_ancestor_access(list, qore_class_private::get(*const_cast<QoreClass*>(m->getClass())), *cache);
+    }
+    const char* name = m->getName();
+    MethodFunctionBase* mf = qore_method_private::get(*m)->getFunction();
+    for (const AncestorAccessCache::Entry& e : cache->entries) {
+        const QoreMethod* w = find(e.cls, name);
+        if (!w) {
+            continue;
+        }
+        QoreFunction* af = qore_method_private::get(*w)->getFunction();
+        if (Parse) {
+            mf->addAncestor(af, e.access, e.owners);
+        } else {
+            mf->addNewAncestor(af, e.access, e.owners);
+        }
+    }
+}
+
 //! The classes visited by the walk of a lookup in a class hierarchy (qore#6522)
 /** The first classes are kept in place, so that a walk of the common, small hierarchy does not allocate; a filter of
     one bit for each class recorded answers most checks of a class that was not visited without a search
@@ -851,6 +1033,7 @@ void SignatureHash::update(const QoreString& str) {
     }
 
 #ifdef DEBUG
+    dbg_parts.emplace_back(str.c_str(), str.size());
     //QoreString dbg;
     //toString(dbg);
     //printd(5, "class hash %p set to: %s\n", this, dbg.getBuffer());
@@ -1311,6 +1494,8 @@ bool AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
     bool changed = false;
     //printd(5, "AbstractMethodMap::parseInit() this: %p cname: %s scl: %p ae: %d\n", this, qc.name.c_str(), scl,
     //    empty());
+    // the access of the ancestors is computed once for the methods created (qore#7410)
+    AncestorAccessCache ancestor_access;
     for (amap_t::iterator i = begin(), e = end(); i != e;) {
         for (vmap_t::iterator vi = i->second->vlist.begin(), ve = i->second->vlist.end(); vi != ve;) {
             // if there is a matching non-abstract variant in any parent class, then move the variant from vlist to
@@ -1333,7 +1518,7 @@ bool AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
                     qc.hm[m->getName()] = m;
                     // the method of the class also has the variants that the parent classes define: the concrete
                     // variants of the class that declares the abstract variant are found through it (issue #6161)
-                    scl->parseAddAncestors(m);
+                    scl->parseAddAncestors(m, &ancestor_access);
                     // the inheritance lists of the subclasses' methods are built again with it (qore#7307)
                     qc.abstract_method_created = true;
                 }
@@ -1406,6 +1591,8 @@ void AbstractMethodMap::runtimeInit(qore_class_private& qc, BCList* scl) {
     // the methods that the parent classes created by resolving abstract methods are in the inheritance lists of the
     // class's methods (qore#7307)
     qc.runtimeUpdateAbstractAncestors();
+    // the access of the ancestors is computed once for the methods created (qore#7410)
+    AncestorAccessCache ancestor_access;
     for (amap_t::iterator i = begin(), e = end(); i != e;) {
         for (vmap_t::iterator vi = i->second->vlist.begin(), ve = i->second->vlist.end(); vi != ve;) {
             // if there is a matching non-abstract variant in any parent class, then move the variant from vlist to
@@ -1444,7 +1631,7 @@ void AbstractMethodMap::runtimeInit(qore_class_private& qc, BCList* scl) {
                     qc.hm[m->getName()] = m;
                     // the method of the class also has the variants that the parent classes define: the concrete
                     // variants of the class that declares the abstract variant are found through it (issue #6161)
-                    scl->addAncestors(m);
+                    scl->addAncestors(m, &ancestor_access);
                     // as in parseInit() (qore#7307)
                     qc.abstract_method_created = true;
                 }
@@ -2287,6 +2474,8 @@ int qore_class_private::initializeHierarchy(qcp_set_t& qcp_set) {
         return -1;
     }
 
+    // the access of the ancestors is computed once for the lists of the methods (qore#7410)
+    AncestorAccessCache ancestor_access;
     // setup inheritance list for new methods
     for (auto& i : hm) {
         bool is_new = i.second->priv->func->committedEmpty();
@@ -2295,7 +2484,7 @@ int qore_class_private::initializeHierarchy(qcp_set_t& qcp_set) {
         //    this, name.c_str(), i->first.c_str(), is_new, checkSpecial(i->second->getName()), i->second->getName());
 
         if (is_new && !checkSpecial(i.second->getName())) {
-            parseAddAncestors(i.second);
+            parseAddAncestors(i.second, &ancestor_access);
         }
     }
 
@@ -2303,7 +2492,7 @@ int qore_class_private::initializeHierarchy(qcp_set_t& qcp_set) {
     for (auto& i : shm) {
         bool is_new = i.second->priv->func->committedEmpty();
         if (is_new) {
-            parseAddStaticAncestors(i.second);
+            parseAddStaticAncestors(i.second, &ancestor_access);
         }
     }
 
@@ -2393,10 +2582,14 @@ int qore_class_private::initializeMembers() {
 }
 
 // process signature entries for base classes
+/** The type of a generic parent class is named with the namespace paths of its type arguments
+    (QoreTypeInfo::getPath()), so that subclasses of the same generic class with type arguments of the same name in
+    different namespaces have different signatures (qore#7457)
+*/
 static void do_sig(QoreString& csig, BCNode& n) {
     qore_class_private* qc = qore_class_private::get(*n.sclass);
     csig.sprintf("inherits %s %s ", privpub(n.getAccess()),
-        n.type_info ? QoreTypeInfo::getName(n.type_info) : qc->name.c_str());
+        n.type_info ? QoreTypeInfo::getPath(n.type_info) : qc->name.c_str());
     SignatureHash& h = qc->hash;
     if (h) {
         csig.concat('[');
@@ -2408,24 +2601,45 @@ static void do_sig(QoreString& csig, BCNode& n) {
 }
 
 // process signature entries for class members
+/** The type is the resolved declared type, with the namespace paths of the classes, hashdecls and enums that it names
+    (QoreTypeInfo::getPath(), as in the parameter types of method signatures): the same declaration has the same type
+    string in every Program, and declarations that differ in a member type have different signatures (qore#7457)
+*/
 static void do_sig(QoreString& csig, const QoreMemberMap::member_list_element_t& i) {
+    assert(i.second);
     if (!i.second->local()) {
         return;
     }
 
-    if (i.second) {
-        csig.sprintf("%s mem %s %s %s\n", privpub(i.second->access), QoreTypeInfo::getName(i.second->getTypeInfo()), i.first, i.second->exp.getTypeName());
-    } else {
-        csig.sprintf("%s mem %s\n", privpub(i.second->access), i.first);
-    }
+    csig.sprintf("%s mem %s %s %s\n", privpub(i.second->access), QoreTypeInfo::getPath(i.second->getTypeInfo()),
+        i.first, i.second->exp.getTypeName());
 }
 
 // process signature entries for class static vars
+/** The type is the resolved declared type with namespace paths, as for members (qore#7457)
+*/
 static void do_sig(QoreString& csig, const QoreVarMap::member_list_element_t& i) {
-    if (i.second) {
-        csig.sprintf("%s var %s %s %s\n", privpub(i.second->access), QoreTypeInfo::getName(i.second->getTypeInfo()), i.first, i.second->exp.getTypeName());
-    } else {
-        csig.sprintf("%s var %s\n", privpub(i.second->access), i.first);
+    assert(i.second);
+    csig.sprintf("%s var %s %s %s\n", privpub(i.second->access), QoreTypeInfo::getPath(i.second->getTypeInfo()),
+        i.first, i.second->exp.getTypeName());
+}
+
+// process signature entries for the methods of a method map
+/** The methods are added in the order of their names, and the variants of a method in the order of its variant list
+    (that of their declarations), so that the signature depends only on the declarations, not on the iteration order
+    of the method map (a hash map whose order depends on its hash function and bucket count) (qore#7458)
+*/
+static void do_method_sigs(QoreString& csig, const hm_method_t& m, const char* mod) {
+    std::vector<const hm_method_t::value_type*> v;
+    v.reserve(m.size());
+    for (auto& i : m) {
+        v.push_back(&i);
+    }
+    std::sort(v.begin(), v.end(), [](const hm_method_t::value_type* a, const hm_method_t::value_type* b) {
+        return a->first < b->first;
+    });
+    for (const hm_method_t::value_type* i : v) {
+        qore_method_private::get(*i->second)->getFunction()->parseSignatures(csig, mod);
     }
 }
 
@@ -2747,6 +2961,16 @@ int qore_class_private::initializeIntern() {
     // signature string - also processed in parseCommit()
     QoreString csig;
 
+    // the namespace path of the class is part of its signature, as for a builtin class (generateBuiltinSignature()),
+    // so that a class with the same name and declarations in another namespace is another type; a class is
+    // compatible with another class of the same signature only if it is the same declaration in another Program
+    // (qore#7397).  It is added once, with the first part of the signature
+    if (!hash && ns) {
+        std::string nspath;
+        ns->getPath(nspath, true, true);
+        csig.sprintf("class %s%s\n", nspath.c_str(), name.c_str());
+    }
+
     // initialize parent classes
     if (scl) {
         mergeAbstract();
@@ -2766,75 +2990,91 @@ int qore_class_private::initializeIntern() {
     if (has_sig_changes) {
         // add methods to class signature
         // pending "normal" (non-static) method variants
-        for (auto& i : hm)
-            i.second->priv->func->parseSignatures(csig, nullptr);
+        do_method_sigs(csig, hm, nullptr);
         // pending static method variants
-        for (auto& i : shm)
-            i.second->priv->func->parseSignatures(csig, "static");
+        do_method_sigs(csig, shm, "static");
+    }
+
+    // the declared types of the static variables and members are resolved before they are added to the signature,
+    // which includes them: classes of other Programs that differ only in such a type are different types; the
+    // initializers are initialized below, after the signature strings are made (qore#7457)
+    if (!sys) {
+        for (auto& i : vars.member_list) {
+            if (i.second && i.second->parseResolveDeclaredType() && !err) {
+                err = -1;
+            }
+        }
+        for (auto& i : members.getList()) {
+            if (i.second && i.second->local() && i.second->parseResolveDeclaredType() && !err) {
+                err = -1;
+            }
+        }
     }
 
     // add committed vars to signature first before members
-    if (!vars.empty()) {
-        for (auto& i : vars.member_list) {
-            do_sig(csig, i);
+    for (auto& i : vars.member_list) {
+        do_sig(csig, i);
+    }
+
+    // add committed members to signature
+    for (auto& i : members.getList()) {
+        do_sig(csig, i);
+    }
+
+    // the signature is complete and hashed before the initializers of the static variables and members are
+    // initialized: an initializer can initialize a subclass of this class (ex: static *Base b = new Sub()), whose
+    // signature includes the hash of this class; without it, it would include the class ID of this class, which
+    // differs in every Program (qore#7457)
+    if (has_sig_changes) {
+        // process constants for class signature, private first, then public
+        do_sig(csig, constlist);
+
+        if (!csig.empty()) {
+            printd(5, "qore_class_private::initializeIntern() this: %p '%s' sig:\n%s", this, name.c_str(),
+                csig.getBuffer());
+            hash.update(csig);
         }
 
-        if (!sys) {
-            VariableBlockHelper vbh;
+        has_sig_changes = false;
+    } else if (!csig.empty()) {
+        // only the namespace path of the class
+        hash.update(csig);
+    }
 
-            // initialize new static vars
-            for (auto& i : vars.member_list) {
-                if (i.second) {
-                    if (i.second->parseInit(i.first) && !err) {
-                        err = -1;
-                    }
+    if (!vars.empty() && !sys) {
+        VariableBlockHelper vbh;
+
+        // initialize new static vars
+        for (auto& i : vars.member_list) {
+            if (i.second) {
+                if (i.second->parseInit(i.first) && !err) {
+                    err = -1;
                 }
             }
         }
     }
 
-    if (!members.empty()) {
-        // add committed members to signature
+    if (!members.empty() && !sys) {
+        SelfLocalVarParseHelper slvph(&selfid);
+
         for (auto& i : members.getList()) {
-            do_sig(csig, i);
-        }
-
-        if (!sys) {
-            SelfLocalVarParseHelper slvph(&selfid);
-
-            // add committed members to signature
-            for (auto& i : members.getList()) {
-                // check new members for conflicts in base classes
-                if (parseCheckMemberInBaseClasses(i.first, i.second) && !err) {
-                    err = -1;
-                }
-            }
-
-            // initialize new members
-            //printd(5, "qore_class_private::initializeIntern() this: %p '%s' initialing members: %p\n", this, name.c_str(), &members);
-            if (members.parseInit(selfid) && !err) {
+            // check new members for conflicts in base classes
+            if (parseCheckMemberInBaseClasses(i.first, i.second) && !err) {
                 err = -1;
             }
+        }
+
+        // initialize new members
+        //printd(5, "qore_class_private::initializeIntern() this: %p '%s' initialing members: %p\n", this,
+        //    name.c_str(), &members);
+        if (members.parseInit(selfid) && !err) {
+            err = -1;
         }
     }
 
     // issue #3286: a constant and a member or static variable with the same name in the class hierarchy
     if (!sys) {
         parseCheckNameKindClashes(pgm);
-    }
-
-    if (has_sig_changes) {
-        // process constants for class signature, private first, then public
-        do_sig(csig, constlist);
-
-        if (!csig.empty()) {
-            printd(5, "qore_class_private::initializeIntern() this: %p '%s' sig:\n%s", this, name.c_str(), csig.getBuffer());
-            hash.update(csig);
-        }
-
-        has_sig_changes = false;
-    } else {
-        assert(csig.empty());
     }
 
     return err;
@@ -2948,10 +3188,8 @@ void qore_class_private::generateBuiltinSignature(const char* nspath) {
         }
     }
 
-    for (auto& i : hm)
-        i.second->priv->func->parseSignatures(csig, nullptr);
-    for (auto& i : shm)
-        i.second->priv->func->parseSignatures(csig, "static");
+    do_method_sigs(csig, hm, nullptr);
+    do_method_sigs(csig, shm, "static");
 
     // add committed vars to signature first before members
     for (auto& i : vars.member_list) {
@@ -3526,13 +3764,16 @@ void qore_class_private::parseCommit() {
                 }
             }
 
+            // add the pending method variants to the signature in the order of the method names (qore#7458)
+            if (has_sig_changes) {
+                do_method_sigs(csig, hm, nullptr);
+                do_method_sigs(csig, shm, "static");
+            }
+
             // commit pending "normal" (non-static) method variants
             for (auto& i : hm) {
                 bool is_new = i.second->priv->func->committedEmpty();
-                if (has_sig_changes)
-                    i.second->priv->func->parseCommitMethod(csig, 0);
-                else
-                    i.second->priv->func->parseCommitMethod();
+                i.second->priv->func->parseCommitMethod();
                 if (is_new) {
                     checkAssignSpecial(i.second);
                     ++num_methods;
@@ -3543,10 +3784,7 @@ void qore_class_private::parseCommit() {
             // commit pending static method variants
             for (auto& i : shm) {
                 bool is_new = i.second->priv->func->committedEmpty();
-                if (has_sig_changes)
-                    i.second->priv->func->parseCommitMethod(csig, "static");
-                else
-                    i.second->priv->func->parseCommitMethod();
+                i.second->priv->func->parseCommitMethod();
                 if (is_new) {
                     ++num_static_methods;
                     ++num_static_user_methods;
@@ -5802,175 +6040,33 @@ void BCList::addNewStaticAncestors(QoreMethod* m) {
 // in the order of the base classes as the recursion that this replaces, each class once, so that a base class reached
 // through more than one path of a diamond hierarchy has its method once in the inheritance list, as for user classes,
 // and the walk is linear in the hierarchy (issues #6488, #6499)
-void BCList::addAncestors(QoreMethod* m) {
-    const char* name = m->getName();
-    auto* mf = qore_method_private::get(*m)->getFunction();
-    HierarchyWalkStack<HierarchyWalkFrame> stack;
-    qcp_set_t visited;
-    stack.push({this, 0});
-    while (!stack.empty()) {
-        HierarchyWalkFrame& f = stack.back();
-        if (f.next == f.list->size()) {
-            stack.pop();
-            continue;
-        }
-        const BCNode& n = *(*f.list)[f.next++];
-        QoreClass* qc = n.sclass;
-        assert(qc);
-        QORE_CLASS_HIERARCHY_WALK_STEP();
-        // the most restrictive access of the edges of the path to the class: the access of its method in the list
-        // (qore#6498)
-        ClassAccess path_access = f.access < n.access ? n.access : f.access;
-        const QoreMethod* w = qc->priv->findLocalCommittedMethod(name);
-        if (!visited.insert(qc->priv).second) {
-            // a class reached again: its method has the least restrictive access of the paths to it (qore#6498)
-            if (w) {
-                mf->lowerAncestorAccess(qore_method_private::get(*w)->getFunction(), path_access);
-            }
-            continue;
-        }
-
-        if (w) {
-            mf->addNewAncestor(qore_method_private::get(*w)->getFunction(), path_access);
-        }
-        if (qc->priv->scl) {
-            stack.push({qc->priv->scl, 0, path_access});
-        }
-    }
+void BCList::addAncestors(QoreMethod* m, AncestorAccessCache* cache) {
+    walk_method_ancestors<false>(this, m, cache, [](qore_class_private* qc, const char* name) {
+        return qc->findLocalCommittedMethod(name);
+    });
 }
 
-void BCList::addStaticAncestors(QoreMethod* m) {
-    const char* name = m->getName();
-    auto* mf = qore_method_private::get(*m)->getFunction();
-    // as for addAncestors()
-    HierarchyWalkStack<HierarchyWalkFrame> stack;
-    qcp_set_t visited;
-    stack.push({this, 0});
-    while (!stack.empty()) {
-        HierarchyWalkFrame& f = stack.back();
-        if (f.next == f.list->size()) {
-            stack.pop();
-            continue;
-        }
-        const BCNode& n = *(*f.list)[f.next++];
-        QoreClass* qc = n.sclass;
-        assert(qc);
-        QORE_CLASS_HIERARCHY_WALK_STEP();
-        // the most restrictive access of the edges of the path to the class: the access of its method in the list
-        // (qore#6498)
-        ClassAccess path_access = f.access < n.access ? n.access : f.access;
-        const QoreMethod* w = qc->priv->findLocalCommittedStaticMethod(name);
-        if (!visited.insert(qc->priv).second) {
-            // as in addAncestors() (qore#6498)
-            if (w) {
-                mf->lowerAncestorAccess(qore_method_private::get(*w)->getFunction(), path_access);
-            }
-            continue;
-        }
-
-        if (w) {
-            mf->addNewAncestor(qore_method_private::get(*w)->getFunction(), path_access);
-        }
-        if (qc->priv->scl) {
-            stack.push({qc->priv->scl, 0, path_access});
-        }
-    }
+void BCList::addStaticAncestors(QoreMethod* m, AncestorAccessCache* cache) {
+    walk_method_ancestors<false>(this, m, cache, [](qore_class_private* qc, const char* name) {
+        return qc->findLocalCommittedStaticMethod(name);
+    });
 }
 
-void BCList::parseAddAncestors(QoreMethod* m) {
-    const char* name = m->getName();
-
-    //printd(5, "BCList::parseAddAncestors(%p %s) this: %p size: %d\n", m, name, this, size());
-
-    // the hierarchy is walked iteratively, depth first in the order of the base classes, as it can be as long as the
-    // code declares it (issue #6047)
-    HierarchyWalkStack<HierarchyWalkFrame> stack;
-    qcp_set_t visited;
-    stack.push({this, 0});
-    while (!stack.empty()) {
-        HierarchyWalkFrame& f = stack.back();
-        if (f.next == f.list->size()) {
-            stack.pop();
-            continue;
-        }
-        const BCNode& n = *(*f.list)[f.next++];
+// the hierarchy is walked iteratively, depth first in the order of the base classes, as it can be as long as the code
+// declares it (issue #6047); each ancestor is added once: a class reached through another path of a diamond hierarchy
+// has been added with its own ancestors already, at its first position (issue #6488), with the least restrictive
+// access of the paths to it (qore#6498, qore#7410)
+void BCList::parseAddAncestors(QoreMethod* m, AncestorAccessCache* cache) {
+    walk_method_ancestors<true>(this, m, cache, [](qore_class_private* qc, const char* name) {
         QORE_CLASS_HIERARCHY_STEP();
-        // if there was a parse error finding the base class, then skip
-        QoreClass* qc = n.sclass;
-        if (!qc) {
-            continue;
-        }
-        QORE_CLASS_HIERARCHY_WALK_STEP();
-        // each ancestor is visited once: a class reached through another path of a diamond hierarchy has been added
-        // with its own ancestors already, at its first position (issue #6488)
-        // the most restrictive access of the edges of the path to the class: the access of its method in the list
-        // (qore#6498)
-        ClassAccess path_access = f.access < n.access ? n.access : f.access;
-        const QoreMethod* w = qc->priv->parseFindLocalMethod(name);
-        if (!visited.insert(qc->priv).second) {
-            // a class reached again: its method has the least restrictive access of the paths to it (qore#6498)
-            if (w) {
-                qore_method_private::get(*m)->getFunction()->lowerAncestorAccess(
-                    qore_method_private::get(*w)->getFunction(), path_access);
-            }
-            continue;
-        }
-
-        //printd(5, "BCList::parseAddAncestors(%p %s) this: %p qc: %p w: %p\n", m, name, this, qc, w);
-
-        if (w) {
-            qore_method_private::get(*m)->getFunction()->addAncestor(qore_method_private::get(*w)->getFunction(),
-                path_access);
-        }
-
-        if (qc->priv->scl) {
-            stack.push({qc->priv->scl, 0, path_access});
-        }
-    }
+        return qc->parseFindLocalMethod(name);
+    });
 }
 
-void BCList::parseAddStaticAncestors(QoreMethod* m) {
-    const char* name = m->getName();
-    // the hierarchy is walked iteratively, as for parseAddAncestors()
-    HierarchyWalkStack<HierarchyWalkFrame> stack;
-    qcp_set_t visited;
-    stack.push({this, 0});
-    while (!stack.empty()) {
-        HierarchyWalkFrame& f = stack.back();
-        if (f.next == f.list->size()) {
-            stack.pop();
-            continue;
-        }
-        const BCNode& n = *(*f.list)[f.next++];
-        QoreClass* qc = n.sclass;
-        // qc may be 0 if there were a parse error with an unknown class earlier
-        if (!qc) {
-            continue;
-        }
-        QORE_CLASS_HIERARCHY_WALK_STEP();
-        // each ancestor is visited once, as in parseAddAncestors() (issue #6488)
-        // the most restrictive access of the edges of the path to the class: the access of its method in the list
-        // (qore#6498)
-        ClassAccess path_access = f.access < n.access ? n.access : f.access;
-        const QoreMethod* w = qc->priv->parseFindLocalStaticMethod(name);
-        if (!visited.insert(qc->priv).second) {
-            // as in parseAddAncestors() (qore#6498)
-            if (w) {
-                qore_method_private::get(*m)->getFunction()->lowerAncestorAccess(
-                    qore_method_private::get(*w)->getFunction(), path_access);
-            }
-            continue;
-        }
-
-        if (w) {
-            qore_method_private::get(*m)->getFunction()->addAncestor(qore_method_private::get(*w)->getFunction(),
-                path_access);
-        }
-
-        if (qc->priv->scl) {
-            stack.push({qc->priv->scl, 0, path_access});
-        }
-    }
+void BCList::parseAddStaticAncestors(QoreMethod* m, AncestorAccessCache* cache) {
+    walk_method_ancestors<true>(this, m, cache, [](qore_class_private* qc, const char* name) {
+        return qc->parseFindLocalStaticMethod(name);
+    });
 }
 
 void BCList::resolveCopy() {
@@ -6056,10 +6152,14 @@ MethodVariantBase* BCList::matchNonAbstractVariant(const std::string& name, Meth
         const BCNode& n = *(*f.list)[f.next++];
         const QoreClass* nqc = n.sclass;
         // nqc may be 0 if there were a parse error with an unknown class earlier
-        // also if the original abstract variant comes from the class being searched, then skip it
         // a class that a parent class inherits with private:internal access is not in the hierarchy of the class:
         // its variants do not implement the class's abstract variants (qore#7316)
-        if (!nqc || v->getClass() == nqc || (f.list != this && n.access >= Internal)) {
+        // the class that declares the abstract variant is searched as any other: once it has implemented the variant
+        // itself, its method has the implementation, and otherwise its abstract variant is passed over and its parent
+        // classes are searched, so that the variant found does not depend on which of the declarations with the same
+        // signature in the parent classes the class has kept, i.e. on the order of the parent classes or on whether
+        // a parent class was parsed in the same program (qore#7382)
+        if (!nqc || (f.list != this && n.access >= Internal)) {
             continue;
         }
         QORE_CLASS_HIERARCHY_WALK_STEP();
@@ -6104,9 +6204,8 @@ MethodVariantBase* BCList::runtimeMatchNonAbstractVariant(const std::string& nam
         const BCNode& n = *(*f.list)[f.next++];
         const QoreClass* nqc = n.sclass;
         // nqc may be nullptr if there were errors earlier
-        // also if the original abstract variant comes from the class being searched, then skip it
-        // as in matchNonAbstractVariant() (qore#7316)
-        if (!nqc || v->getClass() == nqc || (f.list != this && n.access >= Internal)) {
+        // as in matchNonAbstractVariant() (qore#7316, qore#7382)
+        if (!nqc || (f.list != this && n.access >= Internal)) {
             continue;
         }
         QORE_CLASS_HIERARCHY_WALK_STEP();
@@ -10274,7 +10373,13 @@ void collect_hierarchy_functions(const qore_class_private& qc, const std::string
         const QoreMethod* w = is_static ? pcp->parseFindLocalStaticMethod(name.c_str())
             : pcp->parseFindLocalMethod(name.c_str());
         if (w) {
-            out.push_back(INode(qore_method_private::get(*w)->getFunction(), i->access));
+            owner_set_t owners;
+            if (i->access == Internal) {
+                std::shared_ptr<InternalOwnerIndex> index = std::make_shared<InternalOwnerIndex>();
+                owners = make_owner_set(index);
+                owners->add(index->get(&qc));
+            }
+            out.push_back(INode(qore_method_private::get(*w)->getFunction(), i->access, owners));
         }
         collect_hierarchy_functions(*pcp, name, is_static, out, visited);
     }
@@ -10676,6 +10781,8 @@ void qore_class_private::parseUpdateAbstractAncestors(bool aot) {
     }
     // the subclasses build the lists of their methods again too
     abstract_method_created = true;
+    // the access of the ancestors is computed once for the lists of the methods (qore#7410)
+    AncestorAccessCache ancestor_access;
     for (auto& i : hm) {
         QoreMethod* m = i.second;
         MethodFunctionBase* f = qore_method_private::get(*m)->getFunction();
@@ -10684,7 +10791,7 @@ void qore_class_private::parseUpdateAbstractAncestors(bool aot) {
             continue;
         }
         f->clearAncestors();
-        scl->parseAddAncestors(m);
+        scl->parseAddAncestors(m, &ancestor_access);
     }
 }
 
@@ -10694,6 +10801,7 @@ void qore_class_private::runtimeUpdateAbstractAncestors() {
     }
     // as in parseUpdateAbstractAncestors()
     abstract_method_created = true;
+    AncestorAccessCache ancestor_access;
     for (auto& i : hm) {
         QoreMethod* m = i.second;
         // the special methods have no inheritance lists (insertBuiltinMethod())
@@ -10701,7 +10809,7 @@ void qore_class_private::runtimeUpdateAbstractAncestors() {
             continue;
         }
         qore_method_private::get(*m)->getFunction()->clearAncestors();
-        scl->addAncestors(m);
+        scl->addAncestors(m, &ancestor_access);
     }
 }
 
@@ -10716,6 +10824,11 @@ void qore_class_private::recheckBuiltinMethodHierarchy() {
 
     for (hm_method_t::iterator i = shm.begin(), e = shm.end(); i != e; ++i)
         scl->addNewStaticAncestors(i->second);
+}
+
+const qore_class_private* qore_class_private_get_new_copy(const qore_class_private* qc) {
+    assert(qc->new_copy);
+    return qore_class_private::get(*qc->new_copy);
 }
 
 void qore_class_private::resolveCopy() {
@@ -11910,6 +12023,18 @@ static void do_variant_sig(QoreString& csig, const std::string& name, const Meth
     csig.concat('(');
     csig.concat(v->getSignature()->getSignatureText());
     csig.concat(')');
+    // the declared return type is part of the signature, with namespace paths like the parameter types: code typed
+    // with a class of one Program calls the methods of an object of the same class of another Program and takes the
+    // return types of its own declarations (qore#7457); a return type that is not declared but implied by the parse
+    // options (nothing under PO_REQUIRE_TYPES or PO_REQUIRE_PROTOTYPES) is left out, as is that of a constructor,
+    // destructor or copy method, which declares none: the same declaration parsed with and without these options is
+    // the same class
+    const AbstractFunctionSignature* sig = v->getSignature();
+    const QoreTypeInfo* rti = sig->getReturnTypeInfo();
+    if (rti && !sig->returnTypeIsImplied() && name != "constructor" && name != "destructor" && name != "copy") {
+        csig.concat(" -> ");
+        csig.concat(QoreTypeInfo::getPath(rti));
+    }
     csig.concat('\n');
 }
 
@@ -11918,11 +12043,6 @@ void MethodFunctionBase::parseSignatures(QoreString& csig, const char* mod) cons
         const MethodVariantBase* v = METHVB_const(*i);
         do_variant_sig(csig, name, v, mod);
     }
-}
-
-void MethodFunctionBase::parseCommitMethod(QoreString& csig, const char* mod) {
-    parseSignatures(csig, mod);
-    parseCommitMethod();
 }
 
 void MethodFunctionBase::parseCommitMethod() {
@@ -13620,6 +13740,16 @@ static bool qore_ancestor_member_initialized(const qore_class_private* cls, cons
     return false;
 }
 
+int QoreMemberInfoBase::parseResolveDeclaredType() {
+    if (typeInfo || !parseTypeInfo) {
+        return 0;
+    }
+    int err = 0;
+    typeInfo = QoreParseTypeInfo::resolveAndDelete(parseTypeInfo, loc, err);
+    parseTypeInfo = nullptr;
+    return err;
+}
+
 int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
     if (init) {
         return 0;
@@ -14416,7 +14546,7 @@ bool MethodFunctionBase::hasInheritedPublicVariant() const {
     // overrides with the same signature, can be called from outside the class hierarchy: a private variant of the
     // same signature overrides it (qore#6062)
     for (IList::const_iterator i = ilist.begin() + 1, e = ilist.end(); i != e; ++i) {
-        if (i->access != Public) {
+        if (i->access() != Public) {
             continue;
         }
         const VList& ancestor_variants = static_cast<const MethodFunctionBase*>(i->func)->vlist;
