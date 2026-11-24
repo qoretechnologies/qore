@@ -1136,8 +1136,13 @@ string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
     relative path is a path in the current directory; the path is subject to
     @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM", which refuses it without opening the file, and to the
     filesystem policy of the code that runs, also when the time zone of the path was loaded already; the file is
-    opened at exactly this path without blocking and must be a regular file, and its time zone never changes the
-    time zone of a region name.  The @ref set-time-zone "%set-time-zone" parse directive accepts a path only in a
+    opened at exactly this path without blocking and must be a regular file, and the policy is checked again for the
+    file that the open reached, by its canonical path.  The time zone is named by that canonical path and is shared
+    only by loads of the same file with the same data, so it never changes the time zone of a region name or of
+    another file.  Time zones are never freed, so each %Program may load at most 256 new time zones from paths, of at
+    most 32 MiB of zoneinfo file data, and the process at most 16384, of at most 256 MiB; a load beyond that raises
+    \c TZINFO-ERROR, also in a %Program that is not sandboxed.  On Windows, where the file is not identified by its
+    handle, code that a sandbox governs cannot load a time zone from a path (\c ILLEGAL-FILESYSTEM-ACCESS).  The @ref set-time-zone "%set-time-zone" parse directive accepts a path only in a
     %Program whose file-system access is not restricted (no @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" and no
     sandbox manager), as it is processed while the %Program is parsed.
 

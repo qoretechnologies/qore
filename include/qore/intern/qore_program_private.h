@@ -1449,6 +1449,13 @@ public:
     */
     std::atomic<bool> any_sandbox_manager{false};
 
+    //! the number of time zones that the Program loaded from zoneinfo file paths (QoreTimeZoneManager::loadPath())
+    /** Changed only under the write lock of the time zone manager, which checks it against its per-Program quota
+    */
+    unsigned tz_path_zone_count = 0;
+    //! the size of the zoneinfo files of the time zones that the Program loaded from paths
+    size_t tz_path_zone_bytes = 0;
+
     //! true if \c sandbox_manager adds to the sandbox of the Program's callers instead of governing its code alone
     /** Set when code that a sandbox governs sets the manager with Program::setSandboxManager() (see
         setOwnSandboxManager()): the walk of the thread's sandbox stack visits the manager and goes on to the callers,
@@ -5394,7 +5401,7 @@ public:
                     "name or a UTC offset");
                 return nullptr;
             }
-            return QTZM.findLoadRegionFromPath(zone, xsink);
+            return QTZM.findLoadRegionFromPath(zone, xsink, pgm);
         }
         return QTZM.findLoadRegion(zone, xsink);
     }

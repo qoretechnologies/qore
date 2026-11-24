@@ -12,15 +12,22 @@ The whole file is read, up to `QoreZoneInfo::MaxFileSize` (1 MiB; real zoneinfo 
 parsed from memory (`QoreZoneInfo::init()`):
 
 - A path (`findLoadRegionFromPath()`; `findLoadRegionOrPath()` passes names starting with `/` or `.` from
-  `TimeZone::setRegion()` and `Program::setTimeZoneRegion()` to it) is made absolute with the current directory once,
-  checked against `PO_NO_FILESYSTEM` and the file-system policy of the code that runs
-  (`qore_qf_private::checkOpenAccess()`) before the cache is looked at (errors name a relative path as given), and
-  opened at exactly that path with `O_NONBLOCK` by `loadPath()`, which requires a regular file (`fstat()`) and
-  reads it without the lock. The zone is cached in `pathmap` by the device and inode of the file, so every spelling
-  of a path and every link to the file share one zone; at most `MaxPathZones` (4096) files are loaded, as zones are
-  never freed. The name of the zone drops the directory of the local time file if a canonical region name follows
-  (#3736); the name is for display and serialization only and never finds a file. On Windows the path is checked
-  the same way and the zone cached by the path as given (`processFile()`).
+  `TimeZone::setRegion()` and `Program::setTimeZoneRegion()` to it) is made absolute with the current directory once
+  and checked against `PO_NO_FILESYSTEM` and the file-system policy of the code that runs (`checkPathPolicy()`,
+  errors name the path as given) before anything else. `loadPath()` then, without the lock: opens exactly that path
+  with `O_NONBLOCK`, requires a regular file (`fstat()`), determines the canonical path of the open file
+  (`F_GETPATH` on macOS, `/proc/self/fd/N` on Linux, `realpath()` otherwise) and verifies that it names the open
+  file (`stat()` device and inode), checks the policy again for that path (the open can reach another file than the
+  checked path named), reads the file and computes the SHA-256 of its data. `pathmap` maps the canonical path to the
+  zone and digest; an entry is used only with the same digest, so a reused inode, another file or changed data never
+  gets another file's zone, and spellings and symbolic links of one file share a zone (hard links are separate
+  entries). A changed file gets a new zone; the old one is kept in `retired_path_zones`, as dates refer to it. New
+  zones are inserted under the write lock and count against the quota of the Program that loads them
+  (`qore_program_private::tz_path_zone_count`/`tz_path_zone_bytes`: 256 zones, 32 MiB of file data) and of the
+  process (16384 zones, 256 MiB). The zone is named by the canonical path (the directory of the local time file is
+  dropped from the name if a canonical region name follows, #3736). On Windows, where the file is not identified by
+  its handle, code that a sandbox governs cannot load a path; trusted code's paths are made absolute and cached by
+  that path in `processFile()` (at most 16384).
 - The `%set-time-zone` parse directive (`qore_program_private::findTimeZoneDirectiveZone()`) is processed while
   the Program is parsed, when the code that runs is the caller of the parse: a path is refused when the parsed
   Program has `PO_NO_FILESYSTEM` or any sandbox manager; a region goes to the region loader.

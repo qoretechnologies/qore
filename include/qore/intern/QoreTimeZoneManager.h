@@ -35,6 +35,7 @@
 
 #include <cinttypes>
 #include <cstddef>
+#include <array>
 #include <map>
 #include <memory>
 #include <string>
@@ -420,11 +421,25 @@ protected:
     tzmap_t tzmap;
 
 #ifndef _Q_WINDOWS
-    //! the key of a zone loaded from a path: the device and inode of its file
-    typedef std::pair<dev_t, ino_t> path_key_t;
-    typedef std::map<path_key_t, AbstractQoreZoneInfo*> pathmap_t;
-    //! zones loaded from paths, by their file
+    //! the SHA-256 digest of the data of a zoneinfo file
+    typedef std::array<unsigned char, 32> PathZoneDigest;
+    //! a zone loaded from a path and the digest of the data it was created from
+    struct PathZone {
+        AbstractQoreZoneInfo* zone;
+        PathZoneDigest digest;
+    };
+    typedef std::map<std::string, PathZone> pathmap_t;
+    //! zones loaded from paths, by the canonical path of their file; an entry is used only for the same data
     pathmap_t pathmap;
+    //! zones of files whose data changed; kept as dates refer to them
+    std::vector<AbstractQoreZoneInfo*> retired_path_zones;
+    //! the number of zones loaded from paths in the process
+    unsigned path_zone_count = 0;
+    //! the size of the files of the zones loaded from paths in the process
+    size_t path_zone_bytes = 0;
+#else
+    //! the number of zones loaded from paths in the process
+    unsigned path_zone_count = 0;
 #endif
 
     // standard (unlocked) zone offset map
@@ -458,15 +473,25 @@ protected:
     DLLLOCAL const AbstractQoreZoneInfo* loadRegion(const char* region, ExceptionSink* xsink);
 
     //! finds or loads the zoneinfo file at the given absolute path; the lock must not be held
-    /** The caller has checked the path against its restrictions; the file is opened at exactly this path without
-        blocking and must be a regular file; it is read without the lock and its zone is cached by the device and
-        inode of the file under the write lock, never by a region name
+    /** The caller has checked the path against its restrictions.  The file is opened at exactly this path without
+        blocking and must be a regular file; the canonical path of the open file is determined from its descriptor
+        (and verified to name it) and checked against the policy of the calling code, as the open can reach another
+        file than the checked path named.  The file is read without the lock; its zone is cached by the canonical
+        path and used for that path only with the same data (SHA-256 of the data), so a file at another path, a reused
+        inode or changed data never gets another file's zone.  A new zone counts against the quota of the Program
+        that loads it (MaxProgramPathZones files, MaxProgramPathZoneBytes bytes) and of the process (MaxPathZones,
+        MaxPathZoneBytes); the zone is named by the canonical path
 
         @param name the path as given, for error messages
         @param path the absolute path
+        @param charge the Program whose quota a new zone counts against, if any
         @param xsink an exception is raised here if the file cannot be loaded
     */
-    DLLLOCAL const AbstractQoreZoneInfo* loadPath(const char* name, const std::string& path, ExceptionSink* xsink);
+    DLLLOCAL const AbstractQoreZoneInfo* loadPath(const char* name, const std::string& path, QoreProgram* charge,
+            ExceptionSink* xsink);
+
+    //! checks the path against the file-system policy of the calling code; errors name the path as given
+    DLLLOCAL static int checkPathPolicy(const char* name, const std::string& path, ExceptionSink* xsink);
 #endif
 
 public:
@@ -478,7 +503,10 @@ public:
         }
 #ifndef _Q_WINDOWS
         for (auto& i : pathmap) {
-            delete i.second;
+            delete i.second.zone;
+        }
+        for (auto* i : retired_path_zones) {
+            delete i;
         }
 #endif
 
@@ -511,8 +539,14 @@ public:
         return localtzname.empty() ? nullptr : localtzname.c_str();
     }
 
-    //! the maximum number of zoneinfo files loaded from paths; their zones are never freed
-    static constexpr unsigned MaxPathZones = 4096;
+    //! the maximum number of zones loaded from paths by one Program; zones are never freed
+    static constexpr unsigned MaxProgramPathZones = 256;
+    //! the maximum size of the zoneinfo files of the zones loaded from paths by one Program
+    static constexpr size_t MaxProgramPathZoneBytes = 32 * 1024 * 1024;
+    //! the maximum number of zones loaded from paths in the process
+    static constexpr unsigned MaxPathZones = 16384;
+    //! the maximum size of the zoneinfo files of the zones loaded from paths in the process
+    static constexpr size_t MaxPathZoneBytes = 256 * 1024 * 1024;
 
     //! finds or loads a time zone region: a name in the zoneinfo database (ex: \c "Europe/Prague")
     /** For names that come from data (deserialized dates, imported files, database values, compiled literals) and for
@@ -551,17 +585,19 @@ public:
     //! finds or loads a time zone from a zoneinfo file given as a path
     /** A relative path is made absolute with the current directory; the absolute path is checked against
         \c PO_NO_FILESYSTEM and the file-system policy of the calling code (the runtime Program) before anything else,
-        also for a zone that is cached already; errors name the path as given.  The file is opened at exactly that
-        path without blocking, must be a regular file and is read without the lock; the zone is cached by the device
-        and inode of the file (at most MaxPathZones files), never by a region name.  On Windows the zone is cached by
-        the path as given, after the same checks.
+        also for a zone that is cached already; errors name the path as given; then the file is loaded with
+        loadPath(), never cached by a region name.  On Windows, where the file is not identified by its handle, code
+        that a sandbox governs cannot load a path, and a path that trusted code loads is cached by its absolute path
+        (at most MaxPathZones files).
 
         @param name the path
         @param xsink an exception is raised here if the path cannot be used or its file cannot be loaded
+        @param charge the Program whose quota a new zone counts against; the current Program if nullptr
 
         @return the zone or \c nullptr if an exception was raised
     */
-    DLLLOCAL const AbstractQoreZoneInfo* findLoadRegionFromPath(const char* name, ExceptionSink* xsink);
+    DLLLOCAL const AbstractQoreZoneInfo* findLoadRegionFromPath(const char* name, ExceptionSink* xsink,
+            QoreProgram* charge = nullptr);
 
     //! returns true if the name is a path: an absolute path or a name starting with \c "."
     DLLLOCAL static bool isPathName(const char* name);
