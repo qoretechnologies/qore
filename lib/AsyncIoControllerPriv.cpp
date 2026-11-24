@@ -8416,6 +8416,64 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
     // the events of each poll; kept from one iteration to the next, so that a poll does not allocate them
     std::vector<QoreEventInfo> poll_events;
 
+#if defined(__linux__) && defined(HAVE_IO_URING)
+    // delivers the io_uring file reads that completed to their HTTP/2 sessions, and marks the sockets of those
+    // sessions ready, so that their operations run in the next Phase 1 and send the data that was read: a session
+    // whose streams wait only for a read in flight asks for no other event (Http2Session::needsInputStreamPass()),
+    // so a completion delivered without this mark would leave the data unsent (qore#7435); called for the
+    // io_uring event of a poll and at the end of each iteration, which can take a completion that arrives after the
+    // poll returned
+    auto deliver_uring_completions = [&](QoreIoUring& uring) {
+        std::vector<QoreIoUring::CompletedRead> completions;
+        uring.processCompletions(completions);
+        if (completions.empty()) {
+            return;
+        }
+        // the descriptors are taken before the completions are delivered, as a delivery can end the session's
+        // connection
+        std::unordered_set<int> affected_fds;
+        for (auto& cr : completions) {
+            if (cr.session) {
+                int fd = cr.session->getSocketFd();
+                if (fd >= 0) {
+                    affected_fds.insert(fd);
+                }
+            }
+        }
+        for (auto& cr : completions) {
+            if (!cr.session) {
+                continue;
+            }
+            ExceptionSink uring_xsink;
+            // the data pointer is taken before the buffer is moved: cr.data points into it, and the order in which
+            // the arguments are evaluated is unspecified
+            const char* data = cr.data;
+            cr.session->handleAsyncReadCompletion(cr.stream_id, data, cr.length, cr.error, std::move(cr.buffer),
+                &uring_xsink);
+            if (uring_xsink) {
+                // logged and cleared: one stream's error does not end the loop
+                QoreStringValueHelper err(uring_xsink.getExceptionErr());
+                QoreStringValueHelper desc(uring_xsink.getExceptionDesc());
+                log(QORE_LOG_LEVEL_ERROR, "io_uring completion error (stream %d): %s: %s", cr.stream_id,
+                    *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
+                uring_xsink.clear();
+            }
+        }
+        for (int afd : affected_fds) {
+            // the sockets registered for the descriptor
+            t.loop->forEachRegistration(afd, [&](uint64_t key, int) {
+                if (key & ExtraRegKeyBit) {
+                    return;
+                }
+                auto hit = t.key_hashes.find(key);
+                if (hit != t.key_hashes.end()) {
+                    ready_socket_events[hit->second] |= QORE_EV_READ;
+                }
+            });
+        }
+    };
+#endif
+
     while (true) {
         // Process commands
         if (processCommands(t, xsink)) {
@@ -9769,40 +9827,15 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 } else if (poll_events[i].events & QORE_EV_IOURING) {
                     // io_uring completions — I/O thread only
                     QoreIoUring* uring = t.loop->getIoUring();
+#ifdef DEBUG
+                    // a test leaves the completions to the drain at the end of the iteration, as when they arrive
+                    // after the poll returned (qore#7435)
+                    if (qore_dbg_io_uring_completions_deferred()) {
+                        uring = nullptr;
+                    }
+#endif
                     if (uring) {
-                        std::vector<QoreIoUring::CompletedRead> completions;
-                        uring->processCompletions(completions);
-                        std::unordered_set<int> affected_fds;
-                        for (auto& cr : completions) {
-                            if (cr.session) {
-                                int fd = cr.session->getSocketFd();
-                                if (fd >= 0) {
-                                    affected_fds.insert(fd);
-                                }
-                            }
-                        }
-                        for (auto& cr : completions) {
-                            if (cr.session) {
-                                cr.session->handleAsyncReadCompletion(
-                                    cr.stream_id, cr.data, cr.length, cr.error,
-                                    std::move(cr.buffer), xsink);
-                                if (*xsink) {
-                                    xsink->clear();
-                                }
-                            }
-                        }
-                        for (int afd : affected_fds) {
-                            // the sockets registered for the descriptor
-                            t.loop->forEachRegistration(afd, [&](uint64_t key, int) {
-                                if (key & ExtraRegKeyBit) {
-                                    return;
-                                }
-                                auto hit = t.key_hashes.find(key);
-                                if (hit != t.key_hashes.end()) {
-                                    ready_socket_events[hit->second] |= QORE_EV_READ;
-                                }
-                            });
-                        }
+                        deliver_uring_completions(*uring);
                     }
 #endif
                 } else if (poll_events[i].fd >= 0) {
@@ -9973,29 +10006,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         // processCompletions() sees the CQE.  Cancel SQEs and expired-session CQEs
         // still fire the eventfd.  If we skip draining the eventfd, epoll_wait returns
         // immediately on every iteration, causing a busy loop.
-        QoreIoUring* uring = t.loop->getIoUring();
-        if (uring) {
-            std::vector<QoreIoUring::CompletedRead> completions;
-            uring->processCompletions(completions);
-            for (auto& c : completions) {
-                ExceptionSink uring_xsink;
-                // Save data pointer before moving buffer — c.data points into
-                // c.buffer and C++ does not guarantee argument evaluation order
-                const char* data = c.data;
-                c.session->handleAsyncReadCompletion(
-                    c.stream_id, data, c.length, c.error,
-                    std::move(c.buffer), &uring_xsink);
-                if (uring_xsink) {
-                    // Log and clear — don't let one stream's error kill the loop
-                    QoreStringValueHelper err(uring_xsink.getExceptionErr());
-                    QoreStringValueHelper desc(uring_xsink.getExceptionDesc());
-                    log(QORE_LOG_LEVEL_ERROR,
-                        "io_uring completion error (stream %d): %s: %s",
-                        c.stream_id, *err ? err->c_str() : "?",
-                        *desc ? desc->c_str() : "?");
-                    uring_xsink.clear();
-                }
-            }
+        if (QoreIoUring* uring = t.loop->getIoUring()) {
+            deliver_uring_completions(*uring);
         }
 #endif
     }
