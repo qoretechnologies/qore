@@ -2075,6 +2075,13 @@ private:
     DLLLOCAL QoreHashNode* getResolverPollInfo(ExceptionSink* xsink) const;
     DLLLOCAL int initializeResolved(ExceptionSink* xsink);
 
+    //! Creates the client session of a connection to the given addresses; the socket's lock must be held
+    /** @param enable_0rtt true to resume with a cached session ticket and early data (0-RTT)
+    */
+    DLLLOCAL std::shared_ptr<QuicSession> createSessionLocked(const struct sockaddr_storage& local,
+            socklen_t local_len, const struct sockaddr_storage& remote, socklen_t remote_len, bool enable_0rtt,
+            ExceptionSink* xsink);
+
     std::unique_ptr<QoreCaresAddrInfoResolver> resolver;
     SimpleRefHolder<QoreSSLCertificate> client_cert;
     SimpleRefHolder<QoreSSLPrivateKey> client_pk;
@@ -2143,10 +2150,8 @@ private:
     //! The grace period of @ref econnrefused_deadline_ns_, for the error message
     int64_t econnrefused_grace_ns_ = 0;
 
-#ifdef DEBUG
-    //! Number of datagrams this operation produced; see QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS
+    //! Number of datagrams this operation produced; see QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS (debug builds)
     int test_datagram_seq_ = 0;
-#endif
 
     //! Absolute ngtcp2 timestamp (ns) before which no UDP datagrams may be
     //! emitted; 0 means disabled.  Enforced in sendPendingPackets(): while

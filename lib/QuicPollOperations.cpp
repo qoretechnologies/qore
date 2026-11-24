@@ -520,6 +520,228 @@ int qore_quic_test_recv_dispatch(int fd, ExceptionSink* xsink) {
 // SocketQuicClientPollOperation
 // ============================================================
 
+//! Connects the UDP socket of a QUIC client connection to the remote address and prepares it for QUIC
+/** Connecting the socket makes getsockname() return the specific local interface address (not the wildcard), which
+    ngtcp2's path validation needs, and filters the incoming datagrams to those of the peer.
+
+    @param fd the bound UDP socket
+    @param remote the remote address
+    @param remote_len the size of the remote address
+    @param local receives the local address
+    @param local_len receives the size of the local address
+    @param xsink for exceptions
+
+    @return 0 for success, -1 if an exception was raised
+*/
+static int quic_client_connect_descriptor(int fd, const struct sockaddr_storage& remote, socklen_t remote_len,
+        struct sockaddr_storage& local, socklen_t& local_len, ExceptionSink* xsink) {
+    if (::connect(fd, reinterpret_cast<const struct sockaddr*>(&remote), remote_len) < 0) {
+        xsink->raiseErrnoException("QUIC-ERROR", errno, "UDP connect() failed");
+        return -1;
+    }
+
+    // Enlarge UDP receive buffer to prevent packet drops under burst traffic.
+    // QUIC sends many small datagrams; the kernel default (~208KB on Linux) is
+    // easily exhausted when the server sends large responses.  1MB matches
+    // common QUIC implementation defaults (e.g., Google, Cloudflare).
+    // SO_RCVBUFFORCE bypasses net.core.rmem_max (requires CAP_NET_ADMIN);
+    // fall back to SO_RCVBUF which is capped by rmem_max.
+    {
+        int rcvbuf = 1024 * 1024;
+#ifdef SO_RCVBUFFORCE
+        if (setsockopt(fd, SOL_SOCKET, SO_RCVBUFFORCE, &rcvbuf, sizeof(rcvbuf)) < 0)
+#endif
+        {
+            setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+        }
+    }
+
+    // Cache local address after connect — now contains the specific local
+    // interface address selected by the kernel (not wildcard)
+    local_len = sizeof(local);
+    if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local), &local_len) < 0) {
+        xsink->raiseErrnoException("QUIC-ERROR", errno, "getsockname() failed on QUIC client socket");
+        return -1;
+    }
+    if (enableQuicPktinfo(fd, local.ss_family) < 0) {
+        printd(0, "SocketQuicClientPollOperation: enableQuicPktinfo() failed: errno=%d (%s)\n",
+            errno, strerror(errno));
+    }
+    return 0;
+}
+
+//! Writes and sends the pending datagrams of a QUIC client session on its connected UDP socket
+/** The datagrams that are not sent are kept by the session and sent before those written after them
+    (QuicSession::sendPackets(), qore#7414).
+
+    @param session the session
+    @param fd the session's connected UDP socket
+    @param batch the packet batch to use
+    @param test_seq the number of datagrams the connection attempt produced (QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS)
+    @param next_expiry receives the next timer expiry
+    @param xsink for exceptions
+
+    @return 0 on success, SOCK_POLLOUT if the socket's buffer is full, -1 on error
+*/
+static int quic_client_send_packets(QuicSession& session, int fd, QuicPacketBatch& batch, int& test_seq,
+        ngtcp2_tstamp& next_expiry, ExceptionSink* xsink) {
+    // Coalesced timer check + packet generation under a single lock; the datagrams that earlier sends did not send
+    // come first (qore#7414)
+    batch.clear();
+    auto result = session.processTimerAndWrite(batch, xsink);
+    if (result.error) {
+        batch.clear();
+        return -1;
+    }
+    next_expiry = result.next_expiry;
+
+    if (batch.empty()) {
+        ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets EMPTY (no packets to send)\n");
+        return 0;
+    }
+
+#ifdef DEBUG
+    // Test hook: QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS=i[,j...] silently drops the listed datagrams of each
+    // connection attempt (0-based), modelling datagrams lost on the path.  Read on every call because tests
+    // scope the variable to one case in a shared test process.
+    if (QoreEnvironmentValue drop_holder("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS");
+            const char* drop = drop_holder.c_str()) {
+        std::set<int> dropped;
+        for (const char* p = drop; *p; ) {
+            char* end;
+            long v = strtol(p, &end, 10);
+            if (end == p) {
+                break;
+            }
+            dropped.insert(static_cast<int>(v));
+            p = *end == ',' ? end + 1 : end;
+        }
+        // the datagrams kept by an earlier send were already counted
+        QuicPacketBatch passed;
+        for (int i = 0; i < batch.size(); ++i) {
+            if (i < result.kept || !dropped.count(test_seq++)) {
+                passed.addPacket(batch.packetData(i), batch.packetLen(i));
+            }
+        }
+        batch.swap(passed);
+        if (batch.empty()) {
+            return 0;
+        }
+    }
+#else
+    (void)test_seq;
+#endif
+
+    // the datagrams not sent are kept by the session for its next write instead of being dropped: ngtcp2 counts them
+    // as sent, and would recover them only with its PTO timers, with exponential backoff (qore#7414)
+    int count = batch.size();
+    QuicSendResult rc = session.sendPackets(fd, batch, nullptr, 0);
+    ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets fd=%d count=%d result=%d\n",
+        fd, count, static_cast<int>(rc));
+    switch (rc) {
+        case QuicSendResult::Sent:
+            return 0;
+        case QuicSendResult::WaitWritable:
+            printd(1, "SocketQuicClientPollOperation::sendPendingPackets(): QUIC send blocked (%d packets)\n",
+                count);
+            return SOCK_POLLOUT;
+        case QuicSendResult::Backoff: {
+            // no event reports when the datagrams can be sent: the operation is woken at the time to send them
+            // again, and every state sends then
+            ngtcp2_tstamp retry_at = session.getSendRetryAt();
+            if (retry_at < next_expiry) {
+                next_expiry = retry_at;
+            }
+            return 0;
+        }
+        case QuicSendResult::Error:
+            break;
+    }
+    xsink->raiseErrnoException("QUIC-SEND-ERROR", errno, "sendto/sendmmsg() failed");
+    return -1;
+}
+
+//! Receives a datagram on the connected UDP socket of a QUIC client session and gives it to the session
+/** @param session the session
+    @param fd the session's connected UDP socket
+    @param buf the receive buffer
+    @param buflen the size of the receive buffer
+    @param local_addr the local address of the socket (see quic_client_connect_descriptor())
+    @param local_addrlen the size of the local address
+    @param refused set to true if an ICMP "port unreachable" was reported for the socket (ECONNREFUSED)
+    @param received set to true if a datagram was received and given to the session
+    @param xsink for exceptions
+
+    @return 0 if a datagram was received or discarded, SOCK_POLLIN if no datagram is waiting (also after an ICMP
+    refusal), -1 on error
+*/
+static int quic_client_recv_packet(QuicSession& session, int fd, uint8_t* buf, size_t buflen,
+        struct sockaddr_storage& local_addr, socklen_t local_addrlen, bool& refused, bool& received,
+        ExceptionSink* xsink) {
+    // Per-thread heap scratch to reduce stack pressure (see QuicCommon.h for rationale); not static
+    // thread_local objects, which would take their size from the stack of every thread (see QoreThreadScratch)
+    struct ClientRecvScratch {
+        struct sockaddr_storage src_addr;
+        alignas(alignof(struct cmsghdr)) uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
+    };
+    QoreThreadScratch<ClientRecvScratch> scratch;
+    if (!scratch) {
+        xsink->raiseErrnoException("QUIC-RECV-ERROR", ENOMEM, "cannot allocate the receive buffers of this thread");
+        return -1;
+    }
+    auto& src_addr = scratch->src_addr;
+    auto& cmsg_buf = scratch->cmsg_buf;
+    socklen_t src_addrlen = sizeof(src_addr);
+
+    size_t cmsg_len = sizeof(cmsg_buf);
+#ifdef DEBUG
+    qore_quic_test_note_receive_fd(fd);
+#endif
+    ssize_t nread = recvQuicPacket(fd, buf, buflen, 0, reinterpret_cast<struct sockaddr*>(&src_addr), &src_addrlen,
+        cmsg_buf, &cmsg_len);
+    if (nread < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return SOCK_POLLIN;  // need to wait for read
+        }
+        if (errno == EMSGSIZE) {
+            return 0;  // truncated datagram discarded; continue draining
+        }
+        if (errno == ECONNREFUSED) {
+            // ICMP "port unreachable" on a connected UDP socket; see econnrefused_deadline_ns_
+            refused = true;
+            return SOCK_POLLIN;  // need to wait for read
+        }
+        xsink->raiseErrnoException("QUIC-RECV-ERROR", errno, "recvmsg() failed");
+        return -1;
+    }
+
+    if (nread == 0) {
+        return 0;
+    }
+
+#ifdef DEBUG
+    qore_quic_test_note_received(fd, reinterpret_cast<const struct sockaddr*>(&src_addr), 1);
+#endif
+    // Use the cached getsockname() address directly — the client socket is
+    // connect()ed, so the local address is always local_addr.  Do NOT call
+    // extractPktinfoAddr(): on macOS, IP_RECVDSTADDR on connected UDP sockets
+    // returns 0.0.0.0 instead of the actual bound address, causing ngtcp2 path
+    // validation to fail with "ignore packet from unknown path".
+    ngtcp2_path path;
+    path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&local_addr);
+    path.local.addrlen = local_addrlen;
+    path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&src_addr);
+    path.remote.addrlen = src_addrlen;
+
+    printd(5, "SocketQuicClientPollOperation::recvAndProcessPacket() received %d bytes\n", (int)nread);
+    received = true;
+    session.readPacket(buf, static_cast<size_t>(nread), path, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    return 0;
+}
+
 SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     ExceptionSink* xsink, QoreSocketObject* sock,
     const char* host, uint16_t port, int family,
@@ -632,13 +854,8 @@ int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
         return -1;
     }
 
-    // Connect UDP socket to remote so getsockname() returns the specific
-    // local interface address (not wildcard). Required for correct ngtcp2
-    // path validation. Connected sockets also filter incoming packets to
-    // only those from the peer, which is desirable for QUIC clients.
     int fd = qore_socket_ops(sock->priv->socket).getDescriptor();
-    if (::connect(fd, reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_) < 0) {
-        xsink->raiseErrnoException("QUIC-ERROR", errno, "UDP connect() failed");
+    if (quic_client_connect_descriptor(fd, remote_addr_, remote_addrlen_, local_addr_, local_addrlen_, xsink)) {
         return -1;
     }
 
@@ -647,34 +864,6 @@ int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
         std::shared_ptr<QoreConnectionDestinations> d = std::make_shared<QoreConnectionDestinations>();
         d->add(host.c_str(), reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_, QSEC_NET_UDP);
         sock->priv->socket->priv->setConnectedDestinations(std::move(d));
-    }
-
-    // Enlarge UDP receive buffer to prevent packet drops under burst traffic.
-    // QUIC sends many small datagrams; the kernel default (~208KB on Linux) is
-    // easily exhausted when the server sends large responses.  1MB matches
-    // common QUIC implementation defaults (e.g., Google, Cloudflare).
-    // SO_RCVBUFFORCE bypasses net.core.rmem_max (requires CAP_NET_ADMIN);
-    // fall back to SO_RCVBUF which is capped by rmem_max.
-    {
-        int rcvbuf = 1024 * 1024;
-#ifdef SO_RCVBUFFORCE
-        if (setsockopt(fd, SOL_SOCKET, SO_RCVBUFFORCE, &rcvbuf, sizeof(rcvbuf)) < 0)
-#endif
-        {
-            setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
-        }
-    }
-
-    // Cache local address after connect — now contains the specific local
-    // interface address selected by the kernel (not wildcard)
-    local_addrlen_ = sizeof(local_addr_);
-    if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local_addr_), &local_addrlen_) < 0) {
-        xsink->raiseErrnoException("QUIC-ERROR", errno, "getsockname() failed on QUIC client socket");
-        return -1;
-    }
-    if (enableQuicPktinfo(fd, local_addr_.ss_family) < 0) {
-        printd(0, "SocketQuicClientPollOperation: enableQuicPktinfo() failed: errno=%d (%s)\n",
-            errno, strerror(errno));
     }
 
     // Set non-blocking guard flag on QoreSocketObject
@@ -692,16 +881,8 @@ int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
         return -1;
     }
 
-    // Create QUIC session with actual socket addresses; pass through the
-    // socket's ssl_verify_mode so SSL_CTX_set_verify() enforces verification;
-    // enable 0-RTT for reconnections with cached session tickets.
-    // A credential supplied for this handshake never becomes a credential on the reusable socket.
-    setSession(QuicSession::createClient(sock->priv->socket->priv, xsink, host.c_str(), port_,
-        reinterpret_cast<const struct sockaddr*>(&local_addr_), local_addrlen_,
-        reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_,
-        sock->priv->socket->priv->ssl_verify_mode,
-        /*enable_0rtt=*/true,
-        client_cert ? *client_cert : sock->priv->cert, client_pk ? *client_pk : sock->priv->pk));
+    setSession(createSessionLocked(local_addr_, local_addrlen_, remote_addr_, remote_addrlen_, /*enable_0rtt=*/true,
+        xsink));
     if (*xsink || !quic_session) {
         sock->priv->clearNonBlock();
         set_non_block = false;
@@ -710,11 +891,6 @@ int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
 
     // Store the session on qore_socket_private for access via Socket QPP methods
     sock->priv->socket->priv->addQuicSession(quic_session);
-
-    // a request that the peer does not answer at all ends at the connect timeout, not at the idle timeout
-    // (qore#6930)
-    quic_session->setPeerResponseTimeout(handshake_timeout_ns_ > 0 ? (uint64_t)handshake_timeout_ns_
-        : QuicSession::QUIC_DEFAULT_PEER_RESPONSE_TIMEOUT_NS);
 
     // Record the absolute handshake deadline (if a connect_timeout was supplied).
     // Without this, a stalled QUIC handshake over UDP has no transport-level
@@ -726,6 +902,29 @@ int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
 
     qcs_state = QCS::HANDSHAKE_SEND;
     return 0;
+}
+
+std::shared_ptr<QuicSession> SocketQuicClientPollOperation::createSessionLocked(const struct sockaddr_storage& local,
+        socklen_t local_len, const struct sockaddr_storage& remote, socklen_t remote_len, bool enable_0rtt,
+        ExceptionSink* xsink) {
+    // Create QUIC session with actual socket addresses; pass through the
+    // socket's ssl_verify_mode so SSL_CTX_set_verify() enforces verification;
+    // enable 0-RTT for reconnections with cached session tickets.
+    // A credential supplied for this handshake never becomes a credential on the reusable socket.
+    std::shared_ptr<QuicSession> session = QuicSession::createClient(sock->priv->socket->priv, xsink, host.c_str(),
+        port_, reinterpret_cast<const struct sockaddr*>(&local), local_len,
+        reinterpret_cast<const struct sockaddr*>(&remote), remote_len,
+        sock->priv->socket->priv->ssl_verify_mode,
+        enable_0rtt,
+        client_cert ? *client_cert : sock->priv->cert, client_pk ? *client_pk : sock->priv->pk);
+    if (*xsink || !session) {
+        return nullptr;
+    }
+    // a request that the peer does not answer at all ends at the connect timeout, not at the idle timeout
+    // (qore#6930)
+    session->setPeerResponseTimeout(handshake_timeout_ns_ > 0 ? (uint64_t)handshake_timeout_ns_
+        : QuicSession::QUIC_DEFAULT_PEER_RESPONSE_TIMEOUT_NS);
+    return session;
 }
 
 const SocketResolvedAddrInfo& SocketQuicClientPollOperation::selectAddress(
@@ -877,167 +1076,40 @@ int SocketQuicClientPollOperation::sendPendingPackets(
         not_before_ns_ = 0;
     }
 
-    // Coalesced timer check + packet generation under a single lock; the datagrams that earlier sends did not send
-    // come first (qore#7414)
-    pkt_batch_.clear();
-    auto result = quic_session->processTimerAndWrite(pkt_batch_, xsink);
-    if (result.error) {
-        pkt_batch_.clear();
-        return -1;
-    }
-    next_expiry = result.next_expiry;
-
-    if (pkt_batch_.empty()) {
-        ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets EMPTY (no packets to send)\n");
-        return 0;
-    }
-
-#ifdef DEBUG
-    // Test hook: QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS=i[,j...] silently drops the listed datagrams of each
-    // connection attempt (0-based), modelling datagrams lost on the path.  Read on every call because tests
-    // scope the variable to one case in a shared test process.
-    if (QoreEnvironmentValue drop_holder("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS");
-            const char* drop = drop_holder.c_str()) {
-        std::set<int> dropped;
-        for (const char* p = drop; *p; ) {
-            char* end;
-            long v = strtol(p, &end, 10);
-            if (end == p) {
-                break;
-            }
-            dropped.insert(static_cast<int>(v));
-            p = *end == ',' ? end + 1 : end;
-        }
-        // the datagrams kept by an earlier send were already counted
-        QuicPacketBatch passed;
-        for (int i = 0; i < pkt_batch_.size(); ++i) {
-            if (i < result.kept || !dropped.count(test_datagram_seq_++)) {
-                passed.addPacket(pkt_batch_.packetData(i), pkt_batch_.packetLen(i));
-            }
-        }
-        pkt_batch_.swap(passed);
-        if (pkt_batch_.empty()) {
-            return 0;
-        }
-    }
-#endif
-
-    int fd = qore_socket_ops(sock->priv->socket).getDescriptor();
-
-    // the datagrams not sent are kept by the session for its next write instead of being dropped: ngtcp2 counts them
-    // as sent, and would recover them only with its PTO timers, with exponential backoff (qore#7414)
-    int count = pkt_batch_.size();
-    QuicSendResult rc = quic_session->sendPackets(fd, pkt_batch_, nullptr, 0);
-    ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets fd=%d count=%d result=%d\n",
-        fd, count, static_cast<int>(rc));
-    switch (rc) {
-        case QuicSendResult::Sent:
-            return 0;
-        case QuicSendResult::WaitWritable:
-            printd(1, "SocketQuicClientPollOperation::sendPendingPackets(): QUIC send blocked (%d packets)\n",
-                count);
-            return SOCK_POLLOUT;
-        case QuicSendResult::Backoff: {
-            // no event reports when the datagrams can be sent: the operation is woken at the time to send them
-            // again, and every state sends then
-            ngtcp2_tstamp retry_at = quic_session->getSendRetryAt();
-            if (retry_at < next_expiry) {
-                next_expiry = retry_at;
-            }
-            return 0;
-        }
-        case QuicSendResult::Error:
-            break;
-    }
-    xsink->raiseErrnoException("QUIC-SEND-ERROR", errno, "sendto/sendmmsg() failed");
-    return -1;
+    return quic_client_send_packets(*quic_session, qore_socket_ops(sock->priv->socket).getDescriptor(), pkt_batch_,
+        test_datagram_seq_, next_expiry, xsink);
 }
 
 int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
-    // Per-thread heap scratch to reduce stack pressure (see QuicCommon.h for rationale); not static
-    // thread_local objects, which would take their size from the stack of every thread (see QoreThreadScratch)
-    struct ClientRecvScratch {
-        struct sockaddr_storage src_addr;
-        alignas(alignof(struct cmsghdr)) uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
-    };
-    QoreThreadScratch<ClientRecvScratch> scratch;
-    if (!scratch) {
-        xsink->raiseErrnoException("QUIC-RECV-ERROR", ENOMEM, "cannot allocate the receive buffers of this thread");
-        return -1;
-    }
-    auto& src_addr = scratch->src_addr;
-    auto& cmsg_buf = scratch->cmsg_buf;
-    socklen_t src_addrlen = sizeof(src_addr);
-
-    int fd = qore_socket_ops(sock->priv->socket).getDescriptor();
-    size_t cmsg_len = sizeof(cmsg_buf);
-#ifdef DEBUG
-    qore_quic_test_note_receive_fd(fd);
-#endif
-    ssize_t nread = recvQuicPacket(fd, recv_buf_, sizeof(recv_buf_), 0,
-                                    reinterpret_cast<struct sockaddr*>(&src_addr), &src_addrlen,
-                                    cmsg_buf, &cmsg_len);
-    if (nread < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            return SOCK_POLLIN;  // need to wait for read
+    bool refused = false;
+    bool received = false;
+    int rc = quic_client_recv_packet(*quic_session, qore_socket_ops(sock->priv->socket).getDescriptor(), recv_buf_,
+        sizeof(recv_buf_), local_addr_, local_addrlen_, refused, received, xsink);
+    if (refused) {
+        // ICMP "port unreachable" on a connected UDP socket.  Linux
+        // rate-limits ICMP unreachable messages (~1/sec/peer), so a closed
+        // UDP port produces exactly one ECONNREFUSED on recv even though
+        // every retransmit triggers a fresh ICMP — counting consecutive
+        // refusals therefore can't distinguish a permanently closed port
+        // from a momentary bind race.  Instead, on the first refusal
+        // arm a short grace deadline; if the handshake hasn't progressed
+        // by then, continuePoll() fails the op with QUIC-CONNECT-REFUSED.
+        // A successful recv (handshake response from a peer that recovered)
+        // disarms the deadline.  Without this, a closed peer port (e.g.,
+        // Alt-Svc h3=":1" with nothing listening) burns the entire
+        // connect_timeout retransmitting Initials that will never be
+        // answered.
+        if (econnrefused_deadline_ns_ == 0
+            && (qcs_state == QCS::HANDSHAKE_SEND
+                || qcs_state == QCS::HANDSHAKE_RECV)) {
+            econnrefused_grace_ns_ = quic_econnrefused_grace_ns();
+            econnrefused_deadline_ns_ = QuicSession::timestamp() + econnrefused_grace_ns_;
         }
-        if (errno == EMSGSIZE) {
-            return 0;  // truncated datagram discarded; continue draining
-        }
-        if (errno == ECONNREFUSED) {
-            // ICMP "port unreachable" on a connected UDP socket.  Linux
-            // rate-limits ICMP unreachable messages (~1/sec/peer), so a closed
-            // UDP port produces exactly one ECONNREFUSED on recv even though
-            // every retransmit triggers a fresh ICMP — counting consecutive
-            // refusals therefore can't distinguish a permanently closed port
-            // from a momentary bind race.  Instead, on the first refusal
-            // arm a short grace deadline; if the handshake hasn't progressed
-            // by then, continuePoll() fails the op with QUIC-CONNECT-REFUSED.
-            // A successful recv (handshake response from a peer that recovered)
-            // disarms the deadline.  Without this, a closed peer port (e.g.,
-            // Alt-Svc h3=":1" with nothing listening) burns the entire
-            // connect_timeout retransmitting Initials that will never be
-            // answered.
-            if (econnrefused_deadline_ns_ == 0
-                && (qcs_state == QCS::HANDSHAKE_SEND
-                    || qcs_state == QCS::HANDSHAKE_RECV)) {
-                econnrefused_grace_ns_ = quic_econnrefused_grace_ns();
-                econnrefused_deadline_ns_ = QuicSession::timestamp() + econnrefused_grace_ns_;
-            }
-            return SOCK_POLLIN;  // need to wait for read
-        }
-        xsink->raiseErrnoException("QUIC-RECV-ERROR", errno, "recvmsg() failed");
-        return -1;
+    } else if (received) {
+        // Successful recv: peer is responsive — disarm the unreachable deadline.
+        econnrefused_deadline_ns_ = 0;
     }
-
-    if (nread == 0) {
-        return 0;
-    }
-
-    // Successful recv: peer is responsive — disarm the unreachable deadline.
-    econnrefused_deadline_ns_ = 0;
-
-#ifdef DEBUG
-    qore_quic_test_note_received(fd, reinterpret_cast<const struct sockaddr*>(&src_addr), 1);
-#endif
-    // Use the cached getsockname() address directly — the client socket is
-    // connect()ed, so the local address is always local_addr_.  Do NOT call
-    // extractPktinfoAddr(): on macOS, IP_RECVDSTADDR on connected UDP sockets
-    // returns 0.0.0.0 instead of the actual bound address, causing ngtcp2 path
-    // validation to fail with "ignore packet from unknown path".
-    ngtcp2_path path;
-    path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&local_addr_);
-    path.local.addrlen = local_addrlen_;
-    path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&src_addr);
-    path.remote.addrlen = src_addrlen;
-
-    printd(5, "SocketQuicClientPollOperation::recvAndProcessPacket() received %d bytes\n", (int)nread);
-    quic_session->readPacket(recv_buf_, static_cast<size_t>(nread), path, xsink);
-    if (*xsink) {
-        return -1;
-    }
-
-    return 0;
+    return rc;
 }
 
 QoreHashNode* SocketQuicClientPollOperation::trySetupEarlyHttp3(ExceptionSink* xsink) {

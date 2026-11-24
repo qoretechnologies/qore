@@ -53,13 +53,6 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
-// Happy-eyeballs Connection Attempt Delay (RFC 8305 §8).  250ms is the
-// RFC-recommended default; the secondary address-family attempt holds
-// its first packet until this many nanoseconds after the primary's
-// submission, giving the preferred family a head start on the handshake
-// without blocking fallback when the preferred path is a black hole.
-static constexpr int64_t HE_CONNECTION_ATTEMPT_DELAY_NS = 250'000'000LL;
-
 // QPP-generated symbols — forward-declared for the single-compilation-unit
 extern QoreClass* QC_HTTP3CLIENTPOLLOPERATIONBASE;
 extern qore_classid_t CID_HTTP3CLIENTPOLLOPERATIONBASE;
@@ -515,7 +508,7 @@ int Http3ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     // Resolve all candidate address families per RFC 8305.  For a typical
     // dual-stack hostname this returns {AF_INET6, AF_INET} — two parallel
     // QUIC handshake attempts, the secondary staggered by
-    // HE_CONNECTION_ATTEMPT_DELAY_NS.  For literal addresses or single-
+    // QUIC_HE_CONNECTION_ATTEMPT_DELAY_NS.  For literal addresses or single-
     // family hosts, exactly one attempt is built and behavior matches the
     // pre-HE single-attempt path.
     std::vector<int> families = resolveCandidateFamilies(target_host.c_str());
@@ -539,9 +532,9 @@ int Http3ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
         built_indices.push_back(idx);
         // Subsequent attempts get staggered per RFC 8305 §8.
         if (not_before == 0) {
-            not_before = QuicSession::timestamp() + HE_CONNECTION_ATTEMPT_DELAY_NS;
+            not_before = QuicSession::timestamp() + QUIC_HE_CONNECTION_ATTEMPT_DELAY_NS;
         } else {
-            not_before += HE_CONNECTION_ATTEMPT_DELAY_NS;
+            not_before += QUIC_HE_CONNECTION_ATTEMPT_DELAY_NS;
         }
     }
     if (built_indices.empty()) {
@@ -727,17 +720,6 @@ void Http3ClientConnection::onInnerHandshakeReady(Http3ClientPollOperationPriv* 
     onConnectionReady();
 }
 
-//! Returns true if a handshake error means that the attempt never reached a server
-/** A send error is one only before the QUIC handshake completed: raised while the HTTP/3 layer is set up after it,
-    the server was reached (issue #5944)
-*/
-static bool is_unreached_error(const char* err, bool handshake_complete) {
-    if (!strcmp(err, "QUIC-SEND-ERROR")) {
-        return !handshake_complete;
-    }
-    return !strcmp(err, "QUIC-CONNECT-REFUSED") || !strcmp(err, "QUIC-HANDSHAKE-TIMEOUT");
-}
-
 void Http3ClientConnection::onInnerHandshakeFailed(Http3ClientPollOperationPriv* inner,
         const char* err, const char* desc) {
     std::unique_lock<std::mutex> lk(attempts_mu_);
@@ -747,7 +729,7 @@ void Http3ClientConnection::onInnerHandshakeFailed(Http3ClientPollOperationPriv*
     // because its certificate was rejected, explains the failure, while an attempt to another address of the host
     // that never reached a server (such as an IPv6 address that the server does not listen on) does not
     const char* new_err = err ? err : "HTTP3-CONNECT-ERROR";
-    bool new_unreached = is_unreached_error(new_err, inner && inner->isHandshakeComplete());
+    bool new_unreached = quic_is_unreached_error(new_err, inner && inner->isHandshakeComplete());
     if (last_err_.empty() || !new_unreached || last_err_unreached_) {
         last_err_ = new_err;
         last_desc_ = desc ? desc : "QUIC handshake failed";
