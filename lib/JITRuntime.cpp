@@ -13539,6 +13539,21 @@ static QORE_INTERN_NOINLINE uint64_t qore_rt_exec_body_in_call_program_context(Q
     return exec_fn(xsink, invalidated);
 }
 
+//! Runs the body of a function again in the AST interpreter after native code or the IR interpreter requested it (a
+//! guard failure, an invalidation): with the callee's call Program context when the call entered another Program, as
+//! the body ran (qore#7394)
+/** Out of line, so that the frames of the calls within one Program hold neither the helper nor its code; six
+    arguments; the helper restores the caller's call Program context on every exit
+*/
+static QORE_INTERN_NOINLINE QoreValue qore_rt_exec_deopt_body(StatementBlock* stmts, ExceptionSink* xsink,
+        bool body_call_ctx, QoreProgram* exec_pgm, QoreProgram* caller_pgm, void* thread_data_ptr) {
+    std::optional<QoreFunctionCallProgramContextHelper> call_ctx;
+    if (body_call_ctx) {
+        call_ctx.emplace(exec_pgm, caller_pgm, thread_data_ptr);
+    }
+    return stmts->exec(xsink);
+}
+
 #if defined(DEBUG) && !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT)
 //! forces the AST retry of the bodies of the fast calls of the thread (debug builds only, for tests: qore#7394)
 static thread_local bool qore_dbg_jit_force_deopt_flag = false;
@@ -13685,7 +13700,11 @@ static void execJITWithDeopt(std::optional<QoreJITStackLocation>& frame,
                 // so TLS returnTypeInfo may still hold the *caller*'s return type here.
                 const QoreTypeInfo* old_rti = saveReturnTypeInfo(
                     qore_rt_get_effective_return_type(uvb->getUserSignature(), receiver_type_info));
-                val = stmts->exec(xsink);
+                // the body of a plain function that the call runs in another Program runs again with that Program's
+                // call Program context, as it ran (qore#7394)
+                val = __builtin_expect(body_call_ctx, 0)
+                    ? qore_rt_exec_deopt_body(stmts, xsink, body_call_ctx, exec_pgm, caller_pgm, body_call_ctx_td)
+                    : stmts->exec(xsink);
                 saveReturnTypeInfo(old_rti);
             }
             if (skip_body_locals) {
