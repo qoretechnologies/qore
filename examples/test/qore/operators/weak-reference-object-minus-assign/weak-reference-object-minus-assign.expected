@@ -1,0 +1,25 @@
+auto -= b: o.b null aw.a 1
+object -= c: o.c null keys ["a", "b", "c", "w"]
+still weak: w.a 11
+-= list: o2 [null, null, 3] rv is o2 True
+undeclared: keys ["y"]
+private: PRIVATE-MEMBER
+private kept: 4
+own private removed: null
+gate class: g.a null
+member: o4.a null
+closure: o4.b null
+global: o4.c null
+deleted: OBJECT-ALREADY-DELETED
+plain: o6 [null, null, null]
+cycle strong: "peer" holder null
+cycle weak: "peer" holder null
+-= NOTHING: rv is o True
+-= hash: rv is o True
+released: null
+released -= hash: null
+released -= key: OBJECT-ALREADY-DELETED
+Releaser destructor: releasing gl
+L destructor
+last reference: done, gl null
+end

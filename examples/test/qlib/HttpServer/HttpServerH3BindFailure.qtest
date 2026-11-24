@@ -1,0 +1,262 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - binds of the paired QUIC/UDP listener of an HTTP/3 listener and their system errors
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerH3BindFailureTest
+
+#! A server whose paired QUIC listeners fail to bind a given number of times (qore#7420)
+class FailingQuicServer inherits HttpServer {
+    public {
+        #! the number of binds of paired QUIC listeners that fail before they succeed
+        int fails;
+        #! the system error number of the failures
+        *int err_no;
+        #! the ports of the QUIC binds tried
+        list<int> ports = ();
+    }
+
+    constructor(hash<HttpServerOptionInfo> opts, int fails, *int err_no = EADDRINUSE) : HttpServer(opts) {
+        self.fails = fails;
+        self.err_no = err_no;
+    }
+
+    hash<auto> addQuicListener(hash<HttpListenerOptionInfo> opts, int port = 0) {
+        push ports, port;
+        if (fails > 0) {
+            --fails;
+            # the error of a bind, with its system error number as a bind gives it
+            throw "SOCKET-BIND-ERROR", sprintf("forced failure of the bind on UDP port %d", port), err_no;
+        }
+        return HttpServer::addQuicListener(opts, port);
+    }
+}
+
+#! Records the log messages of a server
+class LogRecorder inherits LoggerAppenderWithLayout {
+    public {
+        list<string> msgs = ();
+    }
+
+    private {
+        Mutex lck();
+    }
+
+    constructor() : LoggerAppenderWithLayout("recorder", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            AutoLock al(lck);
+            push msgs, params;
+        }
+    }
+
+    list<string> get(string rx) {
+        AutoLock al(lck);
+        return select msgs, regex($1, rx);
+    }
+}
+
+class HttpServerH3BindFailureTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerH3BindFailure", "1.0") {
+        addTestCase("a random-port listener whose QUIC binds all fail is not added", \allFailTest());
+        addTestCase("a random-port listener is created again until its QUIC bind succeeds", \retryTest());
+        addTestCase("a failed listener leaves the count of running listeners unchanged", \runningCountTest());
+        addTestCase("a random-port bind that fails with another error is not retried", \otherErrorTest());
+        addTestCase("an explicit-port listener whose QUIC bind fails is not added", \explicitPortTest());
+        addTestCase("the failure of a real bind has its system error number", \realBindErrnoTest());
+        set_return_value(main());
+    }
+
+    #! Returns the options of an HTTP/3 listener on localhost on \a service
+    private hash<HttpListenerOptionInfo> h3Options(softstring service = "0") {
+        return <HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": service,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": True,
+        };
+    }
+
+    #! Returns a server whose QUIC binds fail \a fails times with \a err_no, and its log recorder
+    private hash<auto> getServer(int fails, *int err_no = EADDRINUSE) {
+        LogRecorder rec();
+        Logger logger("h3-bind-failure", LoggerLevel::getLevelInfo());
+        logger.addAppender(rec);
+        FailingQuicServer srv(<HttpServerOptionInfo>{"logger": logger}, fails, err_no);
+        return {"srv": srv, "rec": rec};
+    }
+
+    #! Adds a listener on an explicit \a port, which was free a moment ago; another program can take it before the
+    #! listener binds it: then NOTHING is returned (the TCP bind failed) and the caller tries another port
+    private *hash<ExceptionInfo> addOnPort(HttpServer srv, hash<HttpListenerOptionInfo> opts) {
+        try {
+            srv.addListener(opts);
+            assertTrue(False, "the listener was added");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTPLISTENER-BIND-ERROR" || ex.err == "SOCKET-BIND-ERROR") {
+                return;
+            }
+            return ex;
+        }
+    }
+
+    allFailTest() {
+        hash<auto> s = getServer(100);
+        FailingQuicServer srv = s.srv;
+        on_exit delete srv;
+        LogRecorder rec = s.rec;
+
+        hash<ExceptionInfo> ex;
+        try {
+            # all-interfaces: none; h3Options() listens on "node": "localhost" (the scanner does not follow the helper)
+            srv.addListener(h3Options());
+            assertTrue(False, "the listener was added");
+        } catch (hash<ExceptionInfo> ex0) {
+            ex = ex0;
+        }
+        assertEq("HTTPSERVER-H3-BIND-ERROR", ex.err);
+        assertRegex("in 10 attempt", ex.desc);
+        # every attempt was a listener of its own on a fresh port, and its failure is given with its errno
+        assertEq(10, srv.ports.size(), "10 attempts");
+        assertEq(10, ex.arg.attempts.size());
+        for (int i = 0; i < 10; ++i) {
+            assertRegex(sprintf("^attempt %d/10 on port %d: SOCKET-BIND-ERROR: .* \\(errno %d\\)$", i + 1,
+                srv.ports[i], EADDRINUSE), ex.arg.attempts[i]);
+        }
+        assertEq(9, rec.get("retrying with a fresh random port").size(), "each retry is logged");
+        assertEq(1, rec.get("ERROR: failed to bind the paired QUIC listener").size(), "the failure is logged");
+        # no listener is left: neither the TCP listener of an attempt nor anything paired with it
+        assertEq({}, srv.getListeners(), "no listener was kept");
+        assertEq(0, srv.getRunningListenerCount(), "no listener is running");
+    }
+
+    runningCountTest() {
+        hash<auto> s = getServer(100);
+        FailingQuicServer srv = s.srv;
+        on_exit delete srv;
+
+        # a listener that runs: plain HTTP on a random port
+        srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
+        assertEq(1, srv.getRunningListenerCount());
+        # all-interfaces: none; h3Options() listens on "node": "localhost" (the scanner does not follow the helper)
+        assertThrows("HTTPSERVER-H3-BIND-ERROR", \srv.addListener(), h3Options());
+        assertEq(10, srv.ports.size(), "10 attempts");
+        # the failed attempts took away nothing of the count of the listener that runs, so that stop() waits for it
+        assertEq(1, srv.getRunningListenerCount(), "the count of running listeners is unchanged");
+        assertEq(1, srv.getListeners().size());
+        srv.stop();
+        assertEq(0, srv.getRunningListenerCount());
+    }
+
+    otherErrorTest() {
+        # an error that a fresh port does not change, such as an address family that the system does not support
+        hash<auto> s = getServer(100, EAFNOSUPPORT);
+        FailingQuicServer srv = s.srv;
+        on_exit delete srv;
+        LogRecorder rec = s.rec;
+
+        hash<ExceptionInfo> ex;
+        try {
+            # all-interfaces: none; h3Options() listens on "node": "localhost" (the scanner does not follow the helper)
+            srv.addListener(h3Options());
+            assertTrue(False, "the listener was added");
+        } catch (hash<ExceptionInfo> ex0) {
+            ex = ex0;
+        }
+        assertEq("HTTPSERVER-H3-BIND-ERROR", ex.err);
+        assertRegex("in 1 attempt", ex.desc);
+        assertEq(1, srv.ports.size(), "one attempt");
+        assertRegex(sprintf("\\(errno %d\\)$", EAFNOSUPPORT), ex.arg.attempts[0]);
+        assertEq((), rec.get("retrying with a fresh random port"), "no retry");
+        assertEq({}, srv.getListeners(), "no listener was kept");
+    }
+
+    retryTest() {
+        hash<auto> s = getServer(9);
+        FailingQuicServer srv = s.srv;
+        on_exit delete srv;
+        LogRecorder rec = s.rec;
+
+        # all-interfaces: none; h3Options() listens on "node": "localhost" (the scanner does not follow the helper)
+        hash<auto> li = srv.addListener(h3Options());
+        assertEq(10, srv.ports.size(), "the tenth attempt was bound");
+        assertEq(srv.ports.last(), li.port, "the listener is on the port of the last attempt");
+        assertEq(9, rec.get("retrying with a fresh random port").size());
+        # the TCP listener and its paired QUIC listener are both on the final port
+        list<hash<auto>> listeners = srv.getListeners().values();
+        assertEq(2, listeners.size());
+        assertEq((li.port, li.port), (map $1.port, listeners));
+    }
+
+    explicitPortTest() {
+        hash<auto> s = getServer(1000);
+        FailingQuicServer srv = s.srv;
+        on_exit delete srv;
+
+        *hash<ExceptionInfo> ex;
+        int port;
+        for (int i = 0; i < 20 && !ex; ++i) {
+            # a port that was free a moment ago; an explicit port is not changed, so there is one attempt only
+            Socket probe();
+            probe.bindINET("localhost", "0", True);
+            port = probe.getSocketInfo().port;
+            probe.close();
+            srv.ports = ();
+            ex = addOnPort(srv, h3Options(port));
+        }
+        if (!ex) {
+            testSkip("no free port could be bound");
+        }
+        assertEq("HTTPSERVER-H3-BIND-ERROR", ex.err);
+        assertRegex(sprintf("on requested port %d", port), ex.desc);
+        assertEq((port,), srv.ports, "one attempt on the requested port");
+        assertEq(1, ex.arg.attempts.size());
+        assertEq({}, srv.getListeners(), "no listener was kept");
+        assertEq(0, srv.getRunningListenerCount(), "no listener is running");
+    }
+
+    realBindErrnoTest() {
+        HttpServer srv();
+        on_exit delete srv;
+
+        *hash<ExceptionInfo> ex;
+        for (int i = 0; i < 20 && !ex; ++i) {
+            # a UDP socket holds a port on the address that the listener binds; the TCP port of the same number is
+            # free a moment ago
+            Socket udp();
+            on_exit udp.close();
+            udp.bindINET("localhost", "0", False, AF_UNSPEC, SOCK_DGRAM);
+            hash<auto> info = udp.getSocketInfo();
+            Socket tcp();
+            try {
+                tcp.bindINET(info.address, info.port, True, info.family);
+                tcp.close();
+            } catch (hash<ExceptionInfo> ex0) {
+                continue;
+            }
+            hash<HttpListenerOptionInfo> opts = h3Options(info.port);
+            opts.node = info.address;
+            ex = addOnPort(srv, opts);
+        }
+        if (!ex) {
+            testSkip("no port is free for TCP and held for UDP");
+        }
+        assertEq("HTTPSERVER-H3-BIND-ERROR", ex.err);
+        assertEq(1, ex.arg.attempts.size());
+        assertRegex(sprintf("\\(errno %d\\)$", EADDRINUSE), ex.arg.attempts[0], "the system error of the bind");
+        assertEq({}, srv.getListeners(), "no listener was kept");
+    }
+}

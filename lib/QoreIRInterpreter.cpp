@@ -2577,6 +2577,32 @@ static bool hasCleanupEntry(const IRCleanupSlots& cleanup, uint32_t id) {
 }
 
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
+//! Takes the reference that the container operand \a vid of a container store owns
+/** Called before releaseContainerBookkeepingRefs() clears the operand slot: an lvalue load of a local that holds a weak
+    reference to a list or hash reads the container with a reference of its own (qore#7198), which keeps the container
+    until the store has changed it; the caller releases it after the store.  An operand that borrows its value (every
+    other lvalue load) and the value of the local's initializer (\a container_slot_id) give nothing.
+
+    Out of line, as the frame of QoreIRInterpreter::execute() is on the stack at every level of a recursion of
+    interpreted code: as a lambda of execute() with its holds in the scope of the opcode, it made that frame 48 B larger
+    (qore#7355)
+*/
+static QORE_INTERN_NOINLINE QoreValue qore_ir_take_owned_container_operand(IRCallFrame& frame,
+        uint32_t container_slot_id, uint32_t vid) {
+    if (vid >= frame.values.size()
+            || (container_slot_id != UINT32_MAX && container_slot_id < frame.local_init_slots.size()
+                && frame.local_init_slots[container_slot_id] == vid)
+            || !removeCleanupEntry(frame.cleanup, vid)) {
+        return QoreValue();
+    }
+    QoreValue rv = frame.values[vid];
+    frame.values[vid] = QoreValue();
+    if (vid < frame.load_slot_registered.size()) {
+        frame.load_slot_registered[vid] = false;
+    }
+    return rv;
+}
+
 // Sets a value slot without discarding the previous value. Only use this for
 // scalar or borrowed values; owned node values in loop-reexecuted slots must
 // use setValueSlot() so the previous iteration's value is released.
@@ -11805,25 +11831,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         discardContainerValueSlot(operand_slot_id, container_slot_id, false);
     };
-    // Takes the reference that the container operand of a container store owns, before
-    // releaseContainerBookkeepingRefs() clears the operand slot: an lvalue load of a local that holds a weak reference
-    // to a list or hash reads the container with a reference of its own (qore#7198), which keeps the container until
-    // the store has changed it; the caller releases it after the store.  An operand that borrows its value (every
-    // other lvalue load) and the value of the local's initializer give nothing.
-    auto holdOwnedContainerOperand = [&](uint32_t container_slot_id, uint32_t vid) -> QoreValue {
-        if (vid >= values.size()
-                || (container_slot_id != UINT32_MAX && container_slot_id < local_init_slots.size()
-                    && local_init_slots[container_slot_id] == vid)
-                || !removeCleanupEntry(cleanup, vid)) {
-            return QoreValue();
-        }
-        QoreValue rv = values[vid];
-        values[vid] = QoreValue();
-        if (vid < load_slot_registered.size()) {
-            load_slot_registered[vid] = false;
-        }
-        return rv;
-    };
 
     struct LocalInstantiationCleanup {
         std::vector<const LocalVar*>& locals_ordered;
@@ -15124,13 +15131,15 @@ load_local_done:
                 QoreValue hash_val = getIRValue(values, hks_inst->operands[0]);
                 QoreValue val      = getIRValue(values, hks_inst->operands[1]);
                 ValueHolder val_holder(val.refSelf(), xsink);
-                // this frame's own reference to a hash read through a weak reference that the local holds, which
-                // keeps the hash until the store has changed it (see holdOwnedContainerOperand())
-                ValueHolder weak_container_hold(xsink);
                 // every error exit of the store returns from this lambda, so that the exception is dispatched to an
                 // enclosing catch block by the common tail below; a false return aborts without an exception
                 auto store_key = [&]() -> bool {
                     if (hash_val.getType() == NT_HASH) {
+                        // this frame's own reference to a hash read through a weak reference that the local
+                        // holds, which keeps the hash until the store has changed it (see
+                        // qore_ir_take_owned_container_operand()); in the scope of the store, not of the opcode, so
+                        // that it takes no stack in the frame of execute() (qore#7355)
+                        ValueHolder weak_container_hold(xsink);
                         QoreHashNode* h = hash_val.get<QoreHashNode>();
 
                         // Drop this frame's bookkeeping refs to the container before the
@@ -15139,8 +15148,8 @@ load_local_done:
                         // and the non-closure restriction
                         if ((hks_inst->container_lv || hks_inst->container)
                                 && !isClosureContainer(hks_inst->container_lv, hks_inst->container)) {
-                            weak_container_hold = holdOwnedContainerOperand(hks_inst->container_slot_id,
-                                hks_inst->operands[0].id);
+                            weak_container_hold = qore_ir_take_owned_container_operand(frame,
+                                hks_inst->container_slot_id, hks_inst->operands[0].id);
                             releaseContainerBookkeepingRefs(hks_inst->container_slot_id,
                                 hks_inst->operands[0].id);
                         }
@@ -15304,9 +15313,6 @@ load_local_done:
                 qore_check_lvalue_key_not_slice(key_val, xsink);
                 // hash keys are stored in the default encoding
                 QoreHashKeyHelper key_str(key_val, xsink);
-                // this frame's own reference to a hash read through a weak reference that the local holds, which
-                // keeps the hash until the store has changed it (see holdOwnedContainerOperand())
-                ValueHolder weak_container_hold(xsink);
                 // every error exit of the store returns from this function, so that the exception is dispatched to an
                 // enclosing catch block below
                 auto store_dynamic_key = [&]() {
@@ -15314,6 +15320,11 @@ load_local_done:
                         return;
                     }
                     if (hash_val.getType() == NT_HASH) {
+                        // this frame's own reference to a hash read through a weak reference that the local
+                        // holds, which keeps the hash until the store has changed it (see
+                        // qore_ir_take_owned_container_operand()); in the scope of the store, not of the opcode, so
+                        // that it takes no stack in the frame of execute() (qore#7355)
+                        ValueHolder weak_container_hold(xsink);
                         QoreHashNode* h = hash_val.get<QoreHashNode>();
 
                         // Drop this frame's bookkeeping refs to the container before the
@@ -15322,8 +15333,8 @@ load_local_done:
                         // and the non-closure restriction
                         if ((hksd_inst->container_lv || hksd_inst->container)
                                 && !isClosureContainer(hksd_inst->container_lv, hksd_inst->container)) {
-                            weak_container_hold = holdOwnedContainerOperand(hksd_inst->container_slot_id,
-                                hksd_inst->operands[0].id);
+                            weak_container_hold = qore_ir_take_owned_container_operand(frame,
+                                hksd_inst->container_slot_id, hksd_inst->operands[0].id);
                             releaseContainerBookkeepingRefs(hksd_inst->container_slot_id,
                                 hksd_inst->operands[0].id);
                         }
@@ -15478,11 +15489,12 @@ load_local_done:
                 // routes the exception to the instruction's exception target (i.e. the enclosing catch block).
                 // Returning directly from an error path here would make the exception bypass any enclosing
                 // try/catch in the same function
-                // this frame's own reference to a list read through a weak reference that the local holds, which
-                // keeps the list until the store has changed it (see holdOwnedContainerOperand())
-                ValueHolder weak_container_hold(xsink);
                 do {
                     if (list_val.getType() == NT_LIST) {
+                        // this frame's own reference to a list read through a weak reference that the local
+                        // holds, which keeps the list until the store has changed it (see
+                        // qore_ir_take_owned_container_operand()); in the scope of the store (qore#7355)
+                        ValueHolder weak_container_hold(xsink);
                         QoreListNode* l = list_val.get<QoreListNode>();
 
                         // Drop this frame's bookkeeping refs to the container before the
@@ -15491,8 +15503,8 @@ load_local_done:
                         // and the non-closure restriction
                         if ((lis_inst->container_lv || lis_inst->container)
                                 && !isClosureContainer(lis_inst->container_lv, lis_inst->container)) {
-                            weak_container_hold = holdOwnedContainerOperand(lis_inst->container_slot_id,
-                                lis_inst->operands[0].id);
+                            weak_container_hold = qore_ir_take_owned_container_operand(frame,
+                                lis_inst->container_slot_id, lis_inst->operands[0].id);
                             releaseContainerBookkeepingRefs(lis_inst->container_slot_id,
                                 lis_inst->operands[0].id);
                         }
@@ -25460,11 +25472,11 @@ static QORE_INTERN_ALWAYS_INLINE void removeObjectMembers(LValueHelper& v, QoreO
         if (*xsink) {
             return;
         }
-        QoreValue removed = qore_object_private::takeMember(*o, xsink, str.c_str());
-        // The lvalue still contains the same object, even when its last scannable member is removed.
-        // Record the object's changed graph without applying a delta to the lvalue's parent container.
-        bool scan_removed = needs_scan(removed);
-        v.objectRemoved(*qore_object_private::get(*o), scan_removed);
+        // taken as the remove operator takes a member: the object's changed graph is recorded with the lvalue
+        // (objectRemoved()), whose scan runs after it has released its locks, as the scan of the removed value can
+        // take the lock of an object on the lvalue's path, which the lvalue holds (qore#7401); the object's own lock,
+        // a member write gate and an accessor are handled as for remove (qore#7107)
+        QoreValue removed = qore_object_private::takeMember(*o, v, str.c_str());
         v.saveTemp(removed);
     };
 
@@ -25506,8 +25518,70 @@ static __attribute__((noinline)) QoreValue removeExternalObjectMembers(LValueHel
     return result;
 }
 
+//! -= on an lvalue that holds a weak reference to an object: the members are removed from the object, as through the
+//! object itself, and the lvalue keeps the weak reference (qore#7368)
+/** @return the object, as a read of the weak reference gives it, or NOTHING if an exception was raised
+*/
+static __attribute__((noinline, cold)) QoreValue minusEqualsWeakObject(LValueHelper& v, const QoreValue& right,
+        ExceptionSink* xsink) {
+    QoreObject* o = v.getValue().get<const WeakReferenceNode>()->get();
+    // members are removed for a key or a list of keys; any other operand changes nothing
+    const bool remove_keys = !right.isNothing() && right.getType() != NT_HASH && right.getType() != NT_OBJECT;
+    // the weak reference keeps the object allocated, but not referenced: a reference is taken only while its count is
+    // not zero, as a reference taken once the last one was released would make an object whose release has started
+    // reachable again (see QoreValue::resolveIndirectRef())
+    if (!o->optRef()) {
+        if (remove_keys) {
+            makeAccessDeletedObjectException(xsink, o->getClassName());
+        }
+        return QoreValue();
+    }
+    // the reference taken, which keeps the object while its members are removed: the lvalue holds only a weak
+    // reference to it, and it is released before a member gate or an accessor runs; a deleted object is handled as
+    // for an object that the lvalue holds (takeMember() raises OBJECT-ALREADY-DELETED for a key)
+    ReferenceHolder<QoreObject> holder(o, xsink);
+    if (remove_keys) {
+        v.startContainerRemoval();
+        const qore_class_private* cls = qore_class_private::get(*o->getClass());
+        // as for an object that the lvalue holds (doMinusEqualsOnLValue()): the members are removed after the lvalue
+        // has released the object's lock when it holds it (qore#7107), and before a member gate or an accessor runs
+        if (cls->has_member_accessors || cls->member_write_gate
+                || qore_auto_vlock_ops(&v.getAutoVLock()).getRWL() == &qore_object_private::get(*o)->rml) {
+            // the lvalue releases its locks and temporaries here; the object is kept by the reference taken above,
+            // which becomes the value of the operator, and is released with no lock held
+            v.finishForCallback();
+            if (*xsink) {
+                return QoreValue();
+            }
+            {
+                LValueHelper object_scan(*o, xsink, LValueHelper::ObjectScan{});
+                removeObjectMembers(object_scan, o, right, xsink);
+            }
+            if (*xsink) {
+                return QoreValue();
+            }
+            return QoreValue(holder.release());
+        }
+        removeObjectMembers(v, o, right, xsink);
+        if (*xsink) {
+            // released by the lvalue after its locks
+            v.saveTemp(QoreValue(holder.release()));
+            return QoreValue();
+        }
+    }
+    // the value of the operator: the object, as a read of the weak reference gives it; the lvalue keeps a reference
+    // of its own, which it releases after its locks, so that the object's destructor does not run under them if the
+    // caller releases the value first and it is the last reference
+    v.saveTemp(QoreValue(o).refSelf());
+    return QoreValue(holder.release());
+}
+
 QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink) {
     if (right.isNothing()) {
+        // the value of the operator is the object of a weak reference, as a read of it gives it (qore#7368)
+        if (v.getType() == NT_WEAKREF) [[unlikely]] {
+            return minusEqualsWeakObject(v, right, xsink);
+        }
         return v.getReferencedValue();
     }
 
@@ -25630,6 +25704,10 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
             }
             removeObjectMembers(v, o, right, xsink);
         }
+    } else if (vtype == NT_WEAKREF) [[unlikely]] {
+        // the members of the object of a weak reference that the lvalue holds, which keeps the weak reference
+        // (qore#7368)
+        return minusEqualsWeakObject(v, right, xsink);
     } else {
         if (right.getType() == NT_DATE) {
             // if the lvalue is a timeout, convert date/time value as timeout

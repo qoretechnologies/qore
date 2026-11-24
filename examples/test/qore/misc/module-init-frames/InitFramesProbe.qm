@@ -1,0 +1,29 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# InitFramesProbe.qm - test module: the Program of the code that calls a function (qore#7289)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module InitFramesProbe {
+    version = "1.0";
+    desc = "test module: the Program of the code that calls a function";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace InitFramesProbe {
+#! Returns the ID of the Program of the code that called this function, as its frame records it
+public int sub caller_pgm() {
+    # the frames from the innermost: the call of get_thread_call_stack(), and the call of this function
+    return get_thread_call_stack()[1].programid ?? -1;
+}
+
+public class Probe {
+    #! Returns the ID of the Program of the code that called this method, as its frame records it
+    static int callerPgm() {
+        # the frames from the innermost: the call of get_thread_call_stack(), and the call of this method
+        return get_thread_call_stack()[1].programid ?? -1;
+    }
+}
+}
