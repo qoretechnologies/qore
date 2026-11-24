@@ -604,6 +604,8 @@ enum QoreProgramRecordSite {
 #define QORE_DBG_RECORD_CHANGE_TID(site, pp, tid)
 #endif
 
+struct QoreProgramTzQuota;
+
 class qore_program_private_base {
     friend class QoreProgramAccessHelper;
 
@@ -1449,12 +1451,11 @@ public:
     */
     std::atomic<bool> any_sandbox_manager{false};
 
-    //! the number of time zones that the Program loaded from zoneinfo file paths (QoreTimeZoneManager::loadPath())
-    /** Changed only under the write lock of the time zone manager, which checks it against its per-Program quota
+    //! the time zones that the Program loaded while restricted by its parse options and governed by no sandbox
+    /** Shared with the Program that created it if that Program's code was restricted, so that the Programs that
+        restricted code creates share its limit (QoreTimeZoneManager::loadPath(), loadRegion())
     */
-    unsigned tz_path_zone_count = 0;
-    //! the size of the zoneinfo files of the time zones that the Program loaded from paths
-    size_t tz_path_zone_bytes = 0;
+    std::shared_ptr<QoreProgramTzQuota> tz_quota;
 
     //! true if \c sandbox_manager adds to the sandbox of the Program's callers instead of governing its code alone
     /** Set when code that a sandbox governs sets the manager with Program::setSandboxManager() (see
@@ -5403,7 +5404,8 @@ public:
             }
             return QTZM.findLoadRegionFromPath(zone, xsink, pgm);
         }
-        return QTZM.findLoadRegion(zone, xsink);
+        // the zone is charged to the limits of this Program, not of the code that parses it
+        return QTZM.findLoadRegionForProgram(zone, pgm, xsink);
     }
 
     //! sets the time zone of the Program as the %set-time-zone directive with the given argument does

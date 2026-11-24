@@ -1094,6 +1094,19 @@ bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic&
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
         QoreProgram* p_pgm, const QoreParseOptions* p_parse_options, ExceptionSink* xsink)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm, p_parse_options) {
+    // the time zones that a restricted Program that no sandbox governs loads count against the limit of the Program
+    // whose restricted code created it, so that such code cannot multiply its limit by creating Programs
+    {
+        QoreProgram* creator = getProgram();
+        if (creator && creator != n_pgm
+                && runtime_get_parse_options().hasAny(QoreParseOptions(QDOM_ALL & ~(QDOM_INJECTION | QDOM_DEBUGGER
+                    | QDOM_IN_MODULE)))) {
+            tz_quota = qore_program_private::get(*creator)->tz_quota;
+        }
+        if (!tz_quota) {
+            tz_quota = std::make_shared<QoreProgramTzQuota>();
+        }
+    }
     // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
     // every Program wherever it is created, and before the Program is registered and can be found
     if (qore_caller_is_sandboxed()) {

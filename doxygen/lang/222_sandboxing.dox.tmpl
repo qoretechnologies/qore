@@ -1146,24 +1146,25 @@ string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
     Each name of a region or path has a time zone of its own; the time zones of the names that reach the same file
     with the same data share that data, so a time zone never gets the data of another file or the data that a file
     had before it changed.  Time zones are never freed, so the memory of a new time zone that restricted code loads
-    stays charged: code that a sandbox governs is charged to every sandbox that governs it (so the Programs that
-    sandboxed code creates share its limits) and to its isolation domain, at most 256 time zones and 32 MiB each,
-    and the memory stays charged to the memory limits of the sandbox calls that load them (see
+    stays charged, and each tenant has limits of its own, so that no tenant can keep another one from loading time
+    zones: code that a sandbox governs is charged to every sandbox that governs it (the Programs that sandboxed code
+    creates are governed by its sandbox) and to its isolation domain, at most 256 time zones and 32 MiB each, and
+    the memory stays charged to the memory limits of the sandboxes (see
     @ref Qore::SandboxManager::setMemoryLimit() "SandboxManager::setMemoryLimit()"); a %Program that no sandbox
-    governs but whose parse options restrict a functional domain is limited to 256 time zones and 32 MiB; and all
-    such code together is limited to 16384 time zones and 256 MiB in the process.  When the limit of a sandbox is
-    reached, another name of a region that is loaded already gets the time zone of the region's file, named by its
-    path in the zoneinfo directory; other loads raise \c TZINFO-ERROR (\c SANDBOX-MEMORY-LIMIT for a memory
-    limit).  A %Program that is not restricted is not limited.  A TZif file with more than 10000 transitions is
-    refused.
+    governs but whose parse options restrict a functional domain shares a limit of 256 time zones and 32 MiB with
+    the Programs that its code creates.  The limits of the @ref set-time-zone "%set-time-zone" directive are those
+    of the %Program that it is in, not of the code that parses it.  When any of these limits is reached, another
+    name of a region whose file is loaded already gets the time zone of the file, named by its path in the zoneinfo
+    directory; other loads raise \c TZINFO-ERROR (\c SANDBOX-MEMORY-LIMIT for a memory limit).  A %Program that is
+    not restricted is not limited.  A TZif file with more than 10000 transitions is refused.
 
     A time zone name that comes from data and not from code is never loaded as a path: the zone of a deserialized
-    date or @ref Qore::TimeZone "TimeZone" object (see @ref serializable_time_zones), a name that the C++ API
-    \c find_create_timezone() gets (from database drivers and imported Arrow or Parquet data, for example) and the
-    time zone of a date literal in compiled code are a region, the name of the local zone or a UTC offset; any other
-    name raises \c TZINFO-ERROR <tt>unknown time zone region</tt>.  The name of the local zone denotes the local
-    zone in data, also when it is a path (a local time file outside of a zoneinfo directory), without any file
-    access.
+    date or @ref Qore::TimeZone "TimeZone" object (see @ref serializable_time_zones) and a name that the C++ API
+    \c find_create_timezone() gets (from database drivers and imported Arrow or Parquet data, for example) are a
+    region, the name of the local zone or a UTC offset; any other name raises \c TZINFO-ERROR
+    <tt>unknown time zone region</tt>.  The name of the local zone denotes the local zone in data, also when it is
+    a path (a local time file outside of a zoneinfo directory), without any file access.  The time zone of a date
+    literal in code is the time zone that the code had when it was parsed, also one loaded from a path.
 
     @since %Qore 3.0
 

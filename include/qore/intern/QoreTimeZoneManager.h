@@ -374,6 +374,17 @@ protected:
 
 struct QoreZoneCharger;
 class QoreSandboxCharge;
+
+//! the time zones that a restricted Program that no sandbox governs, and the Programs it created, loaded
+/** Shared by a restricted Program with the Programs that its code creates; changed only under the write lock of the
+    time zone manager
+*/
+struct QoreProgramTzQuota {
+    //! the number of time zones loaded
+    unsigned zones = 0;
+    //! their memory
+    int64_t bytes = 0;
+};
 struct stat;
 
 #ifdef _Q_WINDOWS
@@ -494,10 +505,9 @@ private:
     typedef std::map<std::string, PathZoneQuota> domain_quota_map_t;
     //! the zones loaded by isolation domain
     domain_quota_map_t domain_path_quota;
-    //! the number of zones that restricted code loaded in the process
-    unsigned restricted_zones = 0;
-    //! the memory of the zones that restricted code loaded in the process
-    int64_t restricted_bytes = 0;
+    typedef std::map<ZoneIdentity, AbstractQoreZoneInfo*> identity_alias_map_t;
+    //! the zones of region files named by their path in the zoneinfo directory, returned when a limit is reached
+    identity_alias_map_t region_identity_aliases;
     //! the sandbox charges that the memory of zones stays charged to, referenced
     std::vector<std::pair<QoreSandboxCharge*, int64_t>> charged_zone_memory;
 
@@ -507,13 +517,17 @@ private:
         CHARGE_SANDBOX,
         CHARGE_DOMAIN,
         CHARGE_PROGRAM,
-        CHARGE_PROCESS,
+        CHARGE_MEMORY,
     };
 
     //! checks the quotas for a new zone of the given memory; the write lock must be held
     DLLLOCAL ChargeResult checkCharge(const QoreZoneCharger& c, int64_t size);
-    //! charges a new zone of the given memory; the write lock must be held
-    DLLLOCAL void commitCharge(const QoreZoneCharger& c, int64_t size);
+    //! does everything for commitCharge() that can fail; the write lock must be held
+    /** @throw std::bad_alloc nothing is charged
+    */
+    DLLLOCAL void prepareCharge(const QoreZoneCharger& c);
+    //! charges a new zone of the given memory after prepareCharge(); the write lock must be held
+    DLLLOCAL void commitCharge(const QoreZoneCharger& c, int64_t size) noexcept;
     //! raises the error for a quota that a new zone would exceed
     DLLLOCAL static void raiseCharge(ChargeResult result, const char* name, ExceptionSink* xsink);
     //! raises the error for a path that the policy does not permit
@@ -559,7 +573,8 @@ private:
     /** Reads the zoneinfo file of a canonical region name in the zoneinfo directory without the lock and caches the
         zone by the region name under the write lock; see findLoadRegion()
     */
-    DLLLOCAL const AbstractQoreZoneInfo* loadRegion(const char* region, ExceptionSink* xsink, bool startup = false);
+    DLLLOCAL const AbstractQoreZoneInfo* loadRegion(const char* region, ExceptionSink* xsink, bool startup = false,
+            QoreProgram* pgm = nullptr);
 
     //! releases the sandbox charges of the memory of zones (at destruction)
     DLLLOCAL void releaseZoneCharges();
@@ -607,6 +622,9 @@ public:
         }
         for (auto* i : retired_zones) {
             delete i;
+        }
+        for (auto& i : region_identity_aliases) {
+            delete i.second;
         }
         for (auto& i : identity_map) {
             delete i.second;
@@ -684,6 +702,19 @@ public:
     */
     DLLLOCAL const AbstractQoreZoneInfo* findLoadRegion(const char* name, ExceptionSink* xsink);
 
+    //! finds or loads a time zone region for the code of the given Program
+    /** As findLoadRegion(), but the limits of time zones are those of \a pgm, not of the code that runs: for the
+        \c %set-time-zone directive, which is processed while \a pgm is parsed by other code
+    */
+    DLLLOCAL const AbstractQoreZoneInfo* findLoadRegionForProgram(const char* name, QoreProgram* pgm,
+            ExceptionSink* xsink);
+
+    //! returns a zone that was loaded already by its exact name (a region, a path as given, or the local zone)
+    /** No file is accessed and no restriction applies: for the time zone of a date literal in compiled code, which
+        was loaded when the code was parsed
+    */
+    DLLLOCAL const AbstractQoreZoneInfo* findLoadedZone(const char* name);
+
     //! finds or loads a time zone region or a zoneinfo file given as a path by code
     /** For the region APIs (TimeZone::setRegion(), Program::setTimeZoneRegion()): a path (see isPathName()), also
         the path of the local zone, is loaded with findLoadRegionFromPath(), subject to the restrictions of the
@@ -704,7 +735,9 @@ public:
 
         @param name the path
         @param xsink an exception is raised here if the path cannot be used or its file cannot be loaded
-        @param charge the Program whose quota a new zone counts against; the current Program if nullptr
+        @param charge if not nullptr, the limits of time zones are those of this Program and not of the code that runs
+        (for the \c %set-time-zone directive while the Program is parsed); the caller has checked the Program's
+        restrictions for the path
 
         @return the zone or \c nullptr if an exception was raised
     */

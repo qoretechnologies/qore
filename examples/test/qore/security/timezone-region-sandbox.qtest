@@ -43,6 +43,47 @@ string sub set_region(string r) { TimeZone::setRegion(r); return TimeZone::get()
 code sub closure(string r) { return string sub () { return (new TimeZone(r)).region(); }; }
 ";
 
+        #! real region names, more than the limit of a sandbox
+        const TimeZoneRegions = (map "Etc/GMT" + ($1 > 0 ? "+" : "") + $1, xrange(-14, 12))
+            + ("Africa/Abidjan", "Africa/Accra", "Africa/Addis_Ababa", "Africa/Algiers", "Africa/Asmara",
+            "Africa/Bamako", "Africa/Bangui", "Africa/Banjul", "Africa/Bissau", "Africa/Blantyre", "Africa/Brazzaville",
+            "Africa/Bujumbura", "Africa/Cairo", "Africa/Casablanca", "Africa/Ceuta", "Africa/Conakry", "Africa/Dakar",
+            "Africa/Dar_es_Salaam", "Africa/Djibouti", "Africa/Douala", "Africa/El_Aaiun", "Africa/Freetown",
+            "Africa/Gaborone", "Africa/Harare", "Africa/Johannesburg", "Africa/Juba", "Africa/Kampala",
+            "Africa/Khartoum", "Africa/Kigali", "Africa/Kinshasa", "Africa/Lagos", "Africa/Libreville", "Africa/Lome",
+            "Africa/Luanda", "Africa/Lubumbashi", "Africa/Lusaka", "Africa/Malabo", "Africa/Maputo", "Africa/Maseru",
+            "Africa/Mbabane", "Africa/Mogadishu", "Africa/Monrovia", "Africa/Ndjamena", "Africa/Niamey",
+            "Africa/Nouakchott", "Africa/Ouagadougou", "Africa/Porto-Novo", "Africa/Sao_Tome", "Africa/Tripoli",
+            "Africa/Tunis", "Africa/Windhoek")
+            + (map "America/" + $1, ("Adak", "Anchorage", "Anguilla", "Antigua", "Araguaina", "Aruba", "Asuncion",
+            "Atikokan", "Bahia", "Bahia_Banderas", "Barbados", "Belem", "Belize", "Blanc-Sablon", "Boa_Vista", "Boise",
+            "Cambridge_Bay", "Campo_Grande", "Cancun", "Caracas", "Cayenne", "Cayman", "Chicago", "Chihuahua",
+            "Costa_Rica", "Creston", "Cuiaba", "Curacao", "Danmarkshavn", "Dawson", "Dawson_Creek", "Denver",
+            "Detroit", "Dominica", "Edmonton", "Eirunepe", "El_Salvador", "Fort_Nelson", "Fortaleza", "Glace_Bay",
+            "Goose_Bay", "Grand_Turk", "Grenada", "Guadeloupe", "Guatemala", "Guyana", "Halifax", "Havana",
+            "Hermosillo", "Inuvik", "Iqaluit", "Jamaica", "Juneau", "La_Paz", "Lima", "Los_Angeles", "Maceio",
+            "Managua", "Manaus", "Martinique", "Matamoros", "Mazatlan", "Menominee", "Merida", "Metlakatla",
+            "Mexico_City", "Miquelon", "Moncton", "Monterrey", "Montevideo", "Montserrat", "Nassau", "New_York",
+            "Nome", "Noronha", "Nuuk", "Ojinaga", "Panama", "Paramaribo", "Phoenix", "Porto_Velho", "Puerto_Rico",
+            "Punta_Arenas", "Rankin_Inlet", "Recife", "Regina", "Resolute", "Rio_Branco", "Santarem", "Santiago",
+            "Santo_Domingo", "Sao_Paulo", "Scoresbysund", "Sitka", "St_Johns", "St_Kitts", "St_Lucia", "St_Thomas",
+            "St_Vincent", "Swift_Current", "Tegucigalpa", "Thule", "Tijuana", "Toronto", "Tortola", "Vancouver",
+            "Whitehorse", "Winnipeg", "Yakutat"))
+            + (map "Asia/" + $1, ("Aden", "Almaty", "Amman", "Anadyr", "Aqtau", "Aqtobe", "Ashgabat", "Atyrau",
+            "Baghdad", "Bahrain", "Baku", "Bangkok", "Barnaul", "Beirut", "Bishkek", "Brunei", "Chita", "Colombo",
+            "Damascus", "Dili", "Dubai", "Dushanbe", "Famagusta", "Gaza", "Hebron", "Ho_Chi_Minh", "Hong_Kong", "Hovd",
+            "Irkutsk", "Jakarta", "Jayapura", "Jerusalem", "Kabul", "Kamchatka", "Khandyga", "Krasnoyarsk",
+            "Kuala_Lumpur", "Kuching", "Kuwait", "Macau", "Magadan", "Makassar", "Manila", "Muscat", "Nicosia",
+            "Novokuznetsk", "Novosibirsk", "Omsk", "Oral", "Phnom_Penh", "Pontianak", "Pyongyang", "Qatar",
+            "Qostanay", "Qyzylorda", "Riyadh", "Sakhalin", "Samarkand", "Seoul", "Shanghai", "Singapore",
+            "Srednekolymsk", "Taipei", "Tashkent", "Tehran", "Thimphu", "Tokyo", "Tomsk", "Ulaanbaatar", "Urumqi",
+            "Ust-Nera", "Vientiane", "Vladivostok", "Yakutsk", "Yangon", "Yekaterinburg", "Yerevan"))
+            + (map "Europe/" + $1, ("Amsterdam", "Andorra", "Astrakhan", "Athens", "Belgrade", "Brussels",
+            "Bucharest", "Budapest", "Chisinau", "Copenhagen", "Dublin", "Gibraltar", "Helsinki", "Istanbul",
+            "Kaliningrad", "Kirov", "Lisbon", "London", "Luxembourg", "Madrid", "Malta", "Minsk", "Monaco", "Moscow",
+            "Oslo", "Riga", "Rome", "Samara", "Saratov", "Simferopol", "Sofia", "Stockholm", "Tallinn", "Tirane",
+            "Ulyanovsk", "Vienna", "Vilnius", "Volgograd", "Warsaw", "Zurich"));
+
         #! the file functions of a Program that may write files
         const WriterCode = "
 nothing sub write_file(string p, binary b) { File f(); f.open2(p, O_CREAT | O_WRONLY | O_TRUNC); f.write(b); f.close(); }
@@ -94,6 +135,13 @@ nothing sub remove_file(string p) { unlink(p); }
         addTestCase("restricted code is limited, trusted code is not", \testRestrictedQuota());
         addTestCase("files in the zoneinfo directory that are no zoneinfo files are no regions",
             \testNonZoneFiles());
+        addTestCase("%set-time-zone counts against the limits of its Program", \testDirectiveQuota());
+        addTestCase("Programs created by restricted code share its limit; no tenant blocks another",
+            \testRestrictedFamilyQuota());
+        addTestCase("a date literal keeps a zone loaded from a path in every execution mode", \testLiteralZone());
+        addTestCase("a sandboxed path load that cannot open the file gets the policy error", \testSandboxedOpen());
+        addTestCase("a region beyond a limit is named by its path in the zoneinfo directory",
+            \testRegionFallbackName());
         addTestCase("the policy applies to the file that a path reaches", \testPathPolicyTarget());
         set_return_value(main());
     }
@@ -1144,5 +1192,173 @@ int sub load_all(list<string> paths) {
         if (!checked) {
             testSkip("no such file in the zoneinfo directory");
         }
+    }
+
+    testDirectiveQuota() {
+        if (!zoneinfo) {
+            testSkip("no zoneinfo file to copy");
+        }
+        list<string> paths = makeCopies("directive-quota", zoneinfo, 260);
+        # trusted code parses the code of a restricted Program: the directives count against that Program's limit
+        string src;
+        foreach string path in (paths) {
+            src += "%set-time-zone " + path + "\n";
+        }
+        src += "string sub r() { return TimeZone::get().region(); }\n";
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        assertThrows("TZINFO-ERROR", "has loaded the maximum of time zones", \p.parse(), (src, "directives"),
+            "the directives of a restricted Program are limited");
+
+        # region spellings in directives are charged as well (on a file system that does not distinguish case)
+        try {
+            TimeZone t("asia/kathmandu");
+        } catch (hash<ExceptionInfo> ex) {
+            return;
+        }
+        string rsrc;
+        foreach string sp in (caseSpellings("Asia/Kathmandu", 300)) {
+            rsrc += "%set-time-zone " + sp + "\n";
+        }
+        rsrc += "string sub r() { return TimeZone::get().region(); }\n";
+        Program p2(PO_NEW_STYLE | PO_NO_NETWORK);
+        p2.parse(rsrc, "region-directives");
+        # beyond the limit, the spelling gets the zone of the file, named by its path in the zoneinfo directory
+        assertEq("Asia/Kathmandu", p2.callFunction("r"), "region spellings in directives are limited");
+    }
+
+    #! returns a Program restricted by its parse options and governed by no sandbox that can create Programs
+    static Program restrictedParent() {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.parse(TenantCode + "
+int sub child_load(list<string> paths) {
+    Program c(PO_NEW_STYLE);
+    c.parse(\"int sub f(string p) { return (new TimeZone(p)).UTCOffset(); }\", \"child\");
+    int n = 0;
+    foreach string path in (paths) {
+        try {
+            c.callFunction(\"f\", path);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.desc !~ /has loaded the maximum of time zones/) {
+                rethrow;
+            }
+            break;
+        }
+        ++n;
+    }
+    return n;
+}
+", "restricted-parent");
+        return p;
+    }
+
+    testRestrictedFamilyQuota() {
+        if (!zoneinfo) {
+            testSkip("no zoneinfo file to copy");
+        }
+        int max = 256;
+        list<string> paths = makeCopies("restricted-family", zoneinfo, 3 * max);
+        Program parent = restrictedParent();
+        int n1 = parent.callFunction("child_load", paths[0..max - 1]);
+        int n2 = parent.callFunction("child_load", paths[max..2 * max - 1]);
+        int n3 = parent.callFunction("child_load", paths[2 * max..]);
+        assertEq(max, n1 + n2 + n3, "the Programs created by restricted code share its limit");
+
+        # a sandboxed tenant of another domain is not affected: it deserializes a date in a region not loaded yet and
+        # loads another region
+        Program t(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        SandboxManager sm();
+        sm.setIsolationDomain("tz-family-" + get_random_string(8, 1));
+        t.setSandboxManager(sm);
+        t.parse(TenantCode, "tenant-other-domain");
+        string loaded = "Asia/Kolkata";
+        string fresh = "Asia/Tbilisi";
+        date d = (new TimeZone(loaded)).date("2026-01-15T10:00:00");
+        binary data = replaceRegion(Serializable::serialize(d), loaded, fresh.substr(0, loaded.size()));
+        assertEq(fresh, t.callFunction("des", data).info().zone.region(), "a date in a region not loaded yet");
+        assertEq("America/Guayaquil", t.callFunction("tz", "America/Guayaquil"), "another region");
+    }
+
+    testLiteralZone() {
+        if (!zroot || !is_file(zroot + "/Asia/Tokyo")) {
+            testSkip("no zoneinfo file to use");
+        }
+        string zone = dir + "/literal-zone";
+        copyFile(zroot + "/Asia/Tokyo", zone);
+        string script = dir + "/literal.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+        f.write("%modern\n%set-time-zone " + zone + "\ndate sub f() { return 2024-01-01T12:00:00; }\n"
+            "for (int i = 0; i < 3; ++i) { f(); }\nprint(f().format(\"Z\"));\n");
+        f.close();
+        foreach string mode in ("ast", "ir", "jit") {
+            int rc;
+            string out = backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 '%s' --exec-mode=%s '%s' 2>&1", qore_bin, mode,
+                script), \rc);
+            if (rc && out =~ /exec-mode|JIT/i && mode == "jit") {
+                continue;
+            }
+            assertEq("+09:00", trim(out), "the literal keeps its zone with --exec-mode=" + mode);
+        }
+    }
+
+    testSandboxedOpen() {
+        if (!zoneinfo) {
+            testSkip("no zoneinfo file to copy");
+        }
+        string d = dir + "/sandboxed-open";
+        mkdir(d);
+        copyFile(zoneinfo, d + "/zone");
+        symlink(d + "/zone", d + "/link");
+        Program p = tenantAllow(d);
+        # a missing file: the policy error, not the error of the open
+        assertThrows("FILESYSTEM-ACCESS-DENIED", "access to time zone path '" + regex_escape(d) + "/missing' is not "
+            "permitted", \p.callFunction(), ("tz", d + "/missing"), "a missing file");
+        # a symbolic link in the allowed directory to a file in it is followed
+        assertEq(0, p.callFunction("offset", d + "/link"), "a link to a file in the allowed directory");
+        assertEq(d + "/link", p.callFunction("tz", d + "/link"), "named as given");
+    }
+
+    testRegionFallbackName() {
+        *string root = ENV.QORE_TEST_ZONEINFO_ROOT;
+        if (!root || !zoneinfo) {
+            testSkip("QORE_TEST_ZONEINFO_ROOT is not set to the writable zoneinfo directory of a build configured "
+                "with -DZONEINFO_LOCATION");
+        }
+        string subname = "Qore" + get_random_string(10, 1);
+        string subdir = root + "/" + subname;
+        mkdir(subdir);
+        on_exit {
+            try {
+                remove_tree(subdir);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        copyFile(zoneinfo, subdir + "/Real");
+        symlink(".", subdir + "/S");
+        # trusted code loads the file by its path first, so its data is loaded with a path outside of any zoneinfo
+        # directory that the runtime knows by name
+        assertEq(0, (new TimeZone(subdir + "/Real")).UTCOffset(), "the file by its path");
+
+        # a tenant uses up its limit with other regions
+        Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(TenantCode, "tenant-fallback");
+        int loaded = 0;
+        foreach string region in (TimeZoneRegions) {
+            try {
+                if (p.callFunction("tz", region) == region) {
+                    ++loaded;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        assertGt(0, loaded, "regions are loaded");
+        assertGt(256, TimeZoneRegions.size(), "more regions than the limit");
+        # beyond the limit, another name of the file gets its zone named by its path in the zoneinfo directory,
+        # never by a path outside of it
+        string name = p.callFunction("tz", subname + "/S/Real");
+        assertTrue(name == subname + "/S/Real" || name == subname + "/Real",
+            "the zone is named by the region or by its path in the zoneinfo directory: " + name);
+        assertEq(-1, name.find(root), "the zone is not named by a host path: " + name);
     }
 }

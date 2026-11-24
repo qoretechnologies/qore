@@ -2480,56 +2480,119 @@ int QoreAliasZoneInfo::getUTCOffsetImpl(int64 epoch_offset, bool& is_dst, const 
 }
 
 //! the governing restrictions of the code that loads a zone, resolved before the lock is taken
+//! true if the parse options restrict a functional domain
+static bool qore_tz_po_restricted(const QoreParseOptions& po) {
+    return po.hasAny(QoreParseOptions(QDOM_ALL & ~(QDOM_INJECTION | QDOM_DEBUGGER | QDOM_IN_MODULE)));
+}
+
+//! releases a reference to a sandbox manager
+struct QoreTzManagerDeref {
+    DLLLOCAL void operator()(QoreSandboxManager* sm) const {
+        ReferenceHolder<QoreSandboxManager> h(sm, nullptr);
+    }
+};
+
 struct QoreZoneCharger {
-    //! the governing sandbox of the calling code for policy, if any
-    std::unique_ptr<QoreSandboxManagerHelper> policy_helper;
-    //! the governing sandbox, if any
-    QoreSandboxManager* policy = nullptr;
-    //! the memory accounts of the members of the sandbox
+    //! the governing sandboxes, referenced
+    std::vector<std::unique_ptr<QoreSandboxManager, QoreTzManagerDeref>> managers;
+    //! true if a sandbox governs the code
+    bool policy = false;
+    //! the memory accounts of the members of the governing sandboxes
     std::vector<QoreSandboxMemoryAccount*> accounts;
     //! the isolation domain of the sandbox, if any
     std::string domain;
-    //! true if the calling code is restricted (sandboxed or restricted by parse options)
+    //! true if the code is restricted (sandboxed or restricted by parse options)
     bool restricted = false;
-    //! the Program charged when no sandbox governs restricted code
-    qore_program_private* pgm = nullptr;
+    //! the quota charged when no sandbox governs restricted code: that of the restricted root Program
+    std::shared_ptr<QoreProgramTzQuota> quota;
+    //! true if the memory is charged directly to the accounts (no sandbox call of the thread runs the code)
+    bool direct = false;
 
-    //! resolves the restrictions of the calling code; nothing is resolved for the runtime's own loads (startup)
-    DLLLOCAL QoreZoneCharger(QoreProgram* charge, bool resolve = true) {
-        if (!resolve) {
+    //! resolves the restrictions of the code that loads a zone
+    /** @param mode CallerMode for the code that runs, ProgramMode for the code of \\a pgm (the %set-time-zone directive
+        while \\a pgm is parsed), StartupMode for the runtime's own loads
+    */
+    DLLLOCAL QoreZoneCharger(int mode, QoreProgram* pgm) {
+        if (mode == StartupMode) {
             return;
         }
-        policy_helper.reset(new QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy));
-        policy = policy_helper->get();
-        if (policy) {
-            if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(policy)) {
-                for (QoreSandboxManager* m : *members) {
-                    accounts.push_back(m->getMemoryAccount());
-                }
-            } else {
-                accounts.push_back(policy->getMemoryAccount());
+        if (mode == ProgramMode) {
+            assert(pgm);
+            qore_program_private* priv = qore_program_private::get(*pgm);
+            QoreSandboxManager* own = nullptr;
+            QoreSandboxManager* creator = nullptr;
+            priv->getSandboxManagerRefs(own, creator, true);
+            std::unique_ptr<QoreSandboxManager, QoreTzManagerDeref> own_ref(own);
+            std::unique_ptr<QoreSandboxManager, QoreTzManagerDeref> creator_ref(creator);
+            addManager(own_ref);
+            addManager(creator_ref);
+            direct = true;
+            restricted = policy || qore_tz_po_restricted(qore_program_private::readParseOptions(*pgm));
+            if (restricted && !policy) {
+                quota = priv->tz_quota;
             }
-            domain = policy->getIsolationDomain();
-            restricted = true;
             return;
         }
-        // code that no sandbox governs is restricted if its parse options restrict a functional domain
-        restricted = runtime_get_parse_options().hasAny(QoreParseOptions(QDOM_ALL & ~(QDOM_INJECTION | QDOM_DEBUGGER
-            | QDOM_IN_MODULE)));
-        if (restricted && charge) {
-            pgm = qore_program_private::get(*charge);
+        // the code that runs
+        {
+            QoreSandboxManagerHelper helper(QoreSandboxManagerHelper::Policy);
+            if (QoreSandboxManager* sm = helper.get()) {
+                sm->ref();
+                std::unique_ptr<QoreSandboxManager, QoreTzManagerDeref> sm_ref(sm);
+                addManager(sm_ref);
+            }
+        }
+        restricted = policy || qore_tz_po_restricted(runtime_get_parse_options());
+        if (restricted && !policy && pgm) {
+            quota = qore_program_private::get(*pgm)->tz_quota;
+        }
+    }
+
+    QoreZoneCharger(const QoreZoneCharger&) = delete;
+    QoreZoneCharger& operator=(const QoreZoneCharger&) = delete;
+
+    enum {
+        CallerMode = 0,
+        ProgramMode = 1,
+        StartupMode = 2,
+    };
+
+private:
+    //! adds a referenced manager, whose reference the object takes if it is stored
+    DLLLOCAL void addManager(std::unique_ptr<QoreSandboxManager, QoreTzManagerDeref>& ref) {
+        QoreSandboxManager* sm = ref.get();
+        if (!sm) {
+            return;
+        }
+        managers.push_back(std::move(ref));
+        policy = true;
+        if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(sm)) {
+            for (QoreSandboxManager* m : *members) {
+                accounts.push_back(m->getMemoryAccount());
+            }
+        } else {
+            accounts.push_back(sm->getMemoryAccount());
+        }
+        if (domain.empty()) {
+            domain = sm->getIsolationDomain();
         }
     }
 };
 
 QoreTimeZoneManager::ChargeResult QoreTimeZoneManager::checkCharge(const QoreZoneCharger& c, int64_t size) {
     if (!c.restricted) {
-        // trusted code is not limited
+        // code that is not restricted is not limited
         return CHARGE_OK;
     }
     for (QoreSandboxMemoryAccount* account : c.accounts) {
         if (account->tz_path_zones >= MaxSandboxPathZones || account->tz_path_bytes + size > MaxSandboxPathZoneBytes) {
             return CHARGE_SANDBOX;
+        }
+        if (c.direct) {
+            int64_t limit = account->limit.load(std::memory_order_relaxed);
+            if (limit > 0 && account->used.load(std::memory_order_relaxed) + size > limit) {
+                return CHARGE_MEMORY;
+            }
         }
     }
     if (!c.domain.empty()) {
@@ -2539,40 +2602,56 @@ QoreTimeZoneManager::ChargeResult QoreTimeZoneManager::checkCharge(const QoreZon
             return CHARGE_DOMAIN;
         }
     }
-    if (c.pgm && (c.pgm->tz_path_zone_count >= MaxProgramPathZones
-            || c.pgm->tz_path_zone_bytes + static_cast<size_t>(size) > MaxProgramPathZoneBytes)) {
+    if (c.quota && (c.quota->zones >= MaxProgramPathZones || c.quota->bytes + size > MaxProgramPathZoneBytes)) {
         return CHARGE_PROGRAM;
-    }
-    if (restricted_zones >= MaxPathZones || restricted_bytes + size > MaxPathZoneBytes) {
-        return CHARGE_PROCESS;
     }
     return CHARGE_OK;
 }
 
-void QoreTimeZoneManager::commitCharge(const QoreZoneCharger& c, int64_t size) {
+void QoreTimeZoneManager::prepareCharge(const QoreZoneCharger& c) {
+    if (!c.restricted) {
+        return;
+    }
+    // everything that can fail is done before anything is charged
+    if (!c.domain.empty()) {
+        domain_path_quota[c.domain];
+    }
+    if (!c.direct && qore_sb_mem.charge) {
+        charged_zone_memory.reserve(charged_zone_memory.size() + 1);
+    }
+}
+
+void QoreTimeZoneManager::commitCharge(const QoreZoneCharger& c, int64_t size) noexcept {
     if (!c.restricted) {
         return;
     }
     for (QoreSandboxMemoryAccount* account : c.accounts) {
         ++account->tz_path_zones;
         account->tz_path_bytes += size;
+        if (c.direct) {
+            // no sandbox call of the thread runs the code (a Program's code while it is parsed): the memory stays
+            // charged to the accounts of the Program's sandboxes, as zones are never freed
+            account->used.fetch_add(size, std::memory_order_relaxed);
+        }
     }
     if (!c.domain.empty()) {
-        PathZoneQuota& q = domain_path_quota[c.domain];
-        ++q.zones;
-        q.bytes += size;
+        domain_quota_map_t::iterator i = domain_path_quota.find(c.domain);
+        assert(i != domain_path_quota.end());
+        ++i->second.zones;
+        i->second.bytes += size;
     }
-    if (c.pgm) {
-        ++c.pgm->tz_path_zone_count;
-        c.pgm->tz_path_zone_bytes += static_cast<size_t>(size);
+    if (c.quota) {
+        ++c.quota->zones;
+        c.quota->bytes += size;
     }
-    ++restricted_zones;
-    restricted_bytes += size;
     // the memory stays charged to the sandbox calls with memory limits of the thread, as zones are never freed
-    if (QoreSandboxCharge* charge = qore_sb_mem.charge) {
-        charge->ref();
-        charged_zone_memory.emplace_back(charge, size);
-        charge->add(size);
+    if (!c.direct) {
+        if (QoreSandboxCharge* charge = qore_sb_mem.charge) {
+            assert(charged_zone_memory.capacity() > charged_zone_memory.size());
+            charged_zone_memory.emplace_back(charge, size);
+            charge->ref();
+            charge->add(size);
+        }
     }
 }
 
@@ -2585,17 +2664,20 @@ void QoreTimeZoneManager::releaseZoneCharges() {
 }
 
 void QoreTimeZoneManager::raiseCharge(ChargeResult result, const char* name, ExceptionSink* xsink) {
+    if (result == CHARGE_MEMORY) {
+        xsink->raiseException("SANDBOX-MEMORY-LIMIT", "cannot load time zone '%s': its memory would exceed the "
+            "memory limit of the sandbox", name);
+        return;
+    }
     const char* who;
     switch (result) {
         case CHARGE_SANDBOX: who = "the sandbox"; break;
         case CHARGE_DOMAIN: who = "the isolation domain"; break;
-        case CHARGE_PROGRAM: who = "the Program"; break;
-        default: who = "restricted code in the process"; break;
+        default: who = "the Program"; break;
     }
     xsink->raiseException("TZINFO-ERROR", "cannot load time zone '%s': %s has loaded the maximum of time zones (%u "
-        "zones or %u MiB per sandbox, isolation domain or Program; %u zones or %u MiB for restricted code in the "
-        "process)", name, who, MaxSandboxPathZones, static_cast<unsigned>(MaxSandboxPathZoneBytes / (1024 * 1024)),
-        MaxPathZones, static_cast<unsigned>(MaxPathZoneBytes / (1024 * 1024)));
+        "zones or %u MiB per sandbox, isolation domain or restricted Program with the Programs it created)", name,
+        who, MaxSandboxPathZones, static_cast<unsigned>(MaxSandboxPathZoneBytes / (1024 * 1024)));
 }
 
 const AbstractQoreZoneInfo* QoreTimeZoneManager::getZone(const std::string& name, const std::string& data,
@@ -2614,45 +2696,38 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::getZone(const std::string& name
         return nullptr;
     }
 
+    // a new zone is created from the data, without the lock, if no zone of the same file and data exists
+    bool known;
     {
         QoreAutoRWReadLocker al(rwl);
         alias_map_t::iterator i = aliases.find(name);
         if (i != aliases.end() && i->second.id == id) {
             return i->second.zone;
         }
-    }
-
-    // a new zone is created from the data, without the lock, if no zone of the same file and data exists
-    std::unique_ptr<QoreZoneInfo> tzi;
-    bool known;
-    {
-        QoreAutoRWReadLocker al(rwl);
         known = identity_map.find(id) != identity_map.end();
     }
-    {
-        if (!known) {
-            std::string zname = primary_name;
-            tzi.reset(new QoreZoneInfo(zname, reinterpret_cast<const unsigned char*>(data.data()), data.size(),
-                label, xsink));
-            if (!*tzi) {
-                assert(*xsink);
-                if (region) {
-                    // a file in the zoneinfo directory that is not a zoneinfo file is no region
-                    xsink->clear();
-                    raiseUnknownRegion(name.c_str(), xsink);
-                }
-                return nullptr;
+    std::unique_ptr<QoreZoneInfo> tzi;
+    if (!known) {
+        std::string zname = primary_name;
+        tzi.reset(new QoreZoneInfo(zname, reinterpret_cast<const unsigned char*>(data.data()), data.size(), label,
+            xsink));
+        if (!*tzi) {
+            assert(*xsink);
+            if (region) {
+                // a file in the zoneinfo directory that is not a zoneinfo file is no region
+                xsink->clear();
+                raiseUnknownRegion(name.c_str(), xsink);
             }
+            return nullptr;
         }
     }
-    int64_t primary_size = tzi ? static_cast<int64_t>(tzi->memorySize()) : 0;
-    std::unique_ptr<QoreAliasZoneInfo> alias;
-    int64_t size = primary_size;
+    int64_t size = tzi ? static_cast<int64_t>(tzi->memorySize()) : 0;
     // the memory of the new zones is checked against the memory limits of the thread's sandbox calls first
-    if (charger.restricted && qore_sb_check_alloc(static_cast<size_t>(size + sizeof(QoreAliasZoneInfo)
-            + name.size()), xsink, "loading a time zone")) {
+    if (charger.restricted && !charger.direct && qore_sb_check_alloc(static_cast<size_t>(size
+            + sizeof(QoreAliasZoneInfo) + name.size()), xsink, "loading a time zone")) {
         return nullptr;
     }
+    std::unique_ptr<QoreAliasZoneInfo> alias;
 
     ChargeResult result;
     const AbstractQoreZoneInfo* rv = nullptr;
@@ -2673,26 +2748,35 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::getZone(const std::string& name
         size += static_cast<int64_t>(sizeof(QoreAliasZoneInfo) + name.capacity());
         result = checkCharge(charger, size);
         if (result == CHARGE_OK) {
+            prepareCharge(charger);
+            if (i == aliases.end()) {
+                i = aliases.emplace(name, AliasZone{nullptr, id}).first;
+            }
             if (tzi) {
                 identity_map[id] = tzi.get();
                 tzi.release();
                 ++tzsize;
             }
+            // nothing below can fail
             rv = alias.get();
-            if (i != aliases.end()) {
+            if (i->second.zone) {
                 // the name reaches another file or other data now: the old zone stays valid for the dates that
                 // refer to it
                 retired_zones.push_back(i->second.zone);
-                i->second.zone = alias.get();
-                i->second.id = id;
-            } else {
-                aliases.emplace(name, AliasZone{alias.get(), id});
             }
-            alias.release();
+            i->second.zone = alias.release();
+            i->second.id = id;
             commitCharge(charger, size);
         } else if (region && pi != identity_map.end()) {
-            // the quota is used up, but the region exists already: its zone is returned without caching the name
-            return pi->second;
+            // a limit is reached, but the region's file is loaded already: the zone of the file, named by its path in
+            // the zoneinfo directory, is returned without caching the name; there is one such zone for each file
+            identity_alias_map_t::iterator ri = region_identity_aliases.find(id);
+            if (ri != region_identity_aliases.end()) {
+                return ri->second;
+            }
+            std::unique_ptr<QoreAliasZoneInfo> ralias(new QoreAliasZoneInfo(primary_name, pi->second));
+            region_identity_aliases[id] = ralias.get();
+            return ralias.release();
         }
     }
     if (result != CHARGE_OK) {
@@ -2702,7 +2786,8 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::getZone(const std::string& name
     return rv;
 }
 
-const AbstractQoreZoneInfo* QoreTimeZoneManager::loadRegion(const char* region, ExceptionSink* xsink, bool startup) {
+const AbstractQoreZoneInfo* QoreTimeZoneManager::loadRegion(const char* region, ExceptionSink* xsink, bool startup,
+        QoreProgram* pgm) {
     // the name is checked before anything is accessed
     if (!isRegionName(region, strlen(region))) {
         raiseUnknownRegion(region, xsink);
@@ -2748,7 +2833,8 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadRegion(const char* region, 
 
     // errors in the data of a zoneinfo file name the region, not the path of the file
     QoreStringMaker label("time zone region \"%s\"", region);
-    QoreZoneCharger charger(startup ? nullptr : getProgram(), !startup);
+    QoreZoneCharger charger(startup ? QoreZoneCharger::StartupMode
+        : (pgm ? QoreZoneCharger::ProgramMode : QoreZoneCharger::CallerMode), pgm ? pgm : getProgram());
     return getZone(region, data, sbuf, primary_name, true, charger, region_aliases, label.c_str(), xsink);
 }
 
@@ -2820,14 +2906,38 @@ void QoreTimeZoneManager::raisePathDenied(const char* name, const char* code, Ex
 const AbstractQoreZoneInfo* QoreTimeZoneManager::loadPath(const char* name, const std::string& path,
         QoreProgram* charge, ExceptionSink* xsink) {
     assert(!path.empty() && path[0] == '/');
-    QoreZoneCharger charger(charge);
+    // the restrictions of the given Program (the %set-time-zone directive while it is parsed) or of the code that
+    // runs decide the limits
+    QoreZoneCharger charger(charge ? QoreZoneCharger::ProgramMode : QoreZoneCharger::CallerMode,
+        charge ? charge : getProgram());
     // the file is opened and read without the lock; a FIFO or a device does not block the open
+    std::string open_path = path;
+    int flags = O_RDONLY | O_CLOEXEC | O_NONBLOCK;
+    if (charger.policy) {
+        // for code that a sandbox governs, the path is resolved and checked first and the file is opened without
+        // following a symbolic link, so that a link replaced after the check cannot make the runtime open another
+        // file; failures are reported as the policy error, which shows nothing about files the code may not read
+        std::unique_ptr<char, decltype(&free)> real(realpath(path.c_str(), nullptr), &free);
+        if (!real) {
+            raisePathDenied(name, "FILESYSTEM-ACCESS-DENIED", xsink);
+            return nullptr;
+        }
+        open_path = real.get();
+        if (open_path != path && checkPathPolicy(name, open_path, xsink)) {
+            return nullptr;
+        }
+        flags |= O_NOFOLLOW;
+    }
     int fd;
     do {
-        fd = open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+        fd = open(open_path.c_str(), flags);
     } while (fd < 0 && errno == EINTR);
     if (fd < 0) {
-        xsink->raiseErrnoException("FILE-OPEN2-ERROR", errno, "cannot open '%s'", name);
+        if (charger.policy) {
+            raisePathDenied(name, "FILESYSTEM-ACCESS-DENIED", xsink);
+        } else {
+            xsink->raiseErrnoException("FILE-OPEN2-ERROR", errno, "cannot open '%s'", name);
+        }
         return nullptr;
     }
     ON_BLOCK_EXIT(close, fd);
@@ -2836,7 +2946,7 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadPath(const char* name, cons
     // path named when the policy was checked
     struct stat sbuf;
     std::string canon;
-    if (fstat(fd, &sbuf) || get_open_file_path(fd, sbuf, path, canon)) {
+    if (fstat(fd, &sbuf) || get_open_file_path(fd, sbuf, open_path, canon)) {
         if (charger.policy) {
             raisePathDenied(name, "FILESYSTEM-ACCESS-DENIED", xsink);
         } else {
@@ -2845,7 +2955,7 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadPath(const char* name, cons
         }
         return nullptr;
     }
-    if (canon != path && checkPathPolicy(name, canon, xsink)) {
+    if (canon != path && canon != open_path && checkPathPolicy(name, canon, xsink)) {
         return nullptr;
     }
     std::string data;
@@ -2894,6 +3004,41 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadRegion(const char* name
 #endif
 }
 
+const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadRegionForProgram(const char* name, QoreProgram* pgm,
+        ExceptionSink* xsink) {
+    assert(name && pgm);
+#ifdef _Q_WINDOWS
+    return findLoadRegion(name, xsink);
+#else
+    if (!*name) {
+        return nullptr;
+    }
+    if (const AbstractQoreZoneInfo* local = findLocalZone(name)) {
+        return local;
+    }
+    return loadRegion(name, xsink, false, pgm);
+#endif
+}
+
+const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadedZone(const char* name) {
+    assert(name);
+    if (const AbstractQoreZoneInfo* local = findLocalZone(name)) {
+        return local;
+    }
+    QoreAutoRWReadLocker al(rwl);
+#ifdef _Q_WINDOWS
+    tzmap_t::iterator i = tzmap.find(name);
+    return i != tzmap.end() ? i->second : nullptr;
+#else
+    alias_map_t::iterator i = region_aliases.find(name);
+    if (i != region_aliases.end()) {
+        return i->second.zone;
+    }
+    i = path_aliases.find(name);
+    return i != path_aliases.end() ? i->second.zone : nullptr;
+#endif
+}
+
 const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadRegionOrPath(const char* name, ExceptionSink* xsink) {
     assert(name);
     // a path is loaded subject to the restrictions of the calling code, also the path of the local zone
@@ -2915,9 +3060,6 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadRegionFromPath(const ch
     if (!*name) {
         xsink->raiseException("TZINFO-ERROR", "no zoneinfo file path given");
         return nullptr;
-    }
-    if (!charge) {
-        charge = getProgram();
     }
 #ifdef _Q_WINDOWS
     // the file is not identified by its open handle on Windows, so code that a sandbox governs cannot load a path
