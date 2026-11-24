@@ -1887,6 +1887,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       \c DATA-PROVIDER-REGISTRATION-DENIED for the process-wide type cache when the calling code is sandboxed, as its
       lock serializes every caller of the module
       (<a href="https://github.com/qoretechnologies/qore/issues/6749">issue 6749</a>)
+    - @ref DataProvider::DataProvider::tryLoadProviderForConnectionFromEnv() "DataProvider::tryLoadProviderForConnectionFromEnv()"
+      looks up every connection name through the \c QORE_DATA_PROVIDERS modules also after a lookup through them,
+      which made every later lookup return nothing, and passes on an exception of a lookup instead of reporting the
+      module as invalid (<a href="https://github.com/qoretechnologies/qore/issues/7484">issue 7484</a>)
 
     @section dataprovider_v3_11 DataProvider v3.11
     - added @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions()

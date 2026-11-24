@@ -44,6 +44,7 @@
 #include "qore/intern/QuicSession.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
 #include "qore/intern/QoreIoClassesOps.h"
+#include "qore/intern/QoreLastAttemptPollOperation.h"
 
 class QoreEventNotifier;
 
@@ -62,6 +63,22 @@ constexpr size_t QUIC_RECV_BUF_SIZE = 2048;
 DLLLOCAL SocketUpgradeClientSslPollOperation* qore_http_client_ssl_upgrade(ExceptionSink* xsink,
         QoreSocketObject* sock, SslUpgradeMode mode, QoreSSLCertificate* certificate, QoreSSLPrivateKey* private_key,
         int64 credential_connection_id);
+
+//! Non-blocking reader of the HTTP header of a response, as an HTTP client reads it (qore#7485)
+/** The first line of the header must be a valid status line (RFC 9112 section 4), whatever it starts with
+    (qore_socket_private::checkHttpStatusLine()); SocketReadHttpHeaderPollOperation reads a header as a response only if
+    it starts with \c "HTTP/", and as a request if not.
+
+    The class is the mark of a response read: SocketReadHttpHeaderPollOperation::continuePoll() checks for it, so that
+    the layout of the public class does not change (design/module-api-version.md).
+*/
+class DLLLOCAL SocketReadHttpResponseHeaderPollOperation final : public SocketReadHttpHeaderPollOperation {
+public:
+    //! Creates the operation; see SocketReadHttpHeaderPollOperation
+    DLLLOCAL SocketReadHttpResponseHeaderPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
+            : SocketReadHttpHeaderPollOperation(xsink, sock) {
+    }
+};
 
 class SocketUpgradeServerSslPollOperation : public SocketPollSocketOperationBase {
 public:
@@ -496,7 +513,7 @@ protected:
     }
 };
 
-class SocketAcceptPollOperation : public SocketAcceptPollSocketOperationBase {
+class SocketAcceptPollOperation : public SocketAcceptPollSocketOperationBase, public QoreLastAttemptPollOperation {
 public:
     DLLLOCAL SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
     DLLLOCAL SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool ssl);
@@ -560,6 +577,14 @@ public:
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
     DLLLOCAL virtual QoreValue getOutput() const override;
+
+    //! A plain TCP accept completes in one step: its step accepts a connection in the backlog or asks to wait again
+    /** An accept that negotiates TLS does not opt in: its step would accept the connection and start the TLS
+        handshake, and the timeout would then discard the accepted connection (qore#7480)
+    */
+    DLLLOCAL virtual bool completesInLastAttempt() const override {
+        return sgoal == SPG_ACCEPT;
+    }
 
     DLLLOCAL bool timeoutBeforeAccept() const {
         return aborted_before_accept || state == SPS_ACCEPTING;
@@ -1082,7 +1107,8 @@ private:
 
     // Idle phase: timeout deadline in milliseconds on the monotonic clock (q_get_monotonic_us() / 1000, #6150)
     int64 idle_timeout_ms;
-    // the idle timeout in milliseconds, for the deadline of the next request after one answered by a fast route
+    // the idle timeout (TTL) in milliseconds: enterIdle() restarts the deadline from it when a response has been sent,
+    // a fast route's answer included (qore#7488)
     int64 idle_ttl_ms = 0;
 
     // the response of a fast route that is being sent; see serveFastRoute()
@@ -1596,7 +1622,10 @@ private:
 
     //! Waits for the next request after a response, or ends (Phase::Closed) if the server drains the connection
     DLLLOCAL QoreHashNode* enterIdle(ExceptionSink* xsink);
+    //! the idle deadline on the monotonic clock in ms: given to the constructor, and restarted when the response has
+    //! been sent (see enterIdle())
     int64 idle_timeout_ms;
+    //! the idle time (TTL) in ms: the time from the construction to the deadline given to it (qore#7488)
     int64 idle_ttl_ms;
     mutable ReferenceHolder<QoreHashNode> header_output;
 

@@ -1610,6 +1610,13 @@ DLLLOCAL void parse_note_implicit_arg_use();
 
 DLLLOCAL QoreParseOptions parse_get_parse_options();
 DLLLOCAL QoreParseOptions runtime_get_parse_options();
+
+//! returns the Program that the thread runs in if it is also the call Program context and its parse options are the
+//! thread's runtime parse options and those of \a rc, the thread's RuntimeConfig; nullptr otherwise
+/** Then code of the Program runs without entering it again: a class without a constructor whose source Program it is
+    constructs its objects without changing the thread's state (QoreImplicitConstructorProgramHelper, qore#7513)
+*/
+DLLLOCAL QoreProgram* runtime_get_program_with_current_options(const RuntimeConfig& rc);
 DLLLOCAL QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n);
 
 DLLLOCAL bool parse_check_parse_option(const QoreParseOptions& o);

@@ -244,7 +244,14 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     A WebSocket handler takes over the connection of its HTTP/1.1 request, which must ask for the protocol upgrade (an
     \c Upgrade field and the \c upgrade token in its \c Connection field; a \c 101 response to another request is
     answered with \c 500), after the server sent the \c 101 response; the connection then serves no other request,
-    and is closed when the WebSocket connection ends.  The handler of an HTTP/1.1 event stream gets the connection's
+    and is closed when the WebSocket connection ends.  A WebSocket handler that gets the socket of its request does
+    not get the connection's socket: the server makes the connection's poll operation from the connection's socket
+    and keeps it, and sets up the connection with
+    @ref WebSocketHandler::WebSocketHandler::startAsyncWebSocketForRequest() "startAsyncWebSocketForRequest()", which
+    gives the handler and its connection object the socket of the request; the request of a socket handler that does
+    not implement it, or of a server without asynchronous I/O, is answered with \c 500 instead of the \c 101 (see
+    <a href="https://github.com/qoretechnologies/qore/issues/7476">issue 7476</a>).  The handler of an HTTP/1.1 event
+    stream gets the connection's
     socket for the stream, unless it gets the socket of its request: then the request must accept an event stream
     (\c text/event-stream in its \c Accept field; otherwise it is answered with \c 406), the server sends the
     stream's header, with <tt>Connection: close</tt>, makes the stream's poll operation from the connection's socket
@@ -360,7 +367,8 @@ log("started listener on %s", lh.desc);
     - an HTTP/1.x request whose framing is ambiguous is answered with 400 (Bad Request), or 501 (Not Implemented)
       for a transfer coding other than chunked, and the connection is closed: a request with both
       \c Transfer-Encoding and \c Content-Length, a \c Transfer-Encoding that does not end with the chunked coding
-      alone, more than one \c Host, or a header line that ends with a bare LF; a chunked body that cannot be framed,
+      alone, more than one \c Host, a header line that ends with a bare LF, or a header field line with a control
+      character other than tab; a chunked body that cannot be framed,
       such as one whose trailer section has a line that ends with a bare LF or an empty line before its end, is
       answered with 400 instead of 500; the chunked coding is recognized without regard to case and whitespace
     - an HTTP/2 or HTTP/3 request body that the server collects for a handler and whose memory cannot be allocated
@@ -6457,6 +6465,23 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 logViaHandlerIfPossible(handler, cx.id, err);
                 throw "WEBSOCKET-HANDLER-ERROR", err;
             } else {
+                # a handler that gets the socket of its request (see AbstractHttpRequestHandler::needsHandlerSocketView(),
+                # as for a handler declared by sandboxed code) does not get the connection's socket for the WebSocket
+                # connection: the server makes the connection's poll operation and keeps it, and the handler sets up
+                # the connection with startAsyncWebSocketForRequest() (WebSocketHandler) and the socket of the request;
+                # a handler that cannot gets no connection, and the request is answered with an error before the 101
+                # (qore#7476)
+                bool socket_view = exists request_helper.handler_sock && !cx."header-info".http2
+                    && !cx."header-info".http3;
+                if (socket_view && (!asyncIo || !handler.hasCallableMethod("startAsyncWebSocketForRequest"))) {
+                    string err = sprintf("101 Switching Protocols returned from handler %y (class %y), which gets the "
+                        "socket of its request, but the WebSocket connection cannot be set up without the connection's "
+                        "socket: this needs the server's asynchronous I/O and a handler that implements "
+                        "startAsyncWebSocketForRequest() (WebSocketHandler)", cx.handler_name, handler.className());
+                    listener.logError("cid %d: %s", cx.id, err);
+                    logViaHandlerIfPossible(handler, cx.id, err);
+                    throw "WEBSOCKET-HANDLER-ERROR", err;
+                }
                 if (listener.registerDedicatedSocket(request_helper, cx.id, handler)) {
                     # True if the handler manages the connection after start() returns (an asynchronous HTTP/1.1
                     # WebSocket connection): the server's end of the connection (ws_end below) then runs when the
@@ -6517,7 +6542,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # reports the end of the connection to the request's async target if the handler takes it over
                     *HttpServerAsyncIo::HttpPersistentRequestEnd pend;
                     if (ws_poll_op) {
-                        ws_cx."header-info".ws_poll_op = ws_poll_op;
+                        # the poll operation of a handler that gets the socket of its request is given to
+                        # startAsyncWebSocketForRequest() only, never in the context (qore#7476)
+                        if (!socket_view) {
+                            ws_cx."header-info".ws_poll_op = ws_poll_op;
+                        }
                         # the server's end of a connection that the handler manages externally, which the handler
                         # runs when the connection ends; it holds the request helper, so the listener's count of
                         # dedicated connections (dThreads, which a stop of the listener waits for) includes the
@@ -6566,10 +6595,19 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         # handler runs ws_end when it ends; no thread of the handler pool waits for it
                         # the WebSocket handler takes over the connection of an HTTP/1.1 request, whose own
                         # socket ended with the request (qore#7305)
-                        externally_managed = sockhandler.start(listener.getID(), ws_cx, hdr,
-                                (cx."header-info".http2 || cx."header-info".http3)
-                                    ? (request_helper.handler_sock ?? s)
-                                    : s)
+                        externally_managed = (socket_view
+                                # the connection gets the socket of the request, whose methods give the connection's
+                                # information only (qore#7476)
+                                # the method is found by name, so it gets a handle that gives neither the poll
+                                # operation nor the connection's socket: a method of another class with the same
+                                # name gets nothing more (qore#7476)
+                                ? call_object_method(handler, "startAsyncWebSocketForRequest", listener.getID(), ws_cx,
+                                    hdr, request_helper.handler_sock,
+                                    new HttpServer::HttpWebSocketPollOperationHandle(ws_poll_op))
+                                : sockhandler.start(listener.getID(), ws_cx, hdr,
+                                    (cx."header-info".http2 || cx."header-info".http3)
+                                        ? (request_helper.handler_sock ?? s)
+                                        : s))
                             && holder.isAccepted();
                         if (externally_managed) {
                             # the connection stays open after the request returns

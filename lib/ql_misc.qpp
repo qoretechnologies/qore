@@ -108,6 +108,26 @@ static QoreListNode* qore_take_call_function_args_list(const QoreListNode* args,
 #define WARN_MODULES QP_WARN_MODULES
 #endif
 
+// Returns the path of the module being loaded as the calling code may see it: the location of the module on the
+// host is external information, so code restricted with PO_NO_EXTERNAL_INFO (the code of a module loaded by such
+// code has its restrictions) gets the last component of the path, the file name of the module, which identifies it
+// as well while it is loaded
+static QoreStringNode* q_module_context_path_for_caller(const char* path) {
+    if (!(runtime_get_parse_options() & PO_NO_EXTERNAL_INFO)) {
+        return new QoreStringNode(path);
+    }
+    const char* end = path + strlen(path);
+    while (end > path + 1 && (end[-1] == '/' || end[-1] == '\\')) {
+        --end;
+    }
+    const char* last = end;
+    while (last > path && last[-1] != '/' && last[-1] != '\\') {
+        --last;
+    }
+    return last == end ? new QoreStringNode(path, end - path, QCS_DEFAULT)
+        : new QoreStringNode(last, end - last, QCS_DEFAULT);
+}
+
 // the hardening options of the compilation of the library, from the macros that the compiler defined for it
 static QoreHashNode* qore_get_library_hardening_info() {
     QoreHashNode* h = new QoreHashNode(autoTypeInfo);
@@ -2527,8 +2547,10 @@ string parse_base64_url_string_to_string(string base64_url_string, *string encod
 
 //! Returns a list of hashes describing the currently-loaded %Qore modules
 /** @return a list of hashes describing the currently-loaded %Qore modules; each element in the list is a hash with the following keys:
-    - \c filename: the path to the module's primary file
-    - \c path: the path to the module itself (different from \c filename with split user modules)
+    - \c filename: the path to the module's primary file (not present in code restricted with
+      @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO")
+    - \c path: the path to the module itself (different from \c filename with split user modules; not present in
+      code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO")
     - \c name: the name of the module
     - \c desc: the description of the module
     - \c version: the version of the module
@@ -2559,8 +2581,10 @@ list<hash<auto>> getModuleList() [flags=DEPRECATED] {
 
 //! Returns a list of hashes describing the currently-loaded %Qore modules
 /** @return a list of hashes describing the currently-loaded %Qore modules; each element in the list is a hash with the following keys:
-    - \c filename: the path to the module
-    - \c path: the path to the module itself (different from \c filename with split user modules)
+    - \c filename: the path to the module (not present in code restricted with
+      @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO")
+    - \c path: the path to the module itself (different from \c filename with split user modules; not present in
+      code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO")
     - \c name: the name of the module
     - \c desc: the description of the module
     - \c version: the version of the module
@@ -2596,8 +2620,10 @@ list<hash<auto>> get_module_list() {
 
 //! Returns a hash of hashes describing the currently-loaded %Qore modules; the top-level hash keys are the module names
 /** @return a hash of hashes describing the currently-loaded %Qore modules; the top-level hash keys are the module names; the values are hashes with the following keys:
-    - \c filename: the path to the module
-    - \c path: the path to the module itself (different from \c filename with split user modules)
+    - \c filename: the path to the module (not present in code restricted with
+      @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO")
+    - \c path: the path to the module itself (different from \c filename with split user modules; not present in
+      code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO")
     - \c name: the name of the module
     - \c desc: the description of the module
     - \c version: the version of the module
@@ -2628,8 +2654,10 @@ hash<string, hash<auto>> getModuleHash() [flags=DEPRECATED] {
 
 //! Returns a hash of hashes describing the currently-loaded %Qore modules; the top-level hash keys are the module names
 /** @return a hash of hashes describing the currently-loaded %Qore modules; the top-level hash keys are the module names; the values are hashes with the following keys:
-    - \c filename: the path to the module
-    - \c path: the path to the module itself (different from \c filename with split user modules)
+    - \c filename: the path to the module (not present in code restricted with
+      @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO")
+    - \c path: the path to the module itself (different from \c filename with split user modules; not present in
+      code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO")
     - \c name: the name of the module
     - \c desc: the description of the module
     - \c version: the version of the module
@@ -4215,8 +4243,17 @@ hash<string, hash<auto>> get_qore_option_hash() [flags=CONSTANT] {
     @code{.py}
 hash<auto> h = get_qore_library_info();
     @endcode
+
+    @note this function reports the module directories, the build host and the compiler and linker flags of the
+    host's installation of the library, so it is external information: code restricted with
+    @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" cannot call it (since %Qore 3.0); the version and platform
+    of the library are also available as @ref system_and_build_constants "system and build constants" such as
+    @ref Qore::VersionString "VersionString" and @ref Qore::PlatformOS "PlatformOS", but the constants
+    @ref Qore::BuildHost "BuildHost", @ref Qore::Compiler "Compiler", @ref Qore::CFLAGS "CFLAGS" and
+    @ref Qore::LDFLAGS "LDFLAGS" still give build details to code with this restriction, as constants have no
+    @ref function_domains "functional domain"
 */
-hash<auto> get_qore_library_info() [flags=CONSTANT] {
+hash<auto> get_qore_library_info() [flags=CONSTANT;dom=EXTERNAL_INFO] {
    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
 
    h->setKeyValue("PlatformOS", new QoreStringNode(qore_target_os), xsink);
@@ -4631,7 +4668,9 @@ code get_call_reference(string identifier) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 }
 
 //! Returns the path of the module currently being loaded, if any
-/** @return the path of the module currently being loaded, if any
+/** @return the path of the module currently being loaded, if any; for code restricted with
+    @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" (since %Qore 3.0), only the last component of the path (the
+    file name of the module), as the location of the module on the host is external information
 
     @see
     - @ref Qore::get_module_context_path_ex()
@@ -4643,7 +4682,7 @@ code get_call_reference(string identifier) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (!str) {
         return QoreValue();
     }
-    return new QoreStringNode(str);
+    return q_module_context_path_for_caller(str);
 }
 
 //! Returns the name of the module currently being loaded
@@ -4666,7 +4705,9 @@ string get_module_context_name_ex() [flags=CONSTANT] {
 }
 
 //! Returns the path of the module currently being loaded
-/** @return the path of the module currently being loaded
+/** @return the path of the module currently being loaded; for code restricted with
+    @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" (since %Qore 3.0), only the last component of the path (the
+    file name of the module), as the location of the module on the host is external information
 
     @throw NO-MODULE-CONTEXT Thrown if there is no module context
 
@@ -4681,7 +4722,7 @@ string get_module_context_path_ex() [flags=CONSTANT] {
         xsink->raiseException("NO-MODULE-CONTEXT", "no module context is currently set");
         return QoreValue();
     }
-    return new QoreStringNode(str);
+    return q_module_context_path_for_caller(str);
 }
 
 //! Returns the approximate memory size in bytes of any Qore value

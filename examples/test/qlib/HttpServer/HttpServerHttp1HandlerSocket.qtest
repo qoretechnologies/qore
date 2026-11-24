@@ -631,6 +631,7 @@ class HttpServerHttp1HandlerSocketTest inherits QUnit::Test {
 %requires HttpServerUtil
 %requires HttpServerAsyncIo
 %requires ServerSentEventHandler
+%requires WebSocketHandler
 %requires RestHandler
 %requires DataStreamUtil
 %requires DataStreamRequestHandler
@@ -1096,6 +1097,116 @@ AbstractHttpRequestHandler sub get_raw_sse_handler() {
     return new TenantRawSseHandler();
 }
 
+#! a WebSocket connection that echoes its messages and reports the socket it got (qore#7476)
+class TenantWsConnection inherits WebSocketConnection {
+    private {
+        Queue results;
+    }
+
+    constructor(WebSocketHandler handler, Queue results) : WebSocketConnection(handler) {
+        self.results = results;
+    }
+
+    registered() {
+        string r = \"registered sock=\" + getSocket().className();
+        try {
+            auto v = cast<NormalMember>(Class::forName(\"WebSocketHandler::WebSocketConnection\")
+                .getMember(\"async_ws_poll_op\")).getValue(self);
+            r += \" get.op=\" + (v.typeCode() == NT_OBJECT ? v.className() : v.type());
+        } catch (hash<ExceptionInfo> ex) {
+            r += \" get.op=\" + ex.err;
+        }
+        results.push(r);
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+}
+
+#! a WebSocket handler that looks for the connection's socket and poll operation in what it gets (qore#7476)
+class TenantWsHandler inherits WebSocketHandler {
+    public {
+        Queue results();
+    }
+
+    constructor() : WebSocketHandler() {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new TenantWsConnection(self, results);
+    }
+
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket sock) {
+        results.push(sprintf(\"start sock=%s ctx=%s\", sock.className(), (select tenant_classes(cx),
+            $1 =~ /PollOperation/ || $1 == \"Socket\").join(\",\")));
+        return WebSocketHandler::startImpl(lid, cx, hdr, sock);
+    }
+}
+
+AbstractHttpRequestHandler sub get_ws_handler() {
+    return new TenantWsHandler();
+}
+
+#! a socket handler that is not a WebSocketHandler and declares the method that sets up the connection of a handler
+#! that gets the socket of its request, to get what the server gives it (qore#7476)
+class TenantFakeWsHandler inherits AbstractHttpSocketHandler {
+    public {
+        Queue results();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{
+            \"code\": 101,
+            \"hdr\": {
+                \"Upgrade\": \"websocket\",
+                \"Connection\": \"Upgrade\",
+            },
+        };
+    }
+
+    bool startAsyncWebSocketForRequest(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s, auto op) {
+        list<string> got = ();
+        got += \"class=\" + op.className();
+        foreach string m in ((\"getSocket\", \"getPollOperation\", \"getOutput\", \"continuePoll\")) {
+            try {
+                auto v = call_object_method(op, m);
+                got += m + \"=\" + (v.typeCode() == NT_OBJECT ? v.className() : v.type());
+            } catch (hash<ExceptionInfo> ex) {
+                got += m + \"=\" + ex.err;
+            }
+        }
+        try {
+            got += \"op=\" + op.op.className();
+        } catch (hash<ExceptionInfo> ex) {
+            got += \"op=\" + ex.err;
+        }
+        try {
+            got += \"get.op=\" + cast<NormalMember>(Class::getClass(op).getMember(\"op\")).getValue(op).className();
+        } catch (hash<ExceptionInfo> ex) {
+            got += \"get.op=\" + ex.err;
+        }
+        try {
+            cast<NormalMember>(Class::getClass(op).getMember(\"op\")).setValue(op, NOTHING);
+            got += \"set.op=ok\";
+        } catch (hash<ExceptionInfo> ex) {
+            got += \"set.op=\" + ex.err;
+        }
+        results.push(got.join(\" \"));
+        return False;
+    }
+
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
+        results.push(\"startImpl\");
+        return False;
+    }
+}
+
+AbstractHttpRequestHandler sub get_fake_ws_handler() {
+    return new TenantFakeWsHandler();
+}
+
 #! a handler made when the Program is parsed, before or after the Program is sandboxed
 class EarlyHandler inherits AbstractHttpRequestHandler {
     public {
@@ -1186,6 +1297,8 @@ nothing sub run_code(code c) {
         addTestCase("sandboxed code cannot reach the server's state of its request", \sandboxedReachTest());
         addTestCase("an event stream of a sandboxed handler", \sandboxedSseTest());
         addTestCase("an event stream of a sandboxed handler gets no connection socket", \sandboxedSseNoSocketTest());
+        addTestCase("a WebSocket connection of a sandboxed handler gets no connection socket",
+            \sandboxedWebSocketNoSocketTest());
         addTestCase("the abort of an HTTP/2 request's stream", \streamAbortTest(), "h2");
         addTestCase("the abort of an HTTP/3 request's stream", \streamAbortTest(), "h3");
         set_return_value(main());
@@ -2429,6 +2542,89 @@ class Peek inherits HttpServerAsyncIo::Http1SseConnection {
         }
         assertEq("PARSE-EXCEPTION", err.err, "a subclass cannot access the poll operation");
         assertRegex("poll_op", err.desc ?? "", "the error is the access to the poll operation");
+    }
+
+    #! the HTTP/1.1 WebSocket connection of a sandboxed handler gets the socket of its request, never the connection's
+    #! socket or poll operation; a socket handler that cannot set up its connection without them gets none (qore#7476)
+    sandboxedWebSocketNoSocketTest() {
+        Program p = getTenantProgram();
+        object ws = p.callFunction("get_ws_handler");
+        HttpServer srv(<HttpServerOptionInfo>{});
+        on_exit delete srv;
+        srv.setHandler("ws", "^ws", NOTHING, cast<AbstractHttpRequestHandler>(ws));
+        int srv_port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        srv.waitForAsyncIo();
+
+        # the handler's connection: messages are echoed, and neither the handler nor its connection gets the
+        # connection's socket or poll operation
+        {
+            Queue msgs();
+            WebSocketClient wsc(sub (*data msg) { if (exists msg) { msgs.push(msg); } },
+                {"url": "ws://localhost:" + srv_port + "/ws"});
+            wsc.connect();
+            on_exit wsc.disconnect();
+            assertEq("start sock=Http1HandlerSocket ctx=", ws.results.get(HangGuard),
+                "the handler gets the socket of the request, and no poll operation or socket in the context");
+            assertEq("registered sock=Http1HandlerSocket get.op=REFLECTION-ACCESS-ERROR", ws.results.get(HangGuard),
+                "the connection gets the socket of the request, and cannot read its poll operation by reflection");
+            wsc.send("hello");
+            assertEq("hello", msgs.get(HangGuard), "the connection's messages are echoed");
+        }
+
+        # a socket handler that takes over the connection with the socket it is given gets no connection: the
+        # request is answered with an error before any protocol switch, and the handler's start is not called
+        srv.setHandler("raw", "^switch", NOTHING, cast<AbstractHttpRequestHandler>(p.callFunction(
+            "get_socket_handler")));
+        {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("GET /switch HTTP/1.1\r\nHost: localhost\r\nUpgrade: x\r\nConnection: Upgrade\r\n\r\n");
+            hash<auto> h = c.readHTTPHeader(HangGuard);
+            assertEq(500, h.status_code, "no protocol switch without a setup that keeps the connection's socket");
+            string body = c.recv(h."content-length".toInt(), HangGuard);
+            assertRegex("startAsyncWebSocketForRequest", body, "the error names the missing setup");
+            assertEq("", readToClose(c), "the handler did not get the connection");
+        }
+
+        # a socket handler of another class that declares the method that sets up the connection gets a handle that
+        # gives neither the poll operation nor the connection's socket
+        object fake = p.callFunction("get_fake_ws_handler");
+        srv.setHandler("fake", "^fake", NOTHING, cast<AbstractHttpRequestHandler>(fake));
+        {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("GET /fake HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n");
+            hash<auto> h = c.readHTTPHeader(HangGuard);
+            assertEq(101, h.status_code);
+            assertEq("class=HttpWebSocketPollOperationHandle getSocket=METHOD-DOES-NOT-EXIST "
+                "getPollOperation=METHOD-DOES-NOT-EXIST getOutput=METHOD-DOES-NOT-EXIST "
+                "continuePoll=METHOD-DOES-NOT-EXIST op=PRIVATE-MEMBER get.op=REFLECTION-ACCESS-ERROR "
+                "set.op=REFLECTION-ACCESS-ERROR", fake.results.get(HangGuard),
+                "the handle gives no poll operation and no socket");
+            assertEq(0, fake.results.size(), "the handler's startImpl() is not called");
+        }
+
+        # code of a subclass cannot take the poll operation from a connection
+        Program q(PO_NO_CHILD_PO_RESTRICTIONS);
+        *hash<ExceptionInfo> err;
+        try {
+            q.parse("%modern
+%requires WebSocketHandler
+class Peek inherits WebSocketHandler::WebSocketConnection {
+    constructor(WebSocketHandler::WebSocketHandler h) : WebSocketHandler::WebSocketConnection(h) {
+    }
+    static *object peek(WebSocketHandler::WebSocketConnection c) {
+        return c.async_ws_poll_op;
+    }
+}
+", "peek");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        assertEq("PARSE-EXCEPTION", err.err, "a subclass cannot access the poll operation of a connection");
+        assertRegex("async_ws_poll_op", err.desc ?? "", "the error is the access to the poll operation");
     }
 
     #! Reads a connection until the peer closes it and returns what was read; a read timeout is a failure

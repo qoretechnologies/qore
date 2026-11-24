@@ -820,7 +820,8 @@ public class HttpClientStreamHandle {
 
         @return the response hash with status_code, headers, body
 
-        @throw HTTPCLIENT-REQUEST-ERROR if the request fails
+        @throw HTTPCLIENT-REQUEST-ERROR if the request fails; the description gives the error of the request, and the
+        argument is that of the error (such as the start of an invalid status line of the response)
         @throw HTTPCLIENT-CANCELLED the stream was cancelled (see @ref cancel())
         @throw HTTPCLIENT-TIMEOUT if the request times out, also while it waits for its connection to become ready
         @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE the response body exceeds the maximum response body size, as
@@ -955,7 +956,8 @@ public class HttpClientStreamHandle {
             if (ex.err == "HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE") {
                 rethrow;
             }
-            throw "HTTPCLIENT-REQUEST-ERROR", sprintf("%s: %s", ex.err, ex.desc);
+            # the argument of the error, such as the start of an invalid status line (qore#7485), is kept
+            throw "HTTPCLIENT-REQUEST-ERROR", sprintf("%s: %s", ex.err, ex.desc), ex.arg;
         }
     }
 

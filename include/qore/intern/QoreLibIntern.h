@@ -2826,6 +2826,54 @@ DLLLOCAL size_t q_find_last_path_sep(const QoreString& path);
 
 // reutrns the given file's mode or 0 if the stat() call fails
 DLLLOCAL int q_get_mode(const QoreString& path);
+
+class QoreSandboxManager;
+
+//! gets the canonical path of an open file and verifies that the path names that file now
+/** The path is taken from the descriptor (F_GETPATH on macOS, /proc/self/fd on Linux), not from the name it was
+    opened with: a name can reach a file other than the one it appears to name (ex: a descriptor alias such as
+    /dev/fd/N on macOS, which realpath() does not resolve).  The name is resolved with realpath() only where the
+    descriptor cannot be asked (no F_GETPATH and no procfs).
+
+    @param fd the descriptor of the open file
+    @param sbuf the status of the open file (fstat())
+    @param opened_path the path the file was opened with, or nullptr
+    @param canon the canonical path of the file
+
+    @return 0 for OK, -1 if the file has no path (a pipe, a socket, a removed file), the path cannot be determined
+    or it does not name the open file (it was replaced or moved)
+*/
+DLLLOCAL int q_get_open_file_path(int fd, const struct stat& sbuf, const char* opened_path, std::string& canon);
+
+//! checks the sandbox filesystem policy for the file actually opened by a name that the policy allowed
+/** The policy is checked for the canonical path of the open descriptor (q_get_open_file_path()) unless it is the name
+    that was checked before it was opened.  The exception names the file as given, not the file reached.
+
+    @param sm the sandbox manager whose policy applies
+    @param fd the descriptor opened
+    @param name the name it was opened with, which the policy allowed
+    @param access_mode the QSEC_* access requested
+    @param xsink exceptions are raised here: FILESYSTEM-ACCESS-DENIED if the file cannot be identified, or the error
+    of the policy check
+
+    @return 0 if the policy allows the access to the file opened, -1 if not (an exception has been raised)
+*/
+DLLLOCAL int q_check_opened_file_policy(QoreSandboxManager& sm, int fd, const char* name, int access_mode,
+        ExceptionSink* xsink);
+
+//! opens a file descriptor (close-on-exec) for a name that the sandbox filesystem policy, if any, allowed
+/** With a policy, the file actually opened is checked too (q_check_opened_file_policy()), and O_TRUNC is applied only
+    once it is allowed; for code that opens a file by name outside of QoreFile
+
+    @param xsink a denial is raised here; if nullptr, the open fails with errno EACCES
+
+    @return the descriptor, or -1 for an error: errno is set, or an exception has been raised in xsink
+*/
+DLLLOCAL int q_open_policy_checked(const char* fn, int flags, int mode, ExceptionSink* xsink);
+
+//! test hook: a place where a concurrent change of the file system can replace the given name (see
+//! dbg_fs_swap_on_open() in a debug build; does nothing in other builds; qore#7498)
+DLLLOCAL void q_dbg_fs_swap_point(const char* name);
 //! returns the byte length of the next UTF-8 character, 0 for an invalid character (RFC 3629: also an overlong form,
 //! a surrogate or a code point above U+10FFFF) or minus the length of the character if the valid_len bytes are a
 //! valid start of it (qore#6604)
