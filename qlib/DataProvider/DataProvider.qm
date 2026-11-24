@@ -1771,6 +1771,8 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       @ref DataProvider::AbstractTimestampWatchDataProvider::getEventName() "AbstractTimestampWatchDataProvider::getEventName()"
       and @ref DataProvider::AbstractTimestampWatchDataProvider::getWatchRecordTimestamp() "getWatchRecordTimestamp()"
       (<a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
+    - @ref DataProvider::DataProviderActionCatalog::actionMutatesState() "actionMutatesState()" can classify
+      an action with its configured options using the producer's read-only conditions (issue 7470)
     - added @ref DataProvider::DataProvider::setModuleHostHooks() "DataProvider::setModuleHostHooks()" and
       @ref DataProvider::DataProvider::getModuleHostHooks() "DataProvider::getModuleHostHooks()": the host sets, once
       and before a module is loaded, the hooks the module needs to run code for sandboxed callers, and the module reads

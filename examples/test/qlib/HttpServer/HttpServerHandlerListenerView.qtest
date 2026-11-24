@@ -634,7 +634,7 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host, Queue from_host) {
         on_exit delete server;
         server.setDefaultHandler("ws", handler);
         int port = server.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -644,7 +644,7 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host, Queue from_host) {
         # HTTP/1.1 upgrade, HTTP/2 and HTTP/3 extended CONNECT
         foreach string v in (("1.1", "2.0", "3.0")) {
             WebSocketClient wsc(sub (*data msg) {}, {
-                "url": sprintf("wss://localhost:%d", port),
+                "url": sprintf("wss://127.0.0.1:%d", port),
                 "http_version": v,
                 "ssl_verify_cert": False,
                 "timeout": HangGuard,
@@ -766,7 +766,7 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host, Queue from_host) {
         server.setHandler("probe", "^probe", NOTHING, probe);
         server.setHandler("other", "^other", NOTHING, new OtherHandler());
         int port = server.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -774,7 +774,7 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host, Queue from_host) {
         }).port;
         server.waitForAsyncIo();
         HTTPClient hc({
-            "url": "https://localhost:" + port,
+            "url": "https://127.0.0.1:" + port,
             "http_version": http_version,
             "ssl_verify_cert": False,
             "timeout": 10s,

@@ -215,6 +215,7 @@ module ElevenLabsDataProvider {
             "short_desc": "List available voices",
             "desc": "List available voices with optional filtering and pagination",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ElevenLabsVoicesRequestType::Fields{"search", "voice_type"}, {
                     "preselected": True,
@@ -235,6 +236,7 @@ module ElevenLabsDataProvider {
             "short_desc": "Get details of a specific voice",
             "desc": "Get details of a specific voice by its ID",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ElevenLabsGetVoiceRequestType::Fields{"voice_id",}, {
                     "required": True,
@@ -321,6 +323,7 @@ module ElevenLabsDataProvider {
             "short_desc": "List available AI models",
             "desc": "List available ElevenLabs AI models and their capabilities",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": {},
             "output_type": ElevenLabsModelsDataProvider::ResponseType,
         });
@@ -337,6 +340,7 @@ module ElevenLabsDataProvider {
             "short_desc": "List generated audio history items",
             "desc": "List previously generated audio history items with optional pagination",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ElevenLabsHistoryRequestType::Fields{"page_size",}, {
                     "preselected": True,
@@ -357,6 +361,7 @@ module ElevenLabsDataProvider {
             "short_desc": "Get details of a history item",
             "desc": "Get details of a specific audio generation history item",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ElevenLabsGetHistoryItemRequestType::Fields{"history_item_id",}, {
                     "required": True,
@@ -393,6 +398,7 @@ module ElevenLabsDataProvider {
             "short_desc": "Get audio from a history item",
             "desc": "Get the audio file from a specific history item",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ElevenLabsGetHistoryAudioRequestType::Fields{"history_item_id",}, {
                     "required": True,
@@ -433,6 +439,7 @@ module ElevenLabsDataProvider {
             "short_desc": "Get the status of a dubbing project",
             "desc": "Get the current status and details of a dubbing project",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ElevenLabsGetDubbingRequestType::Fields{"dubbing_id",}, {
                     "required": True,
@@ -451,6 +458,7 @@ module ElevenLabsDataProvider {
             "short_desc": "Get dubbed audio for a specific language",
             "desc": "Download the dubbed audio file from a dubbing project for a specific target language",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ElevenLabsGetDubbingAudioRequestType::Fields, {
                     "required": True,
@@ -487,6 +495,7 @@ module ElevenLabsDataProvider {
             "short_desc": "List dubbing projects",
             "desc": "List dubbing projects with optional filtering by status and creator",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ElevenLabsListDubbingRequestType::Fields{"dubbing_status", "page_size"}, {
                     "preselected": True,
@@ -533,6 +542,7 @@ module ElevenLabsDataProvider {
             "short_desc": "List available pronunciation dictionaries",
             "desc": "List available pronunciation dictionaries with optional pagination",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ElevenLabsListPronunciationDictionariesRequestType::Fields{"page_size",}, {
                     "preselected": True,
@@ -553,6 +563,7 @@ module ElevenLabsDataProvider {
             "short_desc": "Get details of a pronunciation dictionary",
             "desc": "Get details of a specific pronunciation dictionary by its ID",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ElevenLabsGetPronunciationDictionaryRequestType::Fields{"dictionary_id",}, {
                     "required": True,

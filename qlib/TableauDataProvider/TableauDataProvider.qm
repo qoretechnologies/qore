@@ -160,6 +160,7 @@ module TableauDataProvider {
             "short_desc": "Download a datasource file",
             "desc": "Download the datasource file content from Tableau",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 TableauDownloadDatasourceRequestDataType::Fields),
             "output_type": TableauDownloadDatasourceDataProvider::ResponseType,

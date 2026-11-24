@@ -143,6 +143,7 @@ module SendCloudDataProvider {
             "short_desc": "Get a single parcel by ID",
             "desc": "Retrieve detailed information about a specific SendCloud parcel by its numeric ID.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": SendCloudGetParcelDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () { return SendCloudGetParcelDataProvider::ResponseType; },
             "options": DataProviderActionCatalog::getActionOptionFromFields(SendCloudGetParcelRequestDataType::Fields),
@@ -216,6 +217,7 @@ module SendCloudDataProvider {
             "desc": "Retrieve the shipping label URL(s) for an announced parcel. The label is available as a "
                 "normal-printer PDF and a label-printer PDF.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": SendCloudGetParcelLabelDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () {
                 return SendCloudGetParcelLabelDataProvider::ResponseType;
@@ -235,6 +237,7 @@ module SendCloudDataProvider {
             "desc": "Download a specific parcel document (such as the shipping label, CN22/CN23 customs "
                 "declaration, or commercial invoice) as binary PDF data.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": SendCloudGetParcelDocumentsDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () {
                 return SendCloudGetParcelDocumentsDataProvider::ResponseType;
@@ -354,6 +357,7 @@ module SendCloudDataProvider {
             "short_desc": "Get the authenticated user",
             "desc": "Retrieve information about the currently authenticated SendCloud user (account owner).",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": SendCloudGetUserDataProvider::ProviderInfo,
             # no `options`: SendCloudGetUserRequestDataType.Fields is empty, so
             # getActionOptionFromFields() would return NOTHING and reject the registration
@@ -432,6 +436,7 @@ module SendCloudDataProvider {
             "desc": "Search for carrier service points (pickup/drop-off locations) near a location; supports "
                 "postal-code or lat/long search origins and radius/weight filters.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": SendCloudSearchServicePointsDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () {
                 return SendCloudSearchServicePointsDataProvider::ResponseType;
@@ -511,6 +516,7 @@ module SendCloudDataProvider {
             "short_desc": "Get a single return by ID",
             "desc": "Retrieve detailed information about a specific return by its numeric ID.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": SendCloudGetReturnDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () {
                 return SendCloudGetReturnDataProvider::ResponseType;

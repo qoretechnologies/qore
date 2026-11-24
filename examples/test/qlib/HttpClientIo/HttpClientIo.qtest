@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-platform: macos - HTTP/1.1, 2 and 3 client connections: happy-eyeballs races, pooling, multiplexing
+# test-loopback: localhost - testHappyEyeballsBlackhole() checks the fallback of the name localhost from ::1 to 127.0.0.1 with listeners on both loopback addresses at one port; "https://localhost:1" is a port where nothing listens, and ":authority" values are only header fields; its other servers listen on 127.0.0.1 and their clients connect to 127.0.0.1
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
@@ -240,7 +241,7 @@ class FullDuplexEchoRawServer {
     }
 
     constructor() {
-        listener.bind("localhost:0");
+        listener.bind("127.0.0.1:0");
         listener.listen(1);
         port = listener.getSocketInfo().port;
     }
@@ -250,7 +251,7 @@ class FullDuplexEchoRawServer {
     }
 
     string getUrl() {
-        return sprintf("http://localhost:%d", port);
+        return sprintf("http://127.0.0.1:%d", port);
     }
 
     start() {
@@ -1105,7 +1106,7 @@ class HttpClientIoTest inherits QUnit::Test {
             return;
         }
 
-        sock.connect("localhost:" + mSslPort);
+        sock.connect("127.0.0.1:" + mSslPort);
         sock.setAlpnProtocols(("h2",));
         try {
             sock.upgradeClientToSSL(30s);

@@ -953,20 +953,147 @@ class TenantSseHandler inherits ServerSentEventHandler::ServerSentEventHandler {
         return rv;
     }
 
-    HttpServerAsyncIo::HttpSseStreamPollOperation setupAsyncSseConnection(Socket sock, hash<auto> cx,
-            hash<auto> hdr, string cid) {
+    #! the socket that the connection is made with is the only socket that the handler gets for the stream
+    ServerSentEventConnection getConnectionImpl(Socket sock, hash<auto> cx, hash<auto> hdr, string cid) {
         try {
             sock.send(\"HTTP/1.1 200 OK\\r\\nContent-Length: 2\\r\\n\\r\\nOK\");
             results.push(sprintf(\"%y\", sock.recv(-1, 1s)));
         } catch (hash<ExceptionInfo> ex) {
             results.push(ex.err);
         }
-        return ServerSentEventHandler::ServerSentEventHandler::setupAsyncSseConnection(sock, cx, hdr, cid);
+        return ServerSentEventHandler::ServerSentEventHandler::getConnectionImpl(sock, cx, hdr, cid);
     }
 }
 
 AbstractHttpRequestHandler sub get_sse_handler() {
     return new TenantSseHandler();
+}
+
+#! an event stream handler that looks for the connection's socket in what its connection and its event source get
+#! (qore#7376)
+class TenantSseSocketHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    public {
+        Queue results();
+        Queue conns();
+    }
+
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({\"heartbeat\": 0}) {
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
+        hash<HttpResponseInfo> rv = ServerSentEventHandler::ServerSentEventHandler::handleRequest(cx, hdr, b);
+        if (hdr.path == \"events-source\") {
+            rv.sse_source = new TenantSseSource(results);
+        }
+        return rv;
+    }
+
+    HttpServerAsyncIo::HttpSseStreamPollOperation setupAsyncSseConnection(Socket sock, hash<auto> cx,
+            hash<auto> hdr, string cid) {
+        results.push(\"setup=\" + sock.className());
+        return ServerSentEventHandler::ServerSentEventHandler::setupAsyncSseConnection(sock, cx, hdr, cid);
+    }
+
+    ServerSentEventConnection getConnectionImpl(Socket sock, hash<auto> cx, hash<auto> hdr, string cid) {
+        results.push(\"conn=\" + sock.className());
+        return ServerSentEventHandler::ServerSentEventHandler::getConnectionImpl(sock, cx, hdr, cid);
+    }
+
+    connectionRegisteredImpl(ServerSentEventConnection conn) {
+        results.push(\"registered \" + get_poll_ops(conn.getAsyncPollOp(), conn.getAsyncSseConnection()));
+        if (conn.hdr.path == \"events-throw\") {
+            throw \"TENANT-ERROR\", \"the hook fails after the connection was registered\";
+        }
+        conns.push(conn);
+    }
+
+    deregisterConnectionImpl(ServerSentEventConnection conn) {
+        if (conn.hdr.path == \"events-throw\") {
+            results.push(\"deregistered\");
+        }
+    }
+}
+
+#! a handler that is not a socket handler and answers with an event source (qore#7376)
+class TenantSourceHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue results();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{
+            \"code\": 200,
+            \"hdr\": {\"Content-Type\": \"text/event-stream\"},
+            \"sse_source\": new TenantSseSource(results),
+        };
+    }
+}
+
+AbstractHttpRequestHandler sub get_source_handler() {
+    return new TenantSourceHandler();
+}
+
+#! an event source that looks for the connection's socket in the stream it gets (qore#7376)
+class TenantSseSource inherits HttpServerAsyncIo::AbstractSseEventSource {
+    private {
+        Queue results;
+    }
+
+    constructor(Queue results) {
+        self.results = results;
+    }
+
+    start(HttpServerAsyncIo::AbstractSseConnection conn) {
+        results.push(\"source \" + get_poll_ops(NOTHING, conn));
+        conn.queueEvent(\"source\", \"from the source\");
+    }
+
+    stop() {
+    }
+}
+
+#! describes the poll operations and sockets that the objects of an event stream give
+string sub get_poll_ops(*object op, *HttpServerAsyncIo::AbstractSseConnection sse_conn) {
+    *object op2;
+    if (sse_conn instanceof HttpServerAsyncIo::Http1SseConnection) {
+        op2 = cast<HttpServerAsyncIo::Http1SseConnection>(sse_conn).getPollOperation();
+    }
+    *object s = op ? cast<HttpServerAsyncIo::HttpSseStreamPollOperation>(op).getSocket() : NOTHING;
+    *object s2 = op2 ? cast<HttpServerAsyncIo::HttpSseStreamPollOperation>(op2).getSocket() : NOTHING;
+    return sprintf(\"op=%s op2=%s sock=%s sock2=%s\", op ? op.className() : \"none\", op2 ? op2.className() : \"none\",
+        s ? s.className() : \"none\", s2 ? s2.className() : \"none\");
+}
+
+AbstractHttpRequestHandler sub get_sse_socket_handler() {
+    return new TenantSseSocketHandler();
+}
+
+#! a socket handler of its own that answers with an event stream and sets it up with the socket it is given
+#! (qore#7376)
+class TenantRawSseHandler inherits AbstractHttpSocketHandler {
+    public {
+        Queue results();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{\"code\": 200, \"hdr\": {\"Content-Type\": \"text/event-stream\"}};
+    }
+
+    HttpServerAsyncIo::HttpSseStreamPollOperation setupAsyncSseConnection(Socket sock, hash<auto> cx,
+            hash<auto> hdr, string cid) {
+        results.push(\"setup=\" + sock.className());
+        return new HttpServerAsyncIo::HttpSseStreamPollOperation(sock);
+    }
+
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
+        return False;
+    }
+}
+
+AbstractHttpRequestHandler sub get_raw_sse_handler() {
+    return new TenantRawSseHandler();
 }
 
 #! a handler made when the Program is parsed, before or after the Program is sandboxed
@@ -1058,6 +1185,7 @@ nothing sub run_code(code c) {
         addTestCase("a protocol switch only for a request that asks for one", \upgradeTest());
         addTestCase("sandboxed code cannot reach the server's state of its request", \sandboxedReachTest());
         addTestCase("an event stream of a sandboxed handler", \sandboxedSseTest());
+        addTestCase("an event stream of a sandboxed handler gets no connection socket", \sandboxedSseNoSocketTest());
         addTestCase("the abort of an HTTP/2 request's stream", \streamAbortTest(), "h2");
         addTestCase("the abort of an HTTP/3 request's stream", \streamAbortTest(), "h3");
         set_return_value(main());
@@ -2162,7 +2290,8 @@ class NoView inherits AbstractHttpRequestHandler {
         assertEq("close", h.connection, "the stream ends with the connection");
         # the handler's attempt to read a next request finds none: the client sends none on the stream's connection
         string read = cast<object>(sse).results.get(HangGuard);
-        assertTrue(read == "\"\"" || read == "SOCKET-TIMEOUT", "no next request to read: " + read);
+        # nothing is read: the socket of the request, which ended, raises an error, or no data comes (qore#7376)
+        assertTrue(read == "\"\"" || read !~ /^"/, "no next request to read: " + read);
 
         # the handler's framing fields and connection option, in any case, are not in the server's header
         Socket c3();
@@ -2175,6 +2304,150 @@ class NoView inherits AbstractHttpRequestHandler {
         assertEq(NOTHING, h."transfer-encoding", "no Transfer-Encoding");
         assertEq("close", h.connection, "only the server's Connection field");
         cast<object>(sse).results.get(HangGuard);
+    }
+
+    #! the server sets up the HTTP/1.1 event stream of a handler that gets the socket of its request without giving
+    #! it, its connection or its event source the connection's socket or the stream's poll operation; the events
+    #! still reach the client (qore#7376)
+    sandboxedSseNoSocketTest() {
+        Program p = getTenantProgram();
+        object sse = p.callFunction("get_sse_socket_handler");
+        HttpServer srv(<HttpServerOptionInfo>{});
+        on_exit delete srv;
+        srv.setHandler("sse", "^events", NOTHING, cast<AbstractHttpRequestHandler>(sse));
+        int srv_port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        srv.waitForAsyncIo();
+
+        # the handler's connection
+        {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("GET /events HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n");
+            hash<auto> h = c.readHTTPHeader(HangGuard);
+            assertEq(200, h.status_code);
+            assertEq("close", h.connection, "the stream ends with the connection");
+            assertEq("conn=Http1HandlerSocket", sse.results.get(HangGuard),
+                "the connection is made with the socket of the request, and the handler's setup is not called");
+            assertEq("registered op=none op2=none sock=none sock2=none", sse.results.get(HangGuard),
+                "no poll operation and no socket from the connection");
+            ServerSentEventConnection conn = sse.conns.get(HangGuard);
+            conn.send(<SseMessageInfo>{"event": "end", "data": "done"});
+            string stream = "";
+            while (stream.find("event: end") < 0) {
+                stream += c.recv(-1, HangGuard);
+            }
+            # the handler serializes the data as JSON
+            assertTrue(stream.find("data: \"done\"") >= 0, "the event reaches the client: " + stream);
+            conn.stop();
+        }
+
+        # the handler's event source
+        {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("GET /events-source HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n");
+            hash<auto> h = c.readHTTPHeader(HangGuard);
+            assertEq(200, h.status_code);
+            list<string> got = (sse.results.get(HangGuard), sse.results.get(HangGuard), sse.results.get(HangGuard));
+            assertEq(("conn=Http1HandlerSocket", "registered op=none op2=none sock=none sock2=none",
+                "source op=none op2=none sock=none sock2=none"), got,
+                "no poll operation and no socket from the connection or the event source's stream");
+            string stream = "";
+            while (stream.find("from the source") < 0) {
+                stream += c.recv(-1, HangGuard);
+            }
+            assertTrue(stream.find("event: source") >= 0, "the source's event reaches the client: " + stream);
+            sse.conns.get(HangGuard).stop();
+        }
+        assertEq(0, sse.results.size(), "nothing else was recorded");
+
+        # a socket handler that cannot set up a stream without the connection's socket gets no stream: the
+        # connection is closed after the server's header, and the handler's own setup is not called
+        object raw = p.callFunction("get_raw_sse_handler");
+        srv.setHandler("raw", "^raw", NOTHING, cast<AbstractHttpRequestHandler>(raw));
+        {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("GET /raw HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n");
+            hash<auto> h = c.readHTTPHeader(HangGuard);
+            assertEq(200, h.status_code, "the server's header of the stream");
+            assertEq("", readToClose(c), "the connection is closed with no stream and no other response");
+            assertEq(0, raw.results.size(), "the handler's own setup with a socket is not called");
+        }
+
+        # a hook of the handler that fails after the connection was registered: the connection is deregistered and
+        # closed, and no other response follows the server's header
+        {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("GET /events-throw HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n");
+            hash<auto> h = c.readHTTPHeader(HangGuard);
+            assertEq(200, h.status_code, "the server's header of the stream");
+            assertEq("", readToClose(c), "the connection is closed with no stream and no other response");
+            list<string> got = (sse.results.get(HangGuard), sse.results.get(HangGuard), sse.results.get(HangGuard));
+            assertEq(("conn=Http1HandlerSocket", "registered op=none op2=none sock=none sock2=none", "deregistered"),
+                got, "the connection that the handler registered is deregistered");
+        }
+
+        # a handler that is not a socket handler: its event source gets a stream that gives no poll operation
+        object source = p.callFunction("get_source_handler");
+        srv.setHandler("source", "^source", NOTHING, cast<AbstractHttpRequestHandler>(source));
+        {
+            Socket c();
+            c.connect("localhost:" + srv_port, HangGuard);
+            on_exit c.close();
+            c.send("GET /source HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n");
+            hash<auto> h = c.readHTTPHeader(HangGuard);
+            assertEq(200, h.status_code);
+            assertEq("source op=none op2=none sock=none sock2=none", source.results.get(HangGuard),
+                "no poll operation and no socket from the event source's stream");
+            string stream = "";
+            while (stream.find("from the source") < 0) {
+                stream += c.recv(-1, HangGuard);
+            }
+            assertTrue(stream.find("event: source") >= 0, "the source's event reaches the client: " + stream);
+        }
+
+        # code of a subclass cannot take the poll operation from a stream that gives none
+        Program q(PO_NO_CHILD_PO_RESTRICTIONS);
+        *hash<ExceptionInfo> err;
+        try {
+            q.parse("%modern
+%requires HttpServerAsyncIo
+class Peek inherits HttpServerAsyncIo::Http1SseConnection {
+    static *object peek(HttpServerAsyncIo::Http1SseConnection c) {
+        return c.poll_op;
+    }
+}
+", "peek");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        assertEq("PARSE-EXCEPTION", err.err, "a subclass cannot access the poll operation");
+        assertRegex("poll_op", err.desc ?? "", "the error is the access to the poll operation");
+    }
+
+    #! Reads a connection until the peer closes it and returns what was read; a read timeout is a failure
+    private string readToClose(Socket c) {
+        string rv = "";
+        while (True) {
+            string d;
+            try {
+                d = c.recv(-1, HangGuard);
+            } catch (hash<ExceptionInfo> ex) {
+                assertFalse(ex.err == "SOCKET-TIMEOUT", "the connection is closed: " + ex.err);
+                break;
+            }
+            if (!d.size()) {
+                break;
+            }
+            rv += d;
+        }
+        return rv;
     }
 
     #! Sends requests to the tenant's HTTP handler and returns its first response's results, with the next response

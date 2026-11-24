@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires HttpClientIo
 %requires WebSocketClient
 %requires ../../TestCertificates.qm
 
@@ -57,6 +58,10 @@ class WebSocketClientConnectTimeoutTest inherits QUnit::Test {
             \testPollConnectRetriedTimeout());
         addTestCase("a connect timeout that fits every attempt in the timeout", \testAttemptsInTimeout());
         addTestCase("an unanswered HTTP/2 CONNECT falls back to HTTP/1.1", \testUnansweredConnectFallback());
+        addTestCase("an attempt that fails when the time of the connect runs out", \testAttemptErrorAtDeadline());
+        addTestCase("an attempt of a request that fails when the time of the request runs out",
+            \testRequestAttemptErrorAtDeadline());
+        addTestCase("sandboxed or restricted code cannot set the attempt test hook", \testHookRefused());
         set_return_value(main());
     }
 
@@ -163,6 +168,149 @@ class WebSocketClientConnectTimeoutTest inherits QUnit::Test {
             checkRetriedTimeout(scheme, connect(ws), "connect");
             assertFalse(ws.isOpen(), scheme + ": the client is not connected");
         }
+    }
+
+    #! a connection error of an attempt when the time of the connect has run out is the timeout of the connect, with
+    #! the attempt's error, not the attempt's error as it is (qore#7475)
+    /** The attempt's own connect timeout and the connect's timeout could end the wait for the connection at the same
+        time: which one the connect reported depended on the order in which they were noticed.  A test hook of a debug
+        build holds the failed attempt until the time of the connect has run out, which makes that order certain: the
+        attempts fail at once (the port refuses connections), and the hook returns once the connect's time is over.
+    */
+    testAttemptErrorAtDeadline() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the attempt is held with a test hook of a debug build");
+        }
+        int refused_port = getRefusedPort();
+        Counter attempts();
+        setDeadlineHook(attempts);
+        on_exit call_static_method("HttpClientIo::HttpClientConnectionManager", "dbgSetAttemptFailedHook");
+
+        WebSocketClient ws(sub (*data msg) {}, {
+            "url": sprintf("ws://127.0.0.1:%d/", refused_port),
+            "timeout": 200,
+            "connect_timeout": 300,
+            "max_request_retries": 20,
+        });
+        *hash<ExceptionInfo> err = connect(ws);
+        assertEq(1, attempts.getCount(), "the deadline passed during the first attempt's hook");
+        checkAttemptTimeout(err, refused_port, "connect");
+        assertFalse(ws.isOpen(), "the client is not connected");
+    }
+
+    #! the same for a request of the connection manager (request(), qore#7475)
+    testRequestAttemptErrorAtDeadline() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the attempt is held with a test hook of a debug build");
+        }
+        int refused_port = getRefusedPort();
+        Counter attempts();
+        setDeadlineHook(attempts);
+        on_exit call_static_method("HttpClientIo::HttpClientConnectionManager", "dbgSetAttemptFailedHook");
+
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "request_timeout": 200,
+            "connect_timeout": 300,
+            "max_request_retries": 20,
+            "protocol": "h1",
+        });
+        on_exit delete mgr;
+        *hash<ExceptionInfo> err;
+        try {
+            mgr.request(sprintf("http://127.0.0.1:%d/", refused_port), "GET", "/");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        assertEq(1, attempts.getCount(), "the deadline passed during the first attempt's hook");
+        checkAttemptTimeout(err, refused_port, "request");
+    }
+
+    #! the process-wide test hook of the connection manager cannot be set by code that a sandbox governs, nor by code
+    #! that may not control the process (qore#7475)
+    testHookRefused() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test hook exists only in a debug build of the library");
+        }
+        on_exit call_static_method("HttpClientIo::HttpClientConnectionManager", "dbgSetAttemptFailedHook");
+        string src = "%modern
+%requires HttpClientIo
+string sub setHook() {
+    try {
+        call_static_method(\"HttpClientIo::HttpClientConnectionManager\", \"dbgSetAttemptFailedHook\",
+            sub (hash<ExceptionInfo> ex, *int deadline_us) {});
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+        {
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+            p.parse(src, "tenant");
+            SandboxManager sm();
+            sm.setNetworkDefaultPolicy(True);
+            p.setSandboxManager(sm);
+            assertEq("SANDBOX-REGISTRATION-ERROR", p.callFunction("setHook"), "a sandboxed Program");
+        }
+        {
+            Program p(PO_NO_PROCESS_CONTROL);
+            p.parse(src, "restricted");
+            # the method's functional domain refuses the call
+            assertEq("INVALID-FUNCTION-ACCESS", p.callFunction("setHook"), "a Program without process control");
+        }
+    }
+
+    #! returns a port of the local host that refuses connections
+    private int getRefusedPort() {
+        Socket s();
+        s.bind("127.0.0.1:0");
+        int port = s.getSocketInfo().port;
+        s.close();
+        return port;
+    }
+
+    #! sets the test hook of the connection manager that holds a failed attempt until the deadline of its request
+    /** The hook is given the deadline of the request: it returns once the deadline has passed, so the first attempt
+        is the last; it is set by name, as it exists only in a debug build of the library
+
+        @param attempts counts the attempts
+    */
+    private setDeadlineHook(Counter attempts) {
+        code hook = sub (hash<ExceptionInfo> ex, *int deadline_us) {
+            attempts.inc();
+            if (!deadline_us) {
+                return;
+            }
+            # the wait ends at the deadline, a fixed time: nothing signals the condition
+            Mutex m();
+            Condition c();
+            m.lock();
+            on_exit m.unlock();
+            while (True) {
+                int left_us = deadline_us - clock_get_monotonic_us();
+                if (left_us < 0) {
+                    break;
+                }
+                c.wait(m, left_us / 1000 + 1);
+            }
+        };
+        call_static_method("HttpClientIo::HttpClientConnectionManager", "dbgSetAttemptFailedHook", hook);
+    }
+
+    #! checks the timeout of a request whose attempt failed when its time ran out
+    private checkAttemptTimeout(*hash<ExceptionInfo> err, int port, string label) {
+        if (!err) {
+            fail(label + ": did not fail");
+            return;
+        }
+        string got = sprintf("%s: %s", err.err, err.desc);
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, label + ": the time ended it: " + got);
+        assertRegex(sprintf("^connection establishment timed out: the connection to 127\\.0\\.0\\.1:%d was not "
+            "established before the time of the request ran out \\(after a wait of [0-9]+ ms\\); the attempt before "
+            "failed with HTTPCLIENT-CONNECT-ERROR: ", port), err.desc, label + ": the description: " + got);
+        assertEq("HTTPCLIENT-CONNECT-ERROR", err.arg.last_attempt_error.err, label + ": the attempt's error");
+        assertEq("127.0.0.1", err.arg.host, label + ": the argument's host");
+        assertEq(port, err.arg.port, label + ": the argument's port");
     }
 
     testPollConnectRetriedTimeout() {

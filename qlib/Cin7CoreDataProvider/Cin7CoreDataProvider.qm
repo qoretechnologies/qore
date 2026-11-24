@@ -117,6 +117,7 @@ module Cin7CoreDataProvider {
             "short_desc": "Get a customer by ID",
             "desc": "Retrieve detailed information about a specific customer by their unique identifier.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": Cin7CoreGetCustomerDataProvider::ProviderInfo,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 Cin7CoreGetCustomerRequestDataType::Fields),
@@ -183,6 +184,7 @@ module Cin7CoreDataProvider {
             "short_desc": "Get a supplier by ID",
             "desc": "Retrieve detailed information about a specific supplier.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": Cin7CoreGetSupplierDataProvider::ProviderInfo,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 Cin7CoreGetSupplierRequestDataType::Fields),
@@ -234,6 +236,7 @@ module Cin7CoreDataProvider {
             "short_desc": "Get a product by ID",
             "desc": "Retrieve detailed information about a specific product.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": Cin7CoreGetProductDataProvider::ProviderInfo,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 Cin7CoreGetProductRequestDataType::Fields),
@@ -300,6 +303,7 @@ module Cin7CoreDataProvider {
             "short_desc": "Get a sale order by ID",
             "desc": "Retrieve detailed information about a specific sale order.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": Cin7CoreGetSaleDataProvider::ProviderInfo,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 Cin7CoreGetSaleRequestDataType::Fields),
@@ -466,6 +470,7 @@ module Cin7CoreDataProvider {
             "short_desc": "Get pack details for a sale",
             "desc": "Retrieve pack/pick details for a sale order.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": Cin7CoreGetSalePackDataProvider::ProviderInfo,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 Cin7CoreGetSalePackRequestDataType::Fields),
@@ -582,6 +587,7 @@ module Cin7CoreDataProvider {
             "short_desc": "Get a stock adjustment by ID",
             "desc": "Retrieve detailed information about a specific stock adjustment.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": Cin7CoreGetStockAdjustmentDataProvider::ProviderInfo,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 Cin7CoreGetStockAdjustmentRequestDataType::Fields),

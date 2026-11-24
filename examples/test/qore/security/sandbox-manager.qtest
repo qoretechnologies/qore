@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-platform: macos - sandbox root and allowed-path canonicalization through /tmp -> /private/tmp, UNIX sockets
+# test-loopback: localhost - it tests the network policy of host names and loopback binds with the name localhost; its localhost client connects to a listener on all interfaces (dual-stack), and its 127.0.0.1 binds check the bind policy and have no clients
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 

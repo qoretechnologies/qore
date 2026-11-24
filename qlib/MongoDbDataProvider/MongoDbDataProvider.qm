@@ -109,6 +109,7 @@ module MongoDbDataProvider {
             "short_desc": "Query documents in a collection",
             "desc": "Find documents in a MongoDB collection using query filters",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_dependent_options": True,
         });
 
@@ -173,6 +174,7 @@ module MongoDbDataProvider {
                 "**Find Documents** where several are.  The result reports `found` separately, so "
                 "a flow can branch on whether anything matched without testing the document.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_dependent_options": True,
         });
 
@@ -188,6 +190,7 @@ module MongoDbDataProvider {
                 "This takes the same filter as **Find Documents**, so it is the cheap way to ask "
                 "how large a result would be before asking for the result itself.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_dependent_options": True,
         });
 
@@ -208,6 +211,8 @@ module MongoDbDataProvider {
                 "that holds the embeddings; `index_name` and `path` must match it.  Available on "
                 "Atlas clusters only, not on a self-managed server.",
             "action_code": DPAT_API,
+            # the pipeline is fixed: $vectorSearch and $addFields, never $out or $merge (qore#7454)
+            "mutates_state": False,
             "data_dependent_options": True,
         });
     };

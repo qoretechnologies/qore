@@ -84,6 +84,7 @@ module SGLangDataProvider {
                 "The `model` is taken from the connection by default; override per-request with "
                 "the `model` field.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Chat",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 SGLangChatCompletionRequestDataType::Fields{"messages",}, {
@@ -116,6 +117,7 @@ module SGLangDataProvider {
                 "- RAG vector index population using local inference\n"
                 "- On-prem semantic search without cloud dependency",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Embeddings",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 SGLangEmbeddingsRequestDataType::Fields{"input",}, {
@@ -151,6 +153,7 @@ module SGLangDataProvider {
                 "- Tool-call argument generation where the arguments must match a precise shape\n\n"
                 "Supply exactly one of `json_schema`, `regex`, or `ebnf` to constrain the output.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Generation",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 SGLangGenerateRequestDataType::Fields{"text",}, {
@@ -182,6 +185,7 @@ module SGLangDataProvider {
                 "max_total_tokens, chat_template, etc.) and runtime state (version, CUDA device, "
                 "number of GPUs).  Useful for health checks and configuration validation.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Admin",),
             "options": {},
             "output_type": SGLangServerInfoDataProvider::ResponseType,
