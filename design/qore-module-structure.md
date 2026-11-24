@@ -3,6 +3,11 @@
 This document clarifies how Qore user modules are structured in this repository.
 Follow these rules to avoid load and documentation issues.
 
+Build standalone AOT modules as the build-tree owner with `cmake --build build` before installing them.
+Their generated install target installs the existing artifacts, so installing under another account leaves
+the compiler stamp and module builds to their owner. An external project that wants its install target to
+build first can configure with `-DCMAKE_SKIP_INSTALL_ALL_DEPENDENCY=OFF`.
+
 External module documentation uses the SDK's `share/qore/qore.tag` language index,
 installed when Qore's documentation has been built before installation. This index
 does not require the complete language HTML documentation. The exported CMake helpers

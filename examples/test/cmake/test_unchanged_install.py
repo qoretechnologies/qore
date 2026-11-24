@@ -245,6 +245,30 @@ class UnchangedInstallTest(unittest.TestCase):
             path.write_bytes(f"{name} AOT module generation {generation}\n".encode())
         return qmods
 
+    def test_external_install_target_leaves_an_outdated_qcc_stamp_for_the_build(self):
+        source, build, prefix = (self.root / name for name in ("src", "build", "prefix"))
+        self.write_modules(source)
+        library = source / "libqore"
+        library.touch()
+        body = (f'set(QORE_LIBRARY "{library.as_posix()}")\n'
+                + self.module_project('qore_external_user_module("{}" "")\n', "share/modules", "lib/modules"))
+        self.configure(source, build, prefix, body, aot_rules=True)
+        qmods = self.stage_qmods(build, 1)
+        stamp = build / "qcc-format.stamp"
+        stamp.write_text("previous build's stamp\n")
+        self.age(stamp)
+        before = self.identity(stamp)
+        self.run_cmake("--build", build, "--target", "install")
+        self.assertEqual(before, self.identity(stamp))
+        self.assertEqual(qmods["Flat"].read_bytes(), (prefix / "lib/modules/Flat.qmod").read_bytes())
+
+        # The ordinary build still checks the newer library. The stand-in compiler (cmake --version) has no
+        # runtime identity, so it fails precisely when it tries to update the stamp.
+        result = subprocess.run([CMAKE, "--build", str(build), "--target", "Flat-qmod"],
+                                capture_output=True, text=True, timeout=60)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("does not report an AOT runtime identity", result.stdout + result.stderr)
+
     def test_module_reinstall_keeps_unchanged_qmods_and_links(self):
         registrations = ('qore_user_module("{}")\n', 'qore_external_user_module("{}" "")\n')
         # qore's own layout: sources and qmods in separate directories and components, relative to the prefix
