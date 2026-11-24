@@ -1404,6 +1404,9 @@ private:
         std::unique_ptr<char[]> pending_iouring_buf;
         //! Length of data in pending_iouring_buf
         size_t pending_iouring_len = 0;
+        //! A chunk read on the other paths that the stream's send limit refused, sent before anything more is read
+        //! (qore#7460)
+        SimpleRefHolder<BinaryNode> retained_chunk;
         //! Declared Content-Length from response headers (-1 if not declared)
         //! and cumulative bytes sent.  Used to detect short-stream bugs (the
         //! InputStream EOFs before the declared byte count) so the server

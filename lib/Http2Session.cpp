@@ -4044,6 +4044,19 @@ void Http2Session::processStreamInputStream(int32_t stream_id, StreamInputStream
         info.need_reassign = false;
     }
 
+    // a chunk that the stream's send limit refused is sent before anything more is read, so that no data is lost and
+    // the body is not ended early (qore#7460); first, so that a path chosen later cannot leave it behind
+    if (info.retained_chunk) {
+        size_t rs = info.retained_chunk->size();
+        int rv = sendStreamData(stream_id, info.retained_chunk->getPtr(), rs, false, xsink);
+        if (*xsink || rv == 1) {
+            return;
+        }
+        info.bytes_sent += (int64_t)rs;
+        info.retained_chunk = nullptr;
+        return;
+    }
+
 #if defined(__linux__) && defined(HAVE_IO_URING)
     // io_uring path for regular files — truly async kernel reads
     if (info.is_regular_file && io_uring) {
@@ -4104,8 +4117,16 @@ void Http2Session::processStreamInputStream(int32_t stream_id, StreamInputStream
             }
         } else {
             chunk->setSize(count);
-            sendStreamData(stream_id, chunk->getPtr(), count, false, xsink);
-            info.bytes_sent += (int64_t)count;
+            int rv = sendStreamData(stream_id, chunk->getPtr(), count, false, xsink);
+            if (*xsink) {
+                return;
+            }
+            if (rv == 1) {
+                // refused by the stream's send limit: kept and sent first in a later pass (qore#7460)
+                info.retained_chunk = chunk.release();
+            } else {
+                info.bytes_sent += (int64_t)count;
+            }
             // Keep info.file_offset in sync with the FileInputStream's
             // internal position.  io_uring reads use pread (positional)
             // off info.file_offset, while readNonBlock advances the
@@ -4138,8 +4159,16 @@ void Http2Session::processStreamInputStream(int32_t stream_id, StreamInputStream
             }
         } else {
             size_t cs = chunk->size();
-            sendStreamData(stream_id, chunk->getPtr(), cs, false, xsink);
-            info.bytes_sent += (int64_t)cs;
+            int rv = sendStreamData(stream_id, chunk->getPtr(), cs, false, xsink);
+            if (*xsink) {
+                return;
+            }
+            if (rv == 1) {
+                // refused by the stream's send limit: kept and sent first in a later pass (qore#7460)
+                info.retained_chunk = chunk.release();
+            } else {
+                info.bytes_sent += (int64_t)cs;
+            }
         }
     }
 }
@@ -4202,6 +4231,13 @@ bool Http2Session::needsInputStreamPass() const {
         // the first pass claims the InputStream for the I/O thread
         if (info.need_reassign) {
             return true;
+        }
+        // a chunk retained after a refused send is retried only when the send would now take it (qore#7460)
+        if (info.retained_chunk) {
+            if (hasSendRoomUnlocked(stream_id, pending, info.retained_chunk->size())) {
+                return true;
+            }
+            continue;
         }
         // a read in flight completes by itself
         if (info.iouring_read_pending) {

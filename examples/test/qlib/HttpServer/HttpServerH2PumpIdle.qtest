@@ -35,7 +35,11 @@ class HeldBodyHandler inherits AbstractHttpRequestHandler {
         int stream_id = cx."header-info".stream_id;
         call_function("dbg_http2_hold_stream_data", stream_id);
         InputStream is;
-        if (cx.raw_path == "/limited") {
+        if (cx.raw_path == "/limited-memory") {
+            # a memory stream on a stream with its own send limit: a refused chunk is retained (qore#7460)
+            s.setHttp2StreamSendLimit(stream_id, 100000);
+            is = new BinaryInputStream(binary(strmul("x", 16 * 1024 * 1024)));
+        } else if (cx.raw_path == "/limited") {
             # a stream with its own send limit, far below the default buffer, and a body that io_uring reads: a read
             # that the limit refuses is retained until the buffer has room
             s.setHttp2StreamSendLimit(stream_id, 100000);
@@ -55,6 +59,8 @@ class HttpServerH2PumpIdleTest inherits QUnit::Test {
         addTestCase("a pumped stream that cannot send leaves the I/O thread idle", \testIdle(), "/");
         addTestCase("a pumped file on a stream with its own send limit leaves the I/O thread idle", \testIdle(),
             "/limited");
+        addTestCase("a pumped memory stream on a stream with its own send limit leaves the I/O thread idle",
+            \testIdle(), "/limited-memory");
         set_return_value(main());
     }
 
