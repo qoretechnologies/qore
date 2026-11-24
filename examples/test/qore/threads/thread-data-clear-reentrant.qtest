@@ -1,0 +1,70 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - thread-local data freed at the end of pool tasks, the allocator scribbling freed memory
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%exec-class ThreadDataClearReentrantTest
+
+#! Destructors that run while thread-local data is cleared read, add, delete and remove its keys safely (qore#7265)
+/** Thread-local data is cleared by delete_all_thread_data(), at the end of a thread and at the end of a pool task;
+    the destructors of its values can use it.  The probe's destructors add values to keys that the clearing has
+    passed (and the destructors of those add more members, which a later destructor looks up), delete and remove
+    their own key and a later key, clear all thread data and add many keys, read the keys freed before and after
+    them, save new values again and again, and delete and remove a key whose value's destructor clears all thread
+    data.  A destructor reads the values not freed yet and never a freed member,
+    and the values saved during the release are freed while nothing can be saved, so that the release ends; the
+    output must be the expected one in every execution mode.  The children run with the macOS allocator scribbling
+    freed memory, so that a read of a freed member shows.
+*/
+class ThreadDataClearReentrantTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string probe = get_script_dir() + "/thread-data-clear-reentrant/probe.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/thread-data-clear-reentrant/expected.txt");
+    }
+
+    constructor() : QUnit::Test("thread data clear reentrant test", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("destructors use thread data while it is cleared, in every execution mode", \testClear());
+        set_return_value(main());
+    }
+
+    testClear() {
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_JIT_SYNC_COMPILE=1 MallocScribble=1 "
+            "MallocPreScribble=1", libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            string out = backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, probe));
+            assertEq(expected, out, mode);
+            # the results that the clearing is about: a destructor reads the 30 values after its own and the key after
+            # it, also when it deleted or removed its own key, and not the key after it when it deleted that
+            assertTrue(out =~ /^self-delete pool: \[\x22self-delete: values 30, keys 31, after \\\x22x\\\x22\x22\]$/m,
+                mode + " self-delete");
+            assertTrue(out =~ /^next-delete direct: \[\x22next-delete: values 30, keys 30, after null\x22\]$/m,
+                mode + " next-delete");
+            # a destructor that saves a value again and again: the value saved during the release is freed, and its
+            # destructor cannot save another one, so the release ends
+            assertTrue(out =~ /^resave same pool: \[\x22resave 0 freed\x22, \x22resave 1 freed\x22, /m
+                && out =~ /^resave same pool: [^\n]*\x22save r: DESTRUCTOR-ERROR\x22, /m, mode + " resave");
+            # a key is deleted whose value's destructor clears all thread data, from plain code and from a destructor
+            # run in the second phase of a release
+            assertTrue(out =~ /^delete plain \(keys after: \[\x22w\x22\]\): \[\x22clear-all: keys \[\]\x22\]$/m,
+                mode + " delete plain");
+            assertTrue(out =~ /^remove phase 2 pool: \[\x22clear-all: keys \[\]\x22, \x22remove x: keys \[\]\x22\]$/m,
+                mode + " remove phase 2");
+            # the thread data of the main thread is empty after its clearing
+            assertTrue(out =~ /^main keys: \[\]$/m, mode + " main keys");
+        }
+    }
+}
