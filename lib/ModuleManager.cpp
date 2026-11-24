@@ -7411,30 +7411,25 @@ struct QoreModuleProgramInfo {
     QoreProgram* pgm;
 };
 
+struct QoreTeardownDependencies {
+    // module -> the modules left that it requires
+    std::map<std::string, std::vector<std::string>> required_mods;
+    // requiring module -> the modules left that it requires only because they were applied to its Program at run time
+    std::map<std::string, strset_t> runtime_required_mods;
+    // the native binary modules left
+    strset_t native_mods;
+};
+
 //! orders the given module Programs so that each comes before those of the modules that it requires (qore#7432)
 /** A module requires the modules that it requires directly or through other modules, user modules (loaded from source
     or AOT modules) and binary modules alike, also those recorded at run time
-    (QoreModuleManager::getTeardownModuleDependencies()).  The modules that no module left requires are taken in the
-    given order.  The modules of a cycle (which modules loaded at run time can make) require each other: a module is
-    held back only by a module that requires it and that it does not require, so the cycle is broken at the first of
-    its modules that no module outside it requires, and never at a module that it requires.  The data of the modules
-    that require a module is therefore cleared before its own: the objects that they hold, which can be objects of its
-    classes, are released while the static variables of its classes, which their destructors can use, still exist.
+    (QoreModuleManager::getTeardownModuleDependencies()).  Dependencies outside a cycle always outlive it. Within a
+    cycle, prefer a module that no remaining module requires statically, as cleanup() does (qore#7451). Ties are
+    resolved in the given order.
 */
-static void qore_order_module_programs_dependents_first(std::vector<QoreModuleProgramInfo>& mpgms) {
+static void qore_order_module_programs_dependents_first(std::vector<QoreModuleProgramInfo>& mpgms,
+        const QoreTeardownDependencies& graph) {
     const size_t n = mpgms.size();
-    // the modules that each module requires directly, found once for each module reached (also modules that are not
-    // in the list, through which the requirements go)
-    std::map<std::string, strset_t> direct;
-    auto get_direct = [&direct](const std::string& name) -> const strset_t& {
-        auto i = direct.find(name);
-        if (i == direct.end()) {
-            strset_t deps;
-            QMM.getTeardownModuleDependencies(name.c_str(), deps);
-            i = direct.emplace(name, std::move(deps)).first;
-        }
-        return i->second;
-    };
     // the index of each module of the list
     std::map<std::string, size_t> index;
     for (size_t i = 0; i < n; ++i) {
@@ -7442,18 +7437,29 @@ static void qore_order_module_programs_dependents_first(std::vector<QoreModulePr
     }
     // requires[i][j]: module i requires module j, directly or through other modules
     std::vector<std::vector<bool>> requires_mod(n, std::vector<bool>(n, false));
+    // Direct static dependencies break ties between mutually reachable modules.
+    std::vector<std::vector<bool>> requires_static(n, std::vector<bool>(n, false));
     for (size_t i = 0; i < n; ++i) {
         strset_t reached;
         std::vector<std::string> todo{mpgms[i].name};
         while (!todo.empty()) {
             std::string name = std::move(todo.back());
             todo.pop_back();
-            for (const std::string& d : get_direct(name)) {
+            auto direct = graph.required_mods.find(name);
+            if (direct == graph.required_mods.end()) {
+                continue;
+            }
+            const auto runtime = graph.runtime_required_mods.find(name);
+            for (const std::string& d : direct->second) {
                 if (reached.insert(d).second) {
                     todo.push_back(d);
-                    auto ii = index.find(d);
-                    if (ii != index.end()) {
-                        requires_mod[i][ii->second] = true;
+                }
+                auto target = index.find(d);
+                if (target != index.end()) {
+                    requires_mod[i][target->second] = true;
+                    if (name == mpgms[i].name && (runtime == graph.runtime_required_mods.end()
+                            || !runtime->second.count(d))) {
+                        requires_static[i][target->second] = true;
                     }
                 }
             }
@@ -7468,7 +7474,7 @@ static void qore_order_module_programs_dependents_first(std::vector<QoreModulePr
     while (!left.empty()) {
         // a module is held back only by a module left that requires it and that it does not require: a module of the
         // same cycle does not hold it back; such a module always exists
-        size_t pick = 0;
+        size_t pick = left.size();
         for (size_t li = 0; li < left.size(); ++li) {
             const size_t i = left[li];
             bool held = false;
@@ -7476,7 +7482,13 @@ static void qore_order_module_programs_dependents_first(std::vector<QoreModulePr
                 const size_t j = left[lj];
                 held = j != i && requires_mod[j][i] && !requires_mod[i][j];
             }
-            if (!held) {
+            if (held) {
+                continue;
+            }
+            if (pick == left.size()) {
+                pick = li;  // deterministic fallback for an entirely static cycle
+            }
+            if (std::none_of(left.begin(), left.end(), [&](size_t j) { return i != j && requires_static[j][i]; })) {
                 pick = li;
                 break;
             }
@@ -7557,7 +7569,11 @@ void QoreModuleManager::delUser() {
             module_programs.push_back({i.first, aot_pgm});
         }
     }
-    qore_order_module_programs_dependents_first(module_programs);
+    {
+        QoreTeardownDependencies graph;
+        getTeardownModuleDependencies(graph);
+        qore_order_module_programs_dependents_first(module_programs, graph);
+    }
     {
         ExceptionSink xsink;
         for (const QoreModuleProgramInfo& mp : module_programs) {
@@ -7793,28 +7809,63 @@ void QoreModuleManager::getModuleDependencies(const char* name, strset_t& deps) 
     deps.insert(binary_deps.begin(), binary_deps.end());
 }
 
-void QoreModuleManager::getTeardownModuleDependencies(const char* name, strset_t& deps) {
-    getModuleDependencies(name, deps);
+void QoreModuleManager::getTeardownModuleDependencies(QoreTeardownDependencies& graph) {
     AutoLocker al(mutex);
-    module_map_t::const_iterator i = map.find(name);
-    if (i == map.end()) {
-        return;
-    }
-    // the binary modules that an AOT module required at run time (those of a user module are added above)
-    if (!i->second->isUser()) {
-        for (md_map_t::const_iterator bi = binary_user_dep_map.begin(), e = binary_user_dep_map.end(); bi != e;
-                ++bi) {
-            if (bi->second.find(name) != bi->second.end()) {
-                deps.insert(bi->first);
+    for (module_map_t::iterator i = map.begin(), e = map.end(); i != e; ++i) {
+        std::vector<std::string>& req = graph.required_mods[i->first];
+        if (i->second->isUser()) {
+            const strset_t* deps = rmd_map.getDeps(i->first);
+            if (deps) {
+                req.assign(deps->begin(), deps->end());
+            }
+        } else if (getBinaryModuleDependencies(i, req)) {
+            graph.native_mods.insert(i->first);
+        }
+        // the requirements recorded at run time only; a user module's are in rmd_map too, while those of a binary
+        // module listed in its own dependencies (those an AOT module was compiled with) are not run time ones, even
+        // if they were also recorded at run time
+        const bool user = i->second->isUser();
+        for (const auto& ri : runtime_dep_map) {
+            if (ri.second.find(i->first) != ri.second.end()
+                    && (user || std::find(req.begin(), req.end(), ri.first) == req.end())) {
+                graph.runtime_required_mods[i->first].insert(ri.first);
             }
         }
     }
-    // the user modules applied to the Program of an AOT module at run time (issue #6501), and the user modules applied
-    // at run time to the Program of a module that they require (qore#7310): user module -> the modules requiring it
-    for (ModMap* m : {&aot_user_dep_map, &runtime_importer_map}) {
-        for (md_map_t::iterator ui = m->begin(), e = m->end(); ui != e; ++ui) {
-            if (ui->second.find(name) != ui->second.end()) {
-                deps.insert(ui->first);
+    // a user module requiring a binary module
+    for (md_map_t::iterator i = binary_user_dep_map.begin(), e = binary_user_dep_map.end(); i != e; ++i) {
+        for (const std::string& user : i->second) {
+            auto ri = graph.required_mods.find(user);
+            if (ri != graph.required_mods.end()) {
+                ri->second.push_back(i->first);
+            }
+        }
+    }
+    // an AOT module requiring a user module applied to its Program at run time (issue #6501)
+    for (md_map_t::iterator i = aot_user_dep_map.begin(), e = aot_user_dep_map.end(); i != e; ++i) {
+        if (graph.required_mods.find(i->first) == graph.required_mods.end()) {
+            continue;
+        }
+        for (const std::string& aot : i->second) {
+            auto ri = graph.required_mods.find(aot);
+            if (ri != graph.required_mods.end()) {
+                ri->second.push_back(i->first);
+            }
+        }
+    }
+    // a user module requiring a user module applied to its Program at run time that requires it, a cycle that rmd_map
+    // does not record (see runtime_importer_map): a requirement at run time only, so that the cycle is broken at the
+    // module loaded, whose native modules it then requires in its place (qore#7310)
+    for (md_map_t::iterator i = runtime_importer_map.begin(), e = runtime_importer_map.end(); i != e; ++i) {
+        if (graph.required_mods.find(i->first) == graph.required_mods.end()) {
+            continue;
+        }
+        for (const std::string& importer : i->second) {
+            auto ri = graph.required_mods.find(importer);
+            if (ri != graph.required_mods.end()
+                    && std::find(ri->second.begin(), ri->second.end(), i->first) == ri->second.end()) {
+                ri->second.push_back(i->first);
+                graph.runtime_required_mods[importer].insert(i->first);
             }
         }
     }
@@ -7994,70 +8045,11 @@ void QoreModuleManager::cleanup() {
     // %requires can hold objects of its classes in the constants of its Program, initialized when it is parsed, which
     // a module loaded later from its code cannot have given it.  So a cycle made by a run-time load is broken at the
     // module loaded, and every module required with %requires is still deleted after the modules that require it.
-    // module -> the modules left that it requires
-    std::map<std::string, std::vector<std::string>> required_mods;
-    // requiring module -> the modules left that it requires only because they were applied to its Program at run time
-    std::map<std::string, strset_t> runtime_required_mods;
-    // the native binary modules left
-    strset_t native_mods;
-    for (module_map_t::iterator i = map.begin(), e = map.end(); i != e; ++i) {
-        std::vector<std::string>& req = required_mods[i->first];
-        if (i->second->isUser()) {
-            const strset_t* deps = rmd_map.getDeps(i->first);
-            if (deps) {
-                req.assign(deps->begin(), deps->end());
-            }
-        } else if (getBinaryModuleDependencies(i, req)) {
-            native_mods.insert(i->first);
-        }
-        // the requirements recorded at run time only; a user module's are in rmd_map too, while those of a binary
-        // module listed in its own dependencies (those an AOT module was compiled with) are not run time ones, even
-        // if they were also recorded at run time
-        const bool user = i->second->isUser();
-        for (const auto& ri : runtime_dep_map) {
-            if (ri.second.find(i->first) != ri.second.end()
-                    && (user || std::find(req.begin(), req.end(), ri.first) == req.end())) {
-                runtime_required_mods[i->first].insert(ri.first);
-            }
-        }
-    }
-    // a user module requiring a binary module
-    for (md_map_t::iterator i = binary_user_dep_map.begin(), e = binary_user_dep_map.end(); i != e; ++i) {
-        for (const std::string& user : i->second) {
-            auto ri = required_mods.find(user);
-            if (ri != required_mods.end()) {
-                ri->second.push_back(i->first);
-            }
-        }
-    }
-    // an AOT module requiring a user module applied to its Program at run time (issue #6501)
-    for (md_map_t::iterator i = aot_user_dep_map.begin(), e = aot_user_dep_map.end(); i != e; ++i) {
-        if (required_mods.find(i->first) == required_mods.end()) {
-            continue;
-        }
-        for (const std::string& aot : i->second) {
-            auto ri = required_mods.find(aot);
-            if (ri != required_mods.end()) {
-                ri->second.push_back(i->first);
-            }
-        }
-    }
-    // a user module requiring a user module applied to its Program at run time that requires it, a cycle that rmd_map
-    // does not record (see runtime_importer_map): a requirement at run time only, so that the cycle is broken at the
-    // module loaded, whose native modules it then requires in its place (qore#7310)
-    for (md_map_t::iterator i = runtime_importer_map.begin(), e = runtime_importer_map.end(); i != e; ++i) {
-        if (required_mods.find(i->first) == required_mods.end()) {
-            continue;
-        }
-        for (const std::string& importer : i->second) {
-            auto ri = required_mods.find(importer);
-            if (ri != required_mods.end()
-                    && std::find(ri->second.begin(), ri->second.end(), i->first) == ri->second.end()) {
-                ri->second.push_back(i->first);
-                runtime_required_mods[importer].insert(i->first);
-            }
-        }
-    }
+    QoreTeardownDependencies graph;
+    getTeardownModuleDependencies(graph);
+    auto& required_mods = graph.required_mods;
+    auto& runtime_required_mods = graph.runtime_required_mods;
+    auto& native_mods = graph.native_mods;
     // module -> the number of modules left that require it
     std::map<std::string, int> dependents;
     for (auto& i : required_mods) {
