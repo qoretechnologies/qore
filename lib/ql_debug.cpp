@@ -25764,6 +25764,25 @@ static QoreValue f_dbg_run_method_cache_lifetime_tests(const QoreListNode* param
     return make_unit_test_result(c, xsink);
 }
 
+// defined in JITRuntime.cpp
+DLLLOCAL QoreHashNode* qore_rt_dbg_aot_dispatch_reclaim_stats();
+DLLLOCAL QoreHashNode* qore_rt_dbg_aot_dispatch_reclaim_stress(QoreObject* target, int64 threads, int64 iterations,
+        ExceptionSink* xsink);
+
+//! Debug-only: returns the counters of the reclamation of replaced AOT method dispatch cache entries (qore#7459)
+static QoreValue f_dbg_aot_dispatch_reclaim_stats(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_rt_dbg_aot_dispatch_reclaim_stats();
+}
+
+//! Debug-only: looks up AOT method dispatch cache entries in reader threads while a writer replaces them (qore#7459)
+static QoreValue f_dbg_aot_dispatch_reclaim_stress(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreObject* target = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    return qore_rt_dbg_aot_dispatch_reclaim_stress(target, get_param_value(params, 1).getAsBigInt(),
+        get_param_value(params, 2).getAsBigInt(), xsink);
+}
+
 //! Checks the reference type cached in a value type (qore#7269)
 /** qore_get_complex_reference_type() returns the reference type cached in the value type without a lock; the cached
     type must always be the entry of the cache of reference types for the value type, so that the type of a reference
@@ -34724,6 +34743,11 @@ void init_debug_functions(QoreNamespace& qns) {
         hashTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "encoded");
     qns.addBuiltinVariant("dbg_run_method_cache_lifetime_tests", f_dbg_run_method_cache_lifetime_tests,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
+    qns.addBuiltinVariant("dbg_aot_dispatch_reclaim_stats", f_dbg_aot_dispatch_reclaim_stats, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_aot_dispatch_reclaim_stress", f_dbg_aot_dispatch_reclaim_stress, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 3, objectTypeInfo, QORE_PARAM_NO_ARG, "target", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "threads", bigIntTypeInfo, QORE_PARAM_NO_ARG, "iterations");
     qns.addBuiltinVariant("dbg_ir_inline_site_states", f_dbg_ir_inline_site_states, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);
     qns.addBuiltinVariant("dbg_run_reference_type_cache_tests", f_dbg_run_reference_type_cache_tests, QCF_NO_FLAGS,
