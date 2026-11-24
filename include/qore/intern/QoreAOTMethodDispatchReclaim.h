@@ -64,7 +64,7 @@ struct DLLLOCAL QoreAOTMethodDispatchReclaimTag {
 typedef QoreEpochReclaimer<QoreAOTMethodDispatchReclaimTag> QoreAOTMethodDispatchReclaimer;
 
 //! what a method call that AOT code dispatches by name needs from the calling thread's data
-struct QoreAOTDispatchThreadContext {
+struct DLLLOCAL QoreAOTDispatchThreadContext {
     //! the class context of the running code (runtime_get_class())
     const qore_class_private* class_ctx = nullptr;
     //! the running Program (getProgram())
