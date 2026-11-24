@@ -13524,8 +13524,10 @@ static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature
 static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig,
         const QoreTypeInfo* receiver_type_info);
 
-template <bool IN_FRAME_RELEASE = false, typename ExecFn>
-static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call_name,
+// The caller owns the frame storage so it can keep the frame through method return validation.
+template <bool IN_FRAME_RELEASE, typename ExecFn>
+static void execJITWithDeopt(std::optional<QoreJITStackLocation>& frame,
+        const UserVariantBase* uvb, const std::string& call_name,
         ExecFn&& exec_fn, QoreValue& val, ExceptionSink* xsink,
         QoreProgram* caller_pgm = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
         QoreProgram* exec_pgm = nullptr, void (*release_in_frame)(void*) = nullptr, void* release_ctx = nullptr) {
@@ -13571,7 +13573,7 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     // call; if not provided, we fall back to uvb->pgm (pre-existing behavior).
     const QoreProgramLocation* parse_loc = uvb->getUserSignature()->getParseLocation();
     const QoreProgramLocation* call_loc = take_runtime_call_location();
-    QoreJITStackLocation jit_stack_loc(call_name, call_loc ? call_loc : parse_loc, uvb->getStatementBlock(),
+    frame.emplace(call_name, call_loc ? call_loc : parse_loc, uvb->getStatementBlock(),
         caller_pgm ? caller_pgm : runtime_pgm);
 
     struct ReceiverTypeInfoGuard {
@@ -13706,6 +13708,17 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     if constexpr (IN_FRAME_RELEASE) {
         release_in_frame(release_ctx);
     }
+}
+
+// Most calls need the frame only while executing the body and releasing its locals.
+template <bool IN_FRAME_RELEASE = false, typename ExecFn>
+static QORE_INTERN_ALWAYS_INLINE void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call_name,
+        ExecFn&& exec_fn, QoreValue& val, ExceptionSink* xsink,
+        QoreProgram* caller_pgm = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
+        QoreProgram* exec_pgm = nullptr, void (*release_in_frame)(void*) = nullptr, void* release_ctx = nullptr) {
+    std::optional<QoreJITStackLocation> frame;
+    execJITWithDeopt<IN_FRAME_RELEASE>(frame, uvb, call_name, std::forward<ExecFn>(exec_fn), val, xsink,
+        caller_pgm, receiver_type_info, exec_pgm, release_in_frame, release_ctx);
 }
 
 //! returns true if a call of a user function with the explicit Program \a call_pgm needs to enter that Program first
@@ -22342,6 +22355,8 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
 
     // the name of the frame, as an AST call names it
     const std::string& call_name = uvb->getCallName();
+    // Keep the method on the stack through the return-type check, which can raise after its body ends (#7370).
+    std::optional<QoreJITStackLocation> frame;
 
     // this fast-call path bypasses evalTiered(), so the call is counted here for the callee's promotion to
     // native code, as qore_rt_call_fast() counts it (a no-op once the callee is native)
@@ -22357,7 +22372,7 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp{args, nargs, arg_cleanups};
-            execJITWithDeopt<CONSUME>(uvb, call_name,
+            execJITWithDeopt<CONSUME>(frame, uvb, call_name,
                     [ir, uvb, exec_pgm, &dp](ExceptionSink* xs, bool& inv) -> uint64_t {
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
@@ -22372,13 +22387,14 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
             CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
         } else if (uvb->hasCachedFunction() && !use_specialized_ir) {
             // JIT/AOT fast path
-            execJITWithDeopt<CONSUME>(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+            execJITWithDeopt<CONSUME>(frame, uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
                 return uvb->execCachedFunction(xs, inv);
             }, val, xsink, caller_pgm, receiver_type_info, exec_pgm,
             CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
         } else {
             // IR fast path (standard TLS): execute IR directly without QoreListNode.
-            execJITWithDeopt<CONSUME>(uvb, call_name, [ir, uvb, exec_pgm](ExceptionSink* xs, bool& inv) -> uint64_t {
+            execJITWithDeopt<CONSUME>(frame, uvb, call_name,
+                    [ir, uvb, exec_pgm](ExceptionSink* xs, bool& inv) -> uint64_t {
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
                     nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
