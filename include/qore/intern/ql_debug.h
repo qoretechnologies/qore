@@ -298,6 +298,9 @@ DLLLOCAL bool qore_dbg_http1_header_read_op_must_fail(const char* site);
 //! \c "send-stream-and-read-header")
 DLLLOCAL bool qore_dbg_http_header_text_alloc_must_fail(const char* site);
 
+//! returns true if the buffer of a binary value must not grow to \a size bytes; set by dbg_fail_binary_reserve_over()
+DLLLOCAL bool qore_dbg_binary_reserve_must_fail(size_t size);
+
 //! notes that thread \a tid starts waiting on a lock, for dbg_lock_wait_wait(); called by VLock::waitOn()
 DLLLOCAL void qore_dbg_note_lock_wait(const AbstractSmartLock* asl, int tid);
 

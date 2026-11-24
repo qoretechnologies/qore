@@ -20477,6 +20477,21 @@ static QoreValue f_dbg_http_header_text_alloc_failed(const QoreListNode* params,
     return rv;
 }
 
+//! the size over which the buffer of a binary value cannot grow; 0: no limit (dbg_fail_binary_reserve_over())
+static std::atomic<int64> dbg_binary_reserve_limit{0};
+
+bool qore_dbg_binary_reserve_must_fail(size_t size) {
+    int64 limit = dbg_binary_reserve_limit.load(std::memory_order_relaxed);
+    return limit > 0 && size > static_cast<size_t>(limit);
+}
+
+//! Debug-only: the buffer of a binary value cannot grow over the given size in the process, as if the memory could not
+//! be allocated; 0 removes the limit
+static QoreValue f_dbg_fail_binary_reserve_over(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    dbg_binary_reserve_limit.store(get_param_value(params, 0).getAsBigInt(), std::memory_order_relaxed);
+    return QoreValue();
+}
+
 //! Debug-only: returns the number of records that a session of a socket keeps for its streams, by kind
 /** The QUIC session with the given ID, or the HTTP/2 session of the socket if no ID is given.  Tests use it to show
     that a long-lived session does not keep records for the streams it has finished.  DEBUG builds only.
@@ -32911,6 +32926,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "site");
     qns.addBuiltinVariant("dbg_http_header_text_alloc_failed", f_dbg_http_header_text_alloc_failed, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_fail_binary_reserve_over", f_dbg_fail_binary_reserve_over, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "size");
     qns.addBuiltinVariant("dbg_clear_http1_header_read_op_failure", f_dbg_clear_http1_header_read_op_failure,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_socket_stream_records", f_dbg_socket_stream_records,
