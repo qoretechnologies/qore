@@ -148,7 +148,7 @@ typedef std::map<std::string, TypedefEntry*> typedef_map_t;
 //! Adds a builtin constant whose value depends on the state of the running library
 /** Code referencing the constant reads it from the process it runs in, including AOT-compiled code; see
     ConstantEntry::setRuntimeDependent().  qpp generates calls to this for constants declared with a
-    <tt>qore_runtime(<value>, <value in compiled code>)</tt> value.
+    <tt>qore_runtime(<value>, <value in compiled code>)</tt> or <tt>qore_domain(<value>, <domain>)</tt> value.
 
     @param ns the namespace to add the constant to
     @param ns_path the namespace's fully-qualified path without a leading "::" (ex: "Qore::Option")
@@ -156,9 +156,10 @@ typedef std::map<std::string, TypedefEntry*> typedef_map_t;
     @param value the constant's value in this process; ownership is taken
     @param compiled_define the value of the constant's parse define in code compiled ahead of time, where the
     compiler cannot know the state of the library the code will run with; ownership is taken
+    @param domain the functional domain required to read the constant
 */
 DLLLOCAL void qore_ns_add_runtime_constant(QoreNamespace& ns, const char* ns_path, const char* name,
-        QoreValue value, QoreValue compiled_define);
+        QoreValue value, QoreValue compiled_define, int64 domain = 0);
 
 //! returns the namespaces of a namespace map in the order in which they were declared (issue #7171)
 DLLLOCAL std::vector<QoreNamespace*> qore_namespaces_in_declaration_order(const nsmap_t& m);

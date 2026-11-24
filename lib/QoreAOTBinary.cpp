@@ -2322,6 +2322,9 @@ private:
 
     DLLLOCAL QoreValue resolvePath(ExceptionSink* xsink) const {
         ConstantEntry* ce = getConstantEntry();
+        if (!ce->checkRuntimeDomain(xsink)) {
+            return QoreValue();
+        }
         if (!ce->hasValue()) {
             // Match RuntimeConstantRefNode's first-read recovery for a reference
             // to the constant itself.  A nested value path can be captured by
@@ -2898,7 +2901,7 @@ QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* pat
         if (resolved) {
             *resolved = true;
         }
-        if (wrap_top_level_if_ready && ce->hasValue()) {
+        if ((wrap_top_level_if_ready || ce->getDomain()) && ce->hasValue()) {
             return QoreValue(new RuntimeConstantRefNode(&loc_builtin, ce));
         }
         if (ce->hasValue()) {
@@ -2928,16 +2931,18 @@ QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* pat
     if (!ce) {
         return QoreValue();
     }
-    if (!ce->hasValue()) {
-        if (defer_if_pending) {
-            if (resolved) {
-                *resolved = true;
-            }
-            if (pos == encoded.size()) {
-                return QoreValue(new RuntimeConstantRefNode(&loc_builtin, ce, true));
-            }
-            return QoreValue(new RuntimeConstantPathRefNode(&loc_builtin, ce, encoded, pos));
+    // Keep a protected base as a reference even when the loader already knows its value: the Program that reads
+    // it must satisfy its domain. Pending values likewise keep the path until they have been initialized.
+    if (ce->getDomain() || (!ce->hasValue() && defer_if_pending)) {
+        if (resolved) {
+            *resolved = true;
         }
+        if (pos == encoded.size()) {
+            return QoreValue(new RuntimeConstantRefNode(&loc_builtin, ce, !ce->hasValue()));
+        }
+        return QoreValue(new RuntimeConstantPathRefNode(&loc_builtin, ce, encoded, pos));
+    }
+    if (!ce->hasValue()) {
         return QoreValue();
     }
 

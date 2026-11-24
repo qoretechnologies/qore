@@ -441,6 +441,10 @@ const QoreTypeInfo* QoreExternalConstant::getTypeInfo() const {
     return reinterpret_cast<const ConstantEntry*>(this)->getParseTypeInfo();
 }
 
+int64 QoreExternalConstant::getDomain() const {
+    return reinterpret_cast<const ConstantEntry*>(this)->getDomain();
+}
+
 QoreValue QoreExternalConstant::getReferencedValue() const {
     return reinterpret_cast<const ConstantEntry*>(this)->getReferencedValue();
 }
