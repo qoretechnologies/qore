@@ -182,7 +182,7 @@ class WebSocketStreamForcedCloseTest inherits QUnit::Test {
         server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
         server.setDefaultHandler("ws", handler);
         port = server.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(TestCertificates::CertPem),
             "key": new SSLPrivateKey(TestCertificates::KeyPem),
@@ -217,7 +217,7 @@ class WebSocketStreamForcedCloseTest inherits QUnit::Test {
                 closed.push(True);
             }
         }, {
-            "url": sprintf("wss://localhost:%d", port),
+            "url": sprintf("wss://127.0.0.1:%d", port),
             "http_version": ver,
             "ssl_verify_cert": False,
             "timeout": HangGuard,
@@ -302,7 +302,7 @@ class WebSocketStreamForcedCloseTest inherits QUnit::Test {
             + <00> + b1(9) + binary(":protocol") + b1(9) + binary("websocket")
             + <86>
             + <04> + b1(1) + binary("/")
-            + <01> + b1(9) + binary("localhost")
+            + <01> + b1(9) + binary("127.0.0.1")
             + <00> + b1(21) + binary("sec-websocket-version") + b1(2) + binary("13");
         # HEADERS with END_HEADERS, without END_STREAM
         s.send(binary("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") + settings + h2_frame(1, 0x4, 1, block));

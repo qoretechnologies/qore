@@ -18827,6 +18827,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         return toBits(QoreValue());
     }
 
+    if (inst->unary_op == LVUnaryOp::EnsureUnique) {
+        QoreValue value;
+        if (qore_try_read_unique_weak_path(path_copy.data(), path_copy.size(), value)) {
+            return toBits(value);
+        }
+    }
+
     bool is_remove = (inst->unary_op == LVUnaryOp::Remove || inst->unary_op == LVUnaryOp::Delete);
     QoreValue res;
 
@@ -22482,25 +22489,8 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
         CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
     }
     if constexpr (!CONSUME) {
-        if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
-            if (sig->argvid) {
-                sig->argvid->uninstantiate(xsink);
-            }
-            if (!use_direct_params) {
-                for (int i = static_cast<int>(num_params) - 1; i >= 0; --i) {
-                    sig->lv[i]->uninstantiate(xsink);
-                }
-            }
-            if (selfid_instantiated) {
-                selfid->uninstantiateSelf();
-            }
-            // the release of a consumed argument raised an exception after the call gave its value, which is
-            // released then, as the AST interpreter releases it (#6051)
-            val.discard(xsink);
-            result = toBits(QoreValue());
-            return true;
-        }
-
+        // The dispatcher selects this instantiation only when the caller gave no argument cleanups.
+        assert(!arg_cleanups);
         if (sig->argvid) {
             sig->argvid->uninstantiate(xsink);
         }

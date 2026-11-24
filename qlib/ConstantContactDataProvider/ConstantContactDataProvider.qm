@@ -1375,6 +1375,7 @@ module ConstantContactDataProvider {
             "short_desc": "Get email campaign summary report",
             "desc": "Get a summary report for email campaigns in Constant Contact",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": {
                 "campaign_ids": <ActionOptionInfo>{
                     "display_name": "Campaign IDs",
@@ -1399,6 +1400,7 @@ module ConstantContactDataProvider {
             "short_desc": "Get account information",
             "desc": "Get the Constant Contact account information",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": {},
             "get_output_type": AbstractDataProviderType sub () { return new ConstantContactAccountDataType(); },
         });

@@ -826,4 +826,26 @@ inline bool isForbiddenResponseHeader(const std::string& lname) {
     return lname == "te" || getForbiddenHopByHopHeaders().count(lname);
 }
 
+//! The Connection Attempt Delay of the address family race of a QUIC client connection (RFC 8305 section 5)
+/** 250 ms, the value that RFC 8305 recommends: the next connection attempt starts this long after the previous one,
+    unless every attempt started has failed before
+*/
+constexpr int64_t QUIC_HE_CONNECTION_ATTEMPT_DELAY_NS = 250'000'000LL;
+
+//! Returns true if the error of a QUIC client connection attempt means that the attempt never reached a server
+/** A send error is one only before the QUIC handshake completed: raised while the HTTP/3 layer is set up after it,
+    the server was reached (issue #5944).  Any other error, such as a refusal by the sandbox or a rejected
+    certificate, explains the failure better than an error of an attempt that reached no server, so the error of a
+    failed connection is the error of the attempt that got furthest.
+
+    @param err the error code
+    @param handshake_complete true if the QUIC handshake of the attempt had completed
+*/
+inline bool quic_is_unreached_error(const char* err, bool handshake_complete) {
+    if (!strcmp(err, "QUIC-SEND-ERROR")) {
+        return !handshake_complete;
+    }
+    return !strcmp(err, "QUIC-CONNECT-REFUSED") || !strcmp(err, "QUIC-HANDSHAKE-TIMEOUT");
+}
+
 #endif // _QORE_QUICCOMMON_H

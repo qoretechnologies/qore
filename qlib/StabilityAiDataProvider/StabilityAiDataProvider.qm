@@ -117,6 +117,7 @@ module StabilityAiDataProvider {
                     "`content_type` the verified MIME type, and `finish_reason` reports completion. "
                     "Safety-filtered responses raise an error. Select a concrete SD3.5 model with `sd3_model`.",
                 "action_code": DPAT_API,
+                "mutates_state": False,
                 "groups": ("Image Generation",),
                 "options": DataProviderActionCatalog::getActionOptionFromFields(
                     StabilityAiGenerateImageDataProvider::requestType().getFields(){"prompt",}, {

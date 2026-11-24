@@ -1,0 +1,168 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the character functions of encodings of the platform's iconv
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class Iso6937CharacterFunctionsTest
+
+#! Tests the character functions of ISO 6937, T.61 and ANSI X3.110 (NAPLPS) (qore#6900)
+/** These encodings write a letter with a diacritical mark as a non-spacing mark (0xc1 - 0xcf) followed by the letter,
+    so probing found a double-byte family for them, which refused their C1 control characters (0x80 - 0x9f) and most
+    other bytes.  Their character functions are now those of their definition: a mark and the graphic character after
+    it are one character, every other byte is one.  For each name of the encodings that the platform's iconv has, every
+    one- and two-byte sequence that iconv decodes must be valid text for the character functions, with as many
+    characters as iconv gives code points, and each of its characters must be the one that iconv gives.
+*/
+class Iso6937CharacterFunctionsTest inherits QUnit::Test {
+    public {
+        #! the names of the encodings, as glibc's iconv has them
+        const Names = ("T.61", "T.61-8BIT", "ISO-IR-103", "ISO6937", "ISO_6937", "ISO_6937:1992", "ISO-IR-156",
+            "ISO_6937-2", "ISO_6937-2:1983", "ISO-IR-90", "NAPLPS", "ANSI_X3.110", "ANSI_X3.110-1983", "CSA_T500",
+            "ISO-IR-99");
+    }
+
+    constructor() : QUnit::Test("ISO 6937 character functions", "1.0", \ARGV) {
+        foreach string enc in (Names) {
+            addTestCase("character functions: " + enc, \testEncoding(), (enc,));
+        }
+        set_return_value(main());
+    }
+
+    testEncoding(string enc) {
+        if (!converts(enc)) {
+            testSkip("the platform's iconv does not have " + enc);
+        }
+
+        # the issue's text: a C1 control character between letters
+        string s = binary_to_string(<41804142>, enc);
+        assertTrue(s.isEncodingValid(), enc);
+        assertEq(4, s.length(), enc);
+        assertEq("A\u{80}AB", convert_encoding(s, "UTF-8"), enc);
+        assertEq(binary(<80>), binary(s.substr(1, 1)), enc);
+
+        # a letter with a diacritical mark (é: the acute accent 0xc2 and 'e') is one character, also between C1
+        # control characters and other bytes
+        s = binary_to_string(<85c2659f41>, enc);
+        assertEq(4, s.length(), enc);
+        assertEq(binary(<c265>), binary(s.substr(1, 1)), enc);
+        assertEq(binary(<9f>), binary(s.substr(2, 1)), enc);
+        assertEq("\u{85}é\u{9f}A", convert_encoding(s, "UTF-8"), enc);
+
+        # searches match only at character boundaries: the letter after a mark is an ASCII character, which is no
+        # character of its own there
+        s = binary_to_string(<41c26542>, enc);
+        string e = convert_encoding("e", enc);
+        assertEq(-1, s.find(e), enc + ": find()");
+        assertEq(-1, s.rfind(e), enc + ": rfind()");
+        assertEq(1, s.split(e).size(), enc + ": split()");
+        assertEq(2, binary_to_string(<41c2656542>, enc).find(e), enc + ": find() after the character");
+
+        # a reader that gets one byte at a time returns whole characters
+        {
+            BinaryInputStream bis(<41c2658542>);
+            StreamReader sr(new ByteAtATimeInputStream(bis), enc);
+            list<binary> chars = ();
+            while (*string c = sr.readString(1)) {
+                chars += binary(c);
+            }
+            assertEq((<41>, <c265>, <85>, <42>), chars, enc + ": StreamReader::readString(1)");
+        }
+
+        # a mark that the text ends with, or that is not followed by a graphic character, is not valid
+        foreach binary b in ((<41c2>, <41c20a>, <41c2c2>, <41cf80>)) {
+            string t = binary_to_string(b, enc);
+            assertFalse(t.isEncodingValid(), sprintf("%s: %s", enc, b.toHex()));
+            assertThrows("INVALID-ENCODING", auto sub () { return t.length(); }, (), sprintf("%s: %s", enc, b.toHex()));
+        }
+
+        # every byte, and every two-byte sequence with a first byte 0x80 - 0xff, that iconv decodes (as the scan of
+        # the issue: the marks, the C1 control characters and the other bytes of the upper half)
+        int checked = 0;
+        list<string> errors = ();
+        for (int b0 = 0; b0 < 0x100; ++b0) {
+            binary first = binary(chr(b0, "ISO-8859-1"));
+            checkSequence(enc, first, \checked, \errors);
+            if (b0 < 0x80) {
+                continue;
+            }
+            for (int b1 = 0; b1 < 0x100; ++b1) {
+                checkSequence(enc, first + binary(chr(b1, "ISO-8859-1")), \checked, \errors);
+            }
+        }
+        assertEq((), errors, enc + ": sequences that iconv decodes and the character functions do not");
+        # glibc decodes 13 marks with their letters and about 200 other bytes
+        assertGt(1000, checked, enc + ": sequences that iconv decodes");
+    }
+
+    #! checks a sequence that iconv decodes: valid text with the characters that iconv gives
+    private checkSequence(string enc, binary b, reference<int> checked, reference<list<string>> errors) {
+        string s = binary_to_string(b, enc);
+        string utf8;
+        try {
+            utf8 = convert_encoding(s, "UTF-8");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "ENCODING-CONVERSION-ERROR") {
+                # iconv does not decode it
+                return;
+            }
+            rethrow;
+        }
+        ++checked;
+        try {
+            if (!s.isEncodingValid()) {
+                errors += sprintf("%s: not valid", b.toHex());
+                return;
+            }
+            int len = s.length();
+            if (len != utf8.length()) {
+                errors += sprintf("%s: %d characters, iconv %d", b.toHex(), len, utf8.length());
+                return;
+            }
+            for (int i = 0; i < len; ++i) {
+                string c = convert_encoding(s.substr(i, 1), "UTF-8");
+                if (c != utf8.substr(i, 1)) {
+                    errors += sprintf("%s: character %d is %y, iconv %y", b.toHex(), i, c, utf8.substr(i, 1));
+                    return;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            errors += sprintf("%s: %s: %s", b.toHex(), ex.err, ex.desc);
+        }
+    }
+
+    #! returns True if the platform's iconv converts to and from the encoding
+    static bool converts(string enc) {
+        try {
+            return convert_encoding(binary_to_string(<41>, enc), "UTF-8") == "A"
+                && binary(convert_encoding("A", enc)) == <41>;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "ENCODING-CONVERSION-ERROR" && ex.desc =~ /cannot convert from/) {
+                return False;
+            }
+            rethrow;
+        }
+    }
+}
+
+#! an input stream that returns one byte of another stream at a time
+class ByteAtATimeInputStream inherits InputStream {
+    private:internal {
+        InputStream is;
+    }
+
+    constructor(InputStream is) {
+        self.is = is;
+    }
+
+    *binary read(int limit) {
+        return is.read(1);
+    }
+
+    int peek() {
+        return is.peek();
+    }
+}

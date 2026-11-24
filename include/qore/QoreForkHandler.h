@@ -235,7 +235,8 @@ DLLEXPORT bool qore_fork_child_exits_quickly();
 
     If the module cleanup of qore_cleanup() stopped waiting for work that it handed over to other threads (once the
     grace period after its deadline had passed: \c QORE_MODULE_CLEANUP_HANDOVER_GRACE), those threads can still run in
-    the library, which qore_cleanup() then leaves allocated; this function then also ends the process with
+    the library. A foreign thread to which a Program was left can also still run in the library. In both cases
+    qore_cleanup() leaves the library allocated and this function ends the process with
     \c _exit(), as the static objects of the library, which those threads use, would be destroyed under them by
     \c exit().  A program that embeds the library and cannot end here (a language runtime that calls qore_cleanup()
     in its own exit processing, for example) can check qore_cleanup_left_library() and end the process itself without

@@ -20899,6 +20899,10 @@ load_local_done:
                             || path_inst->unary_op == LVUnaryOp::Trim
                             || path_inst->unary_op == LVUnaryOp::Chomp
                             || path_inst->unary_op == LVUnaryOp::EnsureUnique);
+                        if (path_inst->unary_op == LVUnaryOp::EnsureUnique
+                                && qore_try_read_unique_weak_path(path_copy.data(), path_copy.size(), res)) {
+                            return 0;
+                        }
                         LValueHelper lvh(xsink);
                         // the source of a weak assignment is read as an rvalue reads it (qore#7242)
                         if (path_inst->unary_op == LVUnaryOp::EnsureUnique) {

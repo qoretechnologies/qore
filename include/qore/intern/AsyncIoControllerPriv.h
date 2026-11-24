@@ -79,6 +79,9 @@ extern qore_classid_t CID_ASYNCIOCONTROLLER;
 */
 class AsyncIoRoutedPollable : public AbstractPollableIoObjectBase {
 public:
+    //! The native socket whose descriptor this wrapper polls.
+    DLLLOCAL virtual struct qore_socket_private* getPollSocket() const = 0;
+
     //! Returns the route key that selects the I/O thread of every operation on this object
     DLLLOCAL virtual const std::string& getAsyncIoRouteKey() const = 0;
 
@@ -2372,6 +2375,8 @@ private:
         // Registered socket tracking; operations are identified by their ID (see OpCache), sockets by their hash
         //! The socket each operation is registered for, by operation ID (referenced)
         std::unordered_map<uint64_t, QoreObject*> registered_sockets;
+        //! Descriptorless waits on native sockets, indexed by operation ID (qore#7371).
+        std::unordered_map<uint64_t, std::shared_ptr<void>> generation_holds;
         //! The hash each operation in @ref registered_sockets is registered under
         /** Recorded with the registration, because the object cannot be asked when the registration is removed: a
             deleted object has no private data, and without the hash the registration of its descriptor would stay

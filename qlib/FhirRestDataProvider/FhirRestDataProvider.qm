@@ -240,24 +240,28 @@ public namespace FhirRestDataProvider {
 
 # private namespace for the module
 namespace Priv {
+    # the generated per-resource actions; "mutates_state" is set on the operations that only read (qore#7454)
     const GeneratedResourceActionSpecs = (
         {
             "operation": "read",
             "display_name": "Read",
             "short_desc": "Read a FHIR %s resource by ID",
             "desc": "Read one FHIR `%s` resource instance using its logical `id`.",
+            "mutates_state": False,
         },
         {
             "operation": "search",
             "display_name": "Search",
             "short_desc": "Search FHIR %s resources",
             "desc": "Search FHIR `%s` resources. Use `params` for server-supported FHIR search parameters.",
+            "mutates_state": False,
         },
         {
             "operation": "search-all",
             "display_name": "Search All",
             "short_desc": "Search all FHIR %s resource pages",
             "desc": "Search FHIR `%s` resources and follow Bundle `next` pagination links.",
+            "mutates_state": False,
         },
         {
             "operation": "create",
@@ -294,6 +298,8 @@ namespace Priv {
             "display_name": "Validate",
             "short_desc": "Validate a FHIR %s resource",
             "desc": "Validate a FHIR `%s` resource by delegating to the server's `$validate` operation.",
+            # a POST, but FHIR defines $validate as an operation that does not change state
+            "mutates_state": False,
         },
     );
 
@@ -412,6 +418,7 @@ namespace Priv {
                     "desc": sprintf(spec.desc, resource_type),
                     "groups": ("R4 Generated Resources", resource_type,),
                     "action_code": DPAT_API,
+                    "mutates_state": spec.mutates_state,
                     "options": getGeneratedResourceActionOptions(resource_type, operation),
                     "output_type": getGeneratedResourceActionOutputType(resource_type, operation),
                 });
@@ -459,6 +466,7 @@ namespace Priv {
             "short_desc": "Read FHIR server metadata",
             "desc": "Read the server `CapabilityStatement` from the FHIR `metadata` endpoint.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": {},
             "output_type": FhirRestDataProvider::FhirCapabilityStatementDataType,
         });
@@ -472,6 +480,7 @@ namespace Priv {
             "desc": "Read the SMART on FHIR discovery document from "
                 "`.well-known/smart-configuration`.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": {},
             "output_type": FhirRestDataProvider::FhirSmartConfigurationDataType,
         });
@@ -484,6 +493,7 @@ namespace Priv {
             "short_desc": "Read a FHIR resource by type and ID",
             "desc": "Read one FHIR resource instance using its `resource_type` and logical `id`.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FhirReadResourceRequestDataType::Fields, {
                     "preselected": True,
@@ -502,6 +512,7 @@ namespace Priv {
             "desc": "Search a FHIR resource type. The `params` hash accepts FHIR search parameter "
                 "names, including modifiers, chained parameters, `_include`, and `_revinclude`.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FhirSearchResourcesRequestDataType::Fields{"resource_type",}, {
                     "preselected": True,
@@ -524,6 +535,7 @@ namespace Priv {
             "desc": "Search a FHIR resource type and follow Bundle `next` pagination links. The `params` hash "
                 "remains available for advanced search parameters.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FhirSearchAllResourcesRequestDataType::Fields{"resource_type",}, {
                     "preselected": True,
@@ -670,6 +682,8 @@ namespace Priv {
             "desc": "Validate a FHIR resource by delegating to the server's `$validate` operation. "
                 "Use `resource_type` and `id` for type-level or instance-level validation.",
             "action_code": DPAT_API,
+            # a POST, but FHIR defines $validate as an operation that does not change state (qore#7454)
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FhirValidateResourceRequestDataType::Fields{"resource",}, {
                     "preselected": True,
@@ -692,6 +706,7 @@ namespace Priv {
             "desc": "Validate a code by delegating to a FHIR terminology endpoint. The `path` value is a "
                 "relative CodeSystem or ValueSet path such as `CodeSystem/example`.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FhirValidateCodeRequestDataType::Fields, {
                     "preselected": True,
@@ -711,6 +726,7 @@ namespace Priv {
                 "terminology endpoint. The `path` value is a relative CodeSystem path such as "
                 "`CodeSystem/example`.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FhirLookupCodeRequestDataType::Fields, {
                     "preselected": True,
@@ -729,6 +745,7 @@ namespace Priv {
             "desc": "Translate a code through a FHIR ConceptMap by delegating to a terminology endpoint. "
                 "The `path` value is a relative ConceptMap path such as `ConceptMap/example`.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FhirTranslateCodeRequestDataType::Fields, {
                     "preselected": True,
@@ -747,6 +764,7 @@ namespace Priv {
             "desc": "Expand a FHIR ValueSet by delegating to a terminology server. The `path` value is a "
                 "relative ValueSet path such as `ValueSet/example`.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FhirExpandValueSetRequestDataType::Fields{"path",}, {
                     "preselected": True,

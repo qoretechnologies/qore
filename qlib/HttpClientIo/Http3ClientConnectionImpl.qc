@@ -56,9 +56,9 @@ public class Http3ClientConnection inherits HttpClientConnection {
         @param ssl_ca_path a directory with the CA certificates to verify the server with instead of the default CAs
         @param ssl_trust_store an in-memory trust store to verify the server with instead of the CA locations (since
             %HttpClientIo 1.0, qoretechnologies/qore#7248)
-        @param address_family the address family to connect in; if not set, the family of the first address of the
-            host is used, unless it is in \a avoid_families
-        @param avoid_families address families not to connect in if the host also has an address in another family
+        @param address_family the address family to connect in; if not set, the connection attempts to the
+            addresses of the host race (RFC 8305), and the first one whose handshake completes is used
+        @param avoid_families address families to try last if the host also has an address in another family
 
         Creating the connection runs nothing that can block, so it can also be created on an async I/O thread: the
         host name is resolved and the UDP socket is bound by the connection's poll operation once it is submitted to
@@ -228,6 +228,8 @@ public class Http3ClientConnection inherits HttpClientConnection {
 
     #! Closes the connection (protocol-specific)
     closeImpl(*timeout close_timeout) {
+        # a close whose caller gave no reason (qore#7443)
+        setCloseReason("closed");
         self.setClosed();
         *AsyncSocketIoController ctl;
         {
@@ -321,6 +323,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         }
         Socket sock = poll_op.getSocket();
         if (sock.isQuicSessionClosed()) {
+            setCloseReason("its QUIC session is closed");
             self.setClosed();
             throw "HTTP3-CONNECTION-CLOSED",
                 "QUIC session closed; connection evicted from pool";
@@ -370,6 +373,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         Socket sock = poll_op.getSocket();
         # Check if the underlying QUIC session is dead before sending
         if (sock.isQuicSessionClosed()) {
+            setCloseReason("its QUIC session is closed");
             self.setClosed();
             throw "HTTP3-CONNECTION-CLOSED",
                 "QUIC session closed; connection evicted from pool";

@@ -312,6 +312,7 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         addTestCase("connection scheme", \connectionSchemeTest());
         addTestCase("S3-compatible connection", \compatibleConnectionTest());
         addTestCase("action catalog", \actionCatalogTest());
+        addTestCase("read-only actions", \readOnlyActionsTest());
         addTestCase("file API registration", \fileApiTest());
         addTestCase("reference data", \referenceDataTest());
         addTestCase("event providers", \eventProviderTest());
@@ -468,6 +469,26 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         *hash<auto> copts = conn.getConnectionOptions();
         assertEq("s3", copts.aws_service);
         assertEq(True, copts.aws_s3);
+    }
+
+    #! the actions that only read declare that they change nothing, and the write actions still do (qore#7454)
+    readOnlyActionsTest() {
+        # each of these makes only GET or HEAD requests and stores nothing
+        foreach string name in (("list-buckets", "list-objects", "get-object", "download-file",
+                "get-object-tagging", "list-object-versions")) {
+            *hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(App, name);
+            assertEq(NT_HASH, action.typeCode(), name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # the write actions keep the default of an API action, which changes state
+        foreach string name in (("create-bucket", "upload-file", "delete-object", "copy-object",
+                "put-object-tagging", "presigned-url")) {
+            *hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(App, name);
+            assertEq(NT_HASH, action.typeCode(), name);
+            assertTrue(DataProviderActionCatalog::actionMutatesState(action), name);
+        }
     }
 
     actionCatalogTest() {

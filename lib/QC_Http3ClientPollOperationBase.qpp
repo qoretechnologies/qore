@@ -121,11 +121,10 @@ Http3ClientPollOperationPriv::Http3ClientPollOperationPriv(QoreObject* self,
     // poll op as far as user code can observe — but it is NOT enough on its
     // own.  The I/O thread's continuePoll path can call
     // @c connection_priv->setClosed() (via @c handleConnecting →
-    // @c setError → @c Http3ClientConnection::onInnerHandshakeFailed) on
-    // its own raw pointer.  If the connection's last refcounted reference
-    // drops between the broadcast inside the FIRST setClosed and the I/O
-    // thread reaching its NEXT mutex acquisition (e.g., a happy-eyeballs
-    // peer attempt also calling setClosed, or the manager's
+    // @c setError) on its own raw pointer.  If the connection's last
+    // refcounted reference drops between the broadcast inside the FIRST
+    // setClosed and the I/O thread reaching its NEXT mutex acquisition
+    // (e.g., the manager's
     // createConnection timeout path doing closeConnection+deref after
     // waitForReadyOrError returns false), the AbstractHttpPollConnectionPriv
     // mutex is destroyed under us and the next pthread_mutex_lock returns
@@ -823,47 +822,6 @@ void Http3ClientPollOperationPriv::setError(const char* err, const char* desc, E
     wakeSettingsWaiters();
     // Socket cleanup is handled by the I/O controller's Phase3 close logic
     // via needsCloseOnComplete() returning true when h3_state == CLOSED.
-    // Happy-eyeballs: if an owner is armed (handshake-phase racing), hand
-    // the outcome to it instead of calling setClosed directly.  The owner
-    // decides whether to keep the connection CONNECTING (other attempts
-    // still pending) or transition to CLOSED (no candidates left).  Once
-    // reported, drop both back-pointers so a subsequent read-side error on
-    // this (losing) attempt does not re-enter the HE path.
-    Http3ClientConnection* owner = nullptr;
-    AbstractHttpPollConnectionPriv* owner_cp = nullptr;
-    {
-        AutoLocker al(stream_lock);
-        owner = h3_owner_;
-        h3_owner_ = nullptr;
-        if (owner && connection_priv) {
-            // Pin the owner before releasing stream_lock; closeConnection()
-            // can disarm this poll op and drop the permanent connection ref.
-            owner_cp = connection_priv;
-            owner_cp->ref();
-        } else {
-            owner = nullptr;
-        }
-    }
-    if (owner) {
-        // This branch does not close the connection, so it has nothing to
-        // settle before notifying: the owner decides the outcome, and a
-        // connection still racing its handshake never reached READY and so was
-        // never pooled.  Notify first, as before — onInnerHandshakeFailed()
-        // tears the losing attempts down, including this poll op.
-        notifyPendingStreams(err, desc, xsink);
-        owner->onInnerHandshakeFailed(this, err, desc);
-        AbstractHttpPollConnectionPriv* cp = nullptr;
-        {
-            AutoLocker al(stream_lock);
-            cp = connection_priv;
-            connection_priv = nullptr;
-        }
-        if (cp) {
-            cp->deref(xsink);  // release the ref taken in the constructor
-        }
-        owner_cp->deref(xsink);  // release the callback lifetime ref
-        return;
-    }
     // Close BEFORE notifying the pending streams: notifyPendingStreams()
     // resolves the waiting callers' Promises, and a caller that wakes while the
     // connection is still Ready in the manager's pool gets this dead connection
@@ -1006,31 +964,6 @@ int Http3ClientPollOperationPriv::waitForExtendedConnectSettings(ExceptionSink* 
 }
 
 void Http3ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
-    // Happy-eyeballs: if an owner is armed, route the success through its
-    // coordinator so losing attempts can be cancelled atomically before the
-    // base-class condition is signaled.  The owner is responsible for
-    // calling @c connection_priv->onConnectionReady() on the winning path.
-    Http3ClientConnection* owner = nullptr;
-    AbstractHttpPollConnectionPriv* owner_cp = nullptr;
-    {
-        AutoLocker al(stream_lock);
-        owner = h3_owner_;
-        h3_owner_ = nullptr;
-        if (owner && connection_priv) {
-            // Pin the owner before releasing stream_lock; closeConnection()
-            // can disarm this poll op and drop the permanent connection ref.
-            owner_cp = connection_priv;
-            owner_cp->ref();
-        } else {
-            owner = nullptr;
-        }
-    }
-    if (owner) {
-        // the owner records the destinations of the attempt that wins
-        owner->onInnerHandshakeReady(this);
-        owner_cp->deref(xsink);  // release the callback lifetime ref
-        return;
-    }
     // where the connection leads, which a pool checks before it hands the connection to other code
     std::shared_ptr<const QoreConnectionDestinations> destinations
         = sock_obj ? qore_socket_object_private(sock_obj).getConnectedDestinations() : nullptr;
@@ -1358,7 +1291,12 @@ bool Http3ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink
         if (old_completed_action) {
             old_completed_action->deref(xsink);
         }
-        return false;  // already completed
+        // the response completed, but the stream may still be open: the request of an extended CONNECT tunnel, or a
+        // streamed request whose response ended before its body did; the stream is then reset by the caller, as
+        // otherwise it stays open and takes one of the peer's streams for the life of the connection, until no new
+        // stream can be opened on it (qore#7443)
+        int64_t sid = session_id.load(std::memory_order_acquire);
+        return sock_obj && sid && qore_socket_object_private(sock_obj).isQuicBidiStreamOpen(sid, stream_id);
     }
 
     // Notify the action of cancellation, then release
@@ -1893,7 +1831,14 @@ qclass Http3ClientPollOperationBase [
     - <b>unbound</b> (a new @ref Qore::Socket "Socket"): once the host name is resolved, the operation binds the
       socket to the wildcard address of the family of the remote address, with a port assigned by the system;
       the bind is subject to the network policy of the @ref sandboxing "sandbox" of the code that creates the
-      operation, as for @ref Qore::Socket::bindINET() "Socket::bindINET()"
+      operation, as for @ref Qore::Socket::bindINET() "Socket::bindINET()".  If the host name resolves to more than
+      one address, the connection attempts to the addresses race as RFC 8305 (Happy Eyeballs) describes: the
+      address families alternate, starting with the family of the first address (the families in \a avoid_families
+      come last); an attempt is started 250 ms after the previous one, or at once when the attempts started have
+      failed (an ICMP refusal fails an attempt at once while another one can still connect); each attempt has a UDP
+      socket and a QUIC handshake of its own, with the sandbox checks of its remote address and of its bind, and the
+      first attempt whose handshake completes wins: the socket takes its descriptor over, and the others are closed;
+      \a connect_timeout applies to the race as a whole
     - <b>bound</b> (for example with @ref Qore::Socket::bindINET() "Socket::bindINET()"): the socket is used as it
       is, and the host name is resolved in the socket's address family
 
@@ -1908,10 +1853,10 @@ qclass Http3ClientPollOperationBase [
         elapsed time raises \c QUIC-HANDSHAKE-TIMEOUT in \c continuePoll(), giving
         a diagnosable connect-phase error instead of waiting for the outer
         request_timeout (UDP has no OS-level connect-phase error like TCP).
-    @param avoid_families address families (AF_INET, AF_INET6) not to connect in, if the host name also resolves
-        to an address in another family; the connection is made to the first resolved address that is not in one of
-        these families, or to the first resolved address if all of them are.  Used for an unbound socket and the
-        default \a family only.  @ref getAddressFamily() returns the family the connection is made in.
+    @param avoid_families address families (AF_INET, AF_INET6) to try last, if the host name also resolves to an
+        address in another family: the connection attempts to the addresses in these families follow the attempts to
+        the others.  Used for an unbound socket only.  @ref getAddressFamily() returns the family the connection is
+        made in.
 
     @throw QUIC-ERROR the port is out of range, or an address family to avoid is not AF_INET or AF_INET6
 
@@ -1953,7 +1898,7 @@ Http3ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
     ReferenceHolder<SocketQuicClientPollOperation> inner(
         new SocketQuicClientPollOperation(xsink, sock_ptr, host->c_str(),
             static_cast<uint16_t>(port), static_cast<int>(family),
-            handshake_timeout_ns, /* not_before_ns_abs */ 0, /* bind_unbound */ true, std::move(avoid),
+            handshake_timeout_ns, /* bind_unbound */ true, std::move(avoid),
             /* http_client */ true),
         xsink
     );
@@ -2120,10 +2065,14 @@ nothing Http3ClientPollOperationBase::setMaxResponseBodySize(int max_size) [flag
     priv->setMaxResponseBodySize(max_size > 0 ? max_size : 0);
 }
 
-//! Returns the address family the connection is made in, once the host name has been resolved
-/** Does not block and can be called from any thread
+//! Returns the address family the connection is made in, once it is known
+/** While the connection attempts to the addresses of the host race (see @ref constructor()), the family is not known
+    yet: it is the family of the attempt that wins, or, if every attempt fails, the family of the attempt whose error
+    is reported.
 
-    @return @ref Qore::AF_INET or @ref Qore::AF_INET6, or @ref nothing if the host name has not been resolved yet
+    Does not block and can be called from any thread
+
+    @return @ref Qore::AF_INET or @ref Qore::AF_INET6, or @ref nothing if it is not known yet
 
     @since %Qore 3.0
 */
@@ -2524,7 +2473,10 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) [flags=N
 
 //! Cancel a stream
 /** @param stream_id the stream to cancel
-    @return True if the stream was found and cancelled
+    @return True if the stream was found and cancelled, or if its response had completed while the stream is still
+    open (an extended CONNECT tunnel, or a streamed request answered before its body ended): the caller resets the
+    stream then (see @ref Qore::Socket::cancelQuicStream()), so that it does not take one of the peer's streams for the
+    life of the connection
 */
 bool Http3ClientPollOperationBase::cancelStream(int stream_id) [flags=NAMED_ARGS] {
     return priv->cancelStream(stream_id, xsink);

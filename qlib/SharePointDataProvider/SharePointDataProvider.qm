@@ -129,6 +129,7 @@ module SharePointDataProvider {
             "short_desc": "Get site metadata",
             "desc": "Retrieve metadata for a SharePoint site",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Sites",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 SharePointGetSiteRequestDataType::Fields
@@ -160,6 +161,7 @@ module SharePointDataProvider {
             "short_desc": "Get document library metadata and quota",
             "desc": "Retrieve a document library's metadata, including its storage quota and owner",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 SharePointGetDriveInfoRequestDataType::Fields
@@ -226,6 +228,7 @@ module SharePointDataProvider {
             "short_desc": "Get document or folder metadata",
             "desc": "Retrieve metadata for a document or folder by ID or by path within the library",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 SharePointGetItemRequestDataType::Fields{"site_id", "drive_id"}
@@ -316,6 +319,7 @@ module SharePointDataProvider {
             "desc": "Get the download URL and metadata for a document. Returns a pre-authenticated "
                 "download URL that can be used to download the content directly",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 SharePointDownloadFileRequestDataType::Fields, {
@@ -459,6 +463,7 @@ module SharePointDataProvider {
             "short_desc": "Get list metadata",
             "desc": "Retrieve metadata for a SharePoint list",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Lists",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 SharePointGetListRequestDataType::Fields
@@ -582,6 +587,7 @@ module SharePointDataProvider {
             "short_desc": "Get a list item and its column values",
             "desc": "Retrieve a list item with the values of all of its columns",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Lists",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 SharePointGetListItemRequestDataType::Fields

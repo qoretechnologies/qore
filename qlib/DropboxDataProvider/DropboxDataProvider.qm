@@ -104,6 +104,7 @@ module DropboxDataProvider {
                 "`cursor` to retrieve the following page.  A cursor already carries the folder and the "
                 "recursion flag, so the other options are ignored when one is supplied.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "output_type": DropboxListFolderResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -121,6 +122,7 @@ module DropboxDataProvider {
                 "Dropbox indexes content asynchronously, so a file uploaded moments earlier may not be found "
                 "yet; use `list-folder` when the result has to reflect the current state exactly.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "output_type": DropboxSearchResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -143,6 +145,7 @@ module DropboxDataProvider {
                 "content hash.\n\n"
                 "Use `download-file` to retrieve the content itself.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "output_type": DropboxFileDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -162,6 +165,7 @@ module DropboxDataProvider {
             "desc": "Downloads a file's content.\n\n"
                 "The content is returned base64-encoded, along with the file's metadata.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "output_type": DropboxContentResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -231,6 +235,8 @@ module DropboxDataProvider {
                 "Use this to hand a file to a system that cannot authenticate to Dropbox; use "
                 "`create-shared-link` for a link that lasts.",
             "action_code": DPAT_API,
+            # get_temporary_link returns a link that expires after four hours and stores nothing (qore#7454)
+            "mutates_state": False,
             "groups": ("Files",),
             "output_type": DropboxFileLinkResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -337,6 +343,7 @@ module DropboxDataProvider {
             "desc": "Lists the earlier revisions of a file, newest first.\n\n"
                 "How long revisions are kept depends on the account.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Revisions",),
             "output_type": DropboxListRevisionsResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -405,6 +412,7 @@ module DropboxDataProvider {
                 "By default a link to a parent folder is listed as well, since it also grants access; set "
                 "`direct_only` to list only links created for the path itself.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Sharing",),
             "output_type": DropboxListSharedLinksResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -447,6 +455,7 @@ module DropboxDataProvider {
                 "password-protected on a `basic` account, and `team_only` link visibility needs a `business` "
                 "account.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Account",),
             "output_type": DropboxAccountInfoDataType,
         });
@@ -461,6 +470,7 @@ module DropboxDataProvider {
                 "Useful before a large upload: Dropbox rejects an upload that would exceed the quota, and "
                 "reports it as an ordinary write failure rather than as a capacity problem.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Account",),
             "output_type": DropboxSpaceUsageDataType,
         });
@@ -501,6 +511,7 @@ module DropboxDataProvider {
                 "work is small and hand back a job when it is not; this reports whether that job has "
                 "finished, and what it produced.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "output_type": DropboxJobStatusResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -610,6 +621,7 @@ module DropboxDataProvider {
                 "Dropbox renders it, so a preview can be shown without downloading the file itself.  "
                 "Thumbnails are available for images and for common document formats.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "output_type": DropboxRenderedContentDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -634,6 +646,7 @@ module DropboxDataProvider {
                 "Dropbox renders it, so a document in a format this system cannot read - a Word file, a "
                 "spreadsheet, a presentation - can still be shown or archived as a PDF.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "output_type": DropboxRenderedContentDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -682,6 +695,7 @@ module DropboxDataProvider {
                 "Someone who has been invited but has not yet accepted appears under `invitees` rather than "
                 "`users`.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Sharing",),
             "output_type": DropboxFileMembersResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(

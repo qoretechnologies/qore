@@ -1754,6 +1754,8 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       refuses code restricted with @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL" also when it calls the
       method through library code, such as a library function that it gives a call reference to the method
       (<a href="https://github.com/qoretechnologies/qore/issues/7394">issue 7394</a>)
+    - @ref DataProvider::DataProviderActionCatalog::actionMutatesState() "actionMutatesState()" can classify
+      an action with its configured options using the producer's read-only conditions (issue 7470)
     - added @ref DataProvider::DataProvider::setModuleHostHooks() "DataProvider::setModuleHostHooks()" and
       @ref DataProvider::DataProvider::getModuleHostHooks() "DataProvider::getModuleHostHooks()": the host sets, once
       and before a module is loaded, the hooks the module needs to run code for sandboxed callers, and the module reads
