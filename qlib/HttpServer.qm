@@ -243,12 +243,16 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
 
     A WebSocket handler takes over the connection of its HTTP/1.1 request, which must ask for the protocol upgrade (an
     \c Upgrade field and the \c upgrade token in its \c Connection field; a \c 101 response to another request is
-    answered with \c 500), after the server sent the \c 101 response.  The handler of an HTTP/1.1 event stream gets
-    the connection's socket for the stream; for a handler that gets the socket of its request, the request must
-    accept an event stream (\c text/event-stream in its \c Accept field; otherwise it is answered with \c 406), and
-    the server sends the stream's header, with <tt>Connection: close</tt>, before the handler gets the connection's
-    socket.  The connection then serves no other request, and is closed when the WebSocket connection or the event
-    stream ends: the only data that the handler can read on it is what the same client sent on it after its request
+    answered with \c 500), after the server sent the \c 101 response; the connection then serves no other request,
+    and is closed when the WebSocket connection ends.  The handler of an HTTP/1.1 event stream gets the connection's
+    socket for the stream, unless it gets the socket of its request: then the request must accept an event stream
+    (\c text/event-stream in its \c Accept field; otherwise it is answered with \c 406), the server sends the
+    stream's header, with <tt>Connection: close</tt>, makes the stream's poll operation from the connection's socket
+    and keeps it, and sets up the stream with
+    @ref ServerSentEventHandler::ServerSentEventHandler::setupAsyncSseConnectionForRequest() "setupAsyncSseConnectionForRequest()"
+    (a socket handler that does not implement it gets no stream, and the connection is closed): the handler, its
+    connection object and its event source get the socket of the request and a stream that gives no poll operation,
+    never the connection's socket.  The connection serves no other request and is closed when the event stream ends
     (see <a href="https://github.com/qoretechnologies/qore/issues/7376">issue 7376</a>).
 
     The requests of an HTTP/2 connection share its socket, and the requests of all the HTTP/3 sessions of a listener
@@ -6962,18 +6966,40 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     listener.logError("cid %d: error sending the header of the event stream of handler %y: %s: %s",
                         cx.id, cx.handler_name, ex.err, ex.desc);
                     cx.close = True;
-                    async_response_out = <HttpAsyncResponseInfo>{"close": True};
+                    async_response_out = <HttpAsyncResponseInfo>{"close": True, "sent": True};
                     return;
                 }
             }
+            string cid = string(cx.id);
+            bool sock_handler = handler instanceof HttpServer::AbstractHttpSocketHandlerInterface;
+            # True once the server called the handler's setup of the stream's connection for a request whose header the
+            # server sent: the setup can fail after it registered the connection (in a hook of the handler)
+            bool setup_called;
             try {
-                string cid = string(cx.id);
-                HttpServerAsyncIo::HttpSseStreamPollOperation poll_op =
-                    (handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)
-                    ? call_object_method(handler, "setupAsyncSseConnection", s, cx, hdr, cid)
-                    # a handler that is not a socket handler gets the stream from the server, for its event
-                    # source
-                    : new HttpServerAsyncIo::HttpSseStreamPollOperation(s);
+                HttpServerAsyncIo::HttpSseStreamPollOperation poll_op;
+                if (server_header) {
+                    # the server makes the stream's poll operation from the connection's socket and keeps it: the
+                    # handler, its connection and its event source get the socket of the request and a stream that
+                    # gives no poll operation (qore#7376)
+                    poll_op = new HttpServerAsyncIo::HttpSseStreamPollOperation(s);
+                    if (sock_handler) {
+                        if (!handler.hasCallableMethod("setupAsyncSseConnectionForRequest")) {
+                            throw "SSE-HANDLER-ERROR", sprintf("handler %y (class %y) gets the socket of its "
+                                "request but does not implement setupAsyncSseConnectionForRequest(), which sets up "
+                                "an HTTP/1.x event stream without the connection's socket", cx.handler_name,
+                                handler.className());
+                        }
+                        setup_called = True;
+                        call_object_method(handler, "setupAsyncSseConnectionForRequest", request_helper.handler_sock,
+                            cx, hdr, cid, new HttpServerAsyncIo::Http1SseConnection(poll_op, True));
+                    }
+                } else {
+                    poll_op = sock_handler
+                        ? call_object_method(handler, "setupAsyncSseConnection", s, cx, hdr, cid)
+                        # a handler that is not a socket handler gets the stream from the server, for its event
+                        # source
+                        : new HttpServerAsyncIo::HttpSseStreamPollOperation(s);
+                }
                 # Wire a wake callback so that events queued by a Qore-side
                 # handler thread (e.g. via ServerSentEventConnection::send())
                 # immediately trigger the async controller to re-run
@@ -7001,18 +7027,35 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 HttpServerAsyncIo::HttpPersistentRequestEnd pend();
                 # the controller calls it exactly once when the stream has ended, for any reason
                 poll_op.setCloseCallback(getSseStreamEndCallback(
-                    (handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)
-                    ? cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler)
-                    : NOTHING, cid, sse_run, pend));
+                    sock_handler ? cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler) : NOTHING, cid,
+                    sse_run, pend));
                 request_helper.persistent_end = pend;
                 # the event source pushes the events of the stream from now on; they are sent after the
-                # response headers
+                # response headers; the source of a handler that got the socket of its request gets a stream that
+                # gives no poll operation (qore#7376)
                 if (sse_run) {
-                    sse_run.start(new HttpServerAsyncIo::Http1SseConnection(poll_op));
+                    sse_run.start(new HttpServerAsyncIo::Http1SseConnection(poll_op, server_header));
                 }
             } catch (hash<ExceptionInfo> ex) {
                 listener.logError("cid %d: error setting up async SSE connection for handler %y: %s: %s",
                     cx.id, cx.handler_name, ex.err, ex.desc);
+                logViaHandlerIfPossible(handler, cx.id, sprintf("error setting up the event stream: %s: %s", ex.err,
+                    ex.desc));
+                # the server sent the stream's header: the connection, which serves no other request, is closed, and
+                # a connection that the handler registered for the stream, which does not start, has ended (a
+                # deregistration of a connection that is not registered does nothing)
+                if (server_header) {
+                    if (setup_called) {
+                        try {
+                            cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler).deregisterConnection(cid);
+                        } catch (hash<ExceptionInfo> ex1) {
+                            listener.logError("cid %d: error deregistering SSE connection %y of handler %y: %s",
+                                cx.id, cid, cx.handler_name, get_exception_string(ex1));
+                        }
+                    }
+                    cx.close = True;
+                    async_response_out = <HttpAsyncResponseInfo>{"close": True, "sent": True};
+                }
             }
         }
     }
@@ -9279,6 +9322,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 "hdr": async_response.hdr,
                 "persistent_request_end": request_helper.persistent_end,
             };
+        }
+
+        # the server already sent what goes out for the request (the header of an event stream that does not start):
+        # no other response follows it on the connection, which is closed (qore#7376)
+        if (async_response.sent) {
+            return <HttpServerAsyncIo::HttpRequestResultInfo>{"close": True};
         }
 
         if (async_response.code && !request_helper.isDedicated()) {
@@ -12765,6 +12814,10 @@ hashdecl HttpAsyncResponseInfo {
 
     #! Whether to close the connection after sending
     bool close = False;
+
+    #! Whether the server already sent what goes out for the request (the header of an event stream that does not
+    #! start): nothing is sent, and the connection is closed (qore#7376)
+    bool sent = False;
 
     #! Connection context (for keep-alive)
     hash<auto> cx;
