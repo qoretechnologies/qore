@@ -3885,7 +3885,6 @@ void Http2Session::dbgResumeHeldStreams() {
 #endif
 int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
     (void)timeout_ms;
-    constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
 
     std::lock_guard<std::recursive_mutex> lg(m);
     auto it = pending_body_data.find(stream_id);
@@ -4027,7 +4026,6 @@ void Http2Session::resetFailedInputStream(int32_t stream_id, StreamInputStreamIn
 }
 
 void Http2Session::processStreamInputStream(int32_t stream_id, StreamInputStreamInfo& info, ExceptionSink* xsink) {
-    constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
     // Backpressure: skip if buffer full
     auto it = pending_body_data.find(stream_id);
     if (it != pending_body_data.end()) {
@@ -4183,6 +4181,48 @@ void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
     if (stream_input_streams_.empty()) {
         has_active_input_streams_.store(false, std::memory_order_release);
     }
+}
+
+bool Http2Session::needsInputStreamPass() const {
+    if (!hasActiveStreamInputStreams()) {
+        return false;
+    }
+    std::lock_guard<std::recursive_mutex> lg(m);
+    for (auto& [stream_id, info] : stream_input_streams_) {
+        if (info.eof) {
+            continue;
+        }
+        // in the order of processStreamInputStreams(): a full send buffer waits for the peer's credit, which comes as
+        // a frame
+        auto it = pending_body_data.find(stream_id);
+        size_t pending = it == pending_body_data.end() ? 0 : it->second.data.size() - it->second.offset;
+        if (pending > MAX_STREAM_BUFFER) {
+            continue;
+        }
+        // the first pass claims the InputStream for the I/O thread
+        if (info.need_reassign) {
+            return true;
+        }
+        // a read in flight completes by itself
+        if (info.iouring_read_pending) {
+            continue;
+        }
+        // a buffer retained after a refused send is retried only when the send would now take it, by the stream's
+        // own send limit if it has one, as sendStreamData() decides
+        if (info.pending_iouring_buf) {
+            if (hasSendRoomUnlocked(stream_id, pending, info.pending_iouring_len)) {
+                return true;
+            }
+            continue;
+        }
+        // a monitored descriptor wakes the operation when it can be read
+        if (info.is_pollable && info.stream_fd >= 0 && info.is_epoll_compatible) {
+            continue;
+        }
+        // memory streams and regular files are read in the pass itself
+        return true;
+    }
+    return false;
 }
 
 void Http2Session::getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const {

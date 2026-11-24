@@ -22060,8 +22060,10 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                     }
                     // Always read; add write if there are pending sends
                     int events = read_events;
+                    // not for every pumped InputStream: one that cannot progress until the peer sends a frame
+                    // would make this operation run continuously while the socket is writable (qore#7435)
                     if (h2_session->hasPendingData() || h2_session->wantWrite()
-                            || h2_session->hasActiveStreamInputStreams()) {
+                            || h2_session->needsInputStreamPass()) {
                         events |= SOCK_POLLOUT;
                     }
 
@@ -22135,8 +22137,10 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                 // InputStreams that need to be read and flushed.
                 {
                     int events = read_events ? read_events : SOCK_POLLIN;
+                    // not for every pumped InputStream: one that cannot progress until the peer sends a frame
+                    // would make this operation run continuously while the socket is writable (qore#7435)
                     if (h2_session->hasPendingData() || h2_session->wantWrite()
-                            || h2_session->hasActiveStreamInputStreams()) {
+                            || h2_session->needsInputStreamPass()) {
                         events |= SOCK_POLLOUT;
                     }
 
