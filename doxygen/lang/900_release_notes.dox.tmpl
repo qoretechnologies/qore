@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Library Code Gives Restricted Code No Values of the Host's Environment
+    For code restricted from external information, @ref Util::substitute_env_vars() "substitute_env_vars()", file URLs,
+    Swagger schema references and the \c %%E{} field of Logger file names expand no environment variables, and data
+    providers take no options from the environment (see @ref sandbox_ambient_host_data;
+    <a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>).
+
     @par Streamed HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
     A streamed HTTP/2 or HTTP/3 response that a handler thread sends is ended when its stream takes less than 1 KiB/s
     while the server waits for it, so that a very slow client can no longer hold a handler thread; a client that keeps
