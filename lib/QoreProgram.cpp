@@ -5588,7 +5588,7 @@ void qore_program_private::clearThreadData(ExceptionSink* xsink) {
     printd(5, "qore_program_private::clearThreadData() this: %p h: %p (size: %d)\n", this, *h, (int)(h ? h->size() : 0));
     if (h) {
         // no lock is held here: clearing the hash can run destructors
-        qore_hash_private::get(**h)->clear(xsink);
+        qore_hash_private::get(**h)->clear(xsink, false);
     }
 }
 

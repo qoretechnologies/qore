@@ -2882,9 +2882,6 @@
     - the @ref garbage_collection "garbage collector" collects a cycle through a hash, list or object holding an
       object that a member was removed from, which it missed, and a write to a member by its bare name no longer
       counts the object as holding a value to scan when it holds none (issue #7348)
-    - @ref Qore::delete_all_thread_data() could use a freed member, or never end, when a destructor that it ran read
-      or saved thread-local data; a destructor now reads the values not freed yet, and the values saved during the
-      release are freed while nothing can be saved (issue #7265)
     - The @ref garbage_collection "garbage collector" now collects object cycles through reversed
       lists and lists whose elements were converted in place (issue #7159).
     - @ref string_formatting "Value formatting" now displays a back-reference when several paths reach the same

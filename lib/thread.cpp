@@ -12821,7 +12821,7 @@ void ThreadProgramData::clearAllProgramThreadData(ExceptionSink* xsink) {
         for (QoreHashNode* h : hashes) {
             if (!h->empty()) {
                 cleared = true;
-                qore_hash_private::get(*h)->clear(xsink);
+                qore_hash_private::get(*h)->clear(xsink, false);
             }
             h->deref(xsink);
         }

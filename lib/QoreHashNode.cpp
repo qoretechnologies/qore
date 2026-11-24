@@ -94,146 +94,6 @@ const TypedHashDecl* qore_hash_private::getInheritingHashDecl(const TypedHashDec
     return nullptr;
 }
 
-void qore_hash_private::clear(ExceptionSink* xsink) {
-    // if no value's release can run code, the members are deleted as when the hash is freed
-    bool runs_code = false;
-    for (const HashMember* m : member_list) {
-        if (!freeRunsNoCode(m->val)) {
-            runs_code = true;
-            break;
-        }
-    }
-    if (!runs_code) {
-        freeMembersOutOfLine(xsink);
-        return;
-    }
-
-    // the first phase: the values that the hash has now are freed in order: each is taken, and its member deleted,
-    // before it is freed, so that no member or iterator is held while code runs; their
-    // destructors can read the values not freed yet and save values, which are added at the end.  The number of
-    // values freed here is that of the members when it starts, so that it ends
-    // the nodes of the member list of the members released (see takeFreeMemberForClear())
-    ReleasedNodes released;
-    for (size_t n = member_list.size(); n && !member_list.empty(); --n) {
-        takeFreeMemberForClear(released, xsink);
-    }
-
-    // the second phase: the values saved in the first are freed in the same way, while nothing can be saved, so
-    // that no value is left
-    {
-        struct RefuseSavesHelper {
-            qore_hash_private& h;
-            bool old;
-
-            RefuseSavesHelper(qore_hash_private& h) : h(h), old(h.refuse_saves) {
-                h.refuse_saves = true;
-            }
-
-            ~RefuseSavesHelper() {
-                h.refuse_saves = old;
-            }
-        } rsh(*this);
-        while (!member_list.empty()) {
-            takeFreeMemberForClear(released, xsink);
-        }
-    }
-
-    // no member is left; this resets the accounting of the hash
-    freeMembersOutOfLine(xsink);
-    released.free();
-}
-
-
-void qore_hash_private::freeMembersOutOfLine(ExceptionSink* xsink) {
-    freeMembers(xsink);
-}
-
-bool qore_hash_private::freeRunsNoCode(const QoreValue& v) {
-    if (!v.hasNode()) {
-        return true;
-    }
-    // an opaque reference can hold the last reference to an object
-    if (v.isOpaque()) {
-        return false;
-    }
-    switch (v.getType()) {
-        case NT_STRING:
-        case NT_DATE:
-        case NT_BINARY:
-        case NT_NUMBER:
-        case NT_NULL:
-            return true;
-    }
-    return false;
-}
-
-void qore_hash_private::takeFreeMemberForClear(ReleasedNodes& released, ExceptionSink* xsink) {
-    assert(!member_list.empty());
-    qhlist_t::iterator li = member_list.begin();
-    HashMember* m = *li;
-    QoreValue v = m->val;
-    hm.erase(m);
-    // the node of the member list is kept until the end of the release, as the release of a hash frees it after the
-    // values (see ReleasedNodes)
-    released.add(member_list, li);
-    sbRemove(m);
-    delete m;
-    // the scan count is not decreased: it is reset when the release ends (freeMembers()), and a count that is too
-    // high only makes the collector look at the hash
-    // code can run now: the member is gone from the key map and the member list, and no iterator is held
-    v.discard(xsink);
-}
-
-int qore_hash_private::checkClearingSave(ExceptionSink* xsink) const {
-    if (refuse_saves) {
-        xsink->raiseException("DESTRUCTOR-ERROR", "illegal save of thread-local data while the values saved during "
-            "the release of thread-local data are freed");
-        return -1;
-    }
-    return 0;
-}
-
-HashMember* qore_hash_private::createMemberKnownAbsent(const char* key) {
-    return addMemberKnownAbsent(new HashMember(qore_hash_lookup_key(key)));
-}
-
-HashMember* qore_hash_private::createMemberKnownAbsent(const qore_hash_lookup_key& key) {
-    return addMemberKnownAbsent(new HashMember(key));
-}
-
-HashMember* qore_hash_private::createMemberKnownAbsent(const HashMember& old) {
-    return addMemberKnownAbsent(new HashMember(old.key, old.hash));
-}
-
-HashMember* qore_hash_private::addMemberKnownAbsent(HashMember* m) {
-    assert(m->val.isNothing());
-    assert(findIter(qore_hash_lookup_key(m->key.c_str(), m->key.size(), m->hash)) == hm.end());
-    // if the list or the map cannot take the member, it is removed from the list again and deleted
-    struct AddMemberHelper {
-        qhlist_t& l;
-        HashMember* m;
-        bool listed = false;
-        bool added = false;
-
-        ~AddMemberHelper() {
-            if (!added) {
-                if (listed) {
-                    l.pop_back();
-                }
-                delete m;
-            }
-        }
-    } amh{member_list, m};
-    member_list.push_back(m);
-    amh.listed = true;
-    qhlist_t::iterator i = member_list.end();
-    --i;
-    hm.emplace(m, i);
-    amh.added = true;
-    sbAdd(m);
-    return m;
-}
-
 QoreValue qore_hash_private::takeKeyValueIntern(const char* key, qore_object_private* obj) {
     assert(key);
 
@@ -416,7 +276,7 @@ int qore_hash_private::getLValue(const char* key, LValueHelper& lvh, bool for_re
             lvh.trackVivifiedKey(this, key);
         }
     } else {
-        m = i->first;
+        m = (*(i->second));
     }
 
     //printd(5, "qore_hash_private::getLValue() this: %p hd: %p ct: %p key: '%s' type: '%s'\n", this, hashdecl,
@@ -738,7 +598,7 @@ QoreValue qore_hash_private::getKeyValueExistenceIntern(const char* key, bool& e
 
     if (i != hm.end()) {
         exists = true;
-        return i->first->val;
+        return (*i->second)->val;
     }
 
     exists = false;
@@ -747,7 +607,7 @@ QoreValue qore_hash_private::getKeyValueExistenceIntern(const char* key, bool& e
 
 QoreValue qore_hash_private::getKeyValueIntern(const char* key) const {
     hm_hm_t::const_iterator i = findIter(key);
-    return i != hm.end() ? i->first->val : QoreValue();
+    return i != hm.end() ? (*i->second)->val : QoreValue();
 }
 
 QoreValue qore_hash_private::getKeyValuePrehashed(const char* key, size_t hash, ExceptionSink* xsink) const {
@@ -769,7 +629,7 @@ QoreValue qore_hash_private::getKeyValueExistencePrehashedIntern(const char* key
     hm_hm_t::const_iterator i = findIterPrehashed(key, hash);
     if (i != hm.end()) {
         exists = true;
-        return i->first->val;
+        return (*i->second)->val;
     }
     exists = false;
     return QoreValue();
@@ -1499,20 +1359,19 @@ void HashIterator::deleteKey(ExceptionSink* xsink) {
 
     assert(h->is_unique());
 
-    QoreValue v = (*(priv->i))->val;
-    if (needs_scan(v)) {
+    if (needs_scan((*(priv->i))->val)) {
         h->priv->incScanCount(-1);
     }
+
+    (*(priv->i))->val.discard(xsink);
 
     qhlist_t::iterator ni = priv->i;
     priv->prev(h->priv->member_list);
 
-    hm_hm_t::iterator i = h->priv->hm.find(*ni);
+    hm_hm_t::iterator i = h->priv->hm.find(&(*ni)->key);
     assert(i != h->priv->hm.end());
     h->priv->hm.erase(i);
-    // the member is deleted before the value is released, as releasing it can run code that changes the hash
     h->priv->internDeleteKey(ni);
-    v.discard(xsink);
 }
 
 int HashIterator::assign(QoreValue val, ExceptionSink* xsink) {
@@ -1543,7 +1402,7 @@ QoreValue HashIterator::removeKeyValue() {
     qhlist_t::iterator ni = priv->i;
     priv->prev(h->priv->member_list);
 
-    hm_hm_t::iterator i = h->priv->hm.find(*ni);
+    hm_hm_t::iterator i = h->priv->hm.find(&(*ni)->key);
     assert(i != h->priv->hm.end());
     h->priv->hm.erase(i);
     h->priv->internDeleteKey(ni);

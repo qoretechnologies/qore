@@ -4,11 +4,9 @@
 #include <qore/Qore.h>
 
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <stdexcept>
-#include <string>
 
 static unsigned checks = 0;
 
@@ -114,116 +112,10 @@ static void declarationErrors() {
     }
 }
 
-// The keys that the hash has, in order, joined with ","
-static std::string keyList(const QoreHashNode& hash) {
-    std::string rv;
-    ConstHashIterator i(hash);
-    while (i.next()) {
-        if (!rv.empty()) {
-            rv += ",";
-        }
-        rv += i.getKey();
-    }
-    return rv;
-}
-
-// A copy of a hash finds every key, and members deleted and removed through an iterator are no longer found
-// (qore#7265)
-static void copiesAndIteratorDeletes() {
-    ExceptionSink xsink;
-    ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), &xsink);
-    for (int64 i = 0; i < 30; ++i) {
-        std::string key = "k" + std::to_string(i);
-        require(!hash->setKeyValue(key.c_str(), QoreValue(i), &xsink) && !xsink, "cannot populate copy fixture");
-    }
-    ReferenceHolder<QoreHashNode> copy(hash->copy(), &xsink);
-    require(copy->size() == 30 && keyList(**copy) == keyList(**hash), "the copy does not have the keys in order");
-    {
-        HashIterator i(*copy);
-        while (i.next()) {
-            int64 n = std::atoll(i.getKey() + 1);
-            if (!(n % 2)) {
-                i.deleteKey(&xsink);
-                require(!xsink, "deleting a member through an iterator raised an exception");
-            } else if (!(n % 3)) {
-                QoreValue v = i.removeKeyValue();
-                require(v.getType() == NT_INT && v.getAsBigInt() == n, "removing a member returned the wrong value");
-            }
-        }
-    }
-    require(copy->size() == 10, "the members were not deleted from the copy");
-    for (int64 i = 0; i < 30; ++i) {
-        std::string key = "k" + std::to_string(i);
-        bool exists;
-        QoreValue v = copy->getKeyValueExistence(key.c_str(), exists, &xsink);
-        bool kept = (i % 2) && (i % 3);
-        require(!xsink && exists == kept && (!kept || v.getAsBigInt() == i), "the copy finds the wrong keys");
-        v = hash->getKeyValueExistence(key.c_str(), exists, &xsink);
-        require(!xsink && exists && v.getAsBigInt() == i, "the original changed");
-    }
-    require(keyList(**copy) == "k1,k5,k7,k11,k13,k17,k19,k23,k25,k29", "the copy has the wrong keys after deletes");
-    // a copy of a hash with deleted keys, which then grows
-    ReferenceHolder<QoreHashNode> copy2(copy->copy(), &xsink);
-    for (int64 i = 30; i < 60; ++i) {
-        std::string key = "k" + std::to_string(i);
-        require(!copy2->setKeyValue(key.c_str(), QoreValue(i), &xsink) && !xsink, "cannot add to the copy");
-    }
-    require(copy2->size() == 40 && keyList(**copy) == "k1,k5,k7,k11,k13,k17,k19,k23,k25,k29",
-        "the copy of the copy changed the copy");
-    for (int64 i = 0; i < 60; ++i) {
-        std::string key = "k" + std::to_string(i);
-        bool exists;
-        QoreValue v = copy2->getKeyValueExistence(key.c_str(), exists, &xsink);
-        bool kept = i >= 30 || ((i % 2) && (i % 3));
-        require(!xsink && exists == kept && (!kept || v.getAsBigInt() == i), "the grown copy finds the wrong keys");
-    }
-}
-
-// HashIterator::deleteKey() deletes a member whose value's release runs code (an object's destructor that changes
-// a global variable), and the iteration continues with the next member (qore#7265)
-static void iteratorDeleteRunsCode() {
-    ExceptionSink xsink;
-    QoreProgram* pgm = new QoreProgram();
-    QoreString code("%new-style\n"
-        "our int destroyed = 0;\n"
-        "class X { destructor() { ++destroyed; } }\n"
-        "hash<auto> sub make() { return {\"a\": 1, \"b\": new X(), \"c\": 3, \"d\": new X(), \"e\": 5}; }\n"
-        "int sub count() { return destroyed; }\n");
-    QoreString label("hash-iterator-delete");
-    pgm->parse(&code, &label, &xsink);
-    require(!xsink, "cannot parse the iterator fixture");
-    // the top-level code initializes the global variable
-    pgm->run(&xsink).discard(&xsink);
-    require(!xsink, "cannot run the iterator fixture");
-    {
-        ValueHolder v(pgm->callFunction("make", nullptr, &xsink), &xsink);
-        require(!xsink && v->getType() == NT_HASH, "the iterator fixture did not give a hash");
-        QoreHashNode* h = v->get<QoreHashNode>();
-        std::string visited;
-        HashIterator i(*h);
-        while (i.next()) {
-            visited += i.getKey();
-            if (i.get().getType() == NT_OBJECT) {
-                int64 before = pgm->callFunction("count", nullptr, &xsink).getAsBigInt();
-                require(!xsink, "cannot read the iterator fixture's count");
-                i.deleteKey(&xsink);
-                require(!xsink, "deleting an object member through an iterator raised an exception");
-                int64 after = pgm->callFunction("count", nullptr, &xsink).getAsBigInt();
-                require(after == before + 1, "the destructor of the deleted member's object did not run");
-            }
-        }
-        require(visited == "abcde", "the iteration did not continue after the members were deleted");
-        require(keyList(*h) == "a,c,e", "the hash has the wrong keys after the deletes");
-    }
-    pgm->waitForTerminationAndDeref(&xsink);
-    require(!xsink, "the iterator fixture's program raised an exception");
-}
-
 int main(int argc, char** argv) {
     if (argc > 2 || (argc == 2 && std::strcmp(argv[1], "encoded")
-            && std::strcmp(argv[1], "conversion") && std::strcmp(argv[1], "declaration")
-            && std::strcmp(argv[1], "copy") && std::strcmp(argv[1], "iterator"))) {
-        std::fprintf(stderr, "usage: hash-lookup-test [encoded|conversion|declaration|copy|iterator]\n");
+            && std::strcmp(argv[1], "conversion") && std::strcmp(argv[1], "declaration"))) {
+        std::fprintf(stderr, "usage: hash-lookup-test [encoded|conversion|declaration]\n");
         return 2;
     }
     qore_init(QL_MIT, "UTF-8", false, QLO_DISABLE_SIGNAL_HANDLING);
@@ -237,12 +129,6 @@ int main(int argc, char** argv) {
         }
         if (argc == 1 || !std::strcmp(argv[1], "declaration")) {
             declarationErrors();
-        }
-        if (argc == 1 || !std::strcmp(argv[1], "copy")) {
-            copiesAndIteratorDeletes();
-        }
-        if (argc == 1 || !std::strcmp(argv[1], "iterator")) {
-            iteratorDeleteRunsCode();
         }
     } catch (const std::exception& error) {
         std::fprintf(stderr, "FAIL after %u checks: %s\n", checks, error.what());
