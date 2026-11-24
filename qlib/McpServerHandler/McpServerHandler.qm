@@ -212,6 +212,33 @@ module McpServerHandler {
     survive without a session, while requests on earlier protocol versions use the
     session-scoped store and require a session.
 
+    @subsection McpServer_intro_cancel Cancellation
+    A tool implementation (or a resource reader or prompt handler) learns that its request was cancelled in one
+    of two ways:
+    - by polling @ref McpServerHandler::McpServerHandler::isCallCancelled() "McpServerHandler::isCallCancelled()"
+      between steps
+    - by registering code that is called at once when the request is cancelled, with
+      @ref McpServerHandler::McpServerHandler::addCallCancelHandler() "McpServerHandler::addCallCancelHandler()";
+      this lets a cancel end a blocking call in progress, for example by cancelling its token
+
+    A cancel handler is called exactly once, from every path that cancels the request: a
+    \c notifications/cancelled notification, a \c tasks/cancel request for its task, and the cancel of the
+    session's requests when the session is deleted or expires
+    (@ref McpServerHandler::McpServerHandler::cancelSessionRequests() "cancelSessionRequests()").  A handler that
+    was not called is removed when its request ends, or with
+    @ref McpServerHandler::McpServerHandler::removeCallCancelHandler() "removeCallCancelHandler()".
+
+    @code{.py}
+hash<auto> sub myTool(*hash<auto> args) {
+    QoreLlmUtils::LlmCancellation token();
+    *int id = McpServerHandler::addCallCancelHandler(sub (string reason) { token.cancel(reason); });
+    on_exit if (id) {
+        McpServerHandler::removeCallCancelHandler(id);
+    }
+    return callModel(args, token);
+}
+    @endcode
+
     @subsection McpServer_intro_resources Resource Features
     The handler supports:
     - Resource subscriptions via \c resources/subscribe and \c resources/unsubscribe
@@ -229,6 +256,13 @@ module McpServerHandler {
     @section McpServerHandler_relnotes McpServerHandler Release Notes
 
     @subsection McpServerHandler_1_1 McpServerHandler v1.1
+    - added @ref McpServerHandler::McpServerHandler::addCallCancelHandler() "McpServerHandler::addCallCancelHandler()"
+      and @ref McpServerHandler::McpServerHandler::removeCallCancelHandler() "removeCallCancelHandler()": code
+      called at once when the current request is cancelled, so a cancel can end a blocking call in progress
+      (see @ref McpServer_intro_cancel)
+    - fixed cancelling a request with \c notifications/cancelled: the request ID it names was compared with the ID
+      of the HTTP connection instead of the JSON-RPC ID of the request, so
+      @ref McpServerHandler::McpServerHandler::isCallCancelled() "isCallCancelled()" did not report the cancel
     - reads the fields of a request from the \c "headers" key of its header hash, or from the top level of a hash
       built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with the HttpServer
       option \c http_fields_at_top_level set to @ref False
