@@ -894,6 +894,21 @@ static void qore_socket_raise_recv_string_memory_error(ExceptionSink* xsink, siz
         "be allocated", (int64)len);
 }
 
+//! reallocates the buffer of the text of a header received for its NUL terminator, as q_realloc() does: the buffer
+//! is freed if the memory cannot be allocated
+/** @param site where the header is read, for the dbg_fail_http_header_text_alloc() test hook
+*/
+static void* qore_socket_header_text_realloc(void* buf, size_t size, const char* site) {
+#ifdef DEBUG
+    // test hook: the allocation fails
+    if (qore_dbg_http_header_text_alloc_must_fail(site)) {
+        free(buf);
+        return nullptr;
+    }
+#endif
+    return q_realloc(buf, size);
+}
+
 int qore_socket_append_http_body(ExceptionSink* xsink, BinaryNode* body_bin, QoreString* body_str,
         const void* data, size_t size) {
     if (!size) {
@@ -5058,9 +5073,10 @@ public:
         }
 
         char* buf = reinterpret_cast<char*>(bin->giveBuffer());
-        char* nbuf = reinterpret_cast<char*>(q_realloc(buf, raw_size + 1));
+        char* nbuf = reinterpret_cast<char*>(qore_socket_header_text_realloc(buf, raw_size + 1, "read-header"));
         if (!nbuf) {
-            xsink->outOfMemory();
+            // the buffer has been freed
+            qore_socket_raise_recv_string_memory_error(xsink, raw_size);
             done = true;
             return nullptr;
         }
@@ -21323,10 +21339,11 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
             // Convert binary to string for HTTP header parsing
             size_t len = raw->size();
             char* buf = reinterpret_cast<char*>(raw->giveBuffer());
-            char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
+            char* nbuf = reinterpret_cast<char*>(qore_socket_header_text_realloc(buf, len + 1,
+                "send-and-read-header"));
             if (!nbuf) {
-                free(buf);
-                xsink->outOfMemory();
+                // the buffer has been freed; the exception can be handled, and the connection is not used again
+                qore_socket_raise_recv_string_memory_error(xsink, len);
                 phase = Phase::Error;
                 sock->priv->clearNonBlock();
                 set_non_block = false;
@@ -21962,10 +21979,11 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
                 // Convert binary to string for HTTP header parsing
                 size_t len = raw->size();
                 char* buf = reinterpret_cast<char*>(raw->giveBuffer());
-                char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
+                char* nbuf = reinterpret_cast<char*>(qore_socket_header_text_realloc(buf, len + 1,
+                    "send-stream-and-read-header"));
                 if (!nbuf) {
-                    free(buf);
-                    xsink->outOfMemory();
+                    // the buffer has been freed; the exception can be handled, and the connection is not used again
+                    qore_socket_raise_recv_string_memory_error(xsink, len);
                     phase = Phase::Error;
                     sock->priv->clearNonBlock();
                     set_non_block = false;
