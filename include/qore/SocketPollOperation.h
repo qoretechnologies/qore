@@ -405,6 +405,9 @@ public:
     */
     DLLEXPORT size_t getBytesSent() const;
 
+    //! Returns the bytes delivered, subtracting queued TCP data when the platform reports it.
+    DLLLOCAL int64 getDeliveredBytes() const;
+
 private:
     friend class qore_socket_poll_events_ops;
 

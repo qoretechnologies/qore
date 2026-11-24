@@ -285,7 +285,7 @@ public class HttpAsyncSocketIoController {
           @ref False "False")
         - \c io_operation_timeout: the time allowed for an I/O operation of a connection: reading the first request
           of a connection, reading a request header after the idle time (\c ttl) of a keep-alive connection, and
-          sending a response (default @ref AsyncSocketIoController::DefaultIoOperationTimeout); must be greater than
+          waiting for progress sending an HTTP/1 response (default @ref AsyncSocketIoController::DefaultIoOperationTimeout); must be greater than
           zero
 
         @throw HTTP-SERVER-INIT-ERROR \c io_operation_timeout is not greater than zero
@@ -3554,10 +3554,17 @@ public class HttpAsyncSocketIoController {
                 # reference is opaque, like that one: nothing that the controller holds references this wrapper or
                 # its closure (the global I/O controller does, until the completion has run), so it is in no cycle
                 HttpAsyncSocketIoController ctrl @= self;
-                submit_op = new DelegatingPollOperation(op,
-                    sub (hash<SocketPollResultInfo> result) {
-                        ctrl.handleConnectionResult(result, uh, state);
-                    });
+                code complete = sub (hash<SocketPollResultInfo> result) {
+                    ctrl.handleConnectionResult(result, uh, state);
+                };
+                if (state == HttpConnectionState::SendStreamResponse || state == HttpConnectionState::SendAndReadHeader
+                        || state == HttpConnectionState::SendStreamAndReadHeader) {
+                    hash<auto> settings = getStreamSendSettings(cinfo.listener);
+                    submit_op = new DelegatingPollOperation(op, complete, NOTHING, io_operation_timeout,
+                        settings.stream_send_min_rate, settings.stream_send_min_rate_window);
+                } else {
+                    submit_op = new DelegatingPollOperation(op, complete);
+                }
             }
             hash<SocketPollOperationInfo> submit_info = <SocketPollOperationInfo>{
                 "sock": cinfo.sock,

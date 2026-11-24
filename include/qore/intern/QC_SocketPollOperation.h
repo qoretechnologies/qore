@@ -1030,6 +1030,9 @@ private:
 */
 class SocketSendAndReadHeaderPollOperation : public SocketPollSocketOperationBase {
 public:
+    //! Returns bytes delivered in the current response, or -1 after the send phase.
+    DLLLOCAL int64 getResponseSendProgress(bool& waiting_for_socket) const;
+
     DLLLOCAL SocketSendAndReadHeaderPollOperation(ExceptionSink* xsink, BinaryNode* response_data,
         QoreSocketObject* sock, int64 idle_timeout_ms);
 
@@ -1513,6 +1516,9 @@ private:
 */
 class SocketSendStreamAndReadHeaderPollOperation : public SocketPollSocketOperationBase {
 public:
+    //! Returns bytes delivered in the current response, or -1 after the send phase.
+    DLLLOCAL int64 getResponseSendProgress(bool& waiting_for_socket) const;
+
     DLLLOCAL SocketSendStreamAndReadHeaderPollOperation(ExceptionSink* xsink, BinaryNode* header_data,
         QoreSocketObject* sock, InputStream* input_stream, QoreObject* input_stream_obj,
         int64 content_length, int64 idle_timeout_ms, bool fused, bool chunked = false);
@@ -1591,6 +1597,7 @@ private:
     //! Waits for the next request after a response, or ends (Phase::Closed) if the server drains the connection
     DLLLOCAL QoreHashNode* enterIdle(ExceptionSink* xsink);
     int64 idle_timeout_ms;
+    int64 idle_ttl_ms;
     mutable ReferenceHolder<QoreHashNode> header_output;
 
     DLLLOCAL virtual bool abortNeedsClose() const override {
