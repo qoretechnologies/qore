@@ -188,7 +188,7 @@ string sub k() {
 }
 
 # the initializer of hashdecl M3
-int sub m3_init(reference<int> r) {
+int sub m3_init(reference<softint> r) {
     ++g_m3;
     return r;
 }
@@ -897,9 +897,9 @@ show("refused store with created containers", auto sub () {
     return "no exception";
 });
 
-# the initializer of a hashdecl member is Qore code that the check of the store runs with the target locked: it cannot
-# bind a reference, which would be bound under that lock
-show("hashdecl initializer binding a reference under the lock of a store", auto sub () {
+# an assignment does not convert a hash to a hashdecl: the store of a hash into a hashdecl member is refused without
+# running the hashdecl's member initializers under the lock of the store
+show("hash for a hashdecl member", auto sub () {
     M3Holder m();
     auto src = {"s": (\m.v,)};
     try {
@@ -910,9 +910,11 @@ show("hashdecl initializer binding a reference under the lock of a store", auto 
     return "no exception";
 });
 
-show("hashdecl initializer binding a reference with no lock held", auto sub () {
+# a cast converts a hash to a hashdecl with no lock held: the initializer of a hashdecl member binds its reference, and
+# the reference elements of the hash are bound
+show("hashdecl initializer binding a reference in a cast", auto sub () {
     M3Holder m();
     auto src = {"s": (\m.v,)};
-    *hash<M3> h = src;
+    hash<M3> h = cast<hash<M3>>(src);
     return (h.a, g_m3, g_m3v.type(), m.v.type(), m.v);
 });
