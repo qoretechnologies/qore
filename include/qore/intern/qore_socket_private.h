@@ -223,6 +223,23 @@ private:
 DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, const struct sockaddr* addr, int size,
     int sock_type, int protocol, QoreSandboxManager* sandbox_manager, ExceptionSink* xsink);
 
+//! Binds an open socket descriptor to a numeric address, with the network policy check of any bind
+/** The descriptor variant of qore_socket_bind_family_sockaddr_direct() for a descriptor that no socket owns yet, such
+    as a connection attempt of the address family race of a QUIC client connection; it neither resolves nor waits.
+
+    @param fd the open socket descriptor
+    @param addr the address to bind to
+    @param size the size of the address
+    @param sock_type the socket type (ex: \c SOCK_DGRAM)
+    @param sandbox_manager the sandbox manager whose network policy governs the bind, if any
+    @param xsink raises \c NETWORK-ACCESS-DENIED if the policy denies the bind
+
+    @return 0 for success, -1 for error; a failed bind leaves its error number in errno without raising an exception,
+    and the caller closes the descriptor
+*/
+DLLLOCAL int qore_socket_bind_descriptor_checked(int fd, const struct sockaddr* addr, int size, int sock_type,
+    QoreSandboxManager* sandbox_manager, ExceptionSink* xsink);
+
 //! Binds a socket descriptor so that, on macOS, a socket on all interfaces never shares its port with an IPv4 socket
 /** A socket on all interfaces shares its port with any socket bound to a more specific address of the same port,
     which receives the clients of that address instead.  Linux refuses a bind on all interfaces of a port that another
@@ -2884,6 +2901,26 @@ public:
         shared_fd = adopt ? qore_owned_descriptor_adopt(adopt) : nullptr;
         ++fd_generation;
         fd_nonblocking.store(nonblocking, std::memory_order_relaxed);
+    }
+
+    //! Makes a connected UDP descriptor, an owned descriptor, the descriptor of the socket, which has none
+    /** Used by the address family race of a QUIC client connection (SocketQuicClientPollOperation) for the
+        connection attempt that wins: the socket is then as if it had been bound to the wildcard address of the family
+        and connected
+
+        @param fd the descriptor, which is non-blocking
+        @param adopt the owned descriptor (see qore_owned_descriptor_create()), which is reset
+        @param family the address family of the descriptor
+    */
+    DLLLOCAL void adoptDatagramDescriptor(int fd, std::shared_ptr<SharedDescriptor>& adopt, int family) {
+        assert(sock == QORE_INVALID_SOCKET);
+        setDescriptor(fd, adopt, true);
+        resetCloseInterrupt();
+        sfamily = family;
+        stype = SOCK_DGRAM;
+        sprot = 0;
+        port = -1;
+        listening = false;
     }
 
     //! Closes a socket descriptor that is not the socket's own descriptor

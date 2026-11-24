@@ -1894,7 +1894,14 @@ qclass Http3ClientPollOperationBase [
     - <b>unbound</b> (a new @ref Qore::Socket "Socket"): once the host name is resolved, the operation binds the
       socket to the wildcard address of the family of the remote address, with a port assigned by the system;
       the bind is subject to the network policy of the @ref sandboxing "sandbox" of the code that creates the
-      operation, as for @ref Qore::Socket::bindINET() "Socket::bindINET()"
+      operation, as for @ref Qore::Socket::bindINET() "Socket::bindINET()".  If the host name resolves to more than
+      one address, the connection attempts to the addresses race as RFC 8305 (Happy Eyeballs) describes: the
+      address families alternate, starting with the family of the first address (the families in \a avoid_families
+      come last); an attempt is started 250 ms after the previous one, or at once when the attempts started have
+      failed (an ICMP refusal fails an attempt at once while another one can still connect); each attempt has a UDP
+      socket and a QUIC handshake of its own, with the sandbox checks of its remote address and of its bind, and the
+      first attempt whose handshake completes wins: the socket takes its descriptor over, and the others are closed;
+      \a connect_timeout applies to the race as a whole
     - <b>bound</b> (for example with @ref Qore::Socket::bindINET() "Socket::bindINET()"): the socket is used as it
       is, and the host name is resolved in the socket's address family
 
@@ -1909,10 +1916,10 @@ qclass Http3ClientPollOperationBase [
         elapsed time raises \c QUIC-HANDSHAKE-TIMEOUT in \c continuePoll(), giving
         a diagnosable connect-phase error instead of waiting for the outer
         request_timeout (UDP has no OS-level connect-phase error like TCP).
-    @param avoid_families address families (AF_INET, AF_INET6) not to connect in, if the host name also resolves
-        to an address in another family; the connection is made to the first resolved address that is not in one of
-        these families, or to the first resolved address if all of them are.  Used for an unbound socket and the
-        default \a family only.  @ref getAddressFamily() returns the family the connection is made in.
+    @param avoid_families address families (AF_INET, AF_INET6) to try last, if the host name also resolves to an
+        address in another family: the connection attempts to the addresses in these families follow the attempts to
+        the others.  Used for an unbound socket only.  @ref getAddressFamily() returns the family the connection is
+        made in.
 
     @throw QUIC-ERROR the port is out of range, or an address family to avoid is not AF_INET or AF_INET6
 
@@ -2121,10 +2128,14 @@ nothing Http3ClientPollOperationBase::setMaxResponseBodySize(int max_size) [flag
     priv->setMaxResponseBodySize(max_size > 0 ? max_size : 0);
 }
 
-//! Returns the address family the connection is made in, once the host name has been resolved
-/** Does not block and can be called from any thread
+//! Returns the address family the connection is made in, once it is known
+/** While the connection attempts to the addresses of the host race (see @ref constructor()), the family is not known
+    yet: it is the family of the attempt that wins, or, if every attempt fails, the family of the attempt whose error
+    is reported.
 
-    @return @ref Qore::AF_INET or @ref Qore::AF_INET6, or @ref nothing if the host name has not been resolved yet
+    Does not block and can be called from any thread
+
+    @return @ref Qore::AF_INET or @ref Qore::AF_INET6, or @ref nothing if it is not known yet
 
     @since %Qore 3.0
 */

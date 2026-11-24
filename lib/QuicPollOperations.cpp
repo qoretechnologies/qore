@@ -742,6 +742,58 @@ static int quic_client_recv_packet(QuicSession& session, int fd, uint8_t* buf, s
     return 0;
 }
 
+//! Sends a CONNECTION_CLOSE on the connected UDP socket of a QUIC client session that is given up, best effort
+/** The peer learns at once that the connection is given up (RFC 9000 section 10.2), instead of keeping it until its
+    handshake or idle timeout; nothing is sent for a session already closed
+*/
+static void quic_client_send_close(QuicSession& session, int fd) {
+    if (session.isClosed()) {
+        return;
+    }
+    uint8_t close_buf[1280];
+    ssize_t close_len = session.writeConnectionClose(close_buf, sizeof(close_buf));
+    if (close_len > 0) {
+        (void)::send(fd, close_buf, static_cast<size_t>(close_len), MSG_DONTWAIT);
+    }
+}
+
+//! Orders the resolved addresses of a QUIC client connection for the connection attempts (RFC 8305 section 4)
+/** The addresses in a family to avoid follow the others; in each of the two groups, the families alternate, starting
+    with the family of the group's first address, and the addresses of a family keep their order.
+*/
+static std::vector<SocketResolvedAddrInfo> quic_order_client_addrs(const std::vector<SocketResolvedAddrInfo>& addrs,
+        const std::vector<int>& avoid_families) {
+    std::vector<SocketResolvedAddrInfo> rv;
+    rv.reserve(addrs.size());
+    auto interleave = [&rv](const std::vector<const SocketResolvedAddrInfo*>& group) {
+        if (group.empty()) {
+            return;
+        }
+        std::vector<const SocketResolvedAddrInfo*> first;
+        std::vector<const SocketResolvedAddrInfo*> other;
+        for (const SocketResolvedAddrInfo* ai : group) {
+            (ai->family == group.front()->family ? first : other).push_back(ai);
+        }
+        for (size_t i = 0; i < first.size() || i < other.size(); ++i) {
+            if (i < first.size()) {
+                rv.push_back(*first[i]);
+            }
+            if (i < other.size()) {
+                rv.push_back(*other[i]);
+            }
+        }
+    };
+    std::vector<const SocketResolvedAddrInfo*> preferred;
+    std::vector<const SocketResolvedAddrInfo*> avoided;
+    for (const SocketResolvedAddrInfo& ai : addrs) {
+        bool avoid = std::find(avoid_families.begin(), avoid_families.end(), ai.family) != avoid_families.end();
+        (avoid ? avoided : preferred).push_back(&ai);
+    }
+    interleave(preferred);
+    interleave(avoided);
+    return rv;
+}
+
 SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     ExceptionSink* xsink, QoreSocketObject* sock,
     const char* host, uint16_t port, int family,
@@ -755,6 +807,7 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
         sock->priv->takeHttpHandshakeCredentials(client_cert, client_pk);
     }
     AutoLocker al(sock->priv->m);
+    close_requested_at_create_ = sock->priv->socket->priv->pre_close_interrupt_fired.load(std::memory_order_acquire);
 
     // Validate socket; an unbound socket is bound once the remote address is resolved (see initializeResolved())
     if (bind_unbound_) {
@@ -825,7 +878,28 @@ int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
         return -1;
     }
 
-    const SocketResolvedAddrInfo& ai = selectAddress(addrs);
+    std::vector<SocketResolvedAddrInfo> ordered = quic_order_client_addrs(addrs, avoid_families_);
+    resolver.reset();
+
+    if (ordered.size() > 1) {
+        AutoLocker al(sock->priv->m);
+        if (sock->priv->checkValid(xsink)) {
+            return -1;
+        }
+        // an unbound socket races connection attempts to the addresses (RFC 8305); a bound socket can only use the
+        // first address, as it was resolved in the socket's family
+        if (bind_unbound_ && !sock->priv->socket->priv->isOpen()) {
+            race_addrs_ = std::move(ordered);
+            race_next_ = 0;
+            // the connect timeout applies to the race as a whole
+            if (handshake_timeout_ns_ > 0) {
+                handshake_deadline_ns_ = QuicSession::timestamp() + handshake_timeout_ns_;
+            }
+            return 0;
+        }
+    }
+
+    const SocketResolvedAddrInfo& ai = ordered.front();
     // the remote address is checked after resolution, so a name resolving to a blocked network is denied; a
     // connection migration later only changes the local address
     if (sandbox_manager_ && !sandbox_manager_->checkNetworkAccess(host.c_str(),
@@ -835,11 +909,15 @@ int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
     memcpy(&remote_addr_, &ai.addr, ai.addrlen);
     remote_addrlen_ = ai.addrlen;
     int family = ai.family;
-    resolver.reset();
     address_family_.store(family, std::memory_order_release);
 
     AutoLocker al(sock->priv->m);
     if (sock->priv->checkValid(xsink)) {
+        return -1;
+    }
+    // an unbound socket closed while the host name was resolved is not bound (see closeRequested())
+    if (bind_unbound_ && !sock->priv->socket->priv->isOpen() && closeRequested()) {
+        xsink->raiseException("QUIC-POLL-ERROR", "socket closed during poll operation");
         return -1;
     }
     if (bind_unbound_ && !sock->priv->socket->priv->isOpen() && bindUnboundLocked(family, xsink)) {
@@ -911,6 +989,9 @@ std::shared_ptr<QuicSession> SocketQuicClientPollOperation::createSessionLocked(
     // socket's ssl_verify_mode so SSL_CTX_set_verify() enforces verification;
     // enable 0-RTT for reconnections with cached session tickets.
     // A credential supplied for this handshake never becomes a credential on the reusable socket.
+    // The session reads the trust configuration of the socket only here; it marks data received on the socket
+    // (qore_socket_private::markDataReceived()) while it lives, which a session of a connection attempt of the
+    // race does too, as the operation keeps the socket while the attempts live
     std::shared_ptr<QuicSession> session = QuicSession::createClient(sock->priv->socket->priv, xsink, host.c_str(),
         port_, reinterpret_cast<const struct sockaddr*>(&local), local_len,
         reinterpret_cast<const struct sockaddr*>(&remote), remote_len,
@@ -927,16 +1008,365 @@ std::shared_ptr<QuicSession> SocketQuicClientPollOperation::createSessionLocked(
     return session;
 }
 
-const SocketResolvedAddrInfo& SocketQuicClientPollOperation::selectAddress(
-        const std::vector<SocketResolvedAddrInfo>& addrs) const {
-    assert(!addrs.empty());
-    // the first address is used, unless it is in a family to avoid and the host has an address in another family
-    for (const SocketResolvedAddrInfo& ai : addrs) {
-        if (std::find(avoid_families_.begin(), avoid_families_.end(), ai.family) == avoid_families_.end()) {
-            return ai;
+QoreHashNode* SocketQuicClientPollOperation::continueRace(ExceptionSink* xsink) {
+    assert(qcs_state == QCS::NONE && !race_addrs_.empty());
+    // a socket closed while the attempts race is not given a descriptor (see closeRequested())
+    if (closeRequested()) {
+        releaseAttempts();
+        race_addrs_.clear();
+        qcs_state = QCS::CLOSED;
+        xsink->raiseException("QUIC-POLL-ERROR", "socket closed during poll operation");
+        return nullptr;
+    }
+    // each pass either starts an attempt or removes one, so the loop ends
+    while (true) {
+        int64_t now = static_cast<int64_t>(QuicSession::timestamp());
+        // the connect timeout applies to the race as a whole: every attempt still running fails
+        if (handshake_deadline_ns_ > 0 && now >= handshake_deadline_ns_) {
+            while (!attempts_.empty()) {
+                ExceptionSink ax;
+                ax.raiseException("QUIC-HANDSHAKE-TIMEOUT",
+                    "QUIC handshake did not complete within the configured connect_timeout");
+                recordRaceError(ax, attempts_.back()->family);
+                removeAttempt(attempts_.size() - 1);
+            }
+            race_next_ = race_addrs_.size();
+            failRace(xsink);
+            return nullptr;
+        }
+
+        // an attempt is started when none runs, or when the connection attempt delay since the last one has passed
+        while (race_next_ < race_addrs_.size() && (attempts_.empty() || now >= race_next_start_ns_)) {
+            const SocketResolvedAddrInfo& ai = race_addrs_[race_next_++];
+            ExceptionSink ax;
+            if (startAttempt(ai, &ax)) {
+                recordRaceError(ax, ai.family);
+                continue;
+            }
+            race_next_start_ns_ = now + QUIC_HE_CONNECTION_ATTEMPT_DELAY_NS;
+            break;
+        }
+        if (attempts_.empty()) {
+            failRace(xsink);
+            return nullptr;
+        }
+
+        bool failed = false;
+        for (size_t i = 0; i < attempts_.size();) {
+            QuicConnectAttempt& a = *attempts_[i];
+            ExceptionSink ax;
+            int rc = serviceAttempt(a, &ax);
+            if (rc > 0) {
+#ifdef DEBUG
+                // a test closes the socket here, before the socket takes the winner over
+                qore_dbg_http_hold(QoreDbgHttpHoldPoint::Http3RaceWinner, nullptr);
+#endif
+                adoptWinner(i, xsink);
+                return nullptr;
+            }
+            if (rc < 0) {
+                recordRaceError(ax, a.family);
+                removeAttempt(i);
+                failed = true;
+                continue;
+            }
+            ++i;
+        }
+        if (!failed) {
+            return getRacePollInfo(xsink);
+        }
+        // the next attempt is started at once when an attempt has failed
+        race_next_start_ns_ = now;
+    }
+}
+
+int SocketQuicClientPollOperation::startAttempt(const SocketResolvedAddrInfo& ai, ExceptionSink* xsink) {
+    // the remote address is checked for each attempt, so a name resolving to a blocked network is denied
+    if (sandbox_manager_ && !sandbox_manager_->checkNetworkAccess(host.c_str(),
+            reinterpret_cast<const struct sockaddr*>(&ai.addr), ai.addrlen, QSEC_NET_UDP, xsink)) {
+        return -1;
+    }
+
+    std::unique_ptr<QuicConnectAttempt> a = std::make_unique<QuicConnectAttempt>();
+    a->family = ai.family;
+    memcpy(&a->remote_addr, &ai.addr, ai.addrlen);
+    a->remote_addrlen = ai.addrlen;
+
+    int fd = qore_socket_cloexec_nonblock(ai.family, SOCK_DGRAM, 0);
+    if (fd == QORE_INVALID_SOCKET) {
+        xsink->raiseErrnoException("QUIC-ERROR", errno, "cannot create the UDP socket of a QUIC connection attempt");
+        return -1;
+    }
+    // an owned descriptor from the start: the I/O thread polls it as an extra fd of the operation, and the attempt
+    // gives it up on every path
+    try {
+        a->owned = qore_owned_descriptor_create(fd);
+    } catch (...) {
+        qore_socket_private::closeDescriptor(fd);
+        throw;
+    }
+    a->fd = fd;
+
+    // the wildcard address of the family with a port of its own, with the network policy check of any bind (see
+    // bindUnboundLocked())
+    struct sockaddr_storage addr{};
+    int size;
+    if (ai.family == AF_INET6) {
+        struct sockaddr_in6* in6 = reinterpret_cast<struct sockaddr_in6*>(&addr);
+        in6->sin6_family = AF_INET6;
+        in6->sin6_addr = in6addr_any;
+        size = static_cast<int>(sizeof(*in6));
+    } else {
+        struct sockaddr_in* in4 = reinterpret_cast<struct sockaddr_in*>(&addr);
+        in4->sin_family = AF_INET;
+        in4->sin_addr.s_addr = htonl(INADDR_ANY);
+        size = static_cast<int>(sizeof(*in4));
+    }
+    if (qore_socket_bind_descriptor_checked(fd, reinterpret_cast<const struct sockaddr*>(&addr), size, SOCK_DGRAM,
+            *sandbox_manager_, xsink)) {
+        if (!*xsink) {
+            qore_socket_error_intern(errno, xsink, "SOCKET-BIND-ERROR",
+                "error binding the UDP socket of the QUIC connection", nullptr, host.c_str(), service.c_str(),
+                reinterpret_cast<const struct sockaddr*>(&addr));
+        }
+        return -1;
+    }
+
+    if (quic_client_connect_descriptor(fd, a->remote_addr, a->remote_addrlen, a->local_addr, a->local_addrlen,
+            xsink)) {
+        return -1;
+    }
+
+    {
+        AutoLocker al(sock->priv->m);
+        if (sock->priv->checkValid(xsink)) {
+            return -1;
+        }
+        // a full handshake: see createSessionLocked()
+        a->session = createSessionLocked(a->local_addr, a->local_addrlen, a->remote_addr, a->remote_addrlen,
+            /*enable_0rtt=*/false, xsink);
+    }
+    if (*xsink) {
+        return -1;
+    }
+    if (!a->session) {
+        xsink->raiseException("QUIC-ERROR", "cannot create the QUIC session of a connection attempt to %s:%u",
+            host.c_str(), static_cast<unsigned>(port_));
+        return -1;
+    }
+    printd(5, "SocketQuicClientPollOperation::startAttempt() %s:%s family %s fd %d\n", host.c_str(),
+        service.c_str(), q_af_to_str(ai.family), fd);
+    attempts_.push_back(std::move(a));
+    return 0;
+}
+
+int SocketQuicClientPollOperation::serviceAttempt(QuicConnectAttempt& a, ExceptionSink* xsink) {
+    int64_t now = static_cast<int64_t>(QuicSession::timestamp());
+    if (a.econnrefused_deadline_ns && now >= a.econnrefused_deadline_ns) {
+        xsink->raiseException("QUIC-CONNECT-REFUSED",
+            "QUIC handshake target %s:%u refused datagrams (ICMP port unreachable) and did not recover within %lld "
+            "ms; peer UDP port appears closed", host.c_str(), static_cast<unsigned>(port_),
+            (long long)(a.econnrefused_grace_ns / 1000000LL));
+        return -1;
+    }
+
+    ngtcp2_tstamp next_expiry;
+    int rv = quic_client_send_packets(*a.session, a.fd, pkt_batch_, a.test_datagram_seq, next_expiry, xsink);
+    if (rv < 0) {
+        return -1;
+    }
+    while (true) {
+        bool received = false;
+        int rrv = quic_client_recv_packet(*a.session, a.fd, recv_buf_, sizeof(recv_buf_), a.local_addr,
+            a.local_addrlen, a.refused, received, xsink);
+        if (rrv < 0) {
+            return -1;
+        }
+        if (received) {
+            // the peer answers: an earlier refusal is forgotten
+            a.refused = false;
+            a.econnrefused_deadline_ns = 0;
+        }
+        if (rrv == SOCK_POLLIN) {
+            break;
         }
     }
-    return addrs.front();
+
+    // a connection closed during its handshake, by a CONNECTION_CLOSE of the peer for example; see continuePoll()
+    if (a.session->isClosed()) {
+        // a connection that closed itself because the peer sent nothing reached no server
+        QuicSession::CloseReason reason = a.session->getCloseReason();
+        if (reason == QuicSession::CloseReason::Unresponsive || reason == QuicSession::CloseReason::Idle) {
+            xsink->raiseException("QUIC-HANDSHAKE-TIMEOUT", "QUIC handshake with %s:%u did not complete: the peer "
+                "sent nothing within the connect timeout", host.c_str(), static_cast<unsigned>(port_));
+            return -1;
+        }
+        ngtcp2_ccerr ccerr = a.session->getCloseError();
+        xsink->raiseException("QUIC-HANDSHAKE-ERROR",
+            "QUIC handshake failed: connection closed by peer (type=%d, error_code=0x%llx)",
+            (int)ccerr.type, (long long)ccerr.error_code);
+        return -1;
+    }
+    if (a.session->isHandshakeComplete()) {
+        return 1;
+    }
+
+    if (a.refused && !a.econnrefused_deadline_ns) {
+        // a refused attempt fails at once while another attempt can still connect; the last one waits for the grace
+        // period (see econnrefused_deadline_ns_)
+        if (attempts_.size() > 1 || race_next_ < race_addrs_.size()) {
+            xsink->raiseException("QUIC-CONNECT-REFUSED",
+                "QUIC handshake target %s:%u refused datagrams (ICMP port unreachable); peer UDP port appears closed",
+                host.c_str(), static_cast<unsigned>(port_));
+            return -1;
+        }
+        a.econnrefused_grace_ns = quic_econnrefused_grace_ns();
+        a.econnrefused_deadline_ns = now + a.econnrefused_grace_ns;
+    }
+
+    // the datagrams that the received ones caused, such as acknowledgements
+    rv = quic_client_send_packets(*a.session, a.fd, pkt_batch_, a.test_datagram_seq, next_expiry, xsink);
+    if (rv < 0) {
+        return -1;
+    }
+    a.want_write = rv == SOCK_POLLOUT;
+    a.next_expiry = next_expiry;
+    return 0;
+}
+
+int SocketQuicClientPollOperation::adoptWinner(size_t idx, ExceptionSink* xsink) {
+    assert(idx < attempts_.size());
+    std::unique_ptr<QuicConnectAttempt> w = std::move(attempts_[idx]);
+    attempts_.erase(attempts_.begin() + idx);
+    // the losers are given up first; the winner is released with its descriptor on an error below
+    releaseAttempts();
+    race_addrs_.clear();
+    race_next_ = 0;
+
+    printd(5, "SocketQuicClientPollOperation::adoptWinner() %s:%s family %s fd %d\n", host.c_str(),
+        service.c_str(), q_af_to_str(w->family), w->fd);
+
+    AutoLocker al(sock->priv->m);
+    // a rejected winner is closed: the peer is told, as for the attempts given up
+    auto reject = [this, &w] () {
+        qcs_state = QCS::CLOSED;
+        if (w->session && w->fd >= 0) {
+            quic_client_send_close(*w->session, w->fd);
+        }
+    };
+    if (sock->priv->checkValid(xsink)) {
+        reject();
+        return -1;
+    }
+    qore_socket_private* spriv = sock->priv->socket->priv;
+    // a socket closed while the attempts raced is not given a descriptor; the check and the adoption are made under
+    // the socket's lock, and a close that follows them closes the descriptor adopted
+    if (closeRequested() || spriv->isOpen()) {
+        reject();
+        xsink->raiseException("QUIC-POLL-ERROR", "socket closed during poll operation");
+        return -1;
+    }
+    memcpy(&local_addr_, &w->local_addr, w->local_addrlen);
+    local_addrlen_ = w->local_addrlen;
+    memcpy(&remote_addr_, &w->remote_addr, w->remote_addrlen);
+    remote_addrlen_ = w->remote_addrlen;
+    test_datagram_seq_ = w->test_datagram_seq;
+    // the connection leads to the remote address; a connection migration later changes only the local address
+    std::shared_ptr<QoreConnectionDestinations> d = std::make_shared<QoreConnectionDestinations>();
+    d->add(host.c_str(), reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_, QSEC_NET_UDP);
+    if (sock->priv->setNonBlock(xsink)) {
+        reject();
+        return -1;
+    }
+    set_non_block = true;
+    // the socket takes the winner's descriptor over; the holds of the I/O threads that have it registered as an extra
+    // fd count as uses of the socket's descriptor
+    spriv->adoptDatagramDescriptor(w->fd, w->owned, w->family);
+    w->fd = -1;
+    address_family_.store(w->family, std::memory_order_release);
+    spriv->setConnectedDestinations(std::move(d));
+
+    setSession(std::move(w->session));
+    spriv->addQuicSession(quic_session);
+    handshake_completed_.store(true, std::memory_order_release);
+    qcs_state = QCS::SETUP_HTTP3;
+    return 0;
+}
+
+void SocketQuicClientPollOperation::recordRaceError(ExceptionSink& ax, int family) {
+    assert(ax);
+    // copied before the exception is cleared: the helpers can refer to the exception's strings
+    std::string new_err;
+    std::string new_desc;
+    {
+        QoreStringValueHelper err(ax.getExceptionErr());
+        QoreStringValueHelper desc(ax.getExceptionDesc());
+        new_err = err->empty() ? "QUIC-ERROR" : err->c_str();
+        new_desc = desc->c_str();
+    }
+    ax.clear();
+    // the handshake of a failed attempt never completed: a completed one wins the race
+    bool unreached = quic_is_unreached_error(new_err.c_str(), false);
+    printd(5, "SocketQuicClientPollOperation::recordRaceError() %s:%s family %s: %s: %s\n", host.c_str(),
+        service.c_str(), q_af_to_str(family), new_err.c_str(), new_desc.c_str());
+    if (race_err_.empty() || !unreached || race_err_unreached_) {
+        race_err_ = std::move(new_err);
+        race_desc_ = std::move(new_desc);
+        race_err_unreached_ = unreached;
+        race_err_family_ = family;
+    }
+}
+
+void SocketQuicClientPollOperation::failRace(ExceptionSink* xsink) {
+    assert(attempts_.empty());
+    race_addrs_.clear();
+    race_next_ = 0;
+    qcs_state = QCS::CLOSED;
+    address_family_.store(race_err_family_, std::memory_order_release);
+    if (race_err_.empty()) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC connection attempt could be made to %s:%u", host.c_str(),
+            static_cast<unsigned>(port_));
+        return;
+    }
+    xsink->raiseException(race_err_.c_str(), "%s", race_desc_.c_str());
+}
+
+QoreHashNode* SocketQuicClientPollOperation::getRacePollInfo(ExceptionSink* xsink) const {
+    std::vector<std::pair<int, int>> fds;
+    fds.reserve(attempts_.size());
+    ngtcp2_tstamp expiry = UINT64_MAX;
+    for (const std::unique_ptr<QuicConnectAttempt>& a : attempts_) {
+        fds.emplace_back(a->fd, SOCK_POLLIN | (a->want_write ? SOCK_POLLOUT : 0));
+        if (a->next_expiry < expiry) {
+            expiry = a->next_expiry;
+        }
+    }
+    // the operation's socket has no descriptor while the attempts race
+    QoreHashNode* poll_info = getSocketPollInfoHash(xsink, 0, fds);
+    if (!poll_info) {
+        return nullptr;
+    }
+    setPollTimeoutFromExpiry(poll_info, expiry, xsink);
+    for (const std::unique_ptr<QuicConnectAttempt>& a : attempts_) {
+        clampPollTimeoutToDeadline(poll_info, a->econnrefused_deadline_ns, xsink);
+    }
+    clampPollTimeoutToDeadline(poll_info, handshake_deadline_ns_, xsink);
+    if (race_next_ < race_addrs_.size()) {
+        clampPollTimeoutToDeadline(poll_info, race_next_start_ns_, xsink);
+    }
+    return poll_info;
+}
+
+void SocketQuicClientPollOperation::removeAttempt(size_t idx) {
+    assert(idx < attempts_.size());
+    std::unique_ptr<QuicConnectAttempt> a = std::move(attempts_[idx]);
+    attempts_.erase(attempts_.begin() + idx);
+    // best effort: the peer learns at once that the attempt is given up (RFC 9000 section 10.2), instead of keeping
+    // the connection until its handshake times out
+    if (a->session && a->fd >= 0) {
+        quic_client_send_close(*a->session, a->fd);
+    }
+    // the descriptor is released with the attempt
 }
 
 int SocketQuicClientPollOperation::bindUnboundLocked(int family, ExceptionSink* xsink) {
@@ -971,7 +1401,7 @@ int SocketQuicClientPollOperation::bindUnboundLocked(int family, ExceptionSink* 
 
 const char* SocketQuicClientPollOperation::getStateImpl() const {
     switch (qcs_state) {
-        case QCS::NONE: return resolver ? "resolving" : "initializing";
+        case QCS::NONE: return resolver ? "resolving" : (race_addrs_.empty() ? "initializing" : "connecting");
         case QCS::HANDSHAKE_SEND: return "handshake-send";
         case QCS::HANDSHAKE_RECV: return "handshake-recv";
         case QCS::SETUP_HTTP3: return "setup-http3";
@@ -1208,8 +1638,13 @@ QoreHashNode* SocketQuicClientPollOperation::flushAndReturnPollInfo(ExceptionSin
 
 QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) {
     if (qcs_state == QCS::NONE) {
-        QoreHashNode* poll_info = continueResolve(xsink);
-        if (*xsink || poll_info || qcs_state != QCS::HANDSHAKE_SEND) {
+        QoreHashNode* poll_info = race_addrs_.empty() ? continueResolve(xsink) : continueRace(xsink);
+        // the race can be started by the resolution
+        if (!*xsink && !poll_info && qcs_state == QCS::NONE && !race_addrs_.empty()) {
+            poll_info = continueRace(xsink);
+        }
+        // the winner of a race continues with the set up of HTTP/3
+        if (*xsink || poll_info || (qcs_state != QCS::HANDSHAKE_SEND && qcs_state != QCS::SETUP_HTTP3)) {
             return poll_info;
         }
     }

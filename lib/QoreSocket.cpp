@@ -15779,6 +15779,22 @@ static int qore_socket_bind_check_sandbox(QoreSandboxManager* sandbox_manager, c
     return 0;
 }
 
+int qore_socket_bind_descriptor_checked(int fd, const struct sockaddr* addr, int size, int sock_type,
+        QoreSandboxManager* sandbox_manager, ExceptionSink* xsink) {
+    if (qore_socket_bind_check_sandbox(sandbox_manager, addr, size, q_get_sock_type(sock_type), xsink)) {
+        return -1;
+    }
+    if (qore_socket_bind_unshadowed(fd, addr, size, q_get_sock_type(sock_type), sandbox_manager, xsink)
+            == QORE_SOCKET_ERROR) {
+#ifdef _Q_WINDOWS
+        // set errno from windows error
+        sock_get_error();
+#endif
+        return -1;
+    }
+    return 0;
+}
+
 static int qore_socket_bind_sockaddr_direct(QoreSocket* s, const struct sockaddr* addr, int size,
         QoreSandboxManager* sandbox_manager, ExceptionSink* xsink) {
     qore_socket_private* priv = qore_socket_private::get(*s);

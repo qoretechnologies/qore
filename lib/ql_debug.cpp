@@ -21254,6 +21254,22 @@ static QoreValue f_dbg_lock_wait_wait(const QoreListNode* params, RuntimeConfig&
     return QoreValue();
 }
 
+//! Debug-only: closes a socket directly, as a C++ owner of the socket does, without the async I/O controller
+/** QoreSocketObject::closeIo() records the close (qore_socket_private::prepareForClose()) and closes the descriptor
+    if the socket has one; a test uses it to close a socket that has no descriptor yet while an operation of the
+    controller that is to give it one runs (qore#7427).
+*/
+static QoreValue f_dbg_socket_close_io(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreObject* obj = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    ReferenceHolder<QoreSocketObject> sock(
+        static_cast<QoreSocketObject*>(obj->getReferencedPrivateData(CID_SOCKET, xsink)), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    sock->closeIo(xsink);
+    return QoreValue();
+}
+
 //! Debug-only: returns whether the descriptor of a socket is non-blocking
 /** Tests use this to check that a socket stays non-blocking whatever thread uses it (see
     qore_socket_cloexec_nonblock()).
@@ -30458,7 +30474,8 @@ static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* param
     operation submitted a request and is about to register it, after waking its I/O thread, so that the request is
     sent and its response can arrive before the registration; \c "h3-response-buffered": an HTTP/3 client poll
     operation received the response of a request that is not registered yet and kept it for the registration (with a
-    release Counter of 0, it only reports it)
+    release Counter of 0, it only reports it); \c "h3-race-winner": the address family race of an HTTP/3 client
+    connection found the connection attempt that wins, before the operation's socket takes it over (the I/O thread)
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
     @param target if given, only a thread that reaches the point for this object is held: the poll operation of the
@@ -30506,6 +30523,8 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::Http3Register);
     } else if (!strcmp(name->c_str(), "h3-response-buffered")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::Http3ResponseBuffered);
+    } else if (!strcmp(name->c_str(), "h3-race-winner")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Http3RaceWinner);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();
@@ -32834,6 +32853,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_ABSTRACTSMARTLOCK->getTypeInfo(), QORE_PARAM_NO_ARG, "lock", bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid");
     qns.addBuiltinVariant("dbg_lock_wait_wait", f_dbg_lock_wait_wait, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_socket_close_io", f_dbg_socket_close_io, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK | QDOM_NETWORK, nothingTypeInfo, 1, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_socket_is_nonblocking", f_dbg_socket_is_nonblocking,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, boolOrNothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");

@@ -413,6 +413,22 @@ ready or a draining connection (`HttpClientConnection::canSendOnStreams()`).  A 
 (`QuicSession::submitShutdown()`): a later one would carry a larger identifier once a request arrived after the first
 one, which the client must treat as a connection error.
 
+### Address Family Race (HTTP/3)
+
+An HTTP/3 connection's poll operation (`SocketQuicClientPollOperation`, given an unbound UDP socket) resolves the host
+name in all families and, when it has more than one address, races connection attempts as RFC 8305 describes: the
+addresses are ordered with the families interleaved (the family of the first address first; the families the
+manager passes in `avoid_families` — those of its `h3_failed_families` hints — come last); the next attempt starts
+250 ms (`QUIC_HE_CONNECTION_ATTEMPT_DELAY_NS`) after the previous one, or at once when an attempt fails, including on
+an ICMP refusal while another attempt can still connect (the refusal grace period applies only to the last attempt
+standing).  Each attempt has an owned UDP descriptor, polled as an extra fd, a `QuicSession`, and the sandbox checks
+of its remote address and bind; `connect_timeout` bounds the whole race.  The first attempt whose handshake completes
+wins: the operation's `Socket` adopts its descriptor and session, so the socket object callers hold
+(`getSocket()`) stays the same, and the others are closed.  If every attempt fails, the error of the attempt that got
+furthest (`quic_is_unreached_error()`) is raised and `getAddressFamily()` reports that attempt's family.  The attempts
+make full handshakes, without 0-RTT, as they would all present the same session ticket (a host with a single address
+keeps 0-RTT), and a socket closed while the attempts race is never given a descriptor.
+
 ### mTLS (HTTP/3 Only)
 
 Client certificates are specified in the connection manager options. For HTTP/2 connections, the standard SSL verify mode and certificate chain apply through the TLS layer. For HTTP/3, `client_cert` and `client_pk` are passed to the QUIC handshake:
