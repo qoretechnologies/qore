@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - threads, object destruction in another thread and AOT code generation and linking
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class WeakCallDestroyedObjectTest
+
+#! Tests method calls made through a weak reference while another thread destroys the object
+/** The child script (weak-call-destroyed-object/weak-call-destroyed-object.q) holds the thread that releases the last
+    reference to an object with debug hooks, after it has released it and before it marks the object as being
+    destroyed, or after it has decided to collect it as part of a cycle (also while references that the cycle held
+    then are released, when the call takes the object out of its cycle, and when the count with which the
+    collection is decided has been superseded by releases), and calls a method through a weak reference
+    meanwhile, held by a local variable, a global variable, a hash, a list or an object member, or read from one into
+    a value or an argument: the call keeps the object, the thread does not destroy it while the call runs, and it is
+    destroyed when the call releases it (issue #7509).  A call that entered the object before keeps it until it
+    returns, and the destructor's own calls on the object are made.
+    It runs in every execution mode, and compiled with AOT at optimization levels 0 and 3, against the same expected
+    output; with a release build, which has no debug hooks, the script reports that it has nothing to test.
+*/
+class WeakCallDestroyedObjectTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string script;
+
+        TmpDir tmp("qore-weak-call-destroyed-object-");
+
+        #! the receivers of the weak calls of the child script
+        const Kinds = ("local", "global", "hash", "list", "member", "value", "argument");
+
+        #! the output of the child script with a release build
+        const ReleaseOutput = "the debug hooks are only in debug builds\n";
+    }
+
+    constructor() : QUnit::Test("WeakCallDestroyedObject", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        script = get_script_dir() + "/weak-call-destroyed-object/weak-call-destroyed-object.q";
+
+        addTestCase("weak calls on an object destroyed in another thread, in every mode", \testModes());
+        addTestCase("weak calls on an object destroyed in another thread, compiled with AOT", \testAot());
+
+        set_return_value(main());
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+    }
+
+    #! returns the output of the child script
+    private string expected() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return ReleaseOutput;
+        }
+        string rv;
+        # last released: the call keeps the object, which is destroyed when the call releases it
+        foreach string kind in (Kinds) {
+            rv += sprintf("last released %s: destroyed while the call runs: 0\nlast released %s: call returned 1\n"
+                "last released %s: destroyed: 1\n", kind, kind, kind);
+        }
+        rv += "entered before: destroyed while the call runs: 0
+entered before: call returned 2
+entered before: destroyed after the call: 1
+cycle: destroyed while the call runs: 0
+cycle: call returned 1
+cycle: destroyed: 2
+cycle released 2: destroyed while the call runs: 0
+cycle released 2: call returned 1
+cycle released 2: destroyed: 2
+broken cycle: destroyed while the call runs: 0
+broken cycle: call returned 1
+broken cycle: destroyed: 2
+superseded cycle: destroyed while the call runs: 0
+superseded cycle: call returned 1
+superseded cycle: destroyed: 2
+destructor calls: 16
+";
+        return rv;
+    }
+
+    testModes() {
+        string exp = expected();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
+                "--exec-mode=%s %s", env(), qore_bin, mode, script));
+            assertEq(0, r.rc, sprintf("%s: exit code: %s", mode, r.out));
+            assertEq(exp, r.out, mode);
+        }
+    }
+
+    testAot() {
+        string exp = expected();
+        foreach int opt in (0, 3) {
+            string bin = sprintf("%s/weak-call-O%d", tmp.path, opt);
+            string out = backquote(sprintf("%s %s -b --compile --opt-level=%d --output %s %s 2>&1", env(), qore_bin,
+                opt, bin, script));
+            assertTrue(is_file(bin), sprintf("compiled with -O%d: %s", opt, out));
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", env(), bin));
+            assertEq(0, r.rc, sprintf("-O%d: exit code: %s", opt, r.out));
+            assertEq(exp, r.out, sprintf("AOT -O%d", opt));
+        }
+    }
+}

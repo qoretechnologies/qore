@@ -1191,8 +1191,10 @@ int RObject::tryFastDeref(bool real) {
             return -1;
         }
         hazard_publish(slot, this);
-        // a set committed before the publication is seen here; one committed after it waits for this release
-        if (rset.load(std::memory_order_relaxed)) {
+        // a set committed before the publication is seen here; one committed after it waits for this release; a
+        // collection decided with the object in a set is seen as well, and its releases are counted (collect_pending):
+        // acquire, so that a set removed after the decision is read with the raised collect_pending
+        if (rset.load(std::memory_order_acquire) || collect_pending.load(std::memory_order_relaxed)) {
             hazard_clear(slot);
             return -1;
         }
@@ -1226,8 +1228,10 @@ int RObject::tryFastDeref(bool real) {
         return -1;
     }
     hazard_publish(slot, this);
-    // a set committed before the publication is seen here; one committed after it waits for this release
-    if (rset.load(std::memory_order_relaxed)) {
+    // a set committed before the publication is seen here; one committed after it waits for this release; a
+    // collection decided with the object in a set is seen as well, and its releases are counted (collect_pending):
+    // acquire, so that a set removed after the decision is read with the raised collect_pending
+    if (rset.load(std::memory_order_acquire) || collect_pending.load(std::memory_order_relaxed)) {
         hazard_clear(slot);
         return -1;
     }
@@ -1306,6 +1310,7 @@ int RObject::deref(bool real, bool& do_scan, bool& rescan) {
 
     // dereference the object and save the resulting value as the return value
     int rv_refs = --references;
+    ++locked_releases;
 
     do_scan = !rrefs;
 
@@ -1340,7 +1345,8 @@ void RObject::derefDone(bool del, bool wait_only) {
         rcond.broadcast();
         // a deleting dereference never completes while another deleting dereference waits for it; a dereference
         // that handed the deletion off and waits before releasing a weak reference (wait_only) can wait for the
-        // deleting one, which holds its own reference to the object (qore_object_private::takeDeleteReference())
+        // deleting one, which holds its own reference to the object (qore_object_private::takeLastDeleteReference(),
+        // takeCollectDeleteReference())
         assert(ref_inprogress || !del || !dbg_del_waiting);
     }
     if (del || wait_only) {
@@ -1793,7 +1799,8 @@ bool RSet::edgesUnchangedSinceScan() const {
 }
 
 // if we return 1, the rset has been invalidated already
-int RSet::canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator, RSetDerefHelper& cleanup) {
+int RSet::canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator, RSetDerefHelper& cleanup,
+        int* decided, unsigned* releases) {
     printd(QRO_LVL, "RSet::canDelete() this: %p valid: %d\n", this, (int)valid);
 
     if (q_disable_gc)
@@ -1801,7 +1808,17 @@ int RSet::canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator
 
     // Another reference operation superseded this dereference's snapshot. A rescan records the current
     // reference count, so comparing it with the old ref_copy would request the same rescan forever.
-    int refs = initiator.refs();
+    int refs;
+    if (releases) {
+        // the count and the releases of the locking path are read together, as RObject::deref() writes them: the
+        // dereference that deletes the set compares the count when it marks the object with this one, plus the
+        // releases made since, which are all made in the locking path from now on (RObject::collect_pending)
+        AutoLocker al(initiator.rlck);
+        refs = initiator.refs();
+        *releases = initiator.locked_releases;
+    } else {
+        refs = initiator.refs();
+    }
     if (ref_copy != refs) {
         // A reference taken since the snapshot is still held, and its release finds this set and decides then; with
         // no reference left, the dereference that released the last one deletes the object.
@@ -1815,6 +1832,9 @@ int RSet::canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator
         // that claims its collection (RObject::claimCollection()).  See design/dgc.md, "A count superseded by a
         // release that decided nothing".
         ref_copy = refs;
+    }
+    if (decided) {
+        *decided = ref_copy;
     }
 
     if (!valid)
