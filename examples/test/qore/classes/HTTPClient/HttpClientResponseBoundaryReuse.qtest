@@ -7,7 +7,8 @@
 # response has no body (a response to HEAD, 204, 304, or a Content-Length of 0) or a body that was read whole, the
 # client closes the connection, and its next request is answered on a new connection (qore#7471); also when the data
 # arrives in a write of its own after the response.  Nor is a connection reused after a 101 response to a request
-# that does not take the connection over, and a request after the server closed the connection (on a TLS connection,
+# that asks for a protocol upgrade and does not take the connection over (a 101 response to a request that does not
+# ask for one is an error, qore#7483), and a request after the server closed the connection (on a TLS connection,
 # with its close_notify) is answered on a new connection.  A connection whose data ends with the response is still
 # reused.  Both the HTTPClient class and the HttpClientIo connection manager are tested.
 
@@ -232,10 +233,14 @@ class HttpClientResponseBoundaryReuseTest inherits QUnit::Test {
             ("GET", "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nok\r\n0\r\n\r\n"),
         );
 
-        #! a 101 response to a request that does not take the connection over
+        #! a 101 response to a request that does not take the connection over; the request asks for the upgrade
+        #! (@ref UpgradeHeaders)
         const Switching = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: other\r\nConnection: Upgrade\r\n\r\n";
 
         const Clients = ("HTTPClient", "HttpClientIo");
+
+        #! the headers of a request that asks for a protocol upgrade without taking the connection over
+        const UpgradeHeaders = {"Upgrade": "other", "Connection": "Upgrade"};
     }
 
     constructor() : QUnit::Test("HttpClientResponseBoundaryReuse", "1.0") {
@@ -284,7 +289,7 @@ class HttpClientResponseBoundaryReuseTest inherits QUnit::Test {
             HTTPClient hc({"url": url, "error_passthru": True, "timeout": RequestTimeout, "ssl_verify_cert": False});
             # the client's connections are closed before the server is stopped
             on_exit delete hc;
-            first = hc.send(NOTHING, method, "/first");
+            first = hc.send(NOTHING, method, "/first", response == Switching ? UpgradeHeaders : NOTHING);
             # the server has done what it does after the first response before the next request
             server.after_done.waitForZero(Timeout);
             second = hc.send(NOTHING, "GET", "/second", NOTHING, True);
@@ -292,7 +297,8 @@ class HttpClientResponseBoundaryReuseTest inherits QUnit::Test {
             HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
             # the client's connections are closed before the server is stopped
             on_exit delete mgr;
-            first = mgr.request(url, method, "/first", NOTHING, NOTHING, RequestTimeout);
+            first = mgr.request(url, method, "/first", response == Switching ? UpgradeHeaders : NOTHING, NOTHING,
+                RequestTimeout);
             # the server has done what it does after the first response before the next request
             server.after_done.waitForZero(Timeout);
             second = mgr.request(url, "GET", "/second", NOTHING, NOTHING, RequestTimeout);
