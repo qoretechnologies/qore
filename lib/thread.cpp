@@ -7659,6 +7659,11 @@ QoreSandboxContext* qore_sandbox_owned_creation_context(const QoreSandboxContext
         qore_add_sandbox_context_managers(*owner, owner_managers);
         std::vector<const QoreSandboxManager*> creation_managers;
         qore_add_sandbox_context_managers(*creation, creation_managers);
+        // the managers are compared as a set, whatever slot names them: a manager that the owner names in another
+        // slot than the creation does counts as named; and ownership follows the enforcement level of each manager
+        // when it is checked, so a manager at code safety that this provenance names and that is later raised to
+        // tenant isolation (SandboxManager::setEnforcementLevel()) owns the object with the others, as for any object
+        // that it governs
         bool covered = std::all_of(creation_managers.begin(), creation_managers.end(),
             [&owner_managers](const QoreSandboxManager* sm) {
                 return std::find(owner_managers.begin(), owner_managers.end(), sm) != owner_managers.end();
