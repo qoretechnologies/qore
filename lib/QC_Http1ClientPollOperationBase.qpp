@@ -525,8 +525,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleProxyConnectRecv(ExceptionSink
     if (poll_xsink) {
         QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
         QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
+        // the argument of the exception, such as the start of an invalid status line, is given with the error
         setError(*err_str ? err_str->c_str() : "HTTP1-CONNECT-ERROR",
-            *desc_str ? desc_str->c_str() : "proxy CONNECT response read failed", xsink);
+            *desc_str ? desc_str->c_str() : "proxy CONNECT response read failed", xsink,
+            poll_xsink.getExceptionArg());
         poll_xsink.clear();
         return nullptr;
     }
@@ -740,15 +742,19 @@ QoreHashNode* Http1ClientPollOperationPriv::startBufferedFullDuplex(ExceptionSin
 #ifdef DEBUG
         dbgFailHeaderReadOp("full-duplex");
 #endif
-        read_op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
+        SocketReadHttpHeaderPollOperation* header_op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
+        // the header read is that of a response, whose status line is checked (qore#7485)
+        header_op->expectResponse();
+        read_op = header_op;
         if (read_xsink) {
             read_op->deref(&read_xsink);
             QoreStringValueHelper err_str(read_xsink.getExceptionErr());
             QoreStringValueHelper desc_str(read_xsink.getExceptionDesc());
             std::string err(*err_str ? err_str->c_str() : "HTTP1-RECV-ERROR");
             std::string desc(*desc_str ? desc_str->c_str() : "the response read could not be started");
+            // the argument of the exception is given with the error (setError() references it)
+            setError(err.c_str(), desc.c_str(), xsink, read_xsink.getExceptionArg());
             read_xsink.clear();
-            setError(err.c_str(), desc.c_str(), xsink);
             return nullptr;
         }
     }
@@ -1013,7 +1019,10 @@ SocketPollOperationBase* Http1ClientPollOperationPriv::newHeaderReadOp(Exception
 #ifdef DEBUG
     dbgFailHeaderReadOp(site);
 #endif
-    SocketPollOperationBase* op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
+    SocketReadHttpHeaderPollOperation* op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
+    // the header read is that of a response, whose status line is checked: a response that does not start with a
+    // valid status line fails the request, and the connection is closed (qore#7485)
+    op->expectResponse();
     if (!read_xsink) {
         return op;
     }
@@ -1022,8 +1031,9 @@ SocketPollOperationBase* Http1ClientPollOperationPriv::newHeaderReadOp(Exception
     QoreStringValueHelper desc_str(read_xsink.getExceptionDesc());
     std::string err(*err_str ? err_str->c_str() : "HTTP1-RECV-ERROR");
     std::string desc(*desc_str ? desc_str->c_str() : "the response read could not be started");
+    // the argument of the exception is given with the error (setError() references it)
+    setError(err.c_str(), desc.c_str(), xsink, read_xsink.getExceptionArg());
     read_xsink.clear();
-    setError(err.c_str(), desc.c_str(), xsink);
     return nullptr;
 }
 
@@ -1047,7 +1057,10 @@ QoreHashNode* Http1ClientPollOperationPriv::recoverResponseAfterSendFailure(cons
 #ifdef DEBUG
         dbgFailHeaderReadOp("send-failure-recovery");
 #endif
-        read_op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
+        SocketReadHttpHeaderPollOperation* header_op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
+        // the header read is that of a response, whose status line is checked (qore#7485)
+        header_op->expectResponse();
+        read_op = header_op;
         if (read_xsink) {
             read_op->deref(&read_xsink);
             read_xsink.clear();
@@ -1753,8 +1766,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
                 err_code = "SOCKET-CLOSED";
             }
         }
+        // the argument of the exception, such as the start of an invalid status line (qore#7485), is given with the
+        // error
         setError(err_code,
-            *desc_str ? desc_str->c_str() : "header read failed", xsink);
+            *desc_str ? desc_str->c_str() : "header read failed", xsink, poll_xsink.getExceptionArg());
         poll_xsink.clear();
         return nullptr;
     }

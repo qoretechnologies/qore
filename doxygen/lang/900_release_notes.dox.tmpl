@@ -4573,6 +4573,10 @@
       response, and fails a request answered with a \c 101 response that it did not ask for (see
       @ref httpclient_interim_responses "HTTPClient interim responses";
       <a href="https://github.com/qoretechnologies/qore/issues/7483">issue 7483</a>)
+    - the HTTP/1.x client fails a request with \c SOCKET-HTTP-ERROR and closes the connection when the status line of
+      the response is invalid, such as with data before it or a status code like \c 1000 or \c 999 (see
+      @ref httpclient_status_line "HTTPClient response status line";
+      <a href="https://github.com/qoretechnologies/qore/issues/7485">issue 7485</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 
