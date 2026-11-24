@@ -26,6 +26,8 @@
       base class constructors, constructors and destructors that throw, abstract methods, copies, call stacks, and
       classes imported into a child Program
     - \c debug.q: the debugger events of constructors and destructors, with the call stacks of their code
+    - \c nonet.q: the builtin base class constructor of classes with user constructors (called directly, and as the
+      implicit constructor of a base class) refused by the runtime parse options of their Program
 */
 class ObjectConstructionShortcutsTest inherits QUnit::Test {
     private {
@@ -41,6 +43,7 @@ class ObjectConstructionShortcutsTest inherits QUnit::Test {
             "domains",
             "users",
             "debug",
+            "nonet",
         );
 
         #! the scripts that do not run on the IR tier: a call that starts while a debugger is attached runs on the AST

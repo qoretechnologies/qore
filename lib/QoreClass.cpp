@@ -42,12 +42,14 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/ql_crypto.h"
 #include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreParseClass.h"
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
+#include "qore/intern/FastRouteGuard.h"
 
 #include <algorithm>
 #include <atomic>
@@ -12183,6 +12185,11 @@ public:
             td(get_thread_data_for_native_calls()),
             loc(hide_call_site ? hide_runtime_call_site(td, hidden_call_site_slot, hidden_call_site)
                 : take_runtime_call_location(td)) {
+        // Qore code must never be started on an async I/O thread answering a fast route, as
+        // CodeEvaluationHelper::CodeEvaluationHelper() asserts for a call (a destructor's helper does not)
+        if (!hide_call_site) {
+            QORE_ASSERT_NOT_IN_FAST_ROUTE();
+        }
         rc_take_call_reference_call(rc, nullptr);
     }
 
@@ -12304,6 +12311,9 @@ public:
     //! takes the call site and the pending call reference call
     QoreDirectUserCall(RuntimeConfig& rc, const qore_class_private* qc, const QoreFunction* func)
             : rc(rc), qc(qc), func(func), td(get_thread_data_for_native_calls()), loc(take_runtime_call_location(td)) {
+        // Qore code must never be started on an async I/O thread answering a fast route (see
+        // CodeEvaluationHelper::CodeEvaluationHelper())
+        QORE_ASSERT_NOT_IN_FAST_ROUTE();
         rc_take_call_reference_call(rc, nullptr);
     }
 
@@ -12479,6 +12489,8 @@ static bool qore_eval_direct_user_constructor(const ConstructorMethodFunction* f
         const QoreListNode* args, bool tmp_args, BCList* bcl, BCEAList* bceal, RuntimeConfig& rc,
         ExceptionSink* xsink, bool& completed) {
     unsigned nargs = args ? args->size() : 0;
+    // the variant is resolved at run time: the variant search checks its functional domains (see below)
+    const bool runtime_resolved = !variant;
     if (!variant) {
         if (nargs || !f->hasSingleCallVariant()) {
             return false;
@@ -12539,6 +12551,16 @@ static bool qore_eval_direct_user_constructor(const ConstructorMethodFunction* f
         if (caller_pgm && caller_pgm != mpgm && qore_program_is_module_inline(mpgm)) {
             return false;
         }
+    }
+    // a variant resolved at run time is checked against the functional domains that the runtime parse options of the
+    // variant search allow, as runtimeFindVariantImpl() checks it: keep these checks in sync.  The search runs after
+    // CodeEvaluationHelper::initImpl() has set the parse options of the class's Program, if it has one; the functionality
+    // of a user variant includes the domain of its class, which it inherits from a builtin parent class, and a domain
+    // that the variant declares, which getDirectUserConstructor() excludes.  A variant that the domains refuse takes
+    // the general path, which raises the error
+    if (runtime_resolved && !*xsink && qore_get_variant_denied_domains(variant, mpgm
+            ? qore_program_private::getParseOptions(*mpgm) : runtime_get_parse_options())) {
+        return false;
     }
     QoreDirectUserCall call(rc, qore_class_private::get(thisclass), f);
     // the Program of the class is being deleted (qore_get_method_pgm_context() raised the error)

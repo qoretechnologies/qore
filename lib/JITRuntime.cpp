@@ -22517,12 +22517,29 @@ DLLLOCAL QoreObject* qore_rt_self_call_fast_object(const SelfFunctionCallNode* c
 //! makes an unqualified call of a method of self (m()) on the object that qore_rt_self_call_fast_object() returned
 //! with the fast method call path; returns false, having done nothing, if the call cannot take it (issue #7267)
 /** @param arg_cleanups the cleanup slots of the arguments whose references the caller gives to the call, or nullptr
+
+    Inlined explicitly into the IR interpreter, which calls it on the path of a recursion of a method that calls itself:
+    an out-of-line call puts its frame on the stack at each level (about 105 bytes per level), which GCC made when the
+    unit grew (qore#7336; tools/hot-inlining.txt, qore#6494).  The attribute is on the definition only, without
+    "inline", as the callers in another compilation unit (a build without a single compilation unit) call the external
+    definition; GCC warns that such a function "might not be inlinable", which is expected here.
 */
-DLLLOCAL bool qore_rt_try_self_call_fast_object(QoreObject* self, const SelfFunctionCallNode* call, uint64_t* args,
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wattributes"
+#endif
+DLLLOCAL
+#if defined(__GNUC__)
+__attribute__((always_inline))
+#endif
+bool qore_rt_try_self_call_fast_object(QoreObject* self, const SelfFunctionCallNode* call, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result) {
     return qore_rt_try_self_call_fast(self, call->getMethod(), call->getClass(), call->getVariant(), args,
         arg_cleanups, nargs, xsink, result);
 }
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
 #if !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT) || defined(QORE_JIT_RUNTIME_TAKE_OVER_UNIT)
