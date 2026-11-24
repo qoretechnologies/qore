@@ -8925,6 +8925,243 @@ public:
         s->close();
     }
 
+#ifndef _Q_WINDOWS
+    //! The socket of the UNIX connection that runUnixConnectClose() closes
+    static inline QoreSocket* unix_close_sock = nullptr;
+    //! The result of the close in the check of runUnixConnectClose(): 1 = the number was free and was given to another
+    //! socket, 2 = the number stayed reserved; and the peer of the socket that took the number
+    static inline int unix_check_result = 0;
+    static inline int unix_check_peer = -1;
+    static inline int unix_check_fd = -1;
+
+    //! Closes the socket with QoreSocket::close() right before the UNIX connection gives it its descriptor, as another
+    //! thread can
+    static void closeBeforeUnixAdopt() {
+        qore_dbg_unix_connect_before_adopt.store(nullptr, std::memory_order_release);
+        unix_close_sock->close();
+    }
+
+    //! Closes the socket with QoreSocket::close() after the UNIX connection's check read its descriptor, as another
+    //! thread can; if the number is free then, another socket takes it, as another thread's socket() can
+    static void closeInUnixCheck(int fd) {
+        qore_dbg_unix_connect_before_check.store(nullptr, std::memory_order_release);
+        unix_close_sock->close();
+        if (fcntl(fd, F_GETFD) < 0 && errno == EBADF) {
+            int sv[2];
+            if (!::socketpair(AF_UNIX, SOCK_DGRAM, 0, sv)) {
+                if (::dup2(sv[0], fd) == fd) {
+                    unix_check_fd = fd;
+                    unix_check_peer = sv[1];
+                    unix_check_result = 1;
+                } else {
+                    ::close(sv[1]);
+                }
+                ::close(sv[0]);
+            }
+        } else {
+            unix_check_result = 2;
+        }
+    }
+
+    //! Where runUnixConnectClose() closes the socket
+    enum UnixCloseMode {
+        //! right before the connection gives the socket its descriptor (qore_dbg_unix_connect_before_adopt)
+        UCM_BEFORE_ADOPT,
+        //! after the connection's check read the descriptor (qore_dbg_unix_connect_before_check)
+        UCM_IN_CHECK,
+        //! after the check, before the connection's state is set (qore_dbg_unix_connect_before_connected)
+        UCM_BEFORE_CONNECTED,
+        //! as UCM_BEFORE_CONNECTED, and the socket is given another descriptor then, as by another connection
+        UCM_BEFORE_CONNECTED_REOPENED,
+        //! after the connection's state was set (qore_dbg_unix_connect_after_connected)
+        UCM_AFTER_CONNECTED,
+    };
+
+    //! The descriptor that the socket is given after the close (UCM_BEFORE_CONNECTED_REOPENED), and its peer
+    static inline int unix_reopen_fd = -1;
+    static inline int unix_reopen_peer = -1;
+
+    //! Closes the socket with QoreSocket::close() after the UNIX connection's check, before the connection's state is
+    //! set, as another thread can; with unix_reopen_peer set to 0, gives the socket another descriptor then
+    //! Closes the socket with QoreSocket::close() right after the UNIX connection's state was set
+    static void closeAfterUnixConnected() {
+        qore_dbg_unix_connect_after_connected.store(nullptr, std::memory_order_release);
+        unix_close_sock->close();
+    }
+
+    static void closeBeforeUnixConnected() {
+        qore_dbg_unix_connect_before_connected.store(nullptr, std::memory_order_release);
+        unix_close_sock->close();
+        if (!unix_reopen_peer) {
+            unix_reopen_peer = -1;
+            int sv[2];
+            if (!::socketpair(AF_UNIX, SOCK_STREAM, 0, sv)) {
+                unix_reopen_fd = sv[0];
+                unix_reopen_peer = sv[1];
+                std::shared_ptr<QoreSharedDescriptor> owned = qore_owned_descriptor_create(sv[0]);
+                qore_socket_private::get(*unix_close_sock)->setDescriptor(sv[0], owned, false);
+            }
+        }
+    }
+
+    //! A UNIX socket connection whose socket is closed right before the connection gives it its descriptor, while
+    //! its check uses the descriptor, or before the connection's state is set, fails as closed, leaves the socket
+    //! closed, uses no number that the close released, and closes no descriptor that the socket was given after the
+    //! close (qore#7156)
+    /** The connection is made with the C++ API (QoreSocket::startConnectUNIX(), whose steps the test makes as a module
+        can) to a listener on a UNIX socket of the test's own, and the socket is closed with QoreSocket::close(), which
+        another thread can call during a step of a QoreSocket that is not part of a Socket object (see UnixCloseMode).
+        Before the adoption, the adoption is refused with the socket's close lock held; in the check, the number must
+        stay reserved while the check uses it (another socket opened then must not get it), and the check must not
+        continue the connection; before the connection's state is set, the state is set with the socket's close lock
+        held only if the socket was not closed meanwhile.  With UCM_BEFORE_CONNECTED_REOPENED, the socket is given
+        another descriptor after the close: the failed connection must not close it.
+    */
+    static void runUnixConnectClose(UnitTestCounters& c, UnixCloseMode mode) {
+        const std::string when = mode == UCM_IN_CHECK ? " (UNIX connection closed in its check)"
+            : (mode == UCM_BEFORE_ADOPT ? " (UNIX connection closed before its descriptor is taken)"
+                : (mode == UCM_BEFORE_CONNECTED ? " (UNIX connection closed before it is connected)"
+                    : (mode == UCM_AFTER_CONNECTED ? " (UNIX connection closed after it is connected)"
+                        : " (UNIX connection closed and given another descriptor before it is connected)")));
+        ExceptionSink xsink;
+        const char* tmp = getenv("TMPDIR");
+        std::string path = std::string(tmp && *tmp ? tmp : "/tmp") + "/qore-unix-close-" + std::to_string(getpid());
+        ::unlink(path.c_str());
+        int lfd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+        UT_ASSERT(c, lfd >= 0, ("the listener is created" + when).c_str());
+        if (lfd < 0) {
+            return;
+        }
+        struct Closer {
+            int fd;
+            std::string path;
+            ~Closer() {
+                ::close(fd);
+                ::unlink(path.c_str());
+                // the socket that took a released number in the check
+                if (unix_check_peer >= 0) {
+                    ::close(unix_check_peer);
+                    unix_check_peer = -1;
+                }
+                if (unix_check_fd >= 0) {
+                    ::close(unix_check_fd);
+                    unix_check_fd = -1;
+                }
+                // the peer of the descriptor that the socket was given after the close (the socket closes the other)
+                if (unix_reopen_peer > 0) {
+                    ::close(unix_reopen_peer);
+                }
+                unix_reopen_peer = -1;
+                unix_reopen_fd = -1;
+            }
+        } closer{lfd, path};
+        struct sockaddr_un sun = {};
+        sun.sun_family = AF_UNIX;
+        strncpy(sun.sun_path, path.c_str(), sizeof(sun.sun_path) - 1);
+        bool ok = !::bind(lfd, reinterpret_cast<struct sockaddr*>(&sun), sizeof(sun)) && !::listen(lfd, 4);
+        UT_ASSERT(c, ok, ("the listener listens" + when).c_str());
+        if (!ok) {
+            return;
+        }
+
+        // the hooks are cleared before the socket is destroyed
+        std::unique_ptr<QoreSocket> s(new QoreSocket);
+        struct HookReset {
+            ~HookReset() {
+                qore_dbg_unix_connect_before_adopt.store(nullptr, std::memory_order_release);
+                qore_dbg_unix_connect_before_check.store(nullptr, std::memory_order_release);
+                qore_dbg_unix_connect_before_connected.store(nullptr, std::memory_order_release);
+                qore_dbg_unix_connect_after_connected.store(nullptr, std::memory_order_release);
+                unix_close_sock = nullptr;
+            }
+        } hook_reset;
+        unix_close_sock = s.get();
+        unix_check_result = 0;
+        unix_check_peer = -1;
+        unix_check_fd = -1;
+        unix_reopen_fd = -1;
+        // 0: the hook gives the socket another descriptor
+        unix_reopen_peer = mode == UCM_BEFORE_CONNECTED_REOPENED ? 0 : -1;
+        if (mode == UCM_IN_CHECK) {
+            qore_dbg_unix_connect_before_check.store(closeInUnixCheck, std::memory_order_release);
+        } else if (mode == UCM_BEFORE_ADOPT) {
+            qore_dbg_unix_connect_before_adopt.store(closeBeforeUnixAdopt, std::memory_order_release);
+        } else if (mode == UCM_AFTER_CONNECTED) {
+            qore_dbg_unix_connect_after_connected.store(closeAfterUnixConnected, std::memory_order_release);
+        } else {
+            qore_dbg_unix_connect_before_connected.store(closeBeforeUnixConnected, std::memory_order_release);
+        }
+        // the socket's events
+        qore_socket_private* sp = qore_socket_private::get(*s);
+        ReferenceHolder<Queue> events_q(new Queue, &xsink);
+        events_q->ref();
+        sp->setEventQueue(&xsink, *events_q, QoreValue(), false);
+        int rc = -1;
+        {
+            // the state is destroyed before the socket
+            std::unique_ptr<AbstractPollState> st(s->startConnectUNIX(&xsink, path.c_str(), SOCK_STREAM, 0));
+            if (!xsink && st) {
+                rc = driveConnect(*s, *st, xsink);
+            }
+        }
+        if (mode == UCM_IN_CHECK) {
+            UT_ASSERT(c, !qore_dbg_unix_connect_before_check.load(std::memory_order_acquire),
+                ("the socket was closed in the check" + when).c_str());
+            UT_ASSERT_EQ(c, 2, unix_check_result,
+                ("the number stays reserved while the check uses it" + when).c_str());
+            bool foreign_send = false;
+            if (unix_check_peer >= 0) {
+                char b;
+                foreign_send = !::recv(unix_check_peer, &b, 1, MSG_DONTWAIT);
+            }
+            UT_ASSERT(c, !foreign_send,
+                ("the check does not use a number that the close released and another socket took" + when).c_str());
+        } else if (mode == UCM_BEFORE_ADOPT) {
+            UT_ASSERT(c, !qore_dbg_unix_connect_before_adopt.load(std::memory_order_acquire),
+                ("the socket was closed before its descriptor was taken" + when).c_str());
+        } else if (mode == UCM_AFTER_CONNECTED) {
+            UT_ASSERT(c, !qore_dbg_unix_connect_after_connected.load(std::memory_order_acquire),
+                ("the socket was closed after it was connected" + when).c_str());
+        } else {
+            UT_ASSERT(c, !qore_dbg_unix_connect_before_connected.load(std::memory_order_acquire),
+                ("the socket was closed before it was connected" + when).c_str());
+        }
+        if (mode == UCM_AFTER_CONNECTED) {
+            // the connection was made, then the socket was closed
+            UT_ASSERT(c, !rc && !xsink, ("the connection is made before the close" + when).c_str());
+        } else {
+            UT_ASSERT(c, rc < 0 && xsink, ("the connection fails" + when).c_str());
+            bool raised = (bool)xsink;
+            QoreStringValueHelper err(raised ? xsink.getExceptionErr() : QoreValue());
+            UT_ASSERT(c, raised && !strcmp(err->c_str(), "SOCKET-CLOSED"),
+                ("the connection fails as closed" + when).c_str());
+        }
+        xsink.clear();
+        // the close leaves no path or destinations of the connection, and no connected event after its closed event
+        // (read after the connection and the close have ended)
+        if (mode != UCM_BEFORE_CONNECTED_REOPENED) {
+            UT_ASSERT(c, sp->socketname.empty(), ("the closed socket has no path" + when).c_str());
+            UT_ASSERT(c, !sp->getConnectedDestinations(), ("the closed socket has no destinations" + when).c_str());
+        }
+        std::vector<int> events = socketEvents(*events_q, xsink);
+        UT_ASSERT(c, connectedBeforeClosed(events), ("no connected event comes after the closed event" + when).c_str());
+        sp->setEventQueue(&xsink, nullptr, QoreValue(), false);
+        xsink.clear();
+        if (mode == UCM_BEFORE_CONNECTED_REOPENED) {
+            UT_ASSERT(c, unix_reopen_fd >= 0, ("the socket was given another descriptor" + when).c_str());
+            UT_ASSERT_EQ(c, unix_reopen_fd, s->getDescriptorForLibrary(),
+                ("the failed connection leaves the socket the descriptor that it was given after the close"
+                    + when).c_str());
+            UT_ASSERT(c, unix_reopen_fd >= 0 && fcntl(unix_reopen_fd, F_GETFD) != -1,
+                ("the failed connection does not close the descriptor that the socket was given after the close"
+                    + when).c_str());
+        } else {
+            UT_ASSERT(c, s->getDescriptorForLibrary() < 0, ("the closed socket stays closed" + when).c_str());
+        }
+        s->close();
+    }
+#endif
+
     //! Set by the hook of runConcurrentConnectRefused() when the first connection makes its first step
     static inline std::mutex ccr_m;
     static inline std::condition_variable ccr_cond;
@@ -28022,6 +28259,13 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, 4, false);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, 2, true);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, 3, true);
+#ifndef _Q_WINDOWS
+    AsyncIoDescriptorHoldTest::runUnixConnectClose(c, AsyncIoDescriptorHoldTest::UCM_BEFORE_ADOPT);
+    AsyncIoDescriptorHoldTest::runUnixConnectClose(c, AsyncIoDescriptorHoldTest::UCM_IN_CHECK);
+    AsyncIoDescriptorHoldTest::runUnixConnectClose(c, AsyncIoDescriptorHoldTest::UCM_BEFORE_CONNECTED);
+    AsyncIoDescriptorHoldTest::runUnixConnectClose(c, AsyncIoDescriptorHoldTest::UCM_BEFORE_CONNECTED_REOPENED);
+    AsyncIoDescriptorHoldTest::runUnixConnectClose(c, AsyncIoDescriptorHoldTest::UCM_AFTER_CONNECTED);
+#endif
     AsyncIoDescriptorHoldTest::runCloseWithoutDescriptor(c, true);
     AsyncIoDescriptorHoldTest::runCloseWithoutDescriptor(c, false);
     AsyncIoDescriptorHoldTest::runConcurrentConnectRefused(c);

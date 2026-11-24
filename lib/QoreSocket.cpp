@@ -10088,6 +10088,10 @@ std::atomic<bool> qore_dbg_connect_fail_held_attempt{false};
 std::atomic<void (*)()> qore_dbg_connect_before_connected{nullptr};
 std::atomic<void (*)()> qore_dbg_connect_after_connected{nullptr};
 std::atomic<void (*)()> qore_dbg_before_close_wakes{nullptr};
+std::atomic<void (*)()> qore_dbg_unix_connect_before_adopt{nullptr};
+std::atomic<void (*)(int)> qore_dbg_unix_connect_before_check{nullptr};
+std::atomic<void (*)()> qore_dbg_unix_connect_before_connected{nullptr};
+std::atomic<void (*)()> qore_dbg_unix_connect_after_connected{nullptr};
 
 //! Calls the hook that a test sets to run right before a connection gives the socket a descriptor
 static void qore_socket_dbg_before_adopt(int where) {
@@ -10153,7 +10157,8 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
 
     // close socket if already open
     qore_socket_close_private_from_controller(sock);
-    assert(sock->sock == QORE_INVALID_SOCKET);
+    // a close of the socket from now on ends the connection (qore#7156)
+    sock_gen = sock->startConnectGeneration();
 
     addr.sun_family = AF_UNIX;
     // a path that does not fit the socket address is refused before it is checked or copied (issue #6910)
@@ -10169,11 +10174,25 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
         return;
     }
 
-    if ((sock->sock = create_nonblocking_socket(AF_UNIX, sock_type, protocol)) == QORE_SOCKET_ERROR) {
+    int fd = create_nonblocking_socket(AF_UNIX, sock_type, protocol);
+    if (fd == QORE_SOCKET_ERROR) {
         xsink->raiseErrnoException("SOCKET-CONNECT-ERROR", errno, "error connecting to UNIX socket: '%s'", name);
         return;
     }
-    sock->fd_nonblocking.store(true, std::memory_order_relaxed);
+#ifdef DEBUG
+    // a test closes the socket here, as another thread can
+    if (void (*hook)() = qore_dbg_unix_connect_before_adopt.load(std::memory_order_acquire)) {
+        hook();
+    }
+#endif
+    // the socket takes the descriptor with its close lock held, and only if it was not closed since the connection
+    // started (qore#7156)
+    std::shared_ptr<QoreSharedDescriptor> no_owner;
+    if (!sock->setDescriptorIfGeneration(sock_gen, fd, no_owner, true, nullptr, &sock_gen)) {
+        qore_socket_private::closeDescriptor(fd);
+        qore_socket_raise_canceled("connect", xsink);
+        return;
+    }
     sock->resetCloseInterrupt();
 
     sock->do_connect_event(AF_UNIX, (sockaddr*)&addr, name);
@@ -10186,6 +10205,19 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
     - < 1 = error (exception raised)
 */
 int SocketConnectUnixPollState::continuePoll(ExceptionSink* xsink) {
+    // a failed connection closes only the descriptor that it gave the socket, not one that another caller gave the
+    // socket after a close (qore#7156)
+    // the socket was closed since the connection gave it its descriptor (by another thread): the connection is not
+    // continued (qore#7156)
+    {
+        uint32_t gen;
+        sock->getDescriptorGeneration(gen);
+        if (gen != sock_gen) {
+            qore_socket_raise_canceled("connect", xsink);
+            return -1;
+        }
+    }
+
     // set non-blocking
     OptionalNonBlockingHelper nbh(*sock, true, xsink);
     if (*xsink) {
@@ -10198,13 +10230,13 @@ int SocketConnectUnixPollState::continuePoll(ExceptionSink* xsink) {
             //printd(5, "SocketConnectUnixPollState::continuePoll() doConnect() returned %d (ex: %d)\n", rc,
             //    (int)*xsink);
             if (*xsink) {
-                sock->close_and_reset();
+                sock->closeIfGeneration(sock_gen);
                 return -1;
             }
             if (rc) {
                 // the error is taken before the close, which makes system calls of its own
                 int err = sock_get_raw_error();
-                sock->close_and_reset();
+                sock->closeIfGeneration(sock_gen);
                 qore_socket_error_intern(err, xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr,
                     name.c_str());
                 return -1;
@@ -10219,7 +10251,7 @@ int SocketConnectUnixPollState::continuePoll(ExceptionSink* xsink) {
             //printd(5, "SocketConnectUnixPollState::continuePoll() checkConnection() returned %d (ex: %d)\n", rc,
             //    (int)*xsink);
             if (*xsink) {
-                sock->close_and_reset();
+                sock->closeIfGeneration(sock_gen);
                 return -1;
             }
 
@@ -10230,7 +10262,7 @@ int SocketConnectUnixPollState::continuePoll(ExceptionSink* xsink) {
             if (rc < 0) {
                 // the error is taken before the close, which makes system calls of its own
                 int err = sock_get_raw_error();
-                sock->close_and_reset();
+                sock->closeIfGeneration(sock_gen);
                 qore_socket_error_intern(err, xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr,
                     name.c_str());
                 return -1;
@@ -10242,10 +10274,27 @@ int SocketConnectUnixPollState::continuePoll(ExceptionSink* xsink) {
     return 0;
 }
 
+bool SocketConnectUnixPollState::closedSinceStart(int fd, ExceptionSink* xsink) {
+    uint32_t gen;
+    if (fd == QORE_INVALID_SOCKET || sock->getDescriptorGeneration(gen) != fd || gen != sock_gen) {
+        qore_socket_raise_canceled("connect", xsink);
+        return true;
+    }
+    return false;
+}
+
 int SocketConnectUnixPollState::doConnect(ExceptionSink* xsink) {
+    // the descriptor is used through a hold: a close of the socket by another thread keeps its number reserved until
+    // the hold is released, and the connection then fails as closed (qore#7156)
+    qore_socket_private::IoUseHelper io_use(*sock);
+    int fd = io_use.getDescriptor();
+    if (closedSinceStart(fd, xsink)) {
+        return -1;
+    }
+    int rc = 0;
     while (true) {
-        if (!::connect(sock->sock, (const sockaddr*)&addr, sizeof(struct sockaddr_un))) {
-            return 0;
+        if (!::connect(fd, (const sockaddr*)&addr, sizeof(struct sockaddr_un))) {
+            break;
         }
 
         // try again if we were interrupted by a signal
@@ -10254,12 +10303,16 @@ int SocketConnectUnixPollState::doConnect(ExceptionSink* xsink) {
         }
 
         if (errno != EINPROGRESS && errno != EAGAIN) {
-            return -1;
+            rc = -1;
         }
 
         break;
     }
-    return 0;
+    // a close during connect() fails the connection as closed, not with the error that the close caused
+    if (closedSinceStart(fd, xsink)) {
+        return -1;
+    }
+    return rc;
 }
 
 // returns 0 = connected, 1 = try again, -1 = error
@@ -10271,22 +10324,51 @@ int SocketConnectUnixPollState::checkConnection(ExceptionSink* xsink) {
     // When continuePoll() reaches this immediately after EINPROGRESS, the
     // SO_ERROR / zero-byte send checks still report "try again" without
     // running a second raw poll/select wait inside the poll operation.
-    int rc = qore_socket_check_connect_ready(sock->sock);
-    if (rc) {
-        return rc;
+    // the descriptor is used through a hold: a close of the socket by another thread keeps its number reserved until
+    // the hold is released, and the connection then fails as closed (qore#7156)
+    {
+        qore_socket_private::IoUseHelper io_use(*sock);
+        int fd = io_use.getDescriptor();
+        if (closedSinceStart(fd, xsink)) {
+            return -1;
+        }
+#ifdef DEBUG
+        // a test closes the socket here, as another thread can
+        if (void (*hook)(int) = qore_dbg_unix_connect_before_check.load(std::memory_order_acquire)) {
+            hook(fd);
+        }
+#endif
+        int rc = qore_socket_check_connect_ready(fd);
+        // a close during the check fails the connection as closed, not with the error that the close caused
+        if (closedSinceStart(fd, xsink)) {
+            return -1;
+        }
+        if (rc) {
+            return rc;
+        }
     }
 
-    // connected successfully within the timeout period
-    sock->socketname = addr.sun_path;
-    sock->sfamily = AF_UNIX;
-    {
-        std::shared_ptr<QoreConnectionDestinations> d = std::make_shared<QoreConnectionDestinations>();
-        d->add(name.c_str(), reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr), QSEC_NET_UNIX);
-        sock->setConnectedDestinations(std::move(d));
+#ifdef DEBUG
+    // a test closes the socket here, as another thread can
+    if (void (*hook)() = qore_dbg_unix_connect_before_connected.load(std::memory_order_acquire)) {
+        hook();
     }
-    sock->resetCloseInterrupt();
-    sock->listening = false;
-    sock->do_connected_event();
+#endif
+    // connected: the connection's state, destinations and connected event are set with the socket's close lock
+    // held, only if the socket was not closed since the connection gave it its descriptor; otherwise the connection
+    // fails as closed (qore#7156)
+    std::shared_ptr<QoreConnectionDestinations> d = std::make_shared<QoreConnectionDestinations>();
+    d->add(name.c_str(), reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr), QSEC_NET_UNIX);
+    if (!sock->setUnixConnectedIfGeneration(sock_gen, addr.sun_path, std::move(d))) {
+        qore_socket_raise_canceled("connect", xsink);
+        return -1;
+    }
+#ifdef DEBUG
+    // a test closes the socket here, as another thread can after the connection was made
+    if (void (*hook)() = qore_dbg_unix_connect_after_connected.load(std::memory_order_acquire)) {
+        hook();
+    }
+#endif
     return 0;
 }
 #endif
