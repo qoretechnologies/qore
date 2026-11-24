@@ -736,6 +736,36 @@ struct UnitTestCounters {
     } \
 } while (0)
 
+#ifndef _Q_WINDOWS
+//! A private directory with room for a UNIX socket name even when TMPDIR exceeds sun_path
+class UtSocketDir {
+public:
+    DLLLOCAL UtSocketDir() {
+        if (mkdtemp(dir)) {
+            path = std::string(dir) + "/s";
+        }
+    }
+
+    DLLLOCAL ~UtSocketDir() {
+        if (!path.empty()) {
+            ::unlink(path.c_str());
+            ::rmdir(dir);
+        }
+    }
+
+    UtSocketDir(const UtSocketDir&) = delete;
+    UtSocketDir& operator=(const UtSocketDir&) = delete;
+
+    DLLLOCAL const std::string& socketPath() const {
+        return path;
+    }
+
+private:
+    char dir[sizeof("/tmp/qore-ut-XXXXXX")] = "/tmp/qore-ut-XXXXXX";
+    std::string path;
+};
+#endif
+
 //! Holds a loopback TCP port that nothing listens on, for a connection to it that must be refused
 /** A listener on 127.0.0.1 that does not reuse the address is connected to, the connection is accepted, and the
     listener is closed: the connection then holds the port.  While the holder exists, the system assigns the port to
@@ -9314,9 +9344,12 @@ public:
                     : (mode == UCM_AFTER_CONNECTED ? " (UNIX connection closed after it is connected)"
                         : " (UNIX connection closed and given another descriptor before it is connected)")));
         ExceptionSink xsink;
-        const char* tmp = getenv("TMPDIR");
-        std::string path = std::string(tmp && *tmp ? tmp : "/tmp") + "/qore-unix-close-" + std::to_string(getpid());
-        ::unlink(path.c_str());
+        UtSocketDir dir;
+        const std::string& path = dir.socketPath();
+        UT_ASSERT(c, !path.empty(), ("the UNIX socket directory is made" + when).c_str());
+        if (path.empty()) {
+            return;
+        }
         int lfd = ::socket(AF_UNIX, SOCK_STREAM, 0);
         UT_ASSERT(c, lfd >= 0, ("the listener is created" + when).c_str());
         if (lfd < 0) {
@@ -9324,10 +9357,8 @@ public:
         }
         struct Closer {
             int fd;
-            std::string path;
             ~Closer() {
                 ::close(fd);
-                ::unlink(path.c_str());
                 // the socket that took a released number in the check
                 if (unix_check_peer >= 0) {
                     ::close(unix_check_peer);
@@ -9344,7 +9375,7 @@ public:
                 unix_reopen_peer = -1;
                 unix_reopen_fd = -1;
             }
-        } closer{lfd, path};
+        } closer{lfd};
         struct sockaddr_un sun = {};
         sun.sun_family = AF_UNIX;
         strncpy(sun.sun_path, path.c_str(), sizeof(sun.sun_path) - 1);
@@ -10557,30 +10588,21 @@ public:
     */
     static void runConnectUnixClosedSocket(UnitTestCounters& c) {
         ExceptionSink xsink;
-        const char* tmp = getenv("TMPDIR");
-        std::string dir_template = std::string(tmp && *tmp ? tmp : "/tmp") + "/qore-ut-7003-XXXXXX";
-        std::vector<char> dir_buf(dir_template.begin(), dir_template.end());
-        dir_buf.push_back('\0');
-        char* dir = dir_buf.data();
-        bool made = mkdtemp(dir) != nullptr;
-        UT_ASSERT(c, made, "unix connect close: the directory is created");
-        if (!made) {
+        UtSocketDir dir;
+        const std::string& path = dir.socketPath();
+        UT_ASSERT(c, !path.empty(), "unix connect close: the directory is created");
+        if (path.empty()) {
             return;
         }
-        std::string path = std::string(dir) + "/s";
         std::vector<int> fds;
         struct Cleanup {
             std::vector<int>& fds;
-            const char* dir;
-            std::string& path;
             ~Cleanup() {
                 for (int fd : fds) {
                     ::close(fd);
                 }
-                ::unlink(path.c_str());
-                ::rmdir(dir);
             }
-        } cleanup{fds, dir, path};
+        } cleanup{fds};
 
         struct sockaddr_un sa = {};
         sa.sun_family = AF_UNIX;
@@ -26429,52 +26451,6 @@ private:
         return listener.getPort();
     }
 
-    //! A temporary directory for a UNIX socket, removed with the socket file when it goes out of scope
-    class SocketDir {
-    public:
-        DLLLOCAL SocketDir() {
-            std::string dir;
-            {
-                QoreEnvironmentValue tmp("TMPDIR");
-                if (tmp.c_str() && *tmp.c_str()) {
-                    dir = tmp.c_str();
-                }
-            }
-            if (dir.empty()) {
-                dir = "/tmp";
-            }
-            while (dir.size() > 1 && dir.back() == '/') {
-                dir.pop_back();
-            }
-            std::vector<char> tmpl(dir.begin(), dir.end());
-            const char* suffix = "/qore-ut-connect-XXXXXX";
-            tmpl.insert(tmpl.end(), suffix, suffix + strlen(suffix) + 1);
-            if (mkdtemp(tmpl.data())) {
-                path = tmpl.data();
-                socket_path = path + "/s";
-            }
-        }
-
-        DLLLOCAL ~SocketDir() {
-            if (!path.empty()) {
-                unlink(socket_path.c_str());
-                rmdir(path.c_str());
-            }
-        }
-
-        SocketDir(const SocketDir&) = delete;
-        SocketDir& operator=(const SocketDir&) = delete;
-
-        //! the socket's path, or empty if the directory could not be made
-        DLLLOCAL const std::string& socketPath() const {
-            return socket_path;
-        }
-
-    private:
-        std::string path;
-        std::string socket_path;
-    };
-
     //! A connect refused by the system reports ECONNREFUSED without the hook
     /** With @p close_errno, errno is changed after the failed attempt is given up
     */
@@ -26631,7 +26607,7 @@ private:
     /** With @p close_errno, errno is changed after the socket is closed
     */
     static void runUnix(UnitTestCounters& c, bool close_errno) {
-        SocketDir dir;
+        UtSocketDir dir;
         UT_ASSERT(c, !dir.socketPath().empty(), "connect error: the UNIX socket directory is made");
         if (dir.socketPath().empty()) {
             return;
@@ -26670,7 +26646,7 @@ private:
     /** The socket is bound and does not listen, so the system refuses the connect in connect()
     */
     static void runUnixRealRefusal(UnitTestCounters& c) {
-        SocketDir dir;
+        UtSocketDir dir;
         UT_ASSERT(c, !dir.socketPath().empty(), "connect error: the UNIX socket directory of the refusal is made");
         if (dir.socketPath().empty()) {
             return;

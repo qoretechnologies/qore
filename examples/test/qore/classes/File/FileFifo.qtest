@@ -23,6 +23,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 
 %requires QUnit
+%requires ../../../TestSocketDir.qm
 %requires FsUtil
 %requires Util
 
@@ -275,8 +276,8 @@ class FileFifoTest inherits QUnit::Test {
     }
 
     testSendFromInputStream() {
-        string sock_path = tmp_location() + DirSep + "qore-fifo-" + get_random_string(12);
-        on_exit unlink(sock_path);
+        TestSocketDir socket_dir();
+        string sock_path = socket_dir.path + "/server.sock";
         Socket server();
         server.bindUNIX(sock_path);
         server.listen();
@@ -458,8 +459,8 @@ class FileFifoTest inherits QUnit::Test {
         assertEq(Data, is.read(4096), "the data");
         assertEq(NOTHING, is.read(4096), "the end");
 
-        string sock_path = tmp_location() + DirSep + "qore-fifo-" + get_random_string(12);
-        on_exit unlink(sock_path);
+        TestSocketDir socket_dir();
+        string sock_path = socket_dir.path + "/server.sock";
         Socket server();
         server.bindUNIX(sock_path);
         server.listen();
