@@ -3036,6 +3036,12 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     endif()
 
     if (NOT DEFINED QCC_FORMAT_STAMP)
+        # A standalone module is built by the build-tree owner. Its install target can run as a different user:
+        # building "all" there would regenerate the stamp and compiled modules with that user's permissions.
+        # Leave an embedding project's install target and any explicit generator setting to the caller.
+        if (PROJECT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR AND NOT DEFINED CMAKE_SKIP_INSTALL_ALL_DEPENDENCY)
+            set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY ON CACHE BOOL "Install built module files without rebuilding all")
+        endif ()
         # A module built outside the Qore source tree: every AOT .qmod depends on this stamp, which is rewritten
         # whenever qcc, the Qore library or the installed qcc format fingerprint changes.  qcc itself is not always
         # relinked or reinstalled when a new Qore library is installed, so depending on the qcc executable alone left
