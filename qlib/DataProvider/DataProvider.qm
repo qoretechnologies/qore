@@ -1899,7 +1899,9 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - added @ref DataProvider::DataProviderActionCatalog::registerLazyValue()
       "DataProviderActionCatalog::registerLazyValue()" and
       @ref DataProvider::DataProviderActionCatalog::getLazyValue() "DataProviderActionCatalog::getLazyValue()" to
-      build shared values, such as types built from a vendored API description, on first use in the same way
+      build shared values, such as types built from a vendored API description, on first use in the same way; a value
+      is given only to the code of the module that registered it
+      (<a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
     - the module needs a %Qore with \c register_exit_hook(), \c SandboxManager::createSystemThreadCall(),
       \c SandboxManager::isSandboxed() and module initialization with no sandbox provenance (a module from the module
       path is initialized as library code, also when sandboxed code loads it first, so its registrations and what

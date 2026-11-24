@@ -31,6 +31,11 @@ public class LazyOwnerValues {
         return string sub () { return DataProviderActionCatalog::getLazyValue(id); };
     }
 
+    #! runs the code of a caller: the module's code calls it, as a module that takes a callback does
+    static auto callBack(code c) {
+        return c();
+    }
+
     #! the ID, for the tests of the refusals only
     static int getIdForTest() {
         return id;

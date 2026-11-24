@@ -4,7 +4,9 @@
 
 /*  Only the code of the module that registered a lazy value reads it (qore#6843): the module's getter, also for its
     callers and in a closure of the module that they run; not the code of another Program, of another module, of a
-    tenant (also with the value's ID, also in a subclass of the module's class), and no ID can be guessed
+    tenant (also with the value's ID, also in a subclass of the module's class), and no ID can be guessed.  The code
+    of a caller that the module's code runs (a callback: a closure, and the functions and the static and normal
+    methods that it calls) is the caller's code in every execution mode, also after many calls (qore#7394)
 */
 
 %modern
@@ -29,6 +31,42 @@ class TenantSub inherits LazyOwnerValues::LazyOwnerValues {
     }
 }
 
+auto sub readFunction(int id) {
+    return DataProviderActionCatalog::getLazyValue(id);
+}
+
+class TenantReader {
+    static auto readStatic(int id) {
+        return DataProviderActionCatalog::getLazyValue(id);
+    }
+
+    auto read(int id) {
+        return DataProviderActionCatalog::getLazyValue(id);
+    }
+}
+
+#! the results of the reads in a callback that the module's code runs; the same code many times, so that the calls
+#! are compiled in tiered execution
+hash<string, list<string>> sub callbacks(int id) {
+    hash<string, code> reads = {
+        'callback-closure': auto sub () { return DataProviderActionCatalog::getLazyValue(id); },
+        'callback-function': auto sub () { return readFunction(id); },
+        'callback-static-method': auto sub () { return TenantReader::readStatic(id); },
+        'callback-method': auto sub () { return new TenantReader().read(id); },
+        'callback-subclass': auto sub () { return TenantSub::read(id); },
+    };
+    hash<string, list<string>> rv;
+    foreach hash<auto> i in (reads.pairIterator()) {
+        hash<string, bool> seen;
+        for (int n = 0; n < 200; ++n) {
+            code c = i.value;
+            seen{attempt(auto sub () { return LazyOwnerValues::LazyOwnerValues::callBack(c); })} = True;
+        }
+        rv{i.key} = keys seen;
+    }
+    return rv;
+}
+
 string sub attempt(code c) {
     try {
         return sprintf('OK %y', c());
@@ -44,7 +82,7 @@ hash<auto> sub run(int id) {
         'getter': attempt(auto sub () { return LazyOwnerValues::LazyOwnerValues::getValue(); }),
         'closure': attempt(auto sub () { return LazyOwnerValues::LazyOwnerValues::getReader()(); }),
         'enumeration': enumerate(),
-    };
+    } + callbacks(id);
 }
 
 list<int> sub enumerate() {
@@ -109,6 +147,12 @@ class LazyValueOwnerTest inherits QUnit::Test {
             "closure": "OK \"owned\"",
             # no ID is found
             "enumeration": (),
+            # the tenant's code that the module's code runs is the tenant's
+            "callback-closure": ("DATA-PROVIDER-LAZY-VALUE-ERROR",),
+            "callback-function": ("DATA-PROVIDER-LAZY-VALUE-ERROR",),
+            "callback-static-method": ("DATA-PROVIDER-LAZY-VALUE-ERROR",),
+            "callback-method": ("DATA-PROVIDER-LAZY-VALUE-ERROR",),
+            "callback-subclass": ("DATA-PROVIDER-LAZY-VALUE-ERROR",),
         }, rv);
     }
 }

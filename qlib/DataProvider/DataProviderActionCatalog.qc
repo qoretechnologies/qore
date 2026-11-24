@@ -1306,7 +1306,9 @@ AbstractDataProviderType output_type = action.output_type;
     never run on a sandboxed thread: a worker delivers the changes that it makes, and those made on a sandboxed
     thread; the workers are a small pool, so that a slow registration delays no other sandboxed reader.
     registerLazyValue() builds other shared values, such as types built from a vendored API description, the same
-    way.  Every such decision uses Qore::SandboxManager::isSandboxed(), so it is the same for callers restricted with
+    way; getLazyValue() gives a value only to the code of the %Program that registered it (the module's code, also
+    when it serves a caller of the module), not to the code of a caller, of another module or of a tenant, also when
+    the module's code calls that code back.  Every such decision uses Qore::SandboxManager::isSandboxed(), so it is the same for callers restricted with
     @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS".  There is no worker when the module was loaded first
     by code that may not create the worker's capability (restricted with \c PO_NO_UNCONTROLLED_APIS, or sandboxed code
     loading the module by path): then every deferred registration runs, and every lazy value is built, when it is
@@ -2104,7 +2106,9 @@ class MyProvider {
     #! identified
     /** The frame of the call of \a method on the thread's call stack is the frame of the code that called it; its
         Program is the Program of that code (a module's, also when a module's code calls it for a caller of the
-        module; a tenant's for a tenant's code, also in a subclass of a module's class)
+        module, and in the initialization of a module loaded at run time; a tenant's for a tenant's code, also in a
+        subclass of a module's class and in a closure of the tenant that a module's code calls), as every execution
+        mode records it (qore#7289, qore#7394)
 
         @param method the name of the method of this class whose caller is identified
     */
