@@ -8208,6 +8208,47 @@ public:
         reg_close_checked = true;
     }
 
+    //! The descriptors that the event loop of runConnectCloseRegistered() registers and removes, and the gate that
+    //! keeps the hold of the attempt's descriptor that its registration has until the test's close of the socket has
+    //! returned
+    struct RegCloseLog {
+        std::mutex l;
+        std::condition_variable cond;
+        std::vector<int> registered;
+        std::vector<int> removed;
+        //! the close's socket, for the hook after the close's shutdown (shutdown_first)
+        qore_socket_private* sock = nullptr;
+        //! the descriptor whose removal waits for the close; -1 until the test closes the socket
+        int gate_fd = -1;
+        //! the I/O thread is removing the registration of gate_fd
+        bool gate_reached = false;
+        //! the test's close of the socket has returned
+        bool close_done = false;
+        //! the removal of gate_fd did not wait for the close (the guard limit expired)
+        bool gate_expired = false;
+        //! the close's shutdown was held until the I/O thread was removing the registration (shutdown_first)
+        bool held_after_shutdown = false;
+    };
+    static inline std::atomic<RegCloseLog*> reg_close_log{nullptr};
+
+    //! Holds the close of runConnectCloseRegistered() after its shutdown until the I/O thread, woken by the shutdown,
+    //! has ended the connection and is removing its registration (qore_dbg_after_pre_close_shutdown)
+    /** Called in a close, which can be made by a destructor: it throws nothing; a failed wait does not hold the close,
+        which the test then sees (held_after_shutdown is not set)
+    */
+    static void regCloseAfterShutdown(qore_socket_private* sp) noexcept {
+        RegCloseLog* r = reg_close_log.load(std::memory_order_acquire);
+        if (!r || sp != r->sock) {
+            return;
+        }
+        try {
+            std::unique_lock<std::mutex> g(r->l);
+            // the guard limit only guards against a hang
+            r->held_after_shutdown = r->cond.wait_for(g, std::chrono::seconds(30), [r]() { return r->gate_reached; });
+        } catch (...) {
+        }
+    }
+
     //! A connection that an I/O thread runs, closed by another thread while the I/O thread has the attempt's
     //! descriptor registered, neither closes nor uses the attempt's number once it could belong to another descriptor,
     //! and fails as closed at once (qore#6962, qore#7003)
@@ -8220,9 +8261,33 @@ public:
         have run, and must not get the attempt's number; then the operation must fail as closed, with neither a cancel
         nor its time limit, which cannot end it before.  The loop's removal of the registration must not fail, the
         socket must not take over the new descriptor, and nothing may close it.
+
+        Socket::close() shuts the descriptor down before it gives it up (qore_socket_private::prepareForClose()): the
+        shutdown ends the attempt in progress, whose event can wake the I/O thread, which then ends the connection (as
+        closed, see runConnectCloseInPreClose()) and removes its registration, and so releases the registration's hold
+        of the descriptor, before the close gives the descriptor up; the close then has no registration to wake
+        (qore#7478).  The order is therefore forced in each variant:
+        - without @p shutdown_first, the wake first: the I/O thread is held before its command queue
+          (dbgHoldIoCommands()) from before the close until the close has returned, so that it handles no event of the
+          shutdown in between; once released, it takes the close's wake (which it drains after its commands, before it
+          polls its event loop again) and runs the operation, which fails as closed.  The test checks that the thread
+          was held for the whole close and that the attempt's registration was removed only after the close
+        - with @p shutdown_first, the shutdown's event first: the close is held after its shutdown
+          (qore_dbg_after_pre_close_shutdown) until the I/O thread, woken by the shutdown, has ended the connection and
+          is removing its registration, which is the order that a loaded host can give the close otherwise (the close
+          runs on the global controller's I/O thread, which the hook holds); in this order the close has no hold of its
+          own to wake (only the one that the test's gate keeps), so the variant checks the result of the operation and
+          not the wake
+
+        In both, the event loop's removal of the attempt's descriptor waits for the test's close to return
+        (dbgSetBeforeRemove()): the loop has dropped the registration from its map then, but the removal from the
+        system and the release of the registration's hold of the descriptor follow the hook, so the hold is kept until
+        the close has given the descriptor up, and the close finds it to wake.
     */
-    static void runConnectCloseRegistered(UnitTestCounters& c, bool direct) {
-        const std::string when = direct ? " (registered, closed directly)" : " (registered)";
+    static void runConnectCloseRegistered(UnitTestCounters& c, bool direct, bool shutdown_first = false) {
+        assert(!direct || !shutdown_first);
+        const std::string when = direct ? " (registered, closed directly)"
+            : (shutdown_first ? " (registered, the shutdown's event first)" : " (registered)");
         ExceptionSink xsink;
         std::vector<int> fds;
         struct FdCloser {
@@ -8254,31 +8319,46 @@ public:
             return;
         }
         // the descriptors that the loop registers and removes; they outlive the I/O thread
-        struct RegLog {
-            std::mutex l;
-            std::condition_variable cond;
-            std::vector<int> registered;
-            std::vector<int> removed;
-        } rlog;
+        RegCloseLog rlog;
         struct Cleanup {
             AsyncIoControllerPriv* ctrl;
             ExceptionSink& xsink;
             ~Cleanup() {
+                qore_dbg_after_pre_close_shutdown.store(nullptr, std::memory_order_release);
+                reg_close_log.store(nullptr, std::memory_order_release);
                 xsink.clear();
                 ctrl->stopClear(&xsink);
                 xsink.clear();
             }
         } cleanup{*ctrl, xsink};
         ctrl->setMaxIoThreads(1, &xsink);
-        // set before the I/O thread starts, which is the only thread that uses the loop then
-        ctrl->io_threads[0]->loop->dbgSetAfterRegister([&rlog](int fd) {
-            std::lock_guard<std::mutex> g(rlog.l);
-            rlog.registered.push_back(fd);
-            rlog.cond.notify_all();
+        // set before the I/O thread starts, which is the only thread that uses the loop then; the hooks run in the
+        // event loop and throw nothing: a registration that cannot be recorded fails the checks that look for it
+        ctrl->io_threads[0]->loop->dbgSetAfterRegister([&rlog](int fd) noexcept {
+            try {
+                std::lock_guard<std::mutex> g(rlog.l);
+                rlog.registered.push_back(fd);
+                rlog.cond.notify_all();
+            } catch (...) {
+            }
         });
-        ctrl->io_threads[0]->loop->dbgSetBeforeRemove([&rlog](int fd) {
-            std::lock_guard<std::mutex> g(rlog.l);
-            rlog.removed.push_back(fd);
+        // the removal of the attempt's descriptor waits for the test's close: the loop has dropped the registration
+        // from its map then, but the removal from the system and the release of the registration's hold of the
+        // descriptor follow this hook, so the hold is kept until the close has given the descriptor up (qore#7478); a
+        // removal that cannot be recorded fails the check that looks for it, and a failed wait does not hold it
+        ctrl->io_threads[0]->loop->dbgSetBeforeRemove([&rlog](int fd) noexcept {
+            try {
+                std::unique_lock<std::mutex> g(rlog.l);
+                rlog.removed.push_back(fd);
+                if (fd == rlog.gate_fd && !rlog.close_done) {
+                    rlog.gate_reached = true;
+                    rlog.cond.notify_all();
+                    // the guard limit only guards against a hang
+                    rlog.gate_expired = !rlog.cond.wait_for(g, std::chrono::seconds(30),
+                        [&rlog]() { return rlog.close_done; });
+                }
+            } catch (...) {
+            }
         });
         ctrl->start(&xsink);
         bool ready = !xsink && ctrl->waitReady(5000, &xsink);
@@ -8344,22 +8424,88 @@ public:
         reg_close_reuse_src = sp[0];
         reg_close_reuse_fd = -1;
         reg_close_checked = false;
-        qore_dbg_before_close_wakes.store(regCloseCheck, std::memory_order_release);
-        if (direct) {
-            // the C++ close that bypasses the controller (as an HTTP/2 abort or the destructor of an HTTP client)
-            qore_socket_private::get(*sock->priv->socket)->close_and_reset();
-        } else {
-            sock->close();
+        // without shutdown_first, the I/O thread is held before its command queue for the whole close, so that it
+        // handles no event of the close's shutdown before the close's wake (see above)
+        bool io_held_before = false;
+        bool io_held_after = false;
+        {
+            // the I/O thread is released after the gate below (so that the operation's removal, which follows the
+            // release, does not wait at the gate), also if the close throws; nothing leaves a destructor
+            struct IoHoldRelease {
+                AsyncIoControllerPriv* ctrl;
+                bool active;
+                ~IoHoldRelease() {
+                    if (active) {
+                        try {
+                            ctrl->dbgHoldIoCommands(false);
+                        } catch (...) {
+                        }
+                    }
+                }
+            } io_hold_release{*ctrl, !shutdown_first};
+            if (!shutdown_first) {
+                ctrl->dbgHoldIoCommands(true);
+                io_held_before = ctrl->dbgWaitIoCommandsHeld(10000);
+            }
+            // the removal of the attempt's descriptor is let go once the close has returned, also if it throws;
+            // nothing leaves a destructor: if the lock fails, the removal waits for the guard limit, which the test
+            // sees (gate_expired)
+            struct GateRelease {
+                RegCloseLog& r;
+                ~GateRelease() {
+                    try {
+                        std::lock_guard<std::mutex> g(r.l);
+                        r.close_done = true;
+                        r.cond.notify_all();
+                    } catch (...) {
+                    }
+                }
+            } gate_release{rlog};
+            {
+                std::lock_guard<std::mutex> g(rlog.l);
+                rlog.gate_fd = attempt_fd;
+                rlog.sock = qore_socket_private::get(*sock->priv->socket);
+            }
+            if (shutdown_first) {
+                reg_close_log.store(&rlog, std::memory_order_release);
+                qore_dbg_after_pre_close_shutdown.store(regCloseAfterShutdown, std::memory_order_release);
+            }
+            qore_dbg_before_close_wakes.store(regCloseCheck, std::memory_order_release);
+            if (direct) {
+                // the C++ close that bypasses the controller (as an HTTP/2 abort or the destructor of an HTTP client)
+                qore_socket_private::get(*sock->priv->socket)->close_and_reset();
+            } else {
+                sock->close();
+            }
+            qore_dbg_before_close_wakes.store(nullptr, std::memory_order_release);
+            qore_dbg_after_pre_close_shutdown.store(nullptr, std::memory_order_release);
+            reg_close_log.store(nullptr, std::memory_order_release);
+            if (!shutdown_first) {
+                // returns at once if the thread is still held
+                io_held_after = ctrl->dbgWaitIoCommandsHeld(10000);
+            }
         }
-        qore_dbg_before_close_wakes.store(nullptr, std::memory_order_release);
+        if (shutdown_first) {
+            std::lock_guard<std::mutex> g(rlog.l);
+            UT_ASSERT(c, rlog.held_after_shutdown,
+                ("the I/O thread ended the connection between the shutdown of the close and the close" + when).c_str());
+        } else {
+            UT_ASSERT(c, io_held_before && io_held_after,
+                ("the I/O thread is held before its command queue for the whole close" + when).c_str());
+        }
         int reuse_fd = reg_close_reuse_fd;
         if (reuse_fd >= 0) {
             fds.push_back(reuse_fd);
         }
-        UT_ASSERT(c, reg_close_checked, ("the close wakes the registration of the descriptor" + when).c_str());
-        UT_ASSERT(c, reuse_fd >= 0 && reuse_fd != attempt_fd,
-            ("the attempt's number is not given to another descriptor while the registered operation has it"
-                + when).c_str());
+        // with shutdown_first, the hold that the close wakes is the one that the test's gate keeps past the removal of
+        // the registration (without the gate, the step that the shutdown's event ran has released it, and the close
+        // has nothing to wake, which is correct: qore#7478): these two checks are of the wake order only
+        if (!shutdown_first) {
+            UT_ASSERT(c, reg_close_checked, ("the close wakes the registration of the descriptor" + when).c_str());
+            UT_ASSERT(c, reuse_fd >= 0 && reuse_fd != attempt_fd,
+                ("the attempt's number is not given to another descriptor while the registered operation has it"
+                    + when).c_str());
+        }
 
         // the wake runs the operation, which fails as closed: neither its time limit nor a cancel ends it
         bool timed_out = false;
@@ -8371,7 +8517,10 @@ public:
             const QoreHashNode* exh = ex.getType() == NT_HASH ? ex.get<const QoreHashNode>() : nullptr;
             QoreValue err = exh ? exh->getKeyValue("err") : QoreValue();
             std::string what = err.getType() == NT_STRING ? QoreStringDataHelper(err).c_str() : "no error";
-            // not EVENT-LOOP-ERROR: the removal of the inert descriptor's registration does not fail
+            // with shutdown_first, the step that the shutdown's event ran failed as closed (the shutdown changed the
+            // descriptor generation), and its result was settled before the gated removal of its registration, which
+            // this therefore does not check; otherwise the close's wake ran the operation, and the result is not
+            // EVENT-LOOP-ERROR: the removal of the inert descriptor's registration does not fail
             UT_ASSERT(c, what == "SOCKET-CLOSED", ("the closed connection fails as closed: " + what + when).c_str());
         }
         xsink.clear();
@@ -8392,6 +8541,13 @@ public:
                 removed = removed || fd == attempt_fd;
             }
             UT_ASSERT(c, removed, ("the loop removes the number of the inert descriptor" + when).c_str());
+            UT_ASSERT(c, !rlog.gate_expired,
+                ("the removal of the attempt's descriptor waited for the close" + when).c_str());
+            if (!shutdown_first) {
+                // the wake first: the operation ended, and its registration was removed, only after the close
+                UT_ASSERT(c, !rlog.gate_reached,
+                    ("the attempt's registration is removed only after the close has returned" + when).c_str());
+            }
         }
     }
 
@@ -8630,6 +8786,10 @@ public:
             hold.sock = qore_socket_private::get(*sock->priv->socket);
             hold.attempt_fd = attempt_fd;
         }
+        // the file of the attempt's descriptor, to tell it from the descriptor that has its number after the close
+        struct stat attempt_st = {};
+        bool attempt_st_ok = !::fstat(attempt_fd, &attempt_st);
+        UT_ASSERT(c, attempt_st_ok, ("the attempt's descriptor is open before the close" + when).c_str());
         pre_close_hold.store(&hold, std::memory_order_release);
         qore_dbg_after_pre_close_shutdown.store(preCloseHook, std::memory_order_release);
         // the close through the controller: its shutdown, then (once the hook let it continue) its close
@@ -8642,6 +8802,20 @@ public:
             UT_ASSERT(c, hold.removed_while_held,
                 ("the I/O thread ended the connection between the shutdown and the close" + when).c_str());
         }
+        // the I/O thread ended the operation for the changed descriptor generation (without a step), so the
+        // operation's attempt still holds the descriptor, and the close, which found the registration removed (and
+        // its hold released), closed the connection by making the descriptor inert: the number is kept, by another
+        // descriptor, until the attempt releases it with the operation (see close_and_reset_locked())
+        if (attempt_st_ok) {
+            struct stat after_st = {};
+            bool kept = !::fstat(attempt_fd, &after_st);
+            UT_ASSERT(c, kept && (after_st.st_dev != attempt_st.st_dev || after_st.st_ino != attempt_st.st_ino),
+                ("the close closes the connection, and an inert descriptor keeps its number while the attempt holds "
+                    "it" + when).c_str());
+        }
+        // the inert descriptor, to tell when the number is free again
+        struct stat inert_st = {};
+        bool inert_st_ok = !::fstat(attempt_fd, &inert_st);
 
         bool timed_out = false;
         ValueHolder result(queue->shift(&xsink, 30000, &timed_out), &xsink);
@@ -8664,7 +8838,19 @@ public:
         queue = nullptr;
         queue_obj = nullptr;
         op_obj = nullptr;
-        sock->close();
+        // the controller's references to the operation are released by its stop (its I/O thread's, and those that
+        // its dispatcher releases off the I/O thread), and the operation with them, whose attempt's hold closes the
+        // inert descriptor: the number is free then
+        ctrl->stopClear(&xsink);
+        xsink.clear();
+        if (inert_st_ok) {
+            // the number no longer has the inert descriptor (it is free, or another thread's descriptor has it)
+            struct stat now_st = {};
+            bool released = ::fstat(attempt_fd, &now_st)
+                || now_st.st_dev != inert_st.st_dev || now_st.st_ino != inert_st.st_ino;
+            UT_ASSERT(c, released, ("the release of the attempt's hold with the operation closes the inert descriptor"
+                + when).c_str());
+        }
     }
 
 #ifdef __linux__
@@ -28684,6 +28870,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runConnectCloseInProgress(c, AsyncIoDescriptorHoldTest::CCM_POLL_AFTER, false, true);
     AsyncIoDescriptorHoldTest::runConnectCloseRegistered(c, false);
     AsyncIoDescriptorHoldTest::runConnectCloseRegistered(c, true);
+    AsyncIoDescriptorHoldTest::runConnectCloseRegistered(c, false, true);
     AsyncIoDescriptorHoldTest::runConnectCloseInPreClose(c);
     AsyncIoDescriptorHoldTest::runConnectCheckAfterShutdown(c);
     AsyncIoDescriptorHoldTest::runConnectCloseTwoAttempts(c);
