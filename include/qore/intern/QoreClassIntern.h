@@ -1444,6 +1444,14 @@ public:
         return typeInfo;
     }
 
+    //! resolves the declared type, if it is not resolved yet, without initializing the initializer
+    /** Called by qore_class_private::initializeIntern() before the class signature is made, which includes the
+        resolved type (qore#7457); parseInit() resolves the type itself if this was not called
+
+        @return 0 for OK, -1 if the type could not be resolved (a parse exception has been raised)
+    */
+    DLLLOCAL int parseResolveDeclaredType();
+
     DLLLOCAL const QoreTypeInfo* parseGetTypeInfo() const {
         // we cannot tell if the member has been initialized, so we return anyTypeInfo here for potential references
         return QoreTypeInfo::isReference(typeInfo) ? anyTypeInfo : typeInfo;

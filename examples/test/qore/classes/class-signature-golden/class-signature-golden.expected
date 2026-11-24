@@ -7,46 +7,47 @@ hash 0523eb96df9893da6c47e12cc9a468f248b2607e
 --- part 1
   class ::SigA::Empty
 === SigA::Members
-hash 47676ee5e0184f52bd01d777ac6005520849e14b
+hash 8d0e7143fad85c859c6af2b5742ee2cc4d0a6670
 --- part 1
   class ::SigA::Members
   public mem int i integer
   public mem *string os nothing
   public mem softint si nothing
-  public mem any li nothing
-  public mem any hss nothing
-  public mem any hd nothing
-  public mem any oe nothing
-  public mem any oo nothing
-  public mem any u nothing
+  public mem list<int> li nothing
+  public mem hash<string, softint> hss nothing
+  public mem hash<::SigHashDecl> hd nothing
+  public mem *object<::SigA::Empty> oe nothing
+  public mem object<::SigA::Empty> oo nothing
+  public mem union<int, string> u nothing
   public mem code c nothing
-  public mem any col namespace-scoped reference
+  public mem enum<::SigA::SigColor> col namespace-scoped reference
   public mem auto a nothing
-  public mem any deep nothing
+  public mem *list<hash<string, list<*float>>> deep nothing
   private mem float pf float
   private:internal mem number pin number
 === SigA::Statics
-hash 1dea48e139a222f828cb30e69d57c25437c17820
+hash caf24c8aba348c34102ef8c44c6c34578345ab8f
 --- part 1
   class ::SigA::Statics
   public var int si integer
-  public var any sls nothing
+  public var *list<string> sls nothing
   private var float spf float
   public const C1 string
   public const C2 integer
   private const C3 list
   private:internal const C4 hash
 === SigA::Methods
-hash beba724bf4373ea116487716fbe394fd5fa6d6ec
+hash c66f29b03d42f0d182aa926ed3aea7a101fe6a5b
 --- part 1
   class ::SigA::Methods
-  pub m()
-  priv m(int a, *string b = "x")
-  int m(reference<list<int>> r)
-  pub m(code c, ...)
-  pub m(hash<::SigHashDecl> h, object o)
-  pub static s(hash<string, int> h, *object<::SigA::Empty> e, softlist<string> l = <EMPTY LIST>)
-  priv static s(union<int, bool> v)
+  pub m() -> string
+  priv m(int a, *string b = "x") -> string
+  int m(reference<list<int>> r) -> int
+  pub m(code c, ...) -> auto
+  pub m(hash<::SigHashDecl> h, object o) -> *object<::SigA::Empty>
+  pub m(float f)
+  pub static s(hash<string, int> h, *object<::SigA::Empty> e, softlist<string> l = <EMPTY LIST>) -> list<int>
+  priv static s(union<int, bool> v) -> nothing
 === SigA::Ctor
 hash e9cd3d2fd28782cbb3a274316b915f24caa2ccd6
 --- part 1
@@ -54,29 +55,44 @@ hash e9cd3d2fd28782cbb3a274316b915f24caa2ccd6
   pub constructor(int i, string s = "a")
   priv constructor()
 === SigA::Abs
-hash b9b23b7e0c4114bb16fc884a78ecc14c43dfac98
+hash 504848a61d083fc0bd2ab8d5551ab5654de19289
 --- part 1
   class ::SigA::Abs
-  abstract pub m(int a)
-  abstract priv m(string s, ...)
+  abstract pub m(int a) -> string
+  abstract priv m(string s, ...) -> *int
 === SigA::Child
-hash 1df6946ccb7031dfa76c0ff81c5c769212aec444
+hash 7530a80f746b5164004e58992bd4f6cf626d707d
 --- part 1
   class ::SigA::Child
-  inherits public Members [47676ee5e0184f52bd01d777ac6005520849e14b]
-  inherits private Statics [1dea48e139a222f828cb30e69d57c25437c17820]
+  inherits public Members [8d0e7143fad85c859c6af2b5742ee2cc4d0a6670]
+  inherits private Statics [caf24c8aba348c34102ef8c44c6c34578345ab8f]
   inherits private:internal Empty [0523eb96df9893da6c47e12cc9a468f248b2607e]
   public mem int child integer
 === SigA::Box
-hash d41b0bea97b0bdb8a3609cd0ac709a3540e826ac
+hash 5d5ababbda423b45c7eedda546181095faa098f9
 --- part 1
   class ::SigA::Box
-  public mem any v nothing
+  public mem *T v nothing
 === SigA::IntBox
-hash e62c25a1b04b99fba023540441fe50c1fd523caa
+hash 2deccf4d568deb2fb4414baefef8a7d03fcc2bf5
 --- part 1
   class ::SigA::IntBox
-  inherits public object<Box<int>> [d41b0bea97b0bdb8a3609cd0ac709a3540e826ac]
+  inherits public object<::SigA::Box<int>> [5d5ababbda423b45c7eedda546181095faa098f9]
+=== SigA::EmptyBox
+hash 2976797faaf572a2ca6ec943cbfc04f28b3338c7
+--- part 1
+  class ::SigA::EmptyBox
+  inherits public object<::SigA::Box<object<::SigA::Empty>>> [5d5ababbda423b45c7eedda546181095faa098f9]
+=== SigA::ReBase
+hash e45028280b45475081e402029977ef3f890ed648
+--- part 1
+  class ::SigA::ReBase
+  public var *object<::SigA::ReBase> inst new object call
+=== SigA::ReSub
+hash 5a19b2c1525b46fba3247a379cb42fb754611c6a
+--- part 1
+  class ::SigA::ReSub
+  inherits public ReBase [e45028280b45475081e402029977ef3f890ed648]
 === SigA::SigB::Nested
 hash a99c159f61e01139428459dd5c055d9ca37dabe5
 --- part 1

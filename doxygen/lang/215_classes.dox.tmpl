@@ -837,11 +837,16 @@ while (i.next) {}  # parse exception: the call is i.next()
     overloaded function or method, a cast, the @ref instanceof "instanceof" operator) if it is an object of the class,
     of a copy of it in another %Program, or of a subclass.  As the same source parsed in two %Program objects gives
     two classes, a class is also compatible with a class of another %Program that has the same
-    namespace path, the same name and the same signature: the same declarations (public and private members, methods
-    and constants) and parent classes.  Two classes with the same name and declarations in different namespaces, such
-    as \c NA::Foo and \c NB::Foo of <tt>namespace NA { class Foo {} } namespace NB { class Foo {} }</tt>, are
-    different types: an object of \c NB::Foo is not a value of the type \c NA::Foo, and a method overloaded on the
-    two classes calls the variant of the object's class, in every @ref execution_modes "execution mode".  A class
+    namespace path, the same name and the same signature: the same declarations (public and private members and
+    static variables with their declared types, methods with the types of their parameters and their return types, and
+    constants) and parent classes.  The types are compared by their names with the namespace paths of the classes,
+    hashdecls and enums that they name, so classes that differ only in the type of a member, of a static variable or
+    of the return value of a method, such as a member declared <tt>list<int> v</tt> in one %Program and
+    <tt>hash<string, int> v</tt> in the other, are different types (since %Qore 3.0).  Two classes
+    with the same name and declarations in different namespaces, such as \c NA::Foo and \c NB::Foo of
+    <tt>namespace NA { class Foo {} } namespace NB { class Foo {} }</tt>, are different types: an object of
+    \c NB::Foo is not a value of the type \c NA::Foo, and a method overloaded on the two classes calls the variant of
+    the object's class, in every @ref execution_modes "execution mode".  A class
     without declarations has a signature as well, so a subclass of it parsed from the same source in two %Program
     objects is also compatible across them (since %Qore 3.0).
 

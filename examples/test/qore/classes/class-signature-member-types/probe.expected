@@ -1,0 +1,53 @@
+list<int> vs hash<string, int> member: other declaration: RUNTIME-OVERLOAD-ERROR
+list<int> vs hash<string, int> member: same declaration: accepted
+list<int> vs hash<string, int> member: other declaration (reverse): RUNTIME-OVERLOAD-ERROR
+list<int> vs list<string> member: other declaration: RUNTIME-OVERLOAD-ERROR
+list<int> vs list<string> member: same declaration: accepted
+list<int> vs list<string> member: other declaration (reverse): RUNTIME-OVERLOAD-ERROR
+list<int> vs *list<int> member: other declaration: RUNTIME-OVERLOAD-ERROR
+list<int> vs *list<int> member: same declaration: accepted
+list<int> vs *list<int> member: other declaration (reverse): RUNTIME-OVERLOAD-ERROR
+hashdecl member: other declaration: RUNTIME-OVERLOAD-ERROR
+hashdecl member: same declaration: accepted
+hashdecl member: other declaration (reverse): RUNTIME-OVERLOAD-ERROR
+class member: other declaration: RUNTIME-OVERLOAD-ERROR
+class member: same declaration: accepted
+class member: other declaration (reverse): RUNTIME-OVERLOAD-ERROR
+class member, same name in other namespaces: other declaration: RUNTIME-OVERLOAD-ERROR
+class member, same name in other namespaces: same declaration: accepted
+class member, same name in other namespaces: other declaration (reverse): RUNTIME-OVERLOAD-ERROR
+class member, class declared later: other declaration: RUNTIME-OVERLOAD-ERROR
+class member, class declared later: same declaration: accepted
+class member, class declared later: other declaration (reverse): RUNTIME-OVERLOAD-ERROR
+enum member: other declaration: RUNTIME-OVERLOAD-ERROR
+enum member: same declaration: accepted
+enum member: other declaration (reverse): RUNTIME-OVERLOAD-ERROR
+union member: other declaration: RUNTIME-OVERLOAD-ERROR
+union member: same declaration: accepted
+union member: other declaration (reverse): RUNTIME-OVERLOAD-ERROR
+private member: other declaration: RUNTIME-OVERLOAD-ERROR
+private member: same declaration: accepted
+private member: other declaration (reverse): RUNTIME-OVERLOAD-ERROR
+static variable: other declaration: RUNTIME-OVERLOAD-ERROR
+static variable: same declaration: accepted
+static variable: other declaration (reverse): RUNTIME-OVERLOAD-ERROR
+method return type: other declaration: RUNTIME-OVERLOAD-ERROR
+method return type: same declaration: accepted
+method return type: other declaration (reverse): RUNTIME-OVERLOAD-ERROR
+static method return type: other declaration: RUNTIME-OVERLOAD-ERROR
+static method return type: same declaration: accepted
+static method return type: other declaration (reverse): RUNTIME-OVERLOAD-ERROR
+generic parent class, type arguments of the same name in other namespaces: other declaration: RUNTIME-OVERLOAD-ERROR
+generic parent class, type arguments of the same name in other namespaces: same declaration: accepted
+generic parent class, type arguments of the same name in other namespaces: other declaration (reverse): RUNTIME-OVERLOAD-ERROR
+parsed with no option, taken by a parse with PO_REQUIRE_TYPES: accepted
+parsed with no option, taken by a parse with PO_REQUIRE_PROTOTYPES: accepted
+parsed with PO_REQUIRE_TYPES, taken by a parse with no option: accepted
+parsed with PO_REQUIRE_TYPES, taken by a parse with PO_REQUIRE_PROTOTYPES: accepted
+parsed with PO_REQUIRE_PROTOTYPES, taken by a parse with no option: accepted
+parsed with PO_REQUIRE_PROTOTYPES, taken by a parse with PO_REQUIRE_TYPES: accepted
+this program's Full in a runtime parse: accepted 3
+this program's Later in a runtime parse: accepted
+this program's Derived in a runtime parse: accepted
+the runtime parse's Full in this program: 2
+this program's static method: Later

@@ -2880,6 +2880,10 @@
     - classes with the same name and declarations in different namespaces are different types (an object of one was
       accepted for the other's type), and code compiled with \c qcc before must be recompiled (see
       @ref class_type_identity; <a href="https://github.com/qoretechnologies/qore/issues/7397">issue 7397</a>)
+    - classes of different %Program objects that differ only in the declared type of a member or static variable or in
+      the return type of a method are different types (an object of one was accepted for the other's type), and a
+      subclass created by a static initializer of its parent class has the same signature in every %Program (see
+      @ref class_type_identity; <a href="https://github.com/qoretechnologies/qore/issues/7457">issue 7457</a>)
     - @ref Qore::call_static_method() "call_static_method()" and the related calls call the static method that a static
       method call in the caller's code calls: they refused a later parent class's public method behind a private one,
       and called a method of a privately inherited class from outside it

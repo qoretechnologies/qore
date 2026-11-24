@@ -5,9 +5,10 @@
 # the classes whose signature strings class-signature-golden.qtest pins (class-signature-golden.expected); parsed in a
 # Program of their own.  The non-static methods of a class are kept in a hash map, whose order is not that of the
 # declarations, so a class here declares methods of one name at most (variants of one name keep their order), and of
-# one static method name at most; a constructor is a method too.  The strings are pinned as they are: a member or
-# static variable whose declared type is not resolved yet when the signature is made (a container, class, union or
-# enum type) is "any" in it, and the return types of methods and the synchronized flag are not in it
+# one static method name at most; a constructor is a method too.  The declared types of members and static
+# variables and the declared return types of methods are in the signature with namespace paths (qore#7457), not a
+# return type implied by %require-types; the synchronized flag is not, as it is not part of the type of a class,
+# like the code of a method
 
 %new-style
 %require-types
@@ -97,6 +98,10 @@ namespace SigA {
         synchronized *SigA::Empty m(hash<SigHashDecl> h, object o) {
         }
 
+        #! no declared return type: the nothing that %require-types implies is not in the signature (qore#7457)
+        m(float f) {
+        }
+
         static list<int> s(hash<string, int> h, *SigA::Empty e, softlist<string> l = ()) {
             return ();
         }
@@ -138,6 +143,21 @@ namespace SigA {
     class IntBox inherits Box<int> {
     }
 
+    #! a generic parent class with a class type argument (named with its namespace path, qore#7457)
+    class EmptyBox inherits Box<Empty> {
+    }
+
+    #! a class whose static variable initializer initializes its subclass while the class is initialized: the
+    #! subclass's signature has the hash of the parent class, not its class ID (qore#7457)
+    class ReBase {
+        public {
+            static *ReBase inst = new ReSub();
+        }
+    }
+
+    class ReSub inherits ReBase {
+    }
+
     namespace SigB {
         #! a nested namespace
         class Nested {
@@ -168,6 +188,9 @@ const ClassPaths = (
     "SigA::Child",
     "SigA::Box",
     "SigA::IntBox",
+    "SigA::EmptyBox",
+    "SigA::ReBase",
+    "SigA::ReSub",
     "SigA::SigB::Nested",
     "SigA::Scoped",
     "SigA::SigB::ScopedNested"
