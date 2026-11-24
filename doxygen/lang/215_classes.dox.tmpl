@@ -738,16 +738,16 @@ while (i.next) {}  # parse exception: the call is i.next()
     @ref call_reference "call reference", or the reflection API) raises the same
     exception as an access from outside the class hierarchy.  This applies to each private variant of a method that
     also has public variants, to the private constructors of the trusted class (an object of it cannot be created with
-    them, with @ref new "new" or @ref Qore::create_object() "create_object()"), and to the public members and methods
+    them, with @ref new "new" or @ref Qore::create_object() "create_object()", nor be constructed with them in the
+    class's own base-class constructor call, <tt>constructor() : Base(args)</tt>), and to the public members and methods
     that the trusted class inherits privately (<tt><b>inherits private</b></tt>).\n\n
     The class can still use its own members and methods and the public members and methods that it inherits, implement
     and override the private (abstract) methods of the trusted class, which the trusted class then calls, call the
     version of a method of a base class in its own method that overrides it (<tt>Base::method()</tt> in a variant of
     the method \c method() whose parameter types are those of a variant of the base class's method, which is the only
     variant that the call selects, on the object of the override; not from another method, not through a call
-    reference, and not in the call's arguments), and call a private constructor of its base class in its own
-    base-class constructor call (<tt>constructor() : Base(args)</tt>), which constructs its own object (not in the
-    call's arguments).  Code of the trusted class keeps
+    reference, and not in the call's arguments), and call the public constructors of its base class.  A trusted class
+    that sandboxed code may subclass gives it a public constructor.  Code of the trusted class keeps
     its private access to the objects of the subclass, and classes declared by trusted code are not affected.  A
     library class that is meant to be subclassed by sandboxed code offers the members and methods that its subclasses
     need as public members and methods.  The access is decided by the state of the class's Program when the class is

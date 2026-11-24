@@ -1,7 +1,7 @@
 #!/usr/bin/env qore
 # a class that sandboxed code declares cannot call the private variants of a method of a class that trusted code
-# declares, nor create an object of such a class with a private constructor; it can call the public variants and
-# call a private constructor of its base class in its own base-class constructor call (qore#6843); run by
+# declares, nor create an object of such a class with a private constructor, also not in its own base-class
+# constructor call; it can call the public variants and the public constructors (qore#6843); run by
 # ../sandbox-trusted-private-access.qtest in every execution mode
 
 %modern
@@ -35,12 +35,33 @@ class Trusted {
     }
 }
 
+#! a class that trusted code declares with private constructors only
+class TrustedPrivateOnly {
+    public {
+        string how;
+    }
+
+    private constructor() {
+        how = "private default constructor";
+    }
+
+    private constructor(string why) {
+        how = "private constructor: " + why;
+    }
+
+    #! trusted code creates its objects
+    static TrustedPrivateOnly make() {
+        return new TrustedPrivateOnly();
+    }
+}
+
 const Opts = PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPSULATION;
 
 #! returns a new sandboxed Program with the code parsed, or the parse error
 *Program sub sandboxed(string label, string code) {
     Program p(Opts);
     p.importClass("Trusted");
+    p.importClass("TrustedPrivateOnly");
     p.setSandboxManager(new SandboxManager());
     try {
         p.parse(code, label);
@@ -58,6 +79,10 @@ const ParseCases = (
     "new-private-ctor": "class T inherits Trusted { static Trusted f() { return new Trusted('x'); } }",
     "new-private-ctor-decl": "class T inherits Trusted { static Trusted f() { Trusted t('x'); return t; } }",
     "base-private-ctor": "class T inherits Trusted { constructor() : Trusted('init') {} }",
+    "base-private-ctor-named": "class T inherits Trusted { constructor() : Trusted(why: 'init') {} }",
+    "base-private-ctor-only": "class T inherits TrustedPrivateOnly { constructor() : TrustedPrivateOnly('init') {} }",
+    "base-private-default-ctor": "class T inherits TrustedPrivateOnly { constructor() : TrustedPrivateOnly() {} }",
+    "base-public-ctor": "class T inherits Trusted { constructor() : Trusted() {} }",
     "public-variant": "class T inherits Trusted { string f() { return op(); } }",
 );
 
@@ -70,7 +95,7 @@ foreach hash<auto> i in (ParseCases.pairIterator()) {
 # the dynamic forms, refused at run time, and the allowed uses
 const Tenant = "
 class T inherits Trusted {
-    constructor() : Trusted('initialiser') {
+    constructor() : Trusted() {
     }
 
     static auto variantAuto(auto h) { return h.op(1); }
@@ -86,8 +111,22 @@ class T inherits Trusted {
     static auto newPublic() { return new Trusted().how; }
 }
 
+# the private default constructor of the base class, called without a base class constructor call: refused at run time
+class TImplicit inherits TrustedPrivateOnly {
+    constructor() {}
+    static auto make() { return new TImplicit().how; }
+}
+class TNoConstructor inherits TrustedPrivateOnly {
+    static auto make() { return new TNoConstructor().how; }
+    static auto createObject() { return create_object('TNoConstructor').how; }
+}
+
 auto sub run(string m, *list<auto> args) {
     return call_static_method_args('T', m, args);
+}
+
+auto sub runClass(string cls, string m) {
+    return call_static_method(cls, m);
 }
 
 auto sub runSelf(string m) {
@@ -118,5 +157,10 @@ foreach string m in (("createObject", "createObjectArgs", "newPublic")) {
 foreach string m in (("variantSelfAuto", "publicVariant", "initialiser")) {
     show(m, auto sub () { return p.callFunction("runSelf", m); });
 }
+show("implicit-private-default-ctor", auto sub () { return p.callFunction("runClass", "TImplicit", "make"); });
+show("no-ctor-private-default-ctor", auto sub () { return p.callFunction("runClass", "TNoConstructor", "make"); });
+show("no-ctor-private-default-ctor-create-object", auto sub () {
+    return p.callFunction("runClass", "TNoConstructor", "createObject");
+});
 # trusted code calls the private variant and constructor of its class
 show("trusted", auto sub () { return (shared.op(), Trusted::viaPrivate()); });

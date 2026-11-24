@@ -284,9 +284,9 @@
     (see @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6750">issue 6750</a>).
 
     @par Classes Declared by Sandboxed Code Have No Private Access to Trusted Classes
-    A class declared by sandboxed code cannot use the private declarations of a class declared by trusted code but
-    can override them and call an overridden method's base version; library classes give their subclasses final public
-    methods, so a subclass method with one of their names and signatures is a parse error and must be renamed
+    A class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, its
+    private constructors included, but can override them and call an overridden method's base version; library classes
+    give subclasses final public methods, so a subclass method with one of their names and signatures must be renamed
     (@ref sandboxed_class_private_access; <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>).
 
     @par The Shared State of Standard Module Classes Is Not Visible to Subclasses

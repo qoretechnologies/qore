@@ -3686,13 +3686,22 @@ int BCANode::parseInit(BCList* bcl, const char* classname) {
             QoreParseContext parse_context;
             parse_context.oflag = qore_class_private::getSelfId(*sclass);
             if (m) {
-                // the class's own call of the constructor of its base class can select a private constructor of a
-                // class that trusted code declared also in a class that sandboxed code declared: only the variant
-                // search of the call itself, not the parse of its arguments (qore#6843)
+                // the variant search of the class's own call of the constructor of its base class sees the private
+                // constructors of a class that trusted code declared also in a class that sandboxed code declared, so
+                // that it selects the constructor that it selects for any subclass; only the search of the call
+                // itself, not the parse of its arguments (qore#6843)
                 QoreSandboxSuperCall sc;
                 sc.constructor = m;
-                QoreSandboxSuperCallParseHelper super_call(static_cast<FunctionCallBase*>(this), sc);
-                err = parseArgsVariant(loc, parse_context, qore_method_private::get(*m)->getFunction(), nullptr);
+                {
+                    QoreSandboxSuperCallParseHelper super_call(static_cast<FunctionCallBase*>(this), sc);
+                    err = parseArgsVariant(loc, parse_context, qore_method_private::get(*m)->getFunction(), nullptr);
+                }
+                // a private constructor that it selects is private:internal for a class that sandboxed code
+                // declared, unless QoreSandboxBaseInitializerPrivateCtor allows it
+                if (!err && !QoreSandboxBaseInitializerPrivateCtor
+                        && qore_class_private::parseCheckSandboxBaseConstructor(loc, variant, parse_get_class_priv())) {
+                    err = -1;
+                }
             } else {
                 if (parse_args) {
                     type_vec_t argTypeInfo;
@@ -8958,6 +8967,24 @@ int qore_class_private::parseCheckSandboxPrivateAccess(const QoreProgramLocation
     parse_error(*loc, "illegal access to private %s '%s' of class '%s' in class '%s': a class declared by sandboxed "
         "code cannot use the private declarations of a class declared by trusted code, which are private:internal "
         "for it", kind, what, decl->name.c_str(), class_ctx->name.c_str());
+    return -1;
+}
+
+int qore_class_private::parseCheckSandboxBaseConstructor(const QoreProgramLocation* loc,
+        const AbstractQoreFunctionVariant* v, const qore_class_private* class_ctx) {
+    if (!v || !class_ctx) {
+        return 0;
+    }
+    assert(dynamic_cast<const MethodVariantBase*>(v));
+    const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(v);
+    if (mvb->getAccess() != Private || !sandboxDeniesPrivateAccess(mvb->getClassPriv(), class_ctx)) {
+        return 0;
+    }
+    const char* cname = mvb->getClassPriv()->name.c_str();
+    parse_error(*loc, "illegal call of a private constructor of class '%s' in the base class constructor call of "
+        "class '%s': a private constructor of a class declared by trusted code cannot be called from a class "
+        "declared by sandboxed code, for which it is private:internal; give class '%s' a constructor that is not "
+        "private for its subclasses to call", cname, class_ctx->name.c_str(), cname);
     return -1;
 }
 

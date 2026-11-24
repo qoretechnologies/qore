@@ -2,8 +2,8 @@
 # the call of the version of a base class of a method by its override, in a class that sandboxed code declares, can
 # select only the variant that the override overrides, on the override's own object, and only in its own variant
 # search: not another private variant of the method, and not a private variant selected by a call in its arguments
-# or in the code that it runs (qore#6843); the class's own call of the constructor of its base class selects a private
-# constructor, but not a private variant in its arguments; run by ../sandbox-trusted-private-access.qtest in every
+# or in the code that it runs (qore#6843); the class's own call of the constructor of its base class cannot select a
+# private constructor nor a private variant in its arguments; run by ../sandbox-trusted-private-access.qtest in every
 # execution mode
 
 %modern
@@ -125,7 +125,8 @@ run("nested-overridden-variant", "class T inherits Trusted {
     string op(string s) { return Trusted::op(Trusted::op(s)); } }
 auto sub run() { return new T().op('x'); }");
 
-# a private constructor of the base class in the class's own base class constructor call: allowed
+# a private constructor of the base class in the class's own base class constructor call: refused, as the
+# private constructors of a class that trusted code declared are private:internal for the class
 run("private-constructor-in-initializer", "class T inherits Trusted {
     constructor() : Trusted('initializer') {} }
 auto sub run() { return new T().how; }");

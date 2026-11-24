@@ -8,7 +8,11 @@ new-private-ctor: parse: PARSE-TYPE-ERROR: no variant matching 'Trusted::constru
    Trusted::constructor()
 new-private-ctor-decl: parse: PARSE-TYPE-ERROR: no variant matching 'Trusted::constructor(string)' can be found; the following variants were tested:
    Trusted::constructor()
-base-private-ctor: parse: OK
+base-private-ctor: parse: PARSE-EXCEPTION: illegal call of a private constructor of class 'Trusted' in the base class constructor call of class 'T': a private constructor of a class declared by trusted code cannot be called from a class declared by sandboxed code, for which it is private:internal; give class 'Trusted' a constructor that is not private for its subclasses to call
+base-private-ctor-named: parse: PARSE-EXCEPTION: illegal call of a private constructor of class 'Trusted' in the base class constructor call of class 'T': a private constructor of a class declared by trusted code cannot be called from a class declared by sandboxed code, for which it is private:internal; give class 'Trusted' a constructor that is not private for its subclasses to call
+base-private-ctor-only: parse: PARSE-EXCEPTION: illegal call of a private constructor of class 'TrustedPrivateOnly' in the base class constructor call of class 'T': a private constructor of a class declared by trusted code cannot be called from a class declared by sandboxed code, for which it is private:internal; give class 'TrustedPrivateOnly' a constructor that is not private for its subclasses to call
+base-private-default-ctor: parse: PARSE-EXCEPTION: illegal call of a private constructor of class 'TrustedPrivateOnly' in the base class constructor call of class 'T': a private constructor of a class declared by trusted code cannot be called from a class declared by sandboxed code, for which it is private:internal; give class 'TrustedPrivateOnly' a constructor that is not private for its subclasses to call
+base-public-ctor: parse: OK
 public-variant: parse: OK
 variantAuto: RUNTIME-OVERLOAD-ERROR: no variant matching '::Trusted::op(integer)' can be found; the following variants were tested:
    ::Trusted::op()
@@ -24,5 +28,8 @@ newPublic: OK "public constructor"
 variantSelfAuto: RUNTIME-OVERLOAD-ERROR: no variant matching '::Trusted::op(integer)' can be found; the following variants were tested:
    ::Trusted::op()
 publicVariant: OK ["public variant", "public variant"]
-initialiser: OK "private constructor: initialiser"
+initialiser: OK "public constructor"
+implicit-private-default-ctor: RUNTIME-OVERLOAD-ERROR: no variant matching '::TrustedPrivateOnly::constructor()' can be found; no variants were accessible in this execution context
+no-ctor-private-default-ctor: RUNTIME-OVERLOAD-ERROR: no variant matching '::TrustedPrivateOnly::constructor()' can be found; no variants were accessible in this execution context
+no-ctor-private-default-ctor-create-object: RUNTIME-OVERLOAD-ERROR: no variant matching '::TrustedPrivateOnly::constructor()' can be found; no variants were accessible in this execution context
 trusted: OK ["public variant", "private constructor: trusted/private variant 2"]

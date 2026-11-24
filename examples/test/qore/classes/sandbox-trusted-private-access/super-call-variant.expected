@@ -12,4 +12,4 @@ private-variant-in-constructor-arguments: parse: PARSE-TYPE-ERROR: no variant ma
 overridden-private-variant: OK "tenant+hook()"
 overridden-public-variant: OK "tenant+op(string) x"
 nested-overridden-variant: OK "op(string) op(string) x"
-private-constructor-in-initializer: OK "private constructor: initializer"
+private-constructor-in-initializer: parse: PARSE-EXCEPTION: illegal call of a private constructor of class 'Trusted' in the base class constructor call of class 'T': a private constructor of a class declared by trusted code cannot be called from a class declared by sandboxed code, for which it is private:internal; give class 'Trusted' a constructor that is not private for its subclasses to call

@@ -3193,13 +3193,22 @@ DLLLOCAL inline std::mutex& qore_class_data_lock(const void* p) {
     return qore_class_data_locks[(reinterpret_cast<uintptr_t>(p) >> 6) % QoreClassDataLockCount].m;
 }
 
+//! True if the class's own call of the constructor of its base class (its base class constructor initializer) may
+//! select a private constructor of a class that trusted code declared in a class that sandboxed code declared
+/** False: such a constructor is \c private:internal for the class as every other private declaration of the trusted
+    class is; the variant search selects the constructor that it selects for any subclass, and a private one is
+    refused with a parse error that tells the host to give the trusted class a constructor that is not private
+    (qore_class_private::parseCheckSandboxBaseConstructor(); qore#6843)
+*/
+constexpr bool QoreSandboxBaseInitializerPrivateCtor = false;
+
 //! The private variants of a class that trusted code declared that a variant search may select in a class context
 //! that sandboxed code declared (qore#6843)
-/** Only two calls can select such a variant: the call of the base class's version of a method by its override, which
-    may select only the variant that the override overrides, on its own object; and the class's own call of the
-    constructor of its base class, which may select any constructor of the base class, as it constructs its own
-    object.  The setting is made for the variant search of such a call only: not for the parse or the evaluation of
-    its arguments, nor for the code that the call runs.
+/** Only the call of the base class's version of a method by its override can select such a variant, and only the
+    variant that the override overrides, on its own object (with QoreSandboxBaseInitializerPrivateCtor, also the
+    class's own call of the constructor of its base class, which may then select any constructor of the base class, as
+    it constructs its own object).  The setting is made for the variant search of such a call only: not for the parse
+    or the evaluation of its arguments, nor for the code that the call runs.
 */
 struct QoreSandboxSuperCall {
     //! the one variant of the base class's method that the override overrides
@@ -5310,6 +5319,15 @@ public:
     //! Returns the private variants that the variant search of the call \a node may select (see
     //! QoreSandboxSuperCallParseHelper), or no variant if \a node is not the call that set them
     DLLLOCAL static QoreSandboxSuperCall getSandboxSuperCallPending(const void* node);
+
+    //! Raises a parse error if \a v, the constructor variant that the base class constructor call of the class
+    //! context selected, is a private constructor of a class that trusted code declared and the class context was
+    //! declared by sandboxed code (qore#6843); returns -1 if an error was raised, 0 if not
+    /** The error tells the host to give the base class a constructor that is not private; see
+        QoreSandboxBaseInitializerPrivateCtor
+    */
+    DLLLOCAL static int parseCheckSandboxBaseConstructor(const QoreProgramLocation* loc,
+            const AbstractQoreFunctionVariant* v, const qore_class_private* class_ctx);
 
     //! Raises a parse error if the parse class context cannot call the private method \a m that a parse-time lookup
     //! found (qore#6843); returns -1 if an error was raised, 0 if not
