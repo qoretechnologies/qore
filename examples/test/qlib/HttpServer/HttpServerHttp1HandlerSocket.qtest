@@ -120,7 +120,7 @@ class ProbeHandler inherits AbstractHttpRequestHandler {
             case "chunked-enc-body": {
                 # a chunked body in the socket's own encoding: the connection's does not change
                 s.setEncoding("ISO-8859-2");
-                string body;
+                string read_body;
                 if (hdr.path == "chunked-enc") {
                     list<string> chunks;
                     s.readHTTPChunkedBodyWithCallback(sub (hash<auto> v) {
@@ -130,12 +130,12 @@ class ProbeHandler inherits AbstractHttpRequestHandler {
                             chunks += v.data;
                         }
                     }, HangGuard);
-                    body = chunks.join("");
+                    read_body = chunks.join("");
                 } else {
-                    body = s.readHTTPChunkedBody(HangGuard).body;
-                    r.encoding = body.encoding();
+                    read_body = s.readHTTPChunkedBody(HangGuard).body;
+                    r.encoding = read_body.encoding();
                 }
-                r.match = sprintf("%y", body == "x\u010dy");
+                r.match = sprintf("%y", read_body == "x\u010dy");
                 break;
             }
             case "chunked-callback": {
@@ -553,6 +553,50 @@ class EarlyAnswerHandler inherits StreamBodyHandler {
     }
 }
 
+#! A trusted REST class that holds the REST classes given to it
+class ContainerRestClass inherits AbstractRestClass {
+    string name() {
+        return "c";
+    }
+}
+
+#! A trusted REST class whose subClassImpl() returns the objects that a closure makes
+class DynamicRestClass inherits AbstractRestClass {
+    private {
+        code make;
+    }
+
+    constructor(code make) {
+        self.make = make;
+    }
+
+    string name() {
+        return "d";
+    }
+
+    *AbstractRestClass subClassImpl(string name, hash<auto> cx, *hash<auto> args) {
+        return name == "sockclass" ? make() : NOTHING;
+    }
+}
+
+#! A trusted authenticator that holds a request between the server's decision of its socket and its dispatch
+class GateAuthenticator inherits AbstractAuthenticator {
+    public {
+        Queue at();
+        Queue go();
+        bool armed;
+    }
+
+    *hash<HttpResponseInfo> authenticateRequest(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx) {
+        if (armed) {
+            armed = False;
+            at.push(True);
+            go.get();
+        }
+    }
+}
+
 #! The REST class of the DataStream records of the test, with its stream handler
 class EchoRestClass inherits AbstractRestClass {
     private {
@@ -682,6 +726,11 @@ RestHandler sub get_class_rest_handler() {
 #! the tenant's REST class that reports the class of the socket of its request
 AbstractRestClass sub get_class_rest() {
     return new TenantClassRest();
+}
+
+#! adds the tenant's REST class to a RestHandler that the tenant holds
+nothing sub add_class_rest(RestHandler rest) {
+    rest.class_hash.sockclass = new TenantClassRest();
 }
 
 #! a RestHandler declared by the tenant, which does not ask for the socket of its requests
@@ -964,6 +1013,7 @@ nothing sub run_code(code c) {
         addTestCase("sandboxed code's own encoding ends with each read", \sandboxedEncodingRestoreTest());
         addTestCase("a RestHandler with a REST class of a sandboxed Program", \restTenantClassTest());
         addTestCase("a send whose callback does not return", \blockedCallbackTest());
+        addTestCase("a REST class of a sandboxed Program on the dispatch path", \restDispatchTest());
         addTestCase("reply_sent without a response", \fakeSentTest());
         addTestCase("other methods", \otherTest());
         addTestCase("the socket ends with its request", \staleTest());
@@ -1880,6 +1930,69 @@ class NoView inherits AbstractHttpRequestHandler {
         }
     }
 
+    #! a trusted RestHandler that has the connection's socket does not hand the request to a REST class of a sandboxed
+    #! Program anywhere on its dispatch path: below a trusted container class, returned by a trusted class's
+    #! subClassImpl(), or added by the tenant after the server decided the socket of the request; the request is
+    #! refused and the connection closed
+    restDispatchTest() {
+        Program p = getTenantProgram();
+
+        # below a trusted container class
+        RestHandler nested();
+        ContainerRestClass cont();
+        cont.addClass(p.callFunction("get_class_rest"));
+        nested.addClass(cont);
+        assertFalse(nested.needsHandlerSocketView(), "only the container is hosted at the top level");
+        restRefused(nested, "/c/sockclass", "below a trusted container class");
+
+        # returned by a trusted class's subClassImpl()
+        RestHandler dynamic();
+        dynamic.addClass(new DynamicRestClass(auto sub () { return p.callFunction("get_class_rest"); }));
+        restRefused(dynamic, "/d/sockclass", "returned by subClassImpl()");
+
+        # added by the tenant between the server's decision and the dispatch
+        GateAuthenticator gate();
+        RestHandler late(gate);
+        restRefused(late, "/sockclass", "added after the server's decision", sub () {
+            p.callFunction("add_class_rest", late);
+        }, gate);
+    }
+
+    private restRefused(RestHandler rest, string path, string what, *code mid, *GateAuthenticator gate) {
+        server.setHandler("rest-dispatch", "^(c|d|sockclass)", NOTHING, rest);
+        on_exit server.removeHandler("rest-dispatch");
+        Socket c = connect();
+        on_exit c.close();
+        if (gate) {
+            gate.armed = True;
+        }
+        c.send("GET " + path + " HTTP/1.1\r\nHost: localhost\r\n\r\nGET /victim HTTP/1.1\r\nHost: localhost\r\n"
+            "Authorization: Basic dmljdGltOnB3\r\n\r\n");
+        if (gate) {
+            gate.at.get(HangGuard);
+            mid();
+            gate.go.push(True);
+        }
+        hash<auto> h = c.readHTTPHeader(HangGuard);
+        string body = c.recv(h."content-length".toInt(), HangGuard);
+        assertEq(500, h.status_code, what + ": refused: " + body);
+        assertRegex("refused", body, what);
+        assertEq("close", h.connection.lwr(), what + ": the connection closes");
+        string rest_data = "";
+        while (True) {
+            try {
+                binary b = c.recvBinary(-1, HangGuard);
+                if (!b) {
+                    break;
+                }
+                rest_data += b.toString();
+            } catch (hash<ExceptionInfo> ex) {
+                break;
+            }
+        }
+        assertTrue(rest_data !~ /HTTP\/1.1 [0-9]/, what + ": the next request is not answered: " + rest_data);
+    }
+
     #! a send of a thread of the handler that outlives its request, whose callback does not return, holds the server
     #! at most for the longest timeout of the socket: the connection is shut down and closed, and the send fails
     blockedCallbackTest() {
@@ -1926,7 +2039,6 @@ class NoView inherits AbstractHttpRequestHandler {
     #! a handler that returns reply_sent without sending a response through the socket of its request gets the
     #! server's error response, and the connection closes
     fakeSentTest() {
-        hash<auto> r;
         Program p = getTenantProgram();
         Queue entered();
         Queue release();

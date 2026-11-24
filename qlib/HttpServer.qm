@@ -196,9 +196,12 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     request); another handler gets the connection's socket.  A @ref RestHandler::RestHandler "RestHandler" object
     gets a socket of its request when one of its REST classes is of a class of a sandboxed Program, whoever made the
     handler and whenever the class was added, when it is declared by sandboxed code, or when it asked for it, and
-    gives that socket to its REST classes and their stream handlers (\c cx.socketobject); a trusted
-    @ref RestHandler::RestHandler "RestHandler" whose REST classes are trusted but run code that is not trusted (a
-    closure of a tenant, for example) must ask for it.
+    gives that socket to its REST classes and their stream handlers (\c cx.socketobject).  A
+    @ref RestHandler::RestHandler "RestHandler" that has the connection's socket refuses a request (\c 500, and the
+    connection is closed) whose dispatch path has a REST class or a stream handler of a sandboxed Program that its
+    top-level classes did not show when the request started (one below a trusted class, one that a trusted class's
+    \c subClassImpl() returns, or one added since); a trusted @ref RestHandler::RestHandler "RestHandler" whose REST
+    classes are trusted but run code that is not trusted (a closure of a tenant, for example) must ask for it.
 
     @warning A trusted handler that hands the socket of its HTTP/1.x request to code that is not trusted (such as
     code of a tenant) <b>must</b> call
