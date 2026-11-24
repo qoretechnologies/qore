@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - optional PDF reader loading, PDFium rasterization, and native Tesseract recognition
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires DataProviderML
+%requires QUnit
+
+%exec-class DocumentOcrPages
+
+class DocumentOcrPages inherits QUnit::Test {
+    constructor() : Test("document-ocr page outcomes", "1.0") {
+        addTestCase("fresh processor reports PDF capabilities and preserves page outcomes", \pages());
+        set_return_value(main());
+    }
+
+    private binary fixture(string name) {
+        return ReadOnlyFile::readBinaryFile(get_script_dir() + "/" + name);
+    }
+
+    pages() {
+        DataProviderML::QoreDocumentOcrProcessor proc;
+        try {
+            proc = new DataProviderML::QoreDocumentOcrProcessor({
+                "document_field": "file", "scanned_threshold": 10, "dpi": 150,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OCR-INIT-ERROR"
+                    || (ex.err == "OCR-DEPENDENCY-ERROR" && ex.desc =~ /ocr module is required for native mode/)) {
+                testSkip(ex.desc);
+            }
+            rethrow;
+        }
+
+        hash<auto> image = proc.processRecord({"file": fixture("../../../../../modules/ocr/test/test_image.png")});
+        assertEq("PNG", image.document_format);
+        assertEq("ocr", image.document_page_results[0].status);
+        assertTrue(image.document_text =~ /Qore OCR/i);
+        assertEq((), image.document_review_pages);
+
+        # No other code in this program imports pdf before this call.
+        *hash<ExceptionInfo> failure;
+        *hash<auto> digital;
+        try {
+            digital = proc.processRecord({"file": fixture("digital.pdf")});
+        } catch (hash<ExceptionInfo> ex) {
+            failure = ex;
+        }
+        try {
+            load_module("pdf");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("LOAD-MODULE-ERROR", ex.err);
+            assertEq("OCR-DEPENDENCY-ERROR", failure.err);
+            assertTrue(failure.desc =~ /pdf/);
+            return;
+        }
+        assertFalse(exists failure, sprintf("fresh document-ocr PDF call: %y", failure));
+        assertThrows("PDF-ERROR", sub () { proc.processRecord({"file": "%PDF-bad".toBinary()}); });
+        assertThrows("PDF-ERROR", "password", sub () { proc.processRecord({"file": fixture("protected.pdf")}); });
+
+        hash<auto> mixed = proc.processRecord({"file": fixture("mixed.pdf")});
+        assertEq(5, mixed.document_pages);
+        assertEq((0, 1, 2, 3, 4), map $1.page_index, mixed.document_page_results);
+        hash<auto> bulk = proc.processRecordsShape({"file": (fixture("digital.pdf"), fixture("mixed.pdf"))},
+            DataProvider::DataProviderShape::HashOfLists);
+        assertEq((digital.document_review_pages, mixed.document_review_pages), bulk.document_review_pages);
+        assertEq((digital.document_page_results, mixed.document_page_results), bulk.document_page_results);
+        if (!call_static_method("Pdf::PdfRenderer", "isAvailable")) {
+            assertEq((0, 1, 2, 3, 4), mixed.document_review_pages);
+            foreach hash<auto> page in (mixed.document_page_results) {
+                assertEq("unreadable", page.status);
+                assertEq("OCR-RENDERER-UNAVAILABLE", page.error);
+                assertEq(0.0, page.confidence);
+            }
+            return;
+        }
+        assertEq((), digital.document_review_pages);
+        assertEq("digital", digital.document_page_results[0].status);
+        assertEq(1.0, digital.document_confidence);
+        assertTrue(digital.document_text =~ /First digital row/);
+        assertTrue(digital.document_text =~ /Second digital row/);
+
+        hash<auto> scanned = proc.processRecord({"file": fixture("scanned.pdf")});
+        assertEq("ocr", scanned.document_page_results[0].status);
+        assertTrue(scanned.document_text =~ /Qore OCR/i);
+        assertEq(1, scanned.document_ocr_pages);
+        assertEq(("digital", "ocr", "blank", "unreadable", "partial"), map $1.status, mixed.document_page_results);
+        assertEq((3, 4), mixed.document_review_pages);
+        assertTrue(mixed.document_text =~ /First digital row/);
+        assertTrue(mixed.document_text =~ /Qore OCR/i);
+        # The fourth page is smaller than one pixel at this DPI. PDFium reads
+        # its empty text layer but cannot rasterize it for verification.
+        assertEq("PDF-ERROR", mixed.document_page_results[3].error);
+        assertEq("0", mixed.document_page_results[4].text);
+        assertEq("PDF-ERROR", mixed.document_page_results[4].error);
+        assertEq((1.0 + mixed.document_page_results[1].confidence) / 5, mixed.document_confidence);
+    }
+}
