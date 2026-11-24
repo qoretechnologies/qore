@@ -2829,6 +2829,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a closure called through a weak reference while another thread decides to collect the recursive graph of a
+      variable that the closure captured keeps the variable's value instead of reading @ref nothing (see
+      @ref closure_var_collection; <a href="https://github.com/qoretechnologies/qore/issues/7546">issue 7546</a>)
     - a method called through a weak reference while another thread releases the last strong reference to its object
       keeps the object, which is destroyed when the call releases it, instead of being destroyed while the call runs
       (see @ref weak_assignment_operator; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue

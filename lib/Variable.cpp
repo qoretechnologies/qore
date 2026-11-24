@@ -6053,6 +6053,7 @@ std::atomic<ClosureVarValue::dbg_after_rescan_t> ClosureVarValue::dbg_after_resc
 std::atomic<qore_dbg_closure_var_decide_hook_t> qore_dbg_closure_var_decide_hook{nullptr};
 std::atomic<qore_dbg_reference_lvalue_hook_t> qore_dbg_reference_lvalue_hook{nullptr};
 std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closure_var_collect_hook{nullptr};
+std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closure_var_collect_decided_hook{nullptr};
 #endif
 
 void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
@@ -6109,6 +6110,13 @@ void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
 #endif
             // set once this dereference has rescanned; see RSet::keepNeedsRescan()
             bool rescanned = false;
+            // the count with which the collection was decided, and the releases of the locking path read with it
+            // (RSet::canDelete(), abandonCollectionIfReferenced())
+            int decided_refs = 0;
+            unsigned decided_releases = 0;
+            bool collecting = false;
+            // a dereference that abandons a collection decides again: see below
+        decide_again:
             while (true) {
                 {
                     QoreRSectionLocker al(rml);
@@ -6123,20 +6131,23 @@ void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
                             assert(!rcount);
                             break;
                         }
-                        int rc = rs->canDelete(ref_copy, rcount, rescanned, *this, cycle_cleanup);
+                        int rc = rs->canDelete(ref_copy, rcount, rescanned, *this, cycle_cleanup, &decided_refs,
+                            &decided_releases);
                         if (rc == 1) {
                             // another dereference can have decided to collect the variable as well; only the one
                             // that claims the collection deletes it (RObject::claimCollection())
                             if (claimCollection()) {
                                 printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p found recursive "
                                     "reference; deleting value\n", this);
-                                do_del = true;
-#ifdef DEBUG
-                                qore_dbg_closure_var_collect_hook_t hook = qore_dbg_closure_var_collect_hook.load();
-                                if (hook) {
-                                    hook(getName());
+                                // the collection is decided while the variable is in a committed set: its releases
+                                // are made in the locking path from now on, until the value is released or the
+                                // collection is abandoned (qore#7546)
+                                {
+                                    AutoLocker al(rlck);
+                                    collect_pending.fetch_add(1, std::memory_order_relaxed);
                                 }
-#endif
+                                collecting = true;
+                                do_del = true;
                             }
                             break;
                         }
@@ -6164,6 +6175,46 @@ void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
                     }
                 }
 #endif
+            }
+            if (collecting) {
+#ifdef DEBUG
+                // the collection is decided and claimed; tests hold this thread here, so that another thread takes a
+                // reference to the variable meanwhile
+                if (qore_dbg_closure_var_collect_hook_t hook = qore_dbg_closure_var_collect_decided_hook.load()) {
+                    hook(getName());
+                }
+#endif
+                // a reference taken since the decision (a call of a closure that captured the variable, made through
+                // a weak reference to an object of the set) keeps the value: the collection is abandoned, and the
+                // later releases decide again (qore#7546)
+                bool abandoned;
+                {
+                    QoreAutoVarRWWriteLocker al(rml);
+                    abandoned = abandonCollectionIfReferenced(decided_refs, decided_releases);
+                    if (!abandoned) {
+                        // the value is taken in the same critical section, and released when the deletion is made
+                        takeCollectedValue();
+                    }
+                }
+#ifdef DEBUG
+                if (!abandoned) {
+                    if (qore_dbg_closure_var_collect_hook_t hook = qore_dbg_closure_var_collect_hook.load()) {
+                        hook(getName());
+                    }
+                }
+#endif
+                if (abandoned) {
+                    printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p referenced since the collection "
+                        "was decided; abandoned\n", this);
+                    do_del = false;
+                    collecting = false;
+                    qodh.abandonDelete();
+                    // this dereference decides again, with the count as it is now: the reference taken since can
+                    // have been released already, and its release, which found the collection claimed by this
+                    // dereference, decided nothing; a reference still held makes the decision fail, and its release
+                    // decides then
+                    goto decide_again;
+                }
             }
             if (do_del) {
                 qodh.willDelete();

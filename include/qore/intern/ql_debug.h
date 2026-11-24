@@ -168,6 +168,9 @@ DLLLOCAL extern std::atomic<qore_dbg_closure_var_decide_hook_t> qore_dbg_closure
 //! set by dbg_count_closure_var_collections()
 typedef void (*qore_dbg_closure_var_collect_hook_t)(const char* name);
 DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closure_var_collect_hook;
+//! called in ClosureVarValue::deref() after a dereference has decided and claimed the collection of a closure-bound
+//! variable, with no lock held, before it checks for references taken since and releases the value (qore#7546)
+DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closure_var_collect_decided_hook;
 
 //! returns true if the staged response data of the given HTTP/3 stream is held back from the transport, as when its
 //! client grants no flow-control credit; set by dbg_quic_hold_stream_data()

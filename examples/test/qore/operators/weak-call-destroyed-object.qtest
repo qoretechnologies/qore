@@ -19,15 +19,16 @@
 #! Tests method calls made through a weak reference while another thread destroys the object
 /** The child script (weak-call-destroyed-object/weak-call-destroyed-object.q) holds the thread that releases the last
     reference to an object with debug hooks, after it has released it and before it marks the object as being
-    destroyed, or after it has decided to collect it as part of a cycle (also while references that the cycle held
-    then are released, when the call takes the object out of its cycle, and when the count with which the
-    collection is decided has been superseded by releases), and calls a method through a weak reference
-    meanwhile, held by a local variable, a global variable, a hash, a list or an object member, or read from one into
-    a value or an argument: the call keeps the object, the thread does not destroy it while the call runs, and it is
-    destroyed when the call releases it (issue #7509).  A call that entered the object before keeps it until it
-    returns, and the destructor's own calls on the object are made.
-    It runs in every execution mode, and compiled with AOT at optimization levels 0 and 3, against the same expected
-    output; with a release build, which has no debug hooks, the script reports that it has nothing to test.
+    destroyed, or after it has decided to collect it as part of a cycle (also while references that the cycle held then
+    are released, when the call takes the object out of its cycle, and when the count with which the collection is
+    decided has been superseded by releases), and calls a method through a weak reference meanwhile, held by a local
+    variable, a global variable, a hash, a list or an object member, or read from one into a value or an argument: the
+    call keeps the object, the thread does not destroy it while the call runs, and it is destroyed when the call
+    releases it (issue #7509); a closure that captured a variable collected with its cycle, called through a weak
+    reference to an object of the cycle, keeps the variable's value (issue #7546). A call that entered the object
+    before keeps it until it returns, and the destructor's own calls on the object are made. It runs in every execution
+    mode, and compiled with AOT at optimization levels 0 and 3, against the same expected output; with a release build,
+    which has no debug hooks, the script reports that it has nothing to test.
 */
 class WeakCallDestroyedObjectTest inherits QUnit::Test {
     private {
@@ -85,7 +86,15 @@ broken cycle: destroyed: 2
 superseded cycle: destroyed while the call runs: 0
 superseded cycle: call returned 1
 superseded cycle: destroyed: 2
-destructor calls: 16
+closure var: destroyed while the call runs: 0
+closure var: call returned \"TC\"
+closure var: destroyed: 1
+closure var hash: call returned \"H\"
+closure var hash: collected: True
+closure var late write: read: \"NOTHING\"
+closure var late write: write: \"H\"
+closure var late write: destroyed: 1
+destructor calls: 18
 ";
         return rv;
     }

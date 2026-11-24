@@ -602,6 +602,12 @@ public:
     DLLLOCAL static std::atomic<dbg_after_rescan_t> dbg_after_rescan;
 #endif
 
+    //! the value of a variable collected with its recursive set, taken when the collection was checked; see
+    //! takeCollectedValue()
+    QoreValue collected_value;
+    //! true once takeCollectedValue() has taken the value, until a deletion has taken it from collected_value
+    std::atomic<bool> value_collected{false};
+
     DLLLOCAL virtual void releaseCycleReference(ExceptionSink* xsink) override {
         deref(xsink);
     }
@@ -612,8 +618,39 @@ public:
     DLLLOCAL virtual void deleteNow(ExceptionSink* xsink) override {
         // releasing the value can re-enter deref() for this variable (a closure that captured it), which the weak
         // reference keeps allocated
-        del(xsink);
+        if (value_collected.load(std::memory_order_relaxed)
+                && value_collected.exchange(false, std::memory_order_acq_rel)) {
+            // the value of a variable collected with its recursive set was taken when the collection was checked
+            // (takeCollectedValue()); the exchange gives it to one deletion only: the collection's, and the one that
+            // the variable's last reference makes, can run at the same time.  The other runs del(), as does the one
+            // that the last reference makes later, which releases a value that a closure has assigned to the
+            // variable since (through a reference to the closure taken after the decision, #7556): the variable has
+            // no reference then, so nothing else uses its value
+            QoreValue v = collected_value;
+            collected_value = QoreValue();
+            v.discard(xsink);
+        } else {
+            del(xsink);
+        }
         tDeref();
+    }
+
+    //! takes the value of a variable whose collection with its recursive set has been checked, under its lock
+    /** In the same critical section as the check (ClosureVarValue::deref(), qore#7546), so that a thread that still
+        reaches the variable (a closure that captured it, called through a weak reference) and reads or writes it under
+        its lock finds either the value, with a reference to the variable that made the check abandon the collection,
+        or no value; the value is released when the deletion is made (deleteNow()).
+    */
+    DLLLOCAL void takeCollectedValue() {
+        block_cleared = true;
+        if (val.static_assignment) {
+            // static_assignment variables (e.g. "self") have borrowed references that must not be decremented
+            val.unassignIgnore();
+        } else {
+            collected_value = val.removeValue(true);
+        }
+        // published after the value, for the deletion that takes it (deleteNow())
+        value_collected.store(true, std::memory_order_release);
     }
 
     // returns the name of the object

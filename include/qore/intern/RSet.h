@@ -615,6 +615,29 @@ public:
         return !collection_claimed.exchange(true, std::memory_order_acq_rel);
     }
 
+    //! returns true if another thread has taken a reference to a closure-bound variable since its collection was
+    //! decided (RSet::canDelete()), and then abandons the collection; lowers collect_pending
+    /** As qore_object_private::takeCollectDeleteReference() for an object (qore#7509, qore#7546): the count plus the
+        releases made since the decision, which collect_pending keeps in the locking path that counts them, is above
+        \a decided exactly when a reference has been taken since (a closure that captured the variable is called
+        through a weak reference to an object of the set, for one, which references the variable).  The collection
+        is then released (claimCollection()), and the releases of that thread decide again.  Called with the
+        object's lock held exclusively.
+
+        @param decided the count with which the collection was decided
+        @param releases locked_releases, read with that count
+    */
+    DLLLOCAL bool abandonCollectionIfReferenced(int decided, unsigned releases) {
+        AutoLocker al(rlck);
+        collect_pending.fetch_sub(1, std::memory_order_relaxed);
+        int since = static_cast<int>(locked_releases - releases);
+        if (references.load(std::memory_order_acquire) + since > decided) {
+            collection_claimed.store(false, std::memory_order_release);
+            return true;
+        }
+        return false;
+    }
+
     DLLLOCAL void removeInvalidateRSet();
 
     //! Marks the object's recursive set stale, and not closed, instead of invalidating it; see RSet::markStale()
