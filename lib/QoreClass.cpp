@@ -12933,7 +12933,9 @@ public:
                 old_call_program_context = get_set_program_call_context(old_pgm);
                 restore_call_program_context = true;
             }
-            ptcch.set(xsink, pgm_ctx, true);
+            // the receiver: a call of the constructor of a lent object from the code it was lent to is a call of the
+            // object as a capability (qore#7052), as in CodeEvaluationHelper::initImpl()
+            ptcch.set(xsink, pgm_ctx, true, self);
             if (*xsink) {
                 return -1;
             }
