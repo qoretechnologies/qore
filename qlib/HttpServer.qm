@@ -5508,6 +5508,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 # the trailer section of a chunked request body is larger than the limit of the socket (qore#6867)
                 case "HTTP-HEADER-TOO-LARGE": err_code = 431; break;
                 case "HTTP-BODY-ENCODING-ERROR": err_code = 400; break;
+                # a chunked request body that cannot be framed: an invalid chunk size or line end, or a trailer
+                # section that is not valid; the connection is closed
+                case "READ-HTTP-CHUNK-ERROR": err_code = 400; break;
                 default: err_code = 500; break;
             }
             # the response gives the client the error and its description; the location of the exception in the

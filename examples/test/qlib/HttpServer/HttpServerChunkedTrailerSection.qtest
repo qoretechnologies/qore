@@ -24,10 +24,11 @@
     DEALINGS IN THE SOFTWARE.
 
     The trailer section of a chunked request body ends where every reader ends it: a trailer section with a line that
-    ends with a bare LF, with an empty line before its end, or with a line that is not a field line, fails the request
-    and the connection is closed after the response, so that the bytes after it are never served as another request,
-    whether the handler reads the body or the server reads it after the handler.  A valid trailer section leaves the
-    connection open, and its fields are given to the handler.
+    ends with a bare LF, with an empty line before its end, or with a line that is not a field line, or a chunk size
+    that is not valid, fails the request with 400 (Bad Request), and the connection is closed after the response, so
+    that the bytes after it are never served as another request, whether the handler reads the body or the server
+    reads it after the handler.  A valid trailer section leaves the connection open, and its fields are given to the
+    handler.
 */
 
 %modern
@@ -93,6 +94,8 @@ class HttpServerChunkedTrailerSectionTest inherits QUnit::Test {
             "bare-lf-field-line": "0\r\nX-Trailer: a\n\r\nGET /smuggled HTTP/1.1\r\nHost: localhost\r\n\r\n",
             "bare-lf-after-field": "0\r\nX-Trailer: a\r\n\nGET /smuggled HTTP/1.1\r\nHost: localhost\r\n\r\n",
             "not-a-field-line": "0\r\nX-Trailer: a\r\nnot a field line\r\n\r\n",
+            # a chunk size that is not valid
+            "bad-chunk-size": "zz\r\nGET /smuggled HTTP/1.1\r\nHost: localhost\r\n\r\n",
         };
     }
 
@@ -139,6 +142,8 @@ class HttpServerChunkedTrailerSectionTest inherits QUnit::Test {
                 c.send(header(req) + "5\r\nhello\r\n" + i.value
                     + "GET /after-invalid HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 hash<auto> resp = readResponse(c);
+                # a body that cannot be framed is an error of the client
+                assertEq(400, resp.status_code, label);
                 assertEq("close", resp.connection, label);
                 # the connection is closed: the bytes after the body are not answered as another request
                 *hash<auto> next;

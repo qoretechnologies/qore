@@ -4489,6 +4489,8 @@ public:
         Invalid,        //!< the framing cannot be determined: chunked is not the final coding, is given more than once
                         //!< or with a parameter, or there is no coding
         Unsupported,    //!< a transfer coding other than chunked
+        CloseDelimited, //!< a response whose final transfer coding is not chunked: its body ends when the
+                        //!< connection is closed (RFC 9112 section 6.3)
     };
 
     //! returns the framing that the value of the \c Transfer-Encoding field of an HTTP/1.x message gives its body
@@ -4498,17 +4500,20 @@ public:
         must be the final coding and must be applied once; it has no parameters (RFC 9112 section 7).  A message body
         with a coding other than chunked cannot be read, as the library implements no other transfer coding.
 
-        In a response, a chunked coding given more than once with no other coding is taken as a chunked body: some
-        intermediaries repeat the field of the origin server, and a client reads the response that it asked for.
+        A response is never refused, as RFC 9112 section 6.3 requires of a client: its body is chunked if its final
+        coding is chunked without parameters (the codings before it are not decoded, and a repeated chunked coding,
+        as some intermediaries repeat the field of the origin server, is taken once); any other response body is
+        delimited by the end of the connection (\c CloseDelimited).
 
         @param te the value of the field: a string, or a list of strings
         @param desc set to why the framing is not \c Chunked
         @param response true for a response, false for a request
+        @param only_chunked if not null, set to true if every coding of the field is the chunked coding
 
         @return the framing of the message body
     */
     DLLLOCAL static HttpTransferCodingFraming getHttpTransferCodingFraming(QoreValue te, std::string& desc,
-            bool response) {
+            bool response, bool* only_chunked = nullptr) {
         // the codings, in order
         std::vector<std::string> codings;
         auto add_value = [&codings](QoreValue v) {
@@ -4543,15 +4548,23 @@ public:
             add_value(te);
         }
 
+        bool all_chunked = !codings.empty() && std::all_of(codings.begin(), codings.end(),
+            [](const std::string& c) { return !strcasecmp(c.c_str(), "chunked"); });
+        if (only_chunked) {
+            *only_chunked = all_chunked;
+        }
+        if (response) {
+            if (!codings.empty() && !strcasecmp(codings.back().c_str(), "chunked")) {
+                return HttpTransferCodingFraming::Chunked;
+            }
+            desc = "the final transfer coding of the response is not chunked";
+            return HttpTransferCodingFraming::CloseDelimited;
+        }
         if (codings.empty()) {
             desc = "the Transfer-Encoding field has no transfer coding";
             return HttpTransferCodingFraming::Invalid;
         }
         const char* unsupported = nullptr;
-        if (response && std::all_of(codings.begin(), codings.end(),
-                [](const std::string& c) { return !strcasecmp(c.c_str(), "chunked"); })) {
-            return HttpTransferCodingFraming::Chunked;
-        }
         for (size_t i = 0, e = codings.size(); i < e; ++i) {
             const std::string& c = codings[i];
             // the name of the coding, without any parameters
@@ -4582,16 +4595,29 @@ public:
         return HttpTransferCodingFraming::Chunked;
     }
 
+    //! returns true if a response with the given \c Transfer-Encoding field value has a chunked body
+    /** @see getHttpTransferCodingFraming()
+    */
+    DLLLOCAL static bool isHttpResponseBodyChunked(QoreValue te) {
+        std::string desc;
+        return !te.isNothing()
+            && getHttpTransferCodingFraming(te, desc, true) == HttpTransferCodingFraming::Chunked;
+    }
+
     //! checks how the body of an HTTP/1.x message is framed (RFC 9112 section 6), after its header was parsed
-    /** A message whose body cannot be framed as every other recipient would frame it is refused, so that the bytes
-        that follow its header are never taken for another message:
-        - a request with both \c Transfer-Encoding and \c Content-Length (RFC 9112 section 6.3): \c SOCKET-HTTP-ERROR;
-          in a response, the \c Transfer-Encoding overrides the \c Content-Length
+    /** A request with more than one \c Host field, or with a list in it, is refused with \c SOCKET-HTTP-ERROR
+        (RFC 9112 section 3.2).  A request whose body cannot be framed as every other recipient would frame it is
+        refused, so that the bytes that follow its header are never taken for another request:
+        - a request with both \c Transfer-Encoding and \c Content-Length (RFC 9112 section 6.3): \c SOCKET-HTTP-ERROR
         - a \c Transfer-Encoding whose framing cannot be determined (chunked not the final coding, given more than
-          once in a request or with a parameter, or no coding): \c SOCKET-HTTP-ERROR
+          once or with a parameter, or no coding): \c SOCKET-HTTP-ERROR
         - a \c Transfer-Encoding with a coding other than chunked: \c HTTP-UNSUPPORTED-TRANSFER-CODING
 
-        A message with a valid \c Transfer-Encoding has a chunked body, and its field is given with the value
+        A response is never refused for its \c Transfer-Encoding (RFC 9112 section 6.3): a response with the status
+        1xx, 204 or 304 has no body; otherwise its body is chunked if its final coding is chunked, which overrides
+        any \c Content-Length, and is delimited by the end of the connection if not.
+
+        A message with a \c Transfer-Encoding of the chunked coding alone has its field given with the value
         \c "chunked" (also when it was received in another case, with whitespace or in more than one field line), so
         that every reader of the message finds the same framing; the \c "headers-raw" key of the information hash
         has the value received.  A connection that receives an HTTP/1.0 request with a \c Transfer-Encoding is closed
@@ -4601,42 +4627,72 @@ public:
     */
     DLLLOCAL int checkHttpMessageFraming(ExceptionSink* xsink, QoreHashNode& h, QoreHashNode& fields, int flags,
             bool& close) {
+        // a request has one Host field, whose value is one host (RFC 9112 section 3.2): a server or an intermediary
+        // that took another one than this one would apply the request to another target
+        if (flags & CHF_REQUEST) {
+            QoreValue host = fields.getKeyValue("host");
+            if (host.getType() == NT_LIST) {
+                xsink->raiseException("SOCKET-HTTP-ERROR", "invalid HTTP request header received with more than one "
+                    "Host field (RFC 9112 section 3.2)");
+                return -1;
+            }
+            if (host.getType() == NT_STRING) {
+                QoreStringValueHelper str(host);
+                if (strchr(str->c_str(), ',')) {
+                    xsink->raiseException("SOCKET-HTTP-ERROR", "invalid HTTP request header received with a list "
+                        "of hosts in the Host field (RFC 9112 section 3.2)");
+                    return -1;
+                }
+            }
+        }
         QoreValue te = fields.getKeyValue("transfer-encoding");
         if (te.isNothing()) {
             return 0;
         }
         bool request = flags & CHF_REQUEST;
+        if (!request) {
+            // a response with one of these statuses has no body, whatever its fields say
+            int64 status = h.getKeyValue("status_code").getAsBigInt();
+            if ((status >= 100 && status < 200) || status == 204 || status == 304) {
+                return 0;
+            }
+        }
         if (request && !fields.getKeyValue("content-length").isNothing()) {
             xsink->raiseException("SOCKET-HTTP-ERROR", "invalid HTTP request header received with both "
                 "Transfer-Encoding and Content-Length (RFC 9112 section 6.3)");
             return -1;
         }
         std::string desc;
-        switch (getHttpTransferCodingFraming(te, desc, !request)) {
+        bool only_chunked = false;
+        switch (getHttpTransferCodingFraming(te, desc, !request, &only_chunked)) {
             case HttpTransferCodingFraming::Invalid:
-                xsink->raiseException("SOCKET-HTTP-ERROR", "invalid HTTP %s header received: %s (RFC 9112 section "
-                    "6.3)", request ? "request" : "response", desc.c_str());
+                xsink->raiseException("SOCKET-HTTP-ERROR", "invalid HTTP request header received: %s (RFC 9112 "
+                    "section 6.3)", desc.c_str());
                 return -1;
             case HttpTransferCodingFraming::Unsupported:
-                xsink->raiseException("HTTP-UNSUPPORTED-TRANSFER-CODING", "HTTP %s header received with an "
-                    "unsupported Transfer-Encoding: %s (RFC 9112 section 6.1)", request ? "request" : "response",
-                    desc.c_str());
+                xsink->raiseException("HTTP-UNSUPPORTED-TRANSFER-CODING", "HTTP request header received with an "
+                    "unsupported Transfer-Encoding: %s (RFC 9112 section 6.1)", desc.c_str());
                 return -1;
+            case HttpTransferCodingFraming::CloseDelimited:
+                // the body of the response ends when the connection is closed
+                return 0;
             case HttpTransferCodingFraming::Chunked:
                 break;
         }
         http_exp_chunked_body = true;
-        // the value is given as "chunked", where it is given
-        bool normalized = false;
-        if (te.getType() == NT_STRING) {
-            // note: the value can be held in inline short string storage, which the value helper reads
-            QoreStringValueHelper str(te);
-            normalized = !strcmp(str->c_str(), "chunked");
-        }
-        if (!normalized) {
-            fields.setKeyValue("transfer-encoding", new QoreStringNode("chunked"), nullptr);
-            if (!h.getKeyValue("transfer-encoding").isNothing()) {
-                h.setKeyValue("transfer-encoding", new QoreStringNode("chunked"), nullptr);
+        // the value is given as "chunked", where it is given, if it has no other coding
+        if (only_chunked) {
+            bool normalized = false;
+            if (te.getType() == NT_STRING) {
+                // note: the value can be held in inline short string storage, which the value helper reads
+                QoreStringValueHelper str(te);
+                normalized = !strcmp(str->c_str(), "chunked");
+            }
+            if (!normalized) {
+                fields.setKeyValue("transfer-encoding", new QoreStringNode("chunked"), nullptr);
+                if (!h.getKeyValue("transfer-encoding").isNothing()) {
+                    h.setKeyValue("transfer-encoding", new QoreStringNode("chunked"), nullptr);
+                }
             }
         }
         // a recipient of an HTTP/1.0 message with a Transfer-Encoding closes the connection after it

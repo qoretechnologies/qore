@@ -6751,6 +6751,10 @@ size_t my_socket_priv::httpLinePayloadSize(const char* str, size_t len) {
     return qore_socket_private::httpLinePayloadSize(str, len);
 }
 
+bool my_socket_priv::isHttpResponseBodyChunked(QoreValue te) {
+    return qore_socket_private::isHttpResponseBodyChunked(te);
+}
+
 int my_socket_priv::parseHttpChunkSize(const char* line, size_t len, int64_t& chunk_size, ExceptionSink* xsink) {
     return qore_socket_private::parseHttpChunkSize(line, len, chunk_size, xsink);
 }

@@ -1976,20 +1976,21 @@ SocketPollOperationBase* qore_poll_pipeline_ops::createInnerOpImpl(PollPipelineP
                 && !strcasecmp(step.target.c_str(), "HEAD");
 
             if (b->ctx.headers) {
-                // Check Transfer-Encoding: chunked; the header parser gives a valid Transfer-Encoding as
-                // "chunked" and refuses any other (RFC 9112 section 6.1)
+                // Check Transfer-Encoding: the body is chunked if the final transfer coding is chunked, and is
+                // delimited by the end of the connection if not (RFC 9112 section 6.3); the header parser has
+                // refused a request with any other Transfer-Encoding
                 QoreValue te_val = pp_get_header_field(b->ctx.headers, "transfer-encoding");
+                bool te_close = false;
                 if (!te_val.isNothing()) {
-                    QoreStringValueHelper te_str(te_val);
-                    if (te_val.getType() != NT_STRING || strcasecmp(te_str->c_str(), "chunked")) {
-                        xsink->raiseException("POLL-PIPELINE-ERROR", "the message has a Transfer-Encoding that is "
-                            "not the chunked transfer coding");
-                        return nullptr;
+                    if (qore_socket_private::isHttpResponseBodyChunked(te_val)) {
+                        chunked = true;
+                    } else {
+                        te_close = true;
+                        conn_close = true;
                     }
-                    chunked = true;
                 }
                 // Check Content-Length; a Transfer-Encoding overrides it (RFC 9112 section 6.3)
-                if (!chunked) {
+                if (!chunked && !te_close) {
                     QoreValue cl_val = pp_get_header_field(b->ctx.headers, "content-length");
                     if (!cl_val.isNullOrNothing()) {
                         content_length = cl_val.getAsBigInt();

@@ -160,6 +160,8 @@ class HttpServerTransferEncodingFramingTest inherits QUnit::Test {
             {"n": "identity", "h": "Transfer-Encoding: identity\r\n", "b": Inner, "c": 501},
             {"n": "xchunked", "h": "Transfer-Encoding: xchunked\r\n", "b": chunked_body, "c": 501},
             {"n": "gzip", "h": "Transfer-Encoding: gzip\r\n", "b": Inner, "c": 501},
+            {"n": "two-hosts", "h": "Host: other\r\nContent-Length: 0\r\n", "b": "", "c": 400},
+            {"n": "host-list", "h": "Host: other, localhost\r\nContent-Length: 0\r\n", "b": "", "c": 400},
         );
         foreach hash<auto> i in (cases) {
             foreach string path in (Paths) {
