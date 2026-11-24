@@ -1,0 +1,80 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module whose destructor starts an HTTP server when the module cleanup deletes its data: its handler returns a
+# streamed response that is too big for the socket buffers, with an after_send callback, to a client that never reads
+# it; the cleanup cancels the connection at its deadline while the response is being sent, and the work of the
+# canceled connection, which the cleanup counts, hands itself over to the thread that calls the after_send callback
+# with the failed result; the cleanup waits for it before it deletes the data of the next module (AbLater); see
+# aftersend-client.qr (qore#7339)
+
+%modern
+
+%requires HttpServerUtil
+%requires HttpServer
+%requires AcKeeper
+
+module AbAfterSend {
+    version = "1.0";
+    desc = "an after_send callback of a response that the module cleanup canceled";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AbAfterSend {
+#! the size of the response: more than the socket buffers hold, so that its sending cannot end
+const ResponseSize = 64 * 1024 * 1024;
+
+#! returns the after_send callback; created outside of a method, as a closure created in one cannot run once its
+#! object is gone
+code sub make_after_send() {
+    return sub (hash<auto> cx, bool sent) {
+        # the work of the canceled connection handed itself over to this thread, taking its handle in the file given
+        printf("after_send: sent: %y, handed over: %y\n", sent,
+            call_function("dbg_module_cleanup_wait_handles", 1, 0, "HttpAsyncSocketIoController.qc"));
+        flush();
+    };
+}
+
+#! returns a streamed response that is too big for the socket buffers, with an after_send callback
+class BigResponseHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": new BinaryInputStream(binary(strmul("x", ResponseSize))),
+            "after_send": make_after_send(),
+        };
+    }
+}
+
+#! starts the server and the client when the cleanup deletes it
+class AfterSendConnector {
+    destructor() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        server.setDefaultHandler("big", new BigResponseHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        Socket sock();
+        sock.connect(sprintf("127.0.0.1:%d", port), 20s);
+        sock.send("GET /big HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        # the response is being sent: its first bytes have arrived; the client never reads it, so its sending cannot
+        # end
+        if (!sock.isDataAvailable(20s)) {
+            printf("the response was not sent\n");
+        }
+        # the connections are kept until the cleanup cancels them at its deadline
+        Keeper::keep = (server, sock);
+        printf("response being sent\n");
+        flush();
+    }
+}
+
+#! the data of this module
+public class AfterSendHolder {
+    public {
+        static AfterSendConnector connector();
+    }
+}
+}

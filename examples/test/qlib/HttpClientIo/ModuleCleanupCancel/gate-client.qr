@@ -9,5 +9,6 @@
 
 GateHolder::http_version = ARGV[0];
 GateHolder::gate_file = ARGV[0] == "2.0" ? "WebSocketHandler.qm" : "HttpWebSocketPollOperation.qc";
+GateHolder::end_file = ARGV[0] == "2.0" ? "HttpAsyncSocketIoController.qc" : "HttpWebSocketPollOperation.qc";
 printf("started\n");
 flush();
