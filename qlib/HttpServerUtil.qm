@@ -192,9 +192,11 @@ module HttpServerUtil {
     @ref HttpServer::AbstractHttpRequestHandler::getRawRequest() "getRawRequest()", and a handler that dispatches
     requests to the code of other components withholds their credentials with
     @ref HttpServer::AbstractHttpRequestHandler::withholdRequestCredentials() "withholdRequestCredentials()"; both
-    are private and refuse sandboxed callers.  The raw request is the request being served on the thread while the
-    code that serves it runs: the request context that the serving code gets has no reference to it, and the
-    concurrent streams of an HTTP/2 or HTTP/3 connection are served on threads of their own.  At most
+    are private, and getRawRequest() refuses sandboxed callers.  The raw request is the request being served on the
+    thread while the code that serves it runs, which only the HTTP server's own dispatch makes current: a handler
+    that other code calls directly, also with a request that the caller made, has no raw request, and its stream
+    requests are refused (\c HTTP-SERVER-ERROR).  The request context that the serving code gets has no reference to
+    it, and the concurrent streams of an HTTP/2 or HTTP/3 connection are served on threads of their own.  At most
     @ref HttpServer::HttpRawRequestScope::MaxDepth "8" requests can be dispatched in the dispatch of others on a
     thread; a further one is refused with \c HTTP-SERVER-ERROR.
 
@@ -226,8 +228,8 @@ module HttpServerUtil {
       of the request, also in the arguments of the stream request's constructor; a handler that authenticates its own
       endpoint opts in to receive its \c Authorization field
       (@ref HttpServer::AbstractHttpRequestHandler::setRequestCredentialHeaders() "setRequestCredentialHeaders()"),
-      and the trusted code of a handler gets the raw request with
-      @ref HttpServer::AbstractHttpRequestHandler::getRawRequest() "getRawRequest()"; a platform filters a
+      and the trusted code of a handler gets the raw request, which only the HTTP server's own dispatch makes
+      current, with @ref HttpServer::AbstractHttpRequestHandler::getRawRequest() "getRawRequest()"; a platform filters a
       request for the code of a tenant with
       @ref HttpServer::AbstractStreamRequest::filterRequest() "AbstractStreamRequest::filterRequest()" (see
       @ref httpserverutil_request_credentials; issue #6843)
@@ -2794,13 +2796,14 @@ public class Http1BodyReader {
 thread_local *list<hash<auto>> http_raw_requests;
 
 #! Keeps the raw request of a request current on the thread while the code that serves it runs (qore#6843)
-/** Not public: only the code of this module uses it.  A request handler creates it when it hands a request without
-    the credentials of the request to the code that serves it (AbstractHttpRequestHandler::withholdRequestCredentials());
-    the raw request is the request being served on the thread until the object is destroyed, which happens on every
-    path out of the scope that holds it (a return, an exception, the end of a stream, the stop of the server).  A
-    stream request of this module reads its raw request with current(), as does the trusted code of a request handler
-    with AbstractHttpRequestHandler::getRawRequest().  The request context that the serving code gets has no
-    reference to it.
+/** Not public: only the code of this module creates it, for the HTTP server's own dispatch of a request
+    (HttpServerDispatchCapability), so that no other code can make a request current, such as a request that it
+    forged with the fields that the server sets (the user, the socket) to call a handler with.  The raw request is the
+    request being served on the thread until the object is destroyed, which happens on every path out of the scope
+    that holds it (a return, an exception, the end of a stream, the stop of the server).  A stream request of this
+    module reads its raw request with current(), as does the trusted code of a request handler with
+    AbstractHttpRequestHandler::getRawRequest().  The request context that the serving code gets has no reference to
+    it.
 */
 class HttpRawRequestScope {
     public {
@@ -2862,6 +2865,67 @@ class HttpRawRequestScope {
     }
 }
 
+#! The capability of the HTTP server's dispatch to make the raw request of a request current (qore#6843)
+/** Not public: AbstractHttpRequestHandler::claimServerDispatch() gives it to the initialization of the HttpServer
+    module only, which keeps it in a \c private:internal member; no other code can create an object of the class or
+    reach one.
+*/
+class HttpServerDispatchCapability {
+    private:internal {
+        #! the canonical path of the file of the module whose initialization claimed the capability
+        string path;
+        #! True once the path was checked against the record of the loaded HttpServer module
+        bool checked;
+        #! a lock for the check
+        Mutex lck();
+    }
+
+    #! creates the object for the module at the given canonical path
+    constructor(string path) {
+        self.path = path;
+    }
+
+    #! Makes the raw request of a request current on the thread until the object returned is destroyed
+    /** @param cx the request context as the server made it
+        @param hdr the request header fields
+        @param s the socket that the handler gets
+
+        @return the object that keeps the raw request current
+
+        @throw HTTP-SERVER-ERROR the capability does not belong to the loaded HttpServer module, or too many requests
+        are dispatched in the dispatch of others on the thread
+    */
+    object enter(hash<auto> cx, hash<auto> hdr, *Socket s) {
+        if (!checked) {
+            check();
+        }
+        return new HttpRawRequestScope(cx, hdr, s);
+    }
+
+    #! checks that the module that claimed the capability is the HttpServer module that is loaded (its record)
+    private:internal check() {
+        AutoLock al(lck);
+        if (checked) {
+            return;
+        }
+        # a private copy of the module (Program::loadApplyToPrivateUserModule()) has no record of its own: it is
+        # checked against the record of the HttpServer module loaded in the process, if any
+        *hash<auto> rec = get_module_hash().HttpServer;
+        *string rp;
+        if (rec.filename) {
+            try {
+                rp = realpath(rec.filename);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        if (rec && rp != path) {
+            throw "HTTP-SERVER-ERROR", "the dispatch capability of the HTTP server was claimed by the initialization of "
+                "a module that is not the loaded HttpServer module";
+        }
+        checked = True;
+    }
+}
+
 #! The options of AbstractStreamRequest::filterRequest(): what the platform consumed and what the handler opts in to
 /** The code that serves a request (a stream request, the handler of a service) gets the request without the
     credentials of the request: see @ref httpserverutil_request_credentials
@@ -2906,6 +2970,11 @@ public hashdecl HttpFilteredRequestInfo {
 
 #! abstract class for streaming HTTP chunked requests/responses
 /** This class is the base class for handling HTTP stream requests; i.e. with chunked data
+
+    An object of the class is created only in the dispatch of an HTTP server
+    (@ref HttpServer::HttpServer "HttpServer"), which makes the raw request of the request current: the constructor
+    raises \c HTTP-SERVER-ERROR for a request that the server did not dispatch (see
+    @ref httpserverutil_request_credentials).
 
     The calling order is as follows:
     - constructor(): this is called when the request is received
@@ -3048,19 +3117,21 @@ public class AbstractStreamRequest {
         # the code of this class serves the request with the raw request, which the code that created the object did
         # not get (see AbstractHttpRequestHandler::getStreamRequest())
         # the raw request being served on the thread; the comparison is a sanity check that the object is created
-        # for the request being served, not a security boundary: the boundary is the scope, which only the code of
-        # this module reads
+        # for the request being served, not a security boundary: the boundary is the scope, which only the HTTP
+        # server's dispatch creates and only the code of this module reads
         *hash<auto> raw = HttpRawRequestScope::current();
-        if (raw && raw.cx.id == cx.id && raw.cx.orig_path == cx.orig_path && raw.hdr.method == hdr.method) {
-            raw_cx = raw.cx;
-            raw_hdr = raw.hdr;
-            # the socket of the request, which the code that created the object did not get for an HTTP/1.x request
-            if (raw.s) {
-                self.s = raw.s;
-            }
-        } else {
-            raw_cx = cx;
-            raw_hdr = hdr;
+        # fails closed: a stream request is served only in the HTTP server's dispatch, which alone makes the raw
+        # request current (qore#6843)
+        if (!raw || raw.cx.id != cx.id || raw.cx.orig_path != cx.orig_path || raw.hdr.method != hdr.method) {
+            throw "HTTP-SERVER-ERROR", "a stream request can only be served in the dispatch of the HTTP server, which "
+                "makes its raw request current; none is current for this request: the request was not dispatched by "
+                "the HTTP server, or the server's dispatch has no capability to make it current";
+        }
+        raw_cx = raw.cx;
+        raw_hdr = raw.hdr;
+        # the socket of the request, which the code that created the object did not get for an HTTP/1.x request
+        if (raw.s) {
+            self.s = raw.s;
         }
         # what subclasses read
         hash<HttpFilteredRequestInfo> filtered = AbstractStreamRequest::filterRequest(raw_cx, raw_hdr);
@@ -5428,6 +5499,11 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
     }
 
     #! top-level request handling method
+    /** A stream request (a handler created with \c stream set) is served only in the dispatch of an HTTP server
+        (@ref HttpServer::HttpServer "HttpServer"), which makes the raw request current for the stream request; a call
+        of this method by other code for a stream request raises \c HTTP-SERVER-ERROR (see
+        @ref httpserverutil_request_credentials)
+    */
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
             *data body) {
         # classic, non-streaming interface
@@ -5444,17 +5520,16 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         }
 
         # the code that serves the request gets it without the server's objects and the credentials of the request
-        # (see AbstractStreamRequest::filterRequest()); the raw request is current on the thread while the request is
-        # served (see getRawRequest()): the concurrent streams of an HTTP/2 or HTTP/3 connection are served on threads
-        # of their own
+        # (see AbstractStreamRequest::filterRequest()); the HTTP server's dispatch makes the raw request current on the
+        # thread while the request is served (see getRawRequest()): the concurrent streams of an HTTP/2 or HTTP/3
+        # connection are served on threads of their own
         # the HTTP server gives the handler of a sandboxed Program a socket of its own request (qore#7305); the socket
         # of the connection, which a stream request needs, never reaches its code (qore#6843)
         if (!HttpRawRequestScope::isStreamView(s) && SandboxManager::isFromSandboxedProgram(self)) {
             throw "HTTP-HANDLER-ERROR", "a stream request handler of a class of a sandboxed Program cannot serve an "
                 "HTTP/1.x request on the socket of the connection, which is not given to the code of such a class";
         }
-        *object raw_scope;
-        hash<HttpFilteredRequestInfo> filtered = withholdRequestCredentials(cx, hdr, \raw_scope, s);
+        hash<HttpFilteredRequestInfo> filtered = withholdRequestCredentials(cx, hdr);
         # the socket of an HTTP/1.x request is the connection's: the code that serves the request gets a placeholder,
         # which is not connected, and the stream request takes the socket from the raw request (qore#6843); the
         # handler socket of an HTTP/2 or HTTP/3 request is a view of its own stream
@@ -5469,41 +5544,64 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
     }
 
     #! Returns the request without the server's objects and the credentials of the request for the code that serves
-    #! it, and makes the raw request current on the thread while it is served
-    /** For the trusted code of the hierarchy of this class that hands a request to code that serves it, such as a
-        request handler that dispatches requests to the classes of another component: the request is filtered with
+    #! it
+    /** For the code of the hierarchy of this class that hands a request to code that serves it, such as a request
+        handler that dispatches requests to the classes of another component: the request is filtered with
         AbstractStreamRequest::filterRequest(), with the options of this handler (its authenticator and
-        setRequestCredentialHeaders()); the raw request is current on the thread, for getRawRequest() and the stream
-        requests created for it, until \a scope is destroyed, which the caller keeps for the duration of the request.
-
-        It is private, and refuses sandboxed callers, so that only trusted code can call it.
+        setRequestCredentialHeaders()).  It does not make the raw request current: only the HTTP server's own dispatch
+        does (see getRawRequest()).
 
         @param cx the raw request context
         @param hdr the raw request header fields
-        @param scope set to the object that keeps the raw request current; the raw request is no longer current when
-        it is destroyed
-        @param s the socket of the request, if any, which getRawRequest() gives in its \c "s" key
 
         @return the filtered request
 
-        @throw REQUEST-ERROR the calling code is sandboxed
-        @throw HTTP-SERVER-ERROR too many requests are dispatched in the dispatch of others on the thread
-
         @since HttpServerUtil 1.6
     */
-    private hash<HttpFilteredRequestInfo> withholdRequestCredentials(hash<auto> cx, hash<auto> hdr,
-            reference<*object> scope, *Socket s) {
-        if (HttpRawRequestScope::callerIsSandboxed()) {
-            throw "REQUEST-ERROR", "sandboxed code cannot make a raw request current";
-        }
+    private hash<HttpFilteredRequestInfo> withholdRequestCredentials(hash<auto> cx, hash<auto> hdr) {
         hash<HttpFilteredRequestInfo> rv = AbstractStreamRequest::filterRequest(cx, hdr,
             <HttpRequestFilterOptions>{
                 # the handler's authenticator consumed the credentials that it reads, unless it accepts every request
                 "platform_authenticated": exists auth && !(auth instanceof PermissiveAuthenticator),
                 "own_headers": request_credential_headers,
             });
-        scope = new HttpRawRequestScope(cx, hdr, s);
         return rv;
+    }
+
+    #! Internal: for the initialization of the HttpServer module only
+    /** @internal
+        Gives the initialization of the HttpServer module the capability of its dispatch to make the raw request of a
+        request current, which only the HTTP server's own dispatch does (see getRawRequest(); qore#6843).  Every other
+        caller is refused: code that a sandbox governs, also a module named HttpServer that sandboxed code loads by its
+        path, and code that is not the initialization of a module named HttpServer.  The capability is checked
+        against the record of the loaded HttpServer module when it is first used: the file of the module that claimed
+        it must be the file of that module.  A trusted initialization of the HttpServer module that runs again in the
+        process (a private copy of the module, Program::loadApplyToPrivateUserModule()) gets a capability of its own,
+        checked against the record of the HttpServer module loaded in the process if there is one: a copy loaded from
+        another file then has no current raw request, and its stream requests are refused.
+
+        @return the capability, which is of a class that is not public
+
+        @throw HTTP-SERVER-ERROR the caller is not the trusted initialization of the HttpServer module
+
+        @since HttpServerUtil 1.6
+    */
+    static object claimServerDispatch() {
+        if (HttpRawRequestScope::callerIsSandboxed()) {
+            throw "HTTP-SERVER-ERROR", "the dispatch capability of the HTTP server cannot be claimed by sandboxed code";
+        }
+        *string name;
+        *string path;
+        try {
+            name = get_module_context_name();
+            path = realpath(get_module_context_path());
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        if (name != "HttpServer" || !path) {
+            throw "HTTP-SERVER-ERROR", "the dispatch capability of the HTTP server can only be claimed by the "
+                "initialization of the HttpServer module";
+        }
+        return new HttpServerDispatchCapability(path);
     }
 
     #! Returns the raw request context and header fields of the request being served on the thread
@@ -5515,7 +5613,8 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         @return a hash with the raw request context in \c "cx", the raw header fields in \c "hdr" and the socket of
         the request, if any, in \c "s" (the raw socket of an HTTP/1.x request)
 
-        @throw REQUEST-ERROR the calling code is sandboxed, or no request is being served on the thread
+        @throw REQUEST-ERROR the calling code is sandboxed, or no request is being served on the thread by the HTTP
+        server's dispatch, which alone makes a raw request current
 
         @since HttpServerUtil 1.6
     */

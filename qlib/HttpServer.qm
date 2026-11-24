@@ -1221,6 +1221,16 @@ public hashdecl HttpServerOptionInfo {
     @see HttpServerAsyncIo::HttpAsyncSocketIoController for callback-based async I/O
 */
 public class HttpServer inherits HttpServer::AbstractLogger {
+    #! Returns the capability of the server's dispatch, claimed by the initialization of the module, or @ref nothing
+    /** Fails closed: without the capability no raw request is current, and stream requests are refused (qore#6843)
+    */
+    private:internal static *object claimDispatchCapability() {
+        try {
+            return AbstractHttpRequestHandler::claimServerDispatch();
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
     public {
         #! version of the HttpServer's implementation
         const Version = HttpServer::HttpServerVersion;
@@ -1517,6 +1527,12 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     }
 
     private:internal {
+        #! The capability of the server's dispatch to make the raw request of a request current (qore#6843)
+        /** Claimed by the initialization of the module; without it, no raw request is current, and stream requests are
+            refused (see AbstractHttpRequestHandler::claimServerDispatch())
+        */
+        static *object dispatch_capability = HttpServer::claimDispatchCapability();
+
         #! Cached HTTP date header value
         static string cached_date_header;
 
@@ -5655,7 +5671,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # the socket that the handler gets (qore#6953); that of an HTTP/1.1 request ends when the
                     # handler's code returns, before the server sends the response and reads the next request on the
                     # connection (qore#7305)
-                    hash<auto!> hrv = handler.handleRequest(hview, request_helper.handler_sock ?? s, cx, hdr, body);
+                    Socket hsock = request_helper.handler_sock ?? s;
+                    # the raw request is current on the thread while the handler serves it: only this dispatch makes
+                    # it current; without the capability no request is current, and a stream request is refused
+                    # (qore#6843)
+                    *object raw_scope = dispatch_capability ? dispatch_capability.enter(cx, hdr, hsock) : NOTHING;
+                    on_exit delete raw_scope;
+                    hash<auto!> hrv = handler.handleRequest(hview, hsock, cx, hdr, body);
                     if (hrv.hasKey("raw_response")) {
                         delete hrv."raw_response";
                     }

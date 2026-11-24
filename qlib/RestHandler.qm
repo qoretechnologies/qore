@@ -1997,10 +1997,9 @@ public namespace RestHandler {
             try {
                 checkAccess(cx);
                 # the REST classes get the request without the server's objects and the credentials of the request,
-                # with the keys that this handler adds (qore#6843; see @ref rest_request_credentials)
-                # the raw request is current on the thread while the request is dispatched
-                *object raw_scope;
-                hash<HttpFilteredRequestInfo> filtered = withholdRequestCredentials(cx, hdr, \raw_scope);
+                # with the keys that this handler adds (qore#6843; see @ref rest_request_credentials); the HTTP
+                # server's dispatch makes the raw request current
+                hash<HttpFilteredRequestInfo> filtered = withholdRequestCredentials(cx, hdr);
                 hash<auto> rcx = filtered.cx;
                 foreach string key in (RestHandlerContextKeys + (rest_context_keys ?? ())) {
                     if (cx.hasKey(key)) {

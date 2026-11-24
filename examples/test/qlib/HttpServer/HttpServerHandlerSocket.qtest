@@ -231,16 +231,11 @@ class HttpServerHandlerSocketTest inherits QUnit::Test {
         HTTPClient c({"url": "http://127.0.0.1:" + port});
         on_exit c.disconnect();
         hash<auto> info;
-        try {
-            c.send("x", "POST", "/tsh/x", {"Authorization": "Basic dGVzdDp0ZXN0"}, False, \info);
-            assertTrue(False, "the request is refused");
-        } catch (hash<ExceptionInfo> ex) {
-            # refused when the request is created, without naming the request's header fields
-            assertEq(500, ex.arg.status_code);
-            assertRegex("HTTP-HANDLER-ERROR: a stream request handler of a class that sandboxed code declared "
-                "cannot serve an HTTP/1.x request", ex.arg.body);
-            assertNRegex("dGVzdDp0ZXN0", ex.arg.body);
-        }
+        # the handler gets a socket of its own request (qore#7305), which the stream request uses: it cannot act on the
+        # connection
+        hash<auto> resp = c.send("x", "POST", "/tsh/x", {"Authorization": "Basic dGVzdDp0ZXN0"}, False, \info);
+        assertEq(200, resp.status_code);
+        assertEq(sprintf("%y", TenantViewOps), resp.body);
     }
 
     #! sends a request and a request with credentials after it on the same connection; returns both responses

@@ -101,6 +101,11 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Stream Requests Are Served Only in the Dispatch of an HTTP Server
+    A stream request (@ref HttpServer::AbstractStreamRequest "AbstractStreamRequest") is served only in the dispatch
+    of an @ref HttpServer::HttpServer "HttpServer": code that calls a stream request handler directly gets
+    \c HTTP-SERVER-ERROR (see @ref httpserverutil_request_credentials).
+
     @par HttpServer Limits the Request Bodies That It Buffers to 256 MiB by Default
     A request body that @ref HttpServer::HttpServer "HttpServer" reads into memory and that is larger than
     @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" (256 MiB) is answered with HTTP 413 when no

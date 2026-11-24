@@ -1,0 +1,317 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Only the HTTP server's own dispatch makes the raw request of a request current (qore#6843): a handler called
+    directly, by trusted code or by sandboxed code with a request that it made, has no raw request
+    (AbstractHttpRequestHandler::getRawRequest() is refused, a stream request is refused), and its REST classes get
+    the filtered request only; the capability of the dispatch is claimed by the initialization of the HttpServer
+    module only, and no other code can claim it or reach it.
+*/
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires RestHandler
+%requires FsUtil
+%requires reflection
+%requires json
+%requires ../../TestInterpreter.qm
+
+%exec-class HttpServerDispatchCapabilityTest
+
+#! a listener for the direct calls of a handler
+class TestListener inherits HttpListenerInterface {
+    log(string fmt, ...) {
+    }
+
+    logError(string fmt, ...) {
+    }
+
+    addUserThreadContext(hash<auto> uctx) {
+    }
+
+    auto removeUserThreadContext(*string k) {
+    }
+}
+
+#! a stream request handler of trusted code that records what its trusted code gets
+class ProbeStreamHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! what getRawRequest() gave in the last request: the user and the request ID, or the error
+        auto raw;
+    }
+
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        try {
+            hash<auto> r = getRawRequest();
+            raw = {"user": r.cx.user, "id": r.cx.id};
+        } catch (hash<ExceptionInfo> ex) {
+            raw = ex.err;
+        }
+        return new ProbeStreamRequest(listener, self, s, cx, hdr, body);
+    }
+}
+
+#! a stream request that answers 200
+class ProbeStreamRequest inherits AbstractStreamRequest {
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, auto body) : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    private hash<auto> getResponseHeaderMessageImpl() {
+        return {"code": 200, "body": "ok"};
+    }
+}
+
+#! a REST class of trusted code that reports the keys of the request context that it gets
+class ProbeRestClass inherits AbstractRestClass {
+    string name() {
+        return "probe";
+    }
+
+    hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
+        return RestHandler::makeResponse(200, {
+            "server-keys": (map cx.hasKey($1), ("auth", "socket-info", "uctx", "logger", "sock_key")),
+        });
+    }
+}
+
+const TenantOpts = PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES;
+
+const Tenant = "%requires HttpServer
+%requires RestHandler
+%requires reflection
+%requires json
+
+#! a request with the fields that the server sets, forged
+hash<auto> sub forged_cx() {
+    return {
+        'id': 1,
+        'orig_path': '/x',
+        'method': 'GET',
+        'user': 'admin',
+        'auth': True,
+        'socket-info': {'address': '127.0.0.1'},
+        'uctx': {'role': 'admin'},
+        'header-info': {'body_streaming': False},
+    };
+}
+
+string sub attempt(code c) {
+    try {
+        c();
+        return 'OK';
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+hash<auto> sub direct(AbstractHttpRequestHandler h, HttpListenerInterface l) {
+    return {'call': attempt(sub () { h.handleRequest(l, new Socket(), forged_cx(), {'method': 'POST'}, NOTHING); })};
+}
+
+auto sub direct_rest(RestHandler h, HttpListenerInterface l) {
+    hash<auto> cx = forged_cx() + {'url': {'path': 'probe'}, 'raw_path': '/probe'};
+    return h.handleRequest(l, new Socket(), cx, {'method': 'GET', 'accept': 'application/json'}, NOTHING);
+}
+
+string sub claim() {
+    return attempt(sub () { AbstractHttpRequestHandler::claimServerDispatch(); });
+}
+
+string sub reflect() {
+    return attempt(sub () {
+        Reflection::Class cls = Reflection::Class::forName('HttpServer::HttpServer');
+        cls.getStaticMember('dispatch_capability').getValue();
+    });
+}
+";
+
+class HttpServerDispatchCapabilityTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        int port;
+        ProbeStreamHandler stream_handler();
+        RestHandler rest();
+        Program tenant;
+    }
+
+    constructor() : Test("HttpServerDispatchCapability", "1.0") {
+        addTestCase("the server's dispatch makes the raw request current", \testServerDispatch());
+        addTestCase("a direct call of a handler by trusted code has no raw request", \testTrustedDirect());
+        addTestCase("a direct call of a handler by sandboxed code has no raw request", \testTenantDirect());
+        addTestCase("only the initialization of the HttpServer module claims the capability", \testClaim());
+        addTestCase("sandboxed code cannot reach the capability", \testReach());
+        addTestCase("a module named HttpServer that sandboxed code loads by its path", \testByPath());
+
+        rest.addClass(new ProbeRestClass());
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        server.setHandler("stream", "^stream", NOTHING, stream_handler);
+        server.setHandler("rest", "^probe", NOTHING, rest);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        on_exit server.stop();
+
+        tenant = new Program(TenantOpts);
+        tenant.setSandboxManager(new SandboxManager());
+        tenant.parse(Tenant, "tenant");
+
+        set_return_value(main());
+    }
+
+    testServerDispatch() {
+        HTTPClient c({"url": "http://127.0.0.1:" + port});
+        on_exit c.disconnect();
+        hash<auto> info;
+        hash<auto> resp = c.send("x", "POST", "/stream", NOTHING, False, \info);
+        assertEq(200, resp.status_code, "the stream request is served");
+        assertEq("hash", stream_handler.raw.type(), "the trusted code of the handler gets the raw request");
+        assertEq("integer", stream_handler.raw.id.type());
+    }
+
+    testTrustedDirect() {
+        stream_handler.raw = NOTHING;
+        # fails closed with an error that names the cause
+        assertThrows("HTTP-SERVER-ERROR", "can only be served in the dispatch of the HTTP server",
+            sub () { stream_handler.handleRequest(new TestListener(), new Socket(), {"id": 1, "orig_path": "/x",
+                "header-info": {}}, {"method": "POST"}, NOTHING); });
+        assertEq("REQUEST-ERROR", stream_handler.raw, "getRawRequest() outside of the server's dispatch");
+    }
+
+    testTenantDirect() {
+        stream_handler.raw = NOTHING;
+        hash<auto> rv = tenant.callFunction("direct", stream_handler, new TestListener());
+        assertEq({"call": "HTTP-SERVER-ERROR"}, rv, "the stream request is refused");
+        assertEq("REQUEST-ERROR", stream_handler.raw, "the trusted code of the handler gets no raw request");
+        # the REST classes get the filtered request: no field that the server sets reaches them
+        hash<auto> r = tenant.callFunction("direct_rest", rest, new TestListener());
+        assertEq(200, r.code);
+        assertEq({"server-keys": (False, False, False, False, False)}, parse_json(r.body));
+    }
+
+    testClaim() {
+        # trusted code that is not the initialization of the HttpServer module
+        assertThrows("HTTP-SERVER-ERROR", "initialization of the HttpServer module",
+            \AbstractHttpRequestHandler::claimServerDispatch());
+        # sandboxed code
+        assertEq("HTTP-SERVER-ERROR", tenant.callFunction("claim"));
+    }
+
+    testReach() {
+        assertEq("REFLECTION-ACCESS-ERROR", tenant.callFunction("reflect"));
+        foreach hash<auto> i in ({
+            "subclass": "class T inherits HttpServer { static auto f() { return dispatch_capability; } }",
+            "class": "auto sub f() { return new HttpServerDispatchCapability('x'); }",
+        }.pairIterator()) {
+            Program p(TenantOpts);
+            p.setSandboxManager(new SandboxManager());
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("%requires HttpServer\n" + i.value, i.key), i.key);
+        }
+    }
+
+    testByPath() {
+        TmpDir tmp("qore-dispatch-capability-");
+        string path = tmp.path + DirSep + "HttpServer.qm";
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern
+%requires HttpServerUtil
+module HttpServer { version = \"1.0\"; desc = \"test\"; author = \"test\"; license = \"MIT\"; }
+public namespace ForgedServer {
+public class Holder {
+    public {
+        static object cap = AbstractHttpRequestHandler::claimServerDispatch();
+    }
+}
+}
+");
+        f.close();
+        # with the HttpServer module loaded: refused, as a second module named HttpServer or by its claim
+        Program p(TenantOpts);
+        p.setSandboxManager(new SandboxManager());
+        string result;
+        try {
+            p.loadModule(path);
+            # the module is not loaded again, or its claim is refused when its static member is read
+            p.parse("auto sub g() { return ForgedServer::Holder::cap; }", "by-path");
+            p.callFunction("g");
+            result = "claimed";
+        } catch (hash<ExceptionInfo> ex) {
+            result = ex.err;
+        }
+        assertNeq("claimed", result);
+        # before the HttpServer module is loaded, in a process of its own: refused by the module loader, as the
+        # module path has a module named HttpServer
+        assertEq("refused (module path)\nHttpServer loaded: False\n", runByPath(path, NOTHING));
+        # and refused by its claim with a module path that has no module named HttpServer
+        assertEq("refused (claim)\nHttpServer loaded: False\n", runByPath(path, modulePathWithoutHttpServer(tmp.path)));
+    }
+
+    #! runs by-path-before-load.q in a process of its own, with the given module path, if any
+    private string runByPath(string path, *string module_path) {
+        string cmd = sprintf("%s -b %s/HttpServerDispatchCapability/by-path-before-load.q %s",
+            TestInterpreter::qore_interpreter(), get_script_dir(), path);
+        if (module_path) {
+            cmd = sprintf("QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s %s", module_path, cmd);
+        }
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, out);
+        return out;
+    }
+
+    #! Returns the module path of this process with every directory that has a module named HttpServer replaced by
+    #! a directory of links to its other entries
+    private string modulePathWithoutHttpServer(string tmp) {
+        list<string> dirs = ();
+        int n = 0;
+        foreach string dir in (ENV.QORE_MODULE_DIR.split(":")) {
+            if (!is_dir(dir)) {
+                continue;
+            }
+            list<string> entries = glob(dir + DirSep + "*") ?? ();
+            if (!(entries.contains(dir + DirSep + "HttpServer.qm") || entries.contains(dir + DirSep + "HttpServer.qmod"))) {
+                dirs += dir;
+                continue;
+            }
+            string farm = sprintf("%s%smodules-%d", tmp, DirSep, ++n);
+            mkdir(farm);
+            foreach string e in (entries) {
+                string name = basename(e);
+                if (name != "HttpServer.qm" && name != "HttpServer.qmod" && name != "HttpServer") {
+                    symlink(e, farm + DirSep + name);
+                }
+            }
+            dirs += farm;
+        }
+        return dirs.join(":");
+    }
+}
