@@ -389,16 +389,30 @@ list<int> thread_list() [flags=RET_VALUE_ONLY;dom=THREAD_INFO] {
 save_thread_data(h);
     @endcode
 
-    @note This function does not throw any exceptions, however if a value is removed from the thread-local data hash
-    by being overwritten with a new value, and the value is an object that goes out of scope, then such an object
-    could throw an exception in its destructor
+    @note If a value is removed from the thread-local data hash by being overwritten with a new value, and the value
+    is an object that goes out of scope, then such an object could throw an exception in its destructor
+
+    @note When thread-local data is released (by delete_all_thread_data() and at the end of a task of a thread pool),
+    the destructors of its values read the values not freed yet (the keys of the values freed before are gone) and
+    can save data in it; nothing can be saved while the values saved by those destructors are freed then (this
+    function raises \c DESTRUCTOR-ERROR), so that the release ends.  At the end of a task of a thread pool, the
+    release is repeated while data is left, and data saved during its last repetition is not saved (without an
+    exception)
+
+    @throw DESTRUCTOR-ERROR the function was called while the values saved during the release of thread-local data
+    are freed
 */
 nothing save_thread_data(hash<auto> data) [flags=NAMED_ARGS,OWN_PROGRAM_STATE;dom=THREAD_CONTROL] {
     ReferenceHolder<QoreHashNode> thread_data(get_thread_data_ref(true), xsink);
     if (!*thread_data) {
         return QoreValue();
     }
-    qore_hash_private::get(**thread_data)->merge(*qore_hash_private::get(*data), xsink);
+    qore_hash_private* hp = qore_hash_private::get(**thread_data);
+    // nothing can be saved while the values saved during the release of the data are freed (qore#7265)
+    if (hp->checkClearingSave(xsink)) {
+        return QoreValue();
+    }
+    hp->merge(*qore_hash_private::get(*data), xsink);
 }
 
 //! Saves the data passed against the key passed as an argument in thread-local storage
@@ -410,11 +424,19 @@ nothing save_thread_data(hash<auto> data) [flags=NAMED_ARGS,OWN_PROGRAM_STATE;do
 save_thread_data("key1", value);
     @endcode
 
-    @note Apart from \c HASH-KEY-ERROR, this function does not throw any exceptions, however if a value is removed
-    from the thread-local data hash by being overwritten with a new value, and the value is an object that goes out
-    of scope, then such an object could throw an exception in its destructor
+    @note If a value is removed from the thread-local data hash by being overwritten with a new value, and the value
+    is an object that goes out of scope, then such an object could throw an exception in its destructor
+
+    @note When thread-local data is released (by delete_all_thread_data() and at the end of a task of a thread pool),
+    the destructors of its values read the values not freed yet (the keys of the values freed before are gone) and
+    can save data in it; nothing can be saved while the values saved by those destructors are freed then (this
+    function raises \c DESTRUCTOR-ERROR), so that the release ends.  At the end of a task of a thread pool, the
+    release is repeated while data is left, and data saved during its last repetition is not saved (without an
+    exception)
 
     @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
+    @throw DESTRUCTOR-ERROR the function was called while the values saved during the release of thread-local data
+    are freed
 */
 nothing save_thread_data(string key, auto value) [flags=NAMED_ARGS,OWN_PROGRAM_STATE;dom=THREAD_CONTROL] {
     // the key in the default encoding; a key with a NUL character raises HASH-KEY-ERROR
@@ -426,7 +448,12 @@ nothing save_thread_data(string key, auto value) [flags=NAMED_ARGS,OWN_PROGRAM_S
     if (!*data) {
         return QoreValue();
     }
-    qore_hash_private::get(**data)->setKeyValue(tmp.c_str(), value.refSelf(), xsink);
+    qore_hash_private* hp = qore_hash_private::get(**data);
+    // nothing can be saved while the values saved during the release of the data are freed (qore#7265)
+    if (hp->checkClearingSave(xsink)) {
+        return QoreValue();
+    }
+    hp->setKeyValue(tmp.c_str(), value.refSelf(), xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -528,6 +555,13 @@ delete_all_thread_data();
     @endcode
 
     @note This function does not throw any exceptions, however if an object is deleted from the thread-local data hash, then it could throw an exception in its destructor
+
+    @note The destructors of the values can use the thread-local data: they read the values not freed yet (the keys
+    of the values freed before are gone), and they can save values, which are freed after the values that the data
+    had; while those are freed, nothing can be saved (save_thread_data() raises \c DESTRUCTOR-ERROR), so that the
+    release ends also when destructors save values again and again; the same holds at the end of a task of a
+    thread pool, where the release is repeated while data is left, and data saved during its last repetition is not
+    saved (without an exception)
 */
 nothing delete_all_thread_data() [dom=THREAD_CONTROL;flags=OWN_PROGRAM_STATE] {
     qore_program_private::get(*getProgram())->clearThreadData(xsink);
