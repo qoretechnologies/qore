@@ -226,9 +226,10 @@ DLLLOCAL bool qore_removed_object_needs_scan(RObject* o, RObject* root);
 /** A system constant object is never deleted, by any code: refused with \c SYSTEM-OBJECT-ERROR, as with the delete
     operator.  Sandboxed code (the code of a sandboxed Program or of a class that sandboxed code declared) at the
     enforcement level of tenant isolation may delete only an object that its sandbox owns; refused with
-    \c SANDBOX-OBJECT-ACCESS-ERROR.  A refused deletion leaves the object as it is.  Used by the functions that delete
-    an object or take it over for the calling code (also by the TAKE_HARD_QORE_VALUE_OBJ_DATA() macro), which make no
-    check of their own.  Also declared in QoreHashNodeIntern.h
+    \c SANDBOX-OBJECT-ACCESS-ERROR.  A refused deletion leaves the object as it is.  Used by the builtin functions and
+    methods that delete an object or take it over for the calling code (also by the TAKE_HARD_QORE_VALUE_OBJ_DATA()
+    macro), which make no check of their own: the class context of the code that called the builtin code counts as
+    well as the current one (runtime_get_caller_class()).  Also declared in QoreHashNodeIntern.h
 
     @param obj the object to delete
     @param action the action for the error message, such as \c "delete"

@@ -217,15 +217,20 @@ void qore_object_private::setCreatorOwnership() {
 }
 
 // returns -1 and raises an exception if the current code is sandboxed code that cannot delete the object: its sandbox
-// does not own it (qore#6842)
+// does not own it (qore#6842); \a builtin_caller: called by builtin code (a function or method that deletes the object
+// or takes it over), whose class context is the builtin's own, so the class context of the code that called it counts
+// as well
 static QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_check_sandboxed_delete(const QoreObject& obj, const char* action,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, bool builtin_caller) {
     // the code that runs the delete operator or the function that deletes the object: trusted code, also library code
     // that serves sandboxed code, deletes objects through its own logic
     const QoreProgram* pgm = getProgram();
     const qore_class_private* class_ctx = runtime_get_class();
     if (!(pgm && qore_program_is_sandboxed(pgm)) && !(class_ctx && class_ctx->isSandboxedCode())) {
-        return 0;
+        const qore_class_private* caller_ctx = builtin_caller ? runtime_get_caller_class() : nullptr;
+        if (!(caller_ctx && caller_ctx->isSandboxedCode())) {
+            return 0;
+        }
     }
     const QoreSandboxContext* owner = qore_object_private::get(obj)->getSandboxOwner();
     if (qore_sandbox_current_code_created(owner, owner)) {
@@ -243,11 +248,11 @@ int qore_check_object_delete(const QoreObject& obj, const char* action, Exceptio
             obj.getClassName());
         return -1;
     }
-    return qore_sandboxed_code_active() ? qore_check_sandboxed_delete(obj, action, xsink) : 0;
+    return qore_sandboxed_code_active() ? qore_check_sandboxed_delete(obj, action, xsink, true) : 0;
 }
 
 void qore_operator_delete_object(QoreObject* o, ExceptionSink* xsink) {
-    if (qore_sandboxed_code_active() && qore_check_sandboxed_delete(*o, "delete", xsink)) {
+    if (qore_sandboxed_code_active() && qore_check_sandboxed_delete(*o, "delete", xsink, false)) {
         return;
     }
     o->doDelete(xsink);
