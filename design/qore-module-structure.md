@@ -117,6 +117,13 @@ This initial pass writes the core tag file before any module reads it; `docs-lan
 completed module tags. These dependencies apply to individual module documentation targets as well as
 full builds, so parallel generation cannot read a stale or partially rewritten core tag file.
 
+A user module imports the transitive tag files it needs to resolve inherited members, signature types,
+and documentation-only references. After Doxygen renders its pages, the Python documentation helper
+removes search results from sibling modules with no links in its content pages or diagrams
+(#6376). Generated listings such as the namespace index can include every imported namespace and do not
+contribute links to this selection. The module's own symbols, language symbols, and all symbols from linked
+modules remain searchable.
+
 Qdx retains parameter declarations when an abstract method is represented by the tree-sitter grammar
 as a member declaration with constructor arguments. The CST translator normalizes these arguments to
 ordinary parameter nodes, including their defaults, for both code formatting and documentation.

@@ -31,6 +31,14 @@ class UserModuleResourcesTest(unittest.TestCase):
                 (source / f"{name}.dox").write_text(
                     f'/** @mainpage {name}\n@section {name.lower()}intro Introduction\n'
                     f'@ref {peer.lower()}intro "{peer}"\n*/\n')
+            # Both doc passes import Unused. Only the final pass links to
+            # Reference. Searching App should still find every Reference symbol.
+            (source / "qlib/App.qm").write_text("%modern\n%requires Unused\n")
+            (source / "qlib/Unused.qm").write_text("%modern\n")
+            (source / "Unused.dox").write_text("/** @mainpage Unused */\n")
+            for name in ("App", "Reference", "Unused"):
+                (source / f"{name}.h").write_text(
+                    f"/** A searchable class. */ class {name}Symbol {{}};\n")
             # Model qdx's build-time regeneration of the base Doxyfile. Phase
             # settings must survive both the initial build and a repeated build.
             (source / "qdx.py").write_text(r'''import sys
@@ -41,8 +49,12 @@ if any(arg.endswith("Doxyfile.cmake.tmpl") for arg in sys.argv):
     name = config.name.removeprefix("Doxyfile.")
     build = config.parent.parent
     source = Path(__file__).parent
+    tags = " ".join(arg[2:] for arg in sys.argv if arg.startswith("-t"))
     config.write_text(f"""PROJECT_NAME = {name}
-INPUT = "{source / (name + '.dox')}"
+INPUT = "{source / (name + '.dox')}" "{source / (name + '.h')}"
+TAGFILES = {tags}
+EXTERNAL_PAGES = NO
+EXTERNAL_GROUPS = NO
 OUTPUT_DIRECTORY = "{build / 'docs/modules' / name}"
 GENERATE_TAGFILE = "{build / (name + '.tag')}"
 GENERATE_LATEX = NO
@@ -65,6 +77,8 @@ foreach(target qore docs docs-lang docs-lib)
 endforeach()
 set(QORE_DOC_EXTRA_MODULES_App Reference)
 set(QORE_DOC_EXTRA_MODULES_Reference App)
+set(QORE_DOC_PRUNE_SEARCH "{sys.executable}" -I "{ROOT.as_posix()}/doxygen/prune-module-search.py")
+qore_user_module("qlib/Unused.qm")
 qore_user_module("qlib/App.qm")
 qore_user_module("qlib/Reference.qm")
 QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
@@ -87,6 +101,23 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
                                             cwd=build, capture_output=True, text=True, timeout=30)
                     self.assertEqual(0, result.returncode, result.stdout + result.stderr)
                     self.assertEqual(timestamp, tag.stat().st_mtime_ns)
+                # The manual Doxygen invocation above restored the complete
+                # search index. Check this positive control before rebuilding.
+                search = build / "docs/modules/App/html/search"
+
+                def index():
+                    return "".join(shard.read_text() for shard in search.glob("all_*.js"))
+
+                self.assertIn("UnusedSymbol", index())
+                for target in ("docs-fast-App", "docs-App", "docs-App-final"):
+                    result = subprocess.run([CMAKE, "--build", str(build), "--target", target],
+                                            capture_output=True, text=True, timeout=60)
+                    self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                    symbols = index()
+                    self.assertIn("AppSymbol", symbols)
+                    self.assertNotIn("UnusedSymbol", symbols)
+                    if target.endswith("-final"):
+                        self.assertIn("ReferenceSymbol", symbols)
             # Final rendering must still reject genuinely broken references.
             with (source / "App.dox").open("a") as output:
                 output.write("/** @page broken Broken\n@ref nonexistentintro\n*/\n")
