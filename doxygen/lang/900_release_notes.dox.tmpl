@@ -2874,6 +2874,10 @@
       <a href="https://github.com/qoretechnologies/qore/issues/7324">issue 7324</a>)
     - @ref Qore::SQL::Datasource::getPort() "Datasource::getPort()" returns the port configured for the next
       connection, including after a port change on an open datasource.
+    - memory that cannot be allocated fails a call of builtin code (in the AST mode also a statement) with a catchable
+      \c MEMORY-ALLOCATION-ERROR exception and leaves the string or list that could not grow unchanged, where the
+      process ended with a segmentation fault or \c std::terminate() (@ref exception_memory "allocation failures";
+      <a href="https://github.com/qoretechnologies/qore/issues/7466">issue 7466</a>)
     - a pseudo-method call runs the method of the pseudo-class of the value's type at run time, also when the parser
       resolved the call from another type, and the code of a pseudo-class refuses a value of another type with an
       exception (see the note on pseudo-classes in @ref qore_classes;
