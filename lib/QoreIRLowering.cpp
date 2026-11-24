@@ -17014,7 +17014,15 @@ bool QoreIRLowering::lowerCallArgs(const QoreParseListNode* parse_args, const Qo
     if (!parse_args && !args) {
         return true;  // zero-argument call — valid, no args to lower
     }
-    auto lowerArgument = [&](const QoreValue& expr) {
+    // A later argument may write the local, or reach the same container through a weak
+    // reference. Capture earlier plain reads before evaluating that argument, in source order.
+    const size_t count = parse_args ? parse_args->size() : args->size();
+    size_t last_effectful_arg = count ? count - 1 : 0;
+    while (last_effectful_arg && qore_ir_selector_eval_is_inert(parse_args ? parse_args->get(last_effectful_arg)
+            : args->retrieveEntry(last_effectful_arg))) {
+        --last_effectful_arg;
+    }
+    auto lowerArgument = [&](const QoreValue& expr, size_t index) {
         QoreIRValue value = lowerExpression(expr, error);
         if (!value.isValid() || !expr.needsEval()) {
             return value;
@@ -17026,7 +17034,9 @@ bool QoreIRLowering::lowerCallArgs(const QoreParseListNode* parse_args, const Qo
         }
         const bool call = qore_call_returns_argument_temp(expr);
         const auto* node = expr.getInternalNode();
-        if (!call && !dynamic_cast<const QoreAssignmentOperatorNode*>(node)
+        const auto* var = dynamic_cast<const VarRefNode*>(node);
+        const bool capture_read = index < last_effectful_arg && var && var->getType() == VT_LOCAL;
+        if (!call && !capture_read && !dynamic_cast<const QoreAssignmentOperatorNode*>(node)
                 && !dynamic_cast<const QorePlusEqualsOperatorNode*>(node)) {
             return value;
         }
@@ -17043,7 +17053,7 @@ bool QoreIRLowering::lowerCallArgs(const QoreParseListNode* parse_args, const Qo
     };
     if (parse_args) {
         for (size_t i = 0; i < parse_args->size(); ++i) {
-            QoreIRValue arg = lowerArgument(parse_args->get(i));
+            QoreIRValue arg = lowerArgument(parse_args->get(i), i);
             if (!arg.isValid()) {
                 return false;
             }
@@ -17062,7 +17072,7 @@ bool QoreIRLowering::lowerCallArgs(const QoreParseListNode* parse_args, const Qo
                 error = "IR named call argument lowering cancelled or interrupted";
                 return false;
             }
-            QoreIRValue arg = lowerArgument(args->retrieveEntry(i));
+            QoreIRValue arg = lowerArgument(args->retrieveEntry(i), i);
             if (!arg.isValid()) {
                 return false;
             }
@@ -17079,7 +17089,7 @@ bool QoreIRLowering::lowerCallArgs(const QoreParseListNode* parse_args, const Qo
         return true;
     }
     for (size_t i = 0; i < args->size(); ++i) {
-        QoreIRValue arg = lowerArgument(args->retrieveEntry(i));
+        QoreIRValue arg = lowerArgument(args->retrieveEntry(i), i);
         if (!arg.isValid()) {
             return false;
         }

@@ -58,6 +58,30 @@ sub stores() {
     checkPair(z = makeValue(), z = {"other": 7});
     printf("replaced local %y\n", z);
 }
+int sub changeObserved(int n) {
+    observed.n = n;
+    return n;
+}
+sub localArguments() {
+    auto x = {"n": 1};
+    observed := x;
+    checkPair(x, x.n = 2);
+    printf("read then write %y\n", observed.n);
+    checkPair(x, changeObserved(3));
+    printf("read then change through weak reference %y\n", x.n);
+    list<auto> l = (1,);
+    observed := l;
+    try {
+        for (int i = 2; i <= 3; ++i) {
+            checkPair(l, l[0] = i);
+            printf("list read then write %y\n", observed);
+        }
+        checkPair(second: l, first: l[0] = 4);
+        printf("named read then write %y\n", observed);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("unexpected %s\n", ex.err);
+    }
+}
 sub arguments(bool choose) {
     Inspector obj();
     checkPair(inspect(makeValue()), observed.n);
@@ -101,5 +125,6 @@ sub boundaries() {
 }
 
 stores();
+localArguments();
 arguments(True);
 boundaries();
