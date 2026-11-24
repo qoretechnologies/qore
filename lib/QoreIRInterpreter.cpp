@@ -174,14 +174,14 @@ static bool qore_ir_try_string_no_arg_pseudo_fast_path(bool pseudo, bool base_kn
 
 static bool qore_ir_try_safe_value_no_arg_pseudo_fast_path(bool pseudo, bool base_safe_value_dispatch,
         QoreIRIntrinsic intrinsic, const QoreValue& base, int nargs, QoreValue& res) {
-    if (!pseudo || !base_safe_value_dispatch || nargs) {
+    // the intrinsic is tested before the argument count: in QoreIRInterpreter::execute(), into which this is inlined,
+    // the intrinsic is in a register and the argument count can be spilled to the stack; written in this order, the
+    // common case (another intrinsic) is decided without reloading the argument count (qore#7272)
+    if (!pseudo || !base_safe_value_dispatch || intrinsic != QoreIRIntrinsic::ToNumber || nargs) {
         return false;
     }
-    if (intrinsic == QoreIRIntrinsic::ToNumber) {
-        res = fromBits(qore_rt_pseudo_toNumber(toBits(base)));
-        return true;
-    }
-    return false;
+    res = fromBits(qore_rt_pseudo_toNumber(toBits(base)));
+    return true;
 }
 
 static bool qore_ir_try_string_arg_pseudo_fast_path(bool pseudo, bool base_known_string,
@@ -10346,9 +10346,11 @@ static QORE_IR_INLINE_SITE void irDotEvalMethodDirect(Given& given, QoreIRDotEva
             ? direct_inst->fallback_method_name
             : (direct_inst->method ? direct_inst->method->getName() : nullptr);
         bool inline_may_invalidate_external_caches = true;
+        // the inline IR path is the common one: its block is placed on the straight path of the instruction
+        // (qore#7272: without the hint, GCC placed it out of line, with a jump back, after an unrelated change)
         if (mname && tryExecuteInterpreterInlineIRDotEvalMethod<GIVEN>(direct_inst, base, mname,
                 explicit_inst, pgm, nanboxed_args, nargs, res, xsink,
-                &inline_may_invalidate_external_caches, given.get())) {
+                &inline_may_invalidate_external_caches, given.get())) [[likely]] {
             // Result produced by the inline IR path.
             called_external = inline_may_invalidate_external_caches;
         } else if (direct_inst->method && direct_inst->qc) {

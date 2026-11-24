@@ -34,7 +34,6 @@
 #define _QORE_QOREHASHNODEINTERN_H
 
 #include "qore/intern/QoreSandboxMemory.h"
-#include <algorithm>
 #include <iterator>
 
 #include <unordered_map>
@@ -535,10 +534,10 @@ public:
     DLLLOCAL bool membersEqual(const qore_hash_private& other, F&& value_equal) const {
         assert(size() == other.size());
         const HashMember* m = member_list.front();
-        // as many members as both hashes have are walked, so that the walk cannot pass the end of either list whatever
-        // the sizes are
+        // the hashes have as many members (the callers check it), so the walk ends at the end of both lists; it counts
+        // the members instead of testing both lists' ends, which costs a test less per member (qore#7272)
         const HashMember* om = other.member_list.front();
-        for (size_t n = std::min(size(), other.size()); n; --n, m = m->next, om = om->next) {
+        for (size_t n = size(); n; --n, m = m->next, om = om->next) {
             if (!qore_key_equal(m->key.data(), m->key.size(), om->key.data(), om->key.size())) [[unlikely]] {
                 break;
             }
