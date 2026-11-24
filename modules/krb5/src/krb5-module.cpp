@@ -399,7 +399,17 @@ static bool krb5_caller_may_use_host_credentials() {
 #ifdef QORE_HAVE_CALLER_AMBIENT_PREDICATES
     return qore_caller_may_receive_host_secrets();
 #else
-    return true;
+    // a libqore that cannot evaluate the rule: fail closed
+    return false;
+#endif
+}
+
+bool krb5_caller_may_read_host_config() {
+#ifdef QORE_HAVE_CALLER_AMBIENT_PREDICATES
+    return qore_caller_may_read_external_info();
+#else
+    // a libqore that cannot evaluate the rule: fail closed
+    return false;
 #endif
 }
 
@@ -2068,6 +2078,12 @@ QoreKrb5Context::~QoreKrb5Context() {
 }
 
 QoreStringNode* QoreKrb5Context::getDefaultRealm(ExceptionSink* xsink) const {
+    // the host's Kerberos configuration (qore#6844)
+    if (!krb5_caller_may_read_host_config()) {
+        xsink->raiseException("KRB5-REALM-ERROR", "the default Kerberos realm of the host is not available to code "
+            "restricted from external information");
+        return nullptr;
+    }
     char* realm = nullptr;
     krb5_error_code rc = krb5_get_default_realm(ctx, &realm);
     if (rc) {

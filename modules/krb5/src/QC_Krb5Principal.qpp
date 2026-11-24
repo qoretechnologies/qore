@@ -124,9 +124,17 @@ bool Krb5Principal::equals(Krb5Principal[QoreKrb5Principal] other) [flags=CONSTA
     requires the same functional domain (\c FILESYSTEM)
 
     @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
-    @throw KRB5-REALM-ERROR if no default realm is configured on this host
+    @throw KRB5-REALM-ERROR if no default realm is configured on this host, or the calling code is restricted from
+    external information (see @ref Qore::SandboxManager::callerMayReadExternalInfo()
+    "SandboxManager::callerMayReadExternalInfo()"; qore#6844)
 */
 static string Krb5Principal::getDefaultRealm() [flags=CONSTANT;dom=FILESYSTEM] {
+    // the host's Kerberos configuration (qore#6844)
+    if (!krb5_caller_may_read_host_config()) {
+        xsink->raiseException("KRB5-REALM-ERROR", "the default Kerberos realm of the host is not available to code "
+            "restricted from external information");
+        return QoreValue();
+    }
     krb5_context ctx = nullptr;
     krb5_error_code rc = krb5_init_context(&ctx);
     if (rc) {

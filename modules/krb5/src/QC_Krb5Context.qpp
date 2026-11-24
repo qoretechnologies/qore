@@ -119,7 +119,9 @@ Krb5Context::constructor() {
 }
 
 //! Returns the default Kerberos realm from the local configuration
-/** @throw KRB5-REALM-ERROR if no default realm is configured on this host
+/** @throw KRB5-REALM-ERROR if no default realm is configured on this host, or the calling code is restricted from
+    external information (see @ref Qore::SandboxManager::callerMayReadExternalInfo()
+    "SandboxManager::callerMayReadExternalInfo()"; qore#6844)
 */
 string Krb5Context::getDefaultRealm() [flags=CONSTANT] {
     return ctx->getDefaultRealm(xsink);
