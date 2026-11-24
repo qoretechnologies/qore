@@ -13227,46 +13227,77 @@ DLLLOCAL void qore_aot_run_all_module_del_closures() {
         std::reverse(dels.begin(), dels.end());
     }
     // the closure of a module that requires another module, directly or through other modules, runs before that of
-    // the module it requires, which it can use; a cycle (not possible for loaded modules) runs the rest in any order
-    // the modules that a module requires, directly or through other modules (also user modules loaded from source and
-    // native binary modules), found once for each module
-    std::unordered_map<std::string, std::unordered_set<std::string>> requires_map;
-    auto requires_module = [&requires_map](const std::string& from, const std::string& target) {
-        auto ri = requires_map.find(from);
-        if (ri == requires_map.end()) {
-            std::unordered_set<std::string> all;
-            std::vector<std::string> todo{from};
+    // the module it requires, which it can use; the requirements include those recorded at run time
+    // (getTeardownModuleDependencies(): an AOT module that loaded another one from its code requires it, as for the
+    // order of the data of the module Programs, qore#7432).  The modules of a cycle (which run-time loads can make)
+    // require each other: a module is held back only by a module that requires it and that it does not require, so
+    // that a cycle runs the closures of its own modules first, and never those of the modules that it requires before
+    // them (qore#7445).  The order is computed before any closure runs, as a closure can load modules
+    const size_t n = dels.size();
+    // the modules that each module requires directly, found once for each module reached
+    std::unordered_map<std::string, std::set<std::string>> direct;
+    // requires_mod[i][j]: the module of dels[i] requires that of dels[j], directly or through other modules
+    std::vector<std::vector<bool>> requires_mod(n, std::vector<bool>(n, false));
+    {
+        std::unordered_map<std::string, size_t> index;
+        for (size_t i = 0; i < n; ++i) {
+            index.emplace(dels[i].name, i);
+        }
+        for (size_t i = 0; i < n; ++i) {
+            std::unordered_set<std::string> reached;
+            std::vector<std::string> todo{dels[i].name};
             while (!todo.empty()) {
                 std::string name = std::move(todo.back());
                 todo.pop_back();
-                std::set<std::string> deps;
-                QMM.getModuleDependencies(name.c_str(), deps);
-                for (const std::string& d : deps) {
-                    if (all.insert(d).second) {
+                auto di = direct.find(name);
+                if (di == direct.end()) {
+                    std::set<std::string> deps;
+                    QMM.getTeardownModuleDependencies(name.c_str(), deps);
+                    di = direct.emplace(name, std::move(deps)).first;
+                }
+                for (const std::string& d : di->second) {
+                    if (reached.insert(d).second) {
                         todo.push_back(d);
+                        auto ii = index.find(d);
+                        if (ii != index.end()) {
+                            requires_mod[i][ii->second] = true;
+                        }
                     }
                 }
             }
-            ri = requires_map.emplace(from, std::move(all)).first;
         }
-        return ri->second.find(target) != ri->second.end();
-    };
-    while (!dels.empty()) {
-        size_t pick = 0;
-        for (size_t i = 0; i < dels.size(); ++i) {
-            bool required = false;
-            for (size_t j = 0; j < dels.size() && !required; ++j) {
-                if (i != j) {
-                    required = requires_module(dels[j].name, dels[i].name);
+    }
+    std::vector<size_t> order;
+    order.reserve(n);
+    {
+        std::vector<size_t> left(n);
+        for (size_t i = 0; i < n; ++i) {
+            left[i] = i;
+        }
+        while (!left.empty()) {
+            size_t pick = left.size();
+            for (size_t li = 0; li < left.size() && pick == left.size(); ++li) {
+                const size_t i = left[li];
+                bool held = false;
+                for (size_t lj = 0; lj < left.size() && !held; ++lj) {
+                    const size_t j = left[lj];
+                    held = j != i && requires_mod[j][i] && !requires_mod[i][j];
+                }
+                if (!held) {
+                    pick = li;
                 }
             }
-            if (!required) {
-                pick = i;
-                break;
+            // "held back" is a strict partial order (the requirements are transitive), so a module is always found
+            assert(pick < left.size());
+            if (pick == left.size()) {
+                pick = 0;
             }
+            order.push_back(left[pick]);
+            left.erase(left.begin() + pick);
         }
-        DelInfo d = std::move(dels[pick]);
-        dels.erase(dels.begin() + pick);
+    }
+    for (size_t i : order) {
+        DelInfo& d = dels[i];
         runAOTModuleDelClosure(d.name, d.path, d.pgm, d.ctx.release(), d.fn);
     }
 }
