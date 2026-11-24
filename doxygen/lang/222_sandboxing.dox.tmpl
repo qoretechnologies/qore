@@ -1051,6 +1051,20 @@ sm.setFilesystemSandboxRoot("/home/sandbox/userdata");
     - a symbolic link pointing outside the sandbox root is denied even when its target does not
       exist, so a dangling link cannot be used to create files outside the root
 
+    The rules apply to the file that is actually reached:
+    - a path that refers to an open descriptor (such as \c "/dev/fd/N" or \c "/dev/stdin") is checked as the
+      file of that descriptor; one whose descriptor has no file path (a pipe, a socket, a removed file) is denied
+    - a file that is opened (with @ref Qore::File "File", @ref Qore::ReadOnlyFile "ReadOnlyFile",
+      @ref Qore::FileInputStream "FileInputStream", @ref Qore::FileOutputStream "FileOutputStream" and the APIs based
+      on them) and a directory that is listed are checked again by the path of the file or directory that was opened;
+      if that path cannot be determined or is not allowed, the file is closed again and the operation is denied, and
+      a file opened with \c O_TRUNC is truncated only after this check
+    - an open with \c O_TRUNC needs write access, also with \c O_RDONLY
+    - a symbolic link created by @ref Qore::symlink() "symlink()" must have a target within the reach of the policy (not
+      denied, inside the sandbox root, and covered by an allowed path or the default policy), checked as the link
+      reaches it: a relative target is resolved against the directory of the link, and a target that does not exist yet
+      by its deepest existing directory; each access through the link is checked as before
+
     A path that cannot be resolved for any other reason - for example because a directory in the
     path cannot be searched - raises \c SANDBOX-PATH-ERROR.  This is a resolution failure, not a
     policy decision, and is deliberately distinct from the \c FILESYSTEM-ACCESS-DENIED raised

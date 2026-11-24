@@ -122,7 +122,8 @@ static bool is_writable_intern(const QoreStringNode* path, ExceptionSink* xsink)
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_WRITE, xsink)) {
       return false;
    }
-   rc = open(path->getBuffer(), O_WRONLY);
+   // with a policy, the file actually opened is checked too (qore#7498)
+   rc = q_open_policy_checked(path->getBuffer(), O_WRONLY, 0, xsink);
    if (rc != -1) {
       close(rc);
       return true;
@@ -1366,6 +1367,10 @@ symlink("/tmp/temporary-dir", "/users/oracle/install");
 
     @throw SYMLINK-ERROR empty string passed for one of the arguments or the operating system returned an error
     @throw SYMLINK-ERROR a path contains a NUL character; see @ref path_nul_characters
+    @throw FILESYSTEM-ACCESS-DENIED in a @ref sandboxing "sandbox" with a file-system policy: the link cannot be
+    created, or its target (resolved against the directory of the link if it is relative) is denied by the policy or
+    outside of the paths it allows; a target that does not exist yet is checked for the deepest directory of it that
+    exists
 
     @since %Qore 0.8.5
  */
@@ -1385,6 +1390,35 @@ nothing symlink(string target_path, string link_path) [flags=NAMED_ARGS;dom=FILE
    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh && !smh->checkFilesystemAccess(link_path->c_str(), QSEC_CREATE, xsink)) {
       return QoreValue();
+   }
+   // under a policy, the target is checked as the link will reach it: a relative target is resolved against the
+   // directory holding the link, and a target that does not exist yet against its deepest existing directory; it must
+   // be within the reach of the policy (mode 0: not denied, in the sandbox root, and allowed by a rule or by the
+   // default policy), so that code cannot make a link to a file that the policy denies; each access through the link
+   // is then checked as before.  A target that cannot be resolved is refused (qore#7498)
+   if (smh) {
+      std::string target;
+      if (target_path->c_str()[0] == '/') {
+         target = target_path->c_str();
+      } else {
+         const char* lp = link_path->c_str();
+         const char* sep = strrchr(lp, '/');
+         if (!sep) {
+            target = target_path->c_str();
+         } else {
+            target.assign(lp, sep == lp ? 1 : sep - lp);
+            if (target != "/") {
+               target += '/';
+            }
+            target += target_path->c_str();
+         }
+      }
+      ExceptionSink check_xsink;
+      if (!smh->checkFilesystemAccess(target.c_str(), 0, &check_xsink)) {
+         check_xsink.clear();
+         return xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "symlink('%s', '%s') denied: the target of the link "
+            "is not permitted by the security policy", target_path->getBuffer(), link_path->getBuffer());
+      }
    }
 
    int rc = symlink(target_path->getBuffer(), link_path->getBuffer());
