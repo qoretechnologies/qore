@@ -21322,6 +21322,31 @@ void SocketReadHttpBodyPollOperation::deref(ExceptionSink* xsink) {
 
 // SocketSendAndReadHeaderPollOperation implementation
 
+//! Adds the time left to an idle deadline to the poll info of an operation that waits for the next request (qore#7488)
+/** The event loop then wakes the operation when the deadline passes, so that a connection that stays idle is closed at
+    its TTL, not only when a request comes or when the whole operation times out (as
+    HttpKeepAlivePollOperationBase::continueIdlePoll() does).
+
+    @param info the poll info, returned (nullptr with an exception)
+    @param idle_deadline_ms the idle deadline on the monotonic clock in milliseconds; 0 for none
+*/
+static QoreHashNode* qore_add_idle_deadline_poll_timeout(QoreHashNode* info, int64 idle_deadline_ms,
+        ExceptionSink* xsink) {
+    if (info && idle_deadline_ms > 0) {
+        // the idle phase closes the connection once the monotonic clock is past the deadline: the wake-up comes 1 ms
+        // after it, so that the check at the wake-up sees it passed
+        int64 left_ms = idle_deadline_ms - q_get_monotonic_us() / 1000 + 1;
+        // a wake-up before the deadline polls again with the time then left: the controller takes an int
+        if (left_ms > INT_MAX) {
+            left_ms = INT_MAX;
+        } else if (left_ms < 1) {
+            left_ms = 1;
+        }
+        info->setKeyValue("poll_timeout_ms", left_ms, xsink);
+    }
+    return info;
+}
+
 SocketSendAndReadHeaderPollOperation::SocketSendAndReadHeaderPollOperation(ExceptionSink* xsink,
         BinaryNode* response_data, QoreSocketObject* sock, int64 idle_timeout_ms)
         : SocketPollSocketOperationBase(sock), send_data(response_data),
@@ -21440,7 +21465,8 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
                     set_non_block = false;
                     return nullptr;
                 }
-                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                return qore_add_idle_deadline_poll_timeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), idle_timeout_ms,
+                    xsink);
             }
             // Data is available — transition to header reading; the rest of a chunked body that was not read to its
             // end would be taken for the header (issue 7417)
@@ -21720,6 +21746,11 @@ int SocketSendAndReadHeaderPollOperation::startFastSend(std::shared_ptr<const st
 QoreHashNode* SocketSendAndReadHeaderPollOperation::enterIdle(ExceptionSink* xsink) {
     responded = true;
     phase = Phase::Idle;
+    // the connection is idle from now on: the TTL starts when the response has been sent, so that the time taken to
+    // send it is not taken from the TTL (qore#7488)
+    if (idle_ttl_ms > 0) {
+        idle_timeout_ms = q_get_monotonic_us() / 1000 + idle_ttl_ms;
+    }
     // the response was sent: a draining server closes the connection unless a request has arrived already, which is
     // then read and answered with Connection: close; the controller closes the connection when the operation
     // completes in the closed phase (qore#5899)
@@ -21735,7 +21766,7 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::enterIdle(ExceptionSink* xsi
             return nullptr;
         }
     }
-    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    return qore_add_idle_deadline_poll_timeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), idle_timeout_ms, xsink);
 }
 
 QoreValue SocketSendAndReadHeaderPollOperation::getOutput() const {
@@ -21755,6 +21786,12 @@ SocketSendStreamAndReadHeaderPollOperation::SocketSendStreamAndReadHeaderPollOpe
           chunked_encoding(chunked),
           fused(fused),
           idle_timeout_ms(idle_timeout_ms), header_output(nullptr) {
+    {
+        // the idle timeout is given as a deadline on the monotonic clock; the TTL is restarted when the response has
+        // been sent (enterIdle(), qore#7488)
+        int64 now_ms = q_get_monotonic_us() / 1000;
+        idle_ttl_ms = idle_timeout_ms > now_ms ? idle_timeout_ms - now_ms : 0;
+    }
 
     if (!is->isIoThreadSafe()) {
         xsink->raiseException("HTTP-STREAM-ERROR", "InputStream is not I/O thread safe");
@@ -21800,6 +21837,11 @@ const char* SocketSendStreamAndReadHeaderPollOperation::getStateImpl() const {
 
 QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::enterIdle(ExceptionSink* xsink) {
     phase = Phase::Idle;
+    // the connection is idle from now on: the TTL starts when the streamed response has been sent, so that the time
+    // taken to send it is not taken from the TTL (qore#7488)
+    if (idle_ttl_ms > 0) {
+        idle_timeout_ms = q_get_monotonic_us() / 1000 + idle_ttl_ms;
+    }
     // the response was sent: a draining server closes the connection unless a request has arrived already, which is
     // then read and answered with Connection: close; the controller closes the connection when the operation
     // completes in the closed phase (qore#5899)
@@ -21815,7 +21857,7 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::enterIdle(ExceptionSin
             return nullptr;
         }
     }
-    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    return qore_add_idle_deadline_poll_timeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), idle_timeout_ms, xsink);
 }
 
 QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePoll(ExceptionSink* xsink) {
@@ -22090,7 +22132,8 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
                         set_non_block = false;
                         return nullptr;
                     }
-                    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                    return qore_add_idle_deadline_poll_timeout(getSocketPollInfoHash(xsink, SOCK_POLLIN),
+                        idle_timeout_ms, xsink);
                 }
                 // Data is available — transition to header reading; the rest of a chunked body that was not read to its
                 // end would be taken for the header (issue 7417)

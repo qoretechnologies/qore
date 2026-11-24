@@ -1079,7 +1079,8 @@ private:
 
     // Idle phase: timeout deadline in milliseconds on the monotonic clock (q_get_monotonic_us() / 1000, #6150)
     int64 idle_timeout_ms;
-    // the idle timeout in milliseconds, for the deadline of the next request after one answered by a fast route
+    // the idle timeout (TTL) in milliseconds: enterIdle() restarts the deadline from it when a response has been sent,
+    // a fast route's answer included (qore#7488)
     int64 idle_ttl_ms = 0;
 
     // the response of a fast route that is being sent; see serveFastRoute()
@@ -1590,7 +1591,11 @@ private:
 
     //! Waits for the next request after a response, or ends (Phase::Closed) if the server drains the connection
     DLLLOCAL QoreHashNode* enterIdle(ExceptionSink* xsink);
+    //! the idle deadline on the monotonic clock in ms: given to the constructor, and restarted when the response has
+    //! been sent (see enterIdle())
     int64 idle_timeout_ms;
+    //! the idle time (TTL) in ms: the time from the construction to the deadline given to it (qore#7488)
+    int64 idle_ttl_ms = 0;
     mutable ReferenceHolder<QoreHashNode> header_output;
 
     DLLLOCAL virtual bool abortNeedsClose() const override {
