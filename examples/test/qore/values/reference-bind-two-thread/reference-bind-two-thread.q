@@ -70,8 +70,15 @@ sub run(string label, list<code> stores, code check) {
             results[r.id] = r.result;
         }
     }
+    # the check reports its error, as after a store that failed, which leaves the targets without the references
+    auto state;
+    try {
+        state = check();
+    } catch (hash<ExceptionInfo> ex) {
+        state = ex.err;
+    }
     printf("%s: parties %d, arrived %d, held %d, max held %d, timeouts %d; stores: %y; %y\n", label, rv.parties,
-        rv.arrived, rv.held, rv.max_held, rv.timeouts, results, check());
+        rv.arrived, rv.held, rv.max_held, rv.timeouts, results, state);
 }
 
 # members of two objects, each object's target referring to the other object's member
