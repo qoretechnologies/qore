@@ -81,6 +81,13 @@ module FirecrawlDataProvider {
                 "Supports browser actions, geolocation, proxy configuration, and "
                 "content filtering via include/exclude tags.",
             "action_code": DPAT_API,
+            "mutates_state": True,
+            # Firecrawl stores fresh scrapes in its cache by default.
+            "read_only_options": (
+                {"path": ("storeInCache",), "values": (False,), "allow_missing": False},
+                {"path": ("actions",), "values": ((),)},
+                {"path": ("profile", "saveChanges"), "values": (False,)},
+            ),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FirecrawlScrapeRequestDataType::Fields{"url",}, {
                     "required": True,
@@ -291,6 +298,13 @@ module FirecrawlDataProvider {
                 "Supports time filtering, geographic location, country codes, and "
                 "scrape options for result pages.",
             "action_code": DPAT_API,
+            "mutates_state": True,
+            # A plain search does not scrape. When scraping, the same write conditions apply as for scrape.
+            "read_only_options": (
+                {"path": ("scrapeOptions", "storeInCache"), "values": (False,), "allow_missing": False, "allow_missing_parent": True},
+                {"path": ("scrapeOptions", "actions"), "values": ((),)},
+                {"path": ("scrapeOptions", "profile", "saveChanges"), "values": (False,)},
+            ),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FirecrawlSearchRequestDataType::Fields{"query",}, {
                     "required": True,

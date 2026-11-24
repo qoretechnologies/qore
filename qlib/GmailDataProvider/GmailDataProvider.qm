@@ -190,6 +190,9 @@ module GmailDataProvider {
             "action_code": DPAT_EVENT,
             # delete_messages deletes each reported message (qore#7454)
             "mutates_state": True,
+            "read_only_options": (
+                {"path": ("delete_messages",), "values": (False,)},
+            ),
             "action_val": EVENT_EMAIL_MATCHED,
             "options": {
                 "q": <ActionOptionInfo>{
@@ -250,6 +253,9 @@ module GmailDataProvider {
             "action_code": DPAT_EVENT,
             # delete_messages deletes each reported message (qore#7454)
             "mutates_state": True,
+            "read_only_options": (
+                {"path": ("delete_messages",), "values": (False,)},
+            ),
             "action_val": EVENT_ATTACHMENT_MATCHED,
             "options": {
                 "q": <ActionOptionInfo>{

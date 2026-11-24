@@ -74,6 +74,11 @@ module FtpPoller {
             "action_code": DPAT_EVENT,
             # remote_file_disposition DELETE or MOVE deletes or moves the remote file (qore#7454)
             "mutates_state": True,
+            # The default disposition is DELETE. A local_dir also leaves a file for the handler.
+            "read_only_options": (
+                {"path": ("remote_file_disposition",), "values": ("NONE",), "allow_missing": False},
+                {"path": ("local_dir",), "values": ()},
+            ),
             "action_val": EVENT_FTP_FILE,
             "output_type": FtpPollerFileEventInfoDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(

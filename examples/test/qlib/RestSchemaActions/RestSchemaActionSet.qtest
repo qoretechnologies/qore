@@ -1454,7 +1454,8 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         # state; an entry without the field keeps the method's value, as above (qore#7454)
         RestSchemaActionSet marked = makeSet((
             entry("search-widgets", "POST", "/widgets", {"mutates_state": False}),
-            entry("touch-status", "GET", "/status", {"mutates_state": True}),
+            entry("touch-status", "GET", "/status", {"mutates_state": True,
+                "read_only_options": ({"path": ("touch",), "values": (False,)},)}),
             entry("get-widget", "GET", "/widgets/{widget_id}"),
         ));
         hash<string, hash<DataProviderActionInfo>> by_action = map {$1.action: $1},
@@ -1463,6 +1464,9 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         assertFalse(by_action."search-widgets".mutates_state);
         assertFalse(DataProviderActionCatalog::actionMutatesState(by_action."search-widgets"));
         assertTrue(by_action."touch-status".mutates_state);
+        assertFalse(DataProviderActionCatalog::actionMutatesState(by_action."touch-status", {}));
+        assertTrue(DataProviderActionCatalog::actionMutatesState(by_action."touch-status", {"touch": True}));
+        assertFalse(DataProviderActionCatalog::actionMutatesState(by_action."search-widgets", {"touch": True}));
         assertTrue(DataProviderActionCatalog::actionMutatesState(by_action."touch-status"));
         assertFalse(by_action."get-widget".mutates_state);
     }
