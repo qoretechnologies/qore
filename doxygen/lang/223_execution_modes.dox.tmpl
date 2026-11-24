@@ -596,9 +596,9 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     \c invalid-operation, \c call-with-type-errors, \c return-value-ignored, \c duplicate-hash-key,
     \c duplicate-block-vars, \c broken-logic-precedence, \c invalid-catch and \c non-exhaustive-switch, as changed by
     the module's own warning directives, such as @ref modern "%modern"), and with its warnings raised as errors, which
-    refuse the module with the loader's diagnostics.  Every such warning of a
-    module file refuses it; of a separated module, the warnings found when its files are parsed refuse it, while the
-    warnings found when it is committed are reported as warnings, as the loader does not report them.
+    refuse the module with the loader's diagnostics.  Every such warning refuses the module, in \c qcc as in the
+    module loader, in a module file and in the files of a @ref separated_modules "separated module", including the
+    warnings found only when the module is committed.
 
     @subsection qcc_batch_memory Memory Admission of Batch Compiles
 

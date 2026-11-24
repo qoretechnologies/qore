@@ -28864,9 +28864,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
         // Parse main .qm file with parsePending()
-        // the files of the module are parsed as the module loader parses a separated module
-        // (QoreModuleManager::loadUserModuleFromDir()): with the warning mask of a module load and the warnings
-        // raised as errors; the loader reports no warning of the commit, which qcc reports (qore#7314)
+        // the files of the module are parsed and committed as the module loader parses and commits a separated
+        // module (QoreModuleManager::loadSeparatedModule()): with the warning mask of a module load and the warnings
+        // raised as errors (qore#7314, qore#7324)
         qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(), &xsink, &xsink,
             QP_WARN_MODULES);
         if (xsink.isException()) {
@@ -28963,7 +28963,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         }
 
         // Step 8: Commit parsing
-        qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+        // the warnings found when the module is committed are errors as well, under the warning mask that the .qm
+        // file left, as the loader commits it (qore#7324)
+        qpgm->parseCommit(&xsink, &xsink, file_warn_mask);
         if (xsink.isException()) {
             mod_ctx.close();
             // the warnings of the parse, then its errors (issue #6555)
@@ -32854,9 +32856,9 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(),
             *qpgm, xsink, QMRL_LOCK);
 
-        // the files of the module are parsed as the module loader parses a separated module
-        // (QoreModuleManager::loadUserModuleFromDir()): with the warning mask of a module load and the warnings
-        // raised as errors; the loader reports no warning of the commit, which qcc reports (qore#7314)
+        // the files of the module are parsed and committed as the module loader parses and commits a separated
+        // module (QoreModuleManager::loadSeparatedModule()): with the warning mask of a module load and the warnings
+        // raised as errors (qore#7314, qore#7324)
         qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(), &xsink, &xsink,
             QP_WARN_MODULES);
         if (xsink.isException()) {
@@ -32985,7 +32987,9 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             return false;
         }
 
-        qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+        // the warnings found when the module is committed are errors as well, under the warning mask that the .qm
+        // file left, as the loader commits it (qore#7324)
+        qpgm->parseCommit(&xsink, &xsink, file_warn_mask);
         if (xsink.isException()) {
             mod_ctx.close();
             // the warnings of the parse, then its errors (issue #6555)
@@ -33448,9 +33452,9 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
             qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
-        // the files of the module are parsed as the module loader parses a separated module
-        // (QoreModuleManager::loadUserModuleFromDir()): with the warning mask of a module load and the warnings
-        // raised as errors; the loader reports no warning of the commit, which qcc reports (qore#7314)
+        // the files of the module are parsed and committed as the module loader parses and commits a separated
+        // module (QoreModuleManager::loadSeparatedModule()): with the warning mask of a module load and the warnings
+        // raised as errors (qore#7314, qore#7324)
         qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(),
             &xsink, &xsink, QP_WARN_MODULES);
         if (xsink.isException()) {
@@ -33530,7 +33534,9 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             }
         }
 
-        qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+        // the warnings found when the module is committed are errors as well, under the warning mask that the .qm
+        // file left, as the loader commits it (qore#7324)
+        qpgm->parseCommit(&xsink, &xsink, file_warn_mask);
         if (xsink.isException()) {
             mod_ctx.close();
             // the warnings of the parse, then its errors (issue #6555)
@@ -34037,9 +34043,9 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
             qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
-        // the files of the module are parsed as the module loader parses a separated module
-        // (QoreModuleManager::loadUserModuleFromDir()): with the warning mask of a module load and the warnings
-        // raised as errors; the loader reports no warning of the commit, which qcc reports (qore#7314)
+        // the files of the module are parsed and committed as the module loader parses and commits a separated
+        // module (QoreModuleManager::loadSeparatedModule()): with the warning mask of a module load and the warnings
+        // raised as errors (qore#7314, qore#7324)
         qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(),
             &xsink, &xsink, QP_WARN_MODULES);
         if (xsink.isException()) {
@@ -34119,7 +34125,9 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             }
         }
 
-        qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+        // the warnings found when the module is committed are errors as well, under the warning mask that the .qm
+        // file left, as the loader commits it (qore#7324)
+        qpgm->parseCommit(&xsink, &xsink, file_warn_mask);
         if (xsink.isException()) {
             mod_ctx.close();
             // the warnings of the parse, then its errors (issue #6555)
