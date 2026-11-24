@@ -1799,9 +1799,9 @@ public namespace RestSchemaValidator {
         */
         private checkCacheWrite() {
             if (isOrphanedSharedObject()) {
-                throw "SCHEMA-DOCUMENT-DESTROYED", sprintf("the schema of this %s object has been destroyed: it is "
-                    "shared by every Program, so it builds no type or field that it does not have cached",
-                    self.className());
+                throw "SCHEMA-DOCUMENT-DESTROYED", sprintf("this %s object can no longer build types or resolve "
+                    "references, because its document has been destroyed; keep the document while using its schema "
+                    "objects (the types that it has already built do not need it)", self.className());
             }
         }
 
