@@ -200,6 +200,9 @@ hash<auto> desc = {
 
 
     @section mysqlsqlutilv16 MysqlSqlUtil v1.6
+    - a table of the connection's database is named in messages without the database, whose name messages do not
+      show (@ref MysqlSqlUtil::MysqlTable::getMessageName() "MysqlTable::getMessageName()")
+      (<a href="https://github.com/qoretechnologies/qore/issues/7018">issue 7018</a>)
     - implemented the SqlUtil @ref select_option_lock_wait "lock_wait" select option: \c "nowait" and
       \c "skip_locked" with MySQL 8.0 and later, \c "nowait" and \c "wait" with MariaDB 10.3 and later and
       \c "skip_locked" with MariaDB 10.6 and later, and the classification of the lock-not-available errors
@@ -2799,6 +2802,21 @@ end";
             return mysql_get_sql_identifier(schema) + "." + mysql_get_sql_identifier(name);
         }
 
+        #! returns the name of the table for messages: without its schema when it is the connection's database
+        /** The default schema is the database of the connection, whose name messages do not show; a table in
+            another database is named with it.  The names are compared without case, as a server whose table names
+            are not case-sensitive (\c lower_case_table_names) takes the database in any case
+
+            @since MysqlSqlUtil 1.6 (issue #7018)
+        */
+        string getMessageName() {
+            *string db = ds.getDBName();
+            if (!recursive_cte && db && schema.lwr() == db.lwr()) {
+                return mysql_get_sql_identifier(name);
+            }
+            return getSqlName();
+        }
+
         #! returns a name as an SQL identifier for MySQL
         /** @copydetails MysqlDatabase::getSqlIdentifier()
         */
@@ -3398,7 +3416,7 @@ end";
         }
 
         private AbstractColumn addColumnImpl(string cname, hash<auto> opt, bool nullable = True) {
-            on_error rethrow $1.err, sprintf("%s (table %y column %y: %y)", $1.desc, getSqlName(), cname, opt);
+            on_error rethrow $1.err, sprintf("%s (table %y column %y: %y)", $1.desc, getMessageName(), cname, opt);
             if (opt.precision || opt.auto_increment || opt.unsigned
                 || (MysqlTypeMap{opt.native_type}.type == Type::Number)
                 || (opt.qore_type == Type::Number))
@@ -4360,7 +4378,7 @@ string str = table.getSqlValue(date);
 
         private *hash<auto> doReturningImpl(hash<auto> opt, reference<string> sql, list<auto> args) {
             throw "RETURNING-ERROR", sprintf("table %s: the mysql driver does not support the returning clause in an "
-                "insert statement", getSqlName());
+                "insert statement", getMessageName());
         }
 
         private list<auto> getGroupOrderByListUnlocked(hash<QueryInfo> info, string key, list<auto> coll) {

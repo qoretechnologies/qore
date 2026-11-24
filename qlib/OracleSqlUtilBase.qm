@@ -392,6 +392,10 @@ hash schema = (
 /** @page ora_relnotes Release Notes
 
     @section oracle17 OracleSqlUtilBase v1.7
+    - a table of the user's own schema is named in messages, also in the \c TABLE-ERROR exceptions for a synonym or
+      a table that cannot be found, without the schema, whose name is the user name
+      (@ref OracleSqlUtilBase::OracleTable::getMessageName() "OracleTable::getMessageName()")
+      (<a href="https://github.com/qoretechnologies/qore/issues/7018">issue 7018</a>)
     - the \c TABLE-ERROR exceptions for a synonym or a table that cannot be found show the masked description of the
       datasource (see
       @ref Qore::SQL::AbstractDatasource::getMaskedDescription() "AbstractDatasource::getMaskedDescription()") instead
@@ -4293,6 +4297,30 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         return oracle_get_sql_identifier(name);
     }
 
+    #! returns the name of the table for messages: without its schema when it is the user's own schema
+    /** The default schema is the one of the connection's user, whose name messages do not show; a table in
+        another user's schema is named with its schema
+
+        @since OracleSqlUtilBase 1.7 (issue #7018)
+    */
+    string getMessageName() {
+        if (recursive_cte || dblink) {
+            return getSqlName();
+        }
+        if (schema.upr() == ds.getUserName().upr()) {
+            return oracle_get_sql_object_name(name);
+        }
+        return getSqlName();
+    }
+
+    #! returns a name of the given schema for messages: the name, with the schema when it is not the user's own
+    private string getSchemaMessageName(string schema, string name) {
+        if (!dblink && schema.upr() == ds.getUserName().upr()) {
+            return sprintf("%y", name);
+        }
+        return sprintf("%y.%y", schema, name);
+    }
+
     #! returns the name of the table without its schema for SQL
     private string getSqlTableName() {
         return oracle_get_sql_object_name(name);
@@ -4374,7 +4402,8 @@ public class OracleTable inherits SqlUtil::AbstractTable {
             return row;
         }
 
-        throw "TABLE-ERROR", sprintf("table %y.%y does not exist or is not accessible to this user (%s)", schema, name, getDBString());
+        throw "TABLE-ERROR", sprintf("table %s does not exist or is not accessible to this user (%s)",
+            getSchemaMessageName(schema, name), getDBString());
     }
 
     private setDblinkSchema() {
@@ -4523,8 +4552,9 @@ public class OracleTable inherits SqlUtil::AbstractTable {
             return row;
         }
 
-        throw "TABLE-ERROR", sprintf("%y is a %ssynonym pointing to table %y.%y which does not exist or is not "
-            "accessible to this user (%s)", orig_name, pub ? "public " : "", schema, name, getDBString());
+        throw "TABLE-ERROR", sprintf("%y is a %ssynonym pointing to table %s which does not exist or is not "
+            "accessible to this user (%s)", orig_name, pub ? "public " : "", getSchemaMessageName(schema, name),
+            getDBString());
     }
 
     private string getUserSchema() {
@@ -4885,8 +4915,8 @@ public class OracleTable inherits SqlUtil::AbstractTable {
             "com.owner = col.owner and com.table_name = col.table_name and com.column_name = col.column_name "
             "order by column_id", schema.upr(), name.upr());
         if (!qh.column_name) {
-            throw "TABLE-ERROR", sprintf("cannot retrieve table information for table %y.%y in %y", schema, name,
-                dsdesc);
+            throw "TABLE-ERROR", sprintf("cannot retrieve table information for table %s in %y",
+                getSchemaMessageName(schema, name), dsdesc);
         }
 
         # now we have to find unvalidated but enabled not null constraints - because these cause the column to

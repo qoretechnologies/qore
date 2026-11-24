@@ -6761,7 +6761,7 @@ string sql = table.getSelectSql(sh, \args);
                     auto value = i.getValue();
                     if (!jt.columns.hasKey(key))
                         throw "SELECT-ERROR", sprintf("%s: cannot join on unknown column %y.%y; known columns: %y",
-                            getDesc(), jt.getSqlName(), key, jt.columns.keys());
+                            getDesc(), jt.getMessageName(), key, jt.columns.keys());
                     # issue #738: a column operator applied to columns of the joined table
                     if (value.typeCode() == NT_HASH) {
                         jel += sprintf("%s.%s = %s", jtn, jt.getColumnSqlName(key),
@@ -6771,11 +6771,11 @@ string sql = table.getSelectSql(sh, \args);
                     if (value.typeCode() != NT_STRING) {
                         throw "SELECT-ERROR", sprintf("%s: join clause error; the join column for column %y.%y must "
                             "be a column name of %y or a column operator hash; got type %y instead", getDesc(),
-                            jt.getSqlName(), key, t.getSqlName(), value.type());
+                            jt.getMessageName(), key, t.getMessageName(), value.type());
                     }
                     if (!t.describe().hasKey(value))
                         throw "SELECT-ERROR", sprintf("%s: cannot join on unknown column %y.%y; known columns: %y",
-                            getDesc(), t.getSqlName(), value, t.columns.keys());
+                            getDesc(), t.getMessageName(), value, t.columns.keys());
                     jel += sprintf("%s.%s = %s.%s", jtn, jt.getColumnSqlName(key), an, t.getColumnSqlName(value));
                 }
             } else {
@@ -6810,7 +6810,7 @@ string sql = table.getSelectSql(sh, \args);
                     if (!fkh)
                         throw "SELECT-ERROR", sprintf("%s: cannot perform a %s join from %s on %s without a column "
                             "specification since neither table has a foreign constraint on the primary key of the "
-                            "other table", getDesc(), jh.jop, jt.getSqlName(), t.getSqlName());
+                            "other table", getDesc(), jh.jop, jt.getMessageName(), t.getMessageName());
                 }
             }
 
@@ -8075,7 +8075,7 @@ string sql = table.getSelectSql(sh, \args);
                 && !info.pseudo_column_map{column_name})
                 throw "COLUMN-ERROR", sprintf("%s: query references unknown column \"%s.%s\" (%y is aliased to "
                     "table %y); known columns: %y", getDesc(), table_prefix, column_name, table_prefix,
-                    info.join_map{table_prefix}.getSqlName(),
+                    info.join_map{table_prefix}.getMessageName(),
                     keys info.join_map{table_prefix}.describe());
         } else if (info.pseudo_column_map{column_name} && !(prefer_column && columns.hasKey(column_name))) {
             if (info.pseudo_column_map{column_name}.typeCode() == NT_STRING) {
@@ -14013,7 +14013,7 @@ string sql = table.getAlignSqlString(table2);
     string getDesc() {
         string sql_name;
         try {
-            sql_name = getSqlName();
+            sql_name = getMessageName();
         } catch (hash<ExceptionInfo> ex) {
             # a description is given for errors, also for a table whose name cannot be an identifier
             if (ex.err != "IDENTIFIER-ERROR") {
@@ -14022,6 +14022,25 @@ string sql = table.getAlignSqlString(table2);
             sql_name = sprintf("%y", name);
         }
         return sprintf("%s: %s %s", AbstractSqlUtilBase::makeDatasourceDesc(ds), getBaseType(), sql_name);
+    }
+
+    #! returns the name of the table for messages: its name in SQL, without the schema when it is the default schema of the connection
+    /** The default schema of some databases is named after the connection (Oracle: the user name, MySQL: the
+        database name), which messages do not show, as the description of the datasource in them does not (see
+        @ref Qore::SQL::AbstractDatasource::getMaskedDescription() "AbstractDatasource::getMaskedDescription()");
+        a table in another schema is named with its schema.  This implementation returns getSqlName(); the
+        DB-specific classes whose default schema is named after the connection omit it.
+
+        @return the name of the table for messages
+
+        @throw IDENTIFIER-ERROR the name cannot be an identifier
+
+        @see getDesc()
+
+        @since %SqlUtil 3.11.0 (issue #7018)
+    */
+    string getMessageName() {
+        return getSqlName();
     }
 
     #! returns the base type of the underlying object (normally \"table\", some DB-specific implementations may support others like \c "view")
