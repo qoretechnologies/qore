@@ -13581,7 +13581,8 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     const bool cross_module = callee_info.cross_module;
     assert(cross_module ? !fast_fn && !object_base && !callee_info.context_independent_fast_entry : fast_fn != nullptr);
     auto ctx_helper = module.getOrInsertFunction(
-        "qore_rt_try_get_aot_call_target_context",
+        object_base && callee_info.receiver_context_fast_entry
+            ? "qore_rt_try_get_aot_method_context" : "qore_rt_try_get_aot_call_target_context",
         llvm::FunctionType::get(ptr_type, {ptr_type, i32_type}, false));
     llvm::Value* callee_ctx = callee_info.context_independent_fast_entry
         ? aot_ctx_arg : nullptr;
@@ -13761,6 +13762,19 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     const AbstractQoreFunctionVariant* context_callee = !object_base ? getBatchCalleeVariant(callee_info) : nullptr;
     llvm::CallInst* function_context = context_callee && nativeCallNeedsFunctionContext(context_callee)
         ? emitPushNativeFunctionContext(module, llvm_func) : nullptr;
+    const bool install_receiver = object_base && callee_info.receiver_context_fast_entry;
+    if (install_receiver) {
+        assert(require_exact_object_class);
+        if (!native_method_context_storage) {
+            auto& entry = llvm_func->getEntryBlock();
+            llvm::IRBuilder<> ab(&entry, entry.begin());
+            native_method_context_storage = ab.CreateAlloca(ptr_type,
+                llvm::ConstantInt::get(i32_type, QORE_NATIVE_METHOD_CONTEXT_WORDS), "method_context");
+        }
+        builder->CreateCall(module.getOrInsertFunction("qore_rt_push_native_method_context",
+                llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false)),
+            {native_method_context_storage, object_base, xsink_arg});
+    }
     llvm::Value* fast_result = cross_module
         ? emitCrossModuleFastEntryCall(callee_info, cross_module_fn, call_args)
         : emitAOTImportedSummary(callee_info, call_args, callee_ctx, module, fast_fn, &summary_nothrow);
@@ -13770,6 +13784,10 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     }
     if (!fast_result) {
         fast_result = builder->CreateCall(fast_fn, call_args);
+    }
+    if (install_receiver) {
+        builder->CreateCall(module.getOrInsertFunction("qore_rt_pop_native_method_context",
+            llvm::FunctionType::get(void_type, {ptr_type}, false)), {native_method_context_storage});
     }
     if (function_context) {
         if (inline_body && summary_nothrow) {
@@ -15719,6 +15737,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     QoreIRClassContextHelper class_ctx(func);
     native_call_frame_storage = nullptr;
     native_function_context_storage = nullptr;
+    native_method_context_storage = nullptr;
     native_call_thread_data = nullptr;
     open_native_call_frames = 0;
     bg_helper_count = 0;
@@ -29330,7 +29349,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             || generic_specialization_matches)
                         && it->second.approach_b_eligible
                         && it->second.implicit_self_method
-                        && it->second.context_independent_fast_entry
+                        && (it->second.context_independent_fast_entry || it->second.receiver_context_fast_entry)
                         && (object_target_non_overridable
                             || !QORE_ENV_IS_SET(
                                 "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY"))
@@ -29344,7 +29363,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (aot_object_batch_fn) {
                         aot_object_batch_callee = &it->second;
                         aot_object_batch_requires_exact_class =
-                            !object_target_non_overridable;
+                            !object_target_non_overridable || it->second.receiver_context_fast_entry;
                     }
                 }
             }
@@ -30262,7 +30281,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             || generic_specialization_matches)
                         && it->second.approach_b_eligible
                         && it->second.implicit_self_method
-                        && it->second.context_independent_fast_entry
+                        && (it->second.context_independent_fast_entry || it->second.receiver_context_fast_entry)
                         && (object_target_non_overridable
                             || !QORE_ENV_IS_SET(
                                 "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY"))
@@ -30276,7 +30295,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (aot_object_batch_fn) {
                         aot_object_batch_callee = &it->second;
                         aot_object_batch_requires_exact_class =
-                            !object_target_non_overridable;
+                            !object_target_non_overridable || it->second.receiver_context_fast_entry;
                     }
                 }
             }

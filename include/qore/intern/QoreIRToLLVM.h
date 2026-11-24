@@ -2809,6 +2809,8 @@ private:
     //! directly, created by the first call that switches to it (emitPushNativeFunctionContext())
     /** One is enough, as for native_call_frame_storage */
     llvm::AllocaInst* native_function_context_storage = nullptr;
+    //! Shared storage for successive exact-receiver calls made by this function.
+    llvm::AllocaInst* native_method_context_storage = nullptr;
 
     //! The number of background helpers emitted for the function being lowered
     unsigned bg_helper_count = 0;

@@ -7405,7 +7405,8 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
         const QoreIRFunction& ir_func,
         const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees,
         const std::unordered_set<const LocalVar*>* explicit_captures = nullptr,
-        QoreContextIndependenceFlag flag = &BatchCalleeInfo::context_independent_fast_entry) {
+        QoreContextIndependenceFlag flag = &BatchCalleeInfo::context_independent_fast_entry,
+        bool allow_self_calls = false) {
     // the code without the paths of a debugger's flow requests (#6201)
     const QoreIRCodeBlocks code_blocks(ir_func);
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
@@ -7645,6 +7646,31 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                         && (call->intrinsic == QoreIRIntrinsic::Size
                             || call->intrinsic == QoreIRIntrinsic::StringStrlen);
                     if (!context_free_string_size) {
+                        return false;
+                    }
+                    break;
+                }
+                case QoreIROpcode::CallMethod: {
+                    if (!allow_self_calls) {
+                        return false;
+                    }
+                    const auto* call = static_cast<const QoreIRExprInstruction*>(inst);
+                    const auto* self = call->expr.hasNode()
+                        ? qore_get_self_function_call_node(call->expr.getInternalNode()) : nullptr;
+                    // Virtual calls conservatively mark their arguments as possible references. Only an exact
+                    // receiver reaches this entry, and scalar operands cannot carry a reference into the call.
+                    bool may_pass_reference = call->has_ref_args && std::any_of(call->operands.begin(),
+                        call->operands.end(), [&](QoreIRValue value) {
+                            const auto* facts = ir_func.getValueFacts(value);
+                            return !facts || !QoreTypeInfo::returnsOnlyScalars(facts->type_info);
+                        });
+                    if (!self || !self->hasSingleName() || self->isCopyCall() || self->isAbstractCall()
+                            || self->getRuntimeArgNames() || self->getExplicitTypeParamInstantiation()
+                            || self->getClass() != variant->getClass() || !self->getMethod()
+                            || !qore_method_private::get(*self->getMethod())->getFunction()->hasSingleCallVariant()
+                            || self->getMethod()->isStatic() || self->getMethod()->getClass() != variant->getClass()
+                            || !qore_aot_fast_entry_call_is_context_independent(self->getVariant(), call->expr,
+                                call->operands, may_pass_reference, batch_callees)) {
                         return false;
                     }
                     break;
@@ -17614,6 +17640,19 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
         return false;
     }
     resolveAOTBatchContextIndependentFastEntries(context_candidates, aot_batch_callee_map);
+    // An implicit-self method whose only other context dependency is an unqualified call can run on an
+    // exact receiver if the caller supplies the object, lexical class and the method's own expression table.
+    size_t receiver_candidate_i = 0;
+    for (const auto& [variant, ir] : context_candidates) {
+        if (++receiver_candidate_i % 100 == 0 && qore_check_cancel(nullptr, "AOT receiver fast-entry analysis")) {
+            return false;
+        }
+        auto& info = aot_batch_callee_map.at(variant);
+        if (info.implicit_self_method && !info.context_independent_fast_entry) {
+            info.receiver_context_fast_entry = qore_aot_fast_entry_is_context_independent(variant, *ir,
+                aot_batch_callee_map, nullptr, &BatchCalleeInfo::context_independent_fast_entry, true);
+        }
+    }
     size_t exact_method_i = 0;
     for (const auto* variant : exact_class_only_methods) {
         if (exact_method_i++ && !(exact_method_i % 100)
@@ -17623,7 +17662,7 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
         }
         auto info = aot_batch_callee_map.find(variant);
         if (info != aot_batch_callee_map.end()
-                && !info->second.context_independent_fast_entry) {
+                && !info->second.context_independent_fast_entry && !info->second.receiver_context_fast_entry) {
             info->second.approach_b_eligible = false;
         }
     }

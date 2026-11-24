@@ -627,6 +627,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_push_native_closure_call_frame",
         reinterpret_cast<void*>(&qore_rt_push_native_closure_call_frame) },
     { "qore_rt_pop_native_call_frame", reinterpret_cast<void*>(&qore_rt_pop_native_call_frame) },
+    { "qore_rt_push_native_method_context", reinterpret_cast<void*>(&qore_rt_push_native_method_context) },
+    { "qore_rt_pop_native_method_context", reinterpret_cast<void*>(&qore_rt_pop_native_method_context) },
     { "qore_rt_push_native_function_context_v1",
         reinterpret_cast<void*>(&qore_rt_push_native_function_context_v1) },
     { "qore_rt_pop_native_function_context_v1", reinterpret_cast<void*>(&qore_rt_pop_native_function_context_v1) },
@@ -646,6 +648,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_call_with_args_aot_consume_args) },
     { "qore_rt_get_aot_call_target_context",
         reinterpret_cast<void*>(&qore_rt_get_aot_call_target_context) },
+    { "qore_rt_try_get_aot_method_context", reinterpret_cast<void*>(&qore_rt_try_get_aot_method_context) },
     { "qore_rt_try_get_aot_call_target_context",
         reinterpret_cast<void*>(&qore_rt_try_get_aot_call_target_context) },
     { "qore_rt_try_get_cross_module_fast_entry",
@@ -13481,6 +13484,18 @@ size_t qore_rt_native_function_context_align() {
     return alignof(QoreNativeFunctionContext);
 }
 
+extern "C" DLLEXPORT void qore_rt_push_native_method_context(void* storage, uint64_t receiver, ExceptionSink* xsink) {
+    static_assert(sizeof(ObjectSubstitutionHelper) <= QORE_NATIVE_METHOD_CONTEXT_WORDS * sizeof(void*)
+        && alignof(ObjectSubstitutionHelper) <= alignof(void*));
+    QoreObject* obj = fromBits(receiver).get<QoreObject>();
+    new (storage) ObjectSubstitutionHelper(obj, qore_class_private::get(*obj->getClass()),
+        QoreSetCallProgramContext(), xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_pop_native_method_context(void* storage) {
+    static_cast<ObjectSubstitutionHelper*>(storage)->~ObjectSubstitutionHelper();
+}
+
 extern "C" DLLEXPORT void qore_rt_push_native_function_context_v1(void* storage, void* thread_data) {
     assert(storage && thread_data);
     new (storage) QoreNativeFunctionContext(thread_data);
@@ -20592,6 +20607,23 @@ extern "C" DLLEXPORT QoreAOTContext* qore_rt_get_aot_call_target_context(
 extern "C" DLLEXPORT QoreAOTContext* qore_rt_try_get_aot_call_target_context(
         QoreAOTContext* ctx, int32_t slot) {
     return qore_rt_get_aot_call_target_context(ctx, slot, nullptr);
+}
+
+extern "C" DLLEXPORT QoreAOTContext* qore_rt_try_get_aot_method_context(QoreAOTContext* ctx, int32_t slot) {
+    if (!ctx || slot < 0 || slot >= ctx->num_exprs || !ctx->call_targets) {
+        return nullptr;
+    }
+    const auto& target = ctx->call_targets[slot];
+    const auto* method = dynamic_cast<const MethodVariantBase*>(target.variant);
+    const UserVariantBase* uvb = method ? method->getUserVariantBase() : nullptr;
+    QoreProgram* pgm = getProgram();
+    // A foreign method, an inherited body, or a call requiring the runtime's entry checks takes normal dispatch.
+    if (!uvb || !pgm || uvb->pgm != pgm || !target.qc || method->getClassPriv() != qore_class_private::get(*target.qc)
+            || !method->getClassPriv()->ownedByProgram(pgm) || qore_rt_debugger_attached(uvb)
+            || qore_program_authored_restrictions_po(pgm)) {
+        return nullptr;
+    }
+    return qore_rt_try_get_aot_call_target_context(ctx, slot);
 }
 
 extern "C" DLLEXPORT int qore_rt_object_is_valid(uint64_t value) {

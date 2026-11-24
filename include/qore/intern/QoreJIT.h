@@ -620,6 +620,7 @@ struct BatchCalleeInfo {
     bool approach_b_eligible = false;    //!< True if fast entry exists
     bool generic_specialized_fast_entry = false; //!< Fast entry is valid only for specialization_key
     bool implicit_self_method = false;   //!< Fast entry reuses the caller's self/class context
+    bool receiver_context_fast_entry = false; //!< Exact-class dot calls install the receiver and use the method's AOT context
     bool context_independent_fast_entry = false; //!< True if fast entry does not require its own AOT context
     //! True if the body of the JIT fast entry does not observe the object and class context it runs in, so that a
     //! direct native call need not switch to the callee's (QoreIRToLLVM::nativeCallNeedsFunctionContext())

@@ -1106,6 +1106,12 @@ void qore_rt_push_native_function_context_v1(void* storage, void* thread_data);
 //! Restores the context replaced by qore_rt_push_native_function_context_v1()
 void qore_rt_pop_native_function_context_v1(void* storage);
 
+//! Pointer-sized words of caller storage for the native method context, part of the AOT ABI.
+constexpr unsigned QORE_NATIVE_METHOD_CONTEXT_WORDS = 9;
+//! Installs and restores an exact-class receiver for a native method making an unqualified self call.
+void qore_rt_push_native_method_context(void* storage, uint64_t receiver, ExceptionSink* xsink);
+void qore_rt_pop_native_method_context(void* storage);
+
 //! AOT slot-indexed variant of qore_rt_sync_local().
 void qore_rt_sync_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t value);
 
@@ -2190,6 +2196,9 @@ QoreAOTContext* qore_rt_get_aot_call_target_context(QoreAOTContext* ctx, int32_t
 //! Try to resolve the callee AOT context for a pre-resolved direct call slot.
 //! Returns nullptr without raising when the target does not have cached AOT.
 QoreAOTContext* qore_rt_try_get_aot_call_target_context(QoreAOTContext* ctx, int32_t slot);
+
+//! Resolves a method entry that can run with its receiver in the current Program.
+QoreAOTContext* qore_rt_try_get_aot_method_context(QoreAOTContext* ctx, int32_t slot);
 
 //! The size of the buffer in a native frame that holds the state of a call of a function of another module
 constexpr size_t QORE_RT_CROSS_MODULE_CALL_STATE_SIZE = 1024;

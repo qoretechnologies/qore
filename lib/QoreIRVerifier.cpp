@@ -3088,9 +3088,14 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         // QoreIRExprInstruction (Call, CallIndirect, CallMethod, CallStatic, CallClosureDirect, and other expr-based ops)
         case QoreIROpcode::Call:
         case QoreIROpcode::CallIndirect:
-        case QoreIROpcode::CallMethod:
         case QoreIROpcode::CallStatic:
             return &static_cast<const QoreIRExprInstruction*>(inst)->expr;
+        case QoreIROpcode::CallMethod: {
+            const QoreValue& expr = static_cast<const QoreIRExprInstruction*>(inst)->expr;
+            // A self call with lowered operands evaluates its arguments from the IR, even on virtual dispatch.
+            return !inst->operands.empty() && expr.hasNode() && qore_get_self_function_call_node(expr.getInternalNode())
+                ? nullptr : &expr;
+        }
 
         // CallDirect, CallStaticDirect, DotEvalMethodDirect, and InvokeDotEvalMethodDirect have expr fields,
         // but they pre-evaluate all arguments into IR operands. The expr args are only used by AOT serialization,
@@ -3294,6 +3299,8 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
 //! their local references still need slots in serialized nested IR functions.
 static const QoreValue* getSerializationOnlyInstructionExpr(const QoreIRInstruction* inst) {
     switch (inst->opcode) {
+        case QoreIROpcode::CallMethod:
+            return getInstructionExpr(inst) ? nullptr : &static_cast<const QoreIRExprInstruction*>(inst)->expr;
         case QoreIROpcode::CallDirect:
             return &static_cast<const QoreIRCallDirectInstruction*>(inst)->expr;
         case QoreIROpcode::CallMethodDirect: {
