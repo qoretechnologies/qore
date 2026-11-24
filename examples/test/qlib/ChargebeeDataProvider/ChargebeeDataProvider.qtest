@@ -450,13 +450,13 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeChargebeeHandler handler();
         server.setHandler("chargebee", "", NOTHING, handler);
         server.setDefaultHandler("chargebee", handler);
 
         ChargebeeRestClient::ChargebeeRestClient rest({"api_key": "test_key",
-            "url": "http://localhost:" + port + "/api/v2"}, True);
+            "url": "http://127.0.0.1:" + port + "/api/v2"}, True);
         handler.rate_limited = 1;
         hash<auto> info;
         rest.doRequest("GET", "customers", NOTHING, \info);
@@ -471,11 +471,11 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeChargebeeHandler handler();
         server.setHandler("chargebee", "", NOTHING, handler);
         server.setDefaultHandler("chargebee", handler);
-        string url = "http://localhost:" + port + "/api/v2";
+        string url = "http://127.0.0.1:" + port + "/api/v2";
 
         # the example event data is requested once; with retries, the third request would return a record
         ChargebeeDataProvider::ChargebeeWatchCustomersEventDataProvider watch(
@@ -619,13 +619,13 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeChargebeeHandler handler();
         server.setHandler("chargebee", "", NOTHING, handler);
         server.setDefaultHandler("chargebee", handler);
 
         ChargebeeDataProvider::ChargebeeDataProvider provider(new ChargebeeRestClient::ChargebeeRestClientIo(
-            {"api_key": "test_key", "url": "http://localhost:" + port + "/api/v2"}));
+            {"api_key": "test_key", "url": "http://127.0.0.1:" + port + "/api/v2"}));
         assertTrue(provider.getRestClient() instanceof ChargebeeRestClient::ChargebeeRestClientIo);
         AbstractDataProvider customers = provider.getChildProviderPath("customers");
 

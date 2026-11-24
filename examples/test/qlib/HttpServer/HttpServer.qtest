@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-platform: macos - HttpServer listeners: HTTPS, keep-alive, wildcard binds, WebSocket upgrades, shutdown
+# test-loopback: localhost - wildcardListenerAllFamiliesTest() checks that a client of the name localhost reaches a listener on the dual-stack wildcard address "::" (both loopback addresses), and the issue #2155 test adds listeners on the node "localhost" without connecting to them; its other servers listen on 127.0.0.1 and their clients connect to 127.0.0.1
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern

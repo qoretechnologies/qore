@@ -360,7 +360,7 @@ public class MailgunDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeMailgunHandler handler();
         server.setHandler("mailgun", "", NOTHING, handler);
         server.setDefaultHandler("mailgun", handler);
@@ -368,7 +368,7 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         MailgunRestClient::MailgunRestClientIo rest({
             "apikey": "fake-key",
             "api_domain": "mg.example.com",
-            "url": "http://localhost:" + port,
+            "url": "http://127.0.0.1:" + port,
         });
         MailgunDataProvider::MailgunCreateRouteDataProvider prov(rest);
         hash<auto> resp = prov.doRequest({
@@ -584,7 +584,7 @@ public class MailgunDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeMailgunHandler handler();
         server.setHandler("mailgun", "", NOTHING, handler);
         server.setDefaultHandler("mailgun", handler);
@@ -592,7 +592,7 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         MailgunRestClient::MailgunRestClientIo rest({
             "apikey": "fake-key",
             "api_domain": "mg.example.com",
-            "url": "http://localhost:" + port,
+            "url": "http://127.0.0.1:" + port,
         });
         MailgunDataProvider::MailgunDataProvider provider({
             "mailgunrestclient": rest,

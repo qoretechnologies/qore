@@ -1986,13 +1986,13 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeShipStationHandler handler();
         server.setHandler("shipstation", "", NOTHING, handler);
         server.setDefaultHandler("shipstation", handler);
 
         ShipStationRestClient::ShipStationRestClient rest({"api_key": "test-key", "api_secret": "test-secret",
-            "url": "http://localhost:" + port}, True);
+            "url": "http://127.0.0.1:" + port}, True);
         handler.rate_limited = ({"Retry-After": "1"},);
         hash<auto> info;
         hash<auto> resp = rest.doRequest("GET", "carriers", NOTHING, \info);
@@ -2004,7 +2004,7 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
         handler.requests = ();
         handler.rate_limited = ({"Retry-After": "1"},);
         rest = new ShipStationRestClient::ShipStationRestClient({"api_key": "test-key", "api_secret": "test-secret",
-            "error_passthru": True, "url": "http://localhost:" + port}, True);
+            "error_passthru": True, "url": "http://127.0.0.1:" + port}, True);
         resp = rest.doRequest("GET", "carriers", NOTHING, \info);
         assertEq(200, info."response-code");
         assertEq(2, handler.requests.size());
@@ -2016,11 +2016,11 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeShipStationHandler handler();
         server.setHandler("shipstation", "", NOTHING, handler);
         server.setDefaultHandler("shipstation", handler);
-        string url = "http://localhost:" + port;
+        string url = "http://127.0.0.1:" + port;
         hash<auto> opts = {"api_key": "test-key", "api_secret": "test-secret", "url": url};
 
         # the example event data is requested once
@@ -2166,7 +2166,7 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeShipStationHandler handler();
         server.setHandler("shipstation", "", NOTHING, handler);
         server.setDefaultHandler("shipstation", handler);
@@ -2174,7 +2174,7 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
         ShipStationRestClient::ShipStationRestClientIo rest({
             "api_key": "test-key",
             "api_secret": "test-secret",
-            "url": "http://localhost:" + port,
+            "url": "http://127.0.0.1:" + port,
         });
         ShipStationDataProvider::ShipStationDataProvider provider(rest);
         string auth = "Basic " + make_base64_string("test-key:test-secret");

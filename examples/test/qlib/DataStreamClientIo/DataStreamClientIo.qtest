@@ -231,7 +231,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         m_http.setHandler("ds-rest", "/ds", NOTHING, new RestDataStreamHandler(), NOTHING, False);
 
         # HTTP/1.1 (plain) listener for non-streaming tests
-        m_port = m_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        m_port = m_http.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
 
         # TLS listener for HTTP/2 streaming tests
         try {
@@ -281,7 +281,7 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     private string getHttpUrl() {
-        return sprintf("http://localhost:%d", m_port);
+        return sprintf("http://127.0.0.1:%d", m_port);
     }
 
     private string getHttpsUrl() {

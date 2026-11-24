@@ -360,7 +360,7 @@ class WebSocketFrameStateCloseTest inherits QUnit::Test {
         }).port;
         server.waitForAsyncIo();
         hash<auto!> conn_opts = protocol == "h2"
-            ? {"url": "wss://localhost:" + port, "http_version": "2.0"}
+            ? {"url": "wss://127.0.0.1:" + port, "http_version": "2.0"}
             : {"url": "wss://127.0.0.1:" + port, "http3_mode": "required"};
         WebSocketClient wsc(sub (*data msg) {
             queue.push(msg);

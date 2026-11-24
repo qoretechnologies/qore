@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-loopback: localhost - it checks that "localhost" at a port is another origin than "127.0.0.1" at the same port, and trusted clients follow such redirects; its plain listener listens on both loopback addresses with the same port, and its TLS listener is bound to the name "localhost", which listens on its first address and holds the port on the other loopback address
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -529,7 +530,7 @@ object sub lookalike() {
     private {
         HttpServer server;
         int port;
-        #! the port of the plain HTTP listener on 127.0.0.1 (redirects)
+        #! the port of the plain HTTP listener on both loopback addresses (redirects)
         int plain_port;
         #! a port where nothing listens
         int closed_port;
@@ -582,15 +583,50 @@ object sub lookalike() {
         RedirectHandler rh();
         server.setHandler("redirect", "^/?redirect", NOTHING, rh);
         server.setHandler("rest", "^/?rest", NOTHING, rh);
-        hash<auto> plinfo = server.addListener(<HttpListenerOptionInfo>{
-            "node": "127.0.0.1",
-            "service": 0,
-        });
+        plain_port = addLoopbackListener();
         server.waitForAsyncIo();
         port = linfo.port;
-        plain_port = plinfo.port;
         rh.setPort(plain_port);
         closed_port = get_free_port();
+    }
+
+    #! Adds the plain HTTP listener on both loopback addresses with the same port and returns the port
+    /** \c "localhost" at the port of the listener is another origin than \c "127.0.0.1" at the same port, and the
+        trusted clients connect to both: a listener on only \c 127.0.0.1 would leave a client of \c "localhost",
+        which tries \c ::1 first, to a test running beside this one that listens on \c ::1 at the same port number
+        (qore#7469).  The port that the system assigns on \c 127.0.0.1 can be in use on \c ::1, in which case
+        another port is taken.  Without an IPv6 loopback address, the listener is only on \c 127.0.0.1.
+    */
+    private int addLoopbackListener() {
+        for (int attempt = 1; ; ++attempt) {
+            hash<auto> v4 = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
+            if (!hasIpv6Loopback()) {
+                return v4.port;
+            }
+            try {
+                server.addListener(<HttpListenerOptionInfo>{"node": "::1", "service": v4.port});
+            } catch (hash<ExceptionInfo> ex) {
+                # the port is in use on the IPv6 loopback address: another port is taken
+                server.stopListenerID(v4.id);
+                if (attempt == 20) {
+                    rethrow;
+                }
+                continue;
+            }
+            return v4.port;
+        }
+    }
+
+    #! Returns True if the IPv6 loopback address can be bound
+    private static bool hasIpv6Loopback() {
+        Socket s();
+        on_exit s.close();
+        try {
+            s.bindINET("::1", 0, False, AF_INET6);
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+        return True;
     }
 
     globalTearDown() {

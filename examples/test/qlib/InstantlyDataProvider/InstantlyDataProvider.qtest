@@ -229,12 +229,12 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeInstantlyHandler handler();
         server.setHandler("instantly", "", NOTHING, handler);
         server.setDefaultHandler("instantly", handler);
 
-        InstantlyRestClient::InstantlyRestClient rest({"apikey": "test-key", "url": "http://localhost:" + port}, True);
+        InstantlyRestClient::InstantlyRestClient rest({"apikey": "test-key", "url": "http://127.0.0.1:" + port}, True);
         handler.rate_limited = 1;
         hash<auto> info;
         hash<auto> resp = rest.doRequest("GET", "campaigns/c1", NOTHING, \info);
@@ -250,11 +250,11 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeInstantlyHandler handler();
         server.setHandler("instantly", "", NOTHING, handler);
         server.setDefaultHandler("instantly", handler);
-        string url = "http://localhost:" + port + "/api/v2";
+        string url = "http://127.0.0.1:" + port + "/api/v2";
 
         # the example event data is requested once
         InstantlyDataProvider::InstantlyReplyReceivedEventDataProvider watch(
@@ -385,14 +385,14 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeInstantlyHandler handler();
         server.setHandler("instantly", "", NOTHING, handler);
         server.setDefaultHandler("instantly", handler);
 
         InstantlyRestClient::InstantlyRestClientIo rest({
             "apikey": "test-key",
-            "url": "http://localhost:" + port + "/api/v2",
+            "url": "http://127.0.0.1:" + port + "/api/v2",
         });
         InstantlyDataProvider::InstantlyDataProvider provider({
             "instantlyrestclient": rest,
