@@ -64,6 +64,13 @@ public class Lib {
     }
 }
 
+#! a class of this module whose method makes the checks of the calling code through a plain function of this module
+public class Checker {
+    string m() {
+        return FcxLib::libcheck();
+    }
+}
+
 #! a plain function of this module that calls a static method of this module
 public list<string> sub libs() {
     return Lib::viaStatic();

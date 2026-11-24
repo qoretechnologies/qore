@@ -13489,11 +13489,27 @@ static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature
 static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig,
         const QoreTypeInfo* receiver_type_info);
 
+//! Runs the body of a plain function that a fast call runs in another Program with the call Program context of that
+//! Program (qore#7394)
+/** Out of line, so that the frames of the calls within one Program, such as the levels of a recursion, hold neither
+    the helper nor its code; the helper restores the caller's call Program context on every exit, also when the body
+    raises an exception that unwinds through this frame (QoreJITException, which execJITWithDeopt() catches)
+
+    @param thread_data_ptr the current thread's data (CalleeContextHelper::getThreadData())
+*/
+template <typename ExecFn>
+static QORE_INTERN_NOINLINE uint64_t qore_rt_exec_body_in_call_program_context(QoreProgram* exec_pgm,
+        QoreProgram* caller_pgm, void* thread_data_ptr, ExecFn& exec_fn, ExceptionSink* xsink, bool& invalidated) {
+    QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, caller_pgm, thread_data_ptr);
+    return exec_fn(xsink, invalidated);
+}
+
 template <bool IN_FRAME_RELEASE = false, typename ExecFn>
 static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call_name,
         ExecFn&& exec_fn, QoreValue& val, ExceptionSink* xsink,
         QoreProgram* caller_pgm = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
-        QoreProgram* exec_pgm = nullptr, void (*release_in_frame)(void*) = nullptr, void* release_ctx = nullptr) {
+        QoreProgram* exec_pgm = nullptr, void (*release_in_frame)(void*) = nullptr, void* release_ctx = nullptr,
+        bool body_call_ctx = false, void* body_call_ctx_td = nullptr) {
     QoreProgram* runtime_pgm = exec_pgm ? exec_pgm : uvb->pgm;
     if (uvb->hasCachedAOT() && !uvb->ensureAOTContext(call_name.c_str(), xsink)) {
         // the parameters that the call bound are released, as without the call
@@ -13586,7 +13602,12 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     bool fn_invalidated = false;
     uint64_t result_bits = 0;
     try {
-        result_bits = exec_fn(xsink, fn_invalidated);
+        // the body of a plain function that the call runs in another Program runs with that Program's call Program
+        // context, out of line (qore#7394); a call within one Program keeps the caller's, which is that Program's
+        result_bits = __builtin_expect(body_call_ctx, 0)
+            ? qore_rt_exec_body_in_call_program_context(exec_pgm, caller_pgm, body_call_ctx_td, exec_fn, xsink,
+                fn_invalidated)
+            : exec_fn(xsink, fn_invalidated);
     } catch (const QoreJITException&) {
         // Native helpers throw this only after populating xsink.  Catch at the
         // fast-call boundary so the normal cleanup path below still runs for
@@ -14319,8 +14340,9 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_t(const QoreFunction
             argv_context = &function_context;
         }
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
-        // the body of a plain function runs with the call Program context of the Program it runs in (qore#7394)
-        QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, caller_pgm, function_context.getThreadData());
+        // the body of a plain function that the call runs in another Program runs with that Program's call Program
+        // context (qore#7394; see execJITWithDeopt())
+        const bool body_call_ctx = exec_pgm && exec_pgm != caller_pgm;
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp{args, nargs, CONSUME ? arg_cleanups : nullptr};
@@ -14336,13 +14358,15 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_t(const QoreFunction
                 }
                 return toBits(ir_return_value);
             }, val, xsink, caller_pgm, nullptr, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
+            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
+            body_call_ctx, function_context.getThreadData());
         } else if (uvb->hasCachedFunction()) {
             // JIT/AOT fast path
             execJITWithDeopt<CONSUME>(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
                 return uvb->execCachedFunction(xs, inv);
             }, val, xsink, caller_pgm, nullptr, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
+            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
+            body_call_ctx, function_context.getThreadData());
         } else {
             // IR fast path (standard TLS): execute IR directly without QoreListNode.
             const QoreIRFunction* callee_ir = uvb->getCachedIR();
@@ -14358,7 +14382,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_t(const QoreFunction
                 }
                 return toBits(ir_return_value);
             }, val, xsink, caller_pgm, nullptr, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
+            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
+            body_call_ctx, function_context.getThreadData());
         }
 
         // the return value is checked in the function's context too, as ReturnStatement::execImpl() checks it
@@ -14968,12 +14993,14 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_with_target_t(uint64
             argv_context = &function_context;
         }
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
-        // the body of a plain function runs with the call Program context of the Program it runs in (qore#7394)
-        QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, caller_pgm, function_context.getThreadData());
+        // the body of a plain function that the call runs in another Program runs with that Program's call Program
+        // context (qore#7394; see execJITWithDeopt())
+        const bool body_call_ctx = exec_pgm && exec_pgm != caller_pgm;
         execJITWithDeopt<CONSUME>(uvb, call_name, [target_fn](ExceptionSink* xs, bool& /*inv*/) {
             return target_fn(xs);
         }, val, xsink, caller_pgm, nullptr, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
+            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
+            body_call_ctx, function_context.getThreadData());
 
         // the return value is checked in the function's context too, as ReturnStatement::execImpl() checks it
         // (with softlist wrapping and the like)
@@ -20337,13 +20364,15 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
                 argv_context = &function_context;
             }
             QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
-            // the body of a plain function runs with the call Program context of the Program it runs in (qore#7394)
-            QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, caller_pgm, function_context.getThreadData());
+            // the body of a plain function that the call runs in another Program runs with that Program's call Program
+            // context (qore#7394; see execJITWithDeopt())
+            const bool body_call_ctx = exec_pgm && exec_pgm != caller_pgm;
             if (uvb->hasCachedFunction()) {
                 execJITWithDeopt<CONSUME>(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
                     return uvb->execCachedFunction(xs, inv);
                 }, val, xsink, caller_pgm, nullptr, exec_pgm,
-                CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
+                CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
+                body_call_ctx, function_context.getThreadData());
             } else if (uvb->getCachedIR()) {
                 const QoreIRFunction* callee_ir = uvb->getCachedIR();
                 execJITWithDeopt<CONSUME>(uvb, call_name,
@@ -20358,7 +20387,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
                     }
                     return toBits(ir_return_value);
                 }, val, xsink, caller_pgm, nullptr, exec_pgm,
-                CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
+                CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
+                body_call_ctx, function_context.getThreadData());
             } else {
                 execJITWithDeopt<CONSUME>(uvb, call_name, [uvb, sig](ExceptionSink* xs, bool& inv) -> uint64_t {
                     QoreValue ast_return_value;
@@ -20370,7 +20400,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
                     }
                     return toBits(ast_return_value);
                 }, val, xsink, caller_pgm, nullptr, exec_pgm,
-                CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
+                CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
+                body_call_ctx, function_context.getThreadData());
             }
 
             // the return value is checked in the function's context too, as ReturnStatement::execImpl() checks it

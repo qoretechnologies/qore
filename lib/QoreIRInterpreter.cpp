@@ -6789,6 +6789,22 @@ private:
     @tparam GIVEN true if the caller gives the references of temporary arguments (\a arg_cleanups); a call that gives
     none runs the code instantiated for false, which has no test for them
 */
+//! Runs the body of a plain function that an inline call of the IR interpreter runs in another Program with the call
+//! Program context of that Program (qore#7394)
+/** Out of line, so that the frames of the inline calls within one Program, such as the levels of a recursion, hold
+    neither the helper nor its code; the helper restores the caller's call Program context on every exit
+*/
+static QORE_INTERN_NOINLINE bool qore_ir_execute_inline_body_in_call_program_context(QoreProgram* exec_pgm,
+        const QoreIRFunction* callee_ir, QoreValue& ir_return_value, ExceptionSink* xsink, const UserVariantBase* uvb,
+        const IRDirectParams* direct_params) {
+    // the caller runs the body here only when the call entered another Program (exec_pgm is not the caller's); six
+    // arguments, so that the frame of the inline call passes none on the stack; the thread data is looked up here
+    QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, nullptr);
+    return QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
+        nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
+        nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
+}
+
 template <bool GIVEN = false>
 static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* inst,
         QoreProgram* caller_pgm, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
@@ -6885,11 +6901,14 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
         if (inst->cached_switches_context) {
             callee_context.emplace(thread_data);
         }
-        // the body of a plain function runs with the call Program context of the Program it runs in (qore#7394)
-        QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, caller_pgm, thread_data);
-        ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
-            nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-            nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
+        // the body of a plain function that the call runs in another Program runs with that Program's call Program
+        // context, out of line (qore#7394); a call within one Program keeps the caller's, which is that Program's
+        ok = __builtin_expect(exec_pgm && exec_pgm != caller_pgm, 0)
+            ? qore_ir_execute_inline_body_in_call_program_context(exec_pgm, callee_ir, ir_return_value, xsink, uvb,
+                direct_params)
+            : QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
+                nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
+                nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
         if (ok && !(xsink && *xsink)) {
             acceptInterpreterIRReturnType(sig, inst->cached_return_type, nullptr, ir_return_value, xsink);
         }
