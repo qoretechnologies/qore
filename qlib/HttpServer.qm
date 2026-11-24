@@ -285,6 +285,14 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - a request body that the server reads into memory is limited to
+      @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" (256 MiB) when no
+      \c max_request_body_size is set
+      (@ref HttpServer::HttpServerOptionInfo::max_request_body_size "HttpServerOptionInfo::max_request_body_size"),
+      and a larger body is answered with HTTP 413 (Content Too Large); a body that a handler reads as a stream is not
+      limited by the default, and an explicit \c 0 still means no limit; added
+      @ref HttpServer::HttpServer::getStreamMaxRequestBodySize() "HttpServer::getStreamMaxRequestBodySize()" and
+      @ref HttpServer::HttpListener::getStreamMaxRequestBodySize() "HttpListener::getStreamMaxRequestBodySize()"
     - a stream handler that wants an HTTP/1.x request body with a \c Content-Length as a stream
       (@ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()") gets it in binary
       parts of at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize" bytes, each byte once, instead of
@@ -416,7 +424,7 @@ log("started listener on %s", lh.desc);
       (@ref HttpServer::HttpServer::setDefaultTextEncoding() "setDefaultTextEncoding()") is the assumed encoding for text without an encoding declaration, and no longer
       replaces the encoding of a JSON body or one declared in the body
     - every request handler receives the effective maximum request body size of the listener
-      (@ref HttpServer::HttpListener::getMaxRequestBodySize() "HttpListener::getMaxRequestBodySize()") in
+      (@ref HttpServer::HttpListener::getStreamMaxRequestBodySize() "HttpListener::getStreamMaxRequestBodySize()") in
       \c cx."header-info".max_request_body_size (\c 0 = no limit), including handlers on an automatically created
       HTTP/3 listener; a handler that reads the request body as a stream enforces the total with it, since the
       server limits only the data it buffers ahead of such a handler
@@ -835,7 +843,7 @@ public hashdecl HttpServerOptionInfo {
     */
     int max_idle_handler_threads = 0;
 
-    #! Maximum HTTP request body size in bytes (0 = unlimited)
+    #! Maximum HTTP request body size in bytes (0 = unlimited; not set = @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" for buffered bodies)
     /** Requests with Content-Length exceeding this value, or chunked, HTTP/2, or HTTP/3 bodies
         that grow beyond this value, receive HTTP 413 (Content Too Large).  An HTTP/1.x connection
         is closed after the response; on HTTP/2 and HTTP/3 only the request's stream ends, and the
@@ -848,9 +856,20 @@ public hashdecl HttpServerOptionInfo {
         the total body size itself; for such a handler, this value limits the data that the server buffers for it,
         and a read of a body that exceeded it fails with \c HTTP-BODY-TOO-LARGE after the buffered data.
 
-        @since HttpServer 1.6
+        - a positive value is the limit
+        - \c 0 means no limit
+        - if it is not set, a body that the server reads into memory for the handler (a body that it reads before
+          dispatching the request, a body that the handler reads with
+          @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "getMessageBody()", and the rest of a chunked
+          body that the handler left unread) is limited to
+          @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" (256 MiB); a body that a handler
+          reads as a stream is not limited then (see
+          @ref HttpServer::HttpServer::getStreamMaxRequestBodySize() "HttpServer::getStreamMaxRequestBodySize()")
+
+        @since HttpServer 1.6; HttpServer 1.7 applies
+        @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" to buffered bodies when it is not set
     */
-    int max_request_body_size = 0;
+    *int max_request_body_size;
 
     #! Maximum size in bytes of the header of an HTTP/1.x request and of the trailer section of a chunked request body
     /** The server answers a request whose header is larger than this limit with HTTP 431 (Request Header Fields Too
@@ -1276,8 +1295,8 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         #! Idle disconnect (TTL) for connections
         date ttl = DefaultTtl;
 
-        #! Maximum HTTP request body size in bytes (0 = unlimited)
-        int max_request_body_size = 0;
+        #! Maximum HTTP request body size in bytes (0 = unlimited; @ref nothing = not set: the default applies)
+        *int max_request_body_size;
 
         #! Maximum size in bytes of a decompressed request body (0 = default, negative = unlimited)
         int max_decoded_body_size = 0;
@@ -1601,17 +1620,39 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         self.ttl = ttl;
     }
 
-    #! Returns the maximum request body size in bytes (0 = unlimited)
-    /** @return the maximum request body size in bytes; 0 means unlimited
+    #! Returns the maximum size in bytes of a request body that the server reads into memory (0 = unlimited)
+    /** @return the maximum request body size in bytes set with the \c max_request_body_size option
+        (@ref HttpServer::HttpServerOptionInfo::max_request_body_size "HttpServerOptionInfo::max_request_body_size")
+        or setMaxRequestBodySize(), or @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" if
+        none is set; 0 means unlimited
 
-        @since HttpServer 1.6
+        @see getStreamMaxRequestBodySize()
+
+        @since HttpServer 1.6; HttpServer 1.7 returns
+        @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" if no limit is set
     */
     int getMaxRequestBodySize() {
-        return max_request_body_size;
+        return max_request_body_size ?? DefaultMaxRequestBodySize;
+    }
+
+    #! Returns the maximum size in bytes of a request body that a handler reads as a stream (0 = unlimited)
+    /** @return the maximum request body size in bytes set with the \c max_request_body_size option
+        (@ref HttpServer::HttpServerOptionInfo::max_request_body_size "HttpServerOptionInfo::max_request_body_size")
+        or setMaxRequestBodySize(), or 0 (no limit) if none is set: the default limit
+        (@ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize") applies only to the bodies that the
+        server reads into memory
+
+        @see getMaxRequestBodySize()
+
+        @since HttpServer 1.7
+    */
+    int getStreamMaxRequestBodySize() {
+        return max_request_body_size ?? 0;
     }
 
     #! Sets the maximum request body size in bytes (0 = unlimited)
-    /** @param size the maximum request body size in bytes; 0 means unlimited
+    /** @param size the maximum request body size in bytes; 0 means unlimited, also for the bodies that the server
+        reads into memory
 
         @since HttpServer 1.6
     */
@@ -3844,7 +3885,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         if (effective_ttl) {
             setTtl(effective_ttl);
         }
-        max_request_body_size = opts.max_request_body_size ?? 0;
+        # not set: the default applies to the bodies that the server reads into memory
+        max_request_body_size = opts.max_request_body_size;
         if ((opts.max_header_size ?? 0) < 0) {
             throw "HTTP-SERVER-INIT-ERROR", sprintf("max_header_size (%d) must not be negative", opts.max_header_size);
         }
@@ -4627,9 +4669,12 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # request was dispatched too, as for a body given whole), and the handler gets the parts from a reader,
             # which gives the bytes read before the dispatch first, in the same parts as those read from the socket
             int content_length = http_parse_content_length(req_content_length);
-            if (max_body > 0 && content_length > max_body) {
+            # a body read as a stream has the limit set for the listener or the server, not the default limit of a
+            # buffered body
+            int stream_max_body = cx."header-info".max_request_body_size;
+            if (stream_max_body > 0 && content_length > stream_max_body) {
                 string etxt = sprintf("Content-Length %d exceeds maximum allowed body size %d",
-                    content_length, max_body);
+                    content_length, stream_max_body);
                 listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
                 cx.close = True;
                 sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
@@ -4638,7 +4683,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             }
             # the server keeps no copy of the bytes read before the dispatch: each byte reaches the handler once
             *binary buffered = remove cx."header-info".body;
-            cx."header-info".body_reader = new Http1BodyReader(s, content_length, buffered, max_body);
+            cx."header-info".body_reader = new Http1BodyReader(s, content_length, buffered, stream_max_body);
             return {"body": NOTHING};
         }
         if (cx."header-info".body_streaming && !want_streaming) {
@@ -5046,10 +5091,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         cx."compression-levels" = compression_levels;
 
         # the effective maximum request body size of the listener, read once per request so a change made with
-        # setMaxRequestBodySize() applies to the next request; handlers that read the body as a stream enforce the
-        # total themselves with this value
+        # setMaxRequestBodySize() applies to the next request: max_body limits the bodies that the server reads into
+        # memory, including DefaultMaxRequestBodySize when no limit is set; handlers that read the body as a stream
+        # enforce the total themselves with the limit set for the listener or the server, which the context gives
         int max_body = listener.getMaxRequestBodySize();
-        cx."header-info".max_request_body_size = max_body;
+        cx."header-info".max_request_body_size = listener.getStreamMaxRequestBodySize();
         cx."header-info".stream_send_min_rate = listener.getStreamSendMinRate();
         cx."header-info".stream_send_min_rate_window = listener.getStreamSendMinRateWindow();
 
@@ -7493,10 +7539,14 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         return ssl;
     }
 
-    #! Returns the effective maximum request body size for this listener
-    /** Returns the listener-specific limit if set, otherwise the server-level default.
+    #! Returns the effective maximum size of a request body that the server reads into memory for this listener
+    /** Returns the listener-specific limit if set, otherwise the server-level limit
+        (@ref HttpServer::HttpServer::getMaxRequestBodySize() "HttpServer::getMaxRequestBodySize()"), which is
+        @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" if none is set.
 
         @return the maximum body size in bytes; 0 means unlimited
+
+        @see getStreamMaxRequestBodySize()
 
         @since HttpServer 1.6
     */
@@ -7504,6 +7554,24 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         int rv = opts.max_request_body_size ?? 0;
         if (!rv) {
             rv = serv.getMaxRequestBodySize();
+        }
+        return rv;
+    }
+
+    #! Returns the effective maximum size of a request body that a handler of this listener reads as a stream
+    /** Returns the listener-specific limit if set, otherwise the limit set for the server
+        (@ref HttpServer::HttpServer::getStreamMaxRequestBodySize() "HttpServer::getStreamMaxRequestBodySize()"); the
+        default limit (@ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize") applies only to the
+        bodies that the server reads into memory (see getMaxRequestBodySize())
+
+        @return the maximum body size in bytes; 0 means unlimited
+
+        @since HttpServer 1.7
+    */
+    int getStreamMaxRequestBodySize() {
+        int rv = opts.max_request_body_size ?? 0;
+        if (!rv) {
+            rv = serv.getStreamMaxRequestBodySize();
         }
         return rv;
     }
@@ -7585,7 +7653,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             rv = serv.getMaxDecodedBodySize();
         }
         if (!rv) {
-            rv = getMaxRequestBodySize();
+            # the limit set for the listener or the server, not the default limit of buffered bodies
+            rv = getStreamMaxRequestBodySize();
         }
         return rv ?: DefaultMaxDecodedBodySize;
     }
