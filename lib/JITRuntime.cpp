@@ -8744,7 +8744,7 @@ static QoreHashNode* qore_rt_make_implicit_hash_for_lvalue(LocalVar* var, Except
         return new QoreHashNode(sti);
     }
 
-    const TypedHashDecl* thd = QoreTypeInfo::getUniqueReturnHashDecl(typeInfo);
+    const TypedHashDecl* thd = QoreTypeInfo::getUniqueReturnHashDecl(qore_get_value_type(typeInfo));
     if (thd) {
         QoreStringNode* desc = new QoreStringNodeMaker("Cannot implicitly create typed hash '%s' "
             "with an assignment; to address this error, declare the typed hash before the assignment",
