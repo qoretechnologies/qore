@@ -46,14 +46,6 @@ DLLLOCAL QoreValue pseudo_classes_eval(LexicalSemanticPolicy policy, const QoreV
 /** @return -1 if the exception was raised, 0 if not
 */
 DLLLOCAL int pseudo_classes_check_method(const QoreValue n, const char* name, ExceptionSink* xsink);
-//! Returns true if a pseudo-method of the pseudo-class @a qc, resolved at parse time, can run on the value @a n
-/** The class of a value of another type than the one the parser assumed for the expression (a call through a call
-    reference whose declared return type the code does not honor, ...) does not accept it: the method of the name is
-    then looked up for the value's own type (pseudo_classes_eval()), which raises the usual exception if there is none
-    (qore#7363).  The pseudo-class of all values accepts every value, and the pseudo-class of bool accepts a buffer (the
-    result of a comparison with a buffer operand, qore#6356).
-*/
-DLLLOCAL bool qore_pseudo_receiver_accepts(const QoreClass* qc, const QoreValue n);
 DLLLOCAL const QoreMethod* pseudo_classes_find_method(qore_type_t t, const char* mname, QoreClass*& qc);
 DLLLOCAL const QoreMethod* pseudo_classes_find_method(const QoreTypeInfo* typeInfo, const char* mname, QoreClass*& qc, bool& possible_match);
 DLLLOCAL void qore_pseudo_check_return_type_info(const QoreFunction* func, const QoreTypeInfo* pseudoTypeInfo, const QoreTypeInfo*& returnTypeInfo);

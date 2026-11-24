@@ -22952,10 +22952,10 @@ static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, c
     }
     RuntimeConfig& rc = rc_get_current_ref();
 
-    // a value that is not of the type the method was resolved for (nothing, or another type, qore#7363): the method
-    // of the name for the value's own type
-    if (__builtin_expect(!qore_pseudo_receiver_accepts(qc, base), 0)) {
-        return toBits(pseudo_classes_eval(base, method->getName(), *arg_list, xsink));
+    // If base is nothing and class is not <nothing>, use <nothing> pseudo class
+    if (base.isNothing() && qc != QC_PSEUDONOTHING) {
+        return toBits(qore_class_private::evalPseudoMethod(QC_PSEUDONOTHING, base, method->getName(),
+            *arg_list, rc, xsink));
     }
     return toBits(qore_class_private::evalPseudoMethod(qc, method, variant, base, *arg_list, rc, xsink));
 }

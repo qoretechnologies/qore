@@ -230,11 +230,11 @@ int qore_check_method_call_receiver(QoreValue base, const char* name, const Qore
     }
 
     if (pseudo) {
-        // as MethodCallNode::execPseudo(): a value that is not of the type the method was resolved for (nothing, or
-        // another type, qore#7363) is dispatched to the methods of the name of its own type; the method resolved at
-        // parse time is called otherwise
-        if (!qore_pseudo_receiver_accepts(qc, base)) {
-            return pseudo_classes_check_method(base, method ? method->getName() : name, xsink);
+        // as MethodCallNode::execPseudo(): no value is dispatched to the methods of the "<nothing>" class by name; the
+        // method resolved at parse time is called otherwise
+        if (base.isNothing() && qc != QC_PSEUDONOTHING) {
+            return qore_class_private::get(*QC_PSEUDONOTHING)->runtimeFindPseudoMethod(base,
+                method ? method->getName() : name, xsink) ? 0 : -1;
         }
         return 0;
     }
