@@ -80,6 +80,10 @@ module DeepgramDataProvider {
                 "the Nova model family with smart formatting, diarization, "
                 "summarization, and language detection.",
             "action_code": DPAT_API,
+            "mutates_state": True,
+            "read_only_options": (
+                {"path": ("callback",), "values": ("",)},
+            ),
             "groups": ("Speech Recognition",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 DeepgramTranscribeFileRequestDataType::Fields{

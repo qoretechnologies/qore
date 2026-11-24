@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FtpPoller
+%requires ImapClientDataProvider
+%requires GmailDataProvider
+%requires DeepgramDataProvider
+%requires GrokDataProvider
+%requires FirecrawlDataProvider
+%requires JinaDataProvider
+%requires PdfCoDataProvider
+%requires GoogleDocumentAiDataProvider
+%requires ElevenLabsDataProvider
+%exec-class ActionOptionMutatesStateTest
+
+class ActionOptionMutatesStateTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ActionOptionMutatesState", "1.0", \ARGV) {
+        addTestCase("configured file and mail actions", \fileAndMail());
+        addTestCase("configured inference and reader actions", \inferenceAndReader());
+        addTestCase("nested Firecrawl scrape options", \firecrawl());
+        addTestCase("actions with persistent results", \persistentResults());
+        set_return_value(main());
+    }
+
+    private check(string app, string name, list<hash<auto>> reads, list<hash<auto>> writes) {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(app, name);
+        string id = app + "/" + name;
+        assertTrue(DataProviderActionCatalog::actionMutatesState(action), id + " without configuration");
+        foreach hash<auto> options in (reads) {
+            assertFalse(DataProviderActionCatalog::actionMutatesState(action, options), sprintf("%s %y", id, options));
+        }
+        foreach hash<auto> options in (writes) {
+            assertTrue(DataProviderActionCatalog::actionMutatesState(action, options), sprintf("%s %y", id, options));
+        }
+    }
+
+    fileAndMail() {
+        check("FTP", "ftp-file-event", ({"remote_file_disposition": "NONE"},),
+            ({}, {"remote_file_disposition": "DELETE"}, {"remote_file_disposition": "MOVE"},
+            {"remote_file_disposition": "other"}, {"remote_file_disposition": "NONE", "local_dir": "inbox"}));
+        check("IMAP", "get-message", ({}, {"mark_seen": False}), ({"mark_seen": True}, {"mark_seen": 0}));
+        foreach string name in ("watch", "watch-attachment") {
+            check("IMAP", name, ({}, {"mark_seen": False, "delete_messages": False}),
+                ({"mark_seen": True}, {"delete_messages": True}, {"delete_messages": "unresolved"}));
+            check("Gmail", name, ({}, {"delete_messages": False}), ({"delete_messages": True},));
+        }
+    }
+
+    inferenceAndReader() {
+        foreach string name in ("multi-chat", "simple-chat") {
+            check("Grok", name, ({}, {"deferred": False}), ({"deferred": True}, {"deferred": "false"}));
+        }
+        check("Deepgram", "transcribe-file", ({}, {"callback": ""}), ({"callback": "configured"},));
+        check("JinaAi", "read-url", ({"do_not_track": True}, {"do_not_track": True, "injectPageScript": ""}),
+            ({}, {"do_not_track": False}, {"do_not_track": True, "injectPageScript": "configured"}));
+    }
+
+    firecrawl() {
+        check("Firecrawl", "scrape", ({"storeInCache": False},
+            {"storeInCache": False, "actions": (), "profile": {"saveChanges": False}}),
+            ({}, {"storeInCache": True}, {"storeInCache": False, "actions": ("configured",)},
+            {"storeInCache": False, "profile": {"saveChanges": True}}, {"storeInCache": False, "profile": "unknown"}));
+        check("Firecrawl", "search", ({}, {"scrapeOptions": {"storeInCache": False}},
+            {"scrapeOptions": {"storeInCache": False, "profile": {"saveChanges": False}}}),
+            ({"scrapeOptions": {}}, {"scrapeOptions": "unknown"},
+            {"scrapeOptions": {"storeInCache": False, "actions": ("configured",)}},
+            {"scrapeOptions": {"storeInCache": False, "profile": {"saveChanges": True}}}));
+    }
+
+    persistentResults() {
+        # PDF.co returns hosted output or uploads input, even for a synchronous conversion.
+        foreach string name in ("convert-from-pdf", "convert-from-pdf-to-images", "convert-html-to-pdf",
+                "convert-images-to-pdf", "convert-to-pdf") {
+            check("PdfCo", name, (), ({}, {"async": False, "callback": ""}));
+        }
+        # The action hides skipHumanReview, so its processor can start a review.
+        check("GoogleDocumentAi", "process-document", (), ({}, {"skipHumanReview": True}));
+        # Neither speech action exposes the provider's history opt-out.
+        foreach string name in ("text-to-speech", "speech-to-speech") {
+            check("ElevenLabs", name, (), ({}, {"enable_logging": False}));
+        }
+    }
+}

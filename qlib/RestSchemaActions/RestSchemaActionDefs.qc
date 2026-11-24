@@ -507,6 +507,9 @@ public hashdecl RestSchemaActionInfo {
     */
     *bool mutates_state;
 
+    #! Option conditions copied to @ref DataProvider::DataProviderActionBaseInfo::read_only_options
+    *list<hash<DataProvider::DataProviderReadOnlyOption>> read_only_options;
+
     #! The OpenAPI path template, including any \c {variable} placeholders
     string path;
 

@@ -74,6 +74,12 @@ module JinaDataProvider {
                 "short_desc": "Convert web pages, HTML, PDF, and Office files into usable content",
                 "desc": "Extract content from a `url`, raw `html`, or a document `file` for search and analysis. Select `region` for EU processing, filter page elements, and choose how content and links are returned.",
                 "action_code": DPAT_API,
+                "mutates_state": True,
+                # DNT prevents Jina from caching or tracking the request.
+                "read_only_options": (
+                    {"path": ("do_not_track",), "values": (True,), "allow_missing": False},
+                    {"path": ("injectPageScript",), "values": ("",)},
+                ),
                 "groups": ("Reader",),
                 "options": DataProviderActionCatalog::getActionOptionFromFields(JinaReaderRequestDataType::Fields),
                 "output_type": JinaReaderResponseDataType,

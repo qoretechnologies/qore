@@ -98,6 +98,10 @@ module ImapClientDataProvider {
                 "Retrieval does not change any flags unless `mark_seen` is set, so a message can be "
                 "inspected without the account showing it as read",
             "action_code": DPAT_API,
+            "mutates_state": True,
+            "read_only_options": (
+                {"path": ("mark_seen",), "values": (False,)},
+            ),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ImapGetMessageRequestDataType::Fields),
             "output_type": ImapMessageResponseType,
@@ -197,6 +201,10 @@ module ImapClientDataProvider {
             "action_code": DPAT_EVENT,
             # mark_seen and delete_messages flag or delete the reported messages (qore#7454)
             "mutates_state": True,
+            "read_only_options": (
+                {"path": ("mark_seen",), "values": (False,)},
+                {"path": ("delete_messages",), "values": (False,)},
+            ),
             "action_val": EVENT_IMAP_MESSAGE_MATCHED,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ImapMessageWatchDataProvider::WatchOptions - keys
@@ -218,6 +226,10 @@ module ImapClientDataProvider {
             "action_code": DPAT_EVENT,
             # mark_seen and delete_messages flag or delete the reported messages (qore#7454)
             "mutates_state": True,
+            "read_only_options": (
+                {"path": ("mark_seen",), "values": (False,)},
+                {"path": ("delete_messages",), "values": (False,)},
+            ),
             "action_val": EVENT_IMAP_ATTACHMENT_MATCHED,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ImapAttachmentWatchDataProvider::AttachmentWatchOptions - keys
