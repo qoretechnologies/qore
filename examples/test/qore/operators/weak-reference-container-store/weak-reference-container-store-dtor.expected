@@ -1,0 +1,8 @@
+list: caught DTOR-L0
+list: after try
+hash: caught DTOR-H0
+hash: after try
+hash dynamic key: caught DTOR-D0
+hash dynamic key: after try
+no local catch: caller caught DTOR-N0
+done

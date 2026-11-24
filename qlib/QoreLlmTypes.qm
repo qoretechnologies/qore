@@ -111,8 +111,6 @@ module QoreLlmTypes {
 
     @subsection qorellmtypes_1_0 QoreLlmTypes 1.0
     - initial release
-    - asynchronous chat calls that hold no thread while they wait for the provider
-      (@ref qorellmtypesasync)
 */
 
 #! Provider-neutral LLM types and abstract classes (shared with QoreLlmUtils)

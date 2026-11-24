@@ -447,6 +447,16 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             that its trusted creator gave
         */
         *HttpClientCreatorProof bound_proof;
+
+        #! The proof that a manager that trusted code created was given, which binds it for restricted code (qore#7295)
+        /** A manager that trusted code creates with the proof of its client (a RestClientIo creates its manager when it
+            is created) is the creator's: trusted code that uses it is not bound.  Restricted code that the client is
+            lent to uses it with the exemption of its creator (see getExemption()), and is bound to what the proof is
+            bound to, as the borrower of a manager that is created for it (bound_proof): the client's target, its proxy
+            and its CA locations.  A client that is given a shared manager takes no proof, so the manager is not bound
+            for its borrower
+        */
+        *HttpClientCreatorProof lent_proof;
     }
 
     #! Creates a new connection manager with the given options
@@ -492,6 +502,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             }
             # the manager creates connections only to the target that the proof is bound to
             bound_proof = proof;
+        }
+        if (!bound_proof) {
+            # the manager is the creator's: its creator is not bound, but a restricted borrower of the client is
+            lent_proof = proof;
         }
         initManager(opts);
     }
@@ -672,15 +686,17 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 "caller check, so it does not create connections";
         }
         # a manager created with a proof for restricted code creates connections only with what the proof is bound
-        # to: the client's target, its proxy and its CA locations, also if they were changed since (qore#7262)
-        if (bound_proof) {
-            checkBoundOrigin(url_info);
-            if (!bound_proof.allowsProxy(proxy_info)) {
+        # to: the client's target, its proxy and its CA locations, also if they were changed since (qore#7262); so does
+        # the manager that trusted code created for a client that it lent to restricted code (qore#7295)
+        *HttpClientCreatorProof binding = getBindingProof();
+        if (binding) {
+            checkBoundOrigin(url_info, binding);
+            if (!binding.allowsProxy(proxy_info)) {
                 throw "PERMISSION-DENIED", "the HTTP client connection manager was created for a client whose "
                     "target was given by trusted code; it does not create connections through another proxy than "
                     "the client's, or without the client's proxy";
             }
-            if (!bound_proof.allowsCaLocations(opts.ssl_ca_file, opts.ssl_ca_path)) {
+            if (!binding.allowsCaLocations(opts.ssl_ca_file, opts.ssl_ca_path)) {
                 throw "PERMISSION-DENIED", "the HTTP client connection manager was created for a client whose "
                     "target was given by trusted code; it does not create connections with other CA certificate "
                     "locations";
@@ -2456,7 +2472,7 @@ printf("%d connection(s) migrated\n", migrated);
             }
             # connections take an integer port; 0 marks the UNIX domain socket target
             url_info.port = 0;
-            checkBoundOrigin(url_info);
+            checkBoundOrigin(url_info, getBindingProof());
             return url_info;
         }
         if (!url_info.protocol) {
@@ -2469,17 +2485,28 @@ printf("%d connection(s) migrated\n", migrated);
         if (!url_info.port) {
             url_info.port = url_info.protocol == "https" ? 443 : 80;
         }
-        checkBoundOrigin(url_info);
+        checkBoundOrigin(url_info, getBindingProof());
         return url_info;
+    }
+
+    #! Returns the proof that binds the calling code, if any (qore#7262, qore#7295)
+    /** The proof of a manager that was created for restricted code binds every caller; the proof that trusted code gave
+        the manager of its client binds only restricted callers, so trusted code that uses the manager is not
+        bound
+    */
+    private:internal *HttpClientCreatorProof getBindingProof() {
+        if (bound_proof) {
+            return bound_proof;
+        }
+        return lent_proof && SandboxManager::isCallerRestricted(DOM_NETWORK) ? lent_proof : NOTHING;
     }
 
     #! Refuses a request target that a manager bound to its client's target does not allow (qore#7262)
     /** Checked for every request, also one that a pooled connection serves (the pool is keyed by host and port), and
         again when a connection is created
     */
-    private:internal checkBoundOrigin(hash<auto> url_info) {
-        if (bound_proof && !bound_proof.allowsOrigin(url_info.protocol == "https", url_info.host ?? "",
-                url_info.port ?? 0)) {
+    private:internal checkBoundOrigin(hash<auto> url_info, *HttpClientCreatorProof binding) {
+        if (binding && !binding.allowsOrigin(url_info.protocol == "https", url_info.host ?? "", url_info.port ?? 0)) {
             throw "PERMISSION-DENIED", sprintf("the HTTP client connection manager was created for a client whose "
                 "target was given by trusted code; it does not create connections to %s://%s:%d",
                 url_info.protocol ?? "", url_info.host ?? "", url_info.port ?? 0);
@@ -2973,8 +3000,9 @@ printf("%d connection(s) migrated\n", migrated);
     private hash<auto> prepareH3Probe(hash<auto> url_info, string key) {
         AutoWriteLock al(pool_lock);
         h3_probe_times{key} = clock_get_monotonic_us();
-        # (a manager bound to the target of a lent client keeps its port, see HttpClientCreatorProof)
-        if (!origin_tls_credentials && !bound_proof && alt_svc_port_map.hasKey(key)) {
+        # (a manager bound to the target of a lent client keeps its port for the callers that the binding governs, see
+        # HttpClientCreatorProof and getBindingProof())
+        if (!origin_tls_credentials && !getBindingProof() && alt_svc_port_map.hasKey(key)) {
             url_info.port = alt_svc_port_map{key};
         }
         return url_info;
@@ -4987,6 +5015,7 @@ printf("%d connection(s) migrated\n", migrated);
         return err == "HTTP3-CONNECTION-CLOSED"  # legacy umbrella, still emitted from some sites
             || err == "HTTP3-IDLE-CLOSE"          # local idle timer expired
             || err == "HTTP3-PEER-UNRESPONSIVE"   # no packet from the peer after a request (qore#6930)
+            || err == "HTTP3-STATELESS-RESET"     # the server has no state for the connection (qore#6931)
             || err == "HTTP3-LOCAL-CLOSE"         # we sent CONNECTION_CLOSE
             || err == "HTTP3-PEER-CLOSE"          # peer sent CONNECTION_CLOSE
             || err == "HTTP3-READ-ERROR";
@@ -5019,6 +5048,7 @@ printf("%d connection(s) migrated\n", migrated);
             || err == "HTTP3-CONNECTION-CLOSED"  # legacy umbrella; still emitted from some sites
             || err == "HTTP3-IDLE-CLOSE"          # local idle timer expired
             || err == "HTTP3-PEER-UNRESPONSIVE"   # no packet from the peer after a request (qore#6930)
+            || err == "HTTP3-STATELESS-RESET"     # the server has no state for the connection (qore#6931)
             || err == "HTTP3-LOCAL-CLOSE"         # we sent CONNECTION_CLOSE
             || err == "HTTP3-PEER-CLOSE"          # peer sent CONNECTION_CLOSE
             || err == "HTTP3-READ-ERROR"

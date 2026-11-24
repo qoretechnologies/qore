@@ -46,6 +46,7 @@
 #include "qore/intern/QC_SSLPrivateKey.h"
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/QuicCommon.h"
+#include "qore/intern/QuicPollTimeout.h"
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/FileInputStream.h"
 #include "qore/intern/FileOutputStream.h"
@@ -1047,6 +1048,11 @@ public:
             return nullptr;
         }
 
+#ifdef DEBUG
+        // a test can hold a stream's data until this flush, which writes it then (on the I/O thread of the socket)
+        qore_dbg_quic_flush_releases_held(session_id);
+#endif
+        // the datagrams that earlier sends of the session did not send come first (qore#7414)
         QuicPacketBatch pkt_batch;
         auto tw = session->processTimerAndWrite(pkt_batch, xsink);
         if (tw.error || *xsink) {
@@ -1065,11 +1071,33 @@ public:
 
             my_socket_priv* priv = my_socket_priv::getPriv(*sock);
             int fd = qore_socket_ops(priv->socket).getDescriptor();
-            int sent = sendQuicPacketsBatch(fd, pkt_batch,
+            // the datagrams not sent are kept by the session and sent when they can be, by this operation or by
+            // whichever writes next for the session: ngtcp2 counts them as sent (qore#7414)
+#ifdef DEBUG
+            // a test can fail the sends of this operation alone
+            QuicTestFlushSending flush_sending;
+#endif
+            QuicSendResult rc = session->sendPackets(fd, pkt_batch,
                 reinterpret_cast<const struct sockaddr*>(&peer_addr), peer_addrlen,
                 reinterpret_cast<const struct sockaddr*>(&local_addr), local_addrlen);
-            if (sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-                xsink->raiseErrnoException("QUIC-SEND-ERROR", errno, "sendto/sendmmsg() failed");
+            switch (rc) {
+                case QuicSendResult::Sent:
+                    break;
+                case QuicSendResult::WaitWritable:
+                    return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                case QuicSendResult::Backoff: {
+                    // no event reports when the datagrams can be sent, and a UDP socket is writable all the while:
+                    // the operation waits for no event, only for the time to send them again
+                    QoreHashNode* poll_info = getSocketPollInfoHash(xsink, 0);
+                    if (poll_info) {
+                        poll_info->setKeyValue("poll_timeout_ms",
+                            qore_quic_poll_timeout_ms(session->getSendRetryAt(), QuicSession::timestamp()), xsink);
+                    }
+                    return poll_info;
+                }
+                case QuicSendResult::Error:
+                    xsink->raiseErrnoException("QUIC-SEND-ERROR", errno, "sendto/sendmmsg() failed");
+                    break;
             }
         }
 
@@ -3922,6 +3950,10 @@ static QoreHashNode* qore_socket_object_exec_read_http_header(QoreSocketObject* 
 
 static QoreStringNode* qore_socket_object_exec_read_http_header_string(QoreSocketObject* s,
         int timeout_ms, ExceptionSink* xsink) {
+    // the rest of a chunked body that was not read to its end would be taken for the header (issue 7417)
+    if (my_socket_priv::getPriv(*s)->checkHttpChunkedBodyFinished(xsink)) {
+        return nullptr;
+    }
     SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n\r\n"));
     s->ref();
     ValueHolder result(qore_socket_object_exec_recv_poll(s,
@@ -3954,11 +3986,8 @@ static QoreStringNode* qore_socket_object_exec_read_http_header_string(QoreSocke
 }
 
 static size_t qore_socket_object_exec_http_line_payload_size(const QoreStringNode& line) {
-    size_t len = line.size();
-    while (len && (line.c_str()[len - 1] == '\r' || line.c_str()[len - 1] == '\n')) {
-        --len;
-    }
-    return len;
+    // the line is taken as every reader of a chunked body takes it (issue 7417)
+    return my_socket_priv::httpLinePayloadSize(line.c_str(), line.size());
 }
 
 static bool qore_socket_object_exec_http_blank_line(const QoreStringNode& line) {
@@ -4092,7 +4121,8 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
         return nullptr;
     }
 
-    priv->clearHttpExpectChunkedBody();
+    // the body is unfinished until the read reaches its end (issue 7417)
+    priv->startHttpChunkedBodyRead();
 
     SimpleRefHolder<BinaryNode> body_bin(binary_body && !os && !recv_callback ? new BinaryNode : nullptr);
     SimpleRefHolder<QoreStringNode> body_str(binary_body || recv_callback
@@ -4115,13 +4145,9 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
         }
 
         size_t line_len = qore_socket_object_exec_http_line_payload_size(**line);
-        const char* line_str = line->c_str();
-        const char* semi = static_cast<const char*>(memchr(line_str, ';', line_len));
-        size_t hex_len = semi ? static_cast<size_t>(semi - line_str) : line_len;
-        std::string hex(line_str, hex_len);
-        long chunk_size = strtol(hex.c_str(), nullptr, 16);
-        if (chunk_size < 0) {
-            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "negative value given for chunk size (%ld)", chunk_size);
+        // the size is parsed as the other readers of a chunked body parse it (issue 7417)
+        int64_t chunk_size = 0;
+        if (my_socket_priv::parseHttpChunkSize(line->c_str(), line_len, chunk_size, xsink)) {
             return nullptr;
         }
 
@@ -4143,6 +4169,8 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
                     xsink, *info, &has_trailers)) {
                 return nullptr;
             }
+            // the whole body has been read
+            priv->finishHttpChunkedBodyRead();
             if (recv_callback) {
                 if (qore_socket_object_exec_run_http_recv_header_callback(obj, recv_callback,
                         has_trailers ? *output : nullptr, info.release(), xsink)) {
@@ -4151,12 +4179,6 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
                 return nullptr;
             }
             return output.release();
-        }
-
-        if (static_cast<unsigned long>(chunk_size) > static_cast<unsigned long>(std::numeric_limits<ssize_t>::max())) {
-            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "chunk size %ld exceeds the maximum supported size",
-                chunk_size);
-            return nullptr;
         }
 
         // apply the limit before the chunk is read, so no data over the limit is read, written, or delivered
@@ -4189,6 +4211,12 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
 
         SimpleRefHolder<BinaryNode> crlf(qore_socket_object_exec_recv_bytes(s, 2, timeout_ms, xsink));
         if (*xsink) {
+            return nullptr;
+        }
+        // the chunk data ends with a line end (RFC 9112 section 7.1)
+        if (crlf->size() != 2 || memcmp(crlf->getPtr(), "\r\n", 2)) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "the data of a chunk of " QLLD " bytes is not followed by "
+                "a line end", static_cast<int64>(chunk_size));
             return nullptr;
         }
         priv->doChunkedReadEvent(QORE_EVENT_HTTP_CHUNKED_DATA_RECEIVED, static_cast<size_t>(chunk_size),
@@ -4801,7 +4829,8 @@ void QoreSocketObject::deref() {
 void QoreSocketObject::closeIo(ExceptionSink* xsink) {
     priv->socket->priv->prepareForClose();
     AutoLocker al(priv->m);
-    if (priv->socket->isOpen()) {
+    // a socket with no descriptor gets none from a connection being made (ex: resolving its host) (qore#7003)
+    if (!priv->socket->priv->endConnectIfNoDescriptor()) {
         qore_socket_private::get(*priv->socket)->shutdown_direct();
         priv->socket->priv->close();
     }
@@ -6462,6 +6491,10 @@ void qore_socket_object_private::dbgForceSslErrorSslAtNextWrite() {
     qore_socket_private::get(*priv->socket)->dbg_force_ssl_error_ssl.store(true, std::memory_order_release);
 }
 
+void qore_socket_object_private::dbgForceStagedWriteFailure() {
+    qore_socket_private::get(*priv->socket)->dbg_force_staged_write_failure.store(true, std::memory_order_release);
+}
+
 QoreHashNode* qore_socket_object_private::dbgGetStreamRecordCounts(int64_t session_id, ExceptionSink* xsink) {
     if (session_id) {
         std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(so, session_id);
@@ -7629,4 +7662,10 @@ void my_socket_priv::shutdownAllQuicStreamReads() {
     for (auto& sess : sessions) {
         sess->shutdownStreamReads();
     }
+}
+
+int64 qore_socket_object_private::getUnacknowledgedSendBytes() const {
+    // the lock keeps another thread from closing the descriptor, or from its number being reused, during the query
+    AutoLocker al(priv->m);
+    return qore_socket_private::getUnacknowledgedBytes(qore_socket_private::get(*priv->socket)->sock);
 }

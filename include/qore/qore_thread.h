@@ -73,11 +73,20 @@ struct QoreRuntimeContext {
     const AbstractStatement* stmt;
     int64_t po;
     const QoreStackLocation* stack_loc;
+    //! the implicit index (\c $#) of the thread
+    /** The index of an element is set only while the per-element code of a foreach statement or operator that reads
+        \c $# runs; inside per-element code that does not read it, including binary-module code called from it, this
+        is the index of the enclosing code (qore#7270)
+    */
     int element;
 };
 
 //! fills a QoreRuntimeContext snapshot from thread-local storage
 /** @param rc output pointer for the runtime context snapshot
+
+    @note QoreRuntimeContext::element is the implicit index (\c $#) of an element only while the per-element code of
+    a foreach statement or operator that reads \c $# runs; inside per-element code that does not read it, including
+    binary-module code called from it, it is the index of the enclosing code (qore#7270)
  */
 DLLEXPORT void qore_get_runtime_context(QoreRuntimeContext* rc);
 

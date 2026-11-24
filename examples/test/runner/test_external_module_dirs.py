@@ -148,21 +148,39 @@ RECORD = """\
     import os
     with open(os.path.join(os.environ["TREE"], "module-path"), "w") as f:
         f.write(os.environ.get("QORE_MODULE_DIR", ""))
+    with open(os.path.join(os.environ["TREE"], "module-only"), "w") as f:
+        f.write(os.environ.get("QORE_MODULE_DIR_ONLY", "unset"))
     """
 
 
 class ModulePathTest(unittest.TestCase):
     """The module path that run_tests.sh gives a test"""
 
-    def run_record(self, dirs_file=None, **variables):
+    def run_record(self, dirs_file=None, configured=False, **variables):
         with tempfile.TemporaryDirectory(prefix="qore-runner-module-dirs-") as directory:
             tree = RunnerTree(directory)
             if dirs_file is not None:
                 tree.write_dirs_file(dirs_file)
+            if configured:
+                with (tree.build / "CMakeCache.txt").open("a") as cache:
+                    cache.write("QORE_EXTERNAL_MODULE_DIRS:STRING=" + dirs_file.strip().replace(":", ";") + "\n")
             tree.add_test("record.qtest", RECORD)
             result = tree.run(**variables)
             self.assertEqual(0, result.returncode, result.output)
+            expected = variables.get("QORE_MODULE_DIR_ONLY", "1" if configured else "unset")
+            self.assertEqual(expected, (tree.root / "module-only").read_text())
             return (tree.root / "module-path").read_text().split(":"), str(tree.root.resolve())
+
+    def test_configured_path_replaces_ambient_and_implicit_paths(self):
+        for dirs in ("", "/selected/first:/selected/second"):
+            with self.subTest(dirs=dirs):
+                path, root = self.run_record(dirs + "\n", configured=True, QORE_MODULE_DIR="/ambient")
+                self.assertEqual([root + "/qlib"] + (dirs.split(":") if dirs else []), path)
+
+    def test_caller_can_replace_configured_external_dirs(self):
+        path, root = self.run_record("/configured\n", configured=True,
+                                     QORE_MODULE_DIR_ONLY="1", QORE_MODULE_DIR="/caller")
+        self.assertEqual([root + "/qlib", "/caller"], path)
 
     def test_external_dirs_come_last(self):
         path, root = self.run_record("/ext/one:/ext/two\n")
@@ -187,7 +205,6 @@ class ModulePathTest(unittest.TestCase):
         self.assertEqual(1, path.count("/ext/one"), path)
         self.assertEqual(["/ext/one", "/ext/two"], path[-2:], path)
 
-    # the path ends with an empty entry when QORE_MODULE_DIR is not set, as it did before the external directories
     def test_empty_file_adds_nothing(self):
         path, root = self.run_record("\n")
         self.assertEqual(root + "/qlib", [entry for entry in path if entry][-1], path)

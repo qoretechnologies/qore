@@ -194,6 +194,15 @@ public class Http2StreamContext inherits AbstractStreamContext {
         int last_taken = -1;
         # the waits in a row that found the stream ended, with the send still refused
         int ended_waits = 0;
+        # True once this send has waited with a minimum rate set: the time after it is not waiting for the peer
+        bool rate_wait;
+        on_error if (rate_wait) {
+            try {
+                send_rate.update(getTakenBytes(), False);
+            } catch () {
+                # the stream or its session is gone: nothing more is measured
+            }
+        }
         while (True) {
             try {
                 sock.sendHttp2StreamData(stream_id, data, end_stream);
@@ -208,18 +217,31 @@ public class Http2StreamContext inherits AbstractStreamContext {
                 wake_callback();
             }
             int wait_ms = -1;
-            if (timeout_ms > 0) {
+            if (timeout_ms > 0 || send_rate) {
                 int now = clock_get_monotonic_us() / 1000;
                 int taken = getTakenBytes();
-                if (!stall_deadline || taken > last_taken) {
-                    last_taken = taken;
-                    stall_deadline = now + timeout_ms;
+                if (timeout_ms > 0) {
+                    if (!stall_deadline || taken > last_taken) {
+                        last_taken = taken;
+                        stall_deadline = now + timeout_ms;
+                    }
+                    wait_ms = stall_deadline - now;
+                    if (wait_ms <= 0) {
+                        throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/2 stream %d: the send buffer did not drain within "
+                            "%d ms and the peer granted no credit meanwhile; %d bytes were not sent", stream_id,
+                            timeout_ms, data.size());
+                    }
                 }
-                wait_ms = stall_deadline - now;
-                if (wait_ms <= 0) {
-                    throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/2 stream %d: the send buffer did not drain within %d "
-                        "ms and the peer granted no credit meanwhile; %d bytes were not sent", stream_id, timeout_ms,
-                        data.size());
+                # the rate of the peer over the window, which the waits of all the sends on the stream share (#7280)
+                if (send_rate) {
+                    rate_wait = True;
+                    if (send_rate.update(taken, True, now)) {
+                        throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/2 stream %d: the peer took less than the minimum "
+                            "rate of %d bytes/s; %d bytes were not sent", stream_id,
+                            send_rate.getMinRate(), data.size());
+                    }
+                    int check_ms = send_rate.getCheckInterval();
+                    wait_ms = wait_ms < 0 ? check_ms : min(wait_ms, check_ms);
                 }
             }
             # 0: drained, 1: timed out, -1: the stream has no data buffered any more (sent or closed); the send is
@@ -230,6 +252,15 @@ public class Http2StreamContext inherits AbstractStreamContext {
                 throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/2 stream %d: the stream ended with its send buffer full; "
                     "%d bytes were not sent", stream_id, data.size());
             }
+        }
+        if (rate_wait) {
+            int taken = -1;
+            try {
+                taken = getTakenBytes();
+            } catch () {
+                # the stream or its session is gone: nothing more is measured
+            }
+            endRateWait(taken, end_stream, sprintf("HTTP/2 stream %d", stream_id));
         }
         # the stream was ended with the data: it is not ended again
         if (end_stream) {

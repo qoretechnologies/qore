@@ -1884,6 +1884,13 @@ enum class QCS : int {
     HEADERS_READY = 11,  //!< HTTP/3 headers received (headers-only mode)
 };
 
+//! A send of QUIC datagrams kept some for a send after a delay, as it failed with ENOBUFS (see QuicSendBackoff)
+/** Returned by the sendPendingPackets() of the QUIC response operations; the operation polls for input with the
+    earlier of QuicSession::getSendRetryAt() and the connection's next timer as its timeout, as POLLOUT would spin
+    (qore#7414)
+*/
+static constexpr int QUIC_SEND_BACKOFF = (1 << 8);
+
 //! Poll operation for QUIC client: handshake + HTTP/3 request/response
 /** Creates a QUIC connection, performs the TLS 1.3 handshake over QUIC,
     sets up HTTP/3, submits a request, and reads the response.
@@ -2163,8 +2170,13 @@ private:
     DLLLOCAL int bindUnboundLocked(int family, ExceptionSink* xsink);
 
     //! Coalesced timer + write + send pending QUIC packets via UDP
-    /** @param next_expiry output: next timer expiry for poll timeout
-        @return 0 on success, SOCK_POLLOUT if partial send, -1 on error
+    /** The datagrams that are not sent are kept by the session and sent before those written after them
+        (QuicSession::sendPackets(), qore#7414).
+
+        @param next_expiry output: next timer expiry for poll timeout; no later than the time to send the datagrams
+        kept again after a send that failed with ENOBUFS
+        @return 0 on success, also when datagrams are kept after a send that failed with ENOBUFS (every state of the
+        operation sends again when it is woken), SOCK_POLLOUT if the socket's buffer is full, -1 on error
     */
     DLLLOCAL int sendPendingPackets(ngtcp2_tstamp& next_expiry, ExceptionSink* xsink);
 
@@ -2384,8 +2396,14 @@ private:
     //! Coalesced timer + write + send for all sessions in a single pass
     /** Replaces separate processTimers() + sendAllPendingPackets() + getMinExpiry()
         with a single iteration over sessions.
-        @param min_expiry output: minimum timer expiry across all sessions
-        @return 0 on success, SOCK_POLLOUT if any session had a partial send, -1 on error
+        All sessions share the socket: the datagrams of a session that a send did not send are kept by the session
+        (QuicSession::sendPackets()) and sent before any that it writes after them, so that no session's datagrams
+        are dropped by another session's write (qore#7414).
+
+        @param min_expiry output: minimum timer expiry across all sessions, no later than the time to send again the
+        datagrams kept after a send that failed with ENOBUFS
+        @return 0 on success, also when datagrams are kept after a send that failed with ENOBUFS, SOCK_POLLOUT if the
+        socket's buffer is full, -1 on error
     */
     DLLLOCAL int processTimersAndSendAll(ngtcp2_tstamp& min_expiry, ExceptionSink* xsink);
 
@@ -2521,8 +2539,13 @@ private:
     socklen_t local_addrlen_ = 0;
 
     //! Coalesced timer + write + send pending QUIC packets via UDP
-    /** @param next_expiry output: next timer expiry for poll timeout
-        @return 0 on success, SOCK_POLLOUT if partial send, -1 on error
+    /** The datagrams that are not sent are kept by the session and sent before those written after them
+        (QuicSession::sendPackets(), qore#7414).
+
+        @param next_expiry output: next timer expiry for poll timeout; no later than the time to send the datagrams
+        kept again after a send that failed with ENOBUFS
+        @return 0 on success, SOCK_POLLOUT if the socket's buffer is full, QUIC_SEND_BACKOFF if datagrams are kept
+        after a send that failed with ENOBUFS, -1 on error
     */
     DLLLOCAL int sendPendingPackets(ngtcp2_tstamp& next_expiry, ExceptionSink* xsink);
 
@@ -2671,8 +2694,13 @@ private:
     socklen_t local_addrlen_ = 0;
 
     //! Coalesced timer + write + send pending QUIC packets via UDP
-    /** @param next_expiry output: next timer expiry for poll timeout
-        @return 0 on success, SOCK_POLLOUT if partial send, -1 on error
+    /** The datagrams that are not sent are kept by the session and sent before those written after them
+        (QuicSession::sendPackets(), qore#7414).
+
+        @param next_expiry output: next timer expiry for poll timeout; no later than the time to send the datagrams
+        kept again after a send that failed with ENOBUFS
+        @return 0 on success, SOCK_POLLOUT if the socket's buffer is full, QUIC_SEND_BACKOFF if datagrams are kept
+        after a send that failed with ENOBUFS, -1 on error
     */
     DLLLOCAL int sendPendingPackets(ngtcp2_tstamp& next_expiry, ExceptionSink* xsink);
 

@@ -1,0 +1,85 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the sandbox of the host's timer callback of the async I/O controller, which connects a socket
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoTimerCallbackContextTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! the host's timer callback, which the controller runs for the timers whose data is not code, runs in the host's
+#! context: not in the sandbox of the code that added the timer (qore#7010)
+class AsyncIoTimerCallbackContextTest inherits QUnit::Test {
+    public {
+        #! a tenant that adds a timer whose data is not code
+        const TenantSource = "%modern
+int sub add(string data) {
+    return AsyncIoController::addTimerDelay(0s, data);
+}
+";
+    }
+
+    private {
+        Socket listener();
+        int port;
+    }
+
+    constructor() : QUnit::Test("AsyncIoController timer callback context", "1.0", \ARGV) {
+        addTestCase("the host's timer callback runs in the host's context", \callbackContextTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+    }
+
+    globalTearDown() {
+        listener.close();
+    }
+
+    callbackContextTest() {
+        Queue results();
+        int p = port;
+        # the host's callback: connects to the test's listener, which the tenant's sandbox does not allow
+        AsyncIoController::setTimerCallback(sub (hash<TimerEventInfo> info) {
+            string r;
+            try {
+                Socket s();
+                s.connect("127.0.0.1:" + p, 10s);
+                s.close();
+                r = "CONNECTED";
+            } catch (hash<ExceptionInfo> ex) {
+                r = ex.err;
+            }
+            results.push({"udata": info.udata, "result": r});
+        });
+        on_exit AsyncIoController::setTimerCallback();
+
+        # a tenant whose sandbox allows no network access
+        Program tenant(PO_NO_CHILD_PO_RESTRICTIONS);
+        tenant.parse(TenantSource, "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(False);
+        tenant.setSandboxManager(sm);
+
+        # the host's own timer, as a control
+        AsyncIoController::addTimerDelay(0s, "host");
+        hash<auto> h = results.get(HangGuard);
+        assertEq({"udata": "host", "result": "CONNECTED"}, h, "the host's timer");
+
+        # the tenant's timer: the callback is the host's code, which runs in the host's context
+        tenant.callFunction("add", "tenant");
+        h = results.get(HangGuard);
+        assertEq({"udata": "tenant", "result": "CONNECTED"}, h, "the tenant's timer");
+    }
+}

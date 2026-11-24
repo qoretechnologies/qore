@@ -38,6 +38,11 @@ public namespace AsyncSocketIo {
 */
 public class AbstractStreamContext {
     private {
+        #! the minimum rate of the sends on the stream, if any (see @ref setSendMinRate())
+        *SendRateMonitor send_rate;
+    }
+
+    private {
         #! True once this context sent the close frame of a WebSocket connection (@ref sendWebSocketClose())
         bool ws_close_sent = False;
 
@@ -83,6 +88,41 @@ public class AbstractStreamContext {
         before (see @ref sendWebSocketClose()); also raised by @ref sendDataWithTimeout() and @ref trySendData()
     */
     abstract sendData(binary data, bool end_stream = False);
+
+    #! Sets the minimum average rate at which the peer must take data while a send waits for it
+    /** The rate is measured over a sliding window of the time spent waiting for the peer, kept across the sends on the
+        stream; a send that waits for a peer below it raises \c STREAM-SEND-TIMEOUT.
+
+        @param min_rate the minimum rate in bytes per second; 0 disables the check
+        @param window the length of the sliding window
+
+        @throw SEND-RATE-ERROR invalid arguments
+
+        @since AsyncSocketIo 1.0
+    */
+    setSendMinRate(int min_rate, timeout window) {
+        send_rate = min_rate > 0 ? new SendRateMonitor(min_rate, window) : NOTHING;
+        if (send_rate) {
+            # the transport shows a peer's progress in steps of its flow-control window; the sender wakes at least
+            # every check interval, so a longer time between updates is its own delay
+            send_rate.enableProgressSteps();
+            send_rate.setMaxWaitCharge(2 * send_rate.getCheckInterval());
+        }
+    }
+
+    #! Ends the measurement of a send that waited; a wait that used up the credit between two checks is decided here
+    /** @param taken the bytes that the peer has taken, or -1 if that is not known
+        @param end_stream @ref True if the send ended the stream, which leaves nothing more to bound
+        @param stream_desc the description of the stream for the error
+
+        @throw STREAM-SEND-TIMEOUT the peer took less than the minimum rate
+    */
+    private endRateWait(int taken, bool end_stream, string stream_desc) {
+        if (send_rate.update(taken, False) && !end_stream) {
+            throw "STREAM-SEND-TIMEOUT", sprintf("%s: the peer took less than the minimum rate of %d bytes/s",
+                stream_desc, send_rate.getMinRate());
+        }
+    }
 
     #! Sends data on the stream, waiting at most the given time for a full stream send buffer to drain
     /** Transports with a bounded stream send buffer (HTTP/2 and HTTP/3) override this to wait for the buffer to

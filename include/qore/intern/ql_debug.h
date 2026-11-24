@@ -36,6 +36,8 @@
 #include "qore/QoreThreadLock.h"
 
 #include <atomic>
+#include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -171,6 +173,37 @@ DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closur
 //! client grants no flow-control credit; set by dbg_quic_hold_stream_data()
 DLLLOCAL bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id);
 
+//! releases the stream held with dbg_quic_hold_stream_data(..., True) if it is a stream of the session
+/** Called by Socket::flushQuicPendingData() on the I/O thread of the session's socket before it writes, so that the
+    flush, and not the server's poll operation, writes the data that was held (qore#7414)
+*/
+DLLLOCAL void qore_dbg_quic_flush_releases_held(int64_t session_id);
+
+//! the stateless resets that the QUIC listeners of the process sent and that its QUIC clients received (qore#6931);
+//! see dbg_quic_stateless_reset_counts()
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent;
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_stateless_resets_received;
+
+//! the number of threads waiting in dbg_quic_wait_idle(); a QUIC session wakes them only while it is not 0
+DLLLOCAL extern std::atomic<int> qore_dbg_quic_idle_waiters;
+
+//! wakes the threads waiting in dbg_quic_wait_idle(); called by a QUIC session when it has read packets, which can
+//! acknowledge the data that it has in flight (issue #7354)
+/** Takes only the lock of the waiters, so that a session can call it with its own lock held
+*/
+DLLLOCAL void qore_dbg_quic_notify_idle_waiters();
+
+class QuicSession;
+
+//! records a QUIC server session, so that dbg_quic_wait_idle() can find it by its ID (issue #7354)
+/** Only a weak reference is kept; the record is removed by qore_dbg_quic_unregister_session() when the session is
+    destroyed.  A session that cannot be recorded works all the same.
+*/
+DLLLOCAL void qore_dbg_quic_register_session(const std::shared_ptr<QuicSession>& session) noexcept;
+
+//! removes the record of a QUIC session made by qore_dbg_quic_register_session(), if any
+DLLLOCAL void qore_dbg_quic_unregister_session(int64_t session_id) noexcept;
+
 //! Returns True if dbg_http2_hold_stream_data() holds the buffered data of this HTTP/2 stream back
 DLLLOCAL bool qore_dbg_h2_stream_data_held(int32_t stream_id);
 
@@ -188,6 +221,10 @@ DLLLOCAL void qore_dbg_note_is_http2_poll();
 //! Returns the bytes of progress that dbg_quic_simulate_stream_progress() adds to the acknowledged byte count of a
 //! stream for this read of the count (0 when no progress is simulated for the stream)
 DLLLOCAL int64_t qore_dbg_quic_simulated_stream_progress(int64_t stream_id);
+
+//! Returns the progress that dbg_http_ws_simulate_send_progress() simulates for the sends of the HTTP/1.1 WebSocket
+//! server connections at the given time of the monotonic clock in milliseconds, or -1 when none is simulated
+DLLLOCAL int64_t qore_dbg_ws_simulated_send_progress(int64_t now_ms);
 //! the accounting of the stream credit that the HTTP/2 and HTTP/3 clients defer until the application consumes the
 //! data (issue #5820), for dbg_http_stream_credit_stats(): after every stream has ended, deferred == credited +
 //! settled (a byte is credited when it is consumed, or settled with its stream when the stream or its session ends
