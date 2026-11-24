@@ -1990,9 +1990,7 @@ int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qor
 
     //printd(5, "qore_object_private::getLValue() this: %p %s::%s type %s for_remove: %d int: %d odata: %p\n", this, theclass->getName(), key, QoreTypeInfo::getName(mti), for_remove, internal_member, odata);
 
-    // the name is hashed once, for the search and for a new member (qore#7265)
-    qore_hash_lookup_key lookup_key(key, len);
-    HashMember* m = odata->priv->findMember(lookup_key);
+    HashMember* m = odata->priv->findMember(key, len);
     if (!m) {
         if (for_remove) {
             return -1;
@@ -2002,7 +2000,7 @@ int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qor
         if (checkMemberWrite(key, nullptr, class_ctx, xsink)) {
             return -1;
         }
-        m = odata->priv->createMemberKnownAbsent(lookup_key);
+        m = odata->priv->createMemberKnownAbsent(key);
     }
 
     lvh.setValue(m->val, mti);

@@ -989,7 +989,7 @@ struct qore_ds_private : public QoreDbiForkObject {
     /** Everything that can fail is allocated here, so that keeping a value that the driver accepted cannot fail: the
         connection has the value from the moment that the driver accepts it, and it must then be kept with its setter
     */
-    struct DLLLOCAL OptionCommitPrep {
+    struct OptionCommitPrep {
         //! the record of the setter if the option has none yet
         qore_ds_option_setter_map_t::node_type node;
         //! the member of the option in \c opt, created for it if the option had no value; nullptr until prepared

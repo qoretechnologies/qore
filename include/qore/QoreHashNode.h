@@ -581,9 +581,6 @@ public:
     /** the pointer is moved to the previous element (or before the beginning)
         so that the next call to next() will put the pointer on the element after
         the one being deleted
-
-        @note the member is deleted before its value is dereferenced; if releasing the value runs code (an object's
-        destructor) that changes the hash, the iterator must not be used any more
     */
     DLLEXPORT void deleteKey(ExceptionSink* xsink);
 
