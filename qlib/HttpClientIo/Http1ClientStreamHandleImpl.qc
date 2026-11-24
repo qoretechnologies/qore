@@ -459,13 +459,22 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
         Half-close (\c end_stream = \c True with empty data) on an
         already-closed stream is a no-op.
 
+        A server can answer a request that asked for a protocol upgrade with \c 101 before it has read the whole
+        request body, which the client must still complete (RFC 9110 section 7.8): the data given before the
+        response is sent before the end of the response stream is delivered, and this method then writes the rest
+        of the body, also after the end of the stream, to the socket in the calling thread, each write bounded by the
+        \c io_timeout option of the connection manager, or else its \c request_timeout option; the body must be
+        complete before the data of the new protocol is sent on the socket taken over (since HttpClientIo 1.0,
+        qore#7503).
+
         @param data the chunk to send (string or binary)
         @param end_stream if \c True, signal end-of-request-body
 
         @throw HTTPCLIENT-STATE-ERROR if not in streaming mode, the
             stream is not in a valid send state, the stream wasn't
             started with \c body_streaming = \c True, or the stream has
-            no assigned ID yet
+            no assigned ID yet; data is given after the end of the request body, or after a \c 101 response with
+            which the request body was complete or could not be completed
         @throw HTTPCLIENT-STREAM-CLOSED if the underlying H1 connection
             has been closed
 
@@ -478,9 +487,12 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
             if (!streaming) {
                 throw "HTTPCLIENT-STATE-ERROR", "not in streaming mode";
             }
+            # the stream of a request answered with 101 ends with the response header, and the request body is
+            # completed after it (qore#7503)
             if (state != HttpClientStreamState::Open
                     && state != HttpClientStreamState::HeadersReceived
-                    && state != HttpClientStreamState::ReceivingBody) {
+                    && state != HttpClientStreamState::ReceivingBody
+                    && (state != HttpClientStreamState::Complete || response.status_code != 101)) {
                 if (end_stream && data.empty()) {
                     # half-close on already-closed stream is a no-op
                     return;
@@ -518,7 +530,10 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
 
         log(LoggerLevel::DEBUG, "sending data on H1 stream %d (end_stream=%y)",
             sid, end_stream);
-        h1conn.sendStreamData(sid, data, end_stream);
+        # a write of the request body in this thread after a 101 response is bounded by the I/O timeout, or else by
+        # the request timeout (qore#7503)
+        timeout write_timeout = io_timeout > 0 ? io_timeout : (request_timeout > 0 ? request_timeout : -1);
+        h1conn.sendStreamData(sid, data, end_stream, write_timeout);
     }
 
     #! Sets HTTP/1.1 chunked-transfer trailers for a streaming-send request

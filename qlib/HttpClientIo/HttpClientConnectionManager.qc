@@ -1040,10 +1040,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         caller took the socket over closes the connection, which the manager then removes from its pool (since
         HttpClientIo 1.0, qore#7500), as does one released before the response to a request that asked for an
         upgrade has arrived.  A request body streamed with \a body_streaming
-        that is not complete when the \c 101 response arrives must still be completed (RFC 9110 section 7.8), but
-        not with @ref HttpClientStreamHandle::sendData() "sendData()", as the stream has ended: the caller writes
-        the rest of the chunked body, with its last chunk, on the socket that it takes over, before any data of the
-        new protocol.  The requests that return the response instead of the
+        that is not complete when the \c 101 response arrives must still be completed (RFC 9110 section 7.8), with
+        @ref HttpClientStreamHandle::sendData() "sendData()": the data given before the response is sent before the
+        end of the stream is delivered, and @ref HttpClientStreamHandle::sendData() "sendData()" writes the rest of
+        the body, also after the end of the stream, to the socket in the calling thread (since HttpClientIo 1.0,
+        qore#7503); the caller completes the body before it sends any data of the new protocol on the socket it takes
+        over.  @ref HttpClientStreamHandle::sendData() "sendData()" raises \c HTTPCLIENT-STATE-ERROR for data given
+        after the end of the body, as it does after a \c 101 response with which the body was complete or could not
+        be completed.  The requests that return the response instead of the
         stream (@ref request(), @ref requestAsync(), @ref openStream()) close the connection after a \c 101 response.
         @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */

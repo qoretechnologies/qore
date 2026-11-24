@@ -274,6 +274,11 @@ public class Http1ClientConnection inherits HttpClientConnection {
         thread sends them, and the response chunks queue in the data channel
         until the caller reads them.
 
+        After a \c 101 response that the server sent before the request body was complete, the body is completed
+        (RFC 9110 section 7.8): the data given before the response is sent before the end of the response stream is
+        delivered, and the data given after it is written to the socket in the calling thread, each write bounded by
+        \a timeout_ms (qore#7503).
+
         @param stream_id the stream ID returned by \c submitRequestStreaming
             (kept for API parity with H2/H3 — H1 is single-stream and the
             value is currently advisory)
@@ -281,12 +286,16 @@ public class Http1ClientConnection inherits HttpClientConnection {
         @param end_stream if \c True, signal end-of-request-body — the
             poll op writes the final \c "0\\r\\n" terminator and any
             trailers; the response continues to be read to completion
+        @param timeout_ms the time to wait for a write of the request body in the calling thread after a \c 101
+            response; a negative value means no limit
 
         @throw HTTP1-STATE-ERROR if the connection is not READY
+        @throw HTTPCLIENT-STATE-ERROR data is given after the end of the request body, or after a \c 101 response
+            with which the request body was complete or could not be completed
 
         @since %Qore 3.0
     */
-    sendStreamData(int stream_id, data data, bool end_stream = False) {
+    sendStreamData(int stream_id, data data, bool end_stream = False, timeout timeout_ms = -1) {
         if (!self.isReady()) {
             throw "HTTP1-STATE-ERROR",
                 sprintf("cannot send data in state: %y", self.getConnectionState());
@@ -300,10 +309,10 @@ public class Http1ClientConnection inherits HttpClientConnection {
         log(LoggerLevel::DEBUG,
             "sending data on H1 stream %d (end_stream=%y)", stream_id, end_stream);
         if (data.size() > 0) {
-            poll_op.pushSendData(data);
+            poll_op.pushSendData(data, timeout_ms);
         }
         if (end_stream) {
-            poll_op.pushSendData();  # NOTHING = EOF sentinel
+            poll_op.pushSendData(NOTHING, timeout_ms);  # NOTHING = EOF sentinel
         }
         if (ctl) {
             ctl.wakeSocket(sock: getSocketIntern());
