@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_number_private.h"
+#include "qore/intern/QorePseudoMethods.h"
 
 /** @defgroup number_formatting_constants Number Formatting Constants
 */
@@ -66,7 +67,7 @@ const SNF_AllDigits = QORE_NUM_ALL_DIGITS;
 //! Methods in this pseudo-class can be executed on @ref number "arbitrary precision number values"
 /**
  */
-qclass <number> [arg=const QoreNumberNode* n = v.get<const QoreNumberNode>();vparent=<value>];
+qclass <number> [arg=const QoreNumberNode* n = qore_pseudo_receiver<QoreNumberNode>(v, NT_NUMBER, "<number>", xsink);vparent=<value>];
 
 //! Returns Qore::NT_NUMBER
 /**

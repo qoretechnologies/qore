@@ -431,6 +431,10 @@ Content-Length: 16
       and @ref RestHandler::AbstractRestStreamRequestHandler::getArgs() "getArgs()" for subclasses, which cannot use
       the private members of the class when sandboxed code declares them; the context is a copy with the request
       metadata only (issue #6843)
+    - the handler gets the socket of an HTTP/1.x request when one of its REST classes is of a class of a sandboxed
+      Program, and refuses a request (\c 500, closing the connection) that would hand the connection's socket to a REST
+      class or a stream handler of a sandboxed Program on its dispatch path (see @ref httpserver_handler_socket;
+      <a href="https://github.com/qoretechnologies/qore/issues/7305">issue 7305</a>)
     - reads the fields of a request from the \c "headers" key of its header hash, or from the top level of a hash
       built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with the HttpServer
       option \c http_fields_at_top_level set to @ref False
@@ -1009,6 +1013,30 @@ public namespace RestHandler {
         }
     }
 
+    #! Returns @ref True if the socket that a REST class would get is the connection's socket of an HTTP/1.x request
+    /** The server gives the handler a socket of its request (the socket of an HTTP/1.x request, or of an HTTP/2 or
+        HTTP/3 stream), or the connection's socket (qore#7305); a socket that is not open (that of a call made without
+        a request) is not a connection's
+    */
+    bool sub rest_socket_is_connection(Socket s) {
+        if (!s.isOpen()) {
+            return False;
+        }
+        string cn = s.className();
+        return cn != "Http1HandlerSocket" && cn != "Http2HandlerSocket" && cn != "Http3HandlerSocket";
+    }
+
+    #! The response that refuses a request whose dispatch path has code of a sandboxed Program while the handler has
+    #! the connection's socket (qore#7305)
+    hash<HttpServer::HttpHandlerResponseInfo> sub rest_refuse_connection_socket(object obj) {
+        return <HttpServer::HttpHandlerResponseInfo>{
+            "code": 500,
+            "body": sprintf("the REST request is refused: %s of a sandboxed Program would get the connection's socket "
+                "(see HttpServer::AbstractHttpRequestHandler::setHandlerSocketView())", obj.className()),
+            "close": True,
+        };
+    }
+
     #! the base abstract class for REST handler classes
     public class AbstractRestClass {
         public {
@@ -1113,6 +1141,12 @@ public namespace RestHandler {
                         mn, rh.getMaskedLogString(args));
                 }
 
+                # a class of a sandboxed Program never gets the connection's socket of an HTTP/1.x request: decided
+                # when the class is handed the request, whatever the handler hosted when the request started
+                # (qore#7305)
+                if (SandboxManager::isFromSandboxedProgram(cls) && rest_socket_is_connection(s)) {
+                    return rest_refuse_connection_socket(cls);
+                }
                 return cls.handleRequest(listener, rh, s, cl, mn, cx, args);
             }
             if (rh.isLogDebugEnabled()) {
@@ -1229,6 +1263,11 @@ public namespace RestHandler {
                 if (!sb && cx."orig-request-body"
                         && cx.hdr."_qore_orig_content_type" == MimeTypeOctetStream) {
                     sb = cx."orig-request-body";
+                }
+                # a stream handler of a sandboxed Program never gets the connection's socket of an HTTP/1.x request
+                # (qore#7305)
+                if (SandboxManager::isFromSandboxedProgram(rsh) && rest_socket_is_connection(s)) {
+                    return rest_refuse_connection_socket(rsh);
                 }
                 RestStreamRequest req(rsh, listener, rh, s, cx, cx.hdr, sb);
                 return req.handleRequest();
@@ -1414,6 +1453,14 @@ public namespace RestHandler {
             RestSchemaValidator::AbstractRestSchemaValidator validator;
         }
 
+        #! Returns the REST classes of the handler, whose code it runs (qore#7305)
+        /** A REST class of a sandboxed Program makes the handler's code get the socket of its HTTP/1.x request (see
+            @ref httpserver_handler_socket)
+        */
+        private list<object> hostedObjects() {
+            return class_hash ? class_hash.values() : ();
+        }
+
         #! create the object optionally with the given HttpServer::AbstractAuthenticator
         /** @param auth the authentication object to use to authenticate connections (see
             HttpServer::AbstractAuthenticator); if no HttpServer::AbstractAuthenticator object is passed, then by
@@ -1423,6 +1470,9 @@ public namespace RestHandler {
         */
         constructor(*HttpServer::AbstractAuthenticator auth)
                 : HttpServer::AbstractHttpRequestHandler(auth, True) {
+            # the REST classes, which can be code of a sandboxed Program: their handler's code gets the socket of its
+            # HTTP/1.x request then (qore#7305)
+            setHostsCode();
             self.validator = new NullRestSchemaValidator();
         }
 
@@ -1435,6 +1485,9 @@ public namespace RestHandler {
         constructor(*HttpServer::AbstractAuthenticator auth,
                 RestSchemaValidator::AbstractRestSchemaValidator validator)
                 : HttpServer::AbstractHttpRequestHandler(auth, True) {
+            # the REST classes, which can be code of a sandboxed Program: their handler's code gets the socket of its
+            # HTTP/1.x request then (qore#7305)
+            setHostsCode();
             self.validator = validator;
         }
 
@@ -1448,6 +1501,9 @@ public namespace RestHandler {
         */
         constructor(Logger::LoggerInterface logger, *HttpServer::AbstractAuthenticator auth)
                 : HttpServer::AbstractHttpRequestHandler(auth, True), LoggerWrapper(logger) {
+            # the REST classes, which can be code of a sandboxed Program: their handler's code gets the socket of its
+            # HTTP/1.x request then (qore#7305)
+            setHostsCode();
             self.validator = new NullRestSchemaValidator(logger);
             self.validator.setLogger(logger);
         }
@@ -1462,6 +1518,9 @@ public namespace RestHandler {
         constructor(Logger::LoggerInterface logger, *HttpServer::AbstractAuthenticator auth,
                 RestSchemaValidator::AbstractRestSchemaValidator validator)
                 : HttpServer::AbstractHttpRequestHandler(auth, True), LoggerWrapper(logger) {
+            # the REST classes, which can be code of a sandboxed Program: their handler's code gets the socket of its
+            # HTTP/1.x request then (qore#7305)
+            setHostsCode();
             self.validator = validator;
             validator.setLogger(logger);
         }
@@ -2045,6 +2104,11 @@ public namespace RestHandler {
                 }
             }
 
+            # a class of a sandboxed Program never gets the connection's socket of an HTTP/1.x request: decided when
+            # the class is handed the request, whatever the handler hosted when the request started (qore#7305)
+            if (SandboxManager::isFromSandboxedProgram(rcls) && rest_socket_is_connection(s)) {
+                return rest_refuse_connection_socket(rcls);
+            }
             return rcls.handleRequest(listener, self, s, class_list, method_name, cx, args);
         }
 

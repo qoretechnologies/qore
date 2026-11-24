@@ -2396,6 +2396,63 @@ AsyncIoSandboxContext capture_async_io_sandbox_context() {
     return AsyncIoSandboxContext();
 }
 
+//! A context that carries only the module cleanup flags of work that the cleanup handed over, for the timer callback of
+//! the host (see QoreSandboxContext::ModuleCleanupFlagsOnly, qore#7010), and its shared pointer, which has a no-op
+//! deleter
+/** Constructed in place when the library is loaded and never destroyed: the holder has no destructor that destroys
+    them, so a copy of the pointer that a work item or a thread still holds at the end of the process (also after the
+    static objects of the library have been destroyed) refers to a live context.  The I/O thread allocates nothing to
+    dispatch the callback, and has no fallback to the context of the code that added the timer
+*/
+class AioImmortalFlagsContext {
+public:
+    DLLLOCAL AioImmortalFlagsContext(bool canceled) {
+        const QoreSandboxContext* c = new (ctx_storage) QoreSandboxContext(true, canceled,
+            QoreSandboxContext::ModuleCleanupFlagsOnly::Flags);
+        ptr = new (ptr_storage) AsyncIoSandboxContext(c, [](const QoreSandboxContext*) {});
+    }
+
+    //! returns the shared pointer of the context
+    DLLLOCAL const AsyncIoSandboxContext& get() const {
+        return *ptr;
+    }
+
+private:
+    alignas(QoreSandboxContext) unsigned char ctx_storage[sizeof(QoreSandboxContext)];
+    alignas(AsyncIoSandboxContext) unsigned char ptr_storage[sizeof(AsyncIoSandboxContext)];
+    const AsyncIoSandboxContext* ptr;
+};
+static_assert(std::is_trivially_destructible<AioImmortalFlagsContext>::value,
+    "the flags-only contexts must not be destroyed");
+static AioImmortalFlagsContext aio_cleanup_flags_live(false);
+static AioImmortalFlagsContext aio_cleanup_flags_canceled(true);
+
+//! Releases the arguments of a work item, in its release context if it has one (see AsyncWorkItem::release_ctx)
+/** The arguments of the timer callback of the host hold the data of a timer of other code, whose destructors are that
+    code's: they are released in its sandbox, with its restrictions and work generation (qore#7010).  The common case
+    (no release context) only tests the pointer.  The helpers are held in place, so that nothing allocates between
+    taking the arguments and releasing them
+*/
+static void aio_release_item_args(QoreListNode*& args, const AsyncIoSandboxContext& release_ctx,
+        ExceptionSink* xsink) {
+    if (!args) {
+        return;
+    }
+    QoreListNode* a = args;
+    args = nullptr;
+    if (!release_ctx) {
+        a->deref(xsink);
+        return;
+    }
+    std::optional<QoreSandboxContextHelper> release_guard;
+    if (release_ctx->manager || release_ctx->policy_manager || release_ctx->isolation) {
+        release_guard.emplace(*release_ctx);
+    }
+    QoreSubmitterRestrictionsHelper release_restrictions(release_ctx->caller_restrictions);
+    QoreWorkGenerationHelper release_gen(release_ctx->work_gen);
+    a->deref(xsink);
+}
+
 void QoreCallDispatcher::dispatchAbortAsync(QoreObject* spop_obj, const std::string& owner,
         AsyncIoSandboxContext sandbox_ctx, AsyncIoNativeTask* after_abort, bool after_abort_on_complete,
         qore_program_id_t app_pgm_id) {
@@ -2432,12 +2489,13 @@ void QoreCallDispatcher::dispatchOnCompleteAsync(QoreObject* spop_obj, QoreHashN
 
 void QoreCallDispatcher::dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args,
         const std::string& owner, AsyncIoSandboxContext sandbox_ctx, AsyncIoRuntimeOptions runtime_po,
-        qore_program_id_t app_pgm_id) {
+        qore_program_id_t app_pgm_id, AsyncIoSandboxContext release_ctx) {
     AsyncWorkItem item{nullptr, nullptr, callback, args, DT_CALLBACK, nullptr, std::string()};
     item.app_pgm_id = app_pgm_id;
     item.owner = owner;
     item.sandbox_ctx = std::move(sandbox_ctx);
     item.runtime_po = std::move(runtime_po);
+    item.release_ctx = std::move(release_ctx);
     enqueue(std::move(item));
 }
 
@@ -2554,10 +2612,8 @@ void QoreCallDispatcher::releaseWorkItem(AsyncWorkItem& item, ExceptionSink* xsi
         item.callback->deref(xsink);
         item.callback = nullptr;
     }
-    if (item.args) {
-        item.args->deref(xsink);
-        item.args = nullptr;
-    }
+    // in the context of the code that added the timer for the host's timer callback (qore#7010)
+    aio_release_item_args(item.args, item.release_ctx, xsink);
     if (item.pgm) {
         // must match enqueue()'s depRef() - deref() would decrement the strong
         // refcount but not the dc counter, stranding the program past shutdown
@@ -2857,9 +2913,8 @@ void QoreCallDispatcher::stop(ExceptionSink* xsink) {
         if (item.callback) {
             item.callback->deref(xsink);
         }
-        if (item.args) {
-            item.args->deref(xsink);
-        }
+        // in the context of the code that added the timer for the host's timer callback (qore#7010)
+        aio_release_item_args(item.args, item.release_ctx, xsink);
         if (item.controller) {
             item.controller->deref(xsink);
         }
@@ -3550,11 +3605,11 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         // connection, or try another address) would not be checked against the sandbox (see AsyncIoSandboxContext)
         // (a context kept only for the module cleanup's delegation has no sandbox to apply: the sandbox lookups of the
         // worker then resolve normally)
-        std::unique_ptr<QoreSandboxContextHelper> sandbox_guard;
+        std::optional<QoreSandboxContextHelper> sandbox_guard;
         // the isolation of a trusted build that submitted the operation holds in its steps as well (qore#6536)
         if (async_item.sandbox_ctx && (async_item.sandbox_ctx->manager || async_item.sandbox_ctx->policy_manager
                 || async_item.sandbox_ctx->isolation)) {
-            sandbox_guard.reset(new QoreSandboxContextHelper(*async_item.sandbox_ctx));
+            sandbox_guard.emplace(*async_item.sandbox_ctx);
         }
         // the item runs for code that is sandboxed or acts for sandboxed code also where its context has no sandbox
         // to apply (module code acting for sandboxed code): its exceptions are raised for that code (qore#7286)
@@ -4019,9 +4074,8 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         if (async_item.callback) {
             async_item.callback->deref(xsink);
         }
-        if (async_item.args) {
-            async_item.args->deref(xsink);
-        }
+        // in the context of the code that added the timer for the host's timer callback (qore#7010)
+        aio_release_item_args(async_item.args, async_item.release_ctx, xsink);
 
         // Clear all thread-local data (program tld hash + thread_local vars + thread
         // resources) to prevent data from leaking between unrelated tasks on the same
@@ -6196,7 +6250,11 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     if (no_program) {
         return 0;
     }
+    return cancelByOwnerIntern(owner_str, restrict_app, xsink);
+}
 
+int AsyncIoControllerPriv::cancelByOwnerIntern(const std::string& owner_str, const AioAppRestriction& restrict_app,
+        ExceptionSink* xsink) {
     bool do_signal = false;
     int count = 0;
     std::vector<PollInfo> direct_pinfos;
@@ -6215,7 +6273,7 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
         }
         for (auto& key : keys) {
             auto it = tp.cache.find(key);
-            if (it != tp.cache.end()) {
+            if (it != tp.cache.end() && (it->second.owner == owner_str || it->second.inherited_owner == owner_str)) {
                 ASYNC_IO_TRACE("cache.erase CANCEL_BY_OWNER_DEAD_THREAD key='%s' owner='%s'\n", key.c_str(),
                     owner_str.c_str());
                 direct_pinfos.push_back(tp.takeUnregisteredOp(it));
@@ -6228,9 +6286,11 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
         cache_count += (int)kept;
         // Record the current per-thread submit_seq so any SubmitOp already pushed (seq_at_push <= this) is
         // tombstoned, while subsequent submits (seq_at_push >) are accepted as fresh.
+        // The record of a cancel restricted to the operations of an application is that application's (qore#7010):
+        // it refuses only that application's submissions of the owner, also those that the thread keeps
         if (!restrict_app.restricted || !keys.empty() || kept) {
             int dead_seq = tp.submit_seq.load(std::memory_order_relaxed);
-            auto& ci = tp.cancelled_owners[owner_str];
+            auto& ci = tp.cancelled_owners[QoreCallDispatcher::ownerMarkKey(owner_str, restrict_app)];
             ci.ttl = 2;
             if (dead_seq > ci.seq) {
                 ci.seq = dead_seq;
@@ -6335,9 +6395,15 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
             // SubmitOps already pushed have seq_at_push <= this value and
             // are rejected, while later submits have seq_at_push > and
             // are accepted as fresh.
+            //
+            // A cancel restricted to the operations of an application (qore#7010) records the owner only on the
+            // threads where it canceled one of them (here, in the command's handler and in the last drain of a
+            // stopping thread): a submission of the owner by the same application that is queued to another I/O
+            // thread, where it canceled nothing, is not refused.  This is not a refusal across applications (the
+            // record is the application's), and it was so before the records were keyed by application
             if (!restrict_app.restricted || !keys.empty()) {
                 int own_seq = tp.submit_seq.load(std::memory_order_relaxed);
-                auto& ci = tp.cancelled_owners[owner_str];
+                auto& ci = tp.cancelled_owners[QoreCallDispatcher::ownerMarkKey(owner_str, restrict_app)];
                 ci.ttl = 2;
                 if (own_seq > ci.seq) {
                     ci.seq = own_seq;
@@ -7210,6 +7276,41 @@ size_t AsyncIoControllerPriv::dbgWakeAllSockets() {
 }
 #endif
 
+#ifdef DEBUG
+std::atomic<bool> qore_dbg_close_wake_push_fails{false};
+std::atomic<bool> qore_dbg_close_wake_drain_fails{false};
+std::atomic<int> qore_dbg_close_wake_all_fails{0};
+#endif
+
+std::function<void()> AsyncIoControllerPriv::makeCloseWake(IoThreadContext& t, const std::string& sock_hash) {
+    if (!t.close_wakes) {
+        t.close_wakes = std::make_shared<CloseWakeQueue>(t.notifier);
+    }
+    std::shared_ptr<CloseWakeQueue> q = t.close_wakes;
+    // a close in a forked child notifies the notifier that it inherited from the parent: the parent's thread wakes
+    // and finds nothing to do (harmless)
+    return [q, sock_hash]() {
+        {
+            // a leaf lock (see CloseWakeQueue)
+            AutoLocker al(q->l);
+            try {
+#ifdef DEBUG
+                if (qore_dbg_close_wake_push_fails.load(std::memory_order_relaxed)) {
+                    throw std::bad_alloc();
+                }
+#endif
+                q->hashes.push_back(sock_hash);
+            } catch (...) {
+                // no memory: the thread wakes all of its sockets (nothing may leave a close)
+                q->all = true;
+            }
+        }
+        if (q->notifier) {
+            q->notifier->notify();
+        }
+    };
+}
+
 void AsyncIoControllerPriv::wakeSocket(const std::string& sock_hash) {
     if (forked()) {
         return;
@@ -7890,6 +7991,11 @@ int64_t AsyncIoControllerPriv::addTimerIntern(int64_t deadline_us, bool monotoni
     bool for_app = runtime_get_module_caller_app(app_pgm_id);
     // the application that the timer's code runs for (qore#7010), computed before the controller's lock is taken
     qore_program_id_t cb_app_id = callerAppId();
+    // the generation of the work that adds the timer, for the timers that sandboxed code with no application may
+    // cancel (timerCancelAllowed()); none for a timer of the initialization of library code, which runs for no
+    // application on the thread of the code that loads the library (a tenant's thread, for example), so that no
+    // sandboxed code can cancel it, not even later work of that thread (qore#7010)
+    const uint64_t adder_gen = qore_runtime_under_library_init_barrier() ? 0 : runtime_get_thread_generation();
 
     {
         AutoLocker al(m);
@@ -7932,7 +8038,7 @@ int64_t AsyncIoControllerPriv::addTimerIntern(int64_t deadline_us, bool monotoni
         tinfo.runtime_po = std::move(timer_po);
         tinfo.for_app = for_app;
         tinfo.cb_app_id = cb_app_id;
-        tinfo.adder_gen = runtime_get_thread_generation();
+        tinfo.adder_gen = adder_gen;
         tinfo.app_pgm_id = app_pgm_id;
         timer_info_map[id] = std::move(tinfo);
 
@@ -8371,6 +8477,31 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             ssl_deferred_hashes.clear();
         }
 
+        // the sockets that closes made by other threads woke (see CloseWakeQueue)
+        // set when a close wake could not record its socket, or its socket could not be moved to the wake set (no
+        // memory): every operation of the thread runs again, without an allocation (see below)
+        bool wake_all = false;
+        if (t.close_wakes) {
+            AutoLocker al(t.close_wakes->l);
+            try {
+#ifdef DEBUG
+                if (!t.close_wakes->hashes.empty() && qore_dbg_close_wake_drain_fails.load(std::memory_order_relaxed)) {
+                    throw std::bad_alloc();
+                }
+#endif
+                for (std::string& h : t.close_wakes->hashes) {
+                    t.wake_socket_hashes.insert(std::move(h));
+                }
+            } catch (...) {
+                wake_all = true;
+            }
+            t.close_wakes->hashes.clear();
+            if (t.close_wakes->all) {
+                t.close_wakes->all = false;
+                wake_all = true;
+            }
+        }
+
         // Consume wake_socket_hashes (I/O-thread-only, no lock needed)
         if (!t.wake_socket_hashes.empty()) {
             woken_hashes = std::move(t.wake_socket_hashes);
@@ -8515,6 +8646,35 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             expand_ready_events(ready_socket_events);
             expand_hashes(ready_socket_hashes, true);
             expand_hashes(woken_hashes, true);
+            if (wake_all) {
+                // every operation of the thread runs again, as for a wake of its socket, also one whose own socket has
+                // no registered descriptor (one that waits only for extra descriptors, such as another Socket's): the
+                // walk records nothing; the list of the operations to run is reserved for all of them first, so that
+                // queuing one cannot fail, and if the reservation fails, the fallback runs again at the next iteration
+                // (nothing may leave the I/O thread)
+                try {
+#ifdef DEBUG
+                    if (qore_dbg_close_wake_all_fails.load(std::memory_order_relaxed) > 0) {
+                        qore_dbg_close_wake_all_fails.fetch_sub(1, std::memory_order_relaxed);
+                        throw std::bad_alloc();
+                    }
+#endif
+                    ops_to_poll.reserve(ops_to_poll.size() + t.cache.size());
+                    for (auto& [key, pinfo] : t.cache) {
+                        try_queue(pinfo, false, true);
+                    }
+                } catch (...) {
+                    std::shared_ptr<CloseWakeQueue>& q = t.close_wakes;
+                    assert(q);
+                    {
+                        AutoLocker al(q->l);
+                        q->all = true;
+                    }
+                    if (q->notifier) {
+                        q->notifier->notify();
+                    }
+                }
+            }
             // the events of the last poll have now been reported to their operations; they must not be reported
             // again when the loop goes round without polling (when a command arrives before the poll, or the poll
             // fails): an operation continued for an event may have consumed it, and would be continued again for an
@@ -9550,6 +9710,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             if (t.dbg_before_poll) {
                 t.dbg_before_poll(t);
             }
+            // test hook: a thread to hold goes back to the top of its loop, where it is held before its command queue
+            // (see dbgHoldIoCommands()); checked under the lock with which the hook is set, as the notification of
+            // the hook can have been acknowledged with the commands of the iteration
+            if (t.dbg_hold_commands) {
+                continue;
+            }
 #endif
             if (!t.cmdq.empty()) {
                 continue;
@@ -9766,9 +9932,31 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             // a code reference is tagged with the timer's owner (if any); see above
             // the timer's own code runs with the options of the code that added the timer, the timer callback with
             // those of the code that set it (qore#6208)
+            // the timer's own code runs in the sandbox of the code that added the timer, and continues its work (its
+            // generation); the timer callback is the host's code (sandboxed code cannot set it), which runs in the
+            // host's context, as work of its own, also for the timer of sandboxed code (qore#7010): for a timer of
+            // work that the module cleanup handed over, with only the cleanup's flags of the timer's context, which
+            // make the callback part of the cleanup (see QoreModuleCleanupDelegateHelper), as it can enter the
+            // Programs of the modules that the cleanup closed; the callback's arguments, which hold the timer's data,
+            // are released in the timer's context, as their destructors are the code's that added the timer
+            AsyncIoSandboxContext item_ctx;
+            AsyncIoSandboxContext release_ctx;
+            if (is_code) {
+                item_ctx = std::move(te.sandbox_ctx);
+            } else {
+                if (async_io_module_cleanup_delegate(te.sandbox_ctx)) {
+                    // one of the contexts that carry only the cleanup's flags, which exist for the life of the
+                    // library: nothing is allocated, and the callback never gets the timer's context, whose work
+                    // generation would make what it creates the timer's code's
+                    item_ctx = te.sandbox_ctx->module_cleanup_canceled ? aio_cleanup_flags_canceled.get()
+                        : aio_cleanup_flags_live.get();
+                }
+                release_ctx = std::move(te.sandbox_ctx);
+            }
             call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(code_ref.release(), args.release(),
-                is_code ? te.owner : std::string(), std::move(te.sandbox_ctx),
-                is_code ? std::move(te.runtime_po) : cb_snapshot_po, is_code ? te.cb_app_id : 0);
+                is_code ? te.owner : std::string(), std::move(item_ctx),
+                is_code ? std::move(te.runtime_po) : cb_snapshot_po, is_code ? te.cb_app_id : 0,
+                std::move(release_ctx));
 #ifdef DEBUG
             if (dbg_pause) {
                 dbgWaitAfterDelivery(DBG_PAUSE_DELIVERY);
@@ -10018,7 +10206,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         }
                     }
                     if (record) {
-                        auto& ci = t.cancelled_owners[pending_cmd.owner];
+                        // the record of a restricted cancel is its application's: it refuses only the kept
+                        // submissions of that application, as the command's handler records it
+                        auto& ci = t.cancelled_owners[QoreCallDispatcher::ownerMarkKey(pending_cmd.owner,
+                            pending_cmd.restrict_app)];
                         ci.ttl = 2;
                         if (pending_cmd.seq_at_push > ci.seq) {
                             ci.seq = pending_cmd.seq_at_push;
@@ -10273,6 +10464,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
     // The outer loop handles commands that arrive during acknowledge.
     while (true) {
 #ifdef DEBUG
+        dbgHoldBeforeCommands(t);
         // a test sends several commands that this thread then drains as one batch
         dbgTakeCancelPause(DBG_CANCEL_BEFORE_COMMAND_DRAIN);
 #endif
@@ -10649,10 +10841,11 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                        disconnect/reconnect) work without depending on TTL
                        aging.  Use max() so a later cancel cannot retreat the
                        gate. */
-                    // a cancel restricted to the operations of a Program (qore#7010) records the owner only if it
-                    // canceled one of them
+                    // a cancel restricted to the operations of an application (qore#7010) records the owner only if
+                    // it canceled one of them, and only for that application: the submissions of the owner by other
+                    // applications are not refused
                     if (!cmd.restrict_app.restricted || local_count) {
-                        auto& ci = t.cancelled_owners[cmd.owner];
+                        auto& ci = t.cancelled_owners[QoreCallDispatcher::ownerMarkKey(cmd.owner, cmd.restrict_app)];
                         ci.ttl = 2;
                         if (cmd.seq_at_push > ci.seq) {
                             ci.seq = cmd.seq_at_push;
@@ -10856,6 +11049,12 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     // reconnect cancelling the HCIO poll op then submitting
                     // the WS poll op on the same socket fd) and must fall
                     // through to create the live op, not be canceled here.
+                    //
+                    // The canceled-key tombstone is keyed by the key alone, also for a cancel restricted to the
+                    // operations of an application (qore#7010): a submission of the key by another application,
+                    // queued before the cancel, would collide with the canceled operation's key anyway (it is refused
+                    // without replace_existing, and may not replace another application's operation with it), so
+                    // refusing it as stale takes nothing from it that the collision would not
                     auto ck_it = t.cancelled_keys.find(cmd.key);
                     if (ck_it != t.cancelled_keys.end()
                             && cmd.seq_at_push <= ck_it->second.seq) {
@@ -10885,6 +11084,13 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     // submit, not a stale racing resubmit.
                     {
                         auto co_it = t.cancelled_owners.find(cmd.owner);
+                        if (co_it == t.cancelled_owners.end() || cmd.seq_at_push > co_it->second.seq) {
+                            // the owner canceled for the submitter's application by a restricted cancel (qore#7010)
+                            AioAppRestriction submitter;
+                            submitter.restricted = true;
+                            submitter.app_id = cmd.submit_app_id;
+                            co_it = t.cancelled_owners.find(QoreCallDispatcher::ownerMarkKey(cmd.owner, submitter));
+                        }
                         if (co_it != t.cancelled_owners.end()
                                 && cmd.seq_at_push <= co_it->second.seq) {
                             // Reset TTL — keep blocking further stale submits
@@ -11977,6 +12183,151 @@ bool AsyncIoControllerPriv::dbgWaitFlushBlocked(int timeout_ms) {
     return cd ? cd->dbgWaitIdleWaiter(timeout_ms) : false;
 }
 
+void AsyncIoControllerPriv::dbgHoldBeforeCommands(IoThreadContext& t) {
+    AutoLocker al(m);
+    if (!t.dbg_hold_commands) {
+        return;
+    }
+    t.dbg_commands_held = true;
+    t.dbg_cond.broadcast();
+    while (t.dbg_hold_commands) {
+        if (!t.dbg_actions.empty()) {
+            std::function<void()> action = std::move(t.dbg_actions.front());
+            t.dbg_actions.pop_front();
+            {
+                // the action takes the controller's lock itself, as code on the I/O thread does
+                AutoUnlocker aul(m);
+                action();
+            }
+            continue;
+        }
+        t.dbg_cond.wait(m);
+    }
+    // actions not run are ended: their waiters see that they did not run
+    t.dbg_actions.clear();
+    t.dbg_commands_held = false;
+    t.dbg_cond.broadcast();
+}
+
+void AsyncIoControllerPriv::dbgHoldIoCommands(bool hold) {
+    AutoLocker al(m);
+    for (auto& tp : io_threads) {
+        tp->dbg_hold_commands = hold;
+        tp->dbg_cond.broadcast();
+        // a thread that waits in its event loop is woken, to be held before its command queue
+        if (hold && tp->notifier && readsCommands(*tp)) {
+            tp->notifier->notify();
+        }
+    }
+}
+
+bool AsyncIoControllerPriv::dbgWaitIoCommandsHeld(int timeout_ms) {
+    AutoLocker al(m);
+    if (io_threads.empty()) {
+        return false;
+    }
+    IoThreadContext& t = *io_threads[0];
+    while (!t.dbg_commands_held) {
+        if (!t.dbg_hold_commands || t.dbg_cond.wait(m, timeout_ms) == ETIMEDOUT) {
+            return t.dbg_commands_held;
+        }
+    }
+    return true;
+}
+
+int AsyncIoControllerPriv::dbgRunOnHeldIoThread(std::function<void(ExceptionSink*)> action, int timeout_ms,
+        ExceptionSink* xsink) {
+    struct State {
+        bool done = false;
+        ExceptionSink xsink;
+    };
+    std::shared_ptr<State> state = std::make_shared<State>();
+    AutoLocker al(m);
+    if (io_threads.empty() || !io_threads[0]->dbg_commands_held) {
+        xsink->raiseException("DBG-ERROR", "the I/O thread is not held (dbg_async_io_hold_io_commands())");
+        return -1;
+    }
+    IoThreadContext& t = *io_threads[0];
+    t.dbg_actions.push_back([state, action, this]() {
+        ExceptionSink action_xsink;
+        action(&action_xsink);
+        AutoLocker al(m);
+        state->xsink.assimilate(action_xsink);
+        state->done = true;
+        io_threads[0]->dbg_cond.broadcast();
+    });
+    t.dbg_cond.broadcast();
+    while (!state->done) {
+        if (!t.dbg_commands_held) {
+            xsink->raiseException("DBG-ERROR", "the I/O thread was released before the action ran");
+            return -1;
+        }
+        if (t.dbg_cond.wait(m, timeout_ms) == ETIMEDOUT && !state->done) {
+            xsink->raiseException("DBG-ERROR", "the action on the held I/O thread did not complete in %d ms",
+                timeout_ms);
+            return -1;
+        }
+    }
+    if (state->xsink) {
+        xsink->assimilate(state->xsink);
+        return -1;
+    }
+    return 0;
+}
+
+//! the restriction of code on the I/O thread that runs for the given application (-1 none, 0 trusted code)
+static AioAppRestriction dbg_io_thread_restriction(int64 app_id) {
+    AioAppRestriction r;
+    if (app_id) {
+        r.restricted = true;
+        r.app_id = app_id < 0 ? QORE_NO_PROGRAM_ID : static_cast<qore_program_id_t>(app_id);
+    }
+    return r;
+}
+
+int AsyncIoControllerPriv::dbgCancelOwnerOnIoThread(const std::string& owner, int64 app_id, int timeout_ms,
+        ExceptionSink* xsink) {
+    // shared with the action, which can outlive a wait that timed out
+    std::shared_ptr<int> count = std::make_shared<int>(0);
+    AioAppRestriction r = dbg_io_thread_restriction(app_id);
+    if (dbgRunOnHeldIoThread([this, owner, r, count](ExceptionSink* axsink) {
+            // fails closed for no application, as cancelByOwner() does
+            if (r.restricted && r.app_id == QORE_NO_PROGRAM_ID) {
+                return;
+            }
+            *count = cancelByOwnerIntern(owner, r, axsink);
+        }, timeout_ms, xsink)) {
+        return -1;
+    }
+    return *count;
+}
+
+int AsyncIoControllerPriv::dbgQueueCancelOwner(const std::string& owner, int64 app_id, ExceptionSink* xsink) {
+    AioAppRestriction r = dbg_io_thread_restriction(app_id);
+    AutoLocker al(m);
+    if (io_threads.empty() || !io_threads[0]->dbg_commands_held) {
+        xsink->raiseException("DBG-ERROR", "the I/O thread is not held (dbg_async_io_hold_io_commands())");
+        return -1;
+    }
+    IoThreadContext& tp = *io_threads[0];
+    // as cancelByOwner() on an I/O thread queues it for another I/O thread, but not waited for
+    Command cmd;
+    cmd.cmd = IoCommand::CancelOwner;
+    cmd.owner = owner;
+    cmd.restrict_app = r;
+    ++submit_seq;
+    cmd.seq_at_push = ++tp.submit_seq;
+    tp.cmdq.push(std::move(cmd));
+    tp.notifier->notify();
+    return 0;
+}
+
+int64 AsyncIoControllerPriv::dbgTimerAdderGen(int64_t id) {
+    AutoLocker al(m);
+    auto it = timer_info_map.find(id);
+    return it == timer_info_map.end() ? -1 : static_cast<int64>(it->second.adder_gen);
+}
+
 bool AsyncIoControllerPriv::dbgWaitOwnerFlushBlocked(int timeout_ms) {
     ensureCallDispatcher();
     // as in flushCallbacksByOwner(): the dispatcher's lock is not taken with the controller's held
@@ -12674,6 +13025,12 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, uint64_t op_id,
                     continue;
                 }
                 if (hold) {
+                    // a close of the object that bypasses the controller wakes the operation, also one made since the
+                    // hold was taken (qore#7003)
+                    OpCache::node_t* node = t.cache.findId(op_id);
+                    if (node) {
+                        qore_descriptor_hold_set_close_wake(hold, makeCloseWake(t, closeWakeKey(node->second)));
+                    }
                     t.extra_fd_holds[{op_id, fd}] = std::move(hold);
                 }
             } else {
@@ -12880,6 +13237,11 @@ int AsyncIoControllerPriv::addSocketFd(IoThreadContext& t, AbstractPollableIoObj
     }
     ASYNC_IO_TRACE("addSocketFd[%d]: add fd=%d sock='%s' hold=%d\n", t.thread_idx, fd, sock_hash.c_str(),
         hold ? 1 : 0);
+    if (hold) {
+        // a close of the socket that bypasses the controller wakes its operations, also one made since the hold was
+        // taken (qore#7003)
+        qore_descriptor_hold_set_close_wake(hold, makeCloseWake(t, sock_hash));
+    }
     t.loop->addRegistration(fd, regKey(t, sock_hash), events, socket, xsink);
     t.registered_fds[sock_hash] = fd;
     // the registration's own hold; an object that takes no hold (a pollable that Socket::poll() polls by number, a
@@ -12900,6 +13262,11 @@ bool AsyncIoControllerPriv::enqueueCmdLocked(IoCommand cmd, const std::string& k
         // stops by itself; a Quit left in their queues would stop them as soon as they are started again
         bool pushed = false;
         for (auto& tp : io_threads) {
+#ifdef DEBUG
+            // a thread held by the test hook stops (see dbgHoldIoCommands())
+            tp->dbg_hold_commands = false;
+            tp->dbg_cond.broadcast();
+#endif
             if (!readsCommands(*tp)) {
                 continue;
             }

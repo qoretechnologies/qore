@@ -877,7 +877,9 @@ int SocketQuicClientPollOperation::sendPendingPackets(
         not_before_ns_ = 0;
     }
 
-    // Coalesced timer check + packet generation under a single lock
+    // Coalesced timer check + packet generation under a single lock; the datagrams that earlier sends did not send
+    // come first (qore#7414)
+    pkt_batch_.clear();
     auto result = quic_session->processTimerAndWrite(pkt_batch_, xsink);
     if (result.error) {
         pkt_batch_.clear();
@@ -892,12 +894,15 @@ int SocketQuicClientPollOperation::sendPendingPackets(
 
 #ifdef DEBUG
     // Test hook: QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS=i[,j...] silently drops the listed datagrams of each
-    // connection attempt (0-based), modelling datagrams lost on the path.  Read on every call because tests
-    // scope the variable to one case in a shared test process.
+    // connection attempt (0-based), modelling datagrams lost on the path, and "*" drops all of them, modelling a peer
+    // that receives nothing more (qore#7452); each datagram dropped is counted for
+    // dbg_quic_wait_dropped_client_datagrams().  Read on every call because tests scope the variable to one case in a
+    // shared test process.
     if (QoreEnvironmentValue drop_holder("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS");
             const char* drop = drop_holder.c_str()) {
+        bool drop_all = !strcmp(drop, "*");
         std::set<int> dropped;
-        for (const char* p = drop; *p; ) {
+        for (const char* p = drop_all ? "" : drop; *p; ) {
             char* end;
             long v = strtol(p, &end, 10);
             if (end == p) {
@@ -906,16 +911,21 @@ int SocketQuicClientPollOperation::sendPendingPackets(
             dropped.insert(static_cast<int>(v));
             p = *end == ',' ? end + 1 : end;
         }
-        QuicPacketBatch kept;
+        // the datagrams kept by an earlier send were already counted
+        QuicPacketBatch passed;
         for (int i = 0; i < pkt_batch_.size(); ++i) {
-            if (!dropped.count(test_datagram_seq_++)) {
-                kept.addPacket(pkt_batch_.packetData(i), pkt_batch_.packetLen(i));
+            if (i < result.kept) {
+                passed.addPacket(pkt_batch_.packetData(i), pkt_batch_.packetLen(i));
+                continue;
             }
+            if (drop_all || dropped.count(test_datagram_seq_)) {
+                qore_dbg_quic_note_dropped_client_datagram();
+            } else {
+                passed.addPacket(pkt_batch_.packetData(i), pkt_batch_.packetLen(i));
+            }
+            ++test_datagram_seq_;
         }
-        pkt_batch_.clear();
-        for (int i = 0; i < kept.size(); ++i) {
-            pkt_batch_.addPacket(kept.packetData(i), kept.packetLen(i));
-        }
+        pkt_batch_.swap(passed);
         if (pkt_batch_.empty()) {
             return 0;
         }
@@ -924,31 +934,33 @@ int SocketQuicClientPollOperation::sendPendingPackets(
 
     int fd = qore_socket_ops(sock->priv->socket).getDescriptor();
 
-    int sent = sendQuicPacketsBatch(fd, pkt_batch_, nullptr, 0);
-    if (sent < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets EAGAIN fd=%d batch=%d\n",
-                fd, pkt_batch_.size());
+    // the datagrams not sent are kept by the session for its next write instead of being dropped: ngtcp2 counts them
+    // as sent, and would recover them only with its PTO timers, with exponential backoff (qore#7414)
+    int count = pkt_batch_.size();
+    QuicSendResult rc = quic_session->sendPackets(fd, pkt_batch_, nullptr, 0);
+    ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets fd=%d count=%d result=%d\n",
+        fd, count, static_cast<int>(rc));
+    switch (rc) {
+        case QuicSendResult::Sent:
+            return 0;
+        case QuicSendResult::WaitWritable:
+            printd(1, "SocketQuicClientPollOperation::sendPendingPackets(): QUIC send blocked (%d packets)\n",
+                count);
             return SOCK_POLLOUT;
+        case QuicSendResult::Backoff: {
+            // no event reports when the datagrams can be sent: the operation is woken at the time to send them
+            // again, and every state sends then
+            ngtcp2_tstamp retry_at = quic_session->getSendRetryAt();
+            if (retry_at < next_expiry) {
+                next_expiry = retry_at;
+            }
+            return 0;
         }
-        pkt_batch_.clear();
-        xsink->raiseErrnoException("QUIC-SEND-ERROR", errno, "sendto/sendmmsg() failed");
-        return -1;
+        case QuicSendResult::Error:
+            break;
     }
-    ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets SENT fd=%d sent=%d/%d\n",
-        fd, sent, pkt_batch_.size());
-    if (sent > 0 && sent < pkt_batch_.size()) {
-        printd(1, "SocketQuicClientPollOperation::sendPendingPackets(): partial QUIC send: %d/%d packets\n",
-            sent, pkt_batch_.size());
-        // Retain unsent packets for the next send cycle instead of dropping them;
-        // ngtcp2 would retransmit via PTO timers, but sending them promptly avoids
-        // the unnecessary delay and bandwidth overhead of retransmission
-        pkt_batch_.removeFront(sent);
-        return SOCK_POLLOUT;
-    }
-
-    pkt_batch_.clear();
-    return 0;
+    xsink->raiseErrnoException("QUIC-SEND-ERROR", errno, "sendto/sendmmsg() failed");
+    return -1;
 }
 
 int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
@@ -1104,6 +1116,7 @@ QoreHashNode* SocketQuicClientPollOperation::flushAndReturnPollInfo(ExceptionSin
     } else {
         // When not flushing, use the QUIC connection's next expiry for the poll
         // timeout so retransmission timers still fire
+        // (including the time to send again the datagrams kept after a send that failed with ENOBUFS)
         expiry = quic_session->getExpiry();
     }
     // Request write-readiness (POLLOUT) ONLY when sendPendingPackets reported a
@@ -1559,7 +1572,10 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink, bool*
         return -1;
     }
 
-    int old_fd = qore_socket_ops(sock->priv->socket).getDescriptor();
+    // the descriptor is replaced below only if the socket still has this one, not only its number (qore#7003); read
+    // with the generation, which getDescriptor() does not give
+    uint32_t old_generation;
+    int old_fd = sock->priv->socket->priv->getDescriptorGeneration(old_generation);
     if (old_fd < 0) {
         xsink->raiseException("QUIC-MIGRATION-ERROR", "socket is not open");
         return -1;
@@ -1652,7 +1668,8 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink, bool*
         // the swap also bumps fd_generation so any sync I/O helper mid-wait (lock released) returns QSE_NOT_OPEN on
         // re-acquire instead of operating on the pre-migration fd; a close that raced with the migration has already
         // released the old fd, so the new fd is not installed and closed by the guard instead
-        if (!sock->priv->socket->priv->replaceDescriptor(old_fd, new_fd, close_old)) {
+        if (!sock->priv->socket->priv->replaceDescriptor(old_fd, new_fd, close_old, nullptr, nullptr,
+                &old_generation)) {
             xsink->raiseException("SOCKET-CLOSED", "the socket was closed during QUIC connection migration");
             return -1;
         }
@@ -1946,7 +1963,8 @@ int SocketQuicServerPollOperation::processTimersAndSendAll(
             continue;
         }
 
-        // Coalesced: timer check + packet generation + next expiry (1 lock per session)
+        // Coalesced: timer check + packet generation + next expiry (1 lock per session); the datagrams that earlier
+        // sends of the session did not send come first (qore#7414)
         pkt_batch_.clear();
         auto tw = session->processTimerAndWrite(pkt_batch_, xsink);
         if (tw.error) {
@@ -1972,27 +1990,34 @@ int SocketQuicServerPollOperation::processTimersAndSendAll(
         socklen_t local_addrlen;
         session->getLocalAddrCopy(local_addr, local_addrlen);
 
-        int sent = sendQuicPacketsBatch(fd, pkt_batch_,
+        // the datagrams not sent are kept by the session for its next write: all sessions share the socket, and
+        // each keeps its own, so that none is dropped by another session's write (qore#7414)
+        int count = pkt_batch_.size();
+        QuicSendResult rc = session->sendPackets(fd, pkt_batch_,
             reinterpret_cast<const struct sockaddr*>(&peer_addr), peer_addrlen,
             reinterpret_cast<const struct sockaddr*>(&local_addr), local_addrlen);
-        printd(5, "processTimersAndSendAll() session %lld: %d/%d packets sent\n",
-            (long long)entry.first, sent, (int)pkt_batch_.size());
-        if (sent < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        printd(5, "processTimersAndSendAll() session %lld: %d packets, result %d\n", (long long)entry.first, count,
+            static_cast<int>(rc));
+        switch (rc) {
+            case QuicSendResult::Sent:
+                break;
+            case QuicSendResult::WaitWritable:
+                printd(1, "SocketQuicServerPollOperation::processTimersAndSendAll(): QUIC send blocked for session "
+                    "%lld (%d packets)\n", (long long)entry.first, count);
                 result = SOCK_POLLOUT;
-            } else {
+                break;
+            case QuicSendResult::Backoff: {
+                // no event reports when the datagrams can be sent: the operation is woken at the time to send them
+                // again
+                ngtcp2_tstamp retry_at = session->getSendRetryAt();
+                if (retry_at < min_expiry) {
+                    min_expiry = retry_at;
+                }
+                break;
+            }
+            case QuicSendResult::Error:
                 xsink->raiseErrnoException("QUIC-SEND-ERROR", errno, "sendto/sendmmsg() failed");
                 return -1;
-            }
-        } else if (sent > 0 && sent < pkt_batch_.size()) {
-            // Log partial send; unsent packets will be retransmitted by ngtcp2 via
-            // PTO timers.  Server uses a shared UDP socket with per-session addressing,
-            // so retaining unsent packets per-session would require a per-session send
-            // queue — not worth the complexity since ngtcp2 retransmission handles it.
-            printd(1, "SocketQuicServerPollOperation::processTimersAndSendAll(): partial QUIC send: "
-                "%d/%d packets for session %lld\n", sent, pkt_batch_.size(),
-                (long long)entry.first);
-            result = SOCK_POLLOUT;
         }
     }
 
@@ -2787,6 +2812,38 @@ const char* SocketQuicSendResponsePollOperation::getStateImpl() const {
     }
 }
 
+//! Sends the datagrams of a QUIC response operation, keeping those not sent (qore#7414)
+/** The datagrams not sent are kept by the session (QuicSession::sendPackets()).
+
+    @return 0 if all were sent, SOCK_POLLOUT if the socket's buffer is full, QUIC_SEND_BACKOFF if they are sent again
+    at the session's QuicSession::getSendRetryAt() (which lowers @p next_expiry to it), -1 if an exception was raised
+*/
+static int sendKeepingUnsent(QuicSession& session, int fd, QuicPacketBatch& batch,
+        const struct sockaddr_storage& peer_addr, socklen_t peer_addrlen, const struct sockaddr_storage& local_addr,
+        socklen_t local_addrlen, ngtcp2_tstamp& next_expiry, const char* op, ExceptionSink* xsink) {
+    int count = batch.size();
+    QuicSendResult rc = session.sendPackets(fd, batch, reinterpret_cast<const struct sockaddr*>(&peer_addr),
+        peer_addrlen, reinterpret_cast<const struct sockaddr*>(&local_addr), local_addrlen);
+    switch (rc) {
+        case QuicSendResult::Sent:
+            return 0;
+        case QuicSendResult::WaitWritable:
+            printd(1, "%s::sendPendingPackets(): QUIC send blocked (%d packets)\n", op, count);
+            return SOCK_POLLOUT;
+        case QuicSendResult::Backoff: {
+            ngtcp2_tstamp retry_at = session.getSendRetryAt();
+            if (retry_at < next_expiry) {
+                next_expiry = retry_at;
+            }
+            return QUIC_SEND_BACKOFF;
+        }
+        case QuicSendResult::Error:
+            break;
+    }
+    xsink->raiseErrnoException("QUIC-SEND-ERROR", errno, "sendto/sendmmsg() failed");
+    return -1;
+}
+
 int SocketQuicSendResponsePollOperation::sendPendingPackets(
     ngtcp2_tstamp& next_expiry, ExceptionSink* xsink) {
     // Refresh cached peer address if path migration has occurred.
@@ -2808,7 +2865,9 @@ int SocketQuicSendResponsePollOperation::sendPendingPackets(
         quic_session->clearPathMigrated();
     }
 
-    // Coalesced timer check + packet generation under a single lock
+    // Coalesced timer check + packet generation under a single lock; the datagrams that earlier sends of the session
+    // did not send come first (qore#7414)
+    pkt_batch_.clear();
     auto result = quic_session->processTimerAndWrite(pkt_batch_, xsink);
     if (result.error) {
         pkt_batch_.clear();
@@ -2832,29 +2891,8 @@ int SocketQuicSendResponsePollOperation::sendPendingPackets(
 
     int fd = qore_socket_ops(sock->priv->socket).getDescriptor();
 
-    int sent = sendQuicPacketsBatch(fd, pkt_batch_,
-        reinterpret_cast<const struct sockaddr*>(&peer_addr_), peer_addrlen_,
-        reinterpret_cast<const struct sockaddr*>(&send_local_addr_), send_local_addrlen_);
-    if (sent < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            return SOCK_POLLOUT;
-        }
-        pkt_batch_.clear();
-        xsink->raiseErrnoException("QUIC-SEND-ERROR", errno, "sendto/sendmmsg() failed");
-        return -1;
-    }
-    if (sent > 0 && sent < static_cast<int>(pkt_batch_.size())) {
-        printd(1, "SocketQuicSendResponsePollOperation::sendPendingPackets(): partial QUIC send: %d/%d packets\n",
-            sent, static_cast<int>(pkt_batch_.size()));
-        // Retain unsent packets for the next send cycle instead of dropping them;
-        // ngtcp2 would retransmit via PTO timers, but sending them promptly avoids
-        // the unnecessary delay and bandwidth overhead of retransmission
-        pkt_batch_.removeFront(sent);
-        return SOCK_POLLOUT;
-    }
-
-    pkt_batch_.clear();
-    return 0;
+    return sendKeepingUnsent(*quic_session, fd, pkt_batch_, peer_addr_, peer_addrlen_, send_local_addr_,
+        send_local_addrlen_, next_expiry, "SocketQuicSendResponsePollOperation", xsink);
 }
 
 int SocketQuicSendResponsePollOperation::recvAndProcessPackets(ExceptionSink* xsink) {
@@ -2914,9 +2952,12 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
                 if (*xsink) {
                     return nullptr;
                 }
-                if (rv == SOCK_POLLOUT) {
-                    // Register for both read (ACKs) and write (more data)
-                    QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN | SOCK_POLLOUT);
+                if (rv == SOCK_POLLOUT || rv == QUIC_SEND_BACKOFF) {
+                    // Register for both read (ACKs) and write (more data); POLLOUT only for a full socket buffer:
+                    // datagrams kept after a send that failed with ENOBUFS are sent again at next_expiry, as a UDP
+                    // socket is writable all the while (qore#7414)
+                    QoreHashNode* poll_info = getSocketPollInfoHash(xsink,
+                        rv == SOCK_POLLOUT ? SOCK_POLLIN | SOCK_POLLOUT : SOCK_POLLIN);
                     if (poll_info) {
                         setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
                     }
@@ -2956,8 +2997,11 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
                 if (*xsink) {
                     return nullptr;
                 }
-                if (rv == SOCK_POLLOUT) {
-                    QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN | SOCK_POLLOUT);
+                if (rv == SOCK_POLLOUT || rv == QUIC_SEND_BACKOFF) {
+                    // POLLOUT only for a full socket buffer: datagrams kept after a send that failed with ENOBUFS
+                    // are sent again at next_expiry, as a UDP socket is writable all the while (qore#7414)
+                    QoreHashNode* poll_info = getSocketPollInfoHash(xsink,
+                        rv == SOCK_POLLOUT ? SOCK_POLLIN | SOCK_POLLOUT : SOCK_POLLIN);
                     if (poll_info) {
                         setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
                     }
@@ -3130,7 +3174,9 @@ int SocketQuicSendStreamingResponsePollOperation::sendPendingPackets(
         quic_session->clearPathMigrated();
     }
 
-    // Coalesced timer check + packet generation under a single lock
+    // Coalesced timer check + packet generation under a single lock; the datagrams that earlier sends of the session
+    // did not send come first (qore#7414)
+    pkt_batch_.clear();
     auto result = quic_session->processTimerAndWrite(pkt_batch_, xsink);
     if (result.error) {
         pkt_batch_.clear();
@@ -3154,26 +3200,8 @@ int SocketQuicSendStreamingResponsePollOperation::sendPendingPackets(
 
     int fd = qore_socket_ops(sock->priv->socket).getDescriptor();
 
-    int sent = sendQuicPacketsBatch(fd, pkt_batch_,
-        reinterpret_cast<const struct sockaddr*>(&peer_addr_), peer_addrlen_,
-        reinterpret_cast<const struct sockaddr*>(&send_local_addr_), send_local_addrlen_);
-    if (sent < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            return SOCK_POLLOUT;
-        }
-        pkt_batch_.clear();
-        xsink->raiseErrnoException("QUIC-SEND-ERROR", errno, "sendto/sendmmsg() failed");
-        return -1;
-    }
-    if (sent > 0 && sent < static_cast<int>(pkt_batch_.size())) {
-        printd(1, "SocketQuicSendStreamingResponsePollOperation::sendPendingPackets(): "
-            "partial QUIC send: %d/%d packets\n", sent, static_cast<int>(pkt_batch_.size()));
-        pkt_batch_.removeFront(sent);
-        return SOCK_POLLOUT;
-    }
-
-    pkt_batch_.clear();
-    return 0;
+    return sendKeepingUnsent(*quic_session, fd, pkt_batch_, peer_addr_, peer_addrlen_, send_local_addr_,
+        send_local_addrlen_, next_expiry, "SocketQuicSendStreamingResponsePollOperation", xsink);
 }
 
 int SocketQuicSendStreamingResponsePollOperation::recvAndProcessPackets(ExceptionSink* xsink) {
@@ -3378,8 +3406,11 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePollIntern(E
                 if (*xsink) {
                     return nullptr;
                 }
-                if (rv == SOCK_POLLOUT) {
-                    QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN | SOCK_POLLOUT);
+                if (rv == SOCK_POLLOUT || rv == QUIC_SEND_BACKOFF) {
+                    // POLLOUT only for a full socket buffer: datagrams kept after a send that failed with ENOBUFS
+                    // are sent again at next_expiry, as a UDP socket is writable all the while (qore#7414)
+                    QoreHashNode* poll_info = getSocketPollInfoHash(xsink,
+                        rv == SOCK_POLLOUT ? SOCK_POLLIN | SOCK_POLLOUT : SOCK_POLLIN);
                     if (poll_info) {
                         setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
                     }

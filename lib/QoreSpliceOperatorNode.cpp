@@ -266,6 +266,10 @@ QoreValue QoreSpliceOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* x
                 }
             }
         }
+        // the elements taken out of a list reached through a weak reference (qore#7373)
+        if (holder) {
+            val.removedValueThroughWeak(QoreValue(*holder));
+        }
     } else if (vt == NT_STRING) {
         // note: safe; val.ensureUnique() above materializes any inline short string
         QoreStringNode *vs = val.getValue().get<QoreStringNode>();

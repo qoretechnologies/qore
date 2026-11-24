@@ -40,7 +40,7 @@ qore_ci_install_build_deps
 echo && echo "-- building Qore from separate compilation units --"
 BUILD_DIR=${QORE_SEPARATE_UNITS_BUILD_DIR:-${QORE_SRC_DIR}/build-separate-units}
 cmake -S "${QORE_SRC_DIR}" -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-debug} \
-    -DSINGLE_COMPILATION_UNIT=OFF -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX:-/usr}
+    -DQORE_EXTERNAL_MODULE_DIRS= -DSINGLE_COMPILATION_UNIT=OFF -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX:-/usr}
 # the targets whose sources the option changes: libqore (linked by qore and qcc) and the binary modules with a single
 # compilation unit build (the SINGLE_COMPILATION_UNIT cases in modules/*/CMakeLists.txt)
 cmake --build "${BUILD_DIR}" -j${MAKE_JOBS} --target libqore qore qcc reflection krb5 logger_bin astparser

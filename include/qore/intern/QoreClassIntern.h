@@ -272,7 +272,8 @@ struct AbstractMethodMap : amap_t {
             i.second->parseRollback();
     }
 
-    DLLLOCAL void parseInit(qore_class_private& qc, BCList* scl);
+    //! Returns true if concrete variants were installed on a method of the class.
+    DLLLOCAL bool parseInit(qore_class_private& qc, BCList* scl);
 
     //! drops the abstract variants inherited from the parent classes that none of them has pending any more
     /** Called when the abstract variants of the parent classes have been resolved (qore_class_private::
@@ -2938,7 +2939,8 @@ public:
     DLLLOCAL void parseAddAncestors(QoreMethod* m);
     DLLLOCAL void parseAddStaticAncestors(QoreMethod* m);
 
-    DLLLOCAL void parseResolveAbstract();
+    //! Returns true if resolution changed method dispatch in this uncommitted hierarchy.
+    DLLLOCAL bool parseResolveAbstract();
 
     DLLLOCAL QoreValue parseFindConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool& found,
             const qore_class_private* class_ctx, bool allow_internal,
@@ -3432,7 +3434,9 @@ public:
         /** The methods' inheritance lists are built there, and each subclass's hierarchy is initialized through its
             base classes (issue #6106)
         */
-        hierarchy_initialized : 1 = false
+        hierarchy_initialized : 1 = false,
+        //! abstract resolution installed variants in this class or an uncommitted ancestor
+        abstract_dispatch_changed : 1 = false
         ;
 
     std::vector<QoreGenericTypeParam> type_params;
@@ -6022,7 +6026,8 @@ public:
     DLLLOCAL int parseCheckReturnTypeHierarchy() const;
     DLLLOCAL int parseResolveHierarchy();
     DLLLOCAL void parseResolveClassMembers();
-    DLLLOCAL void parseResolveAbstract();
+    //! Returns true if resolution changed method dispatch in this uncommitted hierarchy.
+    DLLLOCAL bool parseResolveAbstract();
     DLLLOCAL void parseCommit();
     DLLLOCAL void parseCommitRuntimeInit(ExceptionSink* xsink);
     DLLLOCAL void parseRollback();

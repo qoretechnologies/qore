@@ -7862,6 +7862,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_instanceof(uint64_t val_bits, const QoreTy
 // A path that cannot be resolved is not cached and is not an error for instanceof: no value is an instance of it (a
 // deferred placeholder that the resolver returns for an unknown class or hashdecl in a complex type is cached as any
 // other type).  QORE_DISABLE_AOT_INSTANCEOF_TYPE_CACHE turns the cache off.
+// The cache is set-associative (qore#7416): which paths share a set depends only on the layout of the compiled code,
+// so a direct-mapped cache made two hot paths that share a slot evict each other on every evaluation when a module
+// grew; the ways of a set are kept in the order of their last use, so that a few hot paths that share a set all stay.
+std::atomic<uint64_t> qore_aot_instanceof_resolve_count{0};
+#ifdef DEBUG
+std::atomic<bool> qore_aot_instanceof_one_set{false};
+#endif
+
 extern "C" DLLEXPORT uint64_t qore_rt_instanceof_by_type_path(uint64_t val_bits,
         const char* type_path, ExceptionSink* xsink) {
     QoreProgram* pgm = getProgram();
@@ -7871,6 +7879,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_instanceof_by_type_path(uint64_t val_bits,
     // resolves the path; a path with a type parameter of the signature of the code that runs is resolved for the
     // instantiation that runs
     auto resolve = [pgm, type_path](bool signature_type_param) -> const QoreTypeInfo* {
+        qore_aot_instanceof_resolve_count.fetch_add(1, std::memory_order_relaxed);
         std::string error;
         QoreAOTTypeResolver resolver(pgm);
         if (signature_type_param) {
@@ -7891,26 +7900,52 @@ extern "C" DLLEXPORT uint64_t qore_rt_instanceof_by_type_path(uint64_t val_bits,
         //! true if the path has a type parameter of a signature: it is resolved on every evaluation
         bool per_call = false;
     };
-    static constexpr unsigned INSTANCEOF_TYPE_CACHE_BITS = 6;
-    thread_local InstanceOfTypeCacheEntry cache[1u << INSTANCEOF_TYPE_CACHE_BITS];
+    // 64 sets of 4 ways, the most recently used first
+    static constexpr unsigned INSTANCEOF_TYPE_CACHE_SET_BITS = 6;
+    static constexpr unsigned INSTANCEOF_TYPE_CACHE_WAYS = 4;
+    thread_local InstanceOfTypeCacheEntry cache[1u << INSTANCEOF_TYPE_CACHE_SET_BITS][INSTANCEOF_TYPE_CACHE_WAYS];
     const qore_program_id_t pgm_id = pgm->getProgramId();
     // the paths of related types are adjacent in the image (the path of T can be the end of the path of *T, one byte
-    // after it), so the slot is taken from the high bits of a multiplicative mix of the whole address and the id
+    // after it), so the set is taken from the high bits of a multiplicative mix of the whole address and the id
     const uint64_t hash = (static_cast<uint64_t>(reinterpret_cast<uintptr_t>(type_path))
         ^ (static_cast<uint64_t>(pgm_id) * 0x9e3779b97f4a7c15ull)) * 0x9e3779b97f4a7c15ull;
-    InstanceOfTypeCacheEntry& entry = cache[hash >> (64 - INSTANCEOF_TYPE_CACHE_BITS)];
-    if (entry.type_path != type_path || entry.pgm_id != pgm_id) {
-        // the path is scanned for a signature type parameter only when its entry is made
-        if (qore_aot_type_path_has_signature_type_param(type_path)) {
-            entry = {type_path, pgm_id, nullptr, true};
-        } else {
-            const QoreTypeInfo* ti = resolve(false);
-            if (!ti) {
-                return toBits(QoreValue(false));
-            }
-            entry = {type_path, pgm_id, ti, false};
-        }
+    unsigned set_index = static_cast<unsigned>(hash >> (64 - INSTANCEOF_TYPE_CACHE_SET_BITS));
+#ifdef DEBUG
+    if (qore_aot_instanceof_one_set.load(std::memory_order_relaxed)) {
+        set_index = 0;
     }
+#endif
+    InstanceOfTypeCacheEntry* ways = cache[set_index];
+    // the most recently used way first: the usual hit checks one way (its path and Program id)
+    if (ways[0].type_path != type_path || ways[0].pgm_id != pgm_id) {
+        unsigned i = 1;
+        while (i < INSTANCEOF_TYPE_CACHE_WAYS && (ways[i].type_path != type_path || ways[i].pgm_id != pgm_id)) {
+            ++i;
+        }
+        InstanceOfTypeCacheEntry found;
+        if (i < INSTANCEOF_TYPE_CACHE_WAYS) {
+            found = ways[i];
+        } else {
+            // a miss: the least recently used way is replaced; the path is scanned for a signature type parameter
+            // only when its entry is made
+            i = INSTANCEOF_TYPE_CACHE_WAYS - 1;
+            if (qore_aot_type_path_has_signature_type_param(type_path)) {
+                found = {type_path, pgm_id, nullptr, true};
+            } else {
+                const QoreTypeInfo* ti = resolve(false);
+                if (!ti) {
+                    return toBits(QoreValue(false));
+                }
+                found = {type_path, pgm_id, ti, false};
+            }
+        }
+        // the entry becomes the most recently used
+        for (; i; --i) {
+            ways[i] = ways[i - 1];
+        }
+        ways[0] = found;
+    }
+    const InstanceOfTypeCacheEntry& entry = ways[0];
     if (entry.per_call) {
         const QoreTypeInfo* ti = resolve(true);
         return ti ? qore_rt_instanceof(val_bits, ti) : toBits(QoreValue(false));
@@ -8709,7 +8744,7 @@ static QoreHashNode* qore_rt_make_implicit_hash_for_lvalue(LocalVar* var, Except
         return new QoreHashNode(sti);
     }
 
-    const TypedHashDecl* thd = QoreTypeInfo::getUniqueReturnHashDecl(typeInfo);
+    const TypedHashDecl* thd = QoreTypeInfo::getUniqueReturnHashDecl(qore_get_value_type(typeInfo));
     if (thd) {
         QoreStringNode* desc = new QoreStringNodeMaker("Cannot implicitly create typed hash '%s' "
             "with an assignment; to address this error, declare the typed hash before the assignment",
@@ -13489,8 +13524,10 @@ static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature
 static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig,
         const QoreTypeInfo* receiver_type_info);
 
-template <bool IN_FRAME_RELEASE = false, typename ExecFn>
-static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call_name,
+// The caller owns the frame storage so it can keep the frame through method return validation.
+template <bool IN_FRAME_RELEASE, typename ExecFn>
+static void execJITWithDeopt(std::optional<QoreJITStackLocation>& frame,
+        const UserVariantBase* uvb, const std::string& call_name,
         ExecFn&& exec_fn, QoreValue& val, ExceptionSink* xsink,
         QoreProgram* caller_pgm = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
         QoreProgram* exec_pgm = nullptr, void (*release_in_frame)(void*) = nullptr, void* release_ctx = nullptr) {
@@ -13536,7 +13573,7 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     // call; if not provided, we fall back to uvb->pgm (pre-existing behavior).
     const QoreProgramLocation* parse_loc = uvb->getUserSignature()->getParseLocation();
     const QoreProgramLocation* call_loc = take_runtime_call_location();
-    QoreJITStackLocation jit_stack_loc(call_name, call_loc ? call_loc : parse_loc, uvb->getStatementBlock(),
+    frame.emplace(call_name, call_loc ? call_loc : parse_loc, uvb->getStatementBlock(),
         caller_pgm ? caller_pgm : runtime_pgm);
 
     struct ReceiverTypeInfoGuard {
@@ -13671,6 +13708,17 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     if constexpr (IN_FRAME_RELEASE) {
         release_in_frame(release_ctx);
     }
+}
+
+// Most calls need the frame only while executing the body and releasing its locals.
+template <bool IN_FRAME_RELEASE = false, typename ExecFn>
+static QORE_INTERN_ALWAYS_INLINE void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call_name,
+        ExecFn&& exec_fn, QoreValue& val, ExceptionSink* xsink,
+        QoreProgram* caller_pgm = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
+        QoreProgram* exec_pgm = nullptr, void (*release_in_frame)(void*) = nullptr, void* release_ctx = nullptr) {
+    std::optional<QoreJITStackLocation> frame;
+    execJITWithDeopt<IN_FRAME_RELEASE>(frame, uvb, call_name, std::forward<ExecFn>(exec_fn), val, xsink,
+        caller_pgm, receiver_type_info, exec_pgm, release_in_frame, release_ctx);
 }
 
 //! returns true if a call of a user function with the explicit Program \a call_pgm needs to enter that Program first
@@ -18240,8 +18288,10 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
     };
 
     if (ct == NT_HASH) {
-        // the lvalue's own hash or the hash of a weak reference that it holds, which is changed itself (qore#7306)
-        QoreHashNode* h = lvh.getRemovalHash(lvh.getType());
+        // the lvalue's own hash or the hash of a weak reference that it holds, which is changed itself (qore#7306);
+        // the type is read before the removal, which can free the lvalue's storage (qore#7402)
+        const qore_type_t lt = lvh.getType();
+        QoreHashNode* h = lvh.getRemovalHash(lt);
         if (!h) {
             return QoreValue();
         }
@@ -18272,7 +18322,7 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
             return QoreValue();
         }
         if (old_count && !qore_hash_private::getScanCount(*h)) {
-            lvh.setRemovalDelta(-1, lvh.getType() == NT_WEAKREF_HASH);
+            lvh.setRemovalDelta(-1, lt == NT_WEAKREF_HASH);
         }
         lvh.removedValue(QoreValue(*rvh));
         if (is_delete) {
@@ -18369,8 +18419,10 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
     };
 
     if (ct == NT_LIST) {
-        // the lvalue's own list or the list of a weak reference that it holds, which is changed itself (qore#7306)
-        QoreListNode* l = lvh.getRemovalList(lvh.getType());
+        // the lvalue's own list or the list of a weak reference that it holds, which is changed itself (qore#7306);
+        // the type is read before the removal, which can free or move the lvalue's storage (qore#7402)
+        const qore_type_t lt = lvh.getType();
+        QoreListNode* l = lvh.getRemovalList(lt);
         if (!l) {
             return QoreValue();
         }
@@ -18436,7 +18488,7 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
         }
         if (needs_scan(*v)) {
             if (!qore_list_private::getScanCount(*l)) {
-                lvh.setRemovalDelta(-1, lvh.getType() == NT_WEAKREF_LIST);
+                lvh.setRemovalDelta(-1, lt == NT_WEAKREF_LIST);
             }
         }
         // dereference the spliced-out entries once the lvalue locks are released: a destructor is
@@ -18623,6 +18675,9 @@ QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
         if (reverse) {
             nl = nl->reverse();
         }
+        // the objects removed, as in the AST interpreter (LValueRemoveHelper::doRemove()): the value stays referenced
+        // by the caller until the helper is destroyed (qore#7373)
+        lvh.removedValue(QoreValue(*nl));
         // the caller finishes a "delete" with the lvalue locks released and needs the removed elements
         // to run their destructors
         return nl.release();
@@ -19041,6 +19096,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     QoreListNode* l = lvh.getValue().get<QoreListNode>();
                     if (l && l->size() > 0) {
                         res = l->shift();
+                        // a value taken out of a list reached through a weak reference (qore#7373)
+                        lvh.removedValueThroughWeak(res);
                     }
                 } else if (lvh.getType() != NT_NOTHING && qore_compiled_code_strict_args()) {
                     // matches QoreShiftOperatorNode::evalImpl()
@@ -19054,6 +19111,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     QoreListNode* l = lvh.getValue().get<QoreListNode>();
                     if (l && l->size() > 0) {
                         res = l->pop();
+                        // a value taken out of a list reached through a weak reference (qore#7373)
+                        lvh.removedValueThroughWeak(res);
                     }
                 } else if (lvh.getType() != NT_NOTHING && qore_compiled_code_strict_args()) {
                     // matches QorePopOperatorNode::evalImpl()
@@ -19377,6 +19436,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
                         removed_list = qore_list_private::replace(*vl, offset, length, replacement_val, false, xsink);
                     }
                 }
+                // the elements taken out of a list reached through a weak reference (qore#7373)
+                if (removed_list) {
+                    lvh.removedValueThroughWeak(QoreValue(*removed_list));
+                }
             } else if (vt == NT_STRING) {
                 QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
                 if (length_val.isNothing() && replacement_val.isNothing()) {
@@ -19428,6 +19491,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
                         res = qore_list_private::replace(*vl, offset, length, replacement_val, true, xsink);
                     }
                 }
+                // the elements taken out of a list reached through a weak reference (qore#7373)
+                lvh.removedValueThroughWeak(res);
             } else if (vt == NT_STRING) {
                 // note: safe; lvh.ensureUnique() above materializes any inline short string
                 QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
@@ -22295,6 +22360,8 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
 
     // the name of the frame, as an AST call names it
     const std::string& call_name = uvb->getCallName();
+    // Keep the method on the stack through the return-type check, which can raise after its body ends (#7370).
+    std::optional<QoreJITStackLocation> frame;
 
     // this fast-call path bypasses evalTiered(), so the call is counted here for the callee's promotion to
     // native code, as qore_rt_call_fast() counts it (a no-op once the callee is native)
@@ -22307,43 +22374,25 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
             argv_context = &argv_helper;
         }
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
-        if (use_direct_params) {
-            // Direct params path: pass args straight to IR slot cache, no TLS
+        const bool use_native = !use_direct_params && uvb->hasCachedFunction() && !use_specialized_ir;
+        // Use one call frame for the three ways to run the body. Separate instantiations of execJITWithDeopt
+        // made GCC reserve more stack in every recursive method call while the return check kept that frame alive.
+        execJITWithDeopt<CONSUME>(frame, uvb, call_name, [&](ExceptionSink* xs, bool& invalidated) -> uint64_t {
+            if (use_native) {
+                return uvb->execCachedFunction(xs, invalidated);
+            }
             IRDirectParams dp{args, nargs, arg_cleanups};
-            execJITWithDeopt<CONSUME>(uvb, call_name,
-                    [ir, uvb, exec_pgm, &dp](ExceptionSink* xs, bool& inv) -> uint64_t {
-                QoreValue ir_return_value;
-                bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
-                    nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
-                    uvb->getDebugEntryStatementBlock(), exec_pgm, false, &dp);
-                if (!ok && !*xs) {
-                    inv = true;
-                    return 0;
-                }
-                return toBits(ir_return_value);
-            }, val, xsink, caller_pgm, receiver_type_info, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
-        } else if (uvb->hasCachedFunction() && !use_specialized_ir) {
-            // JIT/AOT fast path
-            execJITWithDeopt<CONSUME>(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
-                return uvb->execCachedFunction(xs, inv);
-            }, val, xsink, caller_pgm, receiver_type_info, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
-        } else {
-            // IR fast path (standard TLS): execute IR directly without QoreListNode.
-            execJITWithDeopt<CONSUME>(uvb, call_name, [ir, uvb, exec_pgm](ExceptionSink* xs, bool& inv) -> uint64_t {
-                QoreValue ir_return_value;
-                bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
-                    nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
-                    uvb->getDebugEntryStatementBlock(), exec_pgm);
-                if (!ok && !*xs) {
-                    inv = true;  // Request deopt to AST
-                    return 0;
-                }
-                return toBits(ir_return_value);
-            }, val, xsink, caller_pgm, receiver_type_info, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
-        }
+            QoreValue ir_return_value;
+            bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
+                nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
+                uvb->getDebugEntryStatementBlock(), exec_pgm, false, use_direct_params ? &dp : nullptr);
+            if (!ok && !*xs) {
+                invalidated = true;
+                return 0;
+            }
+            return toBits(ir_return_value);
+        }, val, xsink, caller_pgm, receiver_type_info, exec_pgm,
+        CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
     }
     if constexpr (!CONSUME) {
         if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
@@ -22743,6 +22792,14 @@ static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_n
 #endif
 
 #if !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT) || defined(QORE_JIT_RUNTIME_TAKE_OVER_UNIT)
+//! calls the pseudo-method of a value found by name in the pseudo-class of its type (qore#6813), as a call of a
+//! value with no declared type does (a weak reference or a reference gives its target); out of line, so that the
+//! dispatch of a pseudo-method of the value's class keeps its frame
+static QORE_INTERN_NOINLINE __attribute__((cold)) uint64_t qore_rt_eval_pseudo_method_by_name(QoreValue base,
+        const char* name, const QoreListNode* args, ExceptionSink* xsink) {
+    return toBits(pseudo_classes_eval(base, name, args, xsink));
+}
+
 static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
@@ -22767,7 +22824,9 @@ static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, c
     // normal name-based dispatch before pseudo-method dispatch.  This preserves
     // user method overrides such as className() and hash member callrefs such as
     // h.size().
-    switch (base.getType()) {
+    // the type is read once (see below)
+    qore_type_t bt = base.getType();
+    switch (bt) {
         case NT_OBJECT:
         case NT_WEAKREF:
         case NT_HASH:
@@ -22778,18 +22837,6 @@ static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, c
             break;
     }
 
-    // Unwrap weak references — pseudo method handlers expect the underlying value
-    if (base.getType() == NT_WEAKREF) {
-        QoreObject* o = base.get<const WeakReferenceNode>()->get();
-        if (!o || !o->isValid()) {
-            qore_raise_deleted_object(xsink, 
-                "cannot call %s::%s() on a deleted weak reference",
-                qc->getName(), method->getName());
-            return toBits(QoreValue());
-        }
-        base = QoreValue(o);
-    }
-
     ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
     if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
         return toBits(QoreValue());
@@ -22797,9 +22844,20 @@ static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, c
     RuntimeConfig& rc = rc_get_current_ref();
 
     // If base is nothing and class is not <nothing>, use <nothing> pseudo class
-    if (base.isNothing() && qc != QC_PSEUDONOTHING) {
-        return toBits(qore_class_private::evalPseudoMethod(QC_PSEUDONOTHING, base, method->getName(),
-            *arg_list, rc, xsink));
+    if (bt == NT_NOTHING) {
+        if (qc != QC_PSEUDONOTHING) {
+            return toBits(qore_class_private::evalPseudoMethod(QC_PSEUDONOTHING, base, method->getName(),
+                *arg_list, rc, xsink));
+        }
+    } else {
+        // the method that the parse-time resolution found is called only on a value of its class: a value of another
+        // type (the value of a builtin whose declared type is wrong) finds the method by name in the pseudo-class of
+        // its type, as a value with no declared type does (qore#6813), with the predicate of the check of the receiver
+        // before the arguments (qore_pseudo_class_accepts_type(), which takes a weak reference or a reference for no
+        // class: the call by name gives the method its target, qore#7363)
+        if (!qore_pseudo_class_accepts_type(qc, bt)) [[unlikely]] {
+            return qore_rt_eval_pseudo_method_by_name(base, method->getName(), *arg_list, xsink);
+        }
     }
     return toBits(qore_class_private::evalPseudoMethod(qc, method, variant, base, *arg_list, rc, xsink));
 }
@@ -24505,6 +24563,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_list_bool_guarded_aot(QoreAOTContex
 
 static uint64_t qore_rt_list_first_last(uint64_t base_bits, bool last) {
     QoreValue base = fromBits(base_bits);
+    // the value is proven to be a list; any other value is never taken for one (qore#7363)
+    if (base.getType() != NT_LIST) [[unlikely]] {
+        return toBits(QoreValue());
+    }
     const QoreListNode* list = base.get<const QoreListNode>();
     size_t size = list->size();
     if (!size) {
@@ -24518,15 +24580,29 @@ static uint64_t qore_rt_list_first_last(uint64_t base_bits, bool last) {
     return toBits(result);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_size(uint64_t val_bits);
+
+//! the size of a value that the helpers below take for a list or a binary but is not one (out of line)
+static QORE_INTERN_NOINLINE __attribute__((cold)) int64_t qore_rt_pseudo_size_other(uint64_t base_bits) {
+    return fromBits(qore_rt_pseudo_size(base_bits)).getAsBigInt();
+}
+
+// the value is proven to be a list (or a binary); any other value is never taken for one (qore#7363)
 extern "C" DLLEXPORT int64_t qore_rt_pseudo_list_size_native_noguard(
         uint64_t base_bits) {
     QoreValue base = fromBits(base_bits);
+    if (base.getType() != NT_LIST) [[unlikely]] {
+        return qore_rt_pseudo_size_other(base_bits);
+    }
     return static_cast<int64_t>(base.get<const QoreListNode>()->size());
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_pseudo_binary_size_native_noguard(
         uint64_t base_bits) {
     QoreValue base = fromBits(base_bits);
+    if (base.getType() != NT_BINARY) [[unlikely]] {
+        return qore_rt_pseudo_size_other(base_bits);
+    }
     return static_cast<int64_t>(base.get<const BinaryNode>()->size());
 }
 
@@ -24559,9 +24635,37 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_list_value_guarded_aot(QoreAOTConte
 // ============================================================================
 
 //! Fast pseudo-method: typeCode() - return type code as NaN-boxed int
+//! the pseudo-methods of a weak reference to a list or a hash are those of its target (qore#7363): the type of the
+//! target of a weak container reference \a v
+static QORE_INTERN_NOINLINE __attribute__((cold)) qore_type_t qore_rt_pseudo_weak_target_type(const QoreValue& v) {
+    return v.getType() == NT_WEAKREF_LIST ? NT_LIST : NT_HASH;
+}
+
+//! the size of the target of a weak container reference \a v
+/** The size is read with a reference to the target, as the pseudo-method dispatch reads it
+    (pseudo_classes_dispatch_weak()): without one, another thread can release the target's last reference and free it
+    meanwhile, which writes the size that is read (the length of a list, the member list of a hash) without
+    synchronization.  A target whose last reference was released gives an empty stand-in.  The release of the
+    reference can be the target's last one, whose free can run destructors: their exceptions are handled as those of
+    the other releases that have no exception sink of the caller (see WeakListReferenceNode::getAsBoolImpl())
+*/
+static QORE_INTERN_NOINLINE __attribute__((cold)) int64_t qore_rt_pseudo_weak_target_size(const QoreValue& v) {
+    ExceptionSink xsink;
+    if (v.getType() == NT_WEAKREF_LIST) {
+        ReferenceHolder<QoreListNode> target(v.get<const WeakListReferenceNode>()->lock(), &xsink);
+        return static_cast<int64_t>(target->size());
+    }
+    ReferenceHolder<QoreHashNode> target(v.get<const WeakHashReferenceNode>()->lock(), &xsink);
+    return static_cast<int64_t>(target->size());
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_typeCode(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
-    return toBits(QoreValue(static_cast<int64_t>(v.getType())));
+    qore_type_t t = v.getType();
+    if (t == NT_WEAKREF_LIST || t == NT_WEAKREF_HASH) [[unlikely]] {
+        t = qore_rt_pseudo_weak_target_type(v);
+    }
+    return toBits(QoreValue(static_cast<int64_t>(t)));
 }
 
 //! Fast pseudo-method: size()/strlen() - return byte/container size as NaN-boxed int.
@@ -24573,6 +24677,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_size(uint64_t val_bits) {
     switch (v.getType()) {
         case NT_LIST:
             size = static_cast<int64_t>(v.get<const QoreListNode>()->size());
+            break;
+        case NT_WEAKREF_LIST:
+        case NT_WEAKREF_HASH:
+            size = qore_rt_pseudo_weak_target_size(v);
+            break;
+        // <buffer>::size(): the number of elements; the value of a call resolved at parse time for another type can
+        // be a buffer (qore#7363)
+        case NT_BUFFER:
+            size = static_cast<int64_t>(v.get<const QoreBufferNode>()->size());
             break;
         case NT_STRING:
             {
@@ -24615,6 +24728,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_empty(uint64_t val_bits) {
         case NT_LIST:
             is_empty = v.get<const QoreListNode>()->empty();
             break;
+        case NT_WEAKREF_LIST:
+        case NT_WEAKREF_HASH:
+            is_empty = !qore_rt_pseudo_weak_target_size(v);
+            break;
+        // <buffer>::empty() (see qore_rt_pseudo_size())
+        case NT_BUFFER:
+            is_empty = v.get<const QoreBufferNode>()->empty();
+            break;
         case NT_STRING:
             {
                 QoreStringValueHelper str(v);
@@ -24645,6 +24766,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_val(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
     bool has_value = false;
     switch (v.getType()) {
+        case NT_WEAKREF_LIST:
+        case NT_WEAKREF_HASH:
+            has_value = qore_rt_pseudo_weak_target_size(v) != 0;
+            break;
+        // <buffer>::val() (see qore_rt_pseudo_size())
+        case NT_BUFFER:
+            has_value = !v.get<const QoreBufferNode>()->empty();
+            break;
         case NT_LIST:
             has_value = !v.get<const QoreListNode>()->empty();
             break;
@@ -25110,6 +25239,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_to_int_noguard(uint64_t val_
 //! Fast pseudo-method: type() - return type name string
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_type(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
+    qore_type_t t = v.getType();
+    // the type of the target of a weak reference to a list or a hash (qore#7363)
+    if (t == NT_WEAKREF_LIST || t == NT_WEAKREF_HASH) [[unlikely]] {
+        return toBits(QoreValue::makeStringValue(qore_rt_pseudo_weak_target_type(v) == NT_LIST ? "list" : "hash"));
+    }
     return toBits(QoreValue::makeStringValue(v.getTypeName()));
 }
 

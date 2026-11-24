@@ -1,0 +1,144 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# QdpInfoFixture.qm registers a factory for a data provider whose static info has no type, for QdpInfo.qtest
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+
+module QdpInfoFixture {
+    version = "1.0";
+    desc = "a data provider factory fixture: a provider whose static info does not declare its type";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new QdpInfoFixtureFactory());
+    };
+}
+
+#! The fixture's data provider: its static info, like that of many providers, does not declare its type
+/** It has events, messages, a request/response API and a child provider whose static info has no type either
+*/
+public class QdpInfoFixtureProvider inherits AbstractDataProvider, Observable {
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "name": "qdp-info-fixture",
+            "supports_observable": True,
+            "supports_messages": MSG_Async,
+            "supports_request": True,
+            "supports_children": True,
+        };
+    }
+
+    constructor(*hash<auto> options) {
+    }
+
+    string getName() {
+        return ProviderInfo.name;
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+
+    private *list<string> getChildProviderNamesImpl() {
+        return ("child",);
+    }
+
+    private *AbstractDataProvider getChildProviderImpl(string name) {
+        if (name == "child") {
+            return new QdpInfoFixtureChildProvider();
+        }
+    }
+
+    #! The provider's only event: without a type
+    private hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
+        return {
+            "event": <DataProviderMessageInfo>{
+                "desc": "a fixture event",
+            },
+        };
+    }
+
+    #! The provider's only message: a string
+    private hash<string, hash<DataProviderMessageInfo>> getMessageTypesImpl() {
+        return {
+            "message": <DataProviderMessageInfo>{
+                "desc": "a fixture message",
+                "type": AbstractDataProviderType::get(StringType),
+            },
+        };
+    }
+
+    #! Accepts a message and ignores it
+    private sendMessageImpl(string message_id, auto msg, *hash<auto> send_message_options) {
+    }
+
+    private *AbstractDataProviderType getRequestTypeImpl() {
+        return AbstractDataProviderType::get(StringType);
+    }
+
+    private *AbstractDataProviderType getResponseTypeImpl() {
+        return AbstractDataProviderType::get(StringType);
+    }
+
+    private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        return req;
+    }
+}
+
+#! The fixture's child provider, whose static info has no type, description or display name
+public class QdpInfoFixtureChildProvider inherits AbstractDataProvider {
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "name": "child",
+            "supports_request": True,
+        };
+    }
+
+    string getName() {
+        return ProviderInfo.name;
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+
+    private *AbstractDataProviderType getRequestTypeImpl() {
+        return AbstractDataProviderType::get(StringType);
+    }
+
+    private *AbstractDataProviderType getResponseTypeImpl() {
+        return AbstractDataProviderType::get(StringType);
+    }
+
+    private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        return req;
+    }
+}
+
+#! The fixture's factory
+public class QdpInfoFixtureFactory inherits AbstractDataProviderFactory {
+    private {
+        static Class cls = new Class("QdpInfoFixtureProvider");
+
+        const FactoryInfo = <DataProviderFactoryInfo>{
+            "name": "qoretestqdpinfo",
+            "desc": "a data provider whose static info does not declare its type",
+        };
+    }
+
+    private hash<DataProviderFactoryInfo> getInfoImpl() {
+        return FactoryInfo;
+    }
+
+    private hash<DataProviderInfo> getProviderInfoImpl() {
+        return QdpInfoFixtureProvider::ProviderInfo;
+    }
+
+    private Class getClassImpl() {
+        return cls;
+    }
+}

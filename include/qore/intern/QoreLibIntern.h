@@ -1766,6 +1766,16 @@ DLLLOCAL void qore_aot_runtime_init_once();
 //! QoreEnvironmentValue), for tests (dbg_environment_lookups(); qore#7086)
 DLLLOCAL extern std::atomic<uint64_t> qore_env_lookup_count;
 
+//! the number of resolutions of the type of an AOT instanceof (qore_rt_instanceof_by_type_path()), for tests
+//! (dbg_aot_instanceof_resolves(); qore#7416)
+DLLLOCAL extern std::atomic<uint64_t> qore_aot_instanceof_resolve_count;
+
+#ifdef DEBUG
+//! debug builds: maps every type path to one set of the AOT instanceof type cache, so that tests can make paths share
+//! a set whatever the layout of the compiled code (dbg_aot_instanceof_one_set(); qore#7416)
+DLLLOCAL extern std::atomic<bool> qore_aot_instanceof_one_set;
+#endif
+
 static inline bool q_env_is_set(const char* name) {
     return SystemEnvironment::isSet(name);
 }
