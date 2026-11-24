@@ -877,9 +877,26 @@ authenticate();
     its code, also when the host's code calls it.
 
     The ambient credentials of the host are the host's secrets: the paths that resolve them ask
-    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "callerMayReceiveHostSecrets()", so neither code
-    restricted from external information nor sandboxed code gets them (whatever its sandbox allows), unless the host
-    grants them; each module has a function or method that answers for its credentials
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "callerMayReceiveHostSecrets()", so the library resolves
+    them neither for code restricted from external information nor for sandboxed code, unless the host grants them.
+    How far this protects them depends on the source:
+    - credentials that the host's environment holds (the AWS key, secret and session token, the path of an application
+      default credential file, the user name and password of a proxy) are a boundary only where the embedder also
+      restricts the untrusted %Program from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO",
+      @ref Qore::DOM_EXTERNAL_INFO "DOM_EXTERNAL_INFO"): a sandbox does not restrict it by default, and sandboxed code
+      that is not restricted from it reads the environment itself (@ref Qore::getenv() "getenv()", \c ENV, and the
+      expansions of library code that follow
+      @ref Qore::SandboxManager::callerMayReadExternalInfo() "callerMayReadExternalInfo()"), so for such code the
+      refusal of the library to resolve them is defence in depth; an embedder that runs untrusted code therefore
+      restricts its Programs from external information
+    - the metadata endpoints of the clouds (IMDS, the ECS task-role endpoint, the GCP metadata server, the Azure managed
+      identity endpoint) are protected from sandboxed code only as far as the network policy of its sandbox blocks
+      them, as such code can request them itself if it may connect to them
+    - the default Kerberos credentials, keytab and credential stores of the host and the credentials that the host's
+      SqlUtil credential resolver gives are refused regardless: they are a boundary also for sandboxed code that is
+      not restricted from external information, as such code reaches them only through the library
+
+    Each module has a function or method that answers for its credentials
     (@ref AwsRestClient::AwsRestClientBase::hostCredentialsAllowed() "AwsRestClientBase::hostCredentialsAllowed()",
     @ref GcpAuth::hostCredentialsAllowed() "GcpAuth::hostCredentialsAllowed()",
     @ref AzureAuth::hostCredentialsAllowed() "AzureAuth::hostCredentialsAllowed()",

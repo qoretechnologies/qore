@@ -1964,6 +1964,14 @@ static bool SandboxManager::callerMayReadExternalInfo() [flags=RET_VALUE_ONLY] {
     credential of the host for a sandboxed caller; a method of an object that the host lent lends nothing here.  It
     fails closed: @ref False if the sandbox that governs the code cannot be resolved.
 
+    The library's refusal protects a credential of the host from sandboxed code that is not restricted from external
+    information only where such code cannot reach it otherwise: the credentials of the host's environment are read by
+    such code itself (getenv()), and the metadata endpoints of the clouds are protected only by the network policy of
+    its sandbox; an embedder that runs untrusted code restricts its Programs from
+    @ref Qore::DOM_EXTERNAL_INFO "DOM_EXTERNAL_INFO" to protect the environment (a sandbox does not by default); the
+    default Kerberos credentials and SqlUtil's resolved credentials are refused regardless (see
+    @ref sandbox_ambient_host_data).
+
     The host's own code (not a module's) that restricted code calls answers for itself, as a policy barrier does:
     the restrictions of its caller do not count for it, so a host must not expose code of its own that resolves the
     host's credentials to restricted code unless it means to grant them; sandboxed callers are refused regardless

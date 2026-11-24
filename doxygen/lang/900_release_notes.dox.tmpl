@@ -101,11 +101,13 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
-    @par Library Code Gives Restricted and Sandboxed Code No Ambient Host Credentials
-    The AWS, GCP, Azure and Kerberos clients and the proxy of the environment resolve no credentials of the host for
-    restricted or sandboxed code unless the host grants them, and environment variables, proxies and data provider
-    options of the environment are not used for code restricted from external information (see
-    @ref sandbox_ambient_host_data; <a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>).
+    @par Library Code Gives Restricted Code No Values of the Host's Environment
+    For code restricted from external information, @ref Util::substitute_env_vars() "substitute_env_vars()", the file
+    URLs of @ref Util::get_file_from_url() "get_file_from_url()", Swagger schema references and the \c %%E{} field of
+    Logger file names expand no environment variables, and
+    @ref DataProvider::DataProvider::getAutoConfig() "DataProvider::getAutoConfig()" is @ref False for it and for
+    sandboxed code, so data providers take no options from the environment (see @ref sandbox_ambient_host_data;
+    <a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>).
 
     @par Streamed HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
     A streamed HTTP/2 or HTTP/3 response that a handler thread sends is ended when its stream takes less than 1 KiB/s
