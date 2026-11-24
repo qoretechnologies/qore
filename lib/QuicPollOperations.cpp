@@ -798,11 +798,11 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     ExceptionSink* xsink, QoreSocketObject* sock,
     const char* host, uint16_t port, int family,
     int64_t handshake_timeout_ns,
-    int64_t not_before_ns_abs, bool bind_unbound, std::vector<int> avoid_families, bool http_client)
+    bool bind_unbound, std::vector<int> avoid_families, bool http_client)
     : SocketPollSocketOperationBase(sock), host(host), service(std::to_string(port)),
       handshake_timeout_ns_(handshake_timeout_ns), port_(port), family_(q_get_af(family)),
       bind_unbound_(bind_unbound), avoid_families_(std::move(avoid_families)),
-      not_before_ns_(not_before_ns_abs), sandbox_manager_(qore_socket_ref_policy_sandbox_manager()) {
+      sandbox_manager_(qore_socket_ref_policy_sandbox_manager()) {
     if (http_client) {
         sock->priv->takeHttpHandshakeCredentials(client_cert, client_pk);
     }
@@ -1484,28 +1484,6 @@ QoreValue SocketQuicClientPollOperation::getOutput() const {
 
 int SocketQuicClientPollOperation::sendPendingPackets(
     ngtcp2_tstamp& next_expiry, ExceptionSink* xsink) {
-    // Happy-eyeballs Connection Attempt Delay (RFC 8305 §8).  When this
-    // operation is a secondary address-family attempt staggered behind the
-    // preferred family, suppress all datagram emission until the deadline
-    // elapses.  processTimerAndWrite() is skipped entirely so ngtcp2 does
-    // not even generate Initial packets — the session stays idle.  Return
-    // SOCK_POLLOUT with next_expiry = not_before_ns_ so the caller yields
-    // back to the controller with a timeout equal to the remaining stagger,
-    // rather than falling through to HANDSHAKE_RECV.
-    if (not_before_ns_) {
-        ngtcp2_tstamp now = QuicSession::timestamp();
-        if (now < not_before_ns_) {
-            next_expiry = not_before_ns_;
-            ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets "
-                           "HE_STAGGER wait_ns=%lld\n",
-                           (long long)(not_before_ns_ - now));
-            return SOCK_POLLOUT;
-        }
-        // Deadline reached; disable the gate so subsequent calls proceed
-        // normally.  ngtcp2's own PTO timer now governs retransmission.
-        not_before_ns_ = 0;
-    }
-
     return quic_client_send_packets(*quic_session, qore_socket_ops(sock->priv->socket).getDescriptor(), pkt_batch_,
         test_datagram_seq_, next_expiry, xsink);
 }

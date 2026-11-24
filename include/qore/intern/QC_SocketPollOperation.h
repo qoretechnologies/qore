@@ -1902,10 +1902,6 @@ public:
     //! @param handshake_timeout_ns optional handshake deadline in nanoseconds
     //!     (0 = disabled); when >0, continuePoll() fails with QUIC-HANDSHAKE-TIMEOUT
     //!     if the handshake has not reached SETUP_HTTP3 by this elapsed time
-    //! @param not_before_ns_abs optional absolute ngtcp2 timestamp (ns) before
-    //!     which sendPendingPackets() must not emit any UDP datagrams; 0 =
-    //!     disabled.  Used by the HTTP/3 client's happy-eyeballs stagger to
-    //!     hold back secondary address-family attempts per RFC 8305 §8.
     //! @param bind_unbound if true, the socket does not have to be open: an unbound socket is bound by the
     //!     operation, once the remote address is resolved, to the wildcard address of the remote address's family,
     //!     with the network policy check of a bind; nothing that can block runs in the thread that creates the
@@ -1916,7 +1912,6 @@ public:
     DLLLOCAL SocketQuicClientPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
                                            const char* host, uint16_t port, int family,
                                            int64_t handshake_timeout_ns = 0,
-                                           int64_t not_before_ns_abs = 0,
                                            bool bind_unbound = false,
                                            std::vector<int> avoid_families = std::vector<int>(),
                                            bool http_client = false);
@@ -2263,16 +2258,6 @@ private:
     //! Number of datagrams this operation produced; see QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS (debug builds)
     int test_datagram_seq_ = 0;
 
-    //! Absolute ngtcp2 timestamp (ns) before which no UDP datagrams may be
-    //! emitted; 0 means disabled.  Enforced in sendPendingPackets(): while
-    //! now < not_before_ns_, the send path is a no-op and returns the deadline
-    //! as next_expiry so the I/O controller reschedules continuePoll() at
-    //! the correct wall time.  Used to implement the RFC 8305 Connection
-    //! Attempt Delay (typically 250ms) for H3 happy-eyeballs — the secondary
-    //! address-family attempt is submitted immediately but holds its Initial
-    //! packet until this deadline elapses, giving the preferred family a
-    //! head start on the handshake.
-    int64_t not_before_ns_ = 0;
 
     //! The sandbox that governs the remote address and the bind of an unbound socket, resolved on the thread that
     //! creates the operation

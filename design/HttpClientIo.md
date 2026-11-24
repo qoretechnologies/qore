@@ -427,7 +427,8 @@ wins: the operation's `Socket` adopts its descriptor and session, so the socket 
 (`getSocket()`) stays the same, and the others are closed.  If every attempt fails, the error of the attempt that got
 furthest (`quic_is_unreached_error()`) is raised and `getAddressFamily()` reports that attempt's family.  The attempts
 make full handshakes, without 0-RTT, as they would all present the same session ticket (a host with a single address
-keeps 0-RTT), and a socket closed while the attempts race is never given a descriptor.
+keeps 0-RTT), and a socket closed while the attempts race is never given a descriptor.  The C++ `Http3ClientConnection`
+(HTTPClient) uses the same operation, so both clients race the same way.
 
 ### mTLS (HTTP/3 Only)
 

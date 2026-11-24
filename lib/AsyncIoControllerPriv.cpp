@@ -373,8 +373,7 @@ static thread_local const AsyncIoControllerPriv* current_io_controller = nullptr
 //! next entry.  @ref cancelByKey's I/O-thread direct path checks this flag and
 //! defers via cmdq when set so the erase+cleanup runs safely after the batch
 //! has been discarded.  This makes cancel-from-within-continuePoll safe for any
-//! caller (currently @ref Http3ClientConnection's happy-eyeballs loser
-//! teardown, but any future caller benefits).
+//! caller.
 static thread_local bool inside_continue_poll_batch = false;
 
 //! Owner of the poll op whose continuePoll() is currently executing on this
@@ -8753,7 +8752,6 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 
         // Mark the I/O thread as inside the continuePoll batch so that
         // any cancelByKey() invoked from within a poll op's continuePoll
-        // (e.g., Http3ClientConnection's happy-eyeballs loser teardown)
         // is deferred via cmdq rather than taking the direct cache-erase
         // path — the direct path would invalidate the raw spop_base /
         // spop_obj pointers that ops_to_poll still holds for remaining
