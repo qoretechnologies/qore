@@ -3324,6 +3324,8 @@ private:
     */
     DLLLOCAL static bool refreshSocketWaitGeneration(PollInfo& pinfo, QoreHashNode* poll_info);
 
+    enum class WaitRegistration { Registered, Descriptorless, NoMemory };
+
     //! Update EventLoop registration for an operation
     /** When the object has no descriptor although an operation waits for its events, it was closed before its
         descriptor could be registered, and no event can come for it: its operations run again and see the close, as
@@ -3331,9 +3333,9 @@ private:
 
         @param op_id the operation's ID; see OpCache
 
-        @return true if the operation waits for events of an object that has no descriptor
+        @return the registration outcome, including a failure to allocate a socket generation wake
     */
-    DLLLOCAL bool updateEventLoopRegistration(IoThreadContext& t, uint64_t op_id,
+    DLLLOCAL WaitRegistration updateEventLoopRegistration(IoThreadContext& t, uint64_t op_id,
         QoreObject* socket, const std::string& sock_hash, int events, bool force_fd_reregister,
         ExceptionSink* xsink);
 
@@ -3341,12 +3343,10 @@ private:
     DLLLOCAL void updateEventLoopRegistrationIntern(IoThreadContext& t, uint64_t op_id, int ev_flags,
         QoreObject* socket, const std::string& sock_hash, bool force_fd_reregister, ExceptionSink* xsink);
 
-    //! Records whether the operation's last wait was for events of an object that has no descriptor
-    /** @param waits_without_descriptor the return value of updateEventLoopRegistration() for the wait
-    */
-    DLLLOCAL static void noteDescriptorlessWait(PollInfo& pinfo, bool waits_without_descriptor) {
-        pinfo.descriptorless_waits = waits_without_descriptor ? pinfo.descriptorless_waits + 1 : 0;
-    }
+    //! Records the outcome of registration, or retires and cancels the operation if its wake could not be allocated.
+    //! Returns false when the cache entry and its poll info have been released.
+    DLLLOCAL bool finishWaitRegistration(IoThreadContext& t, OpCache::node_t& node, WaitRegistration outcome,
+        ExceptionSink* xsink);
 
     //! Returns SOCKET-CLOSED if the operation waited for an object without a descriptor again after it ran again
     /** An operation whose object was closed before its descriptor could be registered runs again to see the close

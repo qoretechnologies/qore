@@ -9801,6 +9801,23 @@ public:
         UT_ASSERT(c, ut_fd_stat(sv[0], &st), ("the descriptor is closed when the hold is released" + when).c_str());
     }
 
+    //! Both native close paths consume generation wakes on a socket with no descriptor.
+    static void runDescriptorlessCloseWakes(UnitTestCounters& c) {
+        for (bool public_close : {true, false}) {
+            QoreSocket socket;
+            auto* priv = qore_socket_private::get(socket);
+            std::atomic<int> calls{0};
+            auto hold = priv->holdGenerationWake([&calls]() { ++calls; });
+            UT_ASSERT(c, hold != nullptr, "the descriptorless socket takes a generation wake");
+            int rc = public_close ? socket.close() : priv->close_internal();
+            UT_ASSERT_EQ(c, 0, rc, "the native close succeeds");
+            UT_ASSERT_EQ(c, 1, calls.load(), public_close ? "QoreSocket::close runs the generation wake"
+                : "close_internal runs the generation wake");
+            priv->close_internal();
+            UT_ASSERT_EQ(c, 1, calls.load(), "a second close does not repeat the generation wake");
+        }
+    }
+
     //! A close of a socket between the hold of its descriptor and the setting of the hold's close wake runs the wake
     //! when it is set (qore#7003)
     /** An I/O thread takes the hold of a registered descriptor and then sets its close wake; a close by another thread
@@ -22506,6 +22523,27 @@ static QoreValue f_dbg_close_socket_directly(const QoreListNode* params, Runtime
     return QoreValue();
 }
 
+//! Fails one generation-wake allocation on the given socket and returns its current number of subscribed wakes.
+static QoreValue f_dbg_socket_generation_wake(const QoreListNode* params, RuntimeConfig&, ExceptionSink* xsink) {
+    QoreObject* obj = get_param_value(params, 0).get<QoreObject>();
+    ReferenceHolder<QoreSocketObject> sock(static_cast<QoreSocketObject*>(obj->getReferencedPrivateData(CID_SOCKET,
+        xsink)), xsink);
+    if (!sock) {
+        return QoreValue();
+    }
+    qore_socket_object_private sp(sock);
+    auto* priv = qore_socket_private::get(*sp.priv->socket);
+    auto stage = get_param_value(params, 1).getAsBigInt();
+    using WakeAllocation = qore_socket_private::WakeAllocation;
+    if (stage < 0 || stage > static_cast<int>(WakeAllocation::Recheck)) {
+        xsink->raiseException("DEBUG-ERROR", "invalid generation wake allocation stage");
+        return QoreValue();
+    }
+    priv->dbg_wake_failure.store(static_cast<WakeAllocation>(stage), std::memory_order_relaxed);
+    qore_socket_private::CloseLockHelper lock(*priv);
+    return static_cast<int64>(priv->generation_wakes.size());
+}
+
 //! Debug-only: closes a socket from another thread at the start of its next SSL I/O call
 /** The close is made where the I/O call is about to use the TLS connection, which is where a close made by another
     thread, such as the abort of a poll operation, can release the connection under the call.  DEBUG builds only.
@@ -28796,6 +28834,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runCloseUnderControllerLock(c);
     AsyncIoDescriptorHoldTest::runCloseWakeAfterStop(c);
     AsyncIoDescriptorHoldTest::runCloseWakeAfterGiveUp(c);
+    AsyncIoDescriptorHoldTest::runDescriptorlessCloseWakes(c);
     AsyncIoDescriptorHoldTest::runPollableExtraFdClose(c, AsyncIoDescriptorHoldTest::XFD_NORMAL);
     AsyncIoDescriptorHoldTest::runPollableExtraFdClose(c, AsyncIoDescriptorHoldTest::XFD_POLL_DIFFERS);
     AsyncIoDescriptorHoldTest::runPollableExtraFdClose(c, AsyncIoDescriptorHoldTest::XFD_ALL_FALLBACK);
@@ -35586,6 +35625,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_async_io_quit_io_thread", f_dbg_async_io_quit_io_thread,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "index");
+    qns.addBuiltinVariant("dbg_socket_generation_wake", f_dbg_socket_generation_wake, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 2, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock", bigIntTypeInfo, QoreValue(0), "stage");
     qns.addBuiltinVariant("dbg_close_socket_directly", f_dbg_close_socket_directly, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_close_socket_at_next_ssl_io", f_dbg_close_socket_at_next_ssl_io,

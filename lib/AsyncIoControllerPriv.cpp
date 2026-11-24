@@ -9332,8 +9332,13 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                 pinfo.cached_sock_obj = poll_sock;
                                 ASYNC_IO_TRACE("Phase3 UPDATE key='%s' sock='%s' events=%d\n",
                                     key.c_str(), sock_hash.c_str(), events);
-                                noteDescriptorlessWait(pinfo, updateEventLoopRegistration(t, result.op_id,
-                                    poll_sock, sock_hash, events, force_fd_reregister, xsink));
+                                auto registration = updateEventLoopRegistration(t, result.op_id, poll_sock,
+                                    sock_hash, events, force_fd_reregister, xsink);
+                                if (!finishWaitRegistration(t, *node, registration, xsink)) {
+                                    // The cache owned this reference. The ready-socket pass below must skip it.
+                                    result.new_poll_info = nullptr;
+                                    continue;
+                                }
                                 pinfo.submit_route_sock_hash.clear();
                                 pinfo.submit_route_thread_idx = -1;
                                 updateExtraFds(t, result.op_id, poll_sock, result.new_poll_info,
@@ -11486,8 +11491,11 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                     pinfo.cached_sock_hash = sock_hash;
                                     pinfo.cached_events = events;
                                     pinfo.cached_sock_obj = poll_sock;
-                                    noteDescriptorlessWait(pinfo, updateEventLoopRegistration(t, pinfo.op_id,
-                                        poll_sock, sock_hash, events, force_fd_reregister, xsink));
+                                    auto registration = updateEventLoopRegistration(t, pinfo.op_id, poll_sock,
+                                        sock_hash, events, force_fd_reregister, xsink);
+                                    if (!finishWaitRegistration(t, *it, registration, xsink)) {
+                                        break;
+                                    }
                                     updateExtraFds(t, pinfo.op_id, poll_sock,
                                         cmd.continue_poll_result, xsink);
                                 }
@@ -12400,7 +12408,7 @@ void AsyncIoControllerPriv::deliverBackstopCompletionIfUndelivered(PollInfo& pin
         pinfo.owner, pinfo.sandbox_ctx, pinfo.sync_release.get(), pinfo.app_pgm_id);
 }
 
-bool AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint64_t op_id,
+AsyncIoControllerPriv::WaitRegistration AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint64_t op_id,
         QoreObject* socket, const std::string& sock_hash, int events, bool force_fd_reregister,
         ExceptionSink* xsink) {
     // Convert SOCK_POLLIN/SOCK_POLLOUT to QORE_EV_READ/QORE_EV_WRITE
@@ -12430,11 +12438,26 @@ bool AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint
                 priv = wrapper->getPollSocket();
             }
             if (priv && priv->sock == QORE_INVALID_SOCKET) {
-                if (auto hold = priv->holdGenerationWake(makeCloseWake(t, sock_hash))) {
-                    t.generation_holds.emplace(op_id, std::move(hold));
+                try {
+#ifdef DEBUG
+                    using WakeAllocation = qore_socket_private::WakeAllocation;
+                    priv->dbgCheckWakeAllocation(WakeAllocation::Callback);
+#endif
+                    if (auto hold = priv->holdGenerationWake(makeCloseWake(t, sock_hash))) {
+#ifdef DEBUG
+                        priv->dbgCheckWakeAllocation(WakeAllocation::OperationMap);
+#endif
+                        t.generation_holds.emplace(op_id, std::move(hold));
+                    }
+#ifdef DEBUG
+                    priv->dbgCheckWakeAllocation(WakeAllocation::Recheck);
+#endif
+                    // A close between the poll step and registration must also be observed.
+                    t.wake_socket_hashes.insert(sock_hash);
+                } catch (const std::bad_alloc&) {
+                    // Unregistering the operation also drops any hold published before the failed insertion.
+                    return WaitRegistration::NoMemory;
                 }
-                // A close between the poll step and registration must also be observed.
-                t.wake_socket_hashes.insert(sock_hash);
             }
         }
     } else {
@@ -12443,20 +12466,20 @@ bool AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint
 
     // the descriptor of an object whose operations wait for its events is registered, unless the object has none
     if (!computeEventUnion(t, sock_hash) || t.registered_fds.count(sock_hash)) {
-        return false;
+        return WaitRegistration::Registered;
     }
     AbstractPollableIoObjectBase* s = static_cast<AbstractPollableIoObjectBase*>(
         socket->getReferencedPrivateDataIfExists(CID_ABSTRACTPOLLABLEIOOBJECTBASE));
     if (!s) {
         // a deleted object; its operations are ended for it (see makeSocketWaitGenerationException())
-        return false;
+        return WaitRegistration::Registered;
     }
     int fd = s->getPollableDescriptor();
     s->deref(xsink);
     if (fd >= 0) {
         // the hold of the descriptor failed: the object was closed or its descriptor replaced after it was read, and
         // its operations run again (see addSocketFd())
-        return false;
+        return WaitRegistration::Registered;
     }
     // the object was closed before its descriptor could be registered, by a thread that closed it without the
     // controller (a module's object closed by its own API, for example), so no event can come for it, and the
@@ -12464,7 +12487,29 @@ bool AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint
     ASYNC_IO_TRACE("updateEventLoop[%d]: op=%llu sock='%s' has no descriptor\n", t.thread_idx,
         (unsigned long long)op_id, sock_hash.c_str());
     t.wake_socket_hashes.insert(sock_hash);
-    return ev_flags != 0;
+    return ev_flags ? WaitRegistration::Descriptorless : WaitRegistration::Registered;
+}
+
+bool AsyncIoControllerPriv::finishWaitRegistration(IoThreadContext& t, OpCache::node_t& node,
+        WaitRegistration outcome, ExceptionSink* xsink) {
+    if (outcome != WaitRegistration::NoMemory) {
+        auto& waits = node.second.descriptorless_waits;
+        waits = outcome == WaitRegistration::Descriptorless ? waits + 1 : 0;
+        return true;
+    }
+
+    // Take the operation out of the cache before aborting it, as abort can call back into the controller.
+    std::string key = node.first;
+    PollInfo pinfo = retireOp(t, t.cache.find(key), xsink);
+    ExceptionSink failure;
+    failure.raiseException("OUT-OF-MEMORY", "could not register a socket close notification for the pending operation");
+    ReferenceHolder<QoreHashNode> ex(qore_exception_sink_ops(failure).getException()->makeExceptionObject(), xsink);
+    failure.clear();
+    doCancelIntern(pinfo, xsink, *ex);
+    pinfo.cleanup(xsink);
+    AutoLocker al(m);
+    signalCancelLocked(key);
+    return false;
 }
 
 QoreHashNode* AsyncIoControllerPriv::makeDescriptorlessWaitException(PollInfo& pinfo, ExceptionSink* xsink) {
