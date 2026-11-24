@@ -7651,6 +7651,66 @@ QoreSandboxContext* qore_sandbox_transfer_owner_context(const QoreSandboxContext
     }
 }
 
+QoreSandboxContext* qore_sandbox_owned_creation_context(const QoreSandboxContext* owner,
+        const QoreSandboxContext* creation) {
+    assert(owner && creation);
+    try {
+        std::vector<const QoreSandboxManager*> owner_managers;
+        qore_add_sandbox_context_managers(*owner, owner_managers);
+        std::vector<const QoreSandboxManager*> creation_managers;
+        qore_add_sandbox_context_managers(*creation, creation_managers);
+        bool covered = std::all_of(creation_managers.begin(), creation_managers.end(),
+            [&owner_managers](const QoreSandboxManager* sm) {
+                return std::find(owner_managers.begin(), owner_managers.end(), sm) != owner_managers.end();
+            });
+        if (covered && owner->origin_restrictions == creation->origin_restrictions) {
+            owner->ref();
+            return const_cast<QoreSandboxContext*>(owner);
+        }
+        // released unless returned, also when an allocation below fails
+        struct ContextHolder {
+            QoreSandboxContext* ctx;
+            ~ContextHolder() {
+                if (ctx) {
+                    ctx->deref();
+                }
+            }
+        } rv{new QoreSandboxContext(owner, false)};
+        // keeps the functional-domain restrictions of the creating code (qore#6520)
+        rv.ctx->origin_restrictions = creation->origin_restrictions;
+        if (!covered) {
+            // the sandboxes that governed the creating code and that the owner does not name, such as one at the
+            // enforcement level of code safety, keep governing the object: each slot takes the stricter of both
+            std::pair<QoreSandboxManager**, QoreSandboxManager*> slots[] = {
+                {&rv.ctx->manager, creation->manager},
+                {&rv.ctx->policy_manager, creation->policy_manager},
+                {&rv.ctx->provenance_manager, creation->provenance_manager},
+                {&rv.ctx->provenance_policy_manager, creation->provenance_policy_manager},
+            };
+            for (auto& slot : slots) {
+                if (!slot.second || *slot.first == slot.second) {
+                    continue;
+                }
+                QoreSandboxManager* combined = QoreSandboxComposition::combine({*slot.first, slot.second});
+                if (*slot.first) {
+                    (*slot.first)->deref(nullptr);
+                }
+                *slot.first = combined;
+            }
+            std::vector<qore_program_id_t>& ids = rv.ctx->program_ids;
+            ids.insert(ids.end(), creation->program_ids.begin(), creation->program_ids.end());
+            std::sort(ids.begin(), ids.end());
+            ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+        }
+        QoreSandboxContext* ctx = rv.ctx;
+        rv.ctx = nullptr;
+        return ctx;
+    } catch (std::bad_alloc&) {
+        // the provenance cannot be made: the caller fails closed
+        return nullptr;
+    }
+}
+
 void QoreSandboxProvenanceHelper::apply(QoreSandboxContext* captured) {
     assert(!context);
     if (!captured) {

@@ -60,6 +60,18 @@ DLLLOCAL bool qore_caller_created_object(const QoreObject& obj);
     compared
 */
 DLLLOCAL QoreSandboxContext* qore_sandbox_transfer_owner_context(const QoreSandboxContext* creation);
+//! Returns the provenance of an object that trusted class code creates in a method of an object that a sandbox owns
+//! (qore#6842)
+/** The object is owned as the object whose method creates it, whose owner context is \a owner: the result names the
+    sandboxes of \a owner and also those of \a creation, the provenance captured for the creating code, that \a owner
+    does not name (such as a sandbox at the enforcement level of code safety), so that the restrictions of the creating
+    code keep governing the object; the sandboxes at the enforcement level of tenant isolation of \a creation are
+    those of \a owner already (the rule applies only then), so the owner of the object is the same.  Keeps the
+    functional-domain restrictions of \a creation (qore#6520).  Returns \a owner referenced if it names every sandbox
+    of \a creation and has the same restrictions, otherwise a new referenced context; nullptr if an allocation fails
+*/
+DLLLOCAL QoreSandboxContext* qore_sandbox_owned_creation_context(const QoreSandboxContext* owner,
+    const QoreSandboxContext* creation);
 //! Records the functional-domain restrictions of the code that creates a call reference to library module code
 /** Called by the constructor of each run-time call reference class once the reference is complete (qore#6520); does
     nothing if \a code_pgm, the Program whose code the reference runs, is not a library module's (or is nullptr) or

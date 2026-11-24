@@ -202,21 +202,13 @@ void qore_object_private::setCreatorOwnership() {
         return;
     }
     // an object that trusted class code creates in a method of an object that a sandbox owns is owned as that object
-    // is: it takes that object's provenance, not the one of the code on the call stack (qore#6842)
+    // is: it takes that object's owner, not the one of the code on the call stack, and stays governed by the sandboxes
+    // of the creating code (qore#6842)
     if (owner_provenance && owner_provenance != sandbox_provenance) {
-        QoreSandboxContext* ctx;
-        if (owner_provenance->origin_restrictions == sandbox_provenance->origin_restrictions) {
-            owner_provenance->ref();
-            ctx = const_cast<QoreSandboxContext*>(owner_provenance);
-        } else {
-            try {
-                // keeps the functional-domain restrictions of the creating code (qore#6520)
-                ctx = new QoreSandboxContext(owner_provenance, false);
-                ctx->origin_restrictions = sandbox_provenance->origin_restrictions;
-            } catch (std::bad_alloc&) {
-                // the provenance cannot be set: the object is owned by no sandbox (fails closed)
-                return;
-            }
+        QoreSandboxContext* ctx = qore_sandbox_owned_creation_context(owner_provenance, sandbox_provenance);
+        if (!ctx) {
+            // the provenance cannot be set: the object is owned by no sandbox (fails closed)
+            return;
         }
         sandbox_provenance->deref();
         sandbox_provenance = ctx;
