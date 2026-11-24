@@ -1,0 +1,92 @@
+=== SigRoot
+hash 9c1ef4f7e136d084966ab5b5f04a989838736d12
+--- part 1
+  class ::SigRoot
+=== SigA::Empty
+hash 0523eb96df9893da6c47e12cc9a468f248b2607e
+--- part 1
+  class ::SigA::Empty
+=== SigA::Members
+hash 47676ee5e0184f52bd01d777ac6005520849e14b
+--- part 1
+  class ::SigA::Members
+  public mem int i integer
+  public mem *string os nothing
+  public mem softint si nothing
+  public mem any li nothing
+  public mem any hss nothing
+  public mem any hd nothing
+  public mem any oe nothing
+  public mem any oo nothing
+  public mem any u nothing
+  public mem code c nothing
+  public mem any col namespace-scoped reference
+  public mem auto a nothing
+  public mem any deep nothing
+  private mem float pf float
+  private:internal mem number pin number
+=== SigA::Statics
+hash 1dea48e139a222f828cb30e69d57c25437c17820
+--- part 1
+  class ::SigA::Statics
+  public var int si integer
+  public var any sls nothing
+  private var float spf float
+  public const C1 string
+  public const C2 integer
+  private const C3 list
+  private:internal const C4 hash
+=== SigA::Methods
+hash beba724bf4373ea116487716fbe394fd5fa6d6ec
+--- part 1
+  class ::SigA::Methods
+  pub m()
+  priv m(int a, *string b = "x")
+  int m(reference<list<int>> r)
+  pub m(code c, ...)
+  pub m(hash<::SigHashDecl> h, object o)
+  pub static s(hash<string, int> h, *object<::SigA::Empty> e, softlist<string> l = <EMPTY LIST>)
+  priv static s(union<int, bool> v)
+=== SigA::Ctor
+hash e9cd3d2fd28782cbb3a274316b915f24caa2ccd6
+--- part 1
+  class ::SigA::Ctor
+  pub constructor(int i, string s = "a")
+  priv constructor()
+=== SigA::Abs
+hash b9b23b7e0c4114bb16fc884a78ecc14c43dfac98
+--- part 1
+  class ::SigA::Abs
+  abstract pub m(int a)
+  abstract priv m(string s, ...)
+=== SigA::Child
+hash 1df6946ccb7031dfa76c0ff81c5c769212aec444
+--- part 1
+  class ::SigA::Child
+  inherits public Members [47676ee5e0184f52bd01d777ac6005520849e14b]
+  inherits private Statics [1dea48e139a222f828cb30e69d57c25437c17820]
+  inherits private:internal Empty [0523eb96df9893da6c47e12cc9a468f248b2607e]
+  public mem int child integer
+=== SigA::Box
+hash d41b0bea97b0bdb8a3609cd0ac709a3540e826ac
+--- part 1
+  class ::SigA::Box
+  public mem any v nothing
+=== SigA::IntBox
+hash e62c25a1b04b99fba023540441fe50c1fd523caa
+--- part 1
+  class ::SigA::IntBox
+  inherits public object<Box<int>> [d41b0bea97b0bdb8a3609cd0ac709a3540e826ac]
+=== SigA::SigB::Nested
+hash a99c159f61e01139428459dd5c055d9ca37dabe5
+--- part 1
+  class ::SigA::SigB::Nested
+=== SigA::Scoped
+hash 246ed203ba1af525b625e801bbe6bd0c34b16a68
+--- part 1
+  class ::SigA::Scoped
+  public mem int x nothing
+=== SigA::SigB::ScopedNested
+hash e11b1806037db6d1e48da38787ecab5845616d5c
+--- part 1
+  class ::SigA::SigB::ScopedNested

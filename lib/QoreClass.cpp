@@ -1033,6 +1033,7 @@ void SignatureHash::update(const QoreString& str) {
     }
 
 #ifdef DEBUG
+    dbg_parts.emplace_back(str.c_str(), str.size());
     //QoreString dbg;
     //toString(dbg);
     //printd(5, "class hash %p set to: %s\n", this, dbg.getBuffer());

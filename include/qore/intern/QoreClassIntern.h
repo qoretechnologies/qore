@@ -3111,6 +3111,13 @@ class SignatureHash {
 protected:
     unsigned char buf[SH_SIZE];
     bool is_set;
+#ifdef DEBUG
+    //! the strings hashed by update() in order, for the dbg_class_signature() debug hook only
+    /** The hash is the XOR of the SHA1 digests of these strings; an AOT-loaded hash (setRawHash()) has none
+        (examples/test/qore/classes/class-signature-golden.qtest)
+    */
+    std::vector<std::string> dbg_parts;
+#endif
 
     DLLLOCAL void set(const QoreString& str);
 
@@ -3130,6 +3137,9 @@ public:
     DLLLOCAL SignatureHash(const SignatureHash& old) : is_set(old.is_set) {
         if (is_set)
             copyHash(old);
+#ifdef DEBUG
+        dbg_parts = old.dbg_parts;
+#endif
     }
 
     DLLLOCAL void update(const QoreString& str);
@@ -3155,6 +3165,9 @@ public:
             if (!is_set)
                 is_set = true;
             copyHash(other);
+#ifdef DEBUG
+            dbg_parts = other.dbg_parts;
+#endif
         }
         return *this;
     }
@@ -3180,6 +3193,11 @@ public:
         }
         return str.c_str();
     }
+
+    //! returns the strings hashed by update() in order (for the dbg_class_signature() debug hook)
+    DLLLOCAL const std::vector<std::string>& dbgGetParts() const {
+        return dbg_parts;
+    }
 #endif
 
     DLLLOCAL char* getHash() const {
@@ -3190,6 +3208,9 @@ public:
     DLLLOCAL void setRawHash(const void* data) {
         memcpy(buf, data, SH_SIZE);
         is_set = true;
+#ifdef DEBUG
+        dbg_parts.clear();
+#endif
     }
 
     DLLLOCAL void clear() {
@@ -3197,6 +3218,9 @@ public:
             is_set = false;
             clearHash();
         }
+#ifdef DEBUG
+        dbg_parts.clear();
+#endif
     }
 };
 
