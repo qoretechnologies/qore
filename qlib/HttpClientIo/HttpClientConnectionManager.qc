@@ -148,7 +148,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         #! Interval before re-probing HTTP/3 for hosts that fell back to HTTP/2
         const H3_REPROBE_INTERVAL = 5m;
 
-        #! How long an address family in which an HTTP/3 connection failed without reaching a server is avoided
+        #! How long an address family in which an HTTP/3 connection failed without reaching a server is tried last
         const H3FamilyFailureTtl = 5m;
 
         #! Errors of HTTP/3 connections that never reached a server, when raised before the QUIC handshake completed
@@ -335,9 +335,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         #! Address families that HTTP/3 connections failed to reach: "host:port" -> family -> expiry time
         /** A host name can resolve to addresses of both families while the server only receives QUIC datagrams on
-            one of them; a family whose connection attempt never reached a server is not used for new HTTP/3
-            connections to the origin until the entry expires (see @ref H3FamilyFailureTtl); the expiry times are on
-            the monotonic clock in microseconds
+            one of them; each HTTP/3 connection races its attempts in both families (RFC 8305), and a family in which
+            a connection failed without reaching a server is tried last by new HTTP/3 connections to the origin until
+            the entry expires (see @ref H3FamilyFailureTtl); the expiry times are on the monotonic clock in
+            microseconds
         */
         hash<string, hash<string, int>> h3_failed_families;
 
@@ -3010,17 +3011,17 @@ printf("%d connection(s) migrated\n", migrated);
         return url_info;
     }
 
-    #! Internal: returns the address families to avoid for a new HTTP/3 connection to the given origin
+    #! Internal: returns the address families to try last for a new HTTP/3 connection to the given origin
     /** These are the families in which an HTTP/3 connection to the origin recently failed without reaching a server
-        (see @ref recordH3FamilyFailure()).  The connection is made to the first resolved address of the host that is
-        not in one of them, or to the first one if all of them are (see
+        (see @ref recordH3FamilyFailure()).  The connection races its attempts to the resolved addresses of the host
+        (RFC 8305), and the attempts in these families come after the others (see
         @ref Qore::Http3ClientPollOperationBase::constructor() "Http3ClientPollOperationBase::constructor()"); the
         host name is resolved by the connection's poll operation, so nothing is resolved here, and a connection can
         be created on an async I/O thread.  Expired entries are removed.
 
         @param key the origin pool key
 
-        @return the address families to avoid, or @ref NOTHING if there are none
+        @return the address families to try last, or @ref NOTHING if there are none
     */
     private *list<int> getH3AvoidedFamilies(string key) {
         int now = clock_get_monotonic_us();
@@ -3079,7 +3080,7 @@ printf("%d connection(s) migrated\n", migrated);
             return;
         }
         log(LoggerLevel::DEBUG, "%s: HTTP/3 connection %d in address family %d failed without reaching a server "
-            "(%s); trying another family for new connections", key, conn.getConnectionId(), family, err);
+            "(%s); trying it last for new connections", key, conn.getConnectionId(), family, err);
         h3_failed_families{key}{family} = now + H3FamilyFailureTtl.durationMicroseconds();
     }
 

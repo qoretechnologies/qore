@@ -41,13 +41,14 @@ sandbox decides on, as the connect checks them:
 | TCP through a proxy | the proxy as above, plus every address of the destination that the proxy connects to | `SocketConnectInetHappyEyeballsPollState::continueProxyTargetCheck()` |
 | TCP through a proxy, made without a sandbox | the proxy, plus the destination's host name **unresolved** | `SocketConnectInetHappyEyeballsPollState` constructor |
 | UNIX socket | the socket path (network and filesystem policy) | `SocketConnectUnixPollState::checkConnection()` |
-| QUIC (HTTP/3) | the host name and the remote address | `SocketQuicClientPollOperation::initializeResolved()` |
+| QUIC (HTTP/3) | the host name and the remote address | `SocketQuicClientPollOperation::initializeResolved()`, or `adoptWinner()` for the attempt that wins the address family race |
 
 The record is published on the socket (`qore_socket_private::setConnectedDestinations()`) when the connection is
 made and cleared when the socket is closed (`close_and_reset()`).  When a protocol reports its connection ready, it
 copies the record of its socket to the connection (`AbstractHttpPollConnectionPriv::setDestinations()`): the
-`fireReadyCallback()` of the HTTP/1.1, HTTP/2 and HTTP/3 poll operations, and, for the C++ HTTP/3 connection that
-races several attempts, `Http3ClientConnection::onInnerHandshakeReady()` with the winning attempt's socket.  Both
+`fireReadyCallback()` of the HTTP/1.1, HTTP/2 and HTTP/3 poll operations (an HTTP/3 connection whose host has
+several addresses races connection attempts in its poll operation, whose socket takes the winning attempt's
+descriptor and record).  Both
 records have their own leaf lock: the I/O thread writes them and application threads read them.
 
 `QoreConnectionDestinations::check()` returns 0 if the sandbox allows every destination, -1 with the sandbox's

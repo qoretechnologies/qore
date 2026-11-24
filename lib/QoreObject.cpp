@@ -3015,6 +3015,30 @@ QoreValue qore_object_private::evalMember(QoreObject* obj, const std::string& me
     return obj->priv->evalMember(mem.c_str(), mem.size(), xsink);
 }
 
+bool qore_object_private::tryReadUniqueWeakMember(const std::string& name, QoreValue& result) {
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    // A gate, accessor or notification can run user code as part of ordinary lvalue navigation.
+    if (cls->member_write_gate || cls->memberGate || cls->has_member_accessors || cls->memberNotification) {
+        return false;
+    }
+    const qore_class_private* ctx = runtime_get_class();
+    if (ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, ctx)) {
+        ctx = qore_class_private::runtimeGetMemberStorageContext(*theclass, name.c_str(), ctx);
+    }
+    const qore_class_private* storage_ctx = nullptr;
+    if (checkMemberAccess(name.c_str(), ctx, storage_ctx)) {
+        return false;
+    }
+    QoreAutoVarRWReadLocker al(rml);
+    if (status != OS_OK) {
+        return false;
+    }
+    // Test ownership and acquire the result under the same lock. Replacing the member cannot
+    // make a detached value look unique between the read and the test.
+    const QoreHashNode* storage = storage_ctx ? getInternalData(storage_ctx) : data;
+    return storage && qore_try_ref_unique_container(storage->getKeyValue(name.c_str()), result);
+}
+
 QoreValue qore_object_private::evalMember(const char* mem, size_t len, ExceptionSink* xsink) {
     assert(strlen(mem) == len);
     // get the current class context

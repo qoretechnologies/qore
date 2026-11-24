@@ -18861,6 +18861,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         return toBits(QoreValue());
     }
 
+    if (inst->unary_op == LVUnaryOp::EnsureUnique) {
+        QoreValue value;
+        if (qore_try_read_unique_weak_path(path_copy.data(), path_copy.size(), value)) {
+            return toBits(value);
+        }
+    }
+
     bool is_remove = (inst->unary_op == LVUnaryOp::Remove || inst->unary_op == LVUnaryOp::Delete);
     QoreValue res;
 
