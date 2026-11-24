@@ -2423,9 +2423,78 @@ public:
     };
 
     typedef section_sline_statement_map section_sline_statement_map_t;
-    // map for filenames
-    typedef vector_map_t<const char*, section_sline_statement_map_t*> name_section_sline_statement_map_t;
-    //typedef std::map<const char*, section_sline_statement_map_t*, ltstr> name_section_sline_statement_map_t;
+
+    //! map of file names (or labels) to their statement maps
+    /** Iterates in insertion order, which getStatementFromIndex() relies on for its suffix match, and finds keys
+        through a hash index: AOT registration of a program that allows the debugger looks up and adds every
+        statement location of every function here, and a linear scan with strcmp() per lookup made that
+        O(statements x files), most of the startup time of a large AOT program on a slow CPU.
+
+        Keys are not copied; they must stay valid while they are in the map, as the strings that the Program owns
+        (file names, labels and runtime strings) do.
+    */
+    class name_section_sline_statement_map_t {
+    public:
+        typedef vector_map_t<const char*, section_sline_statement_map_t*> vmap_t;
+        typedef vmap_t::value_type value_type;
+        typedef vmap_t::iterator iterator;
+        typedef vmap_t::const_iterator const_iterator;
+
+        DLLLOCAL iterator find(const char* key) {
+            auto i = index.find(std::string_view(key));
+            return i == index.end() ? vmap.end() : vmap.begin() + i->second;
+        }
+
+        DLLLOCAL const_iterator find(const char* key) const {
+            auto i = index.find(std::string_view(key));
+            return i == index.end() ? vmap.end() : vmap.begin() + i->second;
+        }
+
+        //! adds the key with its value, or replaces the value of a key that is already in the map
+        DLLLOCAL std::pair<iterator, bool> insert(value_type vt) {
+            auto [i, created] = index.try_emplace(std::string_view(vt.first), vmap.size());
+            if (!created) {
+                iterator vi = vmap.begin() + i->second;
+                vi->second = vt.second;
+                return std::pair<iterator, bool>(vi, false);
+            }
+            return std::pair<iterator, bool>(vmap.append(std::move(vt)), true);
+        }
+
+        DLLLOCAL iterator begin() {
+            return vmap.begin();
+        }
+
+        DLLLOCAL const_iterator begin() const {
+            return vmap.begin();
+        }
+
+        DLLLOCAL iterator end() {
+            return vmap.end();
+        }
+
+        DLLLOCAL const_iterator end() const {
+            return vmap.end();
+        }
+
+        DLLLOCAL bool empty() const {
+            return vmap.empty();
+        }
+
+        DLLLOCAL size_t size() const {
+            return vmap.size();
+        }
+
+        DLLLOCAL void clear() {
+            index.clear();
+            vmap.clear();
+        }
+
+    private:
+        vmap_t vmap;
+        //! the position of each key in vmap
+        std::unordered_map<std::string_view, size_t> index;
+    };
 
     DLLLOCAL qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
             QoreProgram* p_pgm = nullptr, const QoreParseOptions* p_parse_options = nullptr,
