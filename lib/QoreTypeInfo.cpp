@@ -351,12 +351,15 @@ void QoreLegacyTypeVec::refresh(const orphanable_type_vec_t& src) const {
 namespace {
 class QoreAOTDeferredTypeInfo : public QoreTypeInfo {
 public:
-    QoreAOTDeferredTypeInfo(std::string qore_path, std::string type_path, bool hashdecl,
+    QoreAOTDeferredTypeInfo(std::string qore_path, std::string name, bool hashdecl,
             bool or_nothing)
-            : QoreTypeInfo(type_path.c_str(), makeAcceptVec(hashdecl, or_nothing),
+            : QoreTypeInfo(name.c_str(), makeAcceptVec(hashdecl, or_nothing),
                 makeReturnVec(hashdecl, or_nothing)),
-            qore_path(std::move(qore_path)), type_path(std::move(type_path)), hashdecl(hashdecl),
+            qore_path(std::move(qore_path)), type_path(std::move(name)), hashdecl(hashdecl),
             or_nothing(or_nothing) {
+        // As for a resolved type, getPath() roots the name inside object<...> or hash<...>. Class
+        // signatures use this path even when the declaration is in a later compilation unit (qore#7473).
+        type_path.insert(type_path.find('<') + 1, "::");
         aot_deferred_placeholder = true;
     }
 
@@ -372,19 +375,7 @@ public:
             return false;
         }
         const char* path = QoreTypeInfo::getPath(ti);
-        if (!path) {
-            return false;
-        }
-        if (type_path == path) {
-            return true;
-        }
-        // Deferred paths use the unrooted spelling serialized in AOT contracts, while a loaded
-        // class can render as object<::Ns::Class>.  Ignore only that root qualifier: the kind,
-        // nullable marker, and complete namespace-qualified name must still match.
-        size_t prefix_size = strlen(hashdecl ? "hash<" : "object<") + (or_nothing ? 1 : 0);
-        return !strncmp(path, type_path.c_str(), prefix_size)
-            && path[prefix_size] == ':' && path[prefix_size + 1] == ':'
-            && !strcmp(path + prefix_size + 2, type_path.c_str() + prefix_size);
+        return path && (type_path == path || !strcmp(QoreTypeInfo::getName(this), path));
     }
 
 protected:
@@ -455,10 +446,7 @@ static std::string aotDeferredTypeQorePath(const char* qore_path) {
     between a whole-group parse and a parse against preloaded shells -- and the scheduler then
     rebuilds the whole closure of an edit for a difference that changes no declaration.
 
-    A deferred CLASS previously used the rooted spelling (`object<::X>`), unlike the
-    whole-group contract (`object<X>`); deferred hashdecls already used the unrooted form.
-    A loaded live type can still return a rooted path, which matchesResolvedType() handles
-    separately without changing the serialized spelling.
+    The placeholder keeps this spelling as its name and returns the rooted spelling from getPath().
 */
 static std::string aotDeferredTypePath(const std::string& qore_path, bool hashdecl, bool or_nothing) {
     std::string rv;

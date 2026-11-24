@@ -2994,6 +2994,12 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
         return {};
     }
 
+    // A deferred class or hashdecl already has the whole-group contract spelling as its name.
+    // Its rooted path is used for class signatures, just as for a resolved type (qore#7473).
+    if (qore_type_info_is_aot_deferred(ti)) {
+        return QoreTypeInfo::getName(ti);
+    }
+
     if (const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti)) {
         const QoreClass* owner_class = tpi->getOwnerClass();
         const TypedHashDecl* owner_hashdecl = tpi->getOwnerHashDecl();
