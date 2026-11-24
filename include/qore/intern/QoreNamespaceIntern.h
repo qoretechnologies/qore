@@ -169,6 +169,14 @@ public:
     QoreClassList classList;       // class map
     HashDeclList hashDeclList;     // hashdecl map
     EnumList enumList;             // enum map
+    //! The namespaces added at run time whose declarations conflicted with those of this namespace (qore#7530)
+    /** qore_ns_private::runtimeAssimilate() leaves a declaration that conflicts in the namespace that is added, and
+        keeps that namespace here, unnamed, as the other declarations that it added can use the types of those that
+        were not added; they are released with this namespace, in each of the steps in which its own are, and copied
+        with it (the copy of a Program's namespaces for a child Program).  A namespace that is added again and again
+        with declarations that the namespace has keeps one such namespace for each addition
+    */
+    std::vector<QoreNamespace*> retained_ns;
     ConstantList constant;         // constant map
     typedef_map_t typedefMap;      // typedef map
     QoreNamespaceList nsl;         // namespace map
@@ -280,6 +288,15 @@ public:
                     typedefMap[i.first] = new TypedefEntry(*i.second);
                 }
             }
+        }
+        // the namespaces kept by runtimeAssimilate(), whose types the declarations copied above can use, are copied
+        // with all of their declarations (they are not visible), so that the copy holds references to those types
+        // (qore#7530)
+        for (const QoreNamespace* rns : old.retained_ns) {
+            std::unique_ptr<QoreNamespace> copy(new QoreNamespace(*rns, QoreParseOptions()));
+            copy->priv->parent = this;
+            retained_ns.push_back(copy.get());
+            copy.release();
         }
         assert(name.rfind("::") == std::string::npos);
         assert(path.rfind("::", 0) == 0);
@@ -427,6 +444,16 @@ public:
         enumList.reset();
 
         nsl.reset();
+
+        deleteRetained();
+    }
+
+    //! Deletes the namespaces that runtimeAssimilate() kept (qore#7530)
+    DLLLOCAL void deleteRetained() {
+        for (QoreNamespace* rns : retained_ns) {
+            delete rns;
+        }
+        retained_ns.clear();
     }
 
     //! Returns true iff this namespace has no content.

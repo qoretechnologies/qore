@@ -1196,17 +1196,21 @@ int ConstantList::importSystemConstants(const ConstantList& src, ExceptionSink* 
     return 0;
 }
 
-// no duplicate checking is done here
+// the run-time merge: a constant that the list has is kept, and the new one is left in the list that is merged
 void ConstantList::assimilate(ConstantList& n) {
     cnemap.reserve(cnemap.size() + n.cnemap.size());
-    for (cnemap_t::iterator i = n.cnemap.begin(), e = n.cnemap.end(); i != e; ++i) {
-        assert(!inList(i->first));
+    for (size_t k = 0; k < n.cnemap.size();) {
+        cnemap_t::iterator i = n.cnemap.begin() + k;
+        // a constant that the list has is kept, and the new one stays in the list that is merged, which is kept with
+        // the namespace that was added (qore_ns_private::runtimeAssimilate(), qore#7530)
+        if (inList(i->first)) {
+            ++k;
+            continue;
+        }
         // "move" data to new list
         cnemap.append(cnemap_t::value_type(i->first, i->second));
-        i->second = nullptr;
+        n.cnemap.erase(i);
     }
-
-    n.parseDeleteAll();
 }
 
 // duplicate checking is done here
