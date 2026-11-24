@@ -813,13 +813,10 @@ protected:
     //! ensureUnique() and ensureUnique(const char*): \a desc is used only if \a Checked
     template <bool Checked>
     DLLLOCAL int ensureUniqueImpl(const char* desc) {
-        // the container of the lvalue's weak reference is changed as it is, shared (see viewWeakContainer())
-        if (weak_target_view) [[unlikely]] {
-            return 0;
-        }
         // a write-protected variable's container is only read (see setReadOnlyResolution()), as is one on the path of
-        // a reference whose value is read
-        if (read_only_resolution || read_value_only) {
+        // a reference whose value is read, and the container of the lvalue's weak reference is changed as it is,
+        // shared (see viewWeakContainer()); the flags are bits of one byte, tested at once
+        if (read_only_resolution | read_value_only | weak_target_view) {
             return 0;
         }
         member_lvalue_modified = true;
@@ -992,10 +989,6 @@ private:
 
     // flag if the changed value was a container before the assignment
     bool before = false;
-    //! the lvalue's storage is not changed and is not read again (see leaveUnchangedLValue())
-    bool unchanged_lvalue = false;
-    //! the operation on the unchanged lvalue added or removed a value that needs a scan (see changedScannedValue())
-    bool unchanged_lvalue_scan = false;
 #ifndef NDEBUG
     //! the container changed through the weak reference that the lvalue holds, whose changes are allowed while it is
     //! shared until the helper is destroyed (see viewWeakContainer())
@@ -1004,9 +997,14 @@ private:
 #endif
     //! the container that the weak reference held by the lvalue designates, which the helper designates instead of
     //! the lvalue (see viewWeakContainer()); not referenced: the helper holds it with the reference of lockWeakList()
-    QoreValue weak_view;
-    //! the helper designates the container of the lvalue's weak reference (see viewWeakContainer())
-    bool weak_target_view = false;
+    /** Constructed by viewWeakContainer() only, and valid only while \a weak_target_view is set: a helper that does
+        not change a weak reference's container does not initialize it (QoreValue is trivially destructible)
+    */
+    union {
+        QoreValue weak_view;
+    };
+    static_assert(std::is_trivially_destructible_v<QoreValue>, "weak_view is never destroyed: QoreValue must be "
+        "trivially destructible");
 
     // flag to suppress the recursive-reference scan of the target RObject in the destructor; set only when the
     // caller can guarantee that the set of objects reachable from the lvalue is unchanged (see
@@ -1175,12 +1173,20 @@ private:
     bool track_write_protection = false;
     //! set with read_access when the variable read could not have been written; see isWriteProtected()
     bool write_protected = false;
+    // the following flags are bits of one byte: they are initialized together, and ensureUniqueImpl() tests three of
+    // them at once (see the #7297 follow-up)
     //! set while the containers of a write-protected variable are resolved to read an element; see
     //! setReadOnlyResolution()
-    bool read_only_resolution = false;
+    bool read_only_resolution : 1 = false;
     //! set when the value of a reference is only read (ReadAccess): the containers on the whole path, also past an
     //! object, are resolved without being changed (qore#6435)
-    bool read_value_only = false;
+    bool read_value_only : 1 = false;
+    //! the helper designates the container of the lvalue's weak reference (see viewWeakContainer())
+    bool weak_target_view : 1 = false;
+    //! the lvalue's storage is not changed and is not read again (see leaveUnchangedLValue())
+    bool unchanged_lvalue : 1 = false;
+    //! the operation on the unchanged lvalue added or removed a value that needs a scan (see changedScannedValue())
+    bool unchanged_lvalue_scan : 1 = false;
     //! set when the source of a weak assignment is resolved to make its container unique (WeakSourceAccess,
     //! setWeakSourceResolution()): an element that does not exist (also an index beyond the start of a list) is no
     //! lvalue, without an exception, as an rvalue read of it gives no value (qore#7242)
@@ -1948,7 +1954,9 @@ public:
 
     DLLLOCAL int assignNative(QoreValue val, const char* desc);
 
-    template <bool Lexical, bool Native = false>
+    //! the assignment; \a Weak is true for a weak assignment (AssignmentMode::Weak), whose handling (qore#7237) is
+    //! then compiled in, and false for the other modes, which it does not cost anything
+    template <bool Lexical, bool Native = false, bool Weak = false>
     DLLLOCAL int assignImpl(QoreValue val, const char* desc, bool check_types, AssignmentMode mode,
             LexicalSemanticPolicy policy);
 

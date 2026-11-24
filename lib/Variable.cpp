@@ -983,7 +983,8 @@ LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::mo
         track_write_protection(o.track_write_protection),
         write_protected(o.write_protected),
         read_only_resolution(o.read_only_resolution), read_value_only(o.read_value_only),
-        weak_source_resolution(o.weak_source_resolution),
+        weak_target_view(o.weak_target_view), unchanged_lvalue(o.unchanged_lvalue),
+        unchanged_lvalue_scan(o.unchanged_lvalue_scan), weak_source_resolution(o.weak_source_resolution),
         ref_list_type(o.ref_list_type), ref_decl_type(o.ref_decl_type),
 #ifdef DEBUG
         removal_path(o.removal_path),
@@ -1000,6 +1001,19 @@ LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::mo
     o.buffer_lvalue = nullptr;
     o.buffer_lvalue_index = 0;
     o.buffer_lvalue_value = QoreValue();
+    // the helper designates the container of the lvalue's weak reference: the view is its own, as is its qv
+    if (weak_target_view) [[unlikely]] {
+        new (&weak_view) QoreValue(o.weak_view);
+        qv = &weak_view;
+        o.weak_target_view = false;
+    }
+#ifndef NDEBUG
+    // the changes allowed through the weak reference end with the new helper (see viewWeakContainer())
+    weak_change_list = o.weak_change_list;
+    weak_change_hash = o.weak_change_hash;
+    o.weak_change_list = nullptr;
+    o.weak_change_hash = nullptr;
+#endif
 }
 
 #ifdef DEBUG
@@ -1749,7 +1763,7 @@ int LValueHelper::viewWeakContainer() {
         weak_change_list = l;
         ++lp->weak_change;
 #endif
-        weak_view = QoreValue(l);
+        new (&weak_view) QoreValue(l);
         typeInfo = l->getTypeInfo();
     } else if (t == NT_WEAKREF_HASH) [[unlikely]] {
         ensureUnique();
@@ -1764,7 +1778,7 @@ int LValueHelper::viewWeakContainer() {
         weak_change_hash = h;
         ++hp->weak_change;
 #endif
-        weak_view = QoreValue(h);
+        new (&weak_view) QoreValue(h);
         typeInfo = h->getTypeInfo();
     } else {
         return 0;
@@ -3903,11 +3917,17 @@ int LValueHelper::keepWeakAssignmentContainer(QoreValue& weak_source, QoreValue&
 }
 
 int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, AssignmentMode mode) {
+    if (mode == AssignmentMode::Weak) [[unlikely]] {
+        return assignImpl<false, false, true>(n, desc, check_types, mode, {});
+    }
     return assignImpl<false>(n, desc, check_types, mode, {});
 }
 
 int LValueHelper::assign(QoreValue n, const char* desc, LexicalSemanticPolicy policy, bool check_types,
         AssignmentMode mode) {
+    if (mode == AssignmentMode::Weak) [[unlikely]] {
+        return assignImpl<true, false, true>(n, desc, check_types, mode, policy);
+    }
     return assignImpl<true>(n, desc, check_types, mode, policy);
 }
 
@@ -3915,17 +3935,14 @@ int LValueHelper::assignNative(QoreValue n, const char* desc) {
     return assignImpl<false, true>(n, desc, true, AssignmentMode::Normal, {});
 }
 
-template <bool Lexical, bool Native>
+template <bool Lexical, bool Native, bool Weak>
 int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, AssignmentMode mode,
         LexicalSemanticPolicy policy) {
-    // the container of the lvalue's weak reference is changed in place, never replaced (see viewWeakContainer())
-    if (weak_target_view) [[unlikely]] {
-        assert(false);
-        saveTemp(n);
-        vl.xsink->raiseException("LVALUE-ERROR", "%s: a value cannot be assigned to a container changed through a "
-            "weak reference", desc);
-        return -1;
-    }
+    // a weak assignment is compiled in its own instantiation (see assign())
+    assert(Weak == (mode == AssignmentMode::Weak));
+    // the container of the lvalue's weak reference is changed in place, never replaced (see viewWeakContainer()):
+    // no operation assigns through a helper that designates it
+    assert(!weak_target_view);
     member_lvalue_modified = true;
     assert(!*vl.xsink);
     if (n.hasNode() && n.getInternalNode() == &Nothing) {
@@ -3940,7 +3957,7 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
     // a weak reference assigned as it is (a store of the IR interpreter) is kept to compare the container that it
     // designates
     QoreValue weak_source;
-    if (mode == AssignmentMode::Weak) [[unlikely]] {
+    if constexpr (Weak) {
         switch (n.getType()) {
             case NT_LIST:
             case NT_HASH:
@@ -3964,8 +3981,10 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
         if (*vl.xsink) {
             //printd(5, "LValueHelper::assign() this: %p saving type-rejected value: %p '%s'\n", this, n,
             //    get_type_name(n));
-            if (weak_source.hasNode()) {
-                saveTemp(weak_source);
+            if constexpr (Weak) {
+                if (weak_source.hasNode()) {
+                    saveTemp(weak_source);
+                }
             }
             saveTempRef(n);
             // the containers navigated to reach the target must not keep the entries created for this assignment
@@ -3990,14 +4009,16 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
     // (shared with parameter binding — see QoreTypeInfo::applyNoNarrowCoercion())
     QoreTypeInfo::applyNoNarrowCoercion(typeInfo, n, vl.xsink, this);
 
-    if (weak_source.hasNode() && (*vl.xsink || keepWeakAssignmentContainer(weak_source, n, desc))) [[unlikely]] {
-        if (weak_source.hasNode()) {
-            saveTemp(weak_source);
+    if constexpr (Weak) {
+        if (weak_source.hasNode() && (*vl.xsink || keepWeakAssignmentContainer(weak_source, n, desc))) [[unlikely]] {
+            if (weak_source.hasNode()) {
+                saveTemp(weak_source);
+            }
+            saveTemp(n);
+            n.clear();
+            rollbackVivification();
+            return -1;
         }
-        saveTemp(n);
-        n.clear();
-        rollbackVivification();
-        return -1;
     }
 
     // process weak assignment
@@ -4005,7 +4026,7 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
     // target cannot be dereferenced while the lvalue lock is held: a value read through an opaque reference keeps its
     // opaque representation, and releasing it as a plain node would leave its registration with the opaque target
     // registry (see design/dgc.md, "Opaque references")
-    if (mode == AssignmentMode::Weak) {
+    if constexpr (Weak) {
         QoreValue old = n;
         if (n.getType() == NT_OBJECT) {
             n = new WeakReferenceNode(n.get<QoreObject>());
