@@ -76,6 +76,20 @@ static void program_set_independent_creator(QoreProgram& pgm, bool independent, 
 #define WARN_MODULES QP_WARN_MODULES
 #endif
 
+#ifdef DEBUG
+std::atomic<qore_dbg_program_take_over_hook_t> qore_dbg_program_take_over_hook{nullptr};
+#endif
+
+// a point of the methods that take over their own object, where tests hold them in debug builds; phase 0: after the
+// call setup, before the private data is removed from the object; 1: once it is removed
+static void program_take_over_point(QoreObject* self, int phase) {
+#ifdef DEBUG
+    if (qore_dbg_program_take_over_hook_t hook = qore_dbg_program_take_over_hook.load(std::memory_order_acquire)) {
+        hook(*self, phase);
+    }
+#endif
+}
+
 //! source location information
 /**
     @since %Qore 0.9
@@ -3725,16 +3739,21 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
     }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
-#ifdef DEBUG
-    QoreProgram* pgm = (QoreProgram*)
-#endif
-    qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM, xsink);
-#ifdef DEBUG
-    // or the object was deleted meanwhile
-    assert(pgm == p || *xsink);
-#endif
+    program_take_over_point(self, 0);
+    // the reference that the object held is given to the module
+    QoreProgram* pgm = static_cast<QoreProgram*>(qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM,
+        xsink));
+    if (!pgm) {
+        // another call took the object over, or the object is being deleted, meanwhile
+        if (!*xsink) {
+            makeAccessDeletedObjectException(xsink, self->getClassName());
+        }
+        return QoreValue();
+    }
+    assert(pgm == p);
+    program_take_over_point(self, 1);
     if (!*xsink) {
-        QMM.runTimeLoadModule(*xsink, *xsink, module_name->c_str(), 0, p,
+        QMM.runTimeLoadModule(*xsink, *xsink, module_name->c_str(), 0, pgm,
             QMLO_INJECT | (reinject ? QMLO_REINJECT : 0), warning_mask, reexport);
         // getAndRemovePrivateData removed private data, so destructor is not executed. We must remove reference to this object
         //p->unregisterQoreObject(self, xsink);
@@ -3785,17 +3804,22 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
     }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
-#ifdef DEBUG
-    QoreProgram* pgm = (QoreProgram*)
-#endif
-    qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM, xsink);
-#ifdef DEBUG
-    // or the object was deleted meanwhile
-    assert(pgm == p || *xsink);
-#endif
+    program_take_over_point(self, 0);
+    // the reference that the object held is given to the module
+    QoreProgram* pgm = static_cast<QoreProgram*>(qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM,
+        xsink));
+    if (!pgm) {
+        // another call took the object over, or the object is being deleted, meanwhile
+        if (!*xsink) {
+            makeAccessDeletedObjectException(xsink, self->getClassName());
+        }
+        return QoreValue();
+    }
+    assert(pgm == p);
+    program_take_over_point(self, 1);
     if (!*xsink) {
         ExceptionSink wsink;
-        QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), 0, p,
+        QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), 0, pgm,
             QMLO_INJECT | (reinject ? QMLO_REINJECT : 0), warning_mask, reexport);
         // getAndRemovePrivateData removed private data, so destructor is not executed. We must remove reference to this object
         //p->unregisterQoreObject(self, xsink);
@@ -3844,16 +3868,21 @@ Program::loadApplyToPrivateUserModule(
     }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToPrivateUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
-#ifdef DEBUG
-    QoreProgram* pgm = (QoreProgram*)
-#endif
-    qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM, xsink);
-#ifdef DEBUG
-    // or the object was deleted meanwhile
-    assert(pgm == p || *xsink);
-#endif
+    program_take_over_point(self, 0);
+    // the reference that the object held is given to the module
+    QoreProgram* pgm = static_cast<QoreProgram*>(qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM,
+        xsink));
+    if (!pgm) {
+        // another call took the object over, or the object is being deleted, meanwhile
+        if (!*xsink) {
+            makeAccessDeletedObjectException(xsink, self->getClassName());
+        }
+        return QoreValue();
+    }
+    assert(pgm == p);
+    program_take_over_point(self, 1);
     if (!*xsink) {
-        QMM.runTimeLoadModule(*xsink, *xsink, module_name->c_str(), 0, p, QMLO_INJECT | QMLO_PRIVATE,
+        QMM.runTimeLoadModule(*xsink, *xsink, module_name->c_str(), 0, pgm, QMLO_INJECT | QMLO_PRIVATE,
             warning_mask);
         // getAndRemovePrivateData removed private data, so destructor is not executed. We must remove reference to this object
         //p->unregisterQoreObject(self, xsink);
@@ -3900,17 +3929,22 @@ Program::loadApplyToPrivateUserModule(
     }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToPrivateUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
-#ifdef DEBUG
-    QoreProgram* pgm = (QoreProgram*)
-#endif
-    qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM, xsink);
-#ifdef DEBUG
-    // or the object was deleted meanwhile
-    assert(pgm == p || *xsink);
-#endif
+    program_take_over_point(self, 0);
+    // the reference that the object held is given to the module
+    QoreProgram* pgm = static_cast<QoreProgram*>(qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM,
+        xsink));
+    if (!pgm) {
+        // another call took the object over, or the object is being deleted, meanwhile
+        if (!*xsink) {
+            makeAccessDeletedObjectException(xsink, self->getClassName());
+        }
+        return QoreValue();
+    }
+    assert(pgm == p);
+    program_take_over_point(self, 1);
     if (!*xsink) {
         ExceptionSink wsink;
-        QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), 0, p, QMLO_INJECT | QMLO_PRIVATE,
+        QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), 0, pgm, QMLO_INJECT | QMLO_PRIVATE,
             warning_mask);
         // getAndRemovePrivateData removed private data, so destructor is not executed. We must remove reference to this object
         //p->unregisterQoreObject(self, xsink);

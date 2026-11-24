@@ -1,0 +1,187 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-injection
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ProgramTakeOverConcurrentTest
+
+#! Tests a Program method that takes over its own object while another call takes it over or deletes it (qore#7528)
+/** Program::loadApplyToUserModule() and the related methods remove the private data (the Program) from their object
+    and give its reference to the module that they load.  A second call that has passed its call setup when the first
+    one removes the private data, or a call made while the object is being deleted (its destructor has removed the
+    private data, and the object is not yet marked deleted), finds no private data; it must raise
+    OBJECT-ALREADY-DELETED, and must not give the Program to a module, which would release it once more than it is
+    referenced.
+
+    dbg_hold_program_take_over() holds a call of such a method after its call setup or once it has removed the private
+    data, so the test runs only in debug builds.
+*/
+class ProgramTakeOverConcurrentTest inherits QUnit::Test {
+    public {
+        #! the module that the calls load: it does not exist
+        const NoModule = "program-take-over-concurrent-no-such-module";
+
+        #! the methods that take over their own object
+        const Forms = (
+            "loadApplyToUserModule",
+            "loadApplyToUserModuleWarn",
+            "loadApplyToPrivateUserModule",
+            "loadApplyToPrivateUserModuleWarn",
+        );
+
+        #! the longest wait for another thread, in milliseconds
+        const Timeout = 60000;
+    }
+
+    constructor() : QUnit::Test("program take over concurrent", "1.0", \ARGV) {
+        addTestCase("concurrent take-over", \concurrentTest());
+        addTestCase("take-over while being deleted", \beingDeletedTest());
+        set_return_value(main());
+    }
+
+    #! takes over the Program object with the given method; returns "ok" or the exception code
+    static string take(string form, Program p) {
+        try {
+            switch (form) {
+                case "loadApplyToUserModule":
+                    p.loadApplyToUserModule(NoModule);
+                    break;
+                case "loadApplyToUserModuleWarn":
+                    p.loadApplyToUserModuleWarn(NoModule);
+                    break;
+                case "loadApplyToPrivateUserModule":
+                    p.loadApplyToPrivateUserModule(NoModule);
+                    break;
+                case "loadApplyToPrivateUserModuleWarn":
+                    p.loadApplyToPrivateUserModuleWarn(NoModule);
+                    break;
+                default:
+                    throw "UNKNOWN-FORM", form;
+            }
+            return "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returns "ok" or the exception code of a call on the Program object
+    static string use(Program p) {
+        try {
+            p.getProgramId();
+            return "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! makes a take-over in a background thread; its result is pushed on the queue
+    static takeInBackground(string form, Program p, Queue q) {
+        background q.push(ProgramTakeOverConcurrentTest::take(form, p));
+    }
+
+    #! waits for a Counter to reach zero; fails the test if it does not
+    private waitFor(Counter c, string what) {
+        if (c.waitForZero(Timeout)) {
+            throw "TIMEOUT", sprintf("timed out waiting for %s", what);
+        }
+    }
+
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hook that holds a Program method that takes over its object is only in debug builds");
+        }
+    }
+
+    concurrentTest() {
+        checkDebug();
+        foreach string form in (Forms) {
+            Program p();
+
+            # the second call: held after its call setup, before it removes the private data
+            Counter held2(1);
+            Counter release2(1);
+            call_function("dbg_hold_program_take_over", p, 0, held2, release2);
+            Queue q2();
+            ProgramTakeOverConcurrentTest::takeInBackground(form, p, q2);
+            waitFor(held2, form + ": the second call held");
+
+            # the first call: held once it has removed the private data, before it loads the module
+            Counter held1(1);
+            Counter release1(1);
+            call_function("dbg_hold_program_take_over", p, 1, held1, release1);
+            Queue q1();
+            ProgramTakeOverConcurrentTest::takeInBackground(form, p, q1);
+            waitFor(held1, form + ": the first call held");
+
+            # the second call finds no private data
+            release2.dec();
+            assertEq("OBJECT-ALREADY-DELETED", q2.get(Timeout), form + ": second call");
+
+            # the first call loads the module, which does not exist, and deletes the object
+            release1.dec();
+            assertEq("LOAD-MODULE-ERROR", q1.get(Timeout), form + ": first call");
+            assertEq("OBJECT-ALREADY-DELETED", use(p), form + ": object deleted");
+        }
+    }
+
+    beingDeletedTest() {
+        checkDebug();
+        foreach string form in (Forms) {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub wait_in(Counter running, Counter done) { running.dec(); done.waitForZero(); }", "wait");
+
+            # a thread runs in the Program, so that its deletion waits for the thread once its destructor has removed
+            # the private data, before the object is marked deleted
+            Counter running(1);
+            Counter done(1);
+            Counter in_done(1);
+            background sub () {
+                on_exit in_done.dec();
+                p.callFunction("wait_in", running, done);
+            }();
+            waitFor(running, form + ": the thread running in the Program");
+
+            # the take-over: held after its call setup
+            Counter held(1);
+            Counter release(1);
+            call_function("dbg_hold_program_take_over", p, 0, held, release);
+            Queue q();
+            ProgramTakeOverConcurrentTest::takeInBackground(form, p, q);
+            waitFor(held, form + ": the take-over held");
+
+            # the deletion, which removes the private data and waits for the thread running in the Program
+            Counter deleted(1);
+            Program d = p;
+            background sub () {
+                on_exit deleted.dec();
+                delete d;
+            }();
+            # the object has no private data once its destructor has run; it is not marked deleted until the thread
+            # running in the Program ends
+            date deadline = now_us() + milliseconds(Timeout);
+            string err;
+            while ((err = use(p)) == "ok") {
+                if (now_us() > deadline) {
+                    throw "TIMEOUT", form + ": the destructor did not run";
+                }
+                usleep(1ms);
+            }
+            assertEq("OBJECT-INCOMPATIBLE", err, form + ": the object is being deleted");
+
+            # the take-over finds no private data
+            release.dec();
+            assertEq("OBJECT-ALREADY-DELETED", q.get(Timeout), form + ": take-over");
+
+            done.dec();
+            waitFor(in_done, form + ": the thread running in the Program");
+            waitFor(deleted, form + ": the deletion");
+            assertEq("OBJECT-ALREADY-DELETED", use(p), form + ": object deleted");
+        }
+    }
+}

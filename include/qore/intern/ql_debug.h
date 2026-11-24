@@ -119,6 +119,13 @@ DLLLOCAL extern std::atomic<qore_dbg_deref_delete_hook_t> qore_dbg_deref_delete_
 typedef void (*qore_dbg_deref_last_hook_t)(const char* class_name);
 DLLLOCAL extern std::atomic<qore_dbg_deref_last_hook_t> qore_dbg_deref_last_hook;
 
+//! called by the Program methods that take over their own object (Program::loadApplyToUserModule() and the related
+//! methods) at \a phase 0, after the call setup and before the private data is removed from the object, and at
+//! \a phase 1, once it is removed and before the module is loaded; called with no lock held; set by
+//! dbg_hold_program_take_over()
+typedef void (*qore_dbg_program_take_over_hook_t)(QoreObject& obj, int phase);
+DLLLOCAL extern std::atomic<qore_dbg_program_take_over_hook_t> qore_dbg_program_take_over_hook;
+
 //! called by QoreListNode::derefImpl() and QoreHashNode::derefImpl() when the free of a list or hash that has weak
 //! holders starts, before its entries are freed; called with no lock held; \a type_name is "list" or "hash"; set by
 //! dbg_hold_container_free() (qore#7198)
