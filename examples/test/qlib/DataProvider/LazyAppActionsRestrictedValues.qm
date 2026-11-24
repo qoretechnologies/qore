@@ -32,6 +32,11 @@ public class RestrictedValues {
         return id;
     }
 
+    #! Returns the value: only the code of the module that registered it can read it
+    static auto getValue() {
+        return DataProviderActionCatalog::getLazyValue(id);
+    }
+
     static string build() {
         ++runs;
         return "restricted";

@@ -1,0 +1,23 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# LazyOtherModule.qm - test module that reads a lazy value of another module (qore#6843)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+
+module LazyOtherModule {
+    version = "1.0";
+    desc = "test module that reads a lazy value of another module";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace LazyOtherModule {
+public class LazyOtherModule {
+    static auto read(int id) {
+        return DataProviderActionCatalog::getLazyValue(id);
+    }
+}
+}
