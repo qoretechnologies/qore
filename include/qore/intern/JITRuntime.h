@@ -190,6 +190,17 @@ uint64_t qore_rt_unique_container(uint64_t val);
 */
 void qore_rt_unique_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
+//! Returns the operand of a weak assignment from a local with IR storage after its unique step (qore#7405)
+/** The value passed is borrowed; the value returned has a reference of its own: a weak reference to a list or a hash,
+    which the assignment does not keep (see qore_weak_assignment_source()), the target of a weak reference to an
+    object, the operand read through a reference that the local holds, or the value itself; NOTHING if an exception
+    was raised
+*/
+uint64_t qore_rt_weak_assignment_source(uint64_t val, ExceptionSink* xsink);
+
+//! qore_rt_weak_assignment_source() for the value of an AOT body local (qore#7405)
+uint64_t qore_rt_weak_assignment_source_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
 //! Increment reference count if value is a pointer type
 void qore_rt_incref(uint64_t val);
 

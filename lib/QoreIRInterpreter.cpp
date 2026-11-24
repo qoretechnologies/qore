@@ -20603,7 +20603,29 @@ load_local_done:
                         }
                     }
                     if (path_inst->result.isValid()) {
-                        setValueSlot(values, path_inst->result.id, QoreValue(), xsink);
+                        // the operand of the weak assignment: a list or a hash is held weakly (qore#7405)
+                        QoreValue src;
+                        if (sid < locals_slot_cache.size()) {
+                            // raw slot: the stored value is the source, read as the step reads it: a weak
+                            // reference to a list or a hash is kept as it is, and a reference is resolved
+                            src = qore_weak_assignment_source_borrowed(locals_slot_cache.storage(sid), xsink);
+                        }
+                        setValueSlot(values, path_inst->result.id, src, xsink);
+                        if (src.needsRef()) {
+                            cleanup.push_back(path_inst->result.id);
+                        }
+                        if (xsink && *xsink) {
+                            if (inst->exception_target) {
+                                cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
+                                prev_block = block;
+                                block = inst->exception_target;
+                                ip = 0;
+                                break;
+                            }
+                            unwindForException();
+                            cleanupLocalCaches();
+                            return exitAfterUnwind();
+                        }
                     }
                     ++ip;
                     break;
@@ -20948,9 +20970,15 @@ load_local_done:
                                 }
                                 // the value of the variable as it is read, taken under the lock of the variable: the
                                 // weak assignment assigns it, so that a variable that another thread assigns is not
-                                // read again (qore#5847)
+                                // read again (qore#5847); a list or a hash is held weakly while the target is
+                                // resolved, and a weak reference to one is kept as it is: the store locks it
+                                // (qore#7405); a weak reference to an object reads as its target
                                 res = lvh.getReferencedValue();
-                                evaluateOwnedWeakReferenceResult(res, xsink);
+                                if (res.getType() == NT_WEAKREF) {
+                                    evaluateOwnedWeakReferenceResult(res, xsink);
+                                } else {
+                                    res = qore_weak_assignment_source(res, xsink);
+                                }
                                 break;
                             }
                             case LVUnaryOp::Shift: {

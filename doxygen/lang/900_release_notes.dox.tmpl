@@ -2877,6 +2877,10 @@
       a @ref weak_assignment_operator "weak reference" from the list or hash that it designates, instead of removing
       the weak reference itself or nothing
       (<a href="https://github.com/qoretechnologies/qore/issues/7306">issue 7306</a>)
+    - fixed a @ref weak_assignment_operator "weak assignment" whose lvalue's path passes through its source
+      (<tt>h.w := h</tt>): the path copied the source, so that the weak reference and those to the containers below it
+      designated the freed originals; the source is no longer kept by the assignment
+      (<a href="https://github.com/qoretechnologies/qore/issues/7405">issue 7405</a>)
     - the @ref remove "remove" and @ref delete "delete" operators remove a member of an object reached through a
       @ref weak_assignment_operator "weak reference" in the AST interpreter, as in the other execution modes, and no
       longer let an object that is still referenced be collected after such a removal in any mode

@@ -2599,6 +2599,13 @@ if (x || y)
     <tt>h + {...}</tt>, but not that of <tt>() + l</tt>, <tt>l[0..]</tt>, <tt>sort_stable(l)</tt>,
     @ref map "map", <tt>{...} + h</tt>, a hash slice (<tt>h{"x",}</tt>) or <tt>h.values()</tt>; code should not rely on
     either.\n<br>
+    The operator does not keep the hash or the list of such a variable or path alive while it resolves its lvalue: it
+    holds it through a weak reference until it assigns it.  An lvalue whose path passes through the source (ex:
+    <tt>h.w := h</tt>, <tt>h.a.b.w := h</tt>) is therefore changed in place: the weak reference designates the
+    container that the variable holds, and the weak references to the containers below it on the path (ex:
+    <tt>h.a.x := h.a.b</tt>) keep designating them.  If another thread releases the source meanwhile (ex: while a key
+    or an index of the lvalue is evaluated), the weak reference designates a freed hash or list, as described above, in
+    every @ref exec_mode_overview "execution mode".\n<br>
     The value of the operator is the value assigned, converted to the type of the lvalue, as a strong reference: a
     call that is given it uses the value, and a variable or a container that is given a hash or a list from it takes a
     copy of its own, as from any value that a weak reference designates (see above).  A temporary value assigned, as in

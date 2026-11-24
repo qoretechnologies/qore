@@ -53,6 +53,9 @@
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/WeakHashReferenceNode.h"
+#include "qore/intern/WeakListReferenceNode.h"
+#include "qore/intern/WeakReferenceNode.h"
 
 #include <algorithm>
 #include <atomic>
@@ -4306,6 +4309,27 @@ QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* copy) {
         return rv;
     }
     return QoreValue(copy);
+}
+
+QoreValue qore_weak_assignment_source(QoreValue v, ExceptionSink* xsink) {
+    switch (v.getType()) {
+        case NT_HASH: {
+            // the lvalue holds the container: releasing the reference read does not free it
+            ValueHolder strong(v, xsink);
+            return new WeakHashReferenceNode(v.get<QoreHashNode>());
+        }
+        case NT_LIST: {
+            ValueHolder strong(v, xsink);
+            return new WeakListReferenceNode(v.get<QoreListNode>());
+        }
+        case NT_WEAKREF: {
+            // a weak reference to an object that the source holds reads as its target, as in the other modes
+            ValueHolder weak(v, xsink);
+            return QoreValue(v.get<const WeakReferenceNode>()->get()).refSelf();
+        }
+        default:
+            return v;
+    }
 }
 
 QoreValue qore_value_copy_on_write(QoreValue& v) {

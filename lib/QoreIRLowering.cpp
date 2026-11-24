@@ -11029,17 +11029,11 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
             }
             return QoreIRValue();
         }
-        auto* source_var = dynamic_cast<const VarRefNode*>(right_expr.getInternalNode());
-        bool shared_source = !source_var;  // a class static variable
-        if (source_var) {
-            qore_var_t vt = source_var->getType();
-            shared_source = vt == VT_GLOBAL || vt == VT_CLOSURE || vt == VT_LOCAL_TS
-                || ((vt == VT_LOCAL) && source_var->ref.id
-                    && (source_var->ref.id->closureUse() || source_var->ref.id->isTopLevel()));
-        }
-        if (shared_source) {
-            unique_source = unique;
-        }
+        // the operand is the value that the step gives, for every source: a list or a hash is held through a weak
+        // reference, as the assignment does not keep a container that an lvalue holds; a strong reference read
+        // again from the variable would make the container shared, so that a copy-on-write step of the target's
+        // path, which can pass through it (h.w := h), copied it and orphaned the weak references to it (qore#7405)
+        unique_source = unique;
     }
     QoreIRValue right = unique_source.isValid() ? unique_source
         : lowerMutationOperand(assign->getLeft(), right_expr, assign->loc, error, true);
@@ -27651,15 +27645,10 @@ QoreIRValue QoreIRLowering::lowerWeakUniqueSource(const QoreValue& expr, const Q
         }
         return QoreIRValue();
     }
-    auto* source_var = dynamic_cast<const VarRefNode*>(expr.getInternalNode());
-    bool shared_source = !source_var;  // a class static variable or a path
-    if (source_var) {
-        qore_var_t vt = source_var->getType();
-        shared_source = vt == VT_GLOBAL || vt == VT_CLOSURE || vt == VT_LOCAL_TS
-            || ((vt == VT_LOCAL) && source_var->ref.id
-                && (source_var->ref.id->closureUse() || source_var->ref.id->isTopLevel()));
-    }
-    return shared_source ? unique : lowerExpression(expr, error);
+    // the value that the step gives, for every source: a list or a hash is held through a weak reference, as the
+    // assignment does not keep a container that an lvalue holds; a strong reference read again from a local would
+    // make the container shared, so that a copy-on-write step of the target's path copied it (qore#7405)
+    return unique;
 }
 
 QoreIRValue QoreIRLowering::lowerWeakSource(const QoreValue& expr, const QoreProgramLocation* loc,

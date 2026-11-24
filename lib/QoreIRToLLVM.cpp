@@ -40790,8 +40790,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->CreateBr(unique_done_bb);
                 builder->SetInsertPoint(unique_done_bb);
                 if (inst->result.isValid()) {
-                    values[inst->result.id] = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+                    // the operand of the weak assignment, which holds a list or a hash weakly (qore#7405)
+                    llvm::Value* local_bits = builder->CreateLoad(i64_type, storage);
+                    auto source_fn = module.getOrInsertFunction("qore_rt_weak_assignment_source",
+                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                    llvm::Value* source_bits = builder->CreateCall(source_fn, {local_bits, xsink_arg});
+                    values[inst->result.id] = source_bits;
                     nanboxed_values.insert(inst->result.id);
+                    trackResultForCleanup(source_bits, inst->result.id, llvm_func);
+                    // a reference that the local holds is resolved, which can raise an exception
+                    emitExceptionCheck(module, llvm_func, inst);
                 }
                 return true;
             }
@@ -40817,8 +40825,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 emitExceptionCheck(module, llvm_func, inst);
                 if (inst->result.isValid()) {
-                    values[inst->result.id] = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+                    // the operand of the weak assignment, read from the variable (qore#7405)
+                    auto source_fn = module.getOrInsertFunction("qore_rt_weak_assignment_source_local_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                    llvm::Value* source_bits = builder->CreateCall(source_fn,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, unique_slot), xsink_arg});
+                    values[inst->result.id] = source_bits;
                     nanboxed_values.insert(inst->result.id);
+                    trackResultForCleanup(source_bits, inst->result.id, llvm_func);
+                    emitExceptionCheck(module, llvm_func, inst);
                 }
                 return true;
             }
