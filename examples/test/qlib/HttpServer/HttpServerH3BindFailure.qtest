@@ -121,6 +121,7 @@ class HttpServerH3BindFailureTest inherits QUnit::Test {
 
         hash<ExceptionInfo> ex;
         try {
+            # all-interfaces: none; h3Options() listens on "node": "localhost" (the scanner does not follow the helper)
             srv.addListener(h3Options());
             assertTrue(False, "the listener was added");
         } catch (hash<ExceptionInfo> ex0) {
@@ -150,6 +151,7 @@ class HttpServerH3BindFailureTest inherits QUnit::Test {
         # a listener that runs: plain HTTP on a random port
         srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
         assertEq(1, srv.getRunningListenerCount());
+        # all-interfaces: none; h3Options() listens on "node": "localhost" (the scanner does not follow the helper)
         assertThrows("HTTPSERVER-H3-BIND-ERROR", \srv.addListener(), h3Options());
         assertEq(10, srv.ports.size(), "10 attempts");
         # the failed attempts took away nothing of the count of the listener that runs, so that stop() waits for it
@@ -168,6 +170,7 @@ class HttpServerH3BindFailureTest inherits QUnit::Test {
 
         hash<ExceptionInfo> ex;
         try {
+            # all-interfaces: none; h3Options() listens on "node": "localhost" (the scanner does not follow the helper)
             srv.addListener(h3Options());
             assertTrue(False, "the listener was added");
         } catch (hash<ExceptionInfo> ex0) {
@@ -187,6 +190,7 @@ class HttpServerH3BindFailureTest inherits QUnit::Test {
         on_exit delete srv;
         LogRecorder rec = s.rec;
 
+        # all-interfaces: none; h3Options() listens on "node": "localhost" (the scanner does not follow the helper)
         hash<auto> li = srv.addListener(h3Options());
         assertEq(10, srv.ports.size(), "the tenth attempt was bound");
         assertEq(srv.ports.last(), li.port, "the listener is on the port of the last attempt");
