@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par HttpServer Limits the Request Bodies That It Buffers to 256 MiB by Default
+    A request body that @ref HttpServer::HttpServer "HttpServer" reads into memory and that is larger than
+    @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" (256 MiB) is answered with HTTP 413 when no
+    limit is set (a body that a handler reads as a stream is not limited); set the
+    @ref HttpServer::HttpServerOptionInfo::max_request_body_size "max_request_body_size" option to \c 0 for no limit.
+
     @par Streamed HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
     A streamed HTTP/2 or HTTP/3 response that a handler thread sends is ended when its stream takes less than 1 KiB/s
     while the server waits for it, so that a very slow client can no longer hold a handler thread; a client that keeps
