@@ -38,9 +38,9 @@ class AbstractMixedVariantsTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("abstract variant implemented by another parent beside a concrete variant", "1.0", \ARGV) {
-        foreach string mode in (ExecModeHarness::ExecModes) {
-            string execution_mode = mode;
-            addTestCase("execution mode " + mode, sub () {
+        foreach string mode_name in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode_name;
+            addTestCase("execution mode " + mode_name, sub () {
                 assertEq(expected, ExecModeHarness::run(command(execution_mode)));
                 string cmd = shellQuote(qore_bin) + " --exec-mode=" + execution_mode;
                 assertEq("1 missing\n", ExecModeHarness::run(cmd + " " + return_fixture));
