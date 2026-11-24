@@ -39,6 +39,7 @@ list<auto> sub log_files(string pattern) {
     return (
         try_call(auto sub () { return (new Logger::LoggerAppenderFileRotate(\"r\", layout, pattern)).getFileName(); }),
         try_call(auto sub () { return (new Logger::LoggerAppenderFileArchive(\"a\", layout, pattern)).getFileName(); }),
+        try_call(auto sub () { return (new Logger::LoggerAppenderFileRing(\"g\", layout, pattern)).getFileName(); }),
     );
 }
 auto sub openapi3(string spec) {

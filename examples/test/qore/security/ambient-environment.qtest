@@ -82,14 +82,14 @@ auto sub download(string url) {
             "subst_plain": "plain text",
             "file_url": "host data",
             "file_url_explicit": "host data",
-            "log_files": (full, full),
+            "log_files": (full, full, full),
             "openapi3": "OK",
             "swagger": "OK",
         };
         # code that may not read the environment sees an empty one
         hash<string, auto> may_not = may + {
             "subst": "x  y|x  y|x  y",
-            "log_files": (empty, empty),
+            "log_files": (empty, empty, empty),
         };
         hash<string, string> expected;
         map expected{"host_" + $1.key} = sprintf("%y", $1.value), may.pairIterator();

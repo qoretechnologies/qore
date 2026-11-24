@@ -166,6 +166,7 @@ string sub mds(string endpoint) {
 
         addTestCase("client credentials: no token without the secret", \clientCredentialsSecretTest());
         addTestCase("client credentials: no token planted from another endpoint", \clientCredentialsPlantTest());
+        addTestCase("client credentials: no cached token without network access", \clientCredentialsAccessTest());
         addTestCase("managed identity: no token planted by a tenant", \managedIdentityPlantTest());
         addTestCase("managed identity: no host token for a tenant", \managedIdentityAccessTest());
         addTestCase("service account file: no token without file access", \serviceAccountAccessTest());
@@ -200,6 +201,14 @@ string sub mds(string endpoint) {
         string b_token = tenant_b.callFunction("cc", getUrl(port_b), "b-secret");
         assertRegex("^a-", tenant_a.callFunction("cc", getUrl(port_a), "a-secret", True));
         assertEq(b_token, tenant_b.callFunction("cc", getUrl(port_b), "b-secret"));
+    }
+
+    #! A may not connect to B's token endpoint, so it must not get the token that B obtained there with the same
+    #! parameters (and secret): the network check comes before the cache (qore#6745); the managed-identity and
+    #! metadata-server tokens are not served to sandboxed code at all (qore#6844)
+    clientCredentialsAccessTest() {
+        assertRegex("^b-", tenant_b.callFunction("cc", getUrl(port_b), "b-secret"));
+        assertEq("NETWORK-ACCESS-DENIED", tenant_a.callFunction("cc", getUrl(port_b), "b-secret"));
     }
 
     #! the managed identity is the host's: a sandboxed tenant fetches no token, so it cannot plant one over the

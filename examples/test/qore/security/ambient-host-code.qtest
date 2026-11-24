@@ -50,6 +50,10 @@ class AmbientHostCodeTest inherits QUnit::Test {
 *string sub own_closure(code host_call) {
     return host_call(*string sub () { return AwsRestClient::AwsRestClientBase::applyEnvCredentials({}).aws_keyid; });
 }
+# a call reference to a module's function that the caller creates, returned for the host's code to call later
+code sub make_module_ref() {
+    return \\AwsRestClient::AwsRestClientBase::applyEnvCredentials();
+}
 # a closure of the caller, returned for the host's code to call later
 code sub make_closure() {
     return *string sub () { return AwsRestClient::AwsRestClientBase::applyEnvCredentials({}).aws_keyid; };
@@ -92,6 +96,9 @@ code sub make_closure() {
             assertEq(expected, pgms{kind}.callFunction("own_closure", \host_call()), kind + ": passed to the host");
             code c = pgms{kind}.callFunction("make_closure");
             assertEq(expected, host_call(c), kind + ": called by the host later");
+            # a call reference to a module's function that the caller created runs for the caller
+            code r = pgms{kind}.callFunction("make_module_ref");
+            assertEq(expected, r({}).aws_keyid, kind + ": module function reference called by the host");
         }
     }
 }

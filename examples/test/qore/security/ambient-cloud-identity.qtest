@@ -10,6 +10,7 @@
 %requires FsUtil
 %requires GcpAuth
 %requires AzureAuth
+%requires AzureOpenAiRestClient
 %requires ./ambient-host/AmbientCallers.qm
 
 %exec-class AmbientCloudIdentityTest
@@ -24,6 +25,7 @@ class AmbientCloudIdentityTest inherits QUnit::Test {
         const Source = "%modern
 %requires GcpAuth
 %requires AzureAuth
+%requires AzureOpenAiRestClient
 %requires AmbientCallers
 auto sub try_call(code c) {
     try {
@@ -31,6 +33,20 @@ auto sub try_call(code c) {
     } catch (hash<ExceptionInfo> ex) {
         return ex.err + \": \" + ex.desc;
     }
+}
+# a request of an Azure OpenAI client with the managed identity: the token is fetched before the request is sent
+auto sub openai_request(object client, bool async) {
+    return try_call(auto sub () {
+        return async ? client.restGetAsync(\"/x\").get().status_code : client.restGet(\"/x\").status_code;
+    });
+}
+auto sub openai_own(string url, bool async) {
+    return try_call(auto sub () {
+        AzureOpenAiRestClient::AzureOpenAiRestClientIo client({\"url\": url,
+            \"azure_auth_mode\": \"entra_managed_identity\"});
+        on_exit client.close();
+        return async ? client.restGetAsync(\"/x\").get().status_code : client.restGet(\"/x\").status_code;
+    });
 }
 *string sub quota() {
     return GcpAuth::getQuotaProject(NOTHING);
@@ -81,6 +97,7 @@ auto sub azure_mi(string url) {
         addTestCase("GCP metadata server", \gcpMetadataTest());
         addTestCase("Azure managed identity", \azureTest());
         addTestCase("GCP quota project", \quotaTest());
+        addTestCase("Azure OpenAI client with the managed identity", \azureOpenAiTest());
         set_return_value(main());
     }
 
@@ -180,6 +197,27 @@ auto sub azure_mi(string url) {
         foreach string kind in (keys pgms) {
             assertEq(AmbientCallers::may_read(kind) ? "host-quota-project" : NOTHING, pgms{kind}.callFunction("quota"),
                 kind);
+        }
+    }
+
+    #! an Azure OpenAI client that uses the managed identity fetches no token of the host for a caller that may not
+    #! receive it: its own client, and a client that the host lent, synchronously and asynchronously
+    azureOpenAiTest() {
+        AzureOpenAiRestClient::AzureOpenAiRestClientIo lent({"url": mds.url,
+            "azure_auth_mode": "entra_managed_identity"});
+        on_exit lent.close();
+        foreach string kind in (keys pgms) {
+            # the host's identity is fetched from the default endpoint, which this test cannot provide
+            if (AmbientCallers::may_receive(kind)) {
+                continue;
+            }
+            foreach bool async in ((False, True)) {
+                string label = kind + (async ? ": async" : ": sync");
+                assertRegex("^AZURE-AUTH-ERROR: .*" + Refused, pgms{kind}.callFunction("openai_own", mds.url, async),
+                    label);
+                assertRegex("^AZURE-AUTH-ERROR: .*" + Refused, pgms{kind}.callFunction("openai_request", lent, async),
+                    label + ": lent");
+            }
         }
     }
 }
