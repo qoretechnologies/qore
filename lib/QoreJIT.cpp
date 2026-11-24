@@ -2525,6 +2525,12 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
                 error = "cancelled during JIT fast entry parameter mapping";
                 return false;
             }
+            // the argument of a parameter that the caller of a reference parameter fast entry binds on the runtime
+            // stack is ignored: the body reads and writes the parameter there (issue #7271)
+            if (callee_info.ref_fast_entry && qore_ir_fast_entry_param_is_runtime_reference(sig->lv[i])) {
+                fast_fn->getArg(i)->setName(std::string("ref_arg") + std::to_string(i));
+                continue;
+            }
             const void* key = reinterpret_cast<const void*>(sig->lv[i]);
             param_map[key] = fast_fn->getArg(i);
             param_kind_map[key] = i < callee_info.param_kinds.size()
