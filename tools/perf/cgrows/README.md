@@ -162,6 +162,7 @@ A row is named by its script and loop (`bench-func.q:fc`); names repeat between 
 | `bench-hasheq.q` | `hes` `her` `hsw` `hfv` `hfk` `hhe` `hhr` | `==` of two equal 26-key hashes with the keys in the same order, in reverse order, with the first two keys swapped; with the first value different, the first key different; `===` with the keys in the same order, in reverse order (qore#7266) |
 | `bench-gen.q` | `gr` `gc` `cr` `cc` `gn` `gl` `gh` `gk` `gm` `gx` `gv` | generic code at runtime (qore#6126): generic locals, closures, calls, classes, casts, with concrete controls (`cr`, `cc`) |
 | `bench-weak-assignment.q` | `member` `hash` `list` `variable` | a weak assignment (`:=`) from a public member, a hash key, a list element and a local (qore#7301) |
+| `bench-owning.q` | `sf_try_w` `s_try_w` `m_try_w` `mf_try_w` `sf_w` `sf_try_r` | a call that owns a temporary list argument that the method writes: a final static, a static, an instance and a final instance method in a try block, a final static method outside one, a final static method that only reads it (qore#7043, #6860) |
 
 A new bench script follows the same form, which `examples/test/runner/test_cgrows_tool.py` checks: its first line is
 `%modern`; it defines `int sub f(int a)` (which the dead statements call); each loop function starts with
