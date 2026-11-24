@@ -158,6 +158,18 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     request after a response that does not keep the connection, including a redirect, opens a new connection.  The
     HTTP/1.x connections of the @ref httpclientiointro "HttpClientIo" module are kept or closed alike.
 
+    @anchor httpclient_interim_responses
+    An HTTP/1.x interim response, which is any response with a \c 1xx status other than \c 101 (such as
+    <tt>100 Continue</tt>, <tt>102 Processing</tt> or <tt>103 Early Hints</tt>, and the \c 1xx codes not defined yet;
+    RFC 9110 section 15.2), is never returned as the response to a request: it is skipped, and the final response
+    that follows it on the connection is read and returned, and decides whether the connection is kept.  The header
+    of each interim response is reported to an event queue (see HTTPClient::setEventQueue()) as a
+    @ref EVENT_HTTP_MESSAGE_RECEIVED event, as that of any response is.  A request fails with an
+    \c HTTP1-RECV-ERROR exception, and the connection is closed, when the server sends more than 16 interim responses
+    before the final one, and when it sends a \c 101 response to a request that did not ask for a protocol upgrade with
+    an \c Upgrade header (RFC 9110 section 7.8), as such a request, streamed or not, has no use for the connection
+    after it.
+
     HTTP redirect responses are supported and can be limited with the \c max_redirects constructor hash key or by
     using the HTTPClient::setMaxRedirects() method. The default maximum number of redirects allowed is 5; see
     @ref httpclient_redirects for details.

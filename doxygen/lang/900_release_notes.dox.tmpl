@@ -4539,6 +4539,10 @@
     - an HTTP/1.x client connection is not reused after a response, including one without a body, when more data
       follows the response on it, nor after a \c 101 response that does not switch the connection over (see
       @ref httpclient_persistence "HTTPClient connection persistence")
+    - the HTTP/1.x client skips every interim \c 1xx response, such as \c 102 and \c 103, and returns the final
+      response, and fails a request answered with a \c 101 response that it did not ask for (see
+      @ref httpclient_interim_responses "HTTPClient interim responses";
+      <a href="https://github.com/qoretechnologies/qore/issues/7483">issue 7483</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

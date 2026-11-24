@@ -1109,7 +1109,7 @@ void Http1ClientPollOperationPriv::abandonFailedSend(const std::string& err, con
     // once a final response header was received, the response has started: a failure that follows is a failure of
     // the response (e.g. SOCKET-CLOSED for a body cut short), not the send error, which is not armed again (see
     // handleRecvHeader(), which clears it when the final header arrives)
-    if (response_status_code && response_status_code != 100) {
+    if (response_status_code && !isInterimStatus(response_status_code)) {
         return;
     }
     send_failure_pending = true;
@@ -1964,15 +1964,17 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
         // Determine if the response has a body
         // HEAD responses, 1xx, 204, and 304 have no body regardless of headers
         std::string method;
+        bool upgrade_requested;
         {
             AutoLocker al(stream_lock);
             method = active_method;
+            upgrade_requested = active_upgrade;
         }
 
-        // A final response has started (100 Continue is only a promise of one, see below): a failure from here on is
-        // a failure of the response, such as a body cut short, and is reported as such rather than as the send error
-        // the response may have followed
-        if (response_status_code != 100) {
+        // A final response has started (an interim response is only a promise of one, see below): a failure from
+        // here on is a failure of the response, such as a body cut short, and is reported as such rather than as the
+        // send error the response may have followed
+        if (!isInterimStatus(response_status_code)) {
             // on a reused connection, a 408 read after the request send failed is the response the server sent on
             // its own as it closed the idle connection (RFC 9110 section 15.5.9), not an answer to this request: the
             // connection-closed error is reported (setError() reports it for a reused connection), so an idempotent
@@ -2001,6 +2003,16 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
         // 101 Switching Protocols: the HTTP framing layer is done;
         // the socket transitions to raw bidirectional I/O (e.g., WebSocket).
         if (response_status_code == 101) {
+            // a server switches only to a protocol that the request asked for in its Upgrade header (RFC 9110
+            // sections 7.8 and 15.2.2): a 101 response to a request without one is an error of the response, which
+            // fails the request at once and closes the connection (setError()), whose data is no longer HTTP; a
+            // streaming request would otherwise wait for a response body that never comes until it timed out, and
+            // any other would be given the 101 as its response (qore#7483)
+            if (!upgrade_requested) {
+                setError("HTTP1-RECV-ERROR", "the server sent a \"101 Switching Protocols\" response to a request "
+                    "that did not ask for a protocol upgrade (it has no Upgrade header)", xsink);
+                return nullptr;
+            }
             if (streaming_active_io) {
                 // Deliver the 101 response headers to the Channel so the
                 // stream handle caller can validate the upgrade.
@@ -2033,29 +2045,32 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             return handleProtocolSwitched(xsink);
         }
 
-        // 100 Continue: RFC 9110 section 15.2.1 defines it as the server's promise to send a final response
-        // once the request body has been received, so it is never itself an answer - the client discards it
-        // and goes on reading.  This is not theoretical here: a peer answering a large request body early
-        // answers "100 Continue" first whenever the request carried "Expect: 100-continue" (HttpServer.qm
-        // does exactly that), and since startBufferedFullDuplex() reads the response while the body is still
-        // going out, that interim response now arrives mid-upload.  Treating it as the answer would leave
-        // the real response unread on the connection, where the next request finds it and closes the
-        // connection with HTTP1-UNEXPECTED-DATA.
-        //
-        // Only 100 is consumed: 101 ends HTTP framing and is handled above, and the remaining 1xx codes keep
-        // the behavior a handler returning one relies on (see the 102 case in HttpServer.qtest's issue3116),
-        // since nothing forces a final response to follow those.
-        if (response_status_code == 100) {
+        // Interim responses: RFC 9110 section 15.2 defines every 1xx response other than 101 (handled above) as
+        // interim, sent before the final response to the same request, so it is never itself an answer: the
+        // client discards it and goes on reading the final response on the connection, whatever the request
+        // (qore#7483).  This covers 100 Continue (section 15.2.1), which a peer answering a large request body early
+        // sends first whenever the request carried "Expect: 100-continue" (HttpServer.qm does exactly that; as
+        // startBufferedFullDuplex() reads the response while the body is still going out, it arrives mid-upload),
+        // 102 Processing (RFC 2518), 103 Early Hints (RFC 8297), whose header fields are reported to an event queue
+        // as those of any response header are (above), and the codes not defined yet (section 15: an unknown 1xx is
+        // handled as a 100).  Treating one as the answer would give the caller the interim response and leave the
+        // final one unread on the connection.  An interim response has no content (section 15.2), and its header
+        // fields (such as Content-Length or Connection) do not apply to the final response, whose header replaces
+        // them; the check for data that follows the response (connectionEndsWithResponse()) is made for the final
+        // response only.
+        if (isInterimStatus(response_status_code)) {
+            // each interim response is read with the size limit of a response header, and their number is bounded,
+            // so a server that never sends a final response cannot make the client read without end
             if (++interim_response_count > MAX_INTERIM_RESPONSES) {
                 // setError() takes a literal description, not a format string
                 QoreString desc;
-                desc.sprintf("server sent more than the maximum of %d \"100 Continue\" responses without "
-                    "sending a final response", MAX_INTERIM_RESPONSES);
+                desc.sprintf("server sent more than the maximum of %d interim (1xx) responses without sending a "
+                    "final response", MAX_INTERIM_RESPONSES);
                 setError("HTTP1-RECV-ERROR", desc.c_str(), xsink);
                 return nullptr;
             }
-            ASYNC_IO_TRACE("H1 handleRecvHeader: 100 Continue (%d of max %d), reading the next header "
-                "fd=%d\n", interim_response_count, MAX_INTERIM_RESPONSES,
+            ASYNC_IO_TRACE("H1 handleRecvHeader: interim response %d (%d of max %d), reading the next header "
+                "fd=%d\n", response_status_code, interim_response_count, MAX_INTERIM_RESPONSES,
                 sock_obj ? sock_obj->getPollableDescriptor() : -1);
             releaseCurrentOp(xsink);
             sock_obj->ref();
@@ -2850,6 +2865,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
         }
         active_sid = 0;
         active_method.clear();
+        active_upgrade = false;
     }
 
     // Convert binary body to string for text-based content types; a body that is not valid in its encoding
@@ -3059,6 +3075,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
         stream_action = nullptr;
         active_sid = 0;
         active_method.clear();
+        active_upgrade = false;
     }
     // the completed request's action that this one replaces is released first, as when it was released under the
     // lock
@@ -3538,6 +3555,7 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
 
     // Add request headers (skip HTTP/2 pseudo-headers)
     bool has_content_length = false;
+    bool upgrade_requested = false;
     if (user_headers) {
         ConstHashIterator hi(user_headers);
         while (hi.next()) {
@@ -3575,6 +3593,9 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
             }
             if (!strcasecmp(key, "content-length")) {
                 has_content_length = true;
+            } else if (!strcasecmp(key, "upgrade") && !v.isNullOrNothing()) {
+                // the request asks for a protocol upgrade, which a 101 response accepts (RFC 9110 section 7.8)
+                upgrade_requested = true;
             }
         }
     }
@@ -3657,6 +3678,7 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
             ++active_stream_count;
             active_sid = (int)stream_id;
             active_method = method;
+            active_upgrade = upgrade_requested;
             streaming_active = streaming;
             streaming_send = streaming_send_flag;
             old_pending_request_data = pending_request_data;
@@ -3701,6 +3723,7 @@ bool Http1ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink
             // Request hasn't started sending yet - safe to cancel
             active_sid = 0;
             active_method.clear();
+            active_upgrade = false;
             if (pending_request_data) {
                 pending_request_data->deref(xsink);
                 pending_request_data = nullptr;
