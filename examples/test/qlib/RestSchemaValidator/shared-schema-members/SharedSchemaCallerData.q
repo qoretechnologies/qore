@@ -216,6 +216,27 @@ string sub own_token_field(object shared, string token) {
         f.getAttributes().preselected);
 }
 
+# a REST client object of the tenant whose token changes between calls, as when it gets a new one
+class ChangingRest {
+    private {
+        string token = \"first\";
+    }
+    setToken(string token) {
+        self.token = token;
+    }
+    auto preprocessRequestBody() {
+        return {\"token\": token};
+    }
+}
+
+# the defaults of one REST client object that change between calls
+string sub changing_defaults(object shared) {
+    ChangingRest r();
+    *string first = token_default(shared, r);
+    r.setToken(\"second\");
+    return sprintf(\"%y, then %y\", first, token_default(shared, r));
+}
+
 # a REST client object of the tenant whose request bodies carry objects for a required and an optional property
 class TenantMetaRest {
     auto preprocessRequestBody() {
@@ -332,6 +353,7 @@ Program p = tenant();
     printf("tenants with their own REST clients: %y, %y; the first one again: %y\n",
         p.callFunction("own_token_default", shared, "tenant-1"), p2.callFunction("own_token_default", shared, "tenant-2"),
         p.callFunction("own_token_default", shared, "tenant-1"));
+    printf("a tenant's REST client whose defaults change: %s\n", p.callFunction("changing_defaults", shared));
     object schema_field = shared.getTypeForReference("Thing").getFields().token;
     printf("the field of a required property with a tenant's default: %s; the schema's field: mandatory %y, "
         "preselected %y\n", p.callFunction("own_token_field", shared, "tenant-1"), schema_field.isMandatory(),

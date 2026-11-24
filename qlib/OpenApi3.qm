@@ -6622,6 +6622,13 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         }
     }
 
+    #! Returns the variant of this schema's type that a type build cached, or @ref nothing
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::getCachedDataType() "AbstractRestSchemaObject::getCachedDataType()"
+    */
+    *AbstractDataProviderType getCachedDataType(bool required) {
+        return RestSchemaValidator::AbstractRestSchemaObject::getCachedDataType(required && !nullable);
+    }
+
     #! Returns the data type for the schema
     /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::getDataType() "AbstractRestSchemaObject::getDataType()"
     */
@@ -6631,10 +6638,16 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             return getRestDefaultsType(required, rest);
         }
         *RestSchemaValidator::AbstractRestSchemaValidator schema = getTypeBuildSchema();
-        if (schema && !schema.isTypeBuildActive()) {
-            return schema.runTypeBuild(AbstractDataProviderType sub () {
-                return getDataType(required, rest);
-            });
+        if (schema) {
+            # a cached type is read without a build; a build runs only if it is not cached
+            if (*AbstractDataProviderType t = schema.getBuiltDataType(self, required)) {
+                return t;
+            }
+            if (!schema.isTypeBuildActive()) {
+                return schema.runTypeBuild(AbstractDataProviderType sub () {
+                    return getDataType(required, rest);
+                });
+            }
         }
         required = required && !nullable;
         if (*AbstractDataProviderType t = getReplacedDataType(required)) {

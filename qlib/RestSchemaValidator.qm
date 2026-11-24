@@ -1700,10 +1700,16 @@ public namespace RestSchemaValidator {
                 return getRestDefaultsType(required, rest);
             }
             *AbstractRestSchemaValidator schema = getTypeBuildSchema();
-            if (schema && !schema.isTypeBuildActive()) {
-                return schema.runTypeBuild(AbstractDataProviderType sub () {
-                    return getDataType(required, rest);
-                });
+            if (schema) {
+                # a cached type is read without a build; a build runs only if it is not cached
+                if (*AbstractDataProviderType t = schema.getBuiltDataType(self, required)) {
+                    return t;
+                }
+                if (!schema.isTypeBuildActive()) {
+                    return schema.runTypeBuild(AbstractDataProviderType sub () {
+                        return getDataType(required, rest);
+                    });
+                }
             }
             if (*AbstractDataProviderType t = getReplacedDataType(required)) {
                 return t;
@@ -1722,6 +1728,18 @@ public namespace RestSchemaValidator {
                 getDataTypeIntern("/", False, rest);
             }
             return orNothingDataType;
+        }
+
+        #! Returns the variant of this schema's type that a type build cached, or @ref nothing
+        /** Called by @ref RestSchemaValidator::AbstractRestSchemaValidator::getBuiltDataType() "AbstractRestSchemaValidator::getBuiltDataType()"
+            with the schema's type build lock held, when no type build is in progress: a cached type is then complete
+
+            @param required @ref True for the mandatory type, @ref False for the "or nothing" type
+
+            @since RestSchemaValidator 2.5
+        */
+        *AbstractDataProviderType getCachedDataType(bool required) {
+            return required ? dataType : orNothingDataType;
         }
 
         #! Returns the request body defaults that a REST client gives for the fields of this schema's type
@@ -1755,9 +1773,16 @@ public namespace RestSchemaValidator {
             shared by every Program: the schema's own type, built from the schema alone and kept in its caches for
             every caller, is copied with the fields that have a default replaced by a field with the default (see
             @ref DataProvider::HashDataType::setFieldList() "HashDataType::setFieldList()"); the other fields and every
-            type that the fields refer to are the shared ones.  The copy is kept in the per-Program cache of the
-            calling code (see @ref Qore::SandboxManager::setProgramCacheValue() "SandboxManager::setProgramCacheValue()")
-            if the defaults are plain data (qore#6843).
+            type that the fields refer to are the shared ones.
+
+            The variant is kept in the per-Program cache of the calling code (see
+            @ref Qore::SandboxManager::setProgramCacheValue() "SandboxManager::setProgramCacheValue()") with the
+            defaults it was made with, if they are plain data, under the identity of the REST client and under the
+            defaults themselves: the client is asked for its defaults on each call, as they can change at any time (a
+            new token, for example) and a client has no generation of its defaults; the variant found under the
+            client's identity is used only if the defaults are the same (\c ===) as those it was made with, so a client
+            created at the address of a deleted one cannot get the other's variant, and otherwise the variant made for
+            the same defaults, by any client, is used (qore#6843).
 
             @param required @ref True for the mandatory type, @ref False for the "or nothing" type
             @param rest the REST client object
@@ -1774,11 +1799,21 @@ public namespace RestSchemaValidator {
                 return base;
             }
             *string key;
+            *string client_key;
             if (AbstractRestSchemaObject::isPlainData(defaults)) {
-                key = sprintf("rest-type-%s-%s", required ? "Y" : "N", sprintf("%y", defaults).toSHA256());
-                *AbstractDataProviderType rv = SandboxManager::getProgramCacheValue(self, key);
-                if (rv) {
-                    return rv;
+                # the identity of the client only finds the entry; the defaults decide whether it is used
+                client_key = (required ? "rest-client-Y-" : "rest-client-N-") + rest.uniqueHash();
+                *hash<auto> entry = SandboxManager::getProgramCacheValue(self, client_key);
+                if (entry && entry.defaults === defaults) {
+                    return entry.type;
+                }
+                # the variant made for the same defaults, also by another client
+                key = (required ? "rest-type-Y-" : "rest-type-N-") + sprintf("%y", defaults);
+                entry = SandboxManager::getProgramCacheValue(self, key);
+                if (entry) {
+                    SandboxManager::setProgramCacheValue(self, client_key, entry, RestDefaultsCacheSize,
+                        getTypeBuildSchema());
+                    return entry.type;
                 }
             }
             HashDataType base_hash = cast<HashDataType>(base);
@@ -1794,7 +1829,10 @@ public namespace RestSchemaValidator {
             HashDataType rv = base_hash.copy();
             rv.setFieldList(fields);
             if (key) {
-                SandboxManager::setProgramCacheValue(self, key, rv, RestDefaultsCacheSize, getTypeBuildSchema());
+                hash<auto> entry = {"defaults": defaults, "type": rv};
+                *AbstractRestSchemaValidator schema = getTypeBuildSchema();
+                SandboxManager::setProgramCacheValue(self, key, entry, RestDefaultsCacheSize, schema);
+                SandboxManager::setProgramCacheValue(self, client_key, entry, RestDefaultsCacheSize, schema);
             }
             return rv;
         }
@@ -3177,6 +3215,29 @@ AbstractDataProviderType type = schema.runTypeBuild(AbstractDataProviderType sub
         */
         int getTypeBuildId() {
             return type_build_lock.lockOwner() ? type_build_id : 0;
+        }
+
+        #! Returns the variant of a schema object's type that a finished type build cached, or @ref nothing
+        /** Reads the cache with the type build lock held, so that no type build is in progress and a cached type is
+            complete; a schema object's getDataType() starts a type build (see runTypeBuild()) only if the type is not
+            cached, so that asking for a cached type does not run a build (qore#6843)
+
+            In a type build of the calling thread, the cache of the build is read; otherwise it waits for a type build
+            of another thread
+
+            @param so the schema object
+            @param required @ref True for the mandatory type, @ref False for the "or nothing" type
+
+            @since RestSchemaValidator 2.5
+        */
+        *AbstractDataProviderType getBuiltDataType(AbstractRestSchemaObject so, bool required) {
+            # in a type build of the calling thread, the cache is the build's
+            if (type_build_lock.lockOwner()) {
+                return so.getCachedDataType(required);
+            }
+            type_build_lock.lock();
+            on_exit type_build_lock.unlock();
+            return so.getCachedDataType(required);
         }
 
         #! Returns @ref True if the calling thread is building types of this schema

@@ -1257,10 +1257,25 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
     */
     AbstractDataProviderType getType(string path, string typestr, *string format, *SchemaObject arrayItems,
             bool required = True) {
-        if (!isTypeBuildActive() && SandboxManager::isSharedObject(self)) {
-            return getCallerType(path, typestr, format, arrayItems, required);
-        }
         string id;
+        if (SandboxManager::isSharedObject(self) && !isTypeBuildActive()) {
+            # outside a type build of a shared document: the document's cache is read, never written; the unique
+            # hash of a schema object that the document did not build is the caller's, so its id is not looked up
+            # there
+            id = sprintf("%s-%s-%s-%s", path, typestr, format ?? "x", arrayItems ? arrayItems.uniqueHash() : "x");
+            if (!arrayItems || SandboxManager::isSharedObject(arrayItems)) {
+                if (*AbstractDataProviderType rv = typemap{id}{required ? "Y" : "N"}) {
+                    return rv;
+                }
+            }
+            string key = (required ? "type-Y-" : "type-N-") + id;
+            if (*AbstractDataProviderType rv = SandboxManager::getProgramCacheValue(self, key)) {
+                return rv;
+            }
+            AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required);
+            SandboxManager::setProgramCacheValue(self, key, rv, CallerTypeCacheSize);
+            return rv;
+        }
         if (*AbstractDataProviderType rv = checkType(path, typestr, format, arrayItems, required, \id)) {
             return rv;
         }
@@ -1307,28 +1322,6 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
                 }
             }
         });
-    }
-
-    #! Returns a type asked for outside a type build of a shared document; see getType()
-    private AbstractDataProviderType getCallerType(string path, string typestr, *string format,
-            *SchemaObject arrayItems, bool required) {
-        # the unique hash of a schema object that the document did not build is the caller's
-        bool own_items = !arrayItems || SandboxManager::isSharedObject(arrayItems);
-        string id;
-        if (own_items) {
-            if (*AbstractDataProviderType rv = checkType(path, typestr, format, arrayItems, required, \id)) {
-                return rv;
-            }
-        } else {
-            id = sprintf("%s-%s-%s-%s", path, typestr, format ?? "x", arrayItems.uniqueHash());
-        }
-        string key = "type-" + (required ? "Y" : "N") + "-" + id;
-        if (*AbstractDataProviderType rv = SandboxManager::getProgramCacheValue(self, key)) {
-            return rv;
-        }
-        AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required);
-        SandboxManager::setProgramCacheValue(self, key, rv, CallerTypeCacheSize);
-        return rv;
     }
 
     private *AbstractDataProviderType checkType(string path, string typestr, *string format,
@@ -1436,7 +1429,13 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         # a type that is not a shared object is the caller's, and its unique hash is the caller's too: its copy is
         # made with the document's copies of the shared types that it refers to, and is kept for the calling
         # Program only (qore#6843)
-        if (SandboxManager::isSharedObject(self) && !SandboxManager::isSharedObject(type)) {
+        bool shared = SandboxManager::isSharedObject(self);
+        if (shared && SandboxManager::isSharedObject(type)) {
+            # the response copy of a type of the document that was made before
+            if (*AbstractDataProviderType rv = response_types{type.uniqueHash()}) {
+                return rv;
+            }
+        } else if (shared) {
             string key = "response-" + type.uniqueHash();
             if (*AbstractDataProviderType rv = SandboxManager::getProgramCacheValue(self, key)) {
                 return rv;
