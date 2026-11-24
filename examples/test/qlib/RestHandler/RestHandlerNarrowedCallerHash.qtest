@@ -10,6 +10,7 @@
 %requires HttpServerUtil
 %requires RestSchemaValidator
 %requires RestHandler
+%requires HttpServer
 
 %exec-class RestHandlerNarrowedCallerHashTest
 
@@ -118,7 +119,8 @@ class NarrowedHeaderListener inherits HttpListenerInterface {
 #! Response headers whose values all have the same type are accepted by the REST server and validators
 /** A hash literal such as \c {"X-Total-Count": 42} has the narrowed runtime type \c hash<string, int>; adding the
     \c Content-Type string header to it raised RUNTIME-TYPE-ERROR, which the REST handler returned as a 406 error.
-    The handler is called directly, without a server
+    The handler is called directly, without a server, except for the stream requests, which only the dispatch of an
+    HTTP server serves (qore#6843)
 */
 class RestHandlerNarrowedCallerHashTest inherits QUnit::Test {
     constructor() : Test("RestHandlerNarrowedCallerHashTest", "1.0", \ARGV) {
@@ -166,30 +168,51 @@ class RestHandlerNarrowedCallerHashTest inherits QUnit::Test {
     }
 
     streamIntString() {
-        hash<auto> rv = handle("stream?action=intString");
+        hash<auto> rv = serve("stream?action=intString");
         assertEq(200, rv.code);
         # the body is serialized as JSON
         assertEq("\"streamed\"", rv.body);
-        assertEq({"X-Count": 1, "X-Stream": "yes", "Content-Type": "application/json"},
-            rv.hdr{"X-Count", "X-Stream", "Content-Type"});
+        # the header values as the client receives them
+        assertEq({"x-count": "1", "x-stream": "yes", "content-type": "application/json"},
+            rv.hdr{"x-count", "x-stream", "content-type"});
     }
 
     streamStringInt() {
-        hash<auto> rv = handle("stream?action=stringInt");
+        hash<auto> rv = serve("stream?action=stringInt");
         assertEq(200, rv.code);
         # the body is serialized as JSON
         assertEq("\"streamed\"", rv.body);
-        assertEq({"X-Stream": "yes", "X-Count": 1, "Content-Type": "application/json"},
-            rv.hdr{"X-Stream", "X-Count", "Content-Type"});
+        assertEq({"x-stream": "yes", "x-count": "1", "content-type": "application/json"},
+            rv.hdr{"x-stream", "x-count", "content-type"});
     }
 
     streamBoolString() {
-        hash<auto> rv = handle("stream?action=boolString");
+        hash<auto> rv = serve("stream?action=boolString");
         assertEq(200, rv.code);
         # the body is serialized as JSON
         assertEq("\"streamed\"", rv.body);
-        assertEq({"X-Debug": True, "X-Stream": "yes", "Content-Type": "application/json"},
-            rv.hdr{"X-Debug", "X-Stream", "Content-Type"});
+        assertEq({"x-debug": "1", "x-stream": "yes", "content-type": "application/json"},
+            rv.hdr{"x-debug", "x-stream", "content-type"});
+    }
+
+    #! Sends a GET request for the path to the REST handler, dispatched by an HTTP server; returns the code, the
+    #! body and the header fields of the response
+    private hash<auto> serve(string path) {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        server.setHandler("rest", "^stream", NOTHING, new NarrowedHeaderRestHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        HTTPClient c({"url": "http://127.0.0.1:" + port});
+        on_exit c.disconnect();
+        hash<auto> info;
+        hash<auto> resp = c.send(NOTHING, "GET", "/" + path, {"Accept": "application/json"}, False, \info);
+        return {
+            "code": resp.status_code,
+            "body": resp.body,
+            "hdr": resp - ("status_code", "status_message", "body", "headers"),
+        };
     }
 
     externalRequestStringContext() {
