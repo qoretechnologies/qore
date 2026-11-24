@@ -142,7 +142,10 @@ public:
         int delegate_idx = -1;      //!< DELEGATE: index into delegate_ops table
         size_t recv_size = 0;       //!< RECV_EXACT: byte count
         int pattern_idx = -1;       //!< RECV_UNTIL: index into string_data table
-        bool recv_as_string = false;//!< RECV_EXACT/RECV_UNTIL/RECV_DATA: return as string
+        //! RECV_EXACT/RECV_UNTIL/RECV_DATA: return as string; RECV_HEADER: the header is that of a response, whose
+        //! status line is checked whatever it starts with; TRANSFORM/BRANCH: the step checks the status code of a
+        //! response, so the headers that the pipeline reads are those of responses (qore#7485)
+        bool recv_as_string = false;
 
         // BRANCH config
         BranchCondition condition;
@@ -231,26 +234,10 @@ public:
     DLLEXPORT int addTransform(TransformFn transform);
 
     //! Adds a status-code validation transform (throws if not in range)
-    /** The HTTP headers that the pipeline reads are then those of responses (see expectsResponse())
-    */
     DLLEXPORT int addValidateStatus(int lo, int hi, const char* err_code);
 
     //! Adds a branch based on status code range
-    /** The HTTP headers that the pipeline reads are then those of responses (see expectsResponse())
-    */
     DLLEXPORT int addBranchOnStatus(int lo, int hi, int true_step, int false_step);
-
-    //! Returns true if the HTTP headers that the pipeline reads are those of responses
-    /** This is the case when the pipeline checks the status code of a response (addValidateStatus(),
-        addBranchOnStatus()): the first line of a header is then checked as a status line whatever it starts with, so
-        that a response with data before its status line is refused instead of being read as a request (qore#7485);
-        otherwise a header is a response only if it starts with \c "HTTP/", and a request if not.
-
-        @since %Qore 3.0
-    */
-    DLLLOCAL bool expectsResponse() const {
-        return expect_response;
-    }
 
     //! Adds a header value validation transform (throws if header doesn't match prefix)
     DLLEXPORT int addValidateHeaderPrefix(const char* header_name, const char* expected_prefix,
@@ -535,9 +522,6 @@ private:
 
     //! Step vector (configured by builder, executed by continuePoll)
     std::vector<Step> steps;
-
-    //! True if the HTTP headers read are those of responses; see expectsResponse()
-    bool expect_response = false;
 
     //! Current step index
     int current_step = 0;

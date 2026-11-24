@@ -742,10 +742,8 @@ QoreHashNode* Http1ClientPollOperationPriv::startBufferedFullDuplex(ExceptionSin
 #ifdef DEBUG
         dbgFailHeaderReadOp("full-duplex");
 #endif
-        SocketReadHttpHeaderPollOperation* header_op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
         // the header read is that of a response, whose status line is checked (qore#7485)
-        header_op->expectResponse();
-        read_op = header_op;
+        read_op = new SocketReadHttpResponseHeaderPollOperation(&read_xsink, sock_obj);
         if (read_xsink) {
             read_op->deref(&read_xsink);
             QoreStringValueHelper err_str(read_xsink.getExceptionErr());
@@ -1019,10 +1017,9 @@ SocketPollOperationBase* Http1ClientPollOperationPriv::newHeaderReadOp(Exception
 #ifdef DEBUG
     dbgFailHeaderReadOp(site);
 #endif
-    SocketReadHttpHeaderPollOperation* op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
     // the header read is that of a response, whose status line is checked: a response that does not start with a
     // valid status line fails the request, and the connection is closed (qore#7485)
-    op->expectResponse();
+    SocketPollOperationBase* op = new SocketReadHttpResponseHeaderPollOperation(&read_xsink, sock_obj);
     if (!read_xsink) {
         return op;
     }
@@ -1057,10 +1054,8 @@ QoreHashNode* Http1ClientPollOperationPriv::recoverResponseAfterSendFailure(cons
 #ifdef DEBUG
         dbgFailHeaderReadOp("send-failure-recovery");
 #endif
-        SocketReadHttpHeaderPollOperation* header_op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
         // the header read is that of a response, whose status line is checked (qore#7485)
-        header_op->expectResponse();
-        read_op = header_op;
+        read_op = new SocketReadHttpResponseHeaderPollOperation(&read_xsink, sock_obj);
         if (read_xsink) {
             read_op->deref(&read_xsink);
             read_xsink.clear();

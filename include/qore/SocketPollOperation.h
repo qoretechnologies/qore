@@ -690,18 +690,8 @@ public:
     //! Aborts: clears output buffer then delegates to base abort
     DLLEXPORT virtual void abort(ExceptionSink* xsink) override;
 
-    //! Makes the operation read the header of a response, as an HTTP client does
-    /** The first line of the header must then be a valid status line (RFC 9112 section 4), whatever it starts with;
-        otherwise a header is a response only if it starts with \c "HTTP/".  Called before the operation is run.
-
-        @since %Qore 3.0
-    */
-    DLLEXPORT void expectResponse();
-
 private:
     mutable ReferenceHolder<QoreHashNode> out;
-    //! true if the header must be that of a response; see expectResponse()
-    bool expect_response = false;
 
     DLLEXPORT void init(ExceptionSink* xsink, bool defer_init);
     DLLEXPORT virtual int initPollState(ExceptionSink* xsink) override;
