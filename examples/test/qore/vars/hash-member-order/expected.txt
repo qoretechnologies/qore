@@ -1,0 +1,80 @@
+order literal: 5 ok ok [z,a,m,b,y]
+order assigned: 6 ok ok [z,a,m,b,y,c]
+order first deleted: 5 ok ok [a,m,b,y,c]
+order last deleted: 4 ok ok [a,m,b,y]
+order middle removed: 3 ok ok [a,b,y]
+order re-added: 5 ok ok [a,b,y,z,m]
+order minus: 2 ok ok [z,m]
+order emptied: 0 ok ok []
+order one: 1 ok ok [only]
+size1: ok ok "k0" "k0"
+size1 halved: 0 ok ok null null
+size1 refilled: 1 ok ok "k0" "k0" ["k0"]
+size2: ok ok "k0" "k1"
+size2 halved: 1 ok ok "k1" "k1"
+size2 refilled: 2 ok ok "k1" "k0" ["k1", "k0"]
+size7: ok ok "k0" "k6"
+size7 halved: 3 ok ok "k1" "k5"
+size7 refilled: 7 ok ok "k1" "k6" ["k1", "k3", "k5", "k0"]
+size8: ok ok "k0" "k7"
+size8 halved: 4 ok ok "k1" "k7"
+size8 refilled: 8 ok ok "k1" "k6" ["k1", "k3", "k5", "k7"]
+size9: ok ok "k0" "k8"
+size9 halved: 4 ok ok "k1" "k7"
+size9 refilled: 9 ok ok "k1" "k8" ["k1", "k3", "k5", "k7"]
+size15: ok ok "k0" "k14"
+size15 halved: 7 ok ok "k1" "k13"
+size15 refilled: 15 ok ok "k1" "k14" ["k1", "k3", "k5", "k7"]
+size16: ok ok "k0" "k15"
+size16 halved: 8 ok ok "k1" "k15"
+size16 refilled: 16 ok ok "k1" "k14" ["k1", "k3", "k5", "k7"]
+size17: ok ok "k0" "k16"
+size17 halved: 8 ok ok "k1" "k15"
+size17 refilled: 17 ok ok "k1" "k16" ["k1", "k3", "k5", "k7"]
+size31: ok ok "k0" "k30"
+size31 halved: 15 ok ok "k1" "k29"
+size31 refilled: 31 ok ok "k1" "k30" ["k1", "k3", "k5", "k7"]
+size32: ok ok "k0" "k31"
+size32 halved: 16 ok ok "k1" "k31"
+size32 refilled: 32 ok ok "k1" "k30" ["k1", "k3", "k5", "k7"]
+size33: ok ok "k0" "k32"
+size33 halved: 16 ok ok "k1" "k31"
+size33 refilled: 33 ok ok "k1" "k32" ["k1", "k3", "k5", "k7"]
+size63: ok ok "k0" "k62"
+size63 halved: 31 ok ok "k1" "k61"
+size63 refilled: 63 ok ok "k1" "k62" ["k1", "k3", "k5", "k7"]
+size64: ok ok "k0" "k63"
+size64 halved: 32 ok ok "k1" "k63"
+size64 refilled: 64 ok ok "k1" "k62" ["k1", "k3", "k5", "k7"]
+size65: ok ok "k0" "k64"
+size65 halved: 32 ok ok "k1" "k63"
+size65 refilled: 65 ok ok "k1" "k64" ["k1", "k3", "k5", "k7"]
+size127: ok ok "k0" "k126"
+size127 halved: 63 ok ok "k1" "k125"
+size127 refilled: 127 ok ok "k1" "k126" ["k1", "k3", "k5", "k7"]
+size128: ok ok "k0" "k127"
+size128 halved: 64 ok ok "k1" "k127"
+size128 refilled: 128 ok ok "k1" "k126" ["k1", "k3", "k5", "k7"]
+size129: ok ok "k0" "k128"
+size129 halved: 64 ok ok "k1" "k127"
+size129 refilled: 129 ok ok "k1" "k128" ["k1", "k3", "k5", "k7"]
+large: 50000 ok ok "k0" "k49999"
+large removed: 42857 7143 ok ok ["k0", "k7", "k14", "k21", "k28"] "k49994"
+large regrown: 27143 ok ok ["k49980", "k49987", "k49994", "n0", "n1", "n2"] "n19999"
+large copy: 27144 ok "added" 27143
+large lookups: 7143
+large equal: True False
+similar keys: 43 ok ok [abcdefghijklmnopqrstuvwxyz-00,abcdefghijklmnopqrstuvwxyz-01,abcdefghijklmnopqrstuvwxyz-02,abcdefghijklmnopqrstuvwxyz-03,abcdefghijklmnopqrstuvwxyz-04,abcdefghijklmnopqrstuvwxyz-05,abcdefghijklmnopqrstuvwxyz-06,abcdefghijklmnopqrstuvwxyz-07,abcdefghijklmnopqrstuvwxyz-08,abcdefghijklmnopqrstuvwxyz-09,abcdefghijklmnopqrstuvwxyz-10,abcdefghijklmnopqrstuvwxyz-11,abcdefghijklmnopqrstuvwxyz-12,abcdefghijklmnopqrstuvwxyz-13,abcdefghijklmnopqrstuvwxyz-14,abcdefghijklmnopqrstuvwxyz-15,abcdefghijklmnopqrstuvwxyz-16,abcdefghijklmnopqrstuvwxyz-17,abcdefghijklmnopqrstuvwxyz-18,abcdefghijklmnopqrstuvwxyz-19,abcdefghijklmnopqrstuvwxyz-20,abcdefghijklmnopqrstuvwxyz-21,abcdefghijklmnopqrstuvwxyz-22,abcdefghijklmnopqrstuvwxyz-23,abcdefghijklmnopqrstuvwxyz-24,abcdefghijklmnopqrstuvwxyz-25,abcdefghijklmnopqrstuvwxyz-26,abcdefghijklmnopqrstuvwxyz-27,abcdefghijklmnopqrstuvwxyz-28,abcdefghijklmnopqrstuvwxyz-29,abcdefghijklmnopqrstuvwxyz-30,abcdefghijklmnopqrstuvwxyz-31,abcdefghijklmnopqrstuvwxyz-32,abcdefghijklmnopqrstuvwxyz-33,abcdefghijklmnopqrstuvwxyz-34,abcdefghijklmnopqrstuvwxyz-35,abcdefghijklmnopqrstuvwxyz-36,abcdefghijklmnopqrstuvwxyz-37,abcdefghijklmnopqrstuvwxyz-38,abcdefghijklmnopqrstuvwxyz-39,,naïve,日本語]
+similar keys deleted: 29 ok ok [abcdefghijklmnopqrstuvwxyz-01,abcdefghijklmnopqrstuvwxyz-02,abcdefghijklmnopqrstuvwxyz-04,abcdefghijklmnopqrstuvwxyz-05,abcdefghijklmnopqrstuvwxyz-07,abcdefghijklmnopqrstuvwxyz-08,abcdefghijklmnopqrstuvwxyz-10,abcdefghijklmnopqrstuvwxyz-11,abcdefghijklmnopqrstuvwxyz-13,abcdefghijklmnopqrstuvwxyz-14,abcdefghijklmnopqrstuvwxyz-16,abcdefghijklmnopqrstuvwxyz-17,abcdefghijklmnopqrstuvwxyz-19,abcdefghijklmnopqrstuvwxyz-20,abcdefghijklmnopqrstuvwxyz-22,abcdefghijklmnopqrstuvwxyz-23,abcdefghijklmnopqrstuvwxyz-25,abcdefghijklmnopqrstuvwxyz-26,abcdefghijklmnopqrstuvwxyz-28,abcdefghijklmnopqrstuvwxyz-29,abcdefghijklmnopqrstuvwxyz-31,abcdefghijklmnopqrstuvwxyz-32,abcdefghijklmnopqrstuvwxyz-34,abcdefghijklmnopqrstuvwxyz-35,abcdefghijklmnopqrstuvwxyz-37,abcdefghijklmnopqrstuvwxyz-38,naïve,日本語,]
+iterator snapshot: ["k0", "k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8", "k9"] 9 ok ok [k1,k2,k4,k5,k6,k7,k8,k9,added]
+reverse iterator snapshot: ["added", "k9", "k8", "k7", "k6", "k5", "k4", "k2", "k1"] 9 ok ok [k1,k2,k5,k6,k7,k8,k9,added,later]
+foreach keys snapshot: ["k1", "k2", "k5", "k6", "k7", "k8", "k9", "added", "later"] 9 ok ok [k1,k2,k5,k6,k8,k9,added,later,k6x]
+pairIterator snapshot: ["k1", "k2", "k5", "k6", "k8", "k9", "added", "later", "k6x"] 9 ok ok [k1!,k2!,k5!,k6!,k8!,k9!,added!,later!,k6x!]
+shared iteration: ["k0", "k1", "k2", "k3", "k4", "k5"] 0 6 ok ok [k0,k1,k2,k3,k4,k5]
+map over own keys: ["k0", "k1", "k2", "k3", "k4"] 5 ok ok [k0x,k1x,k2x,k3x,k4x]
+object members: ["z", "w", "naïve", "y", "v"] {y: "y again", z: "z", w: "w", naïve: "naïve", v: "v"}
+object copy members: ["z", "w", "naïve", "y", "v"] ["z", "w", "naïve", "y", "v"]
+map hash: 4 ok ok [one,two,three,four]
+slice order: 3 ok ok [four,one,two]
+plus order: 5 ok ok [four,one,two,three,five]
+typed order: hash<string, int> 3 ok ok [a,c,b]

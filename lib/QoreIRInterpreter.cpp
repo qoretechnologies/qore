@@ -20963,7 +20963,7 @@ load_local_done:
                                         HashIterator hi(h);
                                         while (hi.next()) {
                                             if (hi.get().getType() == NT_STRING) {
-                                                QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+                                                QoreValue& v = qhi_priv::get(hi)->i->val;
                                                 ensure_unique(v, xsink);
                                                 if (v.get<QoreStringNode>()->trim(xsink)) {
                                                     return -1;
@@ -21018,7 +21018,7 @@ load_local_done:
                                         HashIterator hi(h);
                                         while (hi.next()) {
                                             if (hi.get().getType() == NT_STRING) {
-                                                QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+                                                QoreValue& v = qhi_priv::get(hi)->i->val;
                                                 ensure_unique(v, xsink);
                                                 if (*xsink) {
                                                     return -1;

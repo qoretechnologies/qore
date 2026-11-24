@@ -5835,7 +5835,7 @@ bool QoreTypeSpec::acceptInputComplexHashImpl(ExceptionSink* xsink, const QoreTy
     // now we have to fold the value types into our type
     HashIterator i(h);
     while (i.next()) {
-        hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(i)->i);
+        hash_assignment_priv ha(*qore_hash_private::get(*h), qhi_priv::get(i)->i);
         QoreValue hn(ha.swap(QoreValue()));
 
         if (policy.value(uTi(), hn, true) == QTI_NOT_EQUAL
@@ -9402,7 +9402,7 @@ bool QoreTypeInfo::retypeValueImpl(QoreValue& v, const QoreTypeInfo* target_ti,
                 if (i && !(i % 100) && qore_check_cancel(xsink, "hash value retyping")) {
                     return false;
                 }
-                hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(hi)->i);
+                hash_assignment_priv ha(*qore_hash_private::get(*h), qhi_priv::get(hi)->i);
                 QoreValue cur(ha.swap(QoreValue()));
                 if (!policy.retype(cur, inner_h_vt, xsink)
                         || !qore_retype_element_accepted(cur, inner_h_vt, hi.getKey(), xsink, policy)) {
