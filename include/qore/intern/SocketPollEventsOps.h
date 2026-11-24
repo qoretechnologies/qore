@@ -52,6 +52,9 @@ public:
     //! Continues a receive operation; with \a events, its readiness mask is stored there and no hash is returned
     DLLLOCAL static QoreHashNode* continuePollImpl(SocketRecvPollOperationBase* b, ExceptionSink* xsink,
             int* events);
+
+    //! Returns the bytes of a send operation delivered, subtracting queued TCP data when the platform reports it
+    DLLLOCAL static int64 getDeliveredBytes(const SocketSendPollOperation& op);
 };
 
 #endif
