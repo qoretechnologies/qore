@@ -850,6 +850,11 @@
     region name in the zoneinfo directory or does not exist raises \c TZINFO-ERROR <tt>unknown time zone
     region</tt> instead of \c FILE-OPEN2-ERROR.  See @ref sandbox_fs_tz_regions.
 
+    @par Deserialized Time Zones Never Open Files
+    The time zone of a deserialized date or @ref Qore::TimeZone "TimeZone" is a region, the local zone or a UTC
+    offset, so one loaded from a zoneinfo file given as a path does not round-trip unless the receiver loads it by
+    path itself.  See @ref serializable_time_zones.
+
     @par Local Times Follow All of the Data in Zoneinfo Files
     Time zones use all of the data in zoneinfo files, so local times before 1901 and after 2037 and with "slim" files
     change, and an invalid file raises \c TZINFO-ERROR.  See @ref zoneinfo_files.

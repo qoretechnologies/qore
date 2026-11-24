@@ -74,6 +74,7 @@ code sub closure(string r) { return string sub () { return (new TimeZone(r)).reg
         addTestCase("a file is cached once however its path is spelled", \testPathSpellings());
         addTestCase("a refused relative path is named as given", \testRelativePathError());
         addTestCase("the local zone named by a path", \testLocalZonePath());
+        addTestCase("deserialized time zones never open files", \testDeserializeNoPath());
         set_return_value(main());
     }
 
@@ -391,12 +392,16 @@ code sub closure(string r) { return string sub () { return (new TimeZone(r)).reg
             "a cached path under a SandboxManager");
         assertEq(0, allowed.callFunction("offset", path), "a cached path that the policy allows");
 
-        # a deserialized date in the zone of the path
-        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \nfs.callFunction(), ("des", data),
-            "a date in a cached path's zone under PO_NO_FILESYSTEM");
-        assertThrows("FILESYSTEM-ACCESS-DENIED", \sm.callFunction(), ("des", data),
-            "a date in a cached path's zone under a SandboxManager");
-        assertEq(d, allowed.callFunction("des", data), "a date in a cached path's zone that the policy allows");
+        # a deserialized date in the zone of the path: data never names a path, also not a cached one, also not for
+        # code that may read it or trusted code
+        foreach hash<auto> c in ({"p": nfs, "label": "PO_NO_FILESYSTEM"}, {"p": sm, "label": "a SandboxManager"},
+                {"p": allowed, "label": "a policy that allows the path"}) {
+            Program prog = c.p;
+            assertUnknownRegion(sub () { prog.callFunction("des", data); }, path,
+                "a date in a cached path's zone under " + c.label);
+        }
+        assertUnknownRegion(auto sub () { return Serializable::deserialize(data); }, path,
+            "a date in a cached path's zone in trusted code");
 
         # the region APIs take the path as a path
         assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \nfs.callFunction(), ("set_region", path),
@@ -596,5 +601,48 @@ print(out.join(\"|\"));
         string out = backquote(sprintf("TZ='%s' '%s' '%s'", local, qore_bin, script));
         assertEq((local, "ILLEGAL-FILESYSTEM-ACCESS", "ILLEGAL-FILESYSTEM-ACCESS", local).join("|"), trim(out),
             "a path naming the local zone is a path for the region APIs; a date in the local zone deserializes");
+    }
+
+    testDeserializeNoPath() {
+        if (!zoneinfo) {
+            testSkip("no zoneinfo file to copy");
+        }
+        # a zone loaded from a path by trusted code, so it is cached
+        string path = dir + "/tz-serialized";
+        copyFile(zoneinfo, path);
+        TimeZone tz(path);
+        date d = tz.date("2026-01-15T10:00:00");
+        binary date_data = Serializable::serialize(d);
+        binary tz_data = Serializable::serialize(tz);
+        hash<auto> h = {"when": d, "zone": tz};
+        binary hash_data = Serializable::serialize(h);
+        Program allowed = tenantAllow(dir);
+        foreach hash<auto> c in ({"data": date_data, "label": "a date"}, {"data": tz_data, "label": "a TimeZone"},
+                {"data": hash_data, "label": "a hash with both"}) {
+            binary data = c.data;
+            assertUnknownRegion(auto sub () { return Serializable::deserialize(data); }, path,
+                c.label + " in a path's zone in trusted code");
+            assertUnknownRegion(sub () { allowed.callFunction("des", data); }, path,
+                c.label + " in a path's zone in code that may read the path");
+        }
+        # a path that was never loaded is not read either: it is removed only after the deserialization
+        string fresh = dir + "/tz-serializex";
+        copyFile(zoneinfo, fresh);
+        binary fresh_data = replaceRegion(date_data, path, fresh);
+        assertUnknownRegion(auto sub () { return Serializable::deserialize(fresh_data); }, fresh,
+            "a date in a zone of a path that was never loaded");
+        unlink(fresh);
+        assertThrows("FILE-OPEN2-ERROR", sub () { TimeZone t(fresh); }, NOTHING, "the path was not read");
+
+        # a TimeZone in a region and in an offset round-trip
+        TimeZone region_tz("America/Bogota");
+        assertEq("America/Bogota", Serializable::deserialize(Serializable::serialize(region_tz)).region(),
+            "a TimeZone in a region");
+        assertEq("America/Bogota", tenant().callFunction("des", Serializable::serialize(region_tz)).region(),
+            "a TimeZone in a region in sandboxed code");
+        TimeZone offset_tz(3600);
+        assertEq(3600, Serializable::deserialize(Serializable::serialize(offset_tz)).UTCOffset(), "an offset");
+        # the receiver can load the zone by its path itself
+        assertEq(0, (new TimeZone(path)).UTCOffset(), "the zone of the path is loaded by path");
     }
 }

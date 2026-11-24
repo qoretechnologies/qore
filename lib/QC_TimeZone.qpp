@@ -80,8 +80,13 @@ static void TimeZone_deserializer(QoreObject& self, const QoreHashNode* sdata, Q
                     "expecting 'string'", val.getTypeName());
                 return;
             }
+            // a zone named in data is a region or the local zone, never a path
             QoreStringNodeValueHelper region(val);
-            create_timezone_from_region(**region, self, xsink);
+            const AbstractQoreZoneInfo* zone = QTZM.findDataRegion(**region, xsink);
+            if (*xsink) {
+                return;
+            }
+            self.setPrivate(CID_TIMEZONE, new TimeZoneData(zone));
             return;
         }
 
@@ -101,7 +106,8 @@ static void TimeZone_deserializer(QoreObject& self, const QoreHashNode* sdata, Q
     have daylight savings time information; those based on UTC offsets have none.
 
     The TimeZone class supports @ref Serializable "data serialization"; deserialization can fail if the object is based on
-    a region that is not present on the target machine.
+    a region that is not present on the target machine, and a TimeZone loaded from a zoneinfo file given as a path does
+    not deserialize, as a deserialized name never opens a file (see @ref serializable_time_zones).
 */
 qclass TimeZone [arg=TimeZoneData* z; vparent=Serializable; serializer=reinterpret_cast<q_serializer_t>(TimeZone_serializer); deserializer=TimeZone_deserializer];
 

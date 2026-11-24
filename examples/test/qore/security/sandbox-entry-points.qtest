@@ -338,8 +338,9 @@ class SandboxEntryPointsTest inherits QUnit::Test {
         string hex = make_hex_string(Serializable::serialize(d));
         binary data = parse_hex_string(replace(hex, make_hex_string(binary(region)),
             make_hex_string(binary(date_path))));
-        assertNoFilesystem(sub () { p.callFunction("des", data); },
-            "a deserialized date with a zoneinfo path under PO_NO_FILESYSTEM");
+        # a zone named in data is never a path: the same error as for an unknown region (qore#7442)
+        assertThrows("TZINFO-ERROR", "^unknown time zone region \"" + regex_escape(date_path) + "\"",
+            \p.callFunction(), ("des", data), "a deserialized date with a zoneinfo path under PO_NO_FILESYSTEM");
 
         if (!zoneinfo) {
             return;

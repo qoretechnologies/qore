@@ -24,8 +24,10 @@ parsed from memory (`QoreZoneInfo::init()`):
 - The `%set-time-zone` parse directive (`qore_program_private::findTimeZoneDirectiveZone()`) is processed while
   the Program is parsed, when the code that runs is the caller of the parse: a path is refused when the parsed
   Program has `PO_NO_FILESYSTEM` or any sandbox manager; a region goes to the region loader.
-- Deserialized dates: the region name of the local zone is the local zone (no file access, also if the name is a
-  path); a path is loaded as above; a region by the region loader.
+- Deserialized dates and TimeZone objects (`QoreTimeZoneManager::findDataRegion()`): the name is data and never
+  opens a path: the region name of the local zone is the local zone (no file access, also if the name is a path), a
+  canonical name goes to the region loader, and anything else (a path, a NUL character) raises the uniform unknown
+  region error.
 - The local zone at startup: a relative `TZ` value or an absolute path in the zoneinfo directory followed by a
   canonical region name is loaded as a region; any other absolute path is read at exactly that path with
   `O_NONBLOCK`. Nothing is read relative to the current directory.

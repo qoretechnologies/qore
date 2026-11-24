@@ -2115,6 +2115,30 @@ bool QoreTimeZoneManager::isRegionName(const char* region, size_t len) {
     return component > 0;
 }
 
+void QoreTimeZoneManager::raiseUnknownRegion(const QoreString& region, ExceptionSink* xsink) {
+    // the region is shown with each NUL character as "\x00", as cut at the first one it would be another name
+    const char* str = region.c_str();
+    std::string shown;
+    for (size_t i = 0, e = region.size(); i < e; ++i) {
+        if (str[i]) {
+            shown += str[i];
+        } else {
+            shown += "\\x00";
+        }
+    }
+    raiseUnknownRegion(shown.c_str(), xsink);
+}
+
+const AbstractQoreZoneInfo* QoreTimeZoneManager::findDataRegion(const QoreString& region, ExceptionSink* xsink) {
+    // cut at a NUL character, the name would be another name
+    if (strlen(region.c_str()) != region.size()) {
+        raiseUnknownRegion(region, xsink);
+        return nullptr;
+    }
+    // the local zone by its name, or a region; never a path
+    return findLoadRegion(region.c_str(), xsink);
+}
+
 void QoreTimeZoneManager::raiseUnknownRegion(const char* region, ExceptionSink* xsink) {
     assert(region);
     xsink->raiseException("TZINFO-ERROR", "unknown time zone region \"%s\"", region);
@@ -2138,16 +2162,7 @@ int QoreTimeZoneManager::checkRegion(const QoreString& region, bool is_path, Exc
     // region with a NUL character must be refused here, as findLoadRegion() would see it cut at the NUL character
     const char* str = region.c_str();
     if (strlen(str) != region.size()) {
-        // the region is shown with each NUL character as "\x00", as cut at the first one it would be another name
-        std::string shown;
-        for (size_t i = 0, e = region.size(); i < e; ++i) {
-            if (str[i]) {
-                shown += str[i];
-            } else {
-                shown += "\\x00";
-            }
-        }
-        raiseUnknownRegion(shown.c_str(), xsink);
+        raiseUnknownRegion(region, xsink);
         return -1;
     }
     // no region has a backslash or a ".." or empty path component

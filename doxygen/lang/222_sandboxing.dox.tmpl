@@ -1132,7 +1132,7 @@ string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
     A zoneinfo file given as an absolute path or a path starting with \c "." is a path when code gives it to
     @ref Qore::TimeZone::constructor() "TimeZone::constructor()",
     @ref Qore::TimeZone::setRegion() "TimeZone::setRegion()" or
-    @ref Qore::Program::setTimeZoneRegion() "Program::setTimeZoneRegion()" and when a deserialized date names it: a
+    @ref Qore::Program::setTimeZoneRegion() "Program::setTimeZoneRegion()": a
     relative path is a path in the current directory; the path is subject to
     @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM", which refuses it without opening the file, and to the
     filesystem policy of the code that runs, also when the time zone of the path was loaded already; the file is
@@ -1141,11 +1141,13 @@ string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
     %Program whose file-system access is not restricted (no @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" and no
     sandbox manager), as it is processed while the %Program is parsed.
 
-    A time zone name that comes from data and not from code is never loaded as a path: a name that the C++ API
+    A time zone name that comes from data and not from code is never loaded as a path: the zone of a deserialized
+    date or @ref Qore::TimeZone "TimeZone" object (see @ref serializable_time_zones), a name that the C++ API
     \c find_create_timezone() gets (from database drivers and imported Arrow or Parquet data, for example) and the
-    time zone of a date literal in compiled code are a region, the name of the local zone or a UTC offset.  The name
-    of the local zone denotes the local zone in data, also when it is a path (a local time file outside of a
-    zoneinfo directory), and also in a deserialized date, without any file access.
+    time zone of a date literal in compiled code are a region, the name of the local zone or a UTC offset; any other
+    name raises \c TZINFO-ERROR <tt>unknown time zone region</tt>.  The name of the local zone denotes the local
+    zone in data, also when it is a path (a local time file outside of a zoneinfo directory), without any file
+    access.
 
     @since %Qore 3.0
 

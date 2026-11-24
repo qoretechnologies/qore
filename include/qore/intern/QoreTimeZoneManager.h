@@ -582,6 +582,21 @@ public:
     */
     DLLLOCAL static void raiseUnknownRegion(const char* region, ExceptionSink* xsink);
 
+    //! raises the error of raiseUnknownRegion() for a region string, showing each NUL character as \c "\x00"
+    DLLLOCAL static void raiseUnknownRegion(const QoreString& region, ExceptionSink* xsink);
+
+    //! finds or loads the zone of a region name from data, such as a deserialized date or TimeZone object
+    /** Data never opens a path: the region name of the local zone returns the local zone without file access, a
+        canonical region name is loaded by the region loader, and any other name, a path or one with a NUL
+        character raises the error of raiseUnknownRegion(); an empty name is UTC
+
+        @param region the name from the data
+        @param xsink an exception is raised here if the zone cannot be found or loaded
+
+        @return the zone or \c nullptr for UTC or if an exception was raised
+    */
+    DLLLOCAL const AbstractQoreZoneInfo* findDataRegion(const QoreString& region, ExceptionSink* xsink);
+
     //! checks a region name or zoneinfo file path given as a string before it is passed to findLoadRegion*()
     /** A region or path with a NUL character would be cut at the NUL character and load another zoneinfo file; a
         region (a name under the zoneinfo directory, as opposed to a path) with a \c ".." or empty path component or
