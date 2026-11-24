@@ -1,0 +1,68 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires ../../TestInterpreter.qm
+
+%exec-class AmbientAutoConfigTest
+
+#! The data providers take no options from the host's environment for code restricted from external information
+#! (qore#6844)
+/** With DataProvider::setAutoConfig() in effect, the ServiceNow, Salesforce, Dataverse and Business Central data
+    providers took missing options, including passwords and client secrets, from the environment also for such code
+*/
+class AmbientAutoConfigTest inherits QUnit::Test {
+    constructor() : Test("AmbientAutoConfig", "1.0", \ARGV) {
+        addTestCase("auto-configuration", \autoConfigTest());
+        set_return_value(main());
+    }
+
+    autoConfigTest() {
+        string dir = normalize_dir(get_script_dir()) + DirSep + "ambient-host" + DirSep;
+        string out = backquote(sprintf("SERVICENOW_USERNAME=hostuser SERVICENOW_PASSWORD=host-sn-password "
+            "QORE_MODULE_DIR='%s' '%s' '%s' 2>/dev/null", (normalize_dir(get_script_dir() + "/../../../../qlib"),
+            ENV.QORE_MODULE_DIR).join(PathSep), TestInterpreter::qore_interpreter(), dir + "AutoConfigChild.q"));
+        hash<string, string> r = parse(out);
+        string host = sprintf("%y", {"username": "hostuser", "password": "host-sn-password"});
+        string none = sprintf("%y", {});
+        string own = sprintf("%y", {"username": "me", "password": "my-password"});
+        hash<string, string> expected = {
+            "host_auto_config": "True",
+            "host_servicenow": host,
+            "restricted_auto_config": "False",
+            "restricted_servicenow": none,
+            "restricted_servicenow_explicit": own,
+            "sandboxed_restricted_auto_config": "False",
+            "sandboxed_restricted_servicenow": none,
+            "sandboxed_restricted_servicenow_explicit": own,
+            # a sandbox that does not restrict external information: the code could read the environment itself
+            "sandboxed_auto_config": "True",
+            "sandboxed_servicenow": host,
+            "sandboxed_servicenow_explicit": own,
+        };
+        assertEq(expected, r, out);
+    }
+
+    #! parses the output of the child process: one line per result, with the key, \c "=" and the value written with
+    #! \c %y
+    private hash<string, string> parse(string out) {
+        hash<string, string> rv;
+        foreach string line in (out.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            *list<*string> kv = (line =~ x/^([a-z_]+)=(.*)$/);
+            if (!kv) {
+                throw "CHILD-OUTPUT-ERROR", sprintf("unexpected output: %s", out);
+            }
+            rv{kv[0]} = kv[1];
+        }
+        return rv ?? {};
+    }
+}

@@ -1750,6 +1750,9 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_12 DataProvider v3.12
+    - @ref DataProvider::DataProvider::getAutoConfig() "DataProvider::getAutoConfig()" returns @ref False for code
+      restricted from external information, so data providers take no options from the host's environment for it
+      (see @ref sandbox_ambient_host_data)
     - added @ref DataProvider::DataProvider::setModuleHostHooks() "DataProvider::setModuleHostHooks()" and
       @ref DataProvider::DataProvider::getModuleHostHooks() "DataProvider::getModuleHostHooks()": the host sets, once
       and before a module is loaded, the hooks the module needs to run code for sandboxed callers, and the module reads
