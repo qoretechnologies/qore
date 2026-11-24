@@ -64,6 +64,7 @@ constexpr int QUIC_MAX_RECV_BATCH = 16;
 #include "qore/intern/QoreSocketObjectPrivate.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreIoClassesOps.h"
+#include "qore/intern/QoreNetInternal.h"
 
 //! Maximum packets to process per continuePoll() call for QUIC client connections.
 /** Prevents a single connection from monopolizing the shared I/O thread when
