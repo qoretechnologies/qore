@@ -54,3 +54,13 @@ What the variant search and `CodeEvaluationHelper` check at run time for such a 
 The builtin variant itself then runs as it does with a `CodeEvaluationHelper`: `BuiltinConstructorValueVariant::
 evalDirectConstructor()` sets the code context, runs the constructors of the builtin class's own base classes and calls
 the native constructor without arguments; a builtin destructor variant's `evalDestructor()` is called as is.
+
+## The thread's data
+
+The call state is held in the thread's data (`ThreadData` in `lib/thread.cpp`), and each helper that reads or writes
+it looks it up (`thread_data.get()`, a call through the thread-local storage).  `rc_get_current_ref()`, which
+`qore_rt_new_object_nb()` and the deletion of an object call, looks it up once for all the fields that it copies
+(`rc_set_current_from_thread()`), and `QoreDirectBuiltinCall` looks it up once for the whole call and uses the
+overloads of the helpers that take it (`take_runtime_call_location(void*)`, `update_get_runtime_stack_builtin_location
+(void*, ...)` and the others with a `thread_data_ptr` parameter, from `get_thread_data_for_native_calls()`); each helper
+without it calls its overload with the thread's data.

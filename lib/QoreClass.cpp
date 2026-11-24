@@ -12094,8 +12094,10 @@ public:
     //! takes the call site (\a hide_call_site: hides it, as for a destructor) and the pending call reference call
     DLLLOCAL QoreDirectBuiltinCall(RuntimeConfig& rc, const qore_class_private* qc, const QoreFunction* func,
             bool hide_call_site) : rc(rc), qc(qc), func(func),
-            loc(hide_call_site ? hide_runtime_call_site(hidden_call_site_slot, hidden_call_site)
-                : take_runtime_call_location()) {
+            // the thread's data is looked up once for the whole call (qore#7336)
+            td(get_thread_data_for_native_calls()),
+            loc(hide_call_site ? hide_runtime_call_site(td, hidden_call_site_slot, hidden_call_site)
+                : take_runtime_call_location(td)) {
         rc_take_call_reference_call(rc, nullptr);
     }
 
@@ -12108,43 +12110,43 @@ public:
 #endif
         provenance.set(self);
         // the receiver's code is of another tenant than the trusted build that a tenant called (qore#6536)
-        if (provenance.getContext() && qore_sandbox_check_isolation(xsink, "calling a method")) {
+        if (provenance.getContext() && qore_sandbox_check_isolation(td, xsink, "calling a method")) {
             return -1;
         }
 #ifdef QORE_MANAGE_STACK
-        if (check_stack(xsink)) {
+        if (check_stack(td, xsink)) {
             return -1;
         }
 #endif
         // the pending caller options are taken by the call, as by any call
         {
             const QoreProgram* code_pgm;
-            runtime_take_call_caller_parse_options(code_pgm);
+            runtime_take_call_caller_parse_options(td, code_pgm);
         }
-        old_receiver_type_info = runtime_set_receiver_type_info(self->getClass()->getTypeInfo());
+        old_receiver_type_info = runtime_set_receiver_type_info(td, self->getClass()->getTypeInfo());
         restore_receiver_type_info = true;
-        old_return_type_info = saveReturnTypeInfo(variant->getSignature()->getReturnTypeInfo());
+        old_return_type_info = saveReturnTypeInfo(td, variant->getSignature()->getReturnTypeInfo());
         restore_return_type_info = true;
         old_rtflags = QoreRuntimeFlags::get(rc);
         QoreRuntimeFlags::set(rc, static_cast<q_rt_flags_t>(variant->getFlags()));
         restore_rtflags = true;
-        stack_loc = update_get_runtime_stack_builtin_location(this, stmt, pgm, old_runtime_loc, nullptr);
+        stack_loc = update_get_runtime_stack_builtin_location(td, this, stmt, pgm, old_runtime_loc, nullptr);
         restore_stack = true;
         return 0;
     }
 
     DLLLOCAL ~QoreDirectBuiltinCall() {
         if (restore_stack) {
-            update_runtime_stack_location(stack_loc, old_runtime_loc);
+            update_runtime_stack_location(td, stack_loc, old_runtime_loc);
         }
         if (restore_rtflags) {
             QoreRuntimeFlags::set(rc, old_rtflags);
         }
         if (restore_receiver_type_info) {
-            runtime_set_receiver_type_info(old_receiver_type_info);
+            runtime_set_receiver_type_info(td, old_receiver_type_info);
         }
         if (restore_return_type_info) {
-            saveReturnTypeInfo(old_return_type_info);
+            saveReturnTypeInfo(td, old_return_type_info);
         }
         if (hidden_call_site) {
             *hidden_call_site_slot = hidden_call_site;
@@ -12178,6 +12180,8 @@ private:
     RuntimeConfig& rc;
     const qore_class_private* qc;
     const QoreFunction* func;
+    //! the current thread's data (get_thread_data_for_native_calls())
+    void* td;
     //! the call site hidden while the call runs, restored through the slot
     const QoreProgramLocation** hidden_call_site_slot = nullptr;
     const QoreProgramLocation* hidden_call_site = nullptr;
