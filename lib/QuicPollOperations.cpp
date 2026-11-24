@@ -2716,6 +2716,12 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
         printd(1, "SocketQuicServerPollOperation::recvAndProcessPacket(): dropping session %lld: %s\n",
             (long long)target_session->getSessionId(), "first client Initial does not start the ClientHello");
         xsink->clear();
+#ifdef DEBUG
+        // a client that returned a valid Retry token is buffered, not dropped (see dbg_quic_server_retry_counts())
+        if (new_session_validated) {
+            qore_dbg_quic_server_validated_drops.fetch_add(1, std::memory_order_relaxed);
+        }
+#endif
         int64_t sid = target_session->getSessionId();
         target_session->unregisterFromDispatcher();
         sock->priv->socket->priv->removeQuicSession(sid);
@@ -2731,8 +2737,16 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
                 reinterpret_cast<const struct sockaddr*>(&src_addr), src_addrlen);
             if (retry_len > 0) {
                 int fd = qore_socket_ops(sock->priv->socket).getDescriptor();
-                (void)sendto(fd, retry_buf, static_cast<size_t>(retry_len), 0,
+                ssize_t sent = sendto(fd, retry_buf, static_cast<size_t>(retry_len), 0,
                     reinterpret_cast<const struct sockaddr*>(&src_addr), src_addrlen);
+#ifdef DEBUG
+                // see dbg_quic_server_retry_counts()
+                if (sent > 0) {
+                    qore_dbg_quic_server_retries_sent.fetch_add(1, std::memory_order_relaxed);
+                }
+#else
+                (void)sent;
+#endif
             }
         }
         if (target_out) {

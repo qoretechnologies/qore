@@ -184,12 +184,12 @@ DLLLOCAL void qore_dbg_quic_flush_releases_held(int64_t session_id);
 DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent;
 DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_stateless_resets_received;
 
-//! the Retry packets that the QUIC clients of the process took; see dbg_quic_retries_received()
-DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_retries_received;
+//! the Retry packets that the QUIC servers of the process sent; see dbg_quic_server_retry_counts()
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_server_retries_sent;
 
 //! the connections that the QUIC servers of the process dropped because a client Initial did not start the
-//! ClientHello (asking for a Retry, or dropping the connection silently); see dbg_quic_server_initial_drops()
-DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_server_initial_drops;
+//! ClientHello although the client had returned a valid Retry token; see dbg_quic_server_retry_counts()
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_server_validated_drops;
 
 //! the number of threads waiting in dbg_quic_wait_idle(); a QUIC session wakes them only while it is not 0
 DLLLOCAL extern std::atomic<int> qore_dbg_quic_idle_waiters;
