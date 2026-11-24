@@ -11776,7 +11776,7 @@ class Http1HandlerSocket inherits Qore::Socket {
     }
 
     hash<auto> readHTTPChunkedBody(timeout timeout_ms = -1) {
-        enterChunkedRead("readHTTPChunkedBody");
+        rh.h1EnterChunkedRead(gen, "readHTTPChunkedBody", real);
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
@@ -11790,7 +11790,7 @@ class Http1HandlerSocket inherits Qore::Socket {
     }
 
     hash<auto> readHTTPChunkedBodyBinary(timeout timeout_ms = -1) {
-        enterChunkedRead("readHTTPChunkedBodyBinary");
+        rh.h1EnterChunkedRead(gen, "readHTTPChunkedBodyBinary", real);
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
@@ -11798,7 +11798,7 @@ class Http1HandlerSocket inherits Qore::Socket {
     }
 
     hash<auto> readHTTPChunkedBodyToOutputStream(OutputStream output_stream, timeout timeout_ms = -1) {
-        enterChunkedRead("readHTTPChunkedBodyToOutputStream");
+        rh.h1EnterChunkedRead(gen, "readHTTPChunkedBodyToOutputStream", real);
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
@@ -11806,7 +11806,7 @@ class Http1HandlerSocket inherits Qore::Socket {
     }
 
     nothing readHTTPChunkedBodyWithCallback(code receive_callback, timeout timeout_ms = -1) {
-        enterChunkedRead("readHTTPChunkedBodyWithCallback");
+        rh.h1EnterChunkedRead(gen, "readHTTPChunkedBodyWithCallback", real);
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
@@ -11821,7 +11821,7 @@ class Http1HandlerSocket inherits Qore::Socket {
     }
 
     nothing readHTTPChunkedBodyBinaryWithCallback(code receive_callback, timeout timeout_ms = -1) {
-        enterChunkedRead("readHTTPChunkedBodyBinaryWithCallback");
+        rh.h1EnterChunkedRead(gen, "readHTTPChunkedBodyBinaryWithCallback", real);
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
@@ -11962,15 +11962,6 @@ class Http1HandlerSocket inherits Qore::Socket {
     }
 
     #! Admits the read of the request's chunked body, which is refused if the request has none, or if it is read or
-    #! was read
-    private:internal enterChunkedRead(string method) {
-        rh.h1Enter(gen, method);
-        if (!rh.h1TakeChunkedBody(real)) {
-            rh.h1Leave();
-            throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): the HTTP/1.x request of this socket has no "
-                "chunked body to read", method);
-        }
-    }
 
     #! Raises the exception of a method that the handler's code cannot call on the connection's socket
     private:internal static refuse(string method) {
@@ -13496,14 +13487,25 @@ class HandlerSocketState {
         return h1_chunk_taken;
     }
 
-    #! Returns True for the first reader of the request's chunked body, if it has one
-    synchronized bool h1TakeChunkedBody(Socket real) {
+    #! Admits a chunked read of the socket of the given generation, which takes the request's chunked body
+    /** Refused if that request ended, or if it has no chunked body that was not taken; the caller calls h1Leave() at
+        the end of the read
+    */
+    synchronized h1EnterChunkedRead(int gen, string method, Socket real) {
+        if (!h1_live || gen != h1_gen) {
+            throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): the HTTP/1.x request of this socket has ended",
+                method);
+        }
         if (h1_chunk_taken || !real.pendingHttpChunkedBody()) {
-            return False;
+            throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): the HTTP/1.x request of this socket has no "
+                "chunked body to read", method);
         }
         h1_chunk_taken = True;
         h1_chunk_open = True;
-        return True;
+        if (!h1_ops) {
+            h1_ops = new Counter();
+        }
+        h1_ops.inc();
     }
 
     #! Records that the response is broken: a send failed, or the connection was aborted
