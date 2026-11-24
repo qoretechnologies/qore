@@ -14174,16 +14174,21 @@ struct QoreNativeMethodContext {
     ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env{nullptr};
     // the method runs in the call Program context of its class, as on the other fast method call paths (issue #7079)
     ObjectSubstitutionHelper receiver;
-    ArgvContextHelper implicit_args;
+    // only for a body that reads its implicit arguments, as the ordinary call of a compiled body does
+    // (UserVariantBase::evalTiered()): a body that does not leaves the caller's, which it cannot observe (#7043)
+    std::optional<ArgvContextHelper> implicit_args;
     QoreRtUserCallOverrideHelper options;
     QoreRtReceiverTypeInfoGuard receiver_type;
     std::optional<QoreProgramLocationHelper> body_options;
 
     QoreNativeMethodContext(QoreObject* obj, const MethodVariantBase* method, const UserVariantBase* uvb,
             QoreProgram* pgm, const QoreTypeInfo* receiver_ti, ExceptionSink* xsink)
-        : receiver(obj, method->getClassPriv(), QoreSetCallProgramContext(), xsink), implicit_args(nullptr, xsink),
+        : receiver(obj, method->getClassPriv(), QoreSetCallProgramContext(), xsink),
           options(pgm, uvb, pgm),
           receiver_type(receiver_ti) {
+        if (uvb->usesArgv()) {
+            implicit_args.emplace(nullptr, xsink);
+        }
         if (uvb->getUserSignature()->getParseLocation()) {
             body_options.emplace(nullptr, uvb->getParseOptions(qore_program_private::getParseOptions(*pgm)));
         }
