@@ -776,6 +776,11 @@ DLLLOCAL bool qore_descriptor_hold_set_close_wake(const std::shared_ptr<void>& h
 /** For the C++ unit tests of a close of a registered connection (qore#7003)
 */
 DLLLOCAL extern std::atomic<void (*)()> qore_dbg_before_close_wakes;
+//! Debug builds: if set, called with the socket by the thread that closes it right after prepareForClose() shut the
+//! descriptor down, without the socket's close lock, before the close gives the descriptor up
+/** For the C++ unit tests of a connection step between the shutdown of a close and the close
+*/
+DLLLOCAL extern std::atomic<void (*)(qore_socket_private*)> qore_dbg_after_pre_close_shutdown;
 #endif
 
 #ifdef DEBUG
@@ -1282,8 +1287,15 @@ private:
         qore_socket_private::DescriptorHold): the descriptor is then closed when the I/O thread has removed it, so its
         number cannot be given to another object before; otherwise it is closed now.  If a concurrent close of the
         socket has released the descriptor already, nothing is closed here.
+
+        @return true if the socket gave the descriptor up, false if it was closed, or given another descriptor, since
+        this operation last gave it one
     */
-    DLLLOCAL void releasePrimaryFd(int fd, ConnAttempt* next);
+    DLLLOCAL bool releasePrimaryFd(int fd, ConnAttempt* next);
+
+    //! Raises the connection's error, or the close's if the socket was closed since this operation last gave it a
+    //! descriptor (whose effect, such as a shutdown's error, can be what made the attempts fail)
+    DLLLOCAL void raiseConnectErrorOrClosed(ExceptionSink* xsink);
 
     //! Returns true if the socket was closed, or given another descriptor, since this operation last gave it one
     /** Read with the socket's close lock held, where a close changes the generation (see @ref sock_gen)
@@ -2940,8 +2952,20 @@ public:
         // SSL_write currently in flight on this socket; if a racing close
         // has already released the fd, there is nothing to shut down.  A TLS
         // connection that no call is using sends its close_notify alert first.
-        CloseLockHelper cl(*this);
-        if (sock != QORE_INVALID_SOCKET) {
+#ifdef DEBUG
+        bool shut = false;
+#endif
+        {
+            CloseLockHelper cl(*this);
+            if (sock == QORE_INVALID_SOCKET) {
+                return;
+            }
+            // the shutdown is the start of the close: the descriptor generation changes with it, so that a connection
+            // that sees its effect on the descriptor (a connection attempt that reads the shutdown's error) sees the
+            // socket closed, and fails as closed, not with the error that the shutdown caused; the close changes it
+            // again when it gives the descriptor up.  Nothing takes a changed generation for a released descriptor:
+            // the descriptor stays the socket's, open, until the close
+            ++fd_generation;
 #ifdef DEBUG
             if (dbgAbortiveCloseLocked()) {
                 return;
@@ -2949,7 +2973,18 @@ public:
 #endif
             sendTlsCloseNotifyLocked();
             ::shutdown(sock, SHUTDOWN_ARG);
+#ifdef DEBUG
+            shut = true;
+#endif
         }
+#ifdef DEBUG
+        // a test holds the close here, after the shutdown and before the close, without the close lock
+        if (shut) {
+            if (void (*hook)(qore_socket_private*) = qore_dbg_after_pre_close_shutdown.load(std::memory_order_acquire)) {
+                hook(this);
+            }
+        }
+#endif
     }
 
     //! Closes the descriptor and resets the connection state; does nothing if the descriptor is already released
@@ -5582,6 +5617,11 @@ DLLLOCAL extern std::atomic<bool> qore_dbg_connect_complete_before_immediate_che
     SocketConnectInetHappyEyeballsPollState::continuePoll()
 */
 DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_before_check_attempts;
+//! Debug builds: if set, called by a happy-eyeballs connect step right after it checked that the socket was not
+//! closed, before it checks its attempts
+/** For the C++ unit tests of a close by another thread that lands after the step's check of the socket
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_after_socket_check;
 
 //! Debug builds: if set, called by a happy-eyeballs connect step right before the socket takes the winning attempt's
 //! descriptor over
