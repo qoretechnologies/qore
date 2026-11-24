@@ -1,0 +1,72 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes
+# test-platform: macos - the AST retry of native and IR fast calls into other Programs
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+%exec-class FunctionCallContextDeoptTest
+
+#! The body of a function that a fast call runs in another Program runs with that Program's call Program context also
+#! when it runs again in the AST interpreter (qore#7394)
+/** Native code and the IR interpreter request the retry of a body in the AST interpreter after a guard failure or an
+    invalidation; the retry runs the body as the call ran it, with the call Program context of the Program that the
+    call entered.  The worker (function-call-context/fcx-deopt-worker.q) forces the retry of every fast call with the
+    debug switch dbg_jit_force_deopt() (debug builds only; the test is skipped in other builds) and prints the frames
+    of the calls that the bodies make and what a sandboxed caller gets from library code, in every execution mode.
+*/
+class FunctionCallContextDeoptTest inherits QUnit::Test {
+    public {
+        #! the lines of the worker
+        const Expected = (
+            "T-deopt-function: Lib::frames:T g:T <anonymous closure>:host HostCls::run:host",
+            "T-deopt-module: Lib::frames:T <anonymous closure>:host HostCls::run:host",
+            "T-deopt-module-function: Lib::frames:M Lib::viaStatic:M libs:T <anonymous closure>:host HostCls::run:host",
+            "T-deopt-register: granted",
+            "T-deopt-checks: sandboxed=False registration=True process=False database=False terminal=True restricted=False",
+            "TS-deopt-module-function: Lib::frames:M Lib::viaStatic:M libs:TS <anonymous closure>:host HostCls::run:host",
+            "TS-deopt-register: SANDBOX-REGISTRATION-ERROR",
+            "TS-deopt-checks: sandboxed=True registration=False process=False database=False terminal=True restricted=True",
+        );
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string dir = get_script_dir() + DirSep + "function-call-context";
+        string worker = dir + DirSep + "fcx-deopt-worker.q";
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("FunctionCallContextDeoptTest", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_LIBDIR="
+            + quote(libdir) + " QORE_MODULE_DIR=" + quote(dir + PathSep + (ENV.QORE_MODULE_DIR ?? "")) + " ";
+        addTestCase("the AST retry of a fast call into another Program", \testDeopt());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private static string strip(string out) {
+        return (map $1 + "\n", out.split("\n"), $1 && $1 !~ /BINARY-MODULE-SOURCE-FALLBACK|^warning encountered/).join("");
+    }
+
+    testDeopt() {
+        Program probe(PO_NEW_STYLE);
+        if (!probe.existsFunction("dbg_jit_force_deopt")) {
+            testSkip("the debug switch dbg_jit_force_deopt() is available in debug builds only");
+        }
+        string expected = (map $1 + "\n", Expected).join("");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected, strip(ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode="
+                + mode + " " + quote(worker), ExecModeHarness::NativeCheck::None)), mode);
+        }
+    }
+}

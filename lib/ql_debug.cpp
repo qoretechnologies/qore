@@ -34937,7 +34937,18 @@ static QoreValue f_dbg_call_pseudo_method(const QoreListNode* params, RuntimeCon
 #endif
 }
 
+// defined in JITRuntime.cpp (debug builds)
+DLLLOCAL void qore_dbg_jit_force_deopt(bool on);
+
+//! forces the AST retry of the bodies of the fast calls of the current thread while \a on (qore#7394)
+static QoreValue f_dbg_jit_force_deopt(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    qore_dbg_jit_force_deopt(HARD_QORE_VALUE_BOOL(params, 0));
+    return QoreValue();
+}
+
 void init_debug_functions(QoreNamespace& qns) {
+    qns.addBuiltinVariant("dbg_jit_force_deopt", f_dbg_jit_force_deopt, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
     qns.addBuiltinVariant("dbg_call_pseudo_method", f_dbg_call_pseudo_method, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         anyTypeInfo, 3, anyTypeInfo, QORE_PARAM_NO_ARG, "class_value", stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         anyTypeInfo, QORE_PARAM_NO_ARG, "value");

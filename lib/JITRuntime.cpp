@@ -13539,6 +13539,15 @@ static QORE_INTERN_NOINLINE uint64_t qore_rt_exec_body_in_call_program_context(Q
     return exec_fn(xsink, invalidated);
 }
 
+#if defined(DEBUG) && !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT)
+//! forces the AST retry of the bodies of the fast calls of the thread (debug builds only, for tests: qore#7394)
+static thread_local bool qore_dbg_jit_force_deopt_flag = false;
+
+DLLLOCAL void qore_dbg_jit_force_deopt(bool on) {
+    qore_dbg_jit_force_deopt_flag = on;
+}
+#endif
+
 // The caller owns the frame storage so it can keep the frame through method return validation.
 template <bool IN_FRAME_RELEASE, typename ExecFn>
 static void execJITWithDeopt(std::optional<QoreJITStackLocation>& frame,
@@ -13650,6 +13659,12 @@ static void execJITWithDeopt(std::optional<QoreJITStackLocation>& frame,
         // fast-call boundary so the normal cleanup path below still runs for
         // self, args, body locals, runtime location, and gate state.
     }
+#if defined(DEBUG) && !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT)
+    // the AST retry of the body, forced by a test (qore#7394)
+    if (__builtin_expect(qore_dbg_jit_force_deopt_flag, 0)) {
+        fn_invalidated = true;
+    }
+#endif
 
     // Check for JIT guard failure or recompilation invalidation requesting deopt to AST; the check is also taken
     // while a debugger has native frames to report, whose returns make their exit events here (issue #6602)
