@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 
 #include <algorithm>
+#include <unordered_set>
 
 #include "qore/intern/ParserSupport.h"
 #include "qore/intern/QoreRegexBase.h"
@@ -2204,19 +2205,42 @@ QoreClass* qore_root_ns_private::parseFindClassWithMember(const char* cname,
 
 static void get_parent_classes_with_name(const qore_class_private& qc, const char* cname,
         std::vector<QoreClass*>& parents, std::vector<const qore_class_private*>& seen) {
-    if (!qc.scl || std::find(seen.begin(), seen.end(), &qc) != seen.end()) {
-        return;
+    // a walk with a stack of its own, in the order of the recursion that it replaces (depth-first, each class entered
+    // once), as the depth of a hierarchy could exhaust the thread's stack (qore#7539)
+    std::unordered_set<const qore_class_private*> seen_set(seen.begin(), seen.end());
+    auto enter = [&](const qore_class_private& c) -> bool {
+        if (!c.scl || !seen_set.insert(&c).second) {
+            return false;
+        }
+        seen.push_back(&c);
+        return true;
+    };
+    struct Frame {
+        const BCList* list;
+        size_t next;
+    };
+    std::vector<Frame> stack;
+    if (enter(qc)) {
+        stack.push_back({qc.scl, 0});
     }
-    seen.push_back(&qc);
-    for (auto& i : *qc.scl) {
-        QoreClass* pc = i->sclass;
+    while (!stack.empty()) {
+        Frame& f = stack.back();
+        if (f.next >= f.list->size()) {
+            stack.pop_back();
+            continue;
+        }
+        QoreClass* pc = (*f.list)[f.next++]->sclass;
         if (!pc) {
             continue;
         }
         if (!strcmp(pc->getName(), cname) && std::find(parents.begin(), parents.end(), pc) == parents.end()) {
             parents.push_back(pc);
         }
-        get_parent_classes_with_name(*qore_class_private::get(*pc), cname, parents, seen);
+        const qore_class_private& pcp = *qore_class_private::get(*pc);
+        // f is not used after this: the vector can be reallocated
+        if (enter(pcp)) {
+            stack.push_back({pcp.scl, 0});
+        }
     }
 }
 

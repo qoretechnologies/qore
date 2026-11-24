@@ -1725,25 +1725,68 @@ bool qore_class_private::spansPrograms() const {
     if (cached) {
         return cached == 2;
     }
+    // a walk of the hierarchy with a stack of its own, not a recursion, which the depth of a hierarchy could make
+    // exhaust the thread's stack (qore#7539); each class that it decides caches its result, so each is decided once
+    struct Frame {
+        const qore_class_private* cls;
+        size_t next;
+        bool rv;
+    };
+    std::vector<Frame> stack;
+    std::unordered_set<const qore_class_private*> on_stack;
+    stack.push_back({this, 0, false});
+    on_stack.insert(this);
     bool rv = false;
-    const QoreProgram* own = spgm.load(std::memory_order_acquire);
-    if (scl) {
-        for (auto& i : *scl) {
-            if (!i->sclass) {
-                continue;
-            }
-            const qore_class_private* parent = qore_class_private::get(*i->sclass);
-            const QoreProgram* parent_pgm = parent->spgm.load(std::memory_order_acquire);
-            // only a base class of a module: the code of another Program that is not a module's runs with that Program
-            // on the stack, which decides for it
-            if ((parent_pgm && parent_pgm != own && qore_program_is_module_inline(parent_pgm))
-                    || parent->spansPrograms()) {
-                rv = true;
+    while (!stack.empty()) {
+        Frame& f = stack.back();
+        const qore_class_private* cls = f.cls;
+        const QoreProgram* own = cls->spgm.load(std::memory_order_acquire);
+        bool pushed = false;
+        if (!f.rv && cls->scl) {
+            while (f.next < cls->scl->size()) {
+                BCNode* n = (*cls->scl)[f.next++];
+                if (!n->sclass) {
+                    continue;
+                }
+                const qore_class_private* parent = qore_class_private::get(*n->sclass);
+                const QoreProgram* parent_pgm = parent->spgm.load(std::memory_order_acquire);
+                // only a base class of a module: the code of another Program that is not a module's runs with that
+                // Program on the stack, which decides for it
+                if (parent_pgm && parent_pgm != own && qore_program_is_module_inline(parent_pgm)) {
+                    f.rv = true;
+                    break;
+                }
+                signed char pc = parent->spans_programs_cache.load(std::memory_order_relaxed);
+                if (pc) {
+                    if (pc == 2) {
+                        f.rv = true;
+                        break;
+                    }
+                    continue;
+                }
+                // a class on the path is its own ancestor (a hierarchy that its parse rejected)
+                if (!on_stack.insert(parent).second) {
+                    continue;
+                }
+                stack.push_back({parent, 0, false});
+                pushed = true;
                 break;
             }
         }
+        if (pushed) {
+            continue;
+        }
+        // the class is decided
+        bool crv = stack.back().rv;
+        cls->spans_programs_cache.store(crv ? 2 : 1, std::memory_order_relaxed);
+        on_stack.erase(cls);
+        stack.pop_back();
+        if (stack.empty()) {
+            rv = crv;
+        } else if (crv) {
+            stack.back().rv = true;
+        }
     }
-    spans_programs_cache.store(rv ? 2 : 1, std::memory_order_relaxed);
     return rv;
 }
 
@@ -5164,8 +5207,19 @@ QORE_INTERN_NOINLINE auto lookup_walk(const BCList& list, Args... args) -> declt
 }
 }
 
+//! the stack, in bytes, that the recursion of a lookup through a hierarchy without a diamond needs before its next
+//! level (qore#7539)
+constexpr size_t QORE_HIERARCHY_STACK_RESERVE = 64 * 1024;
+
+//! Returns true if a lookup through a hierarchy without a diamond walks it with a stack of its own (lookup_walk())
+//! instead of recursing: when less stack remains than its next level could need, as a deep hierarchy could exhaust the
+//! thread's stack; the walk gives the same result, as it does for a hierarchy with a diamond (qore#7539)
+static inline bool hierarchy_stack_low() {
+    return q_thread_stack_reserve_exceeded(QORE_HIERARCHY_STACK_RESERVE);
+}
+
 bool BCList::isBaseClass(QoreClass* qc, bool toplevel) const {
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<IsBaseClassLookup>(*this, qc, toplevel);
     }
     for (auto& i : *this) {
@@ -5181,7 +5235,7 @@ const QoreMemberInfo* BCList::parseFindMember(const char* mem, const qore_class_
     if (!valid) {
         return nullptr;
     }
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<ParseFindMemberLookup, const char*, const qore_class_private*&, ClassAccess&, bool>(*this,
             mem, qc, access, toplevel);
     }
@@ -5199,7 +5253,7 @@ const QoreVarInfo* BCList::parseFindVar(const char* name, const qore_class_priva
     if (!valid) {
         return nullptr;
     }
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<ParseFindVarLookup, const char*, const qore_class_private*&, ClassAccess&, bool>(*this,
             name, qc, n_access, toplevel);
     }
@@ -5214,7 +5268,7 @@ const QoreVarInfo* BCList::parseFindVar(const char* name, const qore_class_priva
 // called at run time
 const QoreMethod* BCList::runtimeFindCommittedMethod(const char* name, ClassAccess& access,
         const qore_class_private* class_ctx, bool allow_internal) const {
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<RuntimeFindCommittedMethodLookup<false>, const char*, ClassAccess&,
             const qore_class_private*, bool>(*this, name, access, class_ctx, allow_internal);
     }
@@ -5229,7 +5283,7 @@ const QoreMethod* BCList::runtimeFindCommittedMethod(const char* name, ClassAcce
 // called at run time
 const QoreMethod* BCList::runtimeFindCommittedStaticMethod(const char* name, ClassAccess& access,
         const qore_class_private* class_ctx, bool allow_internal) const {
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<RuntimeFindCommittedMethodLookup<true>, const char*, ClassAccess&,
             const qore_class_private*, bool>(*this, name, access, class_ctx, allow_internal);
     }
@@ -5279,7 +5333,7 @@ const QoreMethod* BCList::parseFindNormalMethod(const char* name, const qore_cla
     if (!valid) {
         return nullptr;
     }
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<ParseFindMethodLookup<false>>(*this, name, class_ctx, allow_internal);
     }
     for (auto& i : *this) {
@@ -5295,7 +5349,7 @@ const QoreMethod* BCList::parseFindStaticMethod(const char* name, const qore_cla
     if (!valid) {
         return nullptr;
     }
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<ParseFindMethodLookup<true>>(*this, name, class_ctx, allow_internal);
     }
     for (auto& i : *this) {
@@ -5308,7 +5362,7 @@ const QoreMethod* BCList::parseFindStaticMethod(const char* name, const qore_cla
 
 const QoreMethod* BCList::parseResolveSelfMethod(const QoreProgramLocation* loc, const char* name,
         const qore_class_private* class_ctx, bool allow_internal) {
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<ParseResolveSelfMethodLookup>(*this, name, class_ctx, allow_internal);
     }
     for (auto& i : *this) {
@@ -5320,7 +5374,7 @@ const QoreMethod* BCList::parseResolveSelfMethod(const QoreProgramLocation* loc,
 }
 
 bool BCList::runtimeIsPrivateMember(const char* str, bool toplevel) const {
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<RuntimeIsPrivateMemberLookup>(*this, str, toplevel);
     }
     for (auto& i : *this) {
@@ -5331,7 +5385,7 @@ bool BCList::runtimeIsPrivateMember(const char* str, bool toplevel) const {
 }
 
 bool BCList::parseCheckHierarchy(const QoreClass* cls, ClassAccess& access, bool toplevel) const {
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<ParseCheckHierarchyLookup, const QoreClass*, ClassAccess&, bool>(*this,
             cls, access, toplevel);
     }
@@ -5347,7 +5401,7 @@ QoreValue BCList::parseFindConstantValue(const char* cname, const QoreTypeInfo*&
     if (!valid) {
         return QoreValue();
     }
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<ParseFindConstantValueLookup, const char*, const QoreTypeInfo*&, bool&,
             const qore_class_private*, bool, const QoreProgramLocation*>(*this, cname, typeInfo, found, class_ctx,
             allow_internal, consumer_loc);
@@ -5365,7 +5419,7 @@ QoreVarInfo* BCList::parseFindStaticVar(const char* vname, const QoreClass*& qc,
     if (!valid) {
         return nullptr;
     }
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<ParseFindStaticVarLookup, const char*, const QoreClass*&, ClassAccess&, bool, bool>(*this,
             vname, qc, access, check, toplevel);
     }
@@ -5378,7 +5432,7 @@ QoreVarInfo* BCList::parseFindStaticVar(const char* vname, const QoreClass*& qc,
 }
 
 const QoreClass* BCList::getClass(qore_classid_t cid, ClassAccess& n_access, bool toplevel) const {
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<GetClassIdLookup, qore_classid_t, ClassAccess&, bool>(*this, cid, n_access, toplevel);
     }
     for (auto& i : *this) {
@@ -5391,7 +5445,7 @@ const QoreClass* BCList::getClass(qore_classid_t cid, ClassAccess& n_access, boo
 }
 
 const QoreClass* BCList::getClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const {
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<GetClassLookup<GetClassMatch::Runtime>, const qore_class_private&, ClassAccess&, bool>(*this,
             qc, n_access, toplevel);
     }
@@ -5405,7 +5459,7 @@ const QoreClass* BCList::getClass(const qore_class_private& qc, ClassAccess& n_a
 }
 
 const QoreClass* BCList::parseGetClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const {
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<GetClassLookup<GetClassMatch::Parse>, const qore_class_private&, ClassAccess&, bool>(*this,
             qc, n_access, toplevel);
     }
@@ -5419,7 +5473,7 @@ const QoreClass* BCList::parseGetClass(const qore_class_private& qc, ClassAccess
 }
 
 const QoreClass* BCList::getAccessClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const {
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<GetClassLookup<GetClassMatch::Access>, const qore_class_private&, ClassAccess&, bool>(
             *this, qc, n_access, toplevel);
     }
@@ -5434,7 +5488,7 @@ const QoreClass* BCList::getAccessClass(const qore_class_private& qc, ClassAcces
 }
 
 bool BCList::inHierarchy(const qore_class_private& qc, ClassAccess& n_access) const {
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<InHierarchyLookup<GetClassMatch::Runtime>, const qore_class_private&, ClassAccess&>(*this,
             qc, n_access);
     }
@@ -5449,7 +5503,7 @@ bool BCList::inHierarchy(const qore_class_private& qc, ClassAccess& n_access) co
 }
 
 bool BCList::inHierarchyStrict(const qore_class_private& qc, ClassAccess& n_access) const {
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<InHierarchyLookup<GetClassMatch::Strict>, const qore_class_private&, ClassAccess&>(*this,
             qc, n_access);
     }
@@ -5464,7 +5518,7 @@ bool BCList::inHierarchyStrict(const qore_class_private& qc, ClassAccess& n_acce
 }
 
 bool BCList::inAccessHierarchy(const qore_class_private& qc, ClassAccess& n_access) const {
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<InHierarchyLookup<GetClassMatch::Access>, const qore_class_private&, ClassAccess&>(*this,
             qc, n_access);
     }
@@ -5478,7 +5532,7 @@ bool BCList::inAccessHierarchy(const qore_class_private& qc, ClassAccess& n_acce
 }
 
 const ConstantEntry* BCList::findConstantEntry(const char* name) const {
-    if (!diamond_free) {
+    if (!diamond_free || hierarchy_stack_low()) {
         return lookup_walk<FindConstantEntryLookup>(*this, name);
     }
     for (auto& i : *this) {
@@ -9805,6 +9859,54 @@ int qore_class_private::parseInit() {
 
 namespace {
 
+//! what walk_parent_classes() does after visiting a parent class
+enum class ParentWalk {
+    Skip,       //!< the parent class's own parent classes are not visited
+    Descend,    //!< its parent classes are visited before the next parent class
+    Stop,       //!< the walk ends
+};
+
+//! Visits the parent classes of \a qc depth-first, in the order of the recursion that it replaces (qore#7539)
+/** For each parent class, in the order of each inheritance list, \a visit(const BCNode&, const qore_class_private&) is
+    called (the class can be taken as a reference that is not const); with ParentWalk::Descend, the parent class's own
+    parent classes are visited before the next one.  The walk
+    has a stack of its own, not a recursion, as the depth of a hierarchy could exhaust the thread's stack.
+
+    @param require_valid true to descend only into a hierarchy that is valid (BCList::valid)
+*/
+template <typename F>
+void walk_parent_classes(const qore_class_private& qc, bool require_valid, F visit) {
+    struct Frame {
+        const BCList* list;
+        size_t next;
+    };
+    // in place for the common depth, so that a walk of a common hierarchy allocates nothing
+    HierarchyWalkStack<Frame> stack;
+    if (qc.scl && (!require_valid || qc.scl->valid)) {
+        stack.push({qc.scl, 0});
+    }
+    while (!stack.empty()) {
+        Frame& f = stack.back();
+        if (f.next >= f.list->size()) {
+            stack.pop();
+            continue;
+        }
+        const BCNode* n = (*f.list)[f.next++];
+        if (!n->sclass) {
+            continue;
+        }
+        qore_class_private& pc = *qore_class_private::get(*n->sclass);
+        ParentWalk r = visit(*n, pc);
+        if (r == ParentWalk::Stop) {
+            return;
+        }
+        if (r == ParentWalk::Descend && pc.scl && (!require_valid || pc.scl->valid)) {
+            // f is not used after this: the stack can be reallocated
+            stack.push({pc.scl, 0});
+        }
+    }
+}
+
 bool is_special_method_name(const char* name) {
     return !strcmp(name, "constructor") || !strcmp(name, "destructor") || !strcmp(name, "copy")
         || !strcmp(name, "methodGate") || !strcmp(name, "memberGate") || !strcmp(name, "memberNotification");
@@ -9812,27 +9914,26 @@ bool is_special_method_name(const char* name) {
 
 void collect_base_method_names(const qore_class_private& qc, bool is_static, std::set<std::string>& names,
         std::unordered_set<qore_classid_t>& visited) {
+    auto add_names = [&](const qore_class_private& c) {
+        const hm_method_t& map = is_static ? c.shm : c.hm;
+        for (const auto& i : map) {
+            if (is_special_method_name(i.second->getName())) {
+                continue;
+            }
+            names.insert(i.first);
+        }
+    };
     if (!visited.insert(qc.classID).second) {
         return;
     }
-
-    const hm_method_t& map = is_static ? qc.shm : qc.hm;
-    for (const auto& i : map) {
-        if (is_special_method_name(i.second->getName())) {
-            continue;
+    add_names(qc);
+    walk_parent_classes(qc, false, [&](const BCNode&, const qore_class_private& pc) {
+        if (!visited.insert(pc.classID).second) {
+            return ParentWalk::Skip;
         }
-        names.insert(i.first);
-    }
-
-    if (!qc.scl) {
-        return;
-    }
-
-    for (auto& i : *qc.scl) {
-        if (i->sclass) {
-            collect_base_method_names(*qore_class_private::get(*i->sclass), is_static, names, visited);
-        }
-    }
+        add_names(pc);
+        return ParentWalk::Descend;
+    });
 }
 
 bool local_overrides_all_base_variants(MethodFunctionBase& local_func, MethodFunctionBase& base_func,
@@ -9985,16 +10086,9 @@ QoreString build_base_class_list(const std::set<std::string>& bases) {
 void collect_final_methods(const qore_class_private& qc, bool is_static,
         std::vector<std::pair<std::string, const MethodFunctionBase*>>& finals,
         std::unordered_set<qore_classid_t>& visited) {
-    if (!qc.scl) {
-        return;
-    }
-    for (auto& i : *qc.scl) {
-        if (!i->sclass) {
-            continue;
-        }
-        const qore_class_private& pc = *qore_class_private::get(*i->sclass);
+    walk_parent_classes(qc, false, [&](const BCNode&, const qore_class_private& pc) {
         if (!visited.insert(pc.classID).second) {
-            continue;
+            return ParentWalk::Skip;
         }
         const hm_method_t& map = is_static ? pc.shm : pc.hm;
         for (const auto& mi : map) {
@@ -10006,49 +10100,35 @@ void collect_final_methods(const qore_class_private& qc, bool is_static,
                 finals.emplace_back(mi.first, f);
             }
         }
-        collect_final_methods(pc, is_static, finals, visited);
-    }
+        return ParentWalk::Descend;
+    });
 }
 
 // returns the first method of the given name found depth-first in the parent classes, as calls are resolved
 const MethodFunctionBase* find_first_parent_method(const qore_class_private& qc, const std::string& name,
         bool is_static) {
     QORE_CLASS_HIERARCHY_STEP();
-    if (!qc.scl) {
-        return nullptr;
-    }
-    for (auto& i : *qc.scl) {
-        if (!i->sclass) {
-            continue;
-        }
-        const qore_class_private& pc = *qore_class_private::get(*i->sclass);
+    const MethodFunctionBase* rv = nullptr;
+    walk_parent_classes(qc, false, [&](const BCNode&, const qore_class_private& pc) {
+        QORE_CLASS_HIERARCHY_STEP();
         const hm_method_t& map = is_static ? pc.shm : pc.hm;
         hm_method_t::const_iterator mi = map.find(name);
         if (mi != map.end()) {
-            return qore_method_private::get(*mi->second)->getFunction();
+            rv = qore_method_private::get(*mi->second)->getFunction();
+            return ParentWalk::Stop;
         }
-        const MethodFunctionBase* f = find_first_parent_method(pc, name, is_static);
-        if (f) {
-            return f;
-        }
-    }
-    return nullptr;
+        return ParentWalk::Descend;
+    });
+    return rv;
 }
 
 // collects the non-static methods of the parent classes, with their names
 void collect_parent_methods(const qore_class_private& qc,
         std::vector<std::pair<std::string, const MethodFunctionBase*>>& methods,
         std::unordered_set<qore_classid_t>& visited) {
-    if (!qc.scl) {
-        return;
-    }
-    for (auto& i : *qc.scl) {
-        if (!i->sclass) {
-            continue;
-        }
-        const qore_class_private& pc = *qore_class_private::get(*i->sclass);
+    walk_parent_classes(qc, false, [&](const BCNode&, const qore_class_private& pc) {
         if (!visited.insert(pc.classID).second) {
-            continue;
+            return ParentWalk::Skip;
         }
         for (const auto& mi : pc.hm) {
             if (is_special_method_name(mi.second->getName())) {
@@ -10056,8 +10136,8 @@ void collect_parent_methods(const qore_class_private& qc,
             }
             methods.emplace_back(mi.first, qore_method_private::get(*mi.second)->getFunction());
         }
-        collect_parent_methods(pc, methods, visited);
-    }
+        return ParentWalk::Descend;
+    });
 }
 
 } // namespace
@@ -10105,27 +10185,19 @@ namespace {
 //! the methods of the parent's parents (as BCList::parseAddAncestors() builds the list)
 void collect_hierarchy_functions(const qore_class_private& qc, const std::string& name, bool is_static, ilist_t& out,
         std::unordered_set<const qore_class_private*>& visited) {
-    if (!qc.scl || !qc.scl->valid) {
-        return;
-    }
-    for (auto& i : *qc.scl) {
-        QoreClass* pc = i->sclass;
-        if (!pc) {
-            continue;
-        }
-        qore_class_private* pcp = qore_class_private::get(*pc);
+    walk_parent_classes(qc, true, [&](const BCNode& n, qore_class_private& pcp) {
         // a class that the walk has seen again (a diamond, or a cycle that was not rejected yet) adds nothing: its
         // methods come first where it was seen first
-        if (!visited.insert(pcp).second) {
-            continue;
+        if (!visited.insert(&pcp).second) {
+            return ParentWalk::Skip;
         }
-        const QoreMethod* w = is_static ? pcp->parseFindLocalStaticMethod(name.c_str())
-            : pcp->parseFindLocalMethod(name.c_str());
+        const QoreMethod* w = is_static ? pcp.parseFindLocalStaticMethod(name.c_str())
+            : pcp.parseFindLocalMethod(name.c_str());
         if (w) {
-            out.push_back(INode(qore_method_private::get(*w)->getFunction(), i->access));
+            out.push_back(INode(qore_method_private::get(*w)->getFunction(), n.access));
         }
-        collect_hierarchy_functions(*pcp, name, is_static, out, visited);
-    }
+        return ParentWalk::Descend;
+    });
 }
 
 } // namespace
@@ -10162,7 +10234,9 @@ typedef std::set<std::pair<const qore_class_private*, std::string>> generic_pare
 /** Each parent class is expanded once for the type arguments that the walk gives it (\a expanded): a class reached
     again through another path (a diamond) gives the instantiations that it gave when it was first reached, which are
     collected and compared already, so a walk takes steps linear in the parent class edges of the hierarchy, not in
-    its paths, which a lattice of classes multiplies with each level (qore#6423).  Leaving them out changes neither
+    its paths, which a lattice of classes multiplies with each level (qore#6423).  Each level checks the stack: a
+    hierarchy too deep for the thread's stack gives the parse error of the stack limit (\a stack_error is set, the
+    instantiations are not compared; qore#7539).  Leaving them out changes neither
     the first two different instantiations found nor the paths that they are reported through: an instantiation that
     is reached again was compared with every other when it was first collected.  The type arguments are compared by
     name: a type parameter left in them is one of the class whose instantiations are checked, the same on every path,
@@ -10170,9 +10244,14 @@ typedef std::set<std::pair<const qore_class_private*, std::string>> generic_pare
 */
 bool collect_generic_parents(const qore_class_private& cls, const QoreTypeInfo* source, const std::string& via,
         std::vector<GenericParentSeen>& seen, std::unordered_set<const qore_class_private*>& path,
-        generic_parents_expanded_t& expanded, GenericParentSeen*& first, GenericParentSeen& second) {
+        generic_parents_expanded_t& expanded, GenericParentSeen*& first, GenericParentSeen& second,
+        const QoreProgramLocation* loc, bool& stack_error) {
     if (!cls.scl || !cls.scl->valid) {
         return true;
+    }
+    if (parse_check_stack(loc)) {
+        stack_error = true;
+        return false;
     }
     for (auto& i : *cls.scl) {
         QORE_GENERIC_PARENT_CHECK_STEP();
@@ -10221,7 +10300,7 @@ bool collect_generic_parents(const qore_class_private& cls, const QoreTypeInfo* 
         }
         path.insert(pcp);
         const bool ok = collect_generic_parents(*pcp, pti ? subst : nullptr, pvia, seen, path, expanded, first,
-            second);
+            second, loc, stack_error);
         path.erase(pcp);
         if (!ok) {
             return false;
@@ -10242,8 +10321,14 @@ int qore_class_private::parseCheckGenericParentInstantiations() const {
     generic_parents_expanded_t expanded;
     GenericParentSeen* first = nullptr;
     GenericParentSeen second;
-    if (collect_generic_parents(*this, nullptr, std::string(), seen, path, expanded, first, second)) {
+    bool stack_error = false;
+    if (collect_generic_parents(*this, nullptr, std::string(), seen, path, expanded, first, second, loc,
+            stack_error)) {
         return 0;
+    }
+    // the parse error of the stack limit was raised
+    if (stack_error) {
+        return -1;
     }
     parse_error(*loc, "class '%s' inherits generic class '%s' with different type arguments: '%s' through '%s' and "
         "'%s' through '%s'", name.c_str(), second.base->getName(), generic_parent_name(first->type).c_str(),
