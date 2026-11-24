@@ -103,6 +103,22 @@ public:
 
     DLLLOCAL HashDeclMemberInfo* instantiate(const QoreTypeInfo* receiver_type_info) const;
 
+    //! sets the default value of a member that was added without it, which it takes over
+    /** used for the expression default values of the members of a hashdecl deserialized from an AOT binary, which are
+        read after the members are added (qore#7493)
+
+        @param e the default value, which the member takes over
+        @param receiver_type_info the type of the instantiation of a generic hashdecl whose member this is, or nullptr
+        (see getDefaultReceiverTypeInfo())
+    */
+    DLLLOCAL void setDeferredDefault(QoreValue e, const QoreTypeInfo* receiver_type_info = nullptr) {
+        assert(!exp);
+        exp = e;
+        if (exp) {
+            default_receiver_type_info = receiver_type_info;
+        }
+    }
+
     //! Returns the type that the default value of the member is evaluated with as the receiver, or nullptr
     /** The member of an instantiation of a generic hashdecl (HD<string> of HD<X>) shares the initializer of the
         generic hashdecl, whose types can name its type parameters (new hash<HD2<X, int>>()); they are the type
@@ -623,6 +639,38 @@ public:
 
     DLLLOCAL const HashDeclMemberInfo* findLocalMember(const char* name) const {
         return members.find(name);
+    }
+
+    //! sets the default value of the local member \a name of a hashdecl deserialized from an AOT binary (qore#7493)
+    /** The expression default values of the members are read after the members are added, when the functions, global
+        variables, static class members and methods that they can reference are registered; the instantiations of a
+        generic hashdecl made before then, whose members share the initializers of the hashdecl (see
+        HashDeclMemberInfo::instantiate()), take the default value too
+
+        @param name the name of the member, which must have no default value
+        @param val the default value, which the member takes over
+    */
+    DLLLOCAL void setAOTMemberDefault(const char* name, QoreValue val) {
+        ValueHolder holder(val, nullptr);
+        HashDeclMemberInfo* mi = members.find(name);
+        assert(mi);
+        if (!mi || !val) {
+            return;
+        }
+        mi->setDeferredDefault(holder.release());
+        // the initializers have changed
+        code_init.store(-1, std::memory_order_relaxed);
+        hier_code_init.store(-1, std::memory_order_relaxed);
+        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        for (auto& i : parameterized_hashdecl_cache) {
+            typed_hash_decl_private* p = get(*i.second);
+            HashDeclMemberInfo* imi = p->members.find(name);
+            if (imi && !imi->exp) {
+                imi->setDeferredDefault(mi->exp.refSelf(), p->thd->getTypeInfo());
+                p->code_init.store(-1, std::memory_order_relaxed);
+                p->hier_code_init.store(-1, std::memory_order_relaxed);
+            }
+        }
     }
 
     DLLLOCAL HashDeclMemberInfo* findLocalMember(const char* name) {
