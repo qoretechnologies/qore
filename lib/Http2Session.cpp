@@ -868,8 +868,14 @@ int32_t Http2Session::submitRequestImpl(const char* method, const char* path,
         return -1;
     }
 
-    int32_t stream_id = nghttp2_submit_request(session, nullptr, nva.data(), nva.size(),
-        data_prd, this);
+    int32_t stream_id;
+#ifdef DEBUG
+    // a test makes the submit fail as when the session has no stream ID left (qore#7443)
+    if (qore_dbg_h2_fail_next_submit.exchange(false, std::memory_order_acq_rel)) {
+        stream_id = NGHTTP2_ERR_STREAM_ID_NOT_AVAILABLE;
+    } else
+#endif
+    stream_id = nghttp2_submit_request(session, nullptr, nva.data(), nva.size(), data_prd, this);
 
     if (stream_id < 0) {
         xsink->raiseException("HTTP2-ERROR", "failed to submit request: %s",
@@ -2126,6 +2132,12 @@ bool Http2Session::isStreamRemoteClosed(int32_t stream_id) const {
         return true;
     }
     return nghttp2_session_get_stream_remote_close(session, stream_id) == 1;
+}
+
+bool Http2Session::isStreamLocalOpen(int32_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    // 0: the local side is open; 1: closed; -1: no such stream
+    return session && nghttp2_session_get_stream_local_close(session, stream_id) == 0;
 }
 
 bool Http2Session::isStreamBodyTooLarge(int32_t stream_id) const {

@@ -154,6 +154,14 @@ public class HttpAsyncSocketIoController {
     }
 
     private {
+        #! The HTTP/2 and HTTP/3 connections closed most recently, with why (qore#7443); see getRecentConnectionCloses()
+        list<hash<auto>> recent_closes = ();
+
+        #! Protects @ref recent_closes
+        Mutex recent_closes_lock();
+    }
+
+    private {
         #! Lock for atomic operations — RWLock allows concurrent read-only access
         RWLock m();
 
@@ -3763,8 +3771,15 @@ public class HttpAsyncSocketIoController {
                 submitConnectionOp(uh, cinfo);
                 return;
             }
-            log(LoggerLevel::DEBUG, "handleConnectionResult: error for %s state=%y: %s: %s",
-                uh, orig_state, result.ex.err, result.ex.desc);
+            # where and why an HTTP/2 operation closed the connection (qore#7443)
+            *string close_reason = result.spop instanceof Http2PollOperation
+                ? cast<Http2PollOperation>(result.spop).getCloseReason()
+                : NOTHING;
+            log(LoggerLevel::DEBUG, "handleConnectionResult: error for %s state=%y: %s: %s%s",
+                uh, orig_state, result.ex.err, result.ex.desc, close_reason ? ": " + close_reason : "");
+            if (result.spop instanceof Http2PollOperation) {
+                recordConnectionClose(uh, "h2", close_reason ?? "the operation failed", result.ex);
+            }
             if (orig_state == HttpConnectionState::SendStreamResponse && cinfo.after_send) {
                 dispatchResponseSendResult(cinfo.target, cinfo.after_send, False);
             }
@@ -3892,7 +3907,11 @@ public class HttpAsyncSocketIoController {
                         submitConnectionOp(uh, new_cinfo);
                     }
                 } else if (h3op.isClosed() || h3op.hasError()) {
-                    log(LoggerLevel::DEBUG, "HTTP/3 connection closed: %y", uh);
+                    # why the listener's operation ended (qore#7443)
+                    *hash<auto> h3err = h3op.getError();
+                    log(LoggerLevel::DEBUG, "HTTP/3 connection closed: %y%s", uh,
+                        h3err ? sprintf(" (%s: %s)", h3err.err, h3err.desc) : "");
+                    recordConnectionClose(uh, "h3", "the HTTP/3 listener's operation ended", h3err);
                     # Notify stream listeners (e.g., WebSocketStreamProcessor) so
                     # handler threads blocked in stream_done.waitForZero() wake up
                     h3op.notifyStreamListenersClosed();
@@ -6258,17 +6277,51 @@ public class HttpAsyncSocketIoController {
         }
     }
 
+    #! The number of closed connections kept for getRecentConnectionCloses()
+    const RecentCloseMax = 16;
+
+    #! Returns the HTTP/2 and HTTP/3 connections closed most recently, oldest first, with why (qore#7443)
+    /** For diagnostics: the reason is where and why the server's operation closed the connection.
+
+        @return a list of hashes with the keys \c connection (the connection's key), \c protocol (\c "h2" or
+        \c "h3"), \c reason, \c err and \c desc (the error, if any) and \c closed (when); at most the last 16
+    */
+    list<hash<auto>> getRecentConnectionCloses() {
+        AutoLock al(recent_closes_lock);
+        return recent_closes;
+    }
+
+    #! Records why a connection was closed (see getRecentConnectionCloses()); only called when it is closed
+    private recordConnectionClose(string uh, string protocol, string reason, *hash<auto> error) {
+        hash<auto> entry = {
+            "connection": uh,
+            "protocol": protocol,
+            "reason": reason,
+            "err": error.err,
+            "desc": error.desc,
+            "closed": now_us(),
+        };
+        AutoLock al(recent_closes_lock);
+        push recent_closes, entry;
+        if (recent_closes.size() > RecentCloseMax) {
+            splice recent_closes, 0, 1;
+        }
+    }
+
     #! Handles HTTP/2 connection closed
     private handleHttp2ConnectionClosed(string uh, hash<HttpActiveConnectionInfo> cinfo,
             Http2PollOperation h2op) {
         *hash<auto> error = h2op.getError();
+        # where and why the operation closed the connection (qore#7443)
+        string reason = h2op.getCloseReason() ?? "no reason recorded";
+        recordConnectionClose(uh, "h2", reason, error);
         if (error) {
-            log(LoggerLevel::DEBUG, "HTTP/2 connection closed with error: %y (%s: %s)",
-                uh, error.err, error.desc);
+            log(LoggerLevel::DEBUG, "HTTP/2 connection closed with error: %y (%s: %s): %s",
+                uh, error.err, error.desc, reason);
             dispatchOnError(cinfo.target, cinfo.sock, cast<hash<ExceptionInfo>>(error),
                 cinfo.listener, cinfo.cx, uh, "HTTP/2 connection close");
         } else {
-            log(LoggerLevel::DEBUG, "HTTP/2 connection closed: %y", uh);
+            log(LoggerLevel::DEBUG, "HTTP/2 connection closed: %y: %s", uh, reason);
         }
 
         signalPersistentQueuesForConnection(uh);

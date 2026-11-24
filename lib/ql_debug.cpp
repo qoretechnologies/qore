@@ -32552,6 +32552,15 @@ static QoreValue f_dbg_quic_wait_dropped_client_datagrams(const QoreListNode* pa
     }, static_cast<int>(timeout_ms));
 }
 
+std::atomic<bool> qore_dbg_h2_fail_next_submit{false};
+
+//! Debug-only: the next request submitted on an HTTP/2 client session fails as when the session has no stream ID left
+//! (NGHTTP2_ERR_STREAM_ID_NOT_AVAILABLE, raised as HTTP2-ERROR; qore#7443)
+static QoreValue f_dbg_http2_fail_next_submit(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    qore_dbg_h2_fail_next_submit.store(true, std::memory_order_release);
+    return QoreValue();
+}
+
 std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent{0};
 std::atomic<int64_t> qore_dbg_quic_stateless_resets_received{0};
 std::atomic<int64_t> qore_dbg_quic_server_retries_sent{0};
@@ -35848,6 +35857,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_quic_stateless_reset_counts", f_dbg_quic_stateless_reset_counts, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_http2_fail_next_submit", f_dbg_http2_fail_next_submit, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_quic_server_retry_counts", f_dbg_quic_server_retry_counts, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_quic_fail_sends", f_dbg_quic_fail_sends, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

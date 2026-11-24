@@ -378,9 +378,11 @@ class HttpServerMalformedResponseTest inherits QUnit::Test {
             err = ex;
         }
         list<string> entries = plain.getEntries(held_id);
-        string diag = sprintf("held request %y: %s; server entries: %y; client connections: %y; client stats: %y",
-            held_id, err ? sprintf("%s: %s", err.err, err.desc) : sprintf("status %y", status), entries,
-            mgr.getConnectionInfo(), mgr.getStats());
+        # the client's stats include the connections it closed most recently and why (recent_closes), and the server
+        # keeps those it closed (qore#7443), so that a connection that died names the path that closed it
+        string diag = sprintf("held request %y: %s; server entries: %y; client connections: %y; client stats: %y; "
+            "server closes: %y", held_id, err ? sprintf("%s: %s", err.err, err.desc) : sprintf("status %y", status),
+            entries, mgr.getConnectionInfo(), mgr.getStats(), server.getHttpAsyncIo().getRecentConnectionCloses());
         if (err || entries.size() != 1) {
             printf("%s: %s\n", msg, diag);
         }

@@ -773,6 +773,16 @@ public:
     */
     DLLLOCAL bool isStreamRemoteClosed(int32_t stream_id) const;
 
+    //! Returns True if this endpoint has not ended its side of the stream (it has not sent END_STREAM or RST_STREAM)
+    /** A client stream whose response ended while its request side is still open (an extended CONNECT tunnel or a
+        streamed request that the server answered whole) stays half-closed until the client ends it: it then counts
+        against the peer's limit of concurrent streams for the life of the connection (qore#7443)
+
+        @param stream_id the stream to check
+        @return True if the stream exists and its local side is open
+    */
+    DLLLOCAL bool isStreamLocalOpen(int32_t stream_id) const;
+
     //! Returns True if the request body received on the stream exceeded the maximum request body size
     /** @param stream_id the stream to check
         @return True if the stream exists and its request body exceeded the limit; see

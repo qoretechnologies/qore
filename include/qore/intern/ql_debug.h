@@ -179,6 +179,10 @@ DLLLOCAL bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_
 */
 DLLLOCAL void qore_dbg_quic_flush_releases_held(int64_t session_id);
 
+//! set by dbg_http2_fail_next_submit(): the next request submitted on an HTTP/2 client session fails as when the
+//! session has no stream ID left (NGHTTP2_ERR_STREAM_ID_NOT_AVAILABLE; qore#7443)
+DLLLOCAL extern std::atomic<bool> qore_dbg_h2_fail_next_submit;
+
 //! the stateless resets that the QUIC listeners of the process sent and that its QUIC clients received (qore#6931);
 //! see dbg_quic_stateless_reset_counts()
 DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent;

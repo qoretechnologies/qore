@@ -6354,6 +6354,11 @@ bool qore_socket_object_private::isHttp2StreamEndStreamReceivedForAsyncPoll(int3
     return h2 && h2->isStreamEndStreamReceived(stream_id);
 }
 
+bool qore_socket_object_private::isHttp2StreamLocalOpen(int32_t stream_id) const {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(so);
+    return h2 && h2->isStreamLocalOpen(stream_id);
+}
+
 bool qore_socket_object_private::isHttp2StreamResetForAsyncPoll(int32_t stream_id) const {
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(so);
     return h2 && h2->isStreamReset(stream_id);
@@ -6393,6 +6398,11 @@ void qore_socket_object_private::releaseQuicStream(int64_t session_id, int64_t s
     if (session) {
         session->releaseStream(stream_id);
     }
+}
+
+bool qore_socket_object_private::isQuicBidiStreamOpen(int64_t session_id, int64_t stream_id) const {
+    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(so, session_id);
+    return session && session->isBidiStreamOpen(stream_id);
 }
 
 int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms) {
