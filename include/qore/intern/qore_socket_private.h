@@ -1333,6 +1333,43 @@ private:
 };
 
 #ifndef _Q_WINDOWS
+//! A UNIX socket path that the sandbox file-system policy checked, pinned against a concurrent change (qore#7518)
+/** The operation reaches the socket file through what was pinned: on Linux, through the procfs link of the descriptor
+    held (the directory for a bind, the socket file itself for a connection); where the system can bind and connect
+    relative to a directory (FreeBSD), relative to the directory held; on macOS, through the canonical path checked
+    (the socket file is removed on close through the directory held)
+*/
+struct QoreUnixSocketPin {
+    //! the descriptor held: the directory of the socket file (bind; connection with \c at), or the socket file
+    int fd = -1;
+    //! the canonical path of the socket file that the policy checked
+    std::string canon;
+    //! true if the address is relative to the directory held (bindat(), connectat())
+    bool at = false;
+    //! the name of the socket file in the directory held (bind)
+    std::string leaf;
+
+    DLLLOCAL QoreUnixSocketPin() = default;
+    DLLLOCAL QoreUnixSocketPin(const QoreUnixSocketPin&) = delete;
+    DLLLOCAL QoreUnixSocketPin& operator=(const QoreUnixSocketPin&) = delete;
+
+    DLLLOCAL ~QoreUnixSocketPin() {
+        if (fd >= 0) {
+            ::close(fd);
+        }
+    }
+};
+
+//! Pins a UNIX socket path that the sandbox rules allowed, and gives the address that reaches it (qore#7518)
+/** @param bind true for a bind (the socket file is created), false for a connection
+    @param addr the address to bind or connect to, set here
+    @param upin the pin, which must be kept until the bind or connection is made
+
+    @return 0 for OK, -1 if an exception has been raised (a denial, or the error of the operation)
+*/
+DLLLOCAL int qore_socket_pin_unix_path(QoreSandboxManager& sm, const char* path, bool bind, struct sockaddr_un& addr,
+        QoreUnixSocketPin& upin, ExceptionSink* xsink);
+
 class SocketConnectUnixPollState : public AbstractPollState {
 public:
     DLLLOCAL SocketConnectUnixPollState(ExceptionSink* xsink, qore_socket_private* sock, const char* name,
@@ -1350,6 +1387,10 @@ private:
     qore_socket_private* sock;
     std::string name;
     struct sockaddr_un addr;
+    //! the address connected to: that of the path pinned under a sandbox policy, otherwise \a addr (qore#7518)
+    struct sockaddr_un conn_addr;
+    //! the path pinned under a sandbox policy (qore#7518)
+    QoreUnixSocketPin upin;
     int state = SCIPS_CONNECT;
     //! The @ref qore_socket_private::fd_generation "generation" of the socket's descriptor since the connection gave
     //! it one (or since it started): a close of the socket changes it, and the connection then fails (qore#7156)
@@ -1904,6 +1945,10 @@ struct qore_socket_private : public QoreReferenceCounter {
     std::atomic<const QoreEncoding*> enc;
 
     std::string socketname;
+    //! the directory of the socket file of a UNIX socket bound under a sandbox policy, and its name there, from
+    //! which the socket file is removed on close (qore#7518); -1 if none
+    int socket_dirfd = -1;
+    std::string socket_leaf;
     // issue #3053: client target for SNI
     std::string client_target;
     //! The TLS connection of the socket, if any
@@ -3538,9 +3583,18 @@ public:
 
                 if (!socketname.empty()) {
                     if (del) {
-                        unlink(socketname.c_str());
+                        if (socket_dirfd >= 0) {
+                            unlinkat(socket_dirfd, socket_leaf.c_str(), 0);
+                        } else {
+                            unlink(socketname.c_str());
+                        }
                     }
                     socketname.clear();
+                }
+                if (socket_dirfd >= 0) {
+                    ::close(socket_dirfd);
+                    socket_dirfd = -1;
+                    socket_leaf.clear();
                 }
                 do_close_event();
                 // issue #3558: increment the connection sequence here. so the connection sequence is different as
@@ -3550,6 +3604,12 @@ public:
                 rc = close_and_reset_locked();
             } else {
                 ++fd_generation;
+                // the directory of a socket file whose descriptor was given up without this close (qore#7518)
+                if (socket_dirfd >= 0) {
+                    ::close(socket_dirfd);
+                    socket_dirfd = -1;
+                    socket_leaf.clear();
+                }
             }
         }
 
@@ -4587,7 +4647,12 @@ public:
     }
 
     // bind to UNIX domain socket file
-    DLLLOCAL int bindUNIX(ExceptionSink* xsink, const char* name, int socktype = SOCK_STREAM, int protocol = 0) {
+    //! binds to a UNIX socket path
+    /** @param pinned_addr the address of the path pinned under a sandbox policy (qore#7518), if any
+        @param upin the pin of the path, if any; the directory held is taken to remove the socket file on close
+    */
+    DLLLOCAL int bindUNIX(ExceptionSink* xsink, const char* name, int socktype = SOCK_STREAM, int protocol = 0,
+            const struct sockaddr_un* pinned_addr = nullptr, QoreUnixSocketPin* upin = nullptr) {
         assert(xsink);
 #ifdef _Q_WINDOWS
         xsink->raiseException("SOCKET-BINDUNIX-ERROR", "UNIX sockets are not available under Windows");
@@ -4612,15 +4677,46 @@ public:
         strncpy(addr.sun_path, name, sizeof(addr.sun_path) - 1);
         addr.sun_path[sizeof(addr.sun_path) - 1] = '\0';
 
-        if (bindIntern(reinterpret_cast<struct sockaddr*>(&addr), sizeof(struct sockaddr_un), -1, false, nullptr,
-                xsink)) {
-            return -1;
+#if defined(__FreeBSD__)
+        if (upin && upin->at) {
+            // the socket file is created relative to the directory pinned
+            struct sockaddr_un baddr = *pinned_addr;
+            if (::bindat(upin->fd, sock, reinterpret_cast<struct sockaddr*>(&baddr), sizeof(struct sockaddr_un))) {
+                int bind_errno = errno;
+                qore_socket_error(xsink, "SOCKET-BIND-ERROR", "error in bind()", 0, 0, 0,
+                    reinterpret_cast<struct sockaddr*>(&addr));
+                close();
+                sock_set_raw_error(bind_errno);
+                return -1;
+            }
+        } else
+#endif
+        {
+            struct sockaddr_un baddr = pinned_addr ? *pinned_addr : addr;
+            // the error of a pinned bind names the path as given, not the address of the path pinned
+            if (bindIntern(reinterpret_cast<struct sockaddr*>(&baddr), sizeof(struct sockaddr_un), -1, false, nullptr,
+                    pinned_addr ? nullptr : xsink, pinned_addr ? xsink : nullptr)) {
+                if (pinned_addr && !*xsink) {
+                    int bind_errno = sock_get_raw_error();
+                    qore_socket_error(xsink, "SOCKET-BIND-ERROR", "error in bind()", 0, 0, 0,
+                        reinterpret_cast<struct sockaddr*>(&addr));
+                    sock_set_raw_error(bind_errno);
+                }
+                return -1;
+            }
         }
 
         // save socket file name for deleting on close
         socketname = addr.sun_path;
         // delete UNIX domain socket on close
         del = true;
+        // a socket file created in a pinned directory is removed from that directory (qore#7518)
+        if (upin) {
+            assert(socket_dirfd < 0);
+            socket_dirfd = upin->fd;
+            upin->fd = -1;
+            socket_leaf = upin->leaf;
+        }
         return 0;
 #endif // windows
     }
