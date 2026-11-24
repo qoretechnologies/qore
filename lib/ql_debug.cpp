@@ -29959,10 +29959,12 @@ static QoreValue f_dbg_quic_wait_idle(const QoreListNode* params, RuntimeConfig&
     return dbg_quic_wait_until([&session]() { return !session->getBytesInFlight(); }, static_cast<int>(timeout_ms));
 }
 
-//! Debug-only: waits until no QUIC session of the process has data in flight (qore#7452)
-/** When a client and a server in the process have nothing in flight, each has had all its packets that need an
-    acknowledgment acknowledged by the other: neither has a packet left to send or to receive until it sends something
-    new (a request, or the response to one)
+//! Debug-only: waits until no QUIC session of the process has data in flight or anything left to write (qore#7452)
+/** When a client and a server in the process have nothing in flight and nothing to write, each has had all its
+    packets that need an acknowledgment acknowledged by the other, and has no frame waiting to be sent (ex: a client's
+    credit update after it read a response): neither has a packet left to send or to receive until it sends something
+    new (a request, or the response to one), or a timer sends one (keep-alive, path MTU discovery: see
+    QORE_QUIC_TEST_DISABLE_PMTUD)
 
     @param timeout_ms the maximum time to wait in milliseconds
 
@@ -29991,7 +29993,7 @@ static QoreValue f_dbg_quic_wait_all_idle(const QoreListNode* params, RuntimeCon
         }
         // checked without the registry's lock: getBytesInFlight() takes the session's lock
         for (auto& session : sessions) {
-            if (!session->isClosed() && session->getBytesInFlight()) {
+            if (!session->isClosed() && (session->getBytesInFlight() || session->hasPendingWrite())) {
                 return false;
             }
         }

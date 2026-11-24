@@ -131,6 +131,16 @@ static bool quic_server_keep_alive_disabled_for_test() {
     const char* v = v_holder.c_str();
     return v && *v && strcmp(v, "0") != 0;
 }
+
+// Test-only switch: QORE_QUIC_TEST_DISABLE_PMTUD disables ngtcp2's path MTU discovery for the connections created
+// while it is set, whose probes are sent one after the other after the handshake, also once a connection has nothing
+// in flight; a test that stops a server once nothing is in flight (dbg_quic_wait_all_idle()) sets it, so that no probe
+// of either side follows (qore#7452)
+static bool quic_test_pmtud_disabled() {
+    QoreEnvironmentValue v_holder("QORE_QUIC_TEST_DISABLE_PMTUD");
+    const char* v = v_holder.c_str();
+    return v && *v && strcmp(v, "0") != 0;
+}
 #endif
 
 //! The number of ngtcp2 log lines a client connection keeps for the unanswered-request diagnostic
@@ -1945,6 +1955,9 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     settings.initial_ts = timestamp();
 #ifdef DEBUG
     settings.initial_ts += quic_test_clock_step_back_ns();
+    if (quic_test_pmtud_disabled()) {
+        settings.no_pmtud = 1;
+    }
 #endif
     if (quic_ngtcp2_log_enabled()) {
         settings.log_printf = quic_ngtcp2_log_printf;
@@ -2118,6 +2131,9 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
     settings.initial_ts = timestamp();
 #ifdef DEBUG
     settings.initial_ts += quic_test_clock_step_back_ns();
+    if (quic_test_pmtud_disabled()) {
+        settings.no_pmtud = 1;
+    }
 #endif
     if (quic_ngtcp2_log_enabled()) {
         settings.log_printf = quic_ngtcp2_log_printf;
@@ -2869,6 +2885,12 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
             // to avoid busy-looping on POLLOUT.
             if (stream_id < 0 && pending_datagrams_.empty()) {
                 pending_write_.store(false, std::memory_order_release);
+#ifdef DEBUG
+                // the session has nothing more to send (see dbg_quic_wait_all_idle())
+                if (qore_dbg_quic_idle_waiters.load(std::memory_order_acquire)) {
+                    qore_dbg_quic_notify_idle_waiters();
+                }
+#endif
             }
             break;
         }

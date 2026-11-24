@@ -154,6 +154,9 @@ class RestClientH3ServerRestartTest inherits QUnit::Test {
             \restartTest(), "POST");
         addTestCase("the response to another request does not end the wait for a request that the server did not "
             "receive", \otherResponseTest());
+        # no path MTU probe is sent once nothing is in flight (debug builds): the client's next datagram after
+        # dbg_quic_wait_all_idle() is then its next request
+        setenv("QORE_QUIC_TEST_DISABLE_PMTUD", "1");
         set_return_value(main());
     }
 
@@ -173,6 +176,36 @@ class RestClientH3ServerRestartTest inherits QUnit::Test {
         return (server, p);
     }
 
+    #! starts a server that is to be restarted on its port; returns the server and its port
+    /** The port is below the range of the ports that the OS assigns to a socket bound to port 0 (ephemeral ports:
+        32768-60999 by default on Linux, read from /proc/sys/net/ipv4/ip_local_port_range when available; 49152-65535
+        on macOS), so that no socket of another process, such as a client socket of a test running beside this one,
+        can take it while the server restarts on it; a port that a socket bound explicitly is in use is skipped
+    */
+    private list<auto> startRestartableServer(AbstractHttpRequestHandler handler) {
+        int first_ephemeral = 32768;
+        if (is_file("/proc/sys/net/ipv4/ip_local_port_range")) {
+            *string first = (ReadOnlyFile::readTextFile("/proc/sys/net/ipv4/ip_local_port_range") =~ x/^\s*([0-9]+)/)[0];
+            if (first) {
+                first_ephemeral = first.toInt();
+            }
+        }
+        if (first_ephemeral <= 10000) {
+            # no range is left below the ephemeral ports
+            return startServer(0, handler);
+        }
+        for (int attempt = 0; ; ++attempt) {
+            int port = 10000 + (rand() % (first_ephemeral - 10000));
+            try {
+                return startServer(port, handler);
+            } catch (hash<ExceptionInfo> ex) {
+                if (attempt == 100 || ex.desc !~ /in use/) {
+                    rethrow;
+                }
+            }
+        }
+    }
+
     restartTest(string method) {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("a server is stopped as a killed one is only with dbg_quic_silent_server_close()");
@@ -180,7 +213,7 @@ class RestClientH3ServerRestartTest inherits QUnit::Test {
         CountingHandler first_handler();
         HttpServer first;
         int port;
-        (first, port) = startServer(0, first_handler);
+        (first, port) = startRestartableServer(first_handler);
         on_exit if (first) {
             first.stop();
         }
