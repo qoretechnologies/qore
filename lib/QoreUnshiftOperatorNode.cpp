@@ -124,81 +124,105 @@ QoreValue QoreUnshiftOperatorNode::evalLexical(bool& needs_deref, ExceptionSink*
 }
 
 template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE int QoreUnshiftOperatorNode::unshiftOn(LValueHelper& val, QoreValue converted,
+        QoreMutationOperandHolder& res, QoreValue& rv, ExceptionSink* xsink) const {
+    if (!converted.isNothing()) [[unlikely]] {
+        val.saveTemp(converted);
+    }
+
+    // an element type that can bind a reference: the value is checked with a probe before anything is changed,
+    // also before an lvalue with no value is assigned the list that the operation makes for it; the store is
+    // made again if the probe records references (qore#7391)
+    std::optional<QoreReferenceBindProbe> probe;
+    {
+        qore_type_t vt = val.getType();
+        if ((vt == NT_LIST && qore_list_private::get(*val.getValue().get<const QoreListNode>())
+                    ->elementMayBindReference())
+                || (vt == NT_NOTHING && qore_list_push_nothing_may_bind(val))) [[unlikely]] {
+            LexicalSemanticPolicy policy;
+            if constexpr (Lexical) {
+                policy = getSemanticPolicy();
+            }
+            val.enableBindRetry();
+            if (qore_container_store_probe(val, *res, false, Lexical ? &policy : nullptr, probe)) {
+                return -1;
+            }
+        }
+    }
+
+    // assign to a blank list if the lvalue has no value yet but is typed as a list or a softlist
+    if (val.getType() == NT_NOTHING) {
+        const QoreTypeInfo* vti = val.getTypeInfo();
+        if (QoreTypeInfo::parseAcceptsReturns(vti, NT_LIST)) {
+            // issue #3317: if the lvar can be a list, assign the current runtime type based on the declared
+            // complex list type
+            const QoreTypeInfo* lti = vti == autoTypeInfo
+                ? autoTypeInfo
+                : QoreTypeInfo::getReturnComplexListOrNothing(vti);
+            if (val.assign(new QoreListNode(lti))) {
+                assert(*xsink);
+                return -1;
+            }
+        }
+    }
+
+    // value is not a list, so throw exception
+    if (val.getType() != NT_LIST) {
+        // no need to check for PO_STRICT_ARGS; this exception was always thrown
+        xsink->raiseException(*loc, "UNSHIFT-ERROR", QoreValue(), "the lvalue argument to unshift is type "
+            "\"%s\"; expecting \"list\"", val.getTypeName());
+        return -1;
+    }
+
+    // no exception can occur here
+    val.ensureUnique();
+
+    QoreListNode* l = val.getValue().get<QoreListNode>();
+
+    // the value is taken by the operation, also when it refuses it
+    if constexpr (Lexical) {
+        qore_list_private::insert(*l, res.takeReferencedValue(), xsink, getSemanticPolicy());
+    } else {
+        qore_list_private::insertCanonical(*l, res.takeReferencedValue(), xsink);
+    }
+    if (probe) [[unlikely]] {
+        probe.reset();
+    }
+
+    // reference for return value
+    if (ref_rv) {
+        rv = l->refSelf();
+    }
+    return 0;
+}
+
+template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE QoreValue QoreUnshiftOperatorNode::evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const {
     // the operand is a statement of its own where the other execution modes evaluate it so
     QoreMutationOperandHolder res(left, right, false, xsink);
     if (*xsink)
         return QoreValue();
 
-    // a store whose check records reference elements is made again after they have been bound with no lvalue lock
-    // held; a retry stores the value that the first round took (qore#7391)
-    QoreBindKeys keys(xsink);
-    QoreBindRetry retry;
-    do {
-        // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-        LValueHelper val(left, xsink, false, retry, keys);
-        if (!val)
-            return QoreValue();
-
-        // an element type that can bind a reference: the value is checked with a probe before anything is changed,
-        // also before an lvalue with no value is assigned the list that the operation makes for it
-        std::optional<QoreReferenceBindProbe> probe;
-        {
-            qore_type_t vt = val.getType();
-            if ((vt == NT_LIST && qore_list_private::get(*val.getValue().get<const QoreListNode>())
-                        ->elementMayBindReference())
-                    || (vt == NT_NOTHING && qore_list_push_nothing_may_bind(val))) [[unlikely]] {
-                LexicalSemanticPolicy policy;
-                if constexpr (Lexical) {
-                    policy = getSemanticPolicy();
-                }
-                if (qore_container_store_probe(val, *res, false, Lexical ? &policy : nullptr, probe)) {
-                    continue;
-                }
-            }
+    QoreValue rv;
+    // the operation on the lvalue that the helper holds, inline on the normal path (unshiftOn()); made again in a
+    // retry of the store, which takes the operand again: a probe that records references makes the store again before
+    // the operation takes it (qore#7391)
+    struct Op {
+        const QoreUnshiftOperatorNode* node;
+        QoreMutationOperandHolder& res;
+        QoreValue& rv;
+        ExceptionSink* xsink;
+        QORE_INTERN_ALWAYS_INLINE int operator()(LValueHelper& h, QoreValue converted) {
+            return node->unshiftOn<Lexical>(h, converted, res, rv, xsink);
         }
+    } op{this, res, rv, xsink};
 
-        // assign to a blank list if the lvalue has no value yet but is typed as a list or a softlist
-        if (val.getType() == NT_NOTHING) {
-            const QoreTypeInfo* vti = val.getTypeInfo();
-            if (QoreTypeInfo::parseAcceptsReturns(vti, NT_LIST)) {
-                // issue #3317: if the lvar can be a list, assign the current runtime type based on the declared
-                // complex list type
-                const QoreTypeInfo* lti = vti == autoTypeInfo
-                    ? autoTypeInfo
-                    : QoreTypeInfo::getReturnComplexListOrNothing(vti);
-                if (val.assign(new QoreListNode(lti))) {
-                    assert(*xsink);
-                    return QoreValue();
-                }
-            }
-        }
-
-        // value is not a list, so throw exception
-        if (val.getType() != NT_LIST) {
-            // no need to check for PO_STRICT_ARGS; this exception was always thrown
-            xsink->raiseException(*loc, "UNSHIFT-ERROR", QoreValue(), "the lvalue argument to unshift is type "
-                "\"%s\"; expecting \"list\"", val.getTypeName());
-            return QoreValue();
-        }
-
-        // no exception can occur here
-        val.ensureUnique();
-
-        QoreListNode* l = val.getValue().get<QoreListNode>();
-
-        // the value is taken by the operation, also when it refuses it
-        if constexpr (Lexical) {
-            qore_list_private::insert(*l, res.takeReferencedValue(), xsink, getSemanticPolicy());
-        } else {
-            qore_list_private::insertCanonical(*l, res.takeReferencedValue(), xsink);
-        }
-        if (probe) [[unlikely]] {
-            probe.reset();
-        }
-
-        // reference for return value
-        return ref_rv ? l->refSelf() : QoreValue();
-    } while (retry.again());
-    return QoreValue();
+    // the first run of the operation and an lvalue path whose keys are evaluated first are handled out of line
+    // (qore#7391)
+    if (store_mode.get() != QoreStorePathMode::Known) [[unlikely]] {
+        qore_ast_store_slow(store_mode, left, xsink, false, op);
+    } else {
+        qore_ast_store<false>(left, xsink, false, nullptr, op);
+    }
+    return rv;
 }

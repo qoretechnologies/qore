@@ -178,6 +178,146 @@ QoreValue QoreSpliceOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsi
 }
 
 template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE int QoreSpliceOperatorNode::spliceOn(LValueHelper& val, QoreValue converted,
+        ValueEvalOptimizedRefHolder& eoffset, ValueEvalOptimizedRefHolder& elength, ValueEvalOptimizedRefHolder& exp,
+        ReferenceHolder<QoreListNode>& holder, QoreValue& rv, ExceptionSink* xsink) const {
+    if (!converted.isNothing()) [[unlikely]] {
+        val.saveTemp(converted);
+    }
+
+    // if value is not a list or string, throw exception
+    qore_type_t vt = val.getType();
+
+    if (vt == NT_NOTHING) {
+        // see if the lvalue has a default type
+        const QoreTypeInfo *typeInfo = val.getTypeInfo();
+        if (typeInfo == softListTypeInfo || typeInfo == listTypeInfo || typeInfo == stringTypeInfo
+            || typeInfo == softStringTypeInfo) {
+            if (val.assign(QoreTypeInfo::getDefaultQoreValue(typeInfo)))
+                return -1;
+            vt = val.getType();
+        }
+    }
+
+    if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
+        xsink->raiseException(*loc, "EXTRACT-ERROR", QoreValue(), "first (lvalue) argument to the extract "
+            "operator is not a list, string, or binary object");
+        return -1;
+    }
+
+    // a string enum lvalue refuses the plain string that the operation leaves (qore#6195)
+    if (val.ensureUnique("<splice operator>")) {
+        return -1;
+    }
+
+    // a list freed under a weak reference cannot be changed, as by the other changes (qore#7199)
+    if (vt == NT_LIST && qore_list_private::get(*val.getValue().get<QoreListNode>())->checkValid(xsink)) {
+        return -1;
+    }
+
+    size_t offset = (size_t)eoffset->getAsBigInt();
+
+#ifdef DEBUG
+    if (vt == NT_LIST) {
+        QoreListNode *vl = val.getValue().get<QoreListNode>();
+        printd(5, "op_splice() val: %p (size: " QLLD ") offset: " QLLD "\n", vl, (int64)(vl->size()),
+            (int64)offset);
+    }
+    else if (vt == NT_STRING) {
+        QoreStringNode *vs = val.getValue().get<QoreStringNode>();
+        printd(5, "op_splice() val: %p (strlen: " QLLD ") offset: " QLLD "\n", vs, (int64)(vs->strlen()),
+            (int64)offset);
+    }
+    else if (vt == NT_STRING) {
+        QoreStringNode *vs = val.getValue().get<QoreStringNode>();
+        printd(5, "op_splice() val: %p (strlen: " QLLD ") offset: " QLLD "\n", vs, (int64)(vs->strlen()),
+            (int64)offset);
+    }
+#endif
+
+    if (vt == NT_LIST) {
+        QoreListNode *vl = val.getValue().get<QoreListNode>();
+        if (!length_exp && !new_exp) {
+            holder = vl->splice(offset);
+        } else {
+            size_t length = (size_t)elength->getAsBigInt();
+            if (!new_exp) {
+                holder = vl->splice(offset, length);
+            } else {
+                // an element type that can bind a reference: the values are checked with a probe before the list
+                // is changed (qore#7391)
+                std::optional<QoreReferenceBindProbe> probe;
+                if (qore_list_private::get(*vl)->elementMayBindReference()) [[unlikely]] {
+                    LexicalSemanticPolicy policy;
+                    if constexpr (Lexical) {
+                        policy = getSemanticPolicy();
+                    }
+                    val.enableBindRetry();
+                    if (qore_container_store_probe(val, *exp, true, Lexical ? &policy : nullptr, probe)) {
+                        return -1;
+                    }
+                }
+                if constexpr (Lexical) {
+                    holder = qore_list_private::replace(*vl, offset, length, *exp, false,
+                        xsink, getSemanticPolicy());
+                } else {
+                    holder = qore_list_private::replace(*vl, offset, length, *exp, false, xsink);
+                }
+                if (probe) [[unlikely]] {
+                    probe.reset();
+                }
+            }
+        }
+        // the elements taken out of a list reached through a weak reference (qore#7373)
+        if (holder) {
+            val.removedValueThroughWeak(QoreValue(*holder));
+        }
+    } else if (vt == NT_STRING) {
+        // note: safe; val.ensureUnique() above materializes any inline short string
+        QoreStringNode *vs = val.getValue().get<QoreStringNode>();
+        if (!length_exp && !new_exp)
+            vs->splice(offset, xsink);
+        else {
+            size_t length = (size_t)elength->getAsBigInt();
+            if (!new_exp)
+                vs->splice(offset, length, xsink);
+            else
+                vs->splice(offset, length, *exp, xsink);
+        }
+    } else { // must be a binary
+        BinaryNode* b = val.getValue().get<BinaryNode>();
+        if (!length_exp && !new_exp)
+            b->splice(offset, b->size());
+        else {
+            size_t length = (size_t)elength->getAsBigInt();
+            if (!new_exp)
+                b->splice(offset, length);
+            else {
+                qore_type_t t = exp->getType();
+                if (t == NT_BINARY) {
+                    const BinaryNode* b1 = exp->get<const BinaryNode>();
+                    b->splice(offset, length, b1->getPtr(), b1->size());
+                } else {
+                    QoreStringNodeValueHelper sv(*exp);
+                    if (!sv->strlen())
+                        b->splice(offset, length);
+                    else
+                        b->splice(offset, length, sv->getBuffer(), sv->size());
+                }
+            }
+        }
+    }
+
+    if (*xsink)
+        return -1;
+
+    // reference for return value
+    if (ref_rv)
+        rv = val.getReferencedValue();
+    return 0;
+}
+
+template <bool Lexical>
 QoreValue QoreSpliceOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     printd(5, "QoreSpliceOperatorNode::splice() lvalue_exp: %s, offset_exp: %s, length_exp: %s, new_exp: %s, " \
         "isEvent: %d\n", lvalue_exp.getTypeName(), offset_exp.getTypeName(), length_exp.getTypeName(),
@@ -199,143 +339,29 @@ QoreValue QoreSpliceOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* x
     // ensure that any list elements removed are removed outside the LValueHelper lock
     ReferenceHolder<QoreListNode> holder(xsink);
 
-    // a store whose check records reference elements is made again after they have been bound with no lvalue lock
-    // held; the operands are evaluated once (qore#7391)
-    QoreBindKeys keys(xsink);
-    QoreBindRetry retry;
-    do {
-        // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-        LValueHelper val(lvalue_exp, xsink, false, retry, keys);
-        if (!val)
-            return QoreValue();
-
-        // if value is not a list or string, throw exception
-        qore_type_t vt = val.getType();
-
-        if (vt == NT_NOTHING) {
-            // see if the lvalue has a default type
-            const QoreTypeInfo *typeInfo = val.getTypeInfo();
-            if (typeInfo == softListTypeInfo || typeInfo == listTypeInfo || typeInfo == stringTypeInfo
-                || typeInfo == softStringTypeInfo) {
-                if (val.assign(QoreTypeInfo::getDefaultQoreValue(typeInfo)))
-                    return QoreValue();
-                vt = val.getType();
-            }
+    QoreValue rv;
+    // the operation on the lvalue that the helper holds, inline on the normal path (spliceOn()); made again in a retry
+    // of the store, with the operands evaluated once: a probe that records references makes the store again before
+    // the list is changed (qore#7391)
+    struct Op {
+        const QoreSpliceOperatorNode* node;
+        ValueEvalOptimizedRefHolder& eoffset;
+        ValueEvalOptimizedRefHolder& elength;
+        ValueEvalOptimizedRefHolder& exp;
+        ReferenceHolder<QoreListNode>& holder;
+        QoreValue& rv;
+        ExceptionSink* xsink;
+        QORE_INTERN_ALWAYS_INLINE int operator()(LValueHelper& h, QoreValue converted) {
+            return node->spliceOn<Lexical>(h, converted, eoffset, elength, exp, holder, rv, xsink);
         }
+    } op{this, eoffset, elength, exp, holder, rv, xsink};
 
-        if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
-            xsink->raiseException(*loc, "EXTRACT-ERROR", QoreValue(), "first (lvalue) argument to the extract "
-                "operator is not a list, string, or binary object");
-            return QoreValue();
-        }
-
-        // a string enum lvalue refuses the plain string that the operation leaves (qore#6195)
-        if (val.ensureUnique("<splice operator>")) {
-            return QoreValue();
-        }
-
-        // a list freed under a weak reference cannot be changed, as by the other changes (qore#7199)
-        if (vt == NT_LIST && qore_list_private::get(*val.getValue().get<QoreListNode>())->checkValid(xsink)) {
-            return QoreValue();
-        }
-
-        size_t offset = (size_t)eoffset->getAsBigInt();
-
-#ifdef DEBUG
-        if (vt == NT_LIST) {
-            QoreListNode *vl = val.getValue().get<QoreListNode>();
-            printd(5, "op_splice() val: %p (size: " QLLD ") offset: " QLLD "\n", vl, (int64)(vl->size()),
-                (int64)offset);
-        }
-        else if (vt == NT_STRING) {
-            QoreStringNode *vs = val.getValue().get<QoreStringNode>();
-            printd(5, "op_splice() val: %p (strlen: " QLLD ") offset: " QLLD "\n", vs, (int64)(vs->strlen()),
-                (int64)offset);
-        }
-        else if (vt == NT_STRING) {
-            QoreStringNode *vs = val.getValue().get<QoreStringNode>();
-            printd(5, "op_splice() val: %p (strlen: " QLLD ") offset: " QLLD "\n", vs, (int64)(vs->strlen()),
-                (int64)offset);
-        }
-#endif
-
-        if (vt == NT_LIST) {
-            QoreListNode *vl = val.getValue().get<QoreListNode>();
-            if (!length_exp && !new_exp) {
-                holder = vl->splice(offset);
-            } else {
-                size_t length = (size_t)elength->getAsBigInt();
-                if (!new_exp) {
-                    holder = vl->splice(offset, length);
-                } else {
-                    // an element type that can bind a reference: the values are checked with a probe before the list
-                    // is changed (qore#7391)
-                    std::optional<QoreReferenceBindProbe> probe;
-                    if (qore_list_private::get(*vl)->elementMayBindReference()) [[unlikely]] {
-                        LexicalSemanticPolicy policy;
-                        if constexpr (Lexical) {
-                            policy = getSemanticPolicy();
-                        }
-                        if (qore_container_store_probe(val, *exp, true, Lexical ? &policy : nullptr, probe)) {
-                            continue;
-                        }
-                    }
-                    if constexpr (Lexical) {
-                        holder = qore_list_private::replace(*vl, offset, length, *exp, false,
-                            xsink, getSemanticPolicy());
-                    } else {
-                        holder = qore_list_private::replace(*vl, offset, length, *exp, false, xsink);
-                    }
-                    if (probe) [[unlikely]] {
-                        probe.reset();
-                    }
-                }
-            }
-            // the elements taken out of a list reached through a weak reference (qore#7373)
-            if (holder) {
-                val.removedValueThroughWeak(QoreValue(*holder));
-            }
-        } else if (vt == NT_STRING) {
-            // note: safe; val.ensureUnique() above materializes any inline short string
-            QoreStringNode *vs = val.getValue().get<QoreStringNode>();
-            if (!length_exp && !new_exp)
-                vs->splice(offset, xsink);
-            else {
-                size_t length = (size_t)elength->getAsBigInt();
-                if (!new_exp)
-                    vs->splice(offset, length, xsink);
-                else
-                    vs->splice(offset, length, *exp, xsink);
-            }
-        } else { // must be a binary
-            BinaryNode* b = val.getValue().get<BinaryNode>();
-            if (!length_exp && !new_exp)
-                b->splice(offset, b->size());
-            else {
-                size_t length = (size_t)elength->getAsBigInt();
-                if (!new_exp)
-                    b->splice(offset, length);
-                else {
-                    qore_type_t t = exp->getType();
-                    if (t == NT_BINARY) {
-                        const BinaryNode* b1 = exp->get<const BinaryNode>();
-                        b->splice(offset, length, b1->getPtr(), b1->size());
-                    } else {
-                        QoreStringNodeValueHelper sv(*exp);
-                        if (!sv->strlen())
-                            b->splice(offset, length);
-                        else
-                            b->splice(offset, length, sv->getBuffer(), sv->size());
-                    }
-                }
-            }
-        }
-
-        // reference for return value
-        if (!ref_rv || *xsink)
-            return QoreValue();
-
-        return val.getReferencedValue();
-    } while (retry.again());
-    return QoreValue();
+    // the first run of the operation and an lvalue path whose keys are evaluated first are handled out of line
+    // (qore#7391)
+    if (store_mode.get() != QoreStorePathMode::Known) [[unlikely]] {
+        qore_ast_store_slow(store_mode, lvalue_exp, xsink, false, op);
+    } else {
+        qore_ast_store<false>(lvalue_exp, xsink, false, nullptr, op);
+    }
+    return rv;
 }

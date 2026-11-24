@@ -51,6 +51,7 @@ enum qore_var_t {
 #include "qore/vector_set"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -68,6 +69,7 @@ class QoreHashObjectDereferenceOperatorNode;
 class RuntimeConfig;
 struct QoreLValuePathKeys;
 class QoreLValuePathKeyCache;
+class QoreStorePathKeys;
 
 union qore_gvar_ref_u {
     bool b;
@@ -997,18 +999,24 @@ private:
     ocvec_t ocvec;
     //! true if a container of ocvec was reached through a weak reference (qore#7321)
     bool path_has_weak_step = false;
-    //! the bits of the cold work of the destructor, which tests them with one load (qore#7391)
+    //! the bits of cold_flags (qore#7391)
     enum : uint8_t {
         //! the helper locked a list or a hash at a weak step of its path (see releaseOwnWeakLocks(), qore#7352)
         ColdHoldsWeakLocks = 1,
-        //! bind_retry was allocated by this helper for a store site that enabled the retry, when its store recorded
+        //! bind_retry was allocated by this helper for a store site that has a retry, when its store recorded
         //! references; it is released after the locks if the store site does not take it (qore#7391)
         ColdBindRetryAllocated = 2,
-        //! the helper holds a reference to a key of bind_key_buf (bind_key_held), which it releases after the locks
-        //! (qore#7391)
-        ColdBindKeysHeld = 4,
+        //! the work of the destructor: the bits above, tested with one instruction
+        ColdDestructorWork = ColdHoldsWeakLocks | ColdBindRetryAllocated,
+        //! the store site has a retry (enableBindRetry()); no work of the destructor (qore#7391)
+        BindRetryEnabled = 4,
+        //! bind_retry was given by the store site (setBindRetry()); no work of the destructor (qore#7391)
+        BindRetryGiven = 8,
+        //! bind_retry is valid
+        BindRetrySet = ColdBindRetryAllocated | BindRetryGiven,
     };
-    //! the Cold* bits; 0 on the normal path, where the destructor tests it once
+    //! the bits above; 0 on the normal path, where the destructor tests the bits of its work with one instruction, as
+    //! it tests the flag of develop's weak locks
     uint8_t cold_flags = 0;
 
     // flag if the changed value was a container before the assignment
@@ -1081,13 +1089,13 @@ private:
         }
     };
     std::unique_ptr<MemberLValue> member_lvalue;
+    //! true for the helper of an assignment (the for_assignment argument), whose store site has a retry (qore#7391)
+    /** Every store site that makes a helper for an assignment tests isBindPending() after a failed store and makes the
+        store again (see deferBinds()): the AST assignments (QoreAssignmentOperatorNode, QoreListAssignmentOperatorNode)
+        and the IR, JIT and AOT stores, which also enable their retry with enableBindRetry().  The retry of an AST
+        assignment thus costs its helper nothing.
+    */
     bool assignment_only = false;
-    // the two flags of qore#7391 are next to assignment_only, which an assignment's helper sets from the same
-    // argument, so that the constructor sets them with one store
-    //! true while the steps of the path keep their keys in the helper, until a reference is followed (qore#7391)
-    bool bind_keys_retain = false;
-    //! true if the store site tests isBindPending() and makes the store again itself (enableBindRetry(), qore#7391)
-    bool bind_retry_enabled = false;
     //! called once, before the root of the lvalue (a variable, a member of self, a static class variable or a
     //! reference) is resolved and locked, when the keys and indices of the path to it have been evaluated (see the
     //! constructor with a root hook); a non-zero return value stops the resolution of the lvalue
@@ -1216,26 +1224,6 @@ private:
     //! set when the lvalue rejected the value an operation converted for it; see ~LValueHelper()
     bool write_rejected = false;
     bool member_lvalue_modified = false;
-    // the members of qore#7391 that the constructors set to 0 come first, so that their stores are merged with those
-    // of the flags above
-    //! true while the path is resolved with the keys that the first round of a store kept (qore#7391)
-    bool bind_key_replay = false;
-    //! the keys of bind_key_buf that the helper holds a reference to, one bit each, released after the locks
-    //! (ColdBindKeysHeld, qore#7391)
-    uint8_t bind_key_held = 0;
-    //! the number of the keys of the path that the steps of the first round of an AST store kept (qore#7391)
-    /** Kept in the helper, which costs nothing on the normal path but the zero stored with the flags above: the first
-        BindKeyBufSize in bind_key_buf, the others in bind_key_more.  A key that a step held a reference to is handed
-        to the helper, which releases it after the locks; a retry takes them with references of its own
-        (transferBindKeys()).
-    */
-    uint32_t bind_key_count = 0;
-    //! the retry of the store that this helper makes, if the store site has one, or the retry allocated for a store
-    //! site that enabled it (qore#7391)
-    QoreBindRetry* bind_retry = nullptr;
-    //! the keys of the path of a store made in rounds by its store site, which a retry resolves the path with; given
-    //! the keys of the first round when it records references (transferBindKeys(), qore#7391)
-    QoreBindKeys* bind_keys = nullptr;
 
     RObject* robj = nullptr;
     //! set when the lvalue is a static variable whose value is held in external storage
@@ -1260,15 +1248,11 @@ public:
     q_lvalue_vts_e value_type_source = QLVTS_None;
 
 private:
-    // the members that the constructors do not initialize are last, so that the stores of the members that they set to
-    // 0 are merged (qore#7391)
-    //! the number of keys held in bind_key_buf
-    static constexpr unsigned BindKeyBufSize = 4;
-    //! the keys after the first BindKeyBufSize, each held with a reference of the list, which tvec holds; valid if
-    //! bind_key_count > BindKeyBufSize (qore#7391); only a path of more keys allocates it
-    QoreListNode* bind_key_more;
-    //! the first BindKeyBufSize keys kept (the first bind_key_count are valid), borrowed or held (bind_key_held)
-    alignas(QoreValue) unsigned char bind_key_buf[BindKeyBufSize * sizeof(QoreValue)];
+    //! the retry of the store that this helper makes: given by the store site (BindRetryGiven) or allocated for a
+    //! store site that has a retry (ColdBindRetryAllocated); valid only with one of these bits of cold_flags, and not
+    //! initialized by the constructors, so that the helper of a store that records no reference costs nothing for it
+    //! (qore#7391)
+    QoreBindRetry* bind_retry;
 
 public:
     DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool for_remove = false,
@@ -1308,36 +1292,13 @@ public:
     DLLLOCAL LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove = false,
         bool for_assignment = false);
 
-    //! resolves the target \a exp of an AST store that \a retry makes again if its check records references
-    /** The steps of the first round leave the keys and indices of the path in \a keys, and a retry resolves the path
-        with them, so that the key expressions are evaluated once; see QoreBindKeys (qore#7391)
-    */
-    DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_assignment, QoreBindRetry& retry,
-        QoreBindKeys& keys);
-
-    //! as above, with a runtime configuration
-    DLLLOCAL LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_assignment,
-        QoreBindRetry& retry, QoreBindKeys& keys);
-
-    //! tag of the constructor that resolves the target of the first round of a store whose retry is enabled
-    struct BindRetryStore {};
-
-    //! resolves the target \a exp of the first round of a store whose retry is enabled, not for an assignment
-    //! (qore#7391)
-    /** As LValueHelper(const QoreValue&, ExceptionSink*, bool, bool) with \a for_assignment true, which an AST
-        assignment uses, but for a store that is not an assignment (the store of an IR instruction): the steps keep the
-        keys and indices of the path in the helper, and the retry is enabled.  If the check of the value records
-        references, the store site finds isBindPending() true after assign() failed, and makes the store again out of
-        line after releaseForBindRetry(), which gives it the keys, so that the key expressions are evaluated once.
-    */
-    DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, BindRetryStore);
-
     //! enables the retry of the store that this helper makes, for a store site that tests isBindPending() (qore#7391)
     /** A store whose check records references then stores nothing, and assign() returns -1 with no exception and
-        isBindPending() true; without it, the store fails closed (see deferBinds())
+        isBindPending() true; without it, the store fails closed (see deferBinds()).  The helper of an assignment
+        (assignment_only) has a retry without it.
     */
     DLLLOCAL void enableBindRetry() {
-        bind_retry_enabled = true;
+        cold_flags |= BindRetryEnabled;
     }
 
     //! returns true if the store failed because its check recorded references to bind (see enableBindRetry())
@@ -1349,12 +1310,9 @@ public:
 
     //! hands the pending retry to \a retry and releases the helper with its locks, as its destructor does (qore#7391)
     /** The helper is left empty, as made by LValueHelper(ExceptionSink*, bool): the store site makes the store again
-        with helpers of its own, and destroys this one with nothing left to do.  Out of line and cold.
-
-        @param keys if not nullptr, given the keys of the path that the steps of the helper kept (transferBindKeys()),
-        which the retries resolve the path with
+        in it or with helpers of its own.  Out of line and cold.
     */
-    DLLLOCAL void releaseForBindRetry(QoreBindRetry& retry, QoreBindKeys* keys = nullptr);
+    DLLLOCAL void releaseForBindRetry(QoreBindRetry& retry);
 
     //! gives the helper the state of \a retry for a round of a store made again in it (qore#7391)
     /** The helper releases it after its locks unless the round is pending again (see qore_store_bind_retry_continue());
@@ -1364,26 +1322,41 @@ public:
 
     //! returns the value of the last round of the retry that the helper holds, which the caller owns (qore#7391)
     DLLLOCAL QoreValue takeBindRetryValue() {
-        assert(bind_retry);
+        assert(cold_flags & BindRetrySet);
         return bind_retry->hasValue() ? bind_retry->takeValue() : QoreValue();
     }
 
-    //! gives the helper the retry of its store, for a target whose path has no key to record (qore#7391)
+    //! gives the helper the retry of its store, which the store site makes again itself (qore#7391)
     DLLLOCAL void setBindRetry(QoreBindRetry& retry) {
-        assert(!(cold_flags & ColdBindRetryAllocated));
+        assert(!(cold_flags & BindRetrySet));
         bind_retry = &retry;
+        cold_flags |= BindRetryGiven;
     }
 
     //! removes the retry given with setBindRetry(), for a helper that outlives it (qore#7391)
     DLLLOCAL void clearBindRetry() {
         assert(!(cold_flags & ColdBindRetryAllocated));
-        bind_retry = nullptr;
+        cold_flags &= ~BindRetryGiven;
     }
 
     //! returns the retry of the store that this helper makes, or nullptr (qore#7391)
     DLLLOCAL QoreBindRetry* getBindRetry() const {
-        return bind_retry;
+        return (cold_flags & BindRetrySet) ? bind_retry : nullptr;
     }
+
+    //! resolves the AST lvalue \a exp in this helper with the keys of its path that the store site evaluated first
+    /** For a helper that holds no lvalue (made with LValueHelper(ExceptionSink*, bool), or with a constructor given no
+        expression): the steps of the path take the keys of \a keys instead of evaluating their key expressions, until
+        the root of the path is reached; the path of a reference that the root holds is resolved as for any other use of
+        the reference.  The first round of a store and each of its retries resolve the path with the same keys, so that
+        the key expressions are evaluated once (see QoreStorePathKeys, qore#7391).
+
+        @return -1 if the lvalue could not be resolved (an exception was raised), 0 if it was
+    */
+    DLLLOCAL int resolveWithKeys(const QoreValue& exp, const QoreStorePathKeys& keys);
+
+    //! as above, with a runtime configuration
+    DLLLOCAL int resolveWithKeys(const QoreValue& exp, RuntimeConfig& rc, const QoreStorePathKeys& keys);
 
     //! tag for the constructor that only reads the value of a reference
     struct ReadAccess {};
@@ -1752,48 +1725,15 @@ public:
 
     DLLLOCAL int doLValue(const QoreValue& exp, bool for_remove);
 
-    //! resolves the target of an AST store with \a resolve (qore#7391)
-    /** The first round keeps the keys of the path in \a keys until its root is reached; a retry resolves it with them
-    */
+    //! resolves an lvalue with \a resolve, the steps of its path taking the keys of \a keys (see resolveWithKeys())
     template <typename F>
-    DLLLOCAL void resolveWithBindKeysOnce(QoreBindKeys& keys, F resolve);
+    DLLLOCAL int resolveWithKeysIntern(const QoreStorePathKeys& keys, F resolve);
 
-    //! resolves the target of a retry of an AST store with the keys that its first round kept (qore#7391)
-    template <typename F>
-    DLLLOCAL void resolveWithBindKeys(F resolve);
-
-    //! keeps the key that a step of the path of the first round of an AST store took in the helper (qore#7391)
-    /** A key that the step holds a reference to is handed over to the helper, which releases it after the locks
-        (ColdBindKeysHeld, tested by the destructor with its other cold work), so that the step does not release it:
-        no reference count operation.  Out of line, so that the steps keep their code for the paths that keep no keys.
-    */
-    DLLLOCAL QORE_INTERN_NOINLINE void retainBindKey(ValueOptionalRefHolder& rh);
-
-    //! keeps a key past the inline buffer of retainBindKey() in a list that the helper releases after its locks
-    DLLLOCAL void retainBindKeyMore(ValueOptionalRefHolder& rh);
-
-    //! returns the key at position \a i kept by retainBindKey() (0 = the key that the first step took), borrowed
-    DLLLOCAL QoreValue getBindKey(size_t i) const;
-
-    //! takes a reference to the keys of the path kept in the helper that are only borrowed (qore#7391)
-    /** Called before the check of a store that can record references, which can run code; the references are released
-        after the locks (ColdBindKeysHeld)
-    */
-    DLLLOCAL void holdBindKeys();
-
-    //! releases the keys of bind_key_buf that the helper holds (ColdBindKeysHeld), after the locks; out of line
-    DLLLOCAL void releaseBindKeys();
-
-    //! gives \a keys the keys of the path kept in the helper, with references of its own, if it has none yet
-    /** For a retry, which resolves the path with them (qore#7391)
-    */
-    DLLLOCAL void transferBindKeys(QoreBindKeys& keys);
+    //! the root hook of resolveWithKeys(): the steps of the path have taken their keys (qore#7391)
+    DLLLOCAL static int storePathKeysRootHook(void* arg);
 
     //! releases the retry that the helper allocated (ColdBindRetryAllocated), after the locks; out of line and cold
     DLLLOCAL void releaseAllocatedBindRetry();
-
-    //! the root hook of a retry of an AST store made with a QoreBindKeys: ends the replay of the keys (qore#7391)
-    DLLLOCAL static int bindKeyRootHook(void* arg);
 
     //! Navigate an lvalue using a structured path (IR-based alternative to AST-based doLValue)
     //! @param steps array of LVPathStep describing the navigation
@@ -2228,6 +2168,126 @@ private:
     DLLLOCAL __attribute__((cold)) QoreHashNode* getWeakRemovalHash();
 };
 
+//! The keys and indices of the lvalue path of an AST store, evaluated by its store site before its helper (qore#7391)
+/** A store whose check records reference elements to bind under its lvalue lock is made again after they have been
+    bound with no lock held, and its path is resolved again for it.  The key expressions of the path are evaluated once
+    per store: a store site whose path has a key expression that can give another value or have a side effect when it
+    is evaluated again (see qore_lvalue_store_keys_first()) evaluates the keys first into this object, which it owns,
+    and resolves the path of the first round and of each retry with them (LValueHelper::resolveWithKeys()).  The keys
+    are evaluated as LValueHelper::evalPathKeys() evaluates the keys of a path (qore#5753): from the root out, each a
+    statement of its own, a value borrowed from a variable with a reference of its own; the other stores resolve their
+    path as any helper does.
+
+    The keys are released when the object is destroyed, after the helpers of the store site.
+*/
+class QoreStorePathKeys {
+public:
+    DLLLOCAL explicit QoreStorePathKeys(ExceptionSink* xsink) : xsink(xsink) {
+    }
+
+    DLLLOCAL ~QoreStorePathKeys();
+
+    QoreStorePathKeys(const QoreStorePathKeys&) = delete;
+    QoreStorePathKeys& operator=(const QoreStorePathKeys&) = delete;
+
+    //! evaluates the keys and indices of the lvalue path \a exp, from the root out
+    /** @return -1 if a key raised an exception, 0 if not
+    */
+    DLLLOCAL int eval(const QoreValue& exp);
+
+    //! returns the number of keys, which LValueHelper::resolveWithKeys() gives the steps of the path
+    DLLLOCAL size_t size() const {
+        return store.count;
+    }
+
+    //! returns the key at position \a i, the one nearest the root first, borrowed from this object
+    DLLLOCAL const QoreValue& get(size_t i) const {
+        assert(i < store.count);
+        return const_cast<LValueHelper::PathKeyStore&>(store).data()[i].value;
+    }
+
+private:
+    //! the keys, each with a reference of this object if needs_deref is set
+    LValueHelper::PathKeyStore store;
+    ExceptionSink* xsink;
+
+    //! evaluates the keys of the path \a n, those nearer the root first
+    DLLLOCAL int evalIntern(const QoreValue& n);
+};
+
+//! returns true if a store site evaluates the keys of the AST lvalue path \a exp first (QoreStorePathKeys, qore#7391)
+/** A store made again resolves its path again: a path whose keys and indices are all constants, or reads of local
+    variables that nothing but the code of their own frame can change (see the definition), is resolved again with them
+    evaluated again, which gives the same keys with no side effect; any other key expression is evaluated first.
+    Decided when the code runs, as a local variable becomes closure-bound when a reference to it is taken or a closure
+    captures it, which can be parsed after the store.
+*/
+DLLLOCAL bool qore_lvalue_store_keys_first(const QoreValue& exp);
+
+//! How an AST store site resolves its lvalue path, decided when it first runs (qore#7391)
+/** One byte of the node of the store site, tested once on its normal path: Known alone for a path resolved as any
+    helper resolves it (also by a retry, see qore_lvalue_store_keys_first()), with KeysFirst for a path whose keys the
+    store site evaluates first; a store site can add flags of its own, decided with the mode, so that its normal path
+    tests them with the same instruction
+*/
+class QoreStorePathMode {
+public:
+    //! the mode has been decided
+    static constexpr uint8_t Known = 1;
+    //! the store site evaluates the keys of its path first (QoreStorePathKeys)
+    static constexpr uint8_t KeysFirst = 2;
+    //! the first flag of a store site
+    static constexpr uint8_t SiteFlag = 4;
+
+    DLLLOCAL QoreStorePathMode() = default;
+
+    //! a copy of a node decides its mode again
+    DLLLOCAL QoreStorePathMode(const QoreStorePathMode&) {
+    }
+
+    DLLLOCAL QoreStorePathMode& operator=(const QoreStorePathMode&) {
+        mode.store(0, std::memory_order_relaxed);
+        return *this;
+    }
+
+    //! returns the mode, or 0 if it has not been decided yet
+    DLLLOCAL uint8_t get() const {
+        return mode.load(std::memory_order_relaxed);
+    }
+
+    //! decides the mode of the store of the lvalue path \a exp, with the flags \a site_flags of the store site
+    /** Out of line: called by the first run of the store site; another thread that runs it first decides the same mode
+
+        @return the mode
+    */
+    DLLLOCAL uint8_t set(const QoreValue& exp, uint8_t site_flags = 0) const;
+
+    //! records the mode of a store site that decides whether it evaluates the keys of its paths first itself
+    DLLLOCAL uint8_t setKeysFirst(bool keys_first, uint8_t site_flags = 0) const {
+        uint8_t m = Known | (keys_first ? KeysFirst : 0) | site_flags;
+        mode.store(m, std::memory_order_relaxed);
+        return m;
+    }
+
+private:
+    mutable std::atomic<uint8_t> mode{0};
+};
+
+//! no lvalue: the expression given to a helper constructor by a store site that resolves its path with the keys that it
+//! evaluated first (LValueHelper::resolveWithKeys(), qore#7391), so that it shares the code of its normal path
+DLLLOCAL extern const QoreValue qore_store_no_lvalue;
+
+//! resolves the AST lvalue \a exp in \a lvh, an empty helper, for a round of a store made again (qore#7391)
+/** With the keys that the store site evaluated first if \a keys is not nullptr, otherwise as any helper resolves it
+
+    @return -1 if the lvalue could not be resolved (an exception was raised, or there is no lvalue), 0 if it was
+*/
+DLLLOCAL int qore_store_resolve_lvalue(LValueHelper& lvh, const QoreValue& exp, const QoreStorePathKeys* keys);
+
+//! as above, with a runtime configuration
+DLLLOCAL int qore_store_resolve_lvalue(LValueHelper& lvh, const QoreValue& exp, RuntimeConfig& rc,
+        const QoreStorePathKeys* keys);
+
 //! Makes the retries of a store whose first round recorded reference elements to bind (qore#7391)
 /** Out of line and cold: called only when the first round of the store left \a retry pending.  Each round binds the
     references recorded with no lvalue lock held (QoreBindRetry::again()), resolves the target again with \a resolve,
@@ -2290,6 +2350,91 @@ QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_store_bind_retry_continue(LValueH
         lvh.releaseForBindRetry(retry);
     }
     return -1;
+}
+
+//! Makes the retries of an AST store whose first round left its helper \a lvh pending (qore#7391)
+/** Out of line and cold: the lvalue \a exp is resolved again in \a lvh for each round (qore_store_resolve_lvalue()),
+    with \a keys if the store site evaluated the keys of its path first, and \a op makes the operation of the store
+    again; see qore_ast_store()
+
+    @return 0 if the store was made, -1 if not
+*/
+template <typename Op>
+QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_ast_store_bind_retry(LValueHelper& lvh, const QoreValue& exp,
+        const QoreStorePathKeys* keys, Op& op) {
+    auto resolve = [&exp, keys](LValueHelper& h) -> int {
+        return qore_store_resolve_lvalue(h, exp, keys);
+    };
+    return qore_store_bind_retry_continue(lvh, resolve, op);
+}
+
+//! as above, with a runtime configuration
+template <typename Op>
+QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_ast_store_bind_retry(LValueHelper& lvh, const QoreValue& exp,
+        RuntimeConfig& rc, const QoreStorePathKeys* keys, Op& op) {
+    auto resolve = [&exp, &rc, keys](LValueHelper& h) -> int {
+        return qore_store_resolve_lvalue(h, exp, rc, keys);
+    };
+    return qore_store_bind_retry_continue(lvh, resolve, op);
+}
+
+//! Makes an AST store whose operation \a op runs on the lvalue \a exp, binding its reference elements outside its locks
+/** The first round runs the code of a store with no retry: the helper is made as by a store site with no retry (with
+    the keys \a keys of the path if \a KeysFirst), and \a op makes the operation; if it fails because its check recorded
+    reference elements to bind (LValueHelper::isBindPending(), tested only after a failure), the store is made again out
+    of line (qore_ast_store_bind_retry()).  A store site that is not an assignment enables the retry of the helper in
+    \a op, before the check that can record references (qore#7391).
+
+    @param for_assignment the \a for_assignment argument of the helper
+    @param keys the keys of the path, evaluated first, if \a KeysFirst, otherwise nullptr
+    @param op <tt>int (LValueHelper&, QoreValue)</tt>: makes the operation of the store on the target that the helper
+    holds; given the value that the last round converted, which it owns, for a retry (no value for the first round and
+    for a container operation, which takes its operand again); returns 0 if the store was made, -1 if not
+
+    @return 0 if the store was made, -1 if not
+*/
+template <bool KeysFirst, typename Op>
+QORE_INTERN_ALWAYS_INLINE int qore_ast_store(const QoreValue& exp, ExceptionSink* xsink, bool for_assignment,
+        const QoreStorePathKeys* keys, Op& op) {
+    // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
+    LValueHelper lvh(KeysFirst ? qore_store_no_lvalue : exp, xsink, false, for_assignment);
+    if constexpr (KeysFirst) {
+        if (lvh.resolveWithKeys(exp, *keys)) {
+            return -1;
+        }
+    }
+    if (!lvh) {
+        return -1;
+    }
+    if (!op(lvh, QoreValue())) {
+        return 0;
+    }
+    if (!lvh.isBindPending()) [[likely]] {
+        return -1;
+    }
+    return qore_ast_store_bind_retry(lvh, exp, keys, op);
+}
+
+//! Makes an AST store whose store site's mode is not QoreStorePathMode::Known alone, out of line (qore#7391)
+/** For the first run of the store site, which decides \a mode, and for a store site whose path has key expressions that
+    are evaluated first, here, where the helper evaluates them; see qore_ast_store()
+*/
+template <typename Op>
+QORE_INTERN_NOINLINE int qore_ast_store_slow(const QoreStorePathMode& mode, const QoreValue& exp,
+        ExceptionSink* xsink, bool for_assignment, Op& op) {
+    uint8_t m = mode.get();
+    if (!m) {
+        m = mode.set(exp);
+    }
+    if (!(m & QoreStorePathMode::KeysFirst)) {
+        return qore_ast_store<false>(exp, xsink, for_assignment, nullptr, op);
+    }
+    // released after the helper
+    QoreStorePathKeys keys(xsink);
+    if (keys.eval(exp)) {
+        return -1;
+    }
+    return qore_ast_store<true>(exp, xsink, for_assignment, &keys, op);
 }
 
 //! Makes a store whose target has no key expressions to evaluate, binding its reference elements outside its locks

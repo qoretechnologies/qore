@@ -101,12 +101,23 @@ public:
 
 protected:
     QoreValue lvalue_exp, offset_exp, length_exp, new_exp;
+    //! how the lvalue path is resolved, decided when the operation first runs (qore#7391)
+    QoreStorePathMode store_mode;
     const QoreTypeInfo* returnTypeInfo = nullptr;
 
     DLLLOCAL static QoreString splice_str;
 
     template <bool Lexical>
     DLLLOCAL QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
+
+    //! splices the list, string or binary that \a val holds; \a converted is the value that the last round of a retry
+    //! converted, which the operation does not use (qore#7391)
+    /** @return 0 if the operation was made (\a rv holds the value of the expression then), -1 if not
+    */
+    template <bool Lexical>
+    DLLLOCAL int spliceOn(LValueHelper& val, QoreValue converted, ValueEvalOptimizedRefHolder& eoffset,
+            ValueEvalOptimizedRefHolder& elength, ValueEvalOptimizedRefHolder& exp,
+            ReferenceHolder<QoreListNode>& holder, QoreValue& rv, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL ~QoreSpliceOperatorNode() {

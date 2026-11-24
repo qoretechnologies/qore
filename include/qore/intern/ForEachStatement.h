@@ -104,6 +104,16 @@ protected:
     DLLLOCAL int execRef(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
     template <bool Lexical>
     DLLLOCAL int assignLoopValue(LValueHelper& lvalue, QoreValue value, const char* desc = "<lvalue>") const;
+    //! makes the retries of the assignment of the loop variable whose first round left its helper \a lvalue
+    //! pending, out of line (qore#7391)
+    /** The variable is resolved again in \a lvalue for each round, with \a rc if not nullptr, after the reference
+        elements that the check recorded have been bound with no lvalue lock held; the value that the last round
+        converted is assigned
+
+        @return 0 if the store was made, -1 if not
+    */
+    template <bool Lexical>
+    DLLLOCAL int assignLoopValueBindRetry(LValueHelper& lvalue, RuntimeConfig* rc, const char* desc = "<lvalue>") const;
 
 private:
     QoreValue var,

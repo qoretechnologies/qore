@@ -25128,40 +25128,47 @@ QoreValue QoreIRInterpreter::evalLValueLoad(const QoreValue& lvalue, ExceptionSi
 
 //! Makes the retries of QoreIRInterpreter::evalLValueStore() after its first round recorded references (qore#7391)
 /** Out of line and cold: \a first, the helper of the first round, is released with its locks, the references are bound
-    with no lvalue lock held, and \a lvalue is resolved again for each round with the keys that the first round kept,
-    which its helper gives the retries; the store assigns the value that the last round converted
+    with no lvalue lock held, and \a lvalue is resolved again in it for each round, with \a keys if the keys of its path
+    were evaluated first; the store assigns the value that the last round converted
 
     @return the value of the assignment with a reference if the store was made, otherwise no value
 */
 static QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue qore_ir_eval_lvalue_store_bind_retry(LValueHelper& first,
-        const QoreValue& lvalue, AssignmentMode mode, ExceptionSink* xsink) {
-    // the keys of the path that the first round evaluated, which the retries resolve it with
-    QoreBindKeys keys;
-    QoreBindRetry retry;
-    first.releaseForBindRetry(retry, &keys);
-    while (retry.again()) {
-        LValueHelper helper(lvalue, xsink, false, retry, keys);
-        if (!helper) {
-            return QoreValue();
+        const QoreValue& lvalue, AssignmentMode mode, const QoreStorePathKeys* keys) {
+    QoreValue rv;
+    auto op = [&rv, mode](LValueHelper& helper, QoreValue value) -> int {
+        if (helper.assign(value, "<lvalue>", true, mode)) {
+            return -1;
         }
-        assert(retry.hasValue());
-        if (helper.assign(retry.hasValue() ? retry.takeValue() : QoreValue(), "<lvalue>", true, mode)) {
-            continue;
-        }
-        return helper.getReferencedValue();
-    }
-    return QoreValue();
+        rv = helper.getReferencedValue();
+        return 0;
+    };
+    qore_ast_store_bind_retry(first, lvalue, keys, op);
+    return rv;
 }
 
 QoreValue QoreIRInterpreter::evalLValueStore(const QoreValue& lvalue, const QoreValue& value, ExceptionSink* xsink,
         AssignmentMode mode) {
-    // a store whose check records reference elements is made again out of line after they have been bound with no
-    // lvalue lock held; the steps of the path keep their keys in the helper, so that they are evaluated once
-    // (qore#7391)
-    LValueHelper helper(lvalue, xsink, LValueHelper::BindRetryStore());
+    // the keys of a path with key expressions that a retry of the store cannot evaluate again are evaluated first,
+    // where the helper evaluates them, and released after it (qore#7391)
+    std::optional<QoreStorePathKeys> path_keys;
+    if (qore_lvalue_store_keys_first(lvalue)) [[unlikely]] {
+        path_keys.emplace(xsink);
+        if (path_keys->eval(lvalue)) {
+            return QoreValue();
+        }
+    }
+    const QoreStorePathKeys* keys = path_keys ? &*path_keys : nullptr;
+    LValueHelper helper(keys ? qore_store_no_lvalue : lvalue, xsink);
+    if (keys && helper.resolveWithKeys(lvalue, *keys)) {
+        return QoreValue();
+    }
     if (!helper) {
         return QoreValue();
     }
+    // a store whose check records reference elements is made again out of line after they have been bound with no
+    // lvalue lock held (qore#7391)
+    helper.enableBindRetry();
     QoreValue assign_value = value;
     ValueHolder eval_holder(xsink);
     // only a weak and an element store keep a weak reference as it is; an opaque store must reference the target
@@ -25177,7 +25184,7 @@ QoreValue QoreIRInterpreter::evalLValueStore(const QoreValue& lvalue, const Qore
     // values map would think they own the same single reference
     if (helper.assign(assign_value.refSelf(), "<lvalue>", true, mode)) {
         if (helper.isBindPending()) [[unlikely]] {
-            return qore_ir_eval_lvalue_store_bind_retry(helper, lvalue, mode, xsink);
+            return qore_ir_eval_lvalue_store_bind_retry(helper, lvalue, mode, keys);
         }
         return QoreValue();
     }
@@ -25656,43 +25663,77 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
     return doPlusEqualsOnLValueImpl<true>(v, right_holder, xsink, policy);
 }
 
+//! Makes a store of the generic IR fallback with the operation \a op on the AST lvalue \a lvalue (qore#7391)
+/** As qore_ast_store(), with the keys of a path that a retry of the store cannot evaluate again evaluated first; the
+    path is classified for each store, as the instruction has no node of its own to cache it in
+*/
+template <typename Op>
+static QORE_INTERN_ALWAYS_INLINE int qore_ir_ast_store(const QoreValue& lvalue, ExceptionSink* xsink, Op& op) {
+    if (qore_lvalue_store_keys_first(lvalue)) [[unlikely]] {
+        // released after the helper
+        QoreStorePathKeys keys(xsink);
+        if (keys.eval(lvalue)) {
+            return -1;
+        }
+        return qore_ast_store<true>(lvalue, xsink, false, &keys, op);
+    }
+    return qore_ast_store<false>(lvalue, xsink, false, nullptr, op);
+}
+
+//! adds the operand \a right_holder to the lvalue that \a v holds for evalPlusEquals(); \a converted is the value that
+//! the last round of a retry converted: the operand that an assignment of the first round took (qore#7391)
+/** @return 0 if the operation was made (\a result holds the value of the expression then), -1 if not
+*/
+static QORE_INTERN_ALWAYS_INLINE int qore_ir_plus_equals_on(LValueHelper& v, QoreValue converted,
+        ValueHolder& right_holder, QoreValue& result, ExceptionSink* xsink) {
+    // a retry adds the value that an assignment of the first round took; the holder holds no value then, as the
+    // assignment took it
+    if (!converted.isNothing()) [[unlikely]] {
+        v.saveTemp(right_holder.release());
+        right_holder = converted;
+    }
+    // the values that += adds to a container are checked with a probe before it is changed, and the store is
+    // made again if the probe, or the assignment of the operation to an lvalue with no value, records references
+    std::optional<QoreReferenceBindProbe> probe;
+    bool may_bind = false;
+    if (qore_plus_equals_may_bind(v, *right_holder)) [[unlikely]] {
+        v.enableBindRetry();
+        may_bind = true;
+        if (qore_container_store_probe(v, *right_holder, true, nullptr, probe)) {
+            return -1;
+        }
+    }
+    ValueHolder rv(doPlusEqualsOnLValue(v, right_holder, xsink), xsink);
+    if (may_bind) [[unlikely]] {
+        probe.reset();
+        // an assignment of the operation (to an lvalue with no value) can leave the store to be made again
+        if (v.isBindPending()) {
+            return -1;
+        }
+    }
+    if (*xsink) {
+        return -1;
+    }
+    result = rv.release();
+    return 0;
+}
+
 static QORE_INTERN_NOINLINE QoreValue evalPlusEquals(const QoreValue& lvalue, const QoreValue& right,
         ExceptionSink* xsink) {
     ValueHolder right_holder(right.refSelf(), xsink);
-    // a store whose check records reference elements is made again after they have been bound with no lvalue lock
-    // held; the keys of the lvalue expression are evaluated once (qore#7391)
-    QoreBindKeys keys(xsink);
-    QoreBindRetry retry;
-    do {
-        // a retry adds the value that an assignment of the first round took
-        if (retry.hasValue()) [[unlikely]] {
-            right_holder = retry.takeValue();
+    QoreValue result;
+    // the operation on the lvalue that the helper holds, inline in the first round (qore_ir_plus_equals_on()); made
+    // again in a retry of the store (qore#7391)
+    struct Op {
+        ValueHolder& right_holder;
+        QoreValue& result;
+        ExceptionSink* xsink;
+        QORE_INTERN_ALWAYS_INLINE int operator()(LValueHelper& h, QoreValue converted) {
+            return qore_ir_plus_equals_on(h, converted, right_holder, result, xsink);
         }
-        LValueHelper v(lvalue, xsink, false, retry, keys);
-        if (!v) {
-            return QoreValue();
-        }
-        // the values that += adds to a container are checked with a probe before it is changed
-        std::optional<QoreReferenceBindProbe> probe;
-        if (qore_plus_equals_may_bind(v, *right_holder)) [[unlikely]] {
-            if (qore_container_store_probe(v, *right_holder, true, nullptr, probe)) {
-                continue;
-            }
-        }
-        ValueHolder rv(doPlusEqualsOnLValue(v, right_holder, xsink), xsink);
-        if (probe) [[unlikely]] {
-            probe.reset();
-        }
-        // an assignment of the operation (to an lvalue with no value) can leave the store to be made again
-        if (retry.isPending()) [[unlikely]] {
-            continue;
-        }
-        if (*xsink) {
-            return QoreValue();
-        }
-        return rv.release();
-    } while (retry.again());
-    return QoreValue();
+    } op{right_holder, result, xsink};
+    qore_ir_ast_store(lvalue, xsink, op);
+    return result;
 }
 
 // The target is either still held by its lvalue lock or explicitly pinned by the native-callback path.
@@ -26048,65 +26089,81 @@ static QoreValue evalDivideEquals(const QoreValue& lvalue, const QoreValue& righ
     return v.getReferencedValue();
 }
 
+//! inserts \a right at the start of the list of the lvalue that \a val holds for evalUnshift(); \a converted is the
+//! value that the last round of a retry converted, which the operation does not use (qore#7391)
+/** @return 0 if the operation was made (\a result holds the value of the expression then), -1 if not
+*/
+static QORE_INTERN_ALWAYS_INLINE int qore_ir_unshift_on(LValueHelper& val, QoreValue converted, const QoreValue& right,
+        QoreValue& result, ExceptionSink* xsink) {
+    if (!converted.isNothing()) [[unlikely]] {
+        val.saveTemp(converted);
+    }
+
+    // an element type that can bind a reference: the value is checked with a probe before anything is changed,
+    // also before an lvalue with no value is assigned the list that the operation makes for it
+    std::optional<QoreReferenceBindProbe> probe;
+    {
+        qore_type_t vt = val.getType();
+        if ((vt == NT_LIST && qore_list_private::get(*val.getValue().get<const QoreListNode>())
+                    ->elementMayBindReference())
+                || (vt == NT_NOTHING && qore_list_push_nothing_may_bind(val))) [[unlikely]] {
+            val.enableBindRetry();
+            if (qore_container_store_probe(val, right, false, nullptr, probe)) {
+                return -1;
+            }
+        }
+    }
+
+    // assign to a blank list if the lvalue has no value yet but is typed as a list or a softlist
+    if (val.getType() == NT_NOTHING) {
+        const QoreTypeInfo* vti = val.getTypeInfo();
+        if (QoreTypeInfo::parseAcceptsReturns(vti, NT_LIST)) {
+            const QoreTypeInfo* lti = vti == autoTypeInfo
+                ? autoTypeInfo
+                : QoreTypeInfo::getReturnComplexListOrNothing(vti);
+            if (val.assign(new QoreListNode(lti))) {
+                assert(*xsink);
+                return -1;
+            }
+        }
+    }
+
+    // value is not a list, so throw exception
+    if (val.getType() != NT_LIST) {
+        xsink->raiseException("UNSHIFT-ERROR", "the lvalue argument to unshift is type \"%s\"; "
+            "expecting \"list\"", val.getTypeName());
+        return -1;
+    }
+
+    val.ensureUnique();
+    QoreListNode* l = val.getValue().get<QoreListNode>();
+    qore_list_private::insertCanonical(*l, right.refSelf(), xsink);
+    if (probe) [[unlikely]] {
+        probe.reset();
+    }
+
+    if (*xsink) {
+        return -1;
+    }
+    result = l->refSelf();
+    return 0;
+}
+
 static QoreValue evalUnshift(const QoreValue& lvalue, const QoreValue& right, ExceptionSink* xsink) {
-    // a store whose check records reference elements is made again after they have been bound with no lvalue lock
-    // held; the keys of the lvalue expression are evaluated once (qore#7391)
-    QoreBindKeys keys(xsink);
-    QoreBindRetry retry;
-    do {
-        LValueHelper val(lvalue, xsink, false, retry, keys);
-        if (!val) {
-            return QoreValue();
+    QoreValue result;
+    // the operation on the lvalue that the helper holds, inline in the first round (qore_ir_unshift_on()); made again
+    // in a retry of the store, which takes the operand again: a probe that records references makes the store again
+    // before the operation takes it (qore#7391)
+    struct Op {
+        const QoreValue& right;
+        QoreValue& result;
+        ExceptionSink* xsink;
+        QORE_INTERN_ALWAYS_INLINE int operator()(LValueHelper& h, QoreValue converted) {
+            return qore_ir_unshift_on(h, converted, right, result, xsink);
         }
-
-        // an element type that can bind a reference: the value is checked with a probe before anything is changed,
-        // also before an lvalue with no value is assigned the list that the operation makes for it
-        std::optional<QoreReferenceBindProbe> probe;
-        {
-            qore_type_t vt = val.getType();
-            if ((vt == NT_LIST && qore_list_private::get(*val.getValue().get<const QoreListNode>())
-                        ->elementMayBindReference())
-                    || (vt == NT_NOTHING && qore_list_push_nothing_may_bind(val))) [[unlikely]] {
-                if (qore_container_store_probe(val, right, false, nullptr, probe)) {
-                    continue;
-                }
-            }
-        }
-
-        // assign to a blank list if the lvalue has no value yet but is typed as a list or a softlist
-        if (val.getType() == NT_NOTHING) {
-            const QoreTypeInfo* vti = val.getTypeInfo();
-            if (QoreTypeInfo::parseAcceptsReturns(vti, NT_LIST)) {
-                const QoreTypeInfo* lti = vti == autoTypeInfo
-                    ? autoTypeInfo
-                    : QoreTypeInfo::getReturnComplexListOrNothing(vti);
-                if (val.assign(new QoreListNode(lti))) {
-                    assert(*xsink);
-                    return QoreValue();
-                }
-            }
-        }
-
-        // value is not a list, so throw exception
-        if (val.getType() != NT_LIST) {
-            xsink->raiseException("UNSHIFT-ERROR", "the lvalue argument to unshift is type \"%s\"; "
-                "expecting \"list\"", val.getTypeName());
-            return QoreValue();
-        }
-
-        val.ensureUnique();
-        QoreListNode* l = val.getValue().get<QoreListNode>();
-        qore_list_private::insertCanonical(*l, right.refSelf(), xsink);
-        if (probe) [[unlikely]] {
-            probe.reset();
-        }
-
-        if (*xsink) {
-            return QoreValue();
-        }
-        return l->refSelf();
-    } while (retry.again());
-    return QoreValue();
+    } op{right, result, xsink};
+    qore_ir_ast_store(lvalue, xsink, op);
+    return result;
 }
 
 QoreValue QoreIRInterpreter::evalLValueBinary(QoreIROpcode op, const QoreValue& lvalue, const QoreValue& right,

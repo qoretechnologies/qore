@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,12 +35,23 @@
 class QorePlusEqualsOperatorNode : public QoreBinaryLValueOperatorNode {
 OP_COMMON
 protected:
+    //! how the lvalue path is resolved, decided when the operation first runs (qore#7391)
+    QoreStorePathMode store_mode;
+
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
     DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
     template <bool Lexical>
     DLLLOCAL QoreValue evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const;
+
+    //! adds the operand \a right_holder to the lvalue that \a v holds; \a converted is the value that the last round of
+    //! a retry converted: the operand that an assignment of the first round took (qore#7391)
+    /** @return 0 if the operation was made (\a result holds the value of the expression then), -1 if not
+    */
+    template <bool Lexical>
+    DLLLOCAL int plusEqualsOn(LValueHelper& v, QoreValue converted, ValueHolder& right_holder, QoreValue& result,
+            ExceptionSink* xsink) const;
 
     DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
 

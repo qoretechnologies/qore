@@ -33,6 +33,8 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
 
+#include <optional>
+
 QoreString QoreListAssignmentOperatorNode::op_str("list assignment operator expression");
 
 namespace {
@@ -157,20 +159,32 @@ QoreValue QoreListAssignmentOperatorNode::evalImpl(bool& needs_deref, ExceptionS
     return evalCommon<false>(needs_deref, xsink);
 }
 
-template <bool Lexical>
-QoreValue QoreListAssignmentOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
-    assert(left.getType() == NT_PARSE_LIST);
+//! Makes the retries of the store of the element \a i of a list assignment whose first round left its helper \a v
+//! pending (qore#7391)
+/** Out of line and cold: the reference elements that the check recorded are bound with no lvalue lock held, and the
+    target \a lv is resolved again in \a v for each round, with \a keys if its keys were evaluated first; each round
+    takes its value from the list again, and the value that the last round converted is released after the locks
+
+    @return 0 if the store was made, -1 if not
+*/
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_list_assign_bind_retry(LValueHelper& v, const QoreValue& lv,
+        const QoreListNode* nv, const QoreValue& value, unsigned i, const QoreStorePathKeys* keys,
+        const LexicalSemanticPolicy* policy) {
+    auto resolve = [&lv, keys](LValueHelper& lvh) -> int {
+        return qore_store_resolve_lvalue(lvh, lv, keys);
+    };
+    auto assign = [&](LValueHelper& lvh, QoreValue converted) -> int {
+        lvh.saveTemp(converted);
+        QoreValue assigned = nv ? nv->getReferencedEntry(i) : (!i ? value.refSelf() : QoreValue());
+        return policy ? lvh.assign(assigned, "<lvalue>", *policy) : lvh.assign(assigned);
+    };
+    return qore_store_bind_retry_continue(v, resolve, assign);
+}
+
+template <bool Lexical, bool Slow>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreListAssignmentOperatorNode::evalStores(ValueEvalOptimizedRefHolder& new_value,
+        bool& needs_deref, ExceptionSink* xsink) const {
     const QoreParseListNode* llv = left.get<const QoreParseListNode>();
-
-    /* assign new value, this value gets referenced with the
-        eval(xsink) call, so there's no need to reference it again
-        for the variable assignment - however it does need to be
-        copied/referenced for the return value
-    */
-    ValueEvalOptimizedRefHolder new_value(right, xsink);
-    if (*xsink)
-        return QoreValue();
-
     const QoreListNode* nv = (new_value->getType() == NT_LIST ? new_value->get<QoreListNode>() : nullptr);
 
     // get values and save
@@ -182,34 +196,91 @@ QoreValue QoreListAssignmentOperatorNode::evalCommon(bool& needs_deref, Exceptio
             continue;
         }
 
-        // a store whose check records reference elements is made again after they have been bound with no lvalue
-        // lock held; each round takes its value from the list again (qore#7391)
-        QoreBindKeys keys(xsink);
-        QoreBindRetry retry;
-        bool stored = false;
-        do {
-            // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-            LValueHelper v(lv, xsink, true, retry, keys);
-            if (!v)
-                return QoreValue();
+        // the keys of a path that has key expressions which a retry of the store cannot evaluate again are evaluated
+        // first, where the helper evaluates them, and released after the helper (qore#7391)
+        std::optional<QoreStorePathKeys> path_keys;
+        if constexpr (Slow) {
+            if ((store_mode.get() & QoreStorePathMode::KeysFirst) && qore_lvalue_store_keys_first(lv)) {
+                path_keys.emplace(xsink);
+                if (path_keys->eval(lv)) {
+                    return QoreValue();
+                }
+            }
+        }
+        const QoreStorePathKeys* keys = Slow && path_keys ? &*path_keys : nullptr;
 
-            QoreValue assigned = nv ? nv->getReferencedEntry(i) : (!i ? new_value->refSelf() : QoreValue());
-            int rc;
+        // get ptr to current value (lvalue is locked for the scope of the LValueHelper object); the helper of an
+        // assignment has a retry (qore#7391)
+        LValueHelper v(Slow && keys ? qore_store_no_lvalue : lv, xsink, false, true);
+        if constexpr (Slow) {
+            if (keys && v.resolveWithKeys(lv, *keys)) {
+                return QoreValue();
+            }
+        }
+        if (!v)
+            return QoreValue();
+
+        QoreValue assigned = nv ? nv->getReferencedEntry(i) : (!i ? new_value->refSelf() : QoreValue());
+        int rc;
+        if constexpr (Lexical) {
+            rc = v.assign(assigned, "<lvalue>", getSemanticPolicy());
+        } else {
+            rc = v.assign(assigned);
+        }
+        // a store whose check records reference elements is made again out of line after they have been bound with
+        // no lvalue lock held (qore#7391)
+        if (rc && v.isBindPending()) [[unlikely]] {
+            LexicalSemanticPolicy policy;
             if constexpr (Lexical) {
-                rc = v.assign(assigned, "<lvalue>", getSemanticPolicy());
-            } else {
-                rc = v.assign(assigned);
+                policy = getSemanticPolicy();
             }
-            if (rc) {
-                continue;
+            if (qore_list_assign_bind_retry(v, lv, nv, *new_value, i, keys, Lexical ? &policy : nullptr)) {
+                return QoreValue();
             }
-            stored = true;
-            break;
-        } while (retry.again());
-        if (!stored || *xsink) {
+        }
+        if (*xsink) {
             return QoreValue();
         }
     }
 
     return ref_rv ? new_value.takeValue(needs_deref) : QoreValue();
+}
+
+template <bool Lexical>
+QORE_INTERN_NOINLINE QoreValue QoreListAssignmentOperatorNode::evalStoresSlow(ValueEvalOptimizedRefHolder& new_value,
+        bool& needs_deref, ExceptionSink* xsink) const {
+    if (!store_mode.get()) {
+        // the first run of the assignment decides whether the keys of a path are evaluated first (qore#7391)
+        const QoreParseListNode* llv = left.get<const QoreParseListNode>();
+        bool keys_first = false;
+        for (unsigned i = 0; i < llv->size(); i++) {
+            if (qore_lvalue_store_keys_first(llv->get(i))) {
+                keys_first = true;
+                break;
+            }
+        }
+        store_mode.setKeysFirst(keys_first);
+    }
+    return evalStores<Lexical, true>(new_value, needs_deref, xsink);
+}
+
+template <bool Lexical>
+QoreValue QoreListAssignmentOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
+    assert(left.getType() == NT_PARSE_LIST);
+
+    /* assign new value, this value gets referenced with the
+        eval(xsink) call, so there's no need to reference it again
+        for the variable assignment - however it does need to be
+        copied/referenced for the return value
+    */
+    ValueEvalOptimizedRefHolder new_value(right, xsink);
+    if (*xsink)
+        return QoreValue();
+
+    // the first run of the assignment and an assignment with an lvalue path whose keys are evaluated first are made out
+    // of line (qore#7391)
+    if (store_mode.get() != QoreStorePathMode::Known) [[unlikely]] {
+        return evalStoresSlow<Lexical>(new_value, needs_deref, xsink);
+    }
+    return evalStores<Lexical, false>(new_value, needs_deref, xsink);
 }

@@ -97,6 +97,18 @@ int ForEachStatement::assignLoopValue(LValueHelper& lvalue, QoreValue value, con
     }
 }
 
+template <bool Lexical>
+QORE_INTERN_NOINLINE QORE_INTERN_COLD int ForEachStatement::assignLoopValueBindRetry(LValueHelper& lvalue,
+        RuntimeConfig* rc, const char* desc) const {
+    auto op = [this, desc](LValueHelper& h, QoreValue value) -> int {
+        return assignLoopValue<Lexical>(h, value, desc);
+    };
+    // the loop variable has no path keys: it is resolved again as for the first round
+    return rc
+        ? qore_ast_store_bind_retry(lvalue, var, *rc, nullptr, op)
+        : qore_ast_store_bind_retry(lvalue, var, nullptr, op);
+}
+
 ForEachStatement::ForEachStatement(int start_line, int end_line, QoreValue v, QoreValue l, StatementBlock* cd) : AbstractStatement(start_line, end_line), var(v), list(l), code(cd) {
 }
 
@@ -153,24 +165,17 @@ int ForEachStatement::execCommon(QoreValue& return_value, ExceptionSink* xsink) 
             if (*xsink)
                 break;
 
-            // a store whose check records reference elements is made again after they have been bound with no
-            // lvalue lock held (qore#7391)
-            QoreBindKeys keys(xsink);
-            QoreBindRetry retry;
-            bool stored = false;
-            do {
-                LValueHelper n(var, xsink, false, retry, keys);
-                if (!n)
-                    break;
-
-                // assign variable to current value; a retry assigns the value that the first round converted
-                QoreValue value = retry.hasValue() ? retry.takeValue() : iv.takeReferencedValue();
-                if (assignLoopValue<Lexical>(n, value, "<foreach lvalue assignment>"))
-                    continue;
-                stored = true;
+            LValueHelper n(var, xsink);
+            if (!n)
                 break;
-            } while (retry.again());
-            if (!stored)
+            // a store whose check records reference elements is made again out of line after they have been bound
+            // with no lvalue lock held (qore#7391)
+            n.enableBindRetry();
+
+            // assign variable to current value
+            if (assignLoopValue<Lexical>(n, iv.takeReferencedValue(), "<foreach lvalue assignment>")
+                    && (!n.isBindPending()
+                        || assignLoopValueBindRetry<Lexical>(n, nullptr, "<foreach lvalue assignment>")))
                 break;
         }
 
@@ -238,24 +243,17 @@ int ForEachStatement::execCommon(RuntimeConfig& rc, QoreValue& return_value, Exc
             if (*xsink)
                 break;
 
-            // a store whose check records reference elements is made again after they have been bound with no
-            // lvalue lock held (qore#7391)
-            QoreBindKeys keys(xsink);
-            QoreBindRetry retry;
-            bool stored = false;
-            do {
-                LValueHelper n(var, rc, xsink, false, retry, keys);
-                if (!n)
-                    break;
-
-                // assign variable to current value; a retry assigns the value that the first round converted
-                QoreValue value = retry.hasValue() ? retry.takeValue() : iv.takeReferencedValue();
-                if (assignLoopValue<Lexical>(n, value, "<foreach lvalue assignment>"))
-                    continue;
-                stored = true;
+            LValueHelper n(var, rc, xsink);
+            if (!n)
                 break;
-            } while (retry.again());
-            if (!stored)
+            // a store whose check records reference elements is made again out of line after they have been bound
+            // with no lvalue lock held (qore#7391)
+            n.enableBindRetry();
+
+            // assign variable to current value
+            if (assignLoopValue<Lexical>(n, iv.takeReferencedValue(), "<foreach lvalue assignment>")
+                    && (!n.isBindPending()
+                        || assignLoopValueBindRetry<Lexical>(n, &rc, "<foreach lvalue assignment>")))
                 break;
         }
 
@@ -320,28 +318,17 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
         }
 
         {
-            // a store whose check records reference elements is made again after they have been bound with no
-            // lvalue lock held (qore#7391)
-            QoreBindKeys keys(xsink);
-            QoreBindRetry retry;
-            bool stored = false;
-            do {
-                LValueHelper n(var, xsink, false, retry, keys);
-                if (!n) {
-                    return 0;
-                }
+            LValueHelper n(var, xsink);
+            if (!n) {
+                return 0;
+            }
+            // a store whose check records reference elements is made again out of line after they have been bound
+            // with no lvalue lock held (qore#7391)
+            n.enableBindRetry();
 
-                // assign variable to current value in list; a retry assigns the value that the first round converted
-                QoreValue value = retry.hasValue()
-                    ? retry.takeValue()
-                    : (l_tlist ? l_tlist->getReferencedEntry(i) : tlist.release());
-                if (assignLoopValue<Lexical>(n, value)) {
-                    continue;
-                }
-                stored = true;
-                break;
-            } while (retry.again());
-            if (!stored) {
+            // assign variable to current value in list
+            if (assignLoopValue<Lexical>(n, l_tlist ? l_tlist->getReferencedEntry(i) : tlist.release())
+                    && (!n.isBindPending() || assignLoopValueBindRetry<Lexical>(n, nullptr))) {
                 return 0;
             }
         }
@@ -460,28 +447,17 @@ int ForEachStatement::execRef(RuntimeConfig& rc, QoreValue& return_value, Except
         }
 
         {
-            // a store whose check records reference elements is made again after they have been bound with no
-            // lvalue lock held (qore#7391)
-            QoreBindKeys keys(xsink);
-            QoreBindRetry retry;
-            bool stored = false;
-            do {
-                LValueHelper n(var, rc, xsink, false, retry, keys);
-                if (!n) {
-                    return 0;
-                }
+            LValueHelper n(var, rc, xsink);
+            if (!n) {
+                return 0;
+            }
+            // a store whose check records reference elements is made again out of line after they have been bound
+            // with no lvalue lock held (qore#7391)
+            n.enableBindRetry();
 
-                // assign variable to current value in list; a retry assigns the value that the first round converted
-                QoreValue value = retry.hasValue()
-                    ? retry.takeValue()
-                    : (l_tlist ? l_tlist->getReferencedEntry(i) : tlist.takeReferencedValue());
-                if (assignLoopValue<Lexical>(n, value)) {
-                    continue;
-                }
-                stored = true;
-                break;
-            } while (retry.again());
-            if (!stored) {
+            // assign variable to current value in list
+            if (assignLoopValue<Lexical>(n, l_tlist ? l_tlist->getReferencedEntry(i) : tlist.takeReferencedValue())
+                    && (!n.isBindPending() || assignLoopValueBindRetry<Lexical>(n, &rc))) {
                 return 0;
             }
         }

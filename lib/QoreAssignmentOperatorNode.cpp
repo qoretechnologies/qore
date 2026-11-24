@@ -48,6 +48,8 @@
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
 
+#include <optional>
+
 QoreString QoreAssignmentOperatorNode::op_str("assignment (=) operator expression");
 QoreString QoreWeakAssignmentOperatorNode::op_str("weak assignment (:=) operator expression");
 QoreString QoreOpaqueAssignmentOperatorNode::op_str("opaque assignment (@=) operator expression");
@@ -904,6 +906,62 @@ QoreValue QoreAssignmentOperatorNode::evalLexicalWeak(ExceptionSink* xsink, bool
     return evalInternImpl<true, true>(xsink, needs_deref, AssignmentMode::Weak);
 }
 
+//! Takes the copy that the conversion of a weak assignment made and the value of the assignment after its store
+/** The target is compared by its address; a copy is kept with a reference of its own, taken through the weak reference,
+    or is a new empty container if it was freed (qore#7198)
+*/
+static QORE_INTERN_ALWAYS_INLINE void qore_weak_assign_stored(LValueHelper& v, const AbstractQoreNode* assigned_node,
+        bool ref_rv, QoreValue& copy, QoreValue& rv) {
+    switch (v.getType()) {
+        case NT_WEAKREF_HASH: {
+            const WeakHashReferenceNode* w = reinterpret_cast<const WeakHashReferenceNode*>(v.getInternalNode());
+            if (w->borrow() != assigned_node) {
+                copy = w->lock();
+            }
+            break;
+        }
+        case NT_WEAKREF_LIST: {
+            const WeakListReferenceNode* w = reinterpret_cast<const WeakListReferenceNode*>(v.getInternalNode());
+            if (w->borrow() != assigned_node) {
+                copy = w->lock();
+            }
+            break;
+        }
+        default:
+            break;
+    }
+
+    // reference return value if necessary
+    if (ref_rv) {
+        rv = v.getReferencedValue();
+    }
+}
+
+//! Makes the retries of a weak assignment whose first round left its helper \a v pending (qore#7391)
+/** Out of line and cold: the reference elements that the check recorded are bound with no lvalue lock held, and the
+    target is resolved again in \a v for each round, with \a keys if the assignment evaluated the keys of its path
+    first; the store assigns the value that the last round converted
+
+    @return 0 if the store was made (\a copy and \a rv are set then), -1 if not
+*/
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_weak_assign_bind_retry(LValueHelper& v, const QoreValue& left,
+        bool ident, bool ref_rv, const LexicalSemanticPolicy* policy, const QoreStorePathKeys* keys,
+        const AbstractQoreNode* assigned_node, QoreValue& copy, QoreValue& rv) {
+    auto resolve = [&left, keys](LValueHelper& lvh) -> int {
+        return qore_store_resolve_lvalue(lvh, left, keys);
+    };
+    auto assign = [&](LValueHelper& lvh, QoreValue value) -> int {
+        int rc = policy
+            ? lvh.assign(value, "<lvalue>", *policy, !ident, AssignmentMode::Weak)
+            : lvh.assign(value, "<lvalue>", !ident, AssignmentMode::Weak);
+        if (!rc) {
+            qore_weak_assign_stored(lvh, assigned_node, ref_rv, copy, rv);
+        }
+        return rc;
+    };
+    return qore_store_bind_retry_continue(v, resolve, assign);
+}
+
 //! Makes a weak assignment of the value of \a new_value to \a left and returns the value of the assignment
 /** The value assigned, if it is a temporary, and a container that the type of the lvalue converts to a copy of its
     own (ex: a hash<string, int> assigned to a hash variable), a temporary of the statement that only the weak reference
@@ -911,12 +969,18 @@ QoreValue QoreAssignmentOperatorNode::evalLexicalWeak(ExceptionSink* xsink, bool
     releasing a value that the statement held before can run a destructor.  Out of line, so that the other assignments
     keep their code.
 
+    A store whose check records reference elements is made again out of line after they have been bound with no lvalue
+    lock held (qore#7391).
+
+    @tparam KeysFirst true if the keys of the path were evaluated first into \a keys, which the path is resolved with
     @param policy the lexical semantic policy of the assignment, or nullptr for an assignment without one
     @param site the expression, which the copy held is keyed by
+    @param keys the keys of the path evaluated first if \a KeysFirst, otherwise nullptr
 */
-static QORE_INTERN_NOINLINE QoreValue qore_weak_assign_hold_copy(const QoreValue& left,
+template <bool KeysFirst>
+static QORE_INTERN_ALWAYS_INLINE QoreValue qore_weak_assign_hold_copy_impl(const QoreValue& left,
         QoreMutationOperandHolder& new_value, bool ident, bool ref_rv, const LexicalSemanticPolicy* policy,
-        const void* site, ExceptionSink* xsink) {
+        const void* site, const QoreStorePathKeys* keys, ExceptionSink* xsink) {
     // a weak reference does not keep the value assigned: a temporary lives until the end of the statement, as in the
     // other execution modes, so that the weak reference and the value of the assignment designate it until then
     // (qore#7085)
@@ -928,64 +992,38 @@ static QORE_INTERN_NOINLINE QoreValue qore_weak_assign_hold_copy(const QoreValue
     QoreValue copy;
     QoreValue rv;
     {
-        // the container assigned, to recognize a copy made by the conversion; taken from the operand, which the
-        // statement holds, as a retry of the store assigns the value that the first round converted
-        const AbstractQoreNode* assigned_node = new_value->hasNode() ? new_value->getInternalNode() : nullptr;
-
-        // a store whose check records reference elements is made again after they have been bound with no lvalue
-        // lock held (qore#7391)
-        QoreBindKeys keys(xsink);
-        QoreBindRetry retry;
-        bool stored = false;
-        do {
-            // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-            LValueHelper v(left, xsink, true, retry, keys);
-            if (!v) {
+        // get ptr to current value (lvalue is locked for the scope of the LValueHelper object); a path whose keys
+        // were evaluated first is resolved with them (qore#7391)
+        LValueHelper v(KeysFirst ? qore_store_no_lvalue : left, xsink, false, true);
+        if constexpr (KeysFirst) {
+            if (v.resolveWithKeys(left, *keys)) {
                 return QoreValue();
             }
-            assert(!*xsink);
-
-            QoreValue value = retry.hasValue() ? retry.takeValue() : new_value.takeReferencedValue();
-            if (policy) {
-                if (v.assign(value, "<lvalue>", *policy, !ident, AssignmentMode::Weak)) {
-                    continue;
-                }
-            } else if (v.assign(value, "<lvalue>", !ident, AssignmentMode::Weak)) {
-                continue;
-            }
-
-            // the target is compared by its address; a copy is kept with a reference of its own, taken through the
-            // weak reference, or is a new empty container if it was freed (qore#7198)
-            switch (v.getType()) {
-                case NT_WEAKREF_HASH: {
-                    const WeakHashReferenceNode* w
-                        = reinterpret_cast<const WeakHashReferenceNode*>(v.getInternalNode());
-                    if (w->borrow() != assigned_node) {
-                        copy = w->lock();
-                    }
-                    break;
-                }
-                case NT_WEAKREF_LIST: {
-                    const WeakListReferenceNode* w
-                        = reinterpret_cast<const WeakListReferenceNode*>(v.getInternalNode());
-                    if (w->borrow() != assigned_node) {
-                        copy = w->lock();
-                    }
-                    break;
-                }
-                default:
-                    break;
-            }
-
-            // reference return value if necessary
-            if (ref_rv) {
-                rv = v.getReferencedValue();
-            }
-            stored = true;
-            break;
-        } while (retry.again());
-        if (!stored) {
+        }
+        if (!v) {
             return QoreValue();
+        }
+        assert(!*xsink);
+
+        // the container assigned, to recognize a copy made by the conversion; a retry of the store assigns the value
+        // that the first round converted, which is compared with the operand, which the statement holds
+        const AbstractQoreNode* assigned_node = new_value->hasNode() ? new_value->getInternalNode() : nullptr;
+
+        int rc;
+        if (policy) {
+            rc = v.assign(new_value.takeReferencedValue(), "<lvalue>", *policy, !ident, AssignmentMode::Weak);
+        } else {
+            rc = v.assign(new_value.takeReferencedValue(), "<lvalue>", !ident, AssignmentMode::Weak);
+        }
+        if (rc) {
+            if (!v.isBindPending()) [[likely]] {
+                return QoreValue();
+            }
+            if (qore_weak_assign_bind_retry(v, left, ident, ref_rv, policy, keys, assigned_node, copy, rv)) {
+                return QoreValue();
+            }
+        } else {
+            qore_weak_assign_stored(v, assigned_node, ref_rv, copy, rv);
         }
     }
     // the site differs from that of the operand held by the caller
@@ -996,31 +1034,114 @@ static QORE_INTERN_NOINLINE QoreValue qore_weak_assign_hold_copy(const QoreValue
     return rv;
 }
 
+//! Makes a weak assignment whose path is resolved as any helper resolves it; see qore_weak_assign_hold_copy_impl()
+static QORE_INTERN_NOINLINE QoreValue qore_weak_assign_hold_copy(const QoreValue& left,
+        QoreMutationOperandHolder& new_value, bool ident, bool ref_rv, const LexicalSemanticPolicy* policy,
+        const void* site, ExceptionSink* xsink) {
+    return qore_weak_assign_hold_copy_impl<false>(left, new_value, ident, ref_rv, policy, site, nullptr, xsink);
+}
+
+//! Makes a weak assignment whose path is resolved with the keys \a keys evaluated first; see
+//! qore_weak_assign_hold_copy_impl() (qore#7391)
+static QORE_INTERN_NOINLINE QoreValue qore_weak_assign_hold_copy_keys(const QoreValue& left,
+        QoreMutationOperandHolder& new_value, bool ident, bool ref_rv, const LexicalSemanticPolicy* policy,
+        const void* site, const QoreStorePathKeys& keys, ExceptionSink* xsink) {
+    return qore_weak_assign_hold_copy_impl<true>(left, new_value, ident, ref_rv, policy, site, &keys, xsink);
+}
+
 template <bool Lexical>
 QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue QoreAssignmentOperatorNode::evalBindRetry(LValueHelper& v,
-        AssignmentMode mode, ExceptionSink* xsink) const {
+        AssignmentMode mode, const QoreStorePathKeys* keys) const {
     LexicalSemanticPolicy policy;
     if constexpr (Lexical) {
         policy = getSemanticPolicy();
     }
-    // the keys of the path that the first round evaluated, which the retries resolve it with
-    QoreBindKeys keys;
-    QoreBindRetry retry;
-    v.releaseForBindRetry(retry, &keys);
-    while (retry.again()) {
-        LValueHelper lvh(left, xsink, true, retry, keys);
-        if (!lvh) {
+    QoreValue rv;
+    // the path is resolved again in the helper for each round: with the keys evaluated first, or with key expressions
+    // that give the same keys with no side effect when they are evaluated again (qore_lvalue_store_keys_first())
+    auto resolve = [this, keys](LValueHelper& lvh) -> int {
+        return qore_store_resolve_lvalue(lvh, left, keys);
+    };
+    auto assign = [&](LValueHelper& lvh, QoreValue value) -> int {
+        int rc = Lexical
+            ? lvh.assign(value, "<lvalue>", policy, !ident, mode)
+            : lvh.assign(value, "<lvalue>", !ident, mode);
+        if (!rc && ref_rv) {
+            rv = lvh.getReferencedValue();
+        }
+        return rc;
+    };
+    qore_store_bind_retry_continue(v, resolve, assign);
+    return rv;
+}
+
+template <bool Lexical, bool Weak>
+QORE_INTERN_NOINLINE QoreValue QoreAssignmentOperatorNode::evalStoreSlow(QoreMutationOperandHolder& new_value,
+        AssignmentMode mode, ExceptionSink* xsink) const {
+    uint8_t m = store_mode.get();
+    if (!m) {
+        // the first run of the assignment decides how its path is resolved (qore#7391)
+        m = store_mode.set(left, broken_int ? StoreBrokenInt : 0);
+    }
+
+    if (m & StoreBrokenInt) {
+        // convert the value to an int unconditionally
+        new_value.setValue(new_value->getAsBigInt());
+        if (*xsink)
+            return QoreValue();
+    } else {
+        // we have to ensure that the value is referenced before the assignment in case the lvalue
+        // is the same value, so it can be copied in the LValueHelper constructor
+        new_value.ensureReferencedValue();
+    }
+
+    // the keys of a path that has key expressions which a retry of the store cannot evaluate again are evaluated first,
+    // after the operand, where the helper evaluates them; they are released after the helper (qore#7391)
+    std::optional<QoreStorePathKeys> path_keys;
+    if (m & QoreStorePathMode::KeysFirst) {
+        path_keys.emplace(xsink);
+        if (path_keys->eval(left)) {
             return QoreValue();
         }
-        assert(retry.hasValue());
-        QoreValue value = retry.hasValue() ? retry.takeValue() : QoreValue();
-        if (Lexical ? lvh.assign(value, "<lvalue>", policy, !ident, mode)
-                : lvh.assign(value, "<lvalue>", !ident, mode)) {
-            continue;
-        }
-        return ref_rv ? lvh.getReferencedValue() : QoreValue();
     }
-    return QoreValue();
+    const QoreStorePathKeys* keys = path_keys ? &*path_keys : nullptr;
+
+    if constexpr (Weak) {
+        assert(mode == AssignmentMode::Weak);
+        LexicalSemanticPolicy policy;
+        const LexicalSemanticPolicy* policy_ptr = nullptr;
+        if constexpr (Lexical) {
+            policy = getSemanticPolicy();
+            policy_ptr = &policy;
+        }
+        return keys
+            ? qore_weak_assign_hold_copy_keys(left, new_value, ident, ref_rv, policy_ptr, this, *keys, xsink)
+            : qore_weak_assign_hold_copy(left, new_value, ident, ref_rv, policy_ptr, this, xsink);
+    } else {
+        // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
+        LValueHelper v(xsink, true);
+        if (qore_store_resolve_lvalue(v, left, keys)) {
+            return QoreValue();
+        }
+        assert(!*xsink);
+
+        // assign new value
+        int rc;
+        if constexpr (Lexical) {
+            rc = v.assign(new_value.takeReferencedValue(), "<lvalue>", getSemanticPolicy(), !ident, mode);
+        } else {
+            rc = v.assign(new_value.takeReferencedValue(), "<lvalue>", !ident, mode);
+        }
+        if (rc) {
+            if (v.isBindPending()) [[unlikely]] {
+                return evalBindRetry<Lexical>(v, mode, keys);
+            }
+            return QoreValue();
+        }
+
+        // reference return value if necessary
+        return ref_rv ? v.getReferencedValue() : QoreValue();
+    }
 }
 
 template <bool Lexical, bool Weak>
@@ -1068,16 +1189,14 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreAssignmentOperatorNode::evalInternImpl(E
     if (*xsink)
         return QoreValue();
 
-    if (broken_int) {
-        // convert the value to an int unconditionally
-        new_value.setValue(new_value->getAsBigInt());
-        if (*xsink)
-            return QoreValue();
-    } else {
-        // we have to ensure that the value is referenced before the assignment in case the lvalue
-        // is the same value, so it can be copied in the LValueHelper constructor
-        new_value.ensureReferencedValue();
+    // the first run of the assignment, an assignment with broken_int, and an assignment whose path has key expressions
+    // that are evaluated first are made out of line; the one test of the byte replaces that of broken_int (qore#7391)
+    if (store_mode.get() != QoreStorePathMode::Known) [[unlikely]] {
+        return evalStoreSlow<Lexical, Weak>(new_value, mode, xsink);
     }
+    // we have to ensure that the value is referenced before the assignment in case the lvalue
+    // is the same value, so it can be copied in the LValueHelper constructor
+    new_value.ensureReferencedValue();
 
     // a weak assignment holds the value assigned and the copy that the variable's type makes of a container until the
     // end of the statement (out of line: see qore_weak_assign_hold_copy())
@@ -1091,9 +1210,9 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreAssignmentOperatorNode::evalInternImpl(E
         }
     }
 
-    // get ptr to current value (lvalue is locked for the scope of the LValueHelper object); an assignment's helper
-    // keeps the keys of the path and enables the retry of the store, which is made again out of line after the
-    // reference elements that its check recorded have been bound with no lvalue lock held (qore#7391)
+    // get ptr to current value (lvalue is locked for the scope of the LValueHelper object); the helper of an assignment
+    // has a retry: a store whose check records reference elements is made again out of line after they have been bound
+    // with no lvalue lock held, and the path is resolved again, as its keys give the same keys (qore#7391)
     LValueHelper v(left, xsink, false, true);
     if (!v)
         return QoreValue();
@@ -1109,7 +1228,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreAssignmentOperatorNode::evalInternImpl(E
     }
     if (rc) {
         if (v.isBindPending()) [[unlikely]] {
-            return evalBindRetry<Lexical>(v, mode, xsink);
+            return evalBindRetry<Lexical>(v, mode, nullptr);
         }
         return QoreValue();
     }
