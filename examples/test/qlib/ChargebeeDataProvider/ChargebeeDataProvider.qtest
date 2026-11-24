@@ -677,6 +677,16 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
         assertEq("POST", handler.requests[0].method);
         assertEq("api/v2/invoices/inv1/pdf", handler.requests[0].path);
 
+        # an invoice's details are updated with POST /invoices/{id}/update_details, as Chargebee documents it; the
+        # operation takes no metadata (qore#7511)
+        handler.requests = ();
+        provider.getChildProviderPath("update-invoice").doRequest({"id": "inv1", "po_number": "PO-1"});
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("api/v2/invoices/inv1/update_details", handler.requests[0].path);
+        assertEq({"po_number": "PO-1"}, handler.requests[0].body);
+        assertFalse(exists provider.getChildProviderPath("update-invoice").getRequestType().getFields()."meta_data");
+
         # a rate-limited request is retried after the time given by the server
         handler.requests = ();
         handler.rate_limited = 1;
