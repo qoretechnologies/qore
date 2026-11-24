@@ -263,12 +263,14 @@ class AbstractExampleInstanceBaseClass inherits AbstractRestClass {
     @ref HttpServer::AbstractHttpRequestHandler::getRawRequest() "getRawRequest()".
 
     The \c socketobject key of the request context gives the socket of the request: for an HTTP/2 or HTTP/3 request
-    the handler socket of its own stream; for an HTTP/1.x request the socket of the connection, which only a REST
-    class that trusted code declared gets: the key is not set for a REST class that sandboxed code declared
-    (@ref Qore::SandboxManager::isSandboxDeclared() "SandboxManager::isSandboxDeclared()"), which cannot read a
-    request that the client sends after its own on the connection, nor close the connection.  A
-    @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler "data stream request handler" of a class that
-    sandboxed code declared therefore refuses an HTTP/1.x request when it is created.
+    the handler socket of its own stream; for an HTTP/1.x request the socket that the server gives the handler: a
+    socket of the request alone when the handler hosts the code of a sandboxed Program (see
+    @ref httpserver_handler_socket), or the socket of the connection, which only a REST class of a Program that no
+    sandbox governs gets: the key is not set for a REST class of a sandboxed Program
+    (@ref Qore::SandboxManager::isFromSandboxedProgram() "SandboxManager::isFromSandboxedProgram()"), which cannot
+    read a request that the client sends after its own on the connection, nor close the connection.  A
+    @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler "data stream request handler" of a class of a
+    sandboxed Program that gets no socket refuses an HTTP/1.x request when it is created.
 */
 /** @page resthierarchy Implementing Object Hierarchies
 
@@ -1148,9 +1150,9 @@ public namespace RestHandler {
             if (!args && cx.body.typeCode() == NT_HASH) {
                 args = cx.body - "action";
             }
-            # the raw socket of an HTTP/1.1 request is given only to the code of a REST class that trusted code
-            # declared (qore#6843; qore#7305): an HTTP/2 or HTTP/3 request's handler socket is a view of its own stream
-            if (s.className() != "Socket" || !SandboxManager::isSandboxDeclared(self)) {
+            # the raw socket of an HTTP/1.1 request is given only to the code of a REST class of a Program that no
+            # sandbox governs (qore#6843; qore#7305): a handler socket is a view of its own request
+            if (s.className() != "Socket" || !SandboxManager::isFromSandboxedProgram(self)) {
                 cx.socketobject = s;
             } else {
                 remove cx.socketobject;

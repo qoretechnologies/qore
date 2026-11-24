@@ -203,11 +203,11 @@ module HttpServerUtil {
     (@ref HttpServer::AbstractHttpRequestHandler::getStreamRequestImpl() "getStreamRequestImpl()", and the code that
     it hands the socket to) gets a placeholder that is not connected, whose every operation fails, while the stream
     request uses the socket of the connection, and trusted code gets it in the \c "s" key of
-    @ref HttpServer::AbstractHttpRequestHandler::getRawRequest() "getRawRequest()".  The HTTP server gives a handler
-    class that sandboxed code declared (@ref Qore::SandboxManager::isSandboxDeclared()
-    "SandboxManager::isSandboxDeclared()") the placeholder in place of the socket of an HTTP/1.x request as well, so
-    such a stream handler refuses an HTTP/1.x request (\c HTTP-HANDLER-ERROR).  The handler socket of an HTTP/2 or
-    HTTP/3 request is a view of its own stream, which is given as before.
+    @ref HttpServer::AbstractHttpRequestHandler::getRawRequest() "getRawRequest()".  A handler socket, a socket of the
+    request alone, is given to that code as it is: the HTTP server gives one to a handler of a sandboxed %Program
+    (@ref Qore::SandboxManager::isFromSandboxedProgram() "SandboxManager::isFromSandboxedProgram()"; see
+    @ref httpserver_handler_socket), and to every handler of an HTTP/2 or HTTP/3 request; a stream handler of a
+    sandboxed %Program that gets the socket of the connection refuses the request (\c HTTP-HANDLER-ERROR).
 
     See @subpage httpserverutil_relnotes "HttpServerUtil Module Release Notes" for the changes in each version.
 */
@@ -5447,11 +5447,11 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         # (see AbstractStreamRequest::filterRequest()); the raw request is current on the thread while the request is
         # served (see getRawRequest()): the concurrent streams of an HTTP/2 or HTTP/3 connection are served on threads
         # of their own
-        # the HTTP server gives a handler class that sandboxed code declared no socket of an HTTP/1.x request, which a
-        # stream request needs (qore#6843)
-        if (!HttpRawRequestScope::isStreamView(s) && SandboxManager::isSandboxDeclared(self)) {
-            throw "HTTP-HANDLER-ERROR", "a stream request handler of a class that sandboxed code declared cannot serve "
-                "an HTTP/1.x request: its socket is not given to such a class; use HTTP/2 or HTTP/3";
+        # the HTTP server gives the handler of a sandboxed Program a socket of its own request (qore#7305); the socket
+        # of the connection, which a stream request needs, never reaches its code (qore#6843)
+        if (!HttpRawRequestScope::isStreamView(s) && SandboxManager::isFromSandboxedProgram(self)) {
+            throw "HTTP-HANDLER-ERROR", "a stream request handler of a class of a sandboxed Program cannot serve an "
+                "HTTP/1.x request on the socket of the connection, which is not given to the code of such a class";
         }
         *object raw_scope;
         hash<HttpFilteredRequestInfo> filtered = withholdRequestCredentials(cx, hdr, \raw_scope, s);

@@ -2077,40 +2077,6 @@ static bool SandboxManager::isSandboxed() [flags=RET_VALUE_ONLY] {
     return static_cast<bool>(governing);
 }
 
-//! Returns @ref True if the class of the object was declared by sandboxed code
-/** A class that sandboxed code declared (a class parsed in a %Program with a sandbox manager, or by sandboxed code;
-    see @ref sandboxed_class_private_access) has no private access to the declarations of classes that trusted code
-    declared.  Library code that hands an object of the server or of the process to the code of a class uses this
-    method to withhold it from a class that sandboxed code declared: an object of a subclass that sandboxed code
-    declared of a class that trusted code declared is such an object, while an object of a class that trusted code
-    declared is not, also when sandboxed code created it.
-
-    The answer fails closed: @ref True if the class cannot be determined.  It reveals only how the object's class was
-    declared, so it is not restricted itself.
-
-    @param obj the object
-
-    @return @ref True if the class of the object was declared by sandboxed code, or if it cannot be determined
-
-    @par Example:
-    @code{.py}
-# the raw socket only for the code of a class that trusted code declared
-if (!SandboxManager::isSandboxDeclared(handler)) {
-    cx.socketobject = s;
-}
-    @endcode
-
-    @since %Qore 3.0
-*/
-static bool SandboxManager::isSandboxDeclared(object obj) [flags=RET_VALUE_ONLY] {
-    const QoreClass* cls = obj->getClass();
-    if (!cls) {
-        return true;
-    }
-    const qore_class_private* priv = qore_class_private::get(*cls);
-    return !priv || priv->isSandboxDeclared();
-}
-
 //! Returns @ref True if a sandbox governs the Program of the class of the given object
 /** The object keeps the Program of its class (the Program whose code declares the class, or into which the class was
     imported), not the Program of the code that created it: an object of a class of a module or of the application,
