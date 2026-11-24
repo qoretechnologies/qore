@@ -2088,6 +2088,15 @@ QoreSandboxManager* qore_program_private::getOwnSandboxManagerRef() {
     return nullptr;
 }
 
+bool qore_object_program_is_sandboxed(const QoreObject* obj) {
+    QoreProgram* pgm = obj->getProgram();
+    if (!pgm) {
+        return false;
+    }
+    ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*pgm)->getSandboxManagerRef(), nullptr);
+    return static_cast<bool>(sm);
+}
+
 QoreSandboxManager* qore_program_private::getSandboxManagerRef() {
     QoreSandboxManager* own_ptr;
     QoreSandboxManager* creator_ptr;
