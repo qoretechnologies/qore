@@ -4929,6 +4929,22 @@ QoreProgram::~QoreProgram() {
     delete priv;
 }
 
+// the execution mode requested for the process, or -1 if none (see qore_set_default_exec_mode())
+static std::atomic<int> qore_default_exec_mode{-1};
+
+void qore_set_default_exec_mode(qore_exec_mode_t mode) {
+    qore_default_exec_mode.store(static_cast<int>(mode), std::memory_order_release);
+}
+
+bool qore_get_default_exec_mode(qore_exec_mode_t& mode) {
+    int m = qore_default_exec_mode.load(std::memory_order_acquire);
+    if (m < 0) {
+        return false;
+    }
+    mode = static_cast<qore_exec_mode_t>(m);
+    return true;
+}
+
 // setup independent program object
 QoreProgram::QoreProgram() : priv(new qore_program_private(this, PO_DEFAULT)) {
     printd(5, "QoreProgram::QoreProgram() this: %p, pgmid: " QLLD "\n", this, (int64)priv->getProgramId());

@@ -604,6 +604,11 @@ enum QoreProgramRecordSite {
 #define QORE_DBG_RECORD_CHANGE_TID(site, pp, tid)
 #endif
 
+//! returns the execution mode requested for the process in \a mode, if any (see qore_set_default_exec_mode())
+/** @return true if a mode was requested for the process
+*/
+DLLLOCAL bool qore_get_default_exec_mode(qore_exec_mode_t& mode);
+
 class qore_program_private_base {
     friend class QoreProgramAccessHelper;
 
@@ -1600,6 +1605,9 @@ public:
         } else {
             TZ.store(QTZM.getLocalZoneInfo(), std::memory_order_release);
             newProgram();
+            // a Program without a parent takes the execution mode requested for the process, if any
+            // (qore_set_default_exec_mode())
+            inheritExecMode(nullptr);
         }
         // Apply parse-option implications once pwo.parse_options is fully populated
         // (setParent may OR in inherited restrictions from the parent Program).
@@ -1828,11 +1836,14 @@ public:
 
     //! Inherits the explicitly requested execution mode of the given parent, if any, and sets the mode
     /** Used for child Programs (setParent()) and for the Programs of user modules (see ModuleManager.cpp); see
-        syncExecModeWithParseOptions()
+        syncExecModeWithParseOptions().  Without a parent (a Program created without one, or the Program of a module
+        loaded without a requesting Program), the mode requested for the process (qore_set_default_exec_mode(): the
+        qore binary's --exec-mode) is inherited, so that no Program runs in another mode than the one requested (a
+        script run with --exec-mode=ir compiles no code to native code)
     */
     DLLLOCAL void inheritExecMode(const qore_program_private_base* parent) {
         qore_exec_mode_t mode = QEM_AST;
-        bool inherited = parent && parent->getInheritableExecMode(mode);
+        bool inherited = parent ? parent->getInheritableExecMode(mode) : qore_get_default_exec_mode(mode);
         inherited_exec_mode = inherited ? mode : QEM_AST;
         inherited_user_requested_exec_mode.store(inherited, std::memory_order_release);
         user_requested_exec_mode.store(false, std::memory_order_release);
@@ -8381,6 +8392,10 @@ public:
     QoreModulePathScope(const QoreModulePathScope&) = delete;
     QoreModulePathScope& operator=(const QoreModulePathScope&) = delete;
 };
+
+//! sets the execution mode requested for the process (the qore binary's --exec-mode): the mode of the Programs that
+//! have no parent and of the Programs of the modules loaded without a requesting Program
+DLLEXPORT void qore_set_default_exec_mode(qore_exec_mode_t mode);
 
 //! returns the structured parse diagnostics collected on the Program serialized as a JSON array;
 //! exported so the standalone interpreter (--diag-format=json) can emit them

@@ -5306,10 +5306,9 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     // module's own resources while its module context is active.
     inherit_module_sandbox_manager(*mpgm, p, trusted);
     // inherit execution mode from parent program
-    if (p) {
-        // an explicitly requested mode applies to the module's Program as to a child Program (issue #5687)
-        qore_program_private::get(*mpgm)->inheritExecMode(qore_program_private::get(*p));
-    }
+    // an explicitly requested mode applies to the module's Program as to a child Program (issue #5687); a module
+    // loaded without a requesting Program takes the mode requested for the process
+    qore_program_private::get(*mpgm)->inheritExecMode(p ? qore_program_private::get(*p) : nullptr);
     // issue #3592: must add feature first
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
         xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s'; feature '%s' is already loaded in "
@@ -6628,10 +6627,9 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     // See loadSeparatedModule(): source-module constant initialization must inherit the caller's sandbox.
     inherit_module_sandbox_manager(*mpgm, p, trusted);
     // inherit execution mode from parent program
-    if (p) {
-        // an explicitly requested mode applies to the module's Program as to a child Program (issue #5687)
-        qore_program_private::get(*mpgm)->inheritExecMode(qore_program_private::get(*p));
-    }
+    // an explicitly requested mode applies to the module's Program as to a child Program (issue #5687); a module
+    // loaded without a requesting Program takes the mode requested for the process
+    qore_program_private::get(*mpgm)->inheritExecMode(p ? qore_program_private::get(*p) : nullptr);
     // issue #3592: add feature to module container program immediately
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
         xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s'; feature '%s' is already loaded in "
@@ -6771,10 +6769,9 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
         }
     }
     // inherit execution mode from parent program
-    if (p) {
-        // an explicitly requested mode applies to the module's Program as to a child Program (issue #5687)
-        qore_program_private::get(*mpgm)->inheritExecMode(qore_program_private::get(*p));
-    }
+    // an explicitly requested mode applies to the module's Program as to a child Program (issue #5687); a module
+    // loaded without a requesting Program takes the mode requested for the process
+    qore_program_private::get(*mpgm)->inheritExecMode(p ? qore_program_private::get(*p) : nullptr);
     // issue #3592: add feature to module container program immediately
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
         xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s'; feature '%s' is already loaded in " \

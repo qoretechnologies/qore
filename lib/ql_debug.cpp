@@ -31513,6 +31513,51 @@ static QoreValue f_dbg_llvm_uninitialized_level(const QoreListNode* params, Runt
     return (int64)qore_jit_dbg_pipeline_uninitialized_level();
 }
 
+//! loads a module in a foreign thread, which has no current Program, so that the module is loaded without a
+//! requesting Program (as C++ code can load one), and its Program has no parent Program
+/** For examples/test/ir/exec-mode-parentless-module.qtest: the Program of such a module takes the execution mode
+    requested for the process (qore#7495); an exception of the load is raised in the calling thread
+*/
+static QoreValue f_dbg_load_module_in_foreign_thread(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    // the string value can be an inline short string (issue #7038)
+    QoreStringDataHelper name_arg(get_param_value(params, 0));
+    std::string name(name_arg.c_str(), name_arg.size());
+    // the error of the load, as text: an exception of the foreign thread is cleared in it before it is deregistered,
+    // which requires that the thread holds no exception (q_deregister_foreign_thread())
+    std::string error;
+    try {
+        std::thread t([&name, &error]() {
+            // nothing may leave the thread
+            try {
+                QoreForeignThreadHelper foreign_thread;
+                ExceptionSink load_xsink;
+                if (ModuleManager::runTimeLoadModule(&load_xsink, name.c_str(), nullptr) || load_xsink) {
+                    QoreValue err = load_xsink.getExceptionErr();
+                    QoreValue desc = load_xsink.getExceptionDesc();
+                    QoreStringValueHelper err_str(err);
+                    QoreStringValueHelper desc_str(desc);
+                    error = std::string(err_str->c_str()) + ": " + desc_str->c_str();
+                    load_xsink.clear();
+                }
+            } catch (std::exception& e) {
+                error = e.what();
+            } catch (...) {
+                error = "unknown exception";
+            }
+        });
+        t.join();
+    } catch (std::system_error& e) {
+        xsink->raiseException("DBG-LOAD-MODULE-ERROR", "cannot start a thread: %s", e.what());
+        return QoreValue();
+    }
+    if (!error.empty()) {
+        xsink->raiseException("DBG-LOAD-MODULE-ERROR", "the load of module '%s' failed: %s", name.c_str(),
+            error.c_str());
+    }
+    return QoreValue();
+}
+
 //! waits until the background JIT compiler has no queued or in-progress work, detached work included
 static QoreValue f_dbg_wait_bg_compile_idle(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     QoreJIT::instance().waitForBgCompileQueue();
@@ -37996,6 +38041,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_use_after_free", f_dbg_use_after_free, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_llvm_uninitialized_level", f_dbg_llvm_uninitialized_level, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_load_module_in_foreign_thread", f_dbg_load_module_in_foreign_thread, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "name");
     qns.addBuiltinVariant("dbg_get_bg_compile_discarded_count", f_dbg_get_bg_compile_discarded_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_ir_returns_pass_through_without_thread_data",
