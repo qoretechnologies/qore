@@ -5873,13 +5873,17 @@ bool QoreIRLowering::makeDebugFlowEntries(QoreIRDebugFlowTargets& flow, QoreIRBa
     return flow.break_target && flow.continue_target && flow.return_target;
 }
 
-bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction* dbg,
-        const QoreProgramLocation* loc, std::string& error) {
-    const InlineHandlerFlow hf = inline_handler_flow_stack.back();
-    // the index of the handler's entry: lowering a path can lower handlers inline, which pushes on
-    // inline_handler_flow_stack and can reallocate it
-    const size_t hf_index = inline_handler_flow_stack.size() - 1;
+bool QoreIRLowering::lowerInlineHandlerRequestPaths(size_t hf_index, DebugFlowSegment* own_segment,
+        size_t max_cleanup_depth, const QoreProgramLocation* loc, QoreIRBasicBlock* (&paths)[3], std::string& error) {
+    assert(hf_index < inline_handler_flow_stack.size());
+    const InlineHandlerFlow hf = inline_handler_flow_stack[hf_index];
     QoreIRFunction* func = builder.getFunction();
+    // the cache of the paths: the segment of the events in the handler's entry, read and written by its index, as
+    // lowering a path can lower handlers inline, which pushes on inline_handler_flow_stack and can reallocate it; or
+    // the paths of a scope (getScopeFlowPaths()), an element of a map, which a rehash does not move
+    auto segment_ref = [&]() -> DebugFlowSegment& {
+        return own_segment ? *own_segment : inline_handler_flow_stack[hf_index].segment;
+    };
     // the index of the request in DebugFlowSegment::handler_end
     auto end_index = [](int rc) -> size_t {
         return rc == RC_RETURN ? 0 : (rc == RC_BREAK ? 1 : 2);
@@ -5888,7 +5892,7 @@ bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction
         path_end = nullptr;
         // a loop or a switch statement of the body
         if (rc != RC_RETURN) {
-            LoopJumpTarget jt = findLoopJumpTarget(rc == RC_BREAK);
+            LoopJumpTarget jt = findLoopJumpTarget(rc == RC_BREAK, max_cleanup_depth);
             bool in_body = false;
             for (size_t f = hf.flow_depth; jt.target && f < flow_stack.size(); ++f) {
                 if ((rc == RC_BREAK ? flow_stack[f].break_target : flow_stack[f].continue_target) == jt.target) {
@@ -5902,7 +5906,8 @@ bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction
         }
         // the end of the handler: the cleanups of the blocks of the body, and the code after the handler; a request in
         // a try statement of the body ends the try statement with its own return value (qore#6949)
-        QoreIRBasicBlock* end = getInlineHandlerFlowEnd(rc, error, rc == RC_RETURN && try_depth != hf.try_depth);
+        QoreIRBasicBlock* end = getInlineHandlerFlowEndAt(hf_index, rc, error,
+            rc == RC_RETURN && try_depth != hf.try_depth);
         if (!end) {
             return nullptr;
         }
@@ -5910,7 +5915,7 @@ bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction
         // the requests that end at the same block share the code: the requests of a handler that is not the last of
         // its exit, and those whose paths after the handler are the same (getInlineHandlerFlowEnd())
         {
-            const DebugFlowSegment& segment = inline_handler_flow_stack[hf_index].segment;
+            const DebugFlowSegment& segment = segment_ref();
             for (int other : {RC_RETURN, RC_BREAK, RC_CONTINUE}) {
                 QoreIRBasicBlock* other_path = other == RC_RETURN ? segment.return_path
                     : (other == RC_BREAK ? segment.break_path : segment.continue_path);
@@ -5947,6 +5952,34 @@ bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction
         }
         return path;
     };
+    for (int rc : {RC_RETURN, RC_BREAK, RC_CONTINUE}) {
+        auto cached = [&]() -> QoreIRBasicBlock*& {
+            DebugFlowSegment& segment = segment_ref();
+            return rc == RC_RETURN ? segment.return_path
+                : (rc == RC_BREAK ? segment.break_path : segment.continue_path);
+        };
+        QoreIRBasicBlock* path = cached();
+        if (!path) {
+            QoreIRBasicBlock* path_end = nullptr;
+            if ((path = make_path(rc, path_end))) {
+                cached() = path;
+                segment_ref().handler_end[end_index(rc)] = path_end;
+            }
+        }
+        if (!path) {
+            if (error.empty()) {
+                error = "IR builder failed to create the block of a debugger flow request";
+            }
+            return false;
+        }
+        paths[end_index(rc)] = path;
+    }
+    return true;
+}
+
+bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction* dbg,
+        const QoreProgramLocation* loc, std::string& error) {
+    const size_t hf_index = inline_handler_flow_stack.size() - 1;
     // the segment of the event in the body: the cleanups of a path depend only on this state
     {
         DebugFlowSegment& segment = inline_handler_flow_stack[hf_index].segment;
@@ -5969,30 +6002,10 @@ bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction
             segment.exception_target = exception_target;
         }
     }
+    // in the order of DebugFlowSegment::handler_end: return, break, continue
     QoreIRBasicBlock* paths[3] = {};
-    for (int rc : {RC_RETURN, RC_BREAK, RC_CONTINUE}) {
-        // lowering a path can lower handlers inline, which pushes on inline_handler_flow_stack: the cache is read
-        // and written by its index
-        auto cached = [&]() -> QoreIRBasicBlock*& {
-            DebugFlowSegment& segment = inline_handler_flow_stack[hf_index].segment;
-            return rc == RC_RETURN ? segment.return_path
-                : (rc == RC_BREAK ? segment.break_path : segment.continue_path);
-        };
-        QoreIRBasicBlock* path = cached();
-        if (!path) {
-            QoreIRBasicBlock* path_end = nullptr;
-            if ((path = make_path(rc, path_end))) {
-                cached() = path;
-                inline_handler_flow_stack[hf_index].segment.handler_end[end_index(rc)] = path_end;
-            }
-        }
-        if (!path) {
-            if (error.empty()) {
-                error = "IR builder failed to create the block of a debugger flow request";
-            }
-            return false;
-        }
-        paths[end_index(rc)] = path;
+    if (!lowerInlineHandlerRequestPaths(hf_index, nullptr, SIZE_MAX, loc, paths, error)) {
+        return false;
     }
     auto flow = std::make_unique<QoreIRDebugFlowTargets>();
     if (!makeDebugFlowEntries(*flow, paths[1], paths[2], paths[0], "debug.flow.handler.entry",
@@ -6007,10 +6020,23 @@ bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction
 bool QoreIRLowering::setScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry, std::string& error) {
     assert(se && !se->flow && scope_entry < cleanup_stack.size());
     QoreIRFunction* func = builder.getFunction();
-    if (!func->hasDebugFlowPaths() || inline_handler_body_depth || se->is_error) {
+    if (!func->hasDebugFlowPaths() || se->is_error) {
         return true;
     }
-    const DebugFlowSegment* paths = getScopeFlowPaths(scope_entry, error);
+    // in the code of a handler lowered inline (the code of a debugger's request in it runs the handlers of the blocks
+    // of its body out of line): a scope in the body of a handler lowered inline, the innermost one whose body starts
+    // at or below the scope's entry, takes the paths of a request made after the block in that body, as the AST
+    // interpreter makes the request of the last handler run that of the block (StatementBlock::execIntern()): a loop
+    // or switch statement of the body takes it, or it ends the handler (qore#7008); a scope outside of the bodies of
+    // the handlers being lowered takes its own paths
+    size_t hf_index = SIZE_MAX;
+    for (size_t j = inline_handler_flow_stack.size(); j > 0; --j) {
+        if (inline_handler_flow_stack[j - 1].cleanup_depth <= scope_entry) {
+            hf_index = j - 1;
+            break;
+        }
+    }
+    const DebugFlowSegment* paths = getScopeFlowPaths(scope_entry, error, hf_index);
     if (!paths) {
         return false;
     }
@@ -6025,12 +6051,52 @@ bool QoreIRLowering::setScopeExitFlowTargets(QoreIRScopeExitInstruction* se, siz
     return true;
 }
 
-const QoreIRLowering::DebugFlowSegment* QoreIRLowering::getScopeFlowPaths(size_t scope_entry, std::string& error) {
+bool QoreIRLowering::setHandOverScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry,
+        const QoreProgramLocation* loc, std::string& error) {
+    assert(se->result.isValid() && se->hand_over_return);
+    if (!setScopeExitFlowTargets(se, scope_entry, error)) {
+        return false;
+    }
+    if (!se->flow) {
+        return true;
+    }
+    // the request replaces the return of a handler run before it, as with the AST interpreter, where the request of a
+    // later handler replaces it: the value handed over is released, and the result of the ScopeExit cleared for the IR
+    // interpreter (as the return of the value that the result branches to does), at the start of the entry block of
+    // each path, which is the ScopeExit's own (makeDebugFlowEntries())
+    QoreIRBasicBlock* saved_block = builder.getBlock();
+    QoreIRBasicBlock* done[3] = {};
+    size_t count = 0;
+    for (QoreIRBasicBlock* entry : {se->flow->break_target, se->flow->continue_target, se->flow->return_target}) {
+        if (!entry || std::find(done, done + count, entry) != done + count) {
+            continue;
+        }
+        done[count++] = entry;
+        assert(entry->debug_flow && entry->instructions.size() == 1
+            && entry->instructions.back()->opcode == QoreIROpcode::Br);
+        std::unique_ptr<QoreIRInstruction> br = std::move(entry->instructions.back());
+        entry->instructions.pop_back();
+        builder.setBlock(entry);
+        builder.createReleaseHandedOverReturn(loc, se->result);
+        builder.createReleaseHandedOverReturn(loc);
+        entry->instructions.push_back(std::move(br));
+    }
+    builder.setBlock(saved_block);
+    return true;
+}
+
+const QoreIRLowering::DebugFlowSegment* QoreIRLowering::getScopeFlowPaths(size_t scope_entry, std::string& error,
+        size_t hf_index) {
     const BlockCleanupEntry& entry = cleanup_stack[scope_entry];
     assert(entry.type == BlockCleanupEntry::Scope);
+    assert(hf_index == SIZE_MAX || (hf_index < inline_handler_flow_stack.size()
+        && inline_handler_flow_stack[hf_index].cleanup_depth <= scope_entry));
     const QoreProgramLocation* loc = entry.loc;
     const uint32_t scope_id = entry.scope_id;
-    auto [cache, inserted] = scope_exit_flow_paths.try_emplace(scope_id);
+    // the paths that go on in the handler whose body has the scope are kept apart (qore#7008)
+    std::unordered_map<uint32_t, DebugFlowSegment>& path_cache = hf_index == SIZE_MAX ? scope_exit_flow_paths
+        : inline_scope_exit_flow_paths;
+    auto [cache, inserted] = path_cache.try_emplace(scope_id);
     // the element, not the iterator: the lowering of the paths below can add the paths of other scopes, which can
     // rehash the map
     DebugFlowSegment& paths = cache->second;
@@ -6066,6 +6132,7 @@ const QoreIRLowering::DebugFlowSegment* QoreIRLowering::getScopeFlowPaths(size_t
             size_t handler_start;
             QoreIRBuilder::TempScopeState& temp_state;
             int saved_try_depth;
+            std::unordered_map<uint32_t, DebugFlowSegment>& path_cache;
             uint32_t scope_id;
             bool done = false;
             ~ScopePathsRestore() {
@@ -6086,11 +6153,25 @@ const QoreIRLowering::DebugFlowSegment* QoreIRLowering::getScopeFlowPaths(size_t
                 lowering.builder.restoreTempScopeState(std::move(temp_state));
                 lowering.try_depth = saved_try_depth;
                 if (!done) {
-                    lowering.scope_exit_flow_paths.erase(scope_id);
+                    path_cache.erase(scope_id);
                 }
             }
         } scope_paths_restore{*this, saved_entries, scope_entry, saved_handlers, handler_start, temp_state,
-            saved_try_depth, scope_id};
+            saved_try_depth, path_cache, scope_id};
+        if (hf_index != SIZE_MAX) {
+            // the paths of a request made after the block in the handler's body: a loop or switch statement of the
+            // body that encloses the block takes a break or a continue, else the request ends the handler
+            // (qore#7008)
+            QoreIRBasicBlock* hf_paths[3] = {};
+            if (!lowerInlineHandlerRequestPaths(hf_index, &paths, scope_entry, loc, hf_paths, error)) {
+                // the guard drops the scope's paths
+                return nullptr;
+            }
+            assert(paths.return_path == hf_paths[0] && paths.break_path == hf_paths[1]
+                && paths.continue_path == hf_paths[2]);
+            scope_paths_restore.done = true;
+            return &paths;
+        }
         paths.return_path = lowerDebugFlowPath(RC_RETURN, LoopJumpTarget(), loc, error);
         for (int rc : {RC_BREAK, RC_CONTINUE}) {
             if (!paths.return_path) {
@@ -6278,9 +6359,12 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                     size_t keep_end = std::min(entry.handler_start + protected_scope->keep_handlers,
                         block_handlers.size());
                     bool keep_may_return = false;
+                    bool keep_runs = false;
                     for (size_t h = entry.handler_start; h < keep_end && !keep_may_return; ++h) {
-                        keep_may_return = shouldRunHandler(block_handlers[h], is_error)
-                            && qore_ir_block_may_return(block_handlers[h].code);
+                        if (shouldRunHandler(block_handlers[h], is_error)) {
+                            keep_runs = true;
+                            keep_may_return = qore_ir_block_may_return(block_handlers[h].code);
+                        }
                     }
                     if (!keep_may_return) {
                         auto* se_inst = builder.createScopeExit(entry.scope_id, is_error, entry.loc,
@@ -6289,6 +6373,12 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                         // raises goes to the handler outside the scope, as at the end of the block (qore#6658), not
                         // to the scope's own cleanup, which would close it again
                         se_inst->exception_target = entry.outer_exception_target;
+                        // in the code of a debugger's request (a return request in a handler that is not the last of
+                        // its exit), a request in the handlers that have not run is that of the block (qore#7008)
+                        if ((flags & CF_HANDLERS_OUT_OF_LINE) && keep_runs
+                                && !setScopeExitFlowTargets(se_inst, i - 1, error)) {
+                            return false;
+                        }
                         break;
                     }
                 }
@@ -7138,7 +7228,12 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
                     bool replaces = pending_return_active && try_depth == pending_return_try_depth;
                     if (return_walk && !replaces) {
                         // the cleanups of a return in a try statement of a handler, which does not replace the value
-                        // (see replacesPendingReturn()), as before
+                        // (see replacesPendingReturn()), as before; in the code of a debugger's return request, a
+                        // request in the handlers is that of the block (qore#7008)
+                        if (debug_flow_path_depth && barrier_depth != SIZE_MAX
+                                && !setScopeExitFlowTargets(se_inst, barrier_depth - 1, error)) {
+                            return false;
+                        }
                         return true;
                     }
                     se_inst->hand_over_return = true;
@@ -7153,6 +7248,15 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
                         return true;
                     }
                     se_inst->result = builder.getFunction()->createValue();
+                    // in the code of a debugger's request (a handler that can return in the blocks that it leaves,
+                    // past the budget of the paths), a request in the handlers is that of the block (qore#7008); not
+                    // where their values replace that of a return (replaces), nor where a value handed over to a
+                    // return is held, which the release at the paths' entries would take
+                    if (debug_flow_path_depth && !replaces && !pending_return_handed_over
+                            && !try_replaced_handed_over && barrier_depth != SIZE_MAX
+                            && !setHandOverScopeExitFlowTargets(se_inst, barrier_depth - 1, scope_loc, error)) {
+                        return false;
+                    }
                     QoreIRBasicBlock* return_block = createBlock("handler.return.past.cap");
                     QoreIRBasicBlock* cont_block = createBlock("handler.return.past.cap.cont");
                     builder.createBranchIf(se_inst->result, return_block, cont_block, scope_loc);
