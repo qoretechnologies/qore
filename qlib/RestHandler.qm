@@ -627,7 +627,6 @@ Content-Length: 16
     - initial release
 */
 
-#! the RestHandler namespace contains all the objects in the RestHandler module
 #! The body readers of the requests that REST handlers dispatch on the thread, the innermost last (qore#6843)
 /** Not public: the REST classes get the request without the server's objects (see @ref rest_request_credentials), so
     the code of this module that reads the body of an HTTP/1.x request for a REST class (qore#7323) takes the server's
@@ -635,6 +634,7 @@ Content-Length: 16
 */
 thread_local *list<*HttpServer::Http1BodyReader> rest_body_readers;
 
+#! the RestHandler namespace contains all the objects in the RestHandler module
 public namespace RestHandler {
     #! The keys of the request context that the REST handler adds for its REST classes (see @ref rest_context_argument)
     /** The REST classes get the request context without the server's objects and the credentials of the request:

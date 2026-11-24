@@ -232,12 +232,11 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
         @since DataStreamRequestHandler 1.0, updated in 1.2 with Connect detection
     */
     constructor(hash<auto> cx, *hash<auto> ah) : AbstractRestStreamRequestHandler(cx, ah) {
-        # the socket of the connection of an HTTP/1.x request is not given to the code of a class of a sandboxed
-        # Program
+        # a data stream needs the socket of its request, which the REST handler does not give a class of a sandboxed
+        # Program for an HTTP/1.x request on the socket of the connection
         if (!cx.socketobject) {
-            throw "DATASTREAM-ERROR", "a data stream request handler of a class of a sandboxed Program cannot serve an "
-                "HTTP/1.x request without a socket of the request: the socket of the connection is not given to such a "
-                "class";
+            throw "DATASTREAM-ERROR", "a data stream request handler cannot serve a request that it gets without a "
+                "socket: the REST handler gives no socket of an HTTP/1.x connection to a class of a sandboxed Program";
         }
         # Detect Connect protocol from Content-Type or Connect-specific headers.
         # Do NOT auto-upgrade based on HTTP/2 pseudo-headers alone — a client that downgraded

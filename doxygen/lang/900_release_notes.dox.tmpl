@@ -101,6 +101,19 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par REST Classes and Stream Requests Get the Request Without the Server's Objects and Credentials
+    The REST classes of a @ref RestHandler::RestHandler "RestHandler" and the code that serves a stream request get the
+    request context without the objects of the server and the credentials of the request, also when trusted code
+    declares them: the trusted code of a handler gets the raw request with
+    @ref HttpServer::AbstractHttpRequestHandler::getRawRequest() "getRawRequest()" (see
+    @ref httpserverutil_request_credentials and @ref rest_request_credentials).
+
+    @par A Stream Request Handler Gets a Placeholder in Place of the Socket of an HTTP/1.x Connection
+    @ref HttpServer::AbstractHttpRequestHandler::getStreamRequestImpl() "getStreamRequestImpl()" gets a placeholder
+    socket that is not connected for an HTTP/1.x request on the socket of the connection, which the stream request
+    uses; trusted code gets the socket from @ref HttpServer::AbstractHttpRequestHandler::getRawRequest() "getRawRequest()"
+    (see @ref httpserverutil_request_credentials).
+
     @par Stream Requests Are Served Only in the Dispatch of an HTTP Server
     A stream request (@ref HttpServer::AbstractStreamRequest "AbstractStreamRequest") is served only in the dispatch
     of an @ref HttpServer::HttpServer "HttpServer" or of trusted host code that claims a dispatch capability
@@ -1405,6 +1418,7 @@
     <a href="https://github.com/qoretechnologies/qore/issues/7179">issue 7179</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+
     @par Minimum Send Rate Monitor
     @ref Qore::SendRateMonitor "SendRateMonitor" measures the average rate at which a peer takes data while a sender
     waits for it, over a sliding window (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>).
