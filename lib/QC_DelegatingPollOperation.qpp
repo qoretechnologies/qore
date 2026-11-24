@@ -37,6 +37,7 @@
 #include "qore/intern/RSet.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/SendRateWindow.h"
+#include "qore/intern/SocketPollEventsOps.h"
 
 #include <atomic>
 #include <limits>
@@ -57,7 +58,7 @@ public:
         bool waiting = true;
         int64 delivered;
         if (auto* send = dynamic_cast<SocketSendPollOperation*>(&op)) {
-            delivered = send->getDeliveredBytes();
+            delivered = qore_socket_poll_events_ops::getDeliveredBytes(*send);
         } else if (auto* fused = dynamic_cast<SocketSendAndReadHeaderPollOperation*>(&op)) {
             delivered = fused->getResponseSendProgress(waiting);
         } else {
