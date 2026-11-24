@@ -2929,6 +2929,16 @@ int qore_class_private::initializeIntern() {
     // signature string - also processed in parseCommit()
     QoreString csig;
 
+    // the namespace path of the class is part of its signature, as for a builtin class (generateBuiltinSignature()),
+    // so that a class with the same name and declarations in another namespace is another type; a class is
+    // compatible with another class of the same signature only if it is the same declaration in another Program
+    // (qore#7397).  It is added once, with the first part of the signature
+    if (!hash && ns) {
+        std::string nspath;
+        ns->getPath(nspath, true, true);
+        csig.sprintf("class %s%s\n", nspath.c_str(), name.c_str());
+    }
+
     // initialize parent classes
     if (scl) {
         mergeAbstract();
@@ -3015,8 +3025,9 @@ int qore_class_private::initializeIntern() {
         }
 
         has_sig_changes = false;
-    } else {
-        assert(csig.empty());
+    } else if (!csig.empty()) {
+        // only the namespace path of the class
+        hash.update(csig);
     }
 
     return err;

@@ -6270,9 +6270,11 @@ public:
     //! Returns true if \a qc is this class, a copy of its declaration or a class with the same name and signature
     /** The type compatibility of classes (the class of a value for a declared type, casts and the calls of a base
         class's methods on an object): the same declaration loaded in two Programs (an included source parsed by each
-        of them, for example) is the same type.  Never used to give private access, which a class with the name and
-        the signature of another class (a look-alike, which any code that sees the declaration of the class can
-        declare) must not get: see sameClass() (qore#7036)
+        of them, for example) is the same type.  The signature of a user class includes the path of its namespace, so
+        that classes with the same name and declarations in different namespaces are different types (qore#7397).
+        Never used to give private access, which a class with the name and the signature of another class (a
+        look-alike, which any code that sees the declaration of the class can declare) must not get: see sameClass()
+        (qore#7036)
     */
     DLLLOCAL bool equal(const qore_class_private& qc) const {
         if (&qc == this) {

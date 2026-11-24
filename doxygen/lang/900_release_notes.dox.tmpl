@@ -2809,6 +2809,10 @@
       implementation and from another parent class could not be instantiated when the redeclaring class came first in
       the same program (see @ref abstract_parent_implementation;
       <a href="https://github.com/qoretechnologies/qore/issues/7382">issue 7382</a>)
+    - classes with the same name and declarations in different namespaces are different types; an object of one was
+      accepted for the other's type, so that a method overloaded on the two classes could call the other class's
+      variant (see @ref class_type_identity;
+      <a href="https://github.com/qoretechnologies/qore/issues/7397">issue 7397</a>)
     - @ref Qore::call_static_method() "call_static_method()" and the related calls call the static method that a static
       method call in the caller's code calls: they refused a later parent class's public method behind a private one,
       and called a method of a privately inherited class from outside it
