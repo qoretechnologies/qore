@@ -4279,13 +4279,14 @@ public:
     //! Returns the specialization of the generic class \a target_base that \a source inherits
     /** @param source a specialization of this class
         @param target_base a generic class
+        @param match_class_type compare completed class signatures for type compatibility across Programs
 
         @return \a source if this class is \a target_base, else the specialization of \a target_base that this class
         inherits, directly or through other classes (generic or not), with the type arguments of \a source substituted
         for the type parameters of this class, or nullptr if this class does not inherit \a target_base
     */
     DLLLOCAL const QoreTypeInfo* getParameterizedBaseTypeInfo(const QoreParameterizedClassTypeInfo* source,
-            const QoreClass* target_base) const;
+            const QoreClass* target_base, bool match_class_type = false) const;
 
     //! Returns the specialization of the generic class \a target_base that this class inherits
     /** As getParameterizedBaseTypeInfo() for this class as it is: a class without type parameters, a generic class
@@ -4293,7 +4294,7 @@ public:
         with \a allow_raw_self), or else a generic class with its own type parameters in the result
     */
     DLLLOCAL const QoreTypeInfo* getConcreteParameterizedBaseTypeInfo(const QoreClass* target_base,
-        bool allow_raw_self = true) const;
+        bool allow_raw_self = true, bool match_class_type = false) const;
 
     //! Returns the type of the specialization of the direct parent class \a parent that this class inherits
     /** @return the type with the type parameters of this class; for a generic class that defaults to a value-erased
@@ -4308,7 +4309,7 @@ public:
         @param target_base a generic class
     */
     DLLLOCAL const QoreTypeInfo* findParameterizedBaseTypeInfo(const QoreParameterizedClassTypeInfo* source,
-            const QoreClass* target_base) const;
+            const QoreClass* target_base, bool match_class_type = false) const;
 
     //! Returns the receiver of a call of the static method \a m of a class without type parameters
     /** The method of a class without type parameters that declares a method of the same name as one of a generic

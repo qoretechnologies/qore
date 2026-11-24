@@ -4165,7 +4165,7 @@ qore_type_result_e qore_parameterized_class_accepts(const QoreParameterizedClass
     }
 
     const QoreTypeInfo* mapped_type = qore_class_private::get(*source_pti->getBaseClass())
-        ->getParameterizedBaseTypeInfo(source_pti, target_pti->getBaseClass());
+        ->getParameterizedBaseTypeInfo(source_pti, target_pti->getBaseClass(), true);
     const QoreParameterizedClassTypeInfo* mapped_pti = QoreTypeInfo::getParameterizedClassType(mapped_type);
     if (!mapped_pti || mapped_pti->getArgCount() != target_pti->getArgCount()) {
         return QTI_NOT_EQUAL;
@@ -6734,7 +6734,8 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 const QoreParameterizedClassTypeInfo* target_pti = getParameterizedClassTypeInfo();
                 if (target_pti) {
                     const QoreTypeInfo* mapped_type = qore_class_private::get(*obj->getClass())
-                        ->getConcreteParameterizedBaseTypeInfo(target_pti->getBaseClass());
+                        ->getConcreteParameterizedBaseTypeInfo(target_pti->getBaseClass(), /*allow_raw_self=*/true,
+                            /*match_class_type=*/true);
                     bool type_may_not_match = false;
                     bool type_may_need_filter = false;
                     if (QoreTypeInfo::equal(mapped_type, uTi())
@@ -7154,7 +7155,8 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
                 const QoreParameterizedClassTypeInfo* target_pti = getParameterizedClassTypeInfo();
                 if (target_pti) {
                     const QoreTypeInfo* mapped_type = qore_class_private::get(*obj->getClass())
-                        ->getConcreteParameterizedBaseTypeInfo(target_pti->getBaseClass());
+                        ->getConcreteParameterizedBaseTypeInfo(target_pti->getBaseClass(), /*allow_raw_self=*/true,
+                            /*match_class_type=*/true);
                     bool type_may_not_match = false;
                     bool type_may_need_filter = false;
                     if (QoreTypeInfo::equal(mapped_type, uTi())

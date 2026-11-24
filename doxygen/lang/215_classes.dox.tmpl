@@ -888,7 +888,9 @@ while (i.next) {}  # parse exception: the call is i.next()
     \c NB::Foo is not a value of the type \c NA::Foo, and a method overloaded on the two classes calls the variant of
     the object's class, in every @ref execution_modes "execution mode".  A class
     without declarations has a signature as well, so a subclass of it parsed from the same source in two %Program
-    objects is also compatible across them (since %Qore 3.0).
+    objects is also compatible across them (since %Qore 3.0).  For a parameterized class, the same comparison applies
+    to its generic class, and the type arguments must match.  For example, a value of <tt>Child<string></tt> can be passed to another
+    %Program for the same <tt>Child<string></tt> or the <tt>Base<string></tt> it inherits.
 
     @subsection transient Transient Members
     Members declared with the <b><tt>transient</tt></b> keyword will not be processed with @ref Qore::Serializable "object serialization"

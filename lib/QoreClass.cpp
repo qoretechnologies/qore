@@ -7011,8 +7011,19 @@ const QoreTypeInfo* qore_class_private::getParameterizedParentTypeInfo(const Qor
     return nullptr;
 }
 
+//! Type comparison accepts the same completed class signature in another Program. Binding a type parameter
+//! to its declaring class still requires declaration identity (qore#7474).
+static bool matches_generic_base(const QoreClass* base, const QoreClass* target, bool match_class_type) {
+    if (qore_class_private::sameDeclaration(base, target)) {
+        return true;
+    }
+    const qore_class_private* b = qore_class_private::get(*base);
+    const qore_class_private* t = qore_class_private::get(*target);
+    return match_class_type && b->hash && t->hash && b->equal(*t);
+}
+
 const QoreTypeInfo* qore_class_private::findParameterizedBaseTypeInfo(const QoreParameterizedClassTypeInfo* source,
-        const QoreClass* target_base) const {
+        const QoreClass* target_base, bool match_class_type) const {
     // the parent classes are walked depth first in the order in which they are declared, through those that are not
     // generic too (W<V> inherits H inherits G<float>), iteratively, as the hierarchy can be as long as the code
     // declares it (issue #6047); the type arguments of a parent class are those of the walk's path to it
@@ -7060,10 +7071,10 @@ const QoreTypeInfo* qore_class_private::findParameterizedBaseTypeInfo(const Qore
             if (!parent_pti) {
                 continue;
             }
-            if (sameDeclaration(n.sclass, target_base)) {
+            if (matches_generic_base(n.sclass, target_base, match_class_type)) {
                 return parent_type;
             }
-        } else if (sameDeclaration(n.sclass, target_base)) {
+        } else if (matches_generic_base(n.sclass, target_base, match_class_type)) {
             continue;
         }
         const qore_class_private* parent = qore_class_private::get(*n.sclass);
@@ -7076,18 +7087,18 @@ const QoreTypeInfo* qore_class_private::findParameterizedBaseTypeInfo(const Qore
 }
 
 const QoreTypeInfo* qore_class_private::getParameterizedBaseTypeInfo(
-        const QoreParameterizedClassTypeInfo* source, const QoreClass* target_base) const {
+        const QoreParameterizedClassTypeInfo* source, const QoreClass* target_base, bool match_class_type) const {
     assert(source);
     assert(target_base);
 
-    if (sameDeclaration(source->getBaseClass(), target_base)) {
+    if (matches_generic_base(source->getBaseClass(), target_base, match_class_type)) {
         return source;
     }
-    return findParameterizedBaseTypeInfo(source, target_base);
+    return findParameterizedBaseTypeInfo(source, target_base, match_class_type);
 }
 
 const QoreTypeInfo* qore_class_private::getConcreteParameterizedBaseTypeInfo(const QoreClass* target_base,
-        bool allow_raw_self) const {
+        bool allow_raw_self, bool match_class_type) const {
     assert(target_base);
 
     // a generic class that defaults to a value-erased instance for raw use is seen as that instance
@@ -7095,12 +7106,12 @@ const QoreTypeInfo* qore_class_private::getConcreteParameterizedBaseTypeInfo(con
     if (hasTypeParams() && rawConstructionDefaultsToAuto()) {
         type_vec_t raw_args(type_params.size(), autoTypeInfo);
         const QoreTypeInfo* raw_self = getTypeInfo(raw_args);
-        if (allow_raw_self && sameDeclaration(cls, target_base)) {
+        if (allow_raw_self && matches_generic_base(cls, target_base, match_class_type)) {
             return raw_self;
         }
         source = QoreTypeInfo::getParameterizedClassType(raw_self);
     }
-    return findParameterizedBaseTypeInfo(source, target_base);
+    return findParameterizedBaseTypeInfo(source, target_base, match_class_type);
 }
 
 const QoreTypeInfo* qore_class_private::runtimeResolveTypeParamDefault(size_t index) const {
