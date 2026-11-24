@@ -2544,6 +2544,98 @@ class DataProviderGlobalLogger {
         #! the logger, if any
         static *LoggerInterface logger;
     }
+
+    #! Logs a message that the code of a data provider object produces with the process-wide logger, if one is set
+    /** The message is formatted first, and its line breaks and other control characters are written as escapes
+        (a tab is kept), so that no value in it, which a caller can choose (the name of an action, the text of an
+        exception, the strings of a subclass), can start a line of its own that looks like another message in the
+        host's log.  The code of an object of a class that sandboxed code declares (a subclass of a data provider class
+        of a module) can make its messages what it wants, also through the module's methods that it inherits, which
+        format its own values: such a message is marked with the Program of the object's class, the tenant whose code
+        chose it, whichever code calls the object (qore#7110); the messages of an object of a class of a module or of
+        the host keep their form, also when sandboxed code created the object or calls it
+
+        @param obj the data provider object whose code produces the message
+        @param level the level of the message
+        @param fmt the format string of the message for @ref Qore::vsprintf() "vsprintf()"
+        @param args the arguments of the format string
+    */
+    static logObjectArgs(object obj, Qore::Logger::LoggerLevel level, string fmt, *softlist<auto> args) {
+        *LoggerInterface l = logger;
+        if (!l) {
+            return;
+        }
+        string msg = DataProviderGlobalLogger::escapeControl(DataProviderGlobalLogger::format(fmt, args));
+        if (*int id = SandboxManager::getSandboxedProgramId(obj)) {
+            msg = sprintf("[sandboxed Program %d] %s", id, msg);
+        }
+        l.logArgs(level, "%s", msg);
+    }
+
+    private:internal {
+        #! The characters that escapeControl() escapes: the C0 control characters but a tab, DEL, the C1 control
+        #! characters, the Unicode line and paragraph separators and the bidirectional control characters
+        const EscapedCharPattern = "[\\x00-\\x08\\x0a-\\x1f\\x7f\\x{80}-\\x{9f}\\x{61c}\\x{200e}\\x{200f}"
+            + "\\x{2028}-\\x{202e}\\x{2066}-\\x{2069}]";
+    }
+
+    #! Returns the formatted message; never raises an exception
+    /** An argument that cannot be converted to the encoding of the format string gives the format string with the
+        error instead
+    */
+    private:internal static string format(string fmt, *softlist<auto> args) {
+        try {
+            return vsprintf(fmt, args);
+        } catch (hash<ExceptionInfo> ex) {
+            try {
+                return sprintf("%s (the arguments of the message cannot be formatted: %s)", fmt, ex.err);
+            } catch (hash<ExceptionInfo> ex1) {
+                return sprintf("<message that cannot be formatted: %s>", ex1.err);
+            }
+        }
+    }
+
+    #! Returns the string in UTF-8 with its line breaks and other control characters as escapes, but a tab
+    /** CR and LF are written as \c "\\r" and \c "\\n", the other C0 control characters and DEL as \c "\\xNN", and
+        the C1 control characters, the Unicode line and paragraph separators and the bidirectional control characters,
+        which a log viewer or a terminal can act on, as \c "\\uNNNN"; a byte that is no character of the string's
+        encoding is taken as its ISO-8859-1 character first.  A backslash is not escaped.  It takes time linear in the
+        length of the string, and never raises an exception: a string that cannot be converted gives a fixed
+        placeholder, so that logging never fails
+    */
+    private:internal static string escapeControl(string str) {
+        try {
+            if (!str.isEncodingValid()) {
+                str = binary_to_string(binary(str), "ISO-8859-1");
+            }
+            str = convert_encoding(str, "UTF-8");
+            # the common case: nothing to escape
+            if (!regex(str, EscapedCharPattern)) {
+                return str;
+            }
+            string rv = "";
+            # the characters are taken in one pass, as indexing a string with multibyte characters scans it from its
+            # start
+            foreach string c in (str =~ x/(.)/gs) {
+                int cp = c.getUnicode();
+                if (cp == 10) {
+                    rv += "\\n";
+                } else if (cp == 13) {
+                    rv += "\\r";
+                } else if (cp != 9 && (cp < 0x20 || cp == 0x7f)) {
+                    rv += sprintf("\\x%02x", cp);
+                } else if ((cp >= 0x80 && cp <= 0x9f) || cp == 0x61c || cp == 0x200e || cp == 0x200f
+                        || (cp >= 0x2028 && cp <= 0x202e) || (cp >= 0x2066 && cp <= 0x2069)) {
+                    rv += sprintf("\\u%04x", cp);
+                } else {
+                    rv += c;
+                }
+            }
+            return rv;
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("<message that cannot be logged: %s>", ex.err);
+        }
+    }
 }
 
 #! Loads modules for the lookups of the DataProvider module (not public: only the module's own code uses it)

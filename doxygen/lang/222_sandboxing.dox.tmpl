@@ -621,6 +621,18 @@ authenticate();
     - the messages that the library and the modules produce while they serve sandboxed code go to a logger that the
       caller gave its own object, to the loggers that the host configured, which no sandboxed code can replace, or are
       not logged; never to a logger of another tenant
+    - sandboxed code cannot write messages of its own to the loggers that the host configured as if they were a
+      module's: \c ProviderIndexUtil::log() refuses it, and a message that the code of an object of a class that
+      sandboxed code declares writes to the host's \c DataProvider logger (the errors that a data provider subclass
+      logs with \c AbstractDataProvider::logCaughtError() without a logger of its own, also those that the module's
+      methods that it inherits log) is marked with the %Program of the object's class, the tenant whose code chose it,
+      whichever code calls the object (<tt>[sandboxed Program &lt;id&gt;]</tt>, see
+      @ref Qore::SandboxManager::getSandboxedProgramId() "SandboxManager::getSandboxedProgramId()", which can be a
+      %Program that the tenant created); the line breaks, the Unicode line separators and the other control characters
+      of every message written this way are escaped, also in a message whose bytes are not valid UTF-8, so
+      that no value in it that a caller chose can start a line of its own or act on a terminal; the messages of the
+      objects of the classes of the modules and of the host keep their form otherwise, also when sandboxed code created
+      or calls them
 
     State that the host or the library sets for the whole process and that can hold data or configuration of the host
     or of other tenants is not readable by sandboxed code either, until a separate view per isolation domain is
