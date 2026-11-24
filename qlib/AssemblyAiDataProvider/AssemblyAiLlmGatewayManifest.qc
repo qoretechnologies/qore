@@ -36,6 +36,7 @@ public class AssemblyAiLlmGatewayManifest {
             <RestSchemaActionInfo>{
                 "action": "create-chat-completion",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/chat/completions",
                 "operation_id": "createChatCompletion",
                 "display_name": "Create Chat Completion",
@@ -51,6 +52,7 @@ public class AssemblyAiLlmGatewayManifest {
             <RestSchemaActionInfo>{
                 "action": "understand-speech",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/understanding",
                 "operation_id": "createSpeechUnderstanding",
                 "display_name": "Understand Speech",
