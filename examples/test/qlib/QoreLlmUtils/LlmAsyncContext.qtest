@@ -53,6 +53,28 @@ class TestExecutor inherits LlmAsyncExecutor {
     }
 }
 
+#! A provider for transport tests that exchange queue messages only
+class StreamTestProvider inherits AbstractLlmProvider {
+    constructor() : AbstractLlmProvider(<LlmBackendConfig>{"mode": "test", "max_retries": 0}) {
+    }
+
+    string getMode() { return "test"; }
+
+    hash<LlmCompletionResult> complete(string system_prompt, string user_prompt, *hash<auto> output_schema,
+            *hash<LlmRequestOptions> opts) { return <LlmCompletionResult>{"content": "", "usage": {}}; }
+
+    hash<ChatResponse> chat(list<hash<ChatMessage>> messages, *list<hash<ToolDefinition>> tools,
+            *hash<LlmRequestOptions> opts) { return <ChatResponse>{}; }
+}
+
+#! Delivers ordinary notifications from the test transport
+sub report_stream(LlmAsyncSseRequest req, int attempt) {
+    req.sseConnected(attempt);
+    req.sseEvent(attempt, {"data": "first"});
+    req.sseEvent(attempt, {"data": "second"});
+    req.sseClosed(attempt, LlmAsyncSseRequest::ClosedEnd);
+}
+
 #! posts a task of trusted code that reports the sandbox that it runs with
 /** Called by trusted code, and by sandboxed code through an import: the task is then created and posted in a thread
     that the sandbox governs
@@ -105,6 +127,8 @@ class LlmAsyncContextTest inherits QUnit::Test {
             \sharedExecutor());
         addTestCase("the workers of a sandboxed code's executor count against its thread limit",
             \executorThreadLimit());
+        addTestCase("stream callbacks run in order in the request context", \streamReports());
+        addTestCase("a transport opened after operation completion is stopped", \finishDuringOpen());
         set_return_value(main());
     }
 
@@ -122,7 +146,9 @@ class LlmAsyncContextTest inherits QUnit::Test {
         p.importFunction("make_operation");
         p.importFunction("cancel_operation");
         p.importFunction("make_executor");
+        p.importFunction("report_stream");
         p.parse("sub post(object op, Queue q) { post_report(op, q, \"sandboxed\"); }
+sub deliver(object req, int attempt) { report_stream(req, attempt); }
 object sub make(object executor) { return make_operation(executor); }
 sub run(object executor, code task) { execute_task(executor, task); }
 sub cancel(object op) { cancel_operation(op); }
@@ -195,6 +221,62 @@ object sub make_ex(int threads) { return make_executor(threads); }", "sandboxed"
         assertTrue(op.wait(HangGuard), "the call ends");
         assertEq("cancelled", op.getResult());
         assertEq(False, collect(q, 1).completion, "the caller's completion callback runs with no sandbox");
+    }
+
+    private LlmAsyncSseRequest makeStream(LlmAsyncOperation op, Queue opened, Queue callbacks, Queue stopped,
+            *Counter open_gate) {
+        return new LlmAsyncSseRequest(new StreamTestProvider(), op, NOTHING,
+            code<nothing()> sub (LlmAsyncSseRequest req, int attempt) {
+                opened.push(attempt);
+                if (open_gate) {
+                    open_gate.waitForZero(HangGuard);
+                }
+                return sub () { stopped.push(True); };
+            }, bool sub (hash<auto> event) {
+                callbacks.push((event.data, SandboxManager::isGoverned()));
+                return False;
+            }, sub () { callbacks.push(("end", SandboxManager::isGoverned())); },
+            hash<ExceptionInfo> sub () { return AbstractLlmProvider::makeException("TEST-TIMEOUT", "timeout", NOTHING); },
+            hash<ExceptionInfo> sub (hash<ExceptionInfo> ex) { return ex; }, sub () { op.complete(True); },
+            sub (hash<ExceptionInfo> ex) { op.fail(ex); });
+    }
+
+    streamReports() {
+        TestExecutor executor();
+        LlmAsyncOperation op(executor);
+        on_exit op.complete(NOTHING);
+        Queue opened();
+        Queue callbacks();
+        Queue stopped();
+        LlmAsyncSseRequest req = makeStream(op, opened, callbacks, stopped);
+        op.post(sub () { req.start(); });
+        int attempt = opened.get(HangGuard);
+        Program p = sandboxedProgram();
+        p.callFunction("deliver", req, attempt);
+        assertEq(True, op.get(HangGuard));
+        foreach string name in (("first", "second", "end")) {
+            assertEq((name, False), callbacks.get(HangGuard));
+        }
+        assertEq(True, stopped.get(HangGuard));
+    }
+
+    finishDuringOpen() {
+        TestExecutor executor();
+        LlmAsyncOperation op(executor);
+        Queue opened();
+        Queue callbacks();
+        Queue stopped();
+        Counter gate(1);
+        LlmAsyncSseRequest req = makeStream(op, opened, callbacks, stopped, gate);
+        op.post(sub () { req.start(); });
+        {
+            on_exit gate.dec();
+            assertEq(1, opened.get(HangGuard));
+            assertTrue(op.complete("ended"));
+        }
+        assertEq("ended", op.get(HangGuard));
+        assertEq(True, stopped.tryGet().value, "the late transport was stopped before the task returned");
+        assertEq(NOTHING, stopped.tryGet(), "the stopper ran once");
     }
 
     sharedExecutor() {
