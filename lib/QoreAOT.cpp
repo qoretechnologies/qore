@@ -1861,23 +1861,17 @@ static void getAOTStatementLocations(QoreProgram* pgm,
     qore_program_private::get(*pgm)->getRegisteredStatementLocations(locs);
     // Statement registration can follow pointer-ordered parser structures. This
     // metadata-only inventory has no native slot references; use source order.
-    std::sort(locs.begin(), locs.end(), [](const auto* lhs, const auto* rhs) {
-        int cmp = strcmp(lhs->getFileValue(), rhs->getFileValue());
-        if (cmp) {
-            return cmp < 0;
-        }
-        cmp = strcmp(lhs->getSourceValue(), rhs->getSourceValue());
-        if (cmp) {
-            return cmp < 0;
-        }
-        if (lhs->offset != rhs->offset) {
-            return lhs->offset < rhs->offset;
-        }
-        if (lhs->start_line != rhs->start_line) {
-            return lhs->start_line < rhs->start_line;
-        }
-        return lhs->end_line < rhs->end_line;
+    auto sourceSpan = [](const QoreProgramLocation* loc) {
+        // Keep the first statement with a known column as the line lookup's default.
+        return std::make_tuple(std::string_view(loc->getFileValue()), std::string_view(loc->getSourceValue()),
+            loc->offset, loc->start_line, loc->start_column < 0, loc->start_column, loc->end_line, loc->end_column);
+    };
+    std::sort(locs.begin(), locs.end(), [&](const auto* lhs, const auto* rhs) {
+        return sourceSpan(lhs) < sourceSpan(rhs);
     });
+    locs.erase(std::unique(locs.begin(), locs.end(), [&](const auto* lhs, const auto* rhs) {
+        return sourceSpan(lhs) == sourceSpan(rhs);
+    }), locs.end());
 }
 
 static bool buildAOTProgramStatementLocIndex(QoreProgram* pgm,
@@ -1891,7 +1885,6 @@ static bool buildAOTProgramStatementLocIndex(QoreProgram* pgm,
     std::vector<const QoreProgramLocation*> stmt_locs;
     getAOTStatementLocations(pgm, stmt_locs);
 
-    std::unordered_set<std::string> seen;
     for (size_t i = 0; i < stmt_locs.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT statement-location index construction")) {
             error = "AOT statement-location index construction cancelled";
@@ -1906,22 +1899,11 @@ static bool buildAOTProgramStatementLocIndex(QoreProgram* pgm,
             continue;
         }
         const char* source = loc->getSourceValue();
-        std::string key(file);
-        key.push_back('\n');
-        key.append(source);
-        key.push_back('\n');
-        key.append(std::to_string(loc->offset));
-        key.push_back('\n');
-        key.append(std::to_string(loc->start_line));
-        key.push_back(':');
-        key.append(std::to_string(loc->end_line));
-        if (!seen.insert(std::move(key)).second) {
-            continue;
-        }
-
         AOTCompiledFuncWithSlots::AOTStmtLocEntry entry;
         entry.start_line = loc->start_line;
         entry.end_line = loc->end_line;
+        entry.start_column = loc->start_column;
+        entry.end_column = loc->end_column;
         entry.offset = loc->offset;
         entry.file = file;
         entry.source = source;
@@ -1952,7 +1934,6 @@ static bool attachAOTProgramStatementLocs(QoreProgram* pgm,
     getAOTStatementLocations(pgm, stmt_locs);
 
     std::vector<AOTCompiledFuncWithSlots::AOTStmtLocEntry> locs;
-    std::unordered_set<std::string> seen;
     for (size_t i = 0; i < stmt_locs.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT statement-location metadata collection")) {
             error = "AOT statement-location metadata collection cancelled";
@@ -1971,22 +1952,11 @@ static bool attachAOTProgramStatementLocs(QoreProgram* pgm,
             continue;
         }
         const char* source = loc->getSourceValue();
-        std::string key(file);
-        key.push_back('\n');
-        key.append(source);
-        key.push_back('\n');
-        key.append(std::to_string(loc->offset));
-        key.push_back('\n');
-        key.append(std::to_string(loc->start_line));
-        key.push_back(':');
-        key.append(std::to_string(loc->end_line));
-        if (!seen.insert(std::move(key)).second) {
-            continue;
-        }
-
         AOTCompiledFuncWithSlots::AOTStmtLocEntry entry;
         entry.start_line = loc->start_line;
         entry.end_line = loc->end_line;
+        entry.start_column = loc->start_column;
+        entry.end_column = loc->end_column;
         entry.offset = loc->offset;
         entry.file = file;
         entry.source = source;

@@ -2426,12 +2426,40 @@ public:
     }
 
     typedef std::map<const char*, int, ltstr> section_offset_map_t;
-    // map for line to statement
-    typedef std::map<int, AbstractStatement*> sline_statement_map_t;
+    struct IndexedStatement {
+        AbstractStatement* statement;
+        int line_count;
+        int16_t start_column, end_column;
+
+        bool matches(const QoreProgramLocation& loc) const {
+            return start_column == loc.start_column && end_column == loc.end_column
+                && line_count == loc.end_line - loc.start_line;
+        }
+    };
+    using sline_statement_map_t = std::map<int, IndexedStatement>;
 
     struct section_sline_statement_map {
         section_offset_map_t sectionMap;
         sline_statement_map_t statementMap;
+        // Only additional distinct spans on a line need a separate entry.
+        using Span = std::tuple<int, int, int, int>;
+        std::map<Span, AbstractStatement*> otherSpans;
+
+        static Span spanKey(int line, const QoreProgramLocation& loc) {
+            return {line, loc.start_column, loc.end_line - loc.start_line, loc.end_column};
+        }
+
+        AbstractStatement* findSpan(int line, const QoreProgramLocation& loc) const {
+            auto first = statementMap.find(line);
+            if (first == statementMap.end()) {
+                return nullptr;
+            }
+            if (loc.start_column < 0 || first->second.matches(loc)) {
+                return first->second.statement;
+            }
+            auto match = otherSpans.find(spanKey(line, loc));
+            return match == otherSpans.end() ? nullptr : match->second;
+        }
         //! the name of the file normalized as an absolute path, made absolute with the working directory when the
         //! file was parsed, so that a debugger can give the file with another path than it was parsed with
         std::string abs_path;
@@ -7649,10 +7677,7 @@ public:
     }
 
     DLLLOCAL void addStatementToIndexIntern(name_section_sline_statement_map_t* statementIndex, const char* key, AbstractStatement* statement, int offs, const char* section, int sectionOffs);
-    DLLLOCAL AbstractStatement* findStatementInIndexIntern(const name_section_sline_statement_map_t& statementIndex,
-            const char* key, int line) const;
-    DLLLOCAL AbstractStatement* findIndexedStatementForLocation(const char* file, const char* source,
-            int start_line, int offset) const;
+    DLLLOCAL AbstractStatement* findIndexedStatementForLocation(const QoreProgramLocation& loc) const;
     DLLLOCAL static void registerStatement(QoreProgram* pgm, AbstractStatement* statement, bool addToIndex);
     DLLLOCAL QoreHashNode* getSourceIndicesIntern(name_section_sline_statement_map_t* statementIndex, ExceptionSink* xsink) const;
     DLLLOCAL QoreHashNode* getSourceLabels(ExceptionSink* xsink) {
@@ -7662,7 +7687,8 @@ public:
         return getSourceIndicesIntern(&statementByFileIndex, xsink);
     }
 
-    DLLLOCAL AbstractStatement* getStatementFromIndex(const char* name, int line) {
+    DLLLOCAL AbstractStatement* getStatementFromIndex(const char* name, int line,
+            const QoreProgramLocation* span = nullptr) {
         printd(5, "qore_program_private::getStatementFromIndex('%s',%d), this: %p, file#: %d, label#: %d\n", name, line, this, (int)(statementByFileIndex.size()), (int)(statementByLabelIndex.size()));
         AutoLocker al(&plock);
         name_section_sline_statement_map_t::const_iterator it;
@@ -7719,6 +7745,11 @@ public:
                 printd(5, "qore_program_private::getStatementFromIndex('%s',%d) found by file full match, this: %p\n", name, line, this);
             }
         }
+        if (span && span->start_column >= 0) {
+            if (auto* match = it->second->findSpan(line, *span)) {
+                return match;
+            }
+        }
         sline_statement_map_t *ssm = &it->second->statementMap;
         printd(5, "qore_program_private::getStatementFromIndex('%s',%d) found '%s', this: %p, ssm#: %d\n", name, line, it->first, this, (int)(ssm->size()));
         if (ssm->size() == 0)
@@ -7739,16 +7770,16 @@ public:
                 break;
                 // we do not try to find outer statement when looking for line behind inner statement
             }
-            if (li->second->loc->start_line + (addOffs ? li->second->loc->offset : 0) <= line && li->second->loc->end_line + (addOffs ? li->second->loc->offset : 0) >= line) {
-                int n = li->second->loc->end_line - li->second->loc->start_line;
+            if (li->second.statement->loc->start_line + (addOffs ? li->second.statement->loc->offset : 0) <= line && li->second.statement->loc->end_line + (addOffs ? li->second.statement->loc->offset : 0) >= line) {
+                int n = li->second.statement->loc->end_line - li->second.statement->loc->start_line;
                 if (minnl >= 0) {
                     if (n < minnl) {
                         minnl = n;
-                        st = li->second;
+                        st = li->second.statement;
                     }
                 } else {
                     minnl = n;
-                    st = li->second;
+                    st = li->second.statement;
                 }
                 if (minnl == 0)
                     break;

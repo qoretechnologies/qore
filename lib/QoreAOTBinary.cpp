@@ -15486,6 +15486,8 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         for (auto& loc : func.aot_stmt_locs) {
             qore_aot_write_line(writer, loc.start_line);
             qore_aot_write_line(writer, loc.end_line);
+            writer.writeU16(loc.start_column);
+            writer.writeU16(loc.end_column);
             writer.writeI64(loc.offset);
             writer.writeSourcePath(loc.file.c_str());
             writer.writeSourcePath(loc.source.c_str());
@@ -16235,6 +16237,10 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
         qore_aot_write_line(writer, 0);  // start_line=0 signals "no location"
         qore_aot_write_line(writer, 0);
         writer.writeStringRef("");
+    }
+    if (group == QoreIRInstGroup::DebugStatement) {
+        writer.writeU16(inst->loc ? inst->loc->start_column : -1);
+        writer.writeU16(inst->loc ? inst->loc->end_column : -1);
     }
     // the runtime location: the statement's (QORE_AOT_STATEMENT_LOCATIONS_VERSION, qore#6646)
     qore_aot_write_stmt_loc(writer, stmt_locs, inst->stmt_loc);

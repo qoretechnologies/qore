@@ -7187,12 +7187,22 @@ static QoreAOTContext* buildContextFromSlotMap(
         const bool eager_stmt_locs = eager_stmt_locs_env.get();
         bool materialize_stmt_locs = pgm
             && (eager_stmt_locs || (pgm->getParseOptions() & PO_ALLOW_DEBUGGER));
+        // Two lines, two columns, a source offset and two string-pool references per v53 entry.
+        constexpr size_t entry_size = 4 * sizeof(uint32_t) + 2 * sizeof(uint16_t) + sizeof(int64_t);
+        if (num_stmt_locs > static_cast<size_t>(loc_boundary - ptr) / entry_size) {
+            setBuildError("statement locations exceed the slot map entry");
+            delete ctx;
+            ptr = loc_boundary;
+            return nullptr;
+        }
         if (num_stmt_locs > 0 && materialize_stmt_locs) {
             qore_program_private* pp = qore_program_private::get(*pgm);
             AutoLocker al(&pp->plock);
-            for (uint32_t i = 0; i < num_stmt_locs && ptr < loc_boundary; ++i) {
+            for (uint32_t i = 0; i < num_stmt_locs; ++i) {
                 int start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
                 int end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+                int start_column = QoreAOTBinaryReader::readU16(ptr);
+                int end_column = QoreAOTBinaryReader::readU16(ptr);
                 int offset = qore_aot_valid_source_offset(QoreAOTBinaryReader::readI64(ptr));
                 const char* loc_file = reader.readStringRef(ptr);
                 const char* loc_source = reader.readStringRef(ptr);
@@ -7205,25 +7215,19 @@ static QoreAOTContext* buildContextFromSlotMap(
                 const char* interned_file = pp->addRuntimeString(loc_file);
                 const char* interned_source = loc_source && *loc_source
                     ? pp->addRuntimeString(loc_source) : nullptr;
-                if (pp->findIndexedStatementForLocation(interned_file, interned_source,
-                        start_line, offset)) {
+                QoreProgramLocation tmp(interned_file, start_line, end_line, interned_source, offset);
+                tmp.start_column = QoreProgramLineLocation::normalizeColumn(start_column);
+                tmp.end_column = QoreProgramLineLocation::normalizeColumn(end_column);
+                if (pp->findIndexedStatementForLocation(tmp)) {
                     continue;
                 }
-                QoreProgramLocation tmp(interned_file, start_line, end_line,
-                    interned_source, offset);
                 const QoreProgramLocation* loc = pp->getRuntimeLocation(tmp, start_line, end_line);
                 StatementBlock* stmt = new StatementBlock(pp, loc);
                 qore_program_private::registerStatement(pgm, stmt, true);
                 ctx->owned_debug_statements.push_back(stmt);
             }
         } else {
-            for (uint32_t i = 0; i < num_stmt_locs && ptr < loc_boundary; ++i) {
-                (void)qore_aot_read_line(reader, ptr);
-                (void)qore_aot_read_line(reader, ptr);
-                (void)QoreAOTBinaryReader::readI64(ptr);
-                (void)reader.readStringRef(ptr);
-                (void)reader.readStringRef(ptr);
-            }
+            ptr += num_stmt_locs * entry_size;
         }
     }
 
@@ -7475,7 +7479,9 @@ static bool qore_aot_read_stmt_loc(const QoreAOTBinaryReader& reader, const uint
             const bool inst_file_same = inst_loc && file == inst_file;
             // deserializeIRFunction() reads every instruction for the function that owns its locations
             assert(owner_func);
-            if (inst_file_same && inst_loc->start_line == start_line && inst_loc->end_line == end_line) {
+            // Only the lines are recorded here. A debug step on the same line can have a different source span.
+            if (inst_file_same && inst_loc->start_column < 0 && inst_loc->end_column < 0
+                    && inst_loc->start_line == start_line && inst_loc->end_line == end_line) {
                 loc = inst_loc;
             } else {
                 // the file is interned in the Program, as the instruction's own (see deserializeIRInstruction())
@@ -7661,11 +7667,21 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     int start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
     int end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
     const char* loc_file = reader.readStringRef(ptr);
+    int start_column = -1, end_column = -1;
+    if (group_byte == static_cast<uint8_t>(QoreIRInstGroup::DebugStatement)) {
+        if (!need(2 * sizeof(uint16_t), "debug statement columns")) {
+            return nullptr;
+        }
+        start_column = QoreAOTBinaryReader::readU16(ptr);
+        end_column = QoreAOTBinaryReader::readU16(ptr);
+    }
     if (start_line > 0 && owner_func) {
         const char* interned_file = (loc_file && pgm)
             ? qore_program_private::get(*pgm)->addRuntimeString(loc_file)
             : (loc_file ? loc_file : "");
         auto* loc = new QoreProgramLocation(interned_file, start_line, end_line);
+        loc->start_column = QoreProgramLineLocation::normalizeColumn(start_column);
+        loc->end_column = QoreProgramLineLocation::normalizeColumn(end_column);
         owner_func->owned_locations.push_back(loc);
         inst->loc = loc;
     }

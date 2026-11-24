@@ -124,6 +124,10 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
             writer.writeU16(0);
         }
         writer.writeStringRef("");
+        if (version >= QORE_AOT_BATCH_AOT_IDENTITY2_VERSION && group == static_cast<uint8_t>(G::DebugStatement)) {
+            writer.writeU16(0xffff); // unknown start and end columns
+            writer.writeU16(0xffff);
+        }
         // the runtime location (QORE_AOT_STATEMENT_LOCATIONS_VERSION): none, unless the case gives one
         if (version >= QORE_AOT_STATEMENT_LOCATIONS_VERSION) {
             if (stmt_loc) {

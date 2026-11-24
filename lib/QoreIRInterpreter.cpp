@@ -12547,7 +12547,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             return nullptr;
         }
         return qore_program_private::get(*pgm)->getStatementFromIndex(
-            dbg_inst->loc->getFile(), dbg_inst->cached_start_line + dbg_inst->loc->offset);
+            dbg_inst->loc->getFile(), dbg_inst->cached_start_line + dbg_inst->loc->offset, dbg_inst->loc);
     };
     // the statement of an exception event for the debugger: the current statement of the frame, which the
     // DebugStatement instructions set while a debugger is attached, if its location contains the instruction; the
@@ -19211,8 +19211,7 @@ load_local_done:
                         // (QORE_IR_DISPATCH_FOLDED_DEBUG_STEP()): the location of the instructions, which is updated
                         // only when the line changes, is still that of the instruction before, which can be another
                         // statement on the same line or the statement that contains this one (#6248).  The
-                        // statement's location is the instruction's for lowered code; the location of the
-                        // instruction of deserialized AOT closure IR has no columns, unlike its statement's
+                        // statement's own span is also available for deserialized AOT step instructions
                         if (dbg_inst->stmt_loc && dbg_stmt->loc) {
                             *rl_cache.loc_ptr = dbg_stmt->loc;
                             last_stmt_loc = dbg_inst->stmt_loc;

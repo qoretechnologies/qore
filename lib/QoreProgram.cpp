@@ -4371,20 +4371,17 @@ void qore_program_private::addStatementToIndexIntern(name_section_sline_statemen
         sssm = new_sssm.release();
     } else {
         sssm = it->second;
-        if (statement && statement->loc) {
-            int line = statement->loc->start_line + offs;
-            sline_statement_map_t::iterator li = sssm->statementMap.find(line);
-            if (li != sssm->statementMap.end() && li->first == line) {
-                // The index stores raw statement pointers owned elsewhere; do not
-                // dereference existing entries here. First statement for a line wins.
-                printd(5, "qore_program_private::addStatementToIndexIntern(%p,'%s',%d) skipping line (%d-%d), this: %p\n", statementIndex, key, offs, statement->loc->start_line, statement->loc->end_line, this);
-                return;
-            }
-        }
     }
     if (statement && statement->loc) {
         printd(5, "qore_program_private::addStatementToIndexIntern(%p,'%s',%d) insert line %d (%d-%d), this: %p\n", statementIndex, key, offs, statement->loc->start_line+offs, statement->loc->start_line, statement->loc->end_line, this);
-        sssm->statementMap.insert(std::pair<int, AbstractStatement*>(statement->loc->start_line+offs, statement));
+        const auto& loc = *statement->loc;
+        int line = loc.start_line + offs;
+        // Keep the first statement as the line default. Compare saved spans without dereferencing earlier statements.
+        auto [first, inserted] = sssm->statementMap.try_emplace(line, IndexedStatement{
+            statement, loc.end_line - loc.start_line, loc.start_column, loc.end_column});
+        if (!inserted && loc.start_column >= 0 && !first->second.matches(loc)) {
+            sssm->otherSpans.try_emplace(section_sline_statement_map_t::spanKey(line, loc), statement);
+        }
     }
     if (section) {
         if (sssm->sectionMap.find(section) == sssm->sectionMap.end()) {
@@ -4394,28 +4391,13 @@ void qore_program_private::addStatementToIndexIntern(name_section_sline_statemen
     }
 }
 
-AbstractStatement* qore_program_private::findStatementInIndexIntern(
-        const name_section_sline_statement_map_t& statementIndex, const char* key, int line) const {
-    if (!key) {
+AbstractStatement* qore_program_private::findIndexedStatementForLocation(const QoreProgramLocation& loc) const {
+    const char* key = loc.getSource() ? loc.getSource() : loc.getFile();
+    auto it = statementByFileIndex.find(key);
+    if (it == statementByFileIndex.end()) {
         return nullptr;
     }
-    name_section_sline_statement_map_t::const_iterator it = statementIndex.find(key);
-    if (it == statementIndex.end() || !it->second) {
-        return nullptr;
-    }
-    sline_statement_map_t::const_iterator li = it->second->statementMap.find(line);
-    return li == it->second->statementMap.end() ? nullptr : li->second;
-}
-
-AbstractStatement* qore_program_private::findIndexedStatementForLocation(const char* file, const char* source,
-        int start_line, int offset) const {
-    if (start_line <= 0) {
-        return nullptr;
-    }
-    if (source && *source) {
-        return findStatementInIndexIntern(statementByFileIndex, source, start_line + offset);
-    }
-    return findStatementInIndexIntern(statementByFileIndex, file, start_line + offset);
+    return it->second->findSpan(loc.start_line + loc.offset, loc);
 }
 
 StatementBlock* qore_program_private::getAOTClosureDebugBlock(const QoreProgramLocation* loc) {
@@ -6619,7 +6601,7 @@ QoreListNode* qore_program_private::findStatementIds(const char* name, int line,
                 continue;
             }
             const QoreProgramLocation* loc = s->loc;
-            // another statement of the line is one with a column, as a block or a statement of AOT code has none
+            // another statement of the line is one with a known column
             if (s != st && (loc->start_column < 0 || loc->start_line != sloc->start_line
                     || loc->offset != sloc->offset || !same_str(loc->getFile(), sloc->getFile())
                     || !same_str(loc->getSource(), sloc->getSource()))) {

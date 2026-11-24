@@ -702,6 +702,8 @@ constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY_VERSION = 52;
 //!      - the methods of a user class are in its signature in the order of their names (qore#7458), not in the
 //!        iteration order of its method map: the hashes of an earlier image of a class with several method names
 //!        depend on the hash map of the compiler's build
+//!      - statement-location table entries and the source locations of debug-step instructions carry the start
+//!        and exclusive end column (two u16 values, 0xffff for unknown), for source-level stepping (qore#7490)
 //! The shared format version for the changes of the second AOT-identity batch (see v53 above).
 constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY2_VERSION = 53;
 //! The shared format version for the changes in batch AL (see v48 above).
@@ -2469,7 +2471,7 @@ static inline int qore_aot_read_line(const QoreAOTBinaryReader& reader, const ui
 }
 
 //! Serializes a source location: start and end line, offset, file and source label
-/** As the entries of the statement-location table; a missing location is written with lines 0 (see
+/** A missing location is written with lines 0 (see
     qore_aot_read_source_location())
 */
 DLLLOCAL void qore_aot_write_source_location(QoreAOTBinaryWriter& writer, const QoreProgramLocation* loc);
@@ -3600,6 +3602,8 @@ struct AOTCompiledFuncWithSlots {
     std::string source_file;
     //! Source-stripped metadata-only statement locations for ProgramControl::findStatementId().
     struct AOTStmtLocEntry {
+        int16_t start_column = -1;
+        int16_t end_column = -1;
         int32_t start_line = 0;
         int32_t end_line = 0;
         int64_t offset = 0;
