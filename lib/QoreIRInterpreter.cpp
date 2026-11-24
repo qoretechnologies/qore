@@ -17298,6 +17298,7 @@ load_local_done:
                                 lvh.enableBindRetry();
                                 if (lvh.assign(val.needsRef() ? val.refSelf() : val, store_desc)
                                         && lvh.isBindPending()) [[unlikely]] {
+                                    // raw slot: the reference is resolved again for the retry
                                     qore_ir_reference_slot_store_bind_retry(lvh,
                                         *reinterpret_cast<const ReferenceNode*>(
                                             locals_slot_cache.storage(local_inst->slot_id).getInternalNode()),
