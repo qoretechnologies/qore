@@ -1962,6 +1962,11 @@
     the errors of its copy, initialization and release as %Qore exceptions, which fail the creation of a child
     @ref Qore::Program "Program" or are raised by its deletion (see @ref qore_modules; issue #6786).
 
+    @par Faster Creation and Destruction of Objects
+    Creating and destroying objects costs less in every execution mode, especially for subclasses of builtin classes
+    (about 10-20% fewer instructions for a subclass of @ref Qore::Socket "Socket"; see @ref environment_variables for
+    \c QORE_DISABLE_DIRECT_OBJECT_CALLS; issue #7336).
+
     @subsection qore_3_0_0_deprecated Deprecated Features
     - <b>integer parse option constants</b>: the \c PO_* integer constants are deprecated in favor of
       @ref Qore::ParseOptions, which holds all 128 option bits; the constants of options beyond bit 63 are \c 0
