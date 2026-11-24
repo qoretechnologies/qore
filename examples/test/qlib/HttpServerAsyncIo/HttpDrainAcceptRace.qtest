@@ -1,0 +1,169 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - the accept, TLS handshake and close of HTTP/1.x connections while the server drains
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ../../TestCertificates.qm
+
+%exec-class HttpDrainAcceptRaceTest
+
+#! An HTTP/1.x connection accepted after the drain of stop() took its snapshot of the connections is drained too
+/** qore#7438: the drain of HttpServer::stop() closes the connections that wait for a request when it starts; a
+    connection that the server accepted after the drain had taken its snapshot of the connections, and before it
+    stopped accepting, was never closed: it stayed open until the drain ended at its time limit.  A debug hook of the
+    controller holds the drain between its snapshot and the cancel of the accept operations, so the race is
+    deterministic; a request in progress keeps the drain going, so that only the drain of the new connection can
+    close it.
+*/
+
+#! Records the accept of HTTP/1.x connections and the start of the drain from the controller's log
+class RaceLog inherits LoggerAppenderWithLayout {
+    public {
+        Queue accepted();
+        Queue drain();
+    }
+
+    constructor() : LoggerAppenderWithLayout("drain-accept-race", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type != EVENT_LOG) {
+            return;
+        }
+        if (params =~ /Starting HTTP\/1\.x header reading/) {
+            accepted.push(True);
+        } else if (params =~ /drain started/) {
+            drain.push(True);
+        }
+    }
+}
+
+#! Blocks the request on "/block" until it is released, so that the drain goes on
+class BlockingHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue entered();
+        Queue release();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        if (hdr.path == "block") {
+            entered.push(True);
+            release.get();
+        }
+        return makeResponse(200, "ok", {"Content-Type": "text/plain"});
+    }
+}
+
+class HttpDrainAcceptRaceTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpDrainAcceptRace", "1.0") {
+        addTestCase("plain: a connection accepted during the drain is closed", \raceTest(), "plain");
+        addTestCase("fast routes: a connection accepted during the drain is closed", \raceTest(), "fast");
+        addTestCase("TLS: a connection whose handshake ends during the drain is closed", \raceTest(), "tls");
+        set_return_value(main());
+    }
+
+    raceTest(string kind) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the drain snapshot hook needs a debug build of the library");
+        }
+        RaceLog race_log();
+        Logger logger("drain-accept-race", LoggerLevel::getLevelDebug());
+        logger.addAppender(race_log);
+        BlockingHandler handler();
+        # the time limits of the server are far above the wait of the test, so that only the drain can close the
+        # connection in time
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger, "drain_timeout": 300s,
+            "io_operation_timeout": 300s});
+        on_exit delete server;
+        server.setDefaultHandler("h", handler);
+        if (kind == "fast") {
+            server.addFastRoute("/fast", {"public": True, "response": {"code": 200, "body": "fast",
+                "content_type": "text/plain"}});
+        }
+        hash<HttpListenerOptionInfo> lopts = <HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0};
+        if (kind == "tls") {
+            lopts += <HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+                "http_version": "1.1",
+                "enable_h3": False,
+            };
+        }
+        int port = server.addListener(lopts).port;
+        server.waitForAsyncIo();
+        string addr = sprintf("127.0.0.1:%d", port);
+
+        # a request in progress keeps the drain going
+        Socket busy();
+        busy.connect(addr, 10s);
+        on_exit busy.close();
+        if (kind == "tls") {
+            busy.upgradeClientToSSL(10s);
+        }
+        busy.send("GET /block HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq(True, handler.entered.get(30s), "the request in progress was dispatched");
+        # the accept of the busy connection was logged
+        while (race_log.accepted.size()) {
+            race_log.accepted.get();
+        }
+
+        # the drain is held after its snapshot of the connections, before it stops accepting
+        Queue held();
+        Queue go();
+        HttpAsyncSocketIoController::dbgSetDrainSnapshotHook(sub (HttpAsyncSocketIoController ctrl) {
+            held.push(True);
+            go.get();
+        });
+        on_exit HttpAsyncSocketIoController::dbgSetDrainSnapshotHook();
+        Counter stopped(1);
+        background sub () {
+            on_exit stopped.dec();
+            server.stop();
+        }();
+        # the drain and the request in progress are released first (also when a check failed), so that the stop can
+        # end
+        on_exit {
+            go.push(True);
+            handler.release.push(True);
+            stopped.waitForZero(60s);
+        }
+        assertEq(True, held.get(30s), "the drain took its snapshot");
+
+        # a connection accepted now, after the snapshot; it sends no request
+        Socket late();
+        late.connect(addr, 10s);
+        on_exit late.close();
+        if (kind == "tls") {
+            # the handshake ends during the drain, or after it is released; either way the connection is registered
+            # after the snapshot
+            late.upgradeClientToSSL(10s);
+        } else {
+            # the plain connection was registered (accepted after the snapshot)
+            assertEq(True, race_log.accepted.get(30s), "the connection was accepted");
+        }
+        go.push(True);
+        assertEq(True, race_log.drain.get(30s), "the drain started");
+
+        # the drain closes the connection, which has no request; the time limit of the read only ends a wait that a
+        # regression would make, and the error tells it apart
+        string end;
+        try {
+            *binary b = late.recvBinary(1, 20s);
+            end = exists b ? "data" : "closed";
+        } catch (hash<ExceptionInfo> ex) {
+            end = ex.err;
+        }
+        assertTrue(end == "closed" || end == "SOCKET-CLOSED" || end == "SOCKET-SSL-ERROR",
+            sprintf("the connection accepted during the drain was closed (got: %y)", end));
+    }
+}
