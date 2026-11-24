@@ -358,6 +358,24 @@ public:
    }
 };
 
+//! a time zone with a name of its own and the data of another zone
+/** Each name that reaches a zoneinfo file has a zone of its own, which shares the data of the zone of the file
+*/
+class QoreAliasZoneInfo : public AbstractQoreZoneInfo {
+public:
+   DLLLOCAL QoreAliasZoneInfo(const std::string& n_name, const AbstractQoreZoneInfo* n_target);
+
+protected:
+   //! the zone with the data
+   const AbstractQoreZoneInfo* target;
+
+   DLLLOCAL virtual int getUTCOffsetImpl(int64 epoch_offset, bool& is_dst, const char*& zone_name) const;
+};
+
+struct QoreZoneCharger;
+class QoreSandboxCharge;
+struct stat;
+
 #ifdef _Q_WINDOWS
 class QoreWindowsZoneInfo : public AbstractQoreZoneInfo {
 protected:
@@ -427,29 +445,87 @@ protected:
     tzmap_t tzmap;
 
 #ifndef _Q_WINDOWS
+public:
     //! the SHA-256 digest of the data of a zoneinfo file
-    typedef std::array<unsigned char, 32> PathZoneDigest;
-    //! a zone loaded from a path and the digest of the data it was created from
-    struct PathZone {
-        AbstractQoreZoneInfo* zone;
-        PathZoneDigest digest;
+    typedef std::array<unsigned char, 32> ZoneDigest;
+
+private:
+    //! the identity of the data of a zone: the file it was read from and the data
+    struct ZoneIdentity {
+        dev_t dev;
+        ino_t ino;
+        ZoneDigest digest;
+
+        DLLLOCAL bool operator<(const ZoneIdentity& other) const {
+            if (dev != other.dev) {
+                return dev < other.dev;
+            }
+            if (ino != other.ino) {
+                return ino < other.ino;
+            }
+            return digest < other.digest;
+        }
+        DLLLOCAL bool operator==(const ZoneIdentity& other) const {
+            return dev == other.dev && ino == other.ino && digest == other.digest;
+        }
     };
-    typedef std::map<std::string, PathZone> pathmap_t;
-    //! zones loaded from paths, by the canonical path of their file; an entry is used only for the same data
-    pathmap_t pathmap;
-    //! zones of files whose data changed; kept as dates refer to them
-    std::vector<AbstractQoreZoneInfo*> retired_path_zones;
-    //! the number and memory of the zones that an isolation domain loaded from paths
+    typedef std::map<ZoneIdentity, QoreZoneInfo*> identity_map_t;
+    //! the zones with the data of each file and data; never returned themselves
+    identity_map_t identity_map;
+
+    //! the zone of a name and the identity of its data
+    struct AliasZone {
+        AbstractQoreZoneInfo* zone;
+        ZoneIdentity id;
+    };
+    typedef std::map<std::string, AliasZone> alias_map_t;
+    //! the zones of region names
+    alias_map_t region_aliases;
+    //! the zones of zoneinfo paths, by the path as given
+    alias_map_t path_aliases;
+    //! zones whose name reaches another file or other data now; kept as dates refer to them
+    std::vector<AbstractQoreZoneInfo*> retired_zones;
+
+    //! the number and memory of the zones that an isolation domain loaded
     struct PathZoneQuota {
         unsigned zones = 0;
         int64_t bytes = 0;
     };
-    //! the zones loaded from paths by isolation domain
-    std::map<std::string, PathZoneQuota> domain_path_quota;
-    //! the number of zones that sandboxed code loaded from paths in the process
-    unsigned sandboxed_path_zones = 0;
-    //! the memory of the zones that sandboxed code loaded from paths in the process
-    int64_t sandboxed_path_bytes = 0;
+    typedef std::map<std::string, PathZoneQuota> domain_quota_map_t;
+    //! the zones loaded by isolation domain
+    domain_quota_map_t domain_path_quota;
+    //! the number of zones that restricted code loaded in the process
+    unsigned restricted_zones = 0;
+    //! the memory of the zones that restricted code loaded in the process
+    int64_t restricted_bytes = 0;
+    //! the sandbox charges that the memory of zones stays charged to, referenced
+    std::vector<std::pair<QoreSandboxCharge*, int64_t>> charged_zone_memory;
+
+    //! the result of a check of the quotas
+    enum ChargeResult {
+        CHARGE_OK,
+        CHARGE_SANDBOX,
+        CHARGE_DOMAIN,
+        CHARGE_PROGRAM,
+        CHARGE_PROCESS,
+    };
+
+    //! checks the quotas for a new zone of the given memory; the write lock must be held
+    DLLLOCAL ChargeResult checkCharge(const QoreZoneCharger& c, int64_t size);
+    //! charges a new zone of the given memory; the write lock must be held
+    DLLLOCAL void commitCharge(const QoreZoneCharger& c, int64_t size);
+    //! raises the error for a quota that a new zone would exceed
+    DLLLOCAL static void raiseCharge(ChargeResult result, const char* name, ExceptionSink* xsink);
+    //! raises the error for a path that the policy does not permit
+    DLLLOCAL static void raisePathDenied(const char* name, const char* code, ExceptionSink* xsink);
+
+    //! returns the zone of a name for the data read from a file; the lock must not be held
+    /** Zones of the same file and data share the data of one zone; each name has a zone of its own, charged to the
+        restrictions of the calling code
+    */
+    DLLLOCAL const AbstractQoreZoneInfo* getZone(const std::string& name, const std::string& data,
+            const struct stat& sbuf, const std::string& primary_name, bool region, QoreZoneCharger& charger,
+            alias_map_t& aliases, const char* label, ExceptionSink* xsink);
 #else
     //! the number of zones loaded from paths in the process
     unsigned path_zone_count = 0;
@@ -483,7 +559,10 @@ protected:
     /** Reads the zoneinfo file of a canonical region name in the zoneinfo directory without the lock and caches the
         zone by the region name under the write lock; see findLoadRegion()
     */
-    DLLLOCAL const AbstractQoreZoneInfo* loadRegion(const char* region, ExceptionSink* xsink);
+    DLLLOCAL const AbstractQoreZoneInfo* loadRegion(const char* region, ExceptionSink* xsink, bool startup = false);
+
+    //! releases the sandbox charges of the memory of zones (at destruction)
+    DLLLOCAL void releaseZoneCharges();
 
     //! finds or loads the zoneinfo file at the given absolute path; the lock must not be held
     /** The caller has checked the path against its restrictions.  The file is opened at exactly this path without
@@ -520,12 +599,19 @@ public:
             delete i->second;
         }
 #ifndef _Q_WINDOWS
-        for (auto& i : pathmap) {
+        for (auto& i : region_aliases) {
             delete i.second.zone;
         }
-        for (auto* i : retired_path_zones) {
+        for (auto& i : path_aliases) {
+            delete i.second.zone;
+        }
+        for (auto* i : retired_zones) {
             delete i;
         }
+        for (auto& i : identity_map) {
+            delete i.second;
+        }
+        releaseZoneCharges();
 #endif
 
         for (tzomap_t::iterator i = tzo_std_map.begin(), e = tzo_std_map.end(); i != e; ++i) {
@@ -556,6 +642,9 @@ public:
     DLLLOCAL const char* getLocalRegion() const {
         return localtzname.empty() ? nullptr : localtzname.c_str();
     }
+
+    //! the maximum length of a region name in bytes; real region names are less than 40 bytes long
+    static constexpr size_t MaxRegionNameLength = 255;
 
     //! the maximum number of zones loaded from paths by the code of one sandbox (every member of a composite
     //! sandbox), one isolation domain, or one Program that no sandbox governs; zones are never freed

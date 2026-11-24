@@ -89,6 +89,11 @@ nothing sub remove_file(string p) { unlink(p); }
             \testPathZoneQuotaShared());
         addTestCase("path zones are charged with their memory", \testPathZoneMemory());
         addTestCase("the policy is checked for the file that was opened (/dev/fd)", \testDevFd());
+        addTestCase("spellings of a region share its data and are limited", \testRegionSpellings());
+        addTestCase("long region names are refused", \testLongRegionNames());
+        addTestCase("restricted code is limited, trusted code is not", \testRestrictedQuota());
+        addTestCase("files in the zoneinfo directory that are no zoneinfo files are no regions",
+            \testNonZoneFiles());
         addTestCase("the policy applies to the file that a path reaches", \testPathPolicyTarget());
         set_return_value(main());
     }
@@ -353,7 +358,8 @@ nothing sub remove_file(string p) { unlink(p); }
             assertUnknownRegion(sub () { p.callFunction("tz", r); }, r, "sandboxed TimeZone(" + r + ")");
             assertUnknownRegion(sub () { TimeZone t(r); }, r, "TimeZone(" + r + ")");
         }
-        assertThrows("TZINFO-ERROR", "the file is larger than the maximum", \p.callFunction(), ("tz", subname + "/Big"),
+        # a file that is no zoneinfo file, here one larger than the maximum, is no region either
+        assertUnknownRegion(sub () { p.callFunction("tz", subname + "/Big"); }, subname + "/Big",
             "a file larger than the maximum");
 
         foreach string r in (map subname + "/" + $1, ("Real", "Inside", "InDir/Z", "AbsInDir/Z", "RealDir/Z")) {
@@ -560,14 +566,16 @@ nothing sub remove_file(string p) { unlink(p); }
         chdir(dir);
         on_exit chdir(old_cwd);
         spellings += ("./tz-spelled", "./././tz-spelled", "../" + basename(dir) + "/tz-spelled");
-        # the zone of the first load is returned: it is named by the first path
+        # each spelling has a zone named by the spelling, with the data of the file
         foreach string sp in (spellings) {
-            assertEq(path, (new TimeZone(sp)).region(), "the same file as " + sp);
+            TimeZone t(sp);
+            assertEq(sp, t.region(), "the zone is named as given: " + sp);
+            assertEq(0, t.UTCOffset(), "the data of the file: " + sp);
         }
         # a symbolic link to it is the same file
         string link_path = dir + "/tz-symlink";
         symlink(path, link_path);
-        assertEq(path, (new TimeZone(link_path)).region(), "a symbolic link");
+        assertEq(link_path, (new TimeZone(link_path)).region(), "a symbolic link is named as given");
     }
 
     testRelativePathError() {
@@ -744,7 +752,7 @@ print(out.join(\"|\"));
         for (int i = 0; i < max; ++i) {
             a.callFunction("offset", sprintf("%s/z%d", a_dir, i));
         }
-        assertThrows("TZINFO-ERROR", "the sandbox has loaded the maximum of time zones from paths", \a.callFunction(),
+        assertThrows("TZINFO-ERROR", "the sandbox has loaded the maximum of time zones", \a.callFunction(),
             ("offset", sprintf("%s/z%d", a_dir, max)), "the sandbox's quota is used up");
         # zones that the Program loaded already are found
         assertEq(0, a.callFunction("offset", a_dir + "/z0"), "a zone that the Program loaded");
@@ -770,8 +778,8 @@ print(out.join(\"|\"));
         assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("offset", allowed + "/link"),
             "a symbolic link to a file outside of the allowed directory");
         assertEq(0, p.callFunction("offset", allowed + "/zone"), "a file in the allowed directory");
-        # trusted code reads the file of the link; the zone is named by the file
-        assertEq(other + "/zone", (new TimeZone(allowed + "/link")).region(), "the zone is named by its file");
+        # trusted code reads the file of the link; the zone is named as given, not by the path behind the link
+        assertEq(allowed + "/link", (new TimeZone(allowed + "/link")).region(), "the zone is named as given");
         assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("offset", allowed + "/link"),
             "the link after trusted code loaded its file");
     }
@@ -795,7 +803,7 @@ int sub child_load(list<string> paths) {
         try {
             c.callFunction(\"f\", path);
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.desc !~ /has loaded the maximum of time zones from paths/) {
+            if (ex.desc !~ /has loaded the maximum of time zones/) {
                 rethrow;
             }
             break;
@@ -810,7 +818,7 @@ int sub load_all(list<string> paths) {
         try {
             (new TimeZone(path)).UTCOffset();
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.desc !~ /has loaded the maximum of time zones from paths/) {
+            if (ex.desc !~ /has loaded the maximum of time zones/) {
                 rethrow;
             }
             break;
@@ -969,6 +977,8 @@ int sub load_all(list<string> paths) {
                 int off = p.callFunction("offset", path);
                 assertNeq(50400, off, "the tenant does not load the file outside: " + path);
             } catch (hash<ExceptionInfo> ex) {
+                # the tenant learns nothing about descriptors it may not read
+                assertEq(-1, ex.desc.find("replaced or removed"), "a uniform error for the tenant: " + ex.desc);
                 if (ex.desc =~ /access to time zone path '\/dev\/fd\/[0-9]+' is not permitted/) {
                     rechecked = True;
                 }
@@ -976,7 +986,7 @@ int sub load_all(list<string> paths) {
             try {
                 TimeZone t(path);
                 if (t.UTCOffset() == 50400) {
-                    assertEq(outside + "/secret", t.region(), "the zone is named by the file");
+                    assertEq(path, t.region(), "the zone is named as given");
                     trusted_loaded = True;
                 }
             } catch (hash<ExceptionInfo> ex) {
@@ -991,6 +1001,148 @@ int sub load_all(list<string> paths) {
             # /dev/fd/N is not a symbolic link on macOS, so the policy check of the name allows it; the check of the
             # file that was opened refuses it
             assertTrue(rechecked, "the policy is checked for the file that was opened");
+        }
+    }
+
+    #! returns the spellings of a name with the case of its letters given by the bits of the numbers from 0
+    static list<string> caseSpellings(string name, int n) {
+        list<string> rv = ();
+        list<int> letters = ();
+        for (int i = 0; i < name.size(); ++i) {
+            if (name[i] =~ /[A-Za-z]/) {
+                letters += i;
+            }
+        }
+        for (int v = 0; v < n; ++v) {
+            string sp = name;
+            for (int b = 0; b < letters.size(); ++b) {
+                int i = letters[b];
+                string c = name[i];
+                string nc = (v & (1 << b)) ? (c == c.upr() ? c.lwr() : c.upr()) : c;
+                sp = sp.substr(0, i) + nc + sp.substr(i + 1);
+            }
+            rv += sp;
+        }
+        return rv;
+    }
+
+    testRegionSpellings() {
+        string region = "America/Argentina/Buenos_Aires";
+        # a file system that does not distinguish the case of names (macOS) opens the region for every spelling
+        try {
+            TimeZone t(region.lwr());
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("the file system distinguishes the case of names");
+        }
+        Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        SandboxManager sm();
+        sm.setMemoryLimit(64 * 1024 * 1024);
+        p.setSandboxManager(sm);
+        p.parse(TenantCode, "tenant-spellings");
+        int named = 0;
+        int primary = 0;
+        foreach string sp in (caseSpellings(region, 300)) {
+            string rv = p.callFunction("tzinfo", sp);
+            assertEq("|-10800", rv.substr(rv.find("|")), "the data of the region: " + sp);
+            string name = rv.substr(0, rv.find("|"));
+            if (sp == region) {
+                # the region itself was loaded in another case already
+                assertEq(region, name, "the region");
+            } else if (name == sp) {
+                ++named;
+            } else {
+                assertEq(region, name, "a spelling beyond the quota gets the zone of the file: " + sp);
+                ++primary;
+            }
+        }
+        # each spelling counts against the quota of the sandbox; beyond it, the zone of the file is returned
+        assertLe(256, named, "at most 256 spellings get a zone of their own");
+        assertGt(0, primary, "spellings beyond the quota get the zone of the file");
+        assertGt(0, sm.getMemoryUsage(), "the zones are charged to the sandbox");
+    }
+
+    testLongRegionNames() {
+        Program p = tenant();
+        # valid characters, but longer than any region name: refused before anything is accessed
+        foreach string name in (strmul("A/", 200) + "UTC", strmul("A", 300), strmul("A/", 5 * 1024 * 1024) + "A") {
+            string shown = name.size() > 40 ? name.substr(0, 40) : name;
+            try {
+                p.callFunction("tz", name);
+                assertTrue(False, "a long name is refused");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("TZINFO-ERROR", ex.err, "a long name: " + shown);
+                assertRegex("^unknown time zone region", ex.desc, "a long name: " + shown);
+            }
+        }
+
+        *string root = ENV.QORE_TEST_ZONEINFO_ROOT;
+        if (!root || !zoneinfo) {
+            return;
+        }
+        # a directory link to "." in the zoneinfo directory (as "posix -> ." in older Debian) gives longer names of
+        # one file; they share its data, and names longer than the limit are refused
+        string subname = "Qore" + get_random_string(10, 1);
+        string subdir = root + "/" + subname;
+        mkdir(subdir);
+        on_exit {
+            try {
+                remove_tree(subdir);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        copyFile(zoneinfo, subdir + "/Real");
+        symlink(".", subdir + "/SelfLink01");
+        string short_name = subname + "/" + strmul("SelfLink01/", 3) + "Real";
+        assertEq(short_name, p.callFunction("tz", short_name), "a name through the directory link");
+        # fewer symbolic links than the walk follows, but longer than the limit
+        string long_name = subname + "/" + strmul("SelfLink01/", 30) + "Real";
+        assertUnknownRegion(sub () { p.callFunction("tz", long_name); }, long_name, "a name longer than the limit");
+    }
+
+    testRestrictedQuota() {
+        if (!zoneinfo) {
+            testSkip("no zoneinfo file to copy");
+        }
+        list<string> paths = makeCopies("restricted-quota", zoneinfo, 300);
+        # a Program restricted by its parse options and governed by no sandbox is limited
+        Program r(PO_NEW_STYLE | PO_NO_NETWORK);
+        r.parse(TenantCode, "restricted");
+        for (int i = 0; i < 256; ++i) {
+            r.callFunction("offset", paths[i]);
+        }
+        assertThrows("TZINFO-ERROR", "the Program has loaded the maximum of time zones", \r.callFunction(),
+            ("offset", paths[256]), "a restricted Program is limited");
+        # a Program that is not restricted is not limited
+        Program t(PO_NEW_STYLE);
+        t.parse(TenantCode, "trusted");
+        foreach string path in (paths) {
+            assertEq(0, t.callFunction("offset", path), "an unrestricted Program: " + path);
+        }
+        # nor is trusted code that reloads a file whose data changes
+        string changing = dir + "/restricted-changing";
+        if (gmt14) {
+            for (int i = 0; i < 260; ++i) {
+                copyFile(i % 2 ? gmt14 : zoneinfo, changing);
+                assertEq(i % 2 ? 50400 : 0, (new TimeZone(changing)).UTCOffset(), "a changed file in trusted code");
+            }
+        }
+    }
+
+    testNonZoneFiles() {
+        if (!zroot) {
+            testSkip("no zoneinfo directory");
+        }
+        int checked = 0;
+        foreach string name in ("+VERSION", "leapseconds", "SECURITY") {
+            if (!is_file(zroot + "/" + name)) {
+                continue;
+            }
+            ++checked;
+            assertUnknownRegion(sub () { tenant().callFunction("tz", name); }, name, "a file that is no zoneinfo file");
+            assertUnknownRegion(sub () { TimeZone t(name); }, name, "a file that is no zoneinfo file in trusted code");
+        }
+        if (!checked) {
+            testSkip("no such file in the zoneinfo directory");
         }
     }
 }
