@@ -71,6 +71,10 @@ if [ -z "${REDIS_URL}" ]; then
     setup_redis_on_host
 fi
 
+# Compile against the native module directory of this CI image.  It is read from the image's qore, so this must run
+# before the image's libqore is removed below.
+QORE_EXTERNAL_MODULE_DIRS=${QORE_EXTERNAL_MODULE_DIRS-$(qore --module-dir)}
+
 # The tests run with the libqore that this job installs: remove the one that the image installed in its install prefix
 # (make install of qore-test-base's prep-alpine-build.sh).  Only that library directory is touched; a search of the
 # whole file system also removed the libqore of build trees mounted into the container.
@@ -81,8 +85,6 @@ for libqore in "${QORE_IMAGE_PREFIX:?}"/lib/libqore.so*; do
 done
 
 export MAKE_JOBS=${MAKE_JOBS:-6}
-# Compile against the native module directory of this CI image.
-QORE_EXTERNAL_MODULE_DIRS=${QORE_EXTERNAL_MODULE_DIRS-$(qore --module-dir)}
 NEED_RELEASE_BUILD=1
 if [ "${QORE_EXCLUDE_PERF_TESTS}" = "1" ]; then
     NEED_RELEASE_BUILD=0
