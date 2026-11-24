@@ -218,6 +218,22 @@ void FunctionList::assimilate(FunctionList& fl, qore_ns_private* ns,
     }
 }
 
+void FunctionList::runtimeAssimilate(FunctionList& fl, qore_ns_private* ns) {
+    for (fl_map_t::iterator i = fl.begin(), e = fl.end(); i != e;) {
+        // a function that the namespace has is kept as it is, and the new one stays in the list of the namespace that
+        // was added, which is kept with the namespace (qore_ns_private::runtimeAssimilate()): not the parse-time merge
+        // (QoreFunction::parseAssimilate()), which raises a parse error for a variant that conflicts with the function
+        // and reads the parse location of a user variant, which a builtin variant does not have (qore#7530)
+        if (fl_map_t::find(i->first) != end()) {
+            ++i;
+            continue;
+        }
+        insert(fl_map_t::value_type(i->first, i->second));
+        i->second->updateNs(ns);
+        fl.erase(i++);
+    }
+}
+
 int FunctionList::importSystemFunctions(const FunctionList& src, qore_ns_private* ns, ExceptionSink* xsink) {
     int cnt = 0;
     for (fl_map_t::const_iterator i = src.begin(), e = src.end(); i != e; ++i) {

@@ -656,7 +656,10 @@ public:
     DLLLOCAL bool inList(const std::string& name) const;
     //DLLLOCAL ConstantList *copy();
 
-    // assimilate the list without any duplicate checking
+    //! Merges the constants of a namespace that is added at run time (qore_ns_private::runtimeAssimilate())
+    /** No parse is running: a constant that the list already has is not added, but left in \a n, and no parse error
+        is raised (qore#7530)
+    */
     DLLLOCAL void assimilate(ConstantList& n);
 
     // assimilate a constant list in a namespace with duplicate checking (also in pending list)

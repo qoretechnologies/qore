@@ -3531,6 +3531,9 @@ void qore_ns_private::clearConstants(QoreListNode& l) {
     classList.clearConstants(l);
 
     nsl.clearConstants(l);
+    for (QoreNamespace* rns : retained_ns) {
+        rns->priv->clearConstants(l);
+    }
 
     // clear properties
     AutoLocker al(kvlck);
@@ -3549,6 +3552,9 @@ void qore_ns_private::clearData(ExceptionSink* xsink) {
     classList.clear(xsink, getProgram());
 
     nsl.clearData(xsink);
+    for (QoreNamespace* rns : retained_ns) {
+        rns->priv->clearData(xsink);
+    }
 }
 
 /*
@@ -3570,6 +3576,9 @@ void qore_ns_private::deleteClearData(ExceptionSink* xsink) {
 void qore_ns_private::setVarsReleased() {
     classList.setVarsReleased();
     nsl.setVarsReleased();
+    for (QoreNamespace* rns : retained_ns) {
+        rns->priv->setVarsReleased();
+    }
 }
 
 void qore_ns_private::deleteData(ExceptionSink* xsink) {
@@ -3584,6 +3593,9 @@ void qore_ns_private::deleteData(ExceptionSink* xsink) {
 
     // repeat for all subnamespaces
     nsl.deleteData(xsink);
+    for (QoreNamespace* rns : retained_ns) {
+        rns->priv->deleteData(xsink);
+    }
 }
 
 int qore_ns_private::checkGlobalVarDecl(Var* v, const NamedScope& vname) {
@@ -5242,7 +5254,7 @@ void qore_ns_private::parseAssimilate(QoreNamespace* ans) {
 
 void qore_ns_private::runtimeAssimilate(QoreNamespace* ans) {
     //printd(5, "qore_ns_private::runtimeAssimilate() this: %p '%s' pub: %d imported: %d ans->pub: %d ans->imported: %d\n", this, name.c_str(), pub, imported, ans->priv->pub, ans->priv->imported);
-    // delete source namespace on exit
+    // the source namespace is deleted on exit, unless declarations that conflict are left in it (see retained_ns)
     std::unique_ptr<QoreNamespace> ns_ptr(ans);
 
     qore_ns_private* pns = ans->priv;
@@ -5252,17 +5264,19 @@ void qore_ns_private::runtimeAssimilate(QoreNamespace* ans) {
     // assimilate constants
     constant.assimilate(pns->constant);
 
+    // the merges of a namespace that is added at run time, which is not a parse: a declaration that the namespace
+    // has, or that conflicts with one, is not added, and no parse error is raised (qore#7530)
     // assimilate classes
-    classList.assimilate(pns->classList, *this);
+    classList.runtimeAssimilate(pns->classList, *this);
 
     // assimilate hashdecls
-    hashDeclList.assimilate(pns->hashDeclList, *this);
+    hashDeclList.runtimeAssimilate(pns->hashDeclList, *this);
 
-    // assimilate pending functions
-    func_list.assimilate(pns->func_list, this);
+    // assimilate functions
+    func_list.runtimeAssimilate(pns->func_list, this);
 
     // assimilate enums
-    enumList.assimilate(pns->enumList, *this);
+    enumList.runtimeAssimilate(pns->enumList, *this);
 
     // assimilate typedefs (runtime - with conflict checking)
     for (auto& i : pns->typedefMap) {
@@ -5293,13 +5307,24 @@ void qore_ns_private::runtimeAssimilate(QoreNamespace* ans) {
     }
     pns->typedefMap.clear();
 
-    if (pns->class_handler) {
-        assert(!class_handler);
+    // a class handler that the namespace has is kept
+    if (pns->class_handler && !class_handler) {
         class_handler = pns->class_handler;
+        pns->class_handler = nullptr;
     }
 
     // assimilate target namespace list
     nsl.runtimeAssimilate(pns->nsl, this);
+
+    // the declarations that conflicted are kept with this namespace, as the declarations that were added can use
+    // their types (qore#7530)
+    if (!pns->isEmpty()) {
+        // this namespace owns it now: its parent namespace, if it was a subnamespace of a namespace that was added, is
+        // deleted after the merge
+        pns->parent = this;
+        retained_ns.push_back(ns_ptr.get());
+        ns_ptr.release();
+    }
 }
 
 QoreClass* qore_ns_private::parseFindLocalClass(const char* cname) {

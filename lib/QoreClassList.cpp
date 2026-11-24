@@ -309,6 +309,23 @@ void QoreClassList::assimilate(QoreClassList& n, qore_ns_private& ns,
     n.hm.clear();
 }
 
+void QoreClassList::runtimeAssimilate(QoreClassList& n, qore_ns_private& ns) {
+    for (hm_qc_t::iterator i = n.hm.begin(); i != n.hm.end();) {
+        // a class that conflicts with a declaration of the namespace is not added; it stays in the list that is merged,
+        // which is kept with the namespace that was added, as the other declarations of that namespace can use its type
+        // (qore_ns_private::runtimeAssimilate(), qore#7530)
+        if (ns.hashDeclList.find(i->first) || ns.classList.find(i->first) || find(i->first) || ns.nsl.find(i->first)) {
+            ++i;
+            continue;
+        }
+        // "move" data to new list
+        releaseAdded(hm[i->first] = i->second);
+        // move class to new namespace
+        qore_class_private::get(*i->second.cls)->updateNamespace(&ns);
+        i = n.hm.erase(i);
+    }
+}
+
 QoreHashNode* QoreClassList::getInfo() {
     QoreHashNode* h = new QoreHashNode(autoTypeInfo);
     for (hm_qc_t::iterator i = hm.begin(), e = hm.end(); i != e; ++i)

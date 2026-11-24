@@ -385,6 +385,55 @@ QoreValue f_dbg_node_info(const QoreListNode* params, RuntimeConfig& rc, Excepti
     return s.release();
 }
 
+// the builtin function of the namespace of dbg_add_runtime_namespace(): returns the number of its arguments
+static QoreValue f_dbg_rt_func(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(num_args(params));
+}
+
+//! Adds a namespace with a builtin function, a constant, a class and a hashdecl to the root namespace of the calling
+//! Program at run time, through the public C++ API that a binary module calls (qore#7530)
+/** With a name \c "outer::inner", the declarations are in the subnamespace \c inner of the namespace \c outer that is
+    added.  With \c variant 1, the function also has a variant with a string parameter, and the namespace has a function
+    \c dbg_rt_new() with a parameter of the type of its class.  Adding a namespace with the same name again merges it
+    with the one that the Program has: a declaration that the Program already has is not added again (it is kept with
+    the namespace, as the declarations that are added can use its type), and nothing reaches the parse-error path, as
+    there is no parse
+*/
+static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* name = get_param_value(params, 0).get<const QoreStringNode>();
+    int64 variant = HARD_QORE_VALUE_INT(params, 1);
+    // "outer::inner": the declarations are in a subnamespace of the namespace that is added
+    std::string full = name->c_str();
+    size_t sep = full.find("::");
+    std::string inner = sep == std::string::npos ? full : full.substr(sep + 2);
+    std::string path = std::string("::") + full;
+    std::unique_ptr<QoreNamespace> ns(new QoreNamespace(inner.c_str()));
+    ns->addBuiltinVariant("dbg_rt_func", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
+    if (variant == 1) {
+        ns->addBuiltinVariant("dbg_rt_func", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            stringTypeInfo, QORE_PARAM_NO_ARG, "str");
+    }
+    ns->addConstant("DbgRtConst", static_cast<int64>(variant));
+    QoreClass* qc = new QoreClass("DbgRtClass", (path + "::DbgRtClass").c_str());
+    ns->addSystemClass(qc);
+    if (variant == 1) {
+        // a function that uses the type of the class of this namespace, which is not added when the Program has it
+        ns->addBuiltinVariant("dbg_rt_new", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            qc->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+    }
+    // the namespace takes the hashdecl and the class (their destructors are not public)
+    TypedHashDecl* hd = new TypedHashDecl("DbgRtHash", (path + "::DbgRtHash").c_str());
+    hd->addMember("a", bigIntTypeInfo, QoreValue(static_cast<int64>(variant)));
+    ns->addSystemHashDecl(hd);
+    if (sep != std::string::npos) {
+        std::unique_ptr<QoreNamespace> outer(new QoreNamespace(full.substr(0, sep).c_str()));
+        outer->addNamespace(ns.release());
+        ns.reset(outer.release());
+    }
+    getProgram()->getRootNS()->addNamespace(ns.release());
+    return QoreValue();
+}
+
 // returns a hash of all namespace information
 static QoreValue f_dbg_get_ns_info(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return getRootNS()->getInfo();
@@ -36592,6 +36641,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_cyclic_type_declarations", f_dbg_cyclic_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_add_runtime_namespace", f_dbg_add_runtime_namespace, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", bigIntTypeInfo, QORE_PARAM_NO_ARG, "variant");
     qns.addBuiltinVariant("run_debug_unit_tests", f_run_debug_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_run_datasource_pending_tests", f_dbg_run_datasource_pending_tests, QCF_NO_FLAGS,
