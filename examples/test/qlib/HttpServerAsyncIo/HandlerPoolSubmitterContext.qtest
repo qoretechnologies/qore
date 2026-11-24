@@ -1,0 +1,116 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the sandbox context of handler-pool threads, which run tasks with their submitters' context
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServerAsyncIo
+%requires AsyncSocketIo
+
+%exec-class HandlerPoolSubmitterContextTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! the number of submissions of each submitter
+const Rounds = 200;
+
+#! a target without behavior: only its dispatch hooks run around a body
+class TestTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
+    hash<HttpRequestResultInfo> onHttpRequest(hash<HttpConnectionInfo> info) {
+        return <HttpRequestResultInfo>{};
+    }
+    onIdleTimeout(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+    }
+    onError(Socket sock, hash<ExceptionInfo> ex, *HttpServer::HttpListenerInterface listener, *hash<auto> cx) {
+    }
+    onSseDisconnect(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+    }
+    onWebSocketFrame(Socket sock, hash<WebSocketFrameInfo> frame, *HttpServer::HttpListenerInterface listener,
+            hash<auto> cx) {
+    }
+    onWebSocketClose(Socket sock, int code, string reason, *HttpServer::HttpListenerInterface listener,
+            hash<auto> cx) {
+    }
+}
+
+#! submits bodies of trusted code (as the bodies of the controller are) that report the sandbox that they run with
+/** Called by trusted code, and by sandboxed code through an import: the submissions are then made on a thread that the
+    sandbox governs, as the controller submits a request of a sandboxed listener
+*/
+sub submit_bodies(HttpAsyncSocketIoController ctl, HttpAsyncTarget target, Queue q, string who, int n) {
+    for (int i = 0; i < n; ++i) {
+        ctl.submitToHandlerPool(target, sub () {
+            q.push({"who": who, "governed": SandboxManager::isGoverned()});
+        });
+    }
+}
+
+#! A handler-pool body always runs with the context of the code that submitted it (qore#7494)
+/** A task of a ThreadPool runs with the context (sandbox restrictions and provenance) of the code that submitted it.
+    The handler pool submitted a runner and pushed the work item to a queue shared by all runners, so when two
+    submissions overlapped, a runner could run the work item of the other submission: a trusted body with a sandboxed
+    submitter's restrictions, and a sandboxed body with a trusted submitter's privileges.  A sandboxed Program and
+    trusted code submit at the same time; each body records
+    whether it runs governed by a sandbox, which must be its submitter's.  Every interleaving must give the submitter's
+    context; the many overlapping submissions of the test make a runner take the work item of the other submitter if
+    the work items are shared (the module's pool class is private, so no gate can be put between the two halves of a
+    submission there).
+*/
+class HandlerPoolSubmitterContextTest inherits QUnit::Test {
+    constructor() : Test("HandlerPoolSubmitterContextTest", "1.0") {
+        addTestCase("each body runs with its own submitter's sandbox context", \pairingTest());
+        set_return_value(main());
+    }
+
+    pairingTest() {
+        AsyncSocketIoController aio();
+        HttpAsyncSocketIoController ctl(aio, NOTHING, {"max_handler_threads": 4});
+        ctl.start();
+        on_exit ctl.stop();
+        TestTarget target();
+        Queue results();
+
+        # a sandbox that denies the filesystem
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.importFunction("submit_bodies");
+        p.parse("sub run(object ctl, object target, Queue q, int n) {
+    submit_bodies(ctl, target, q, \"sandboxed\", n);
+}", "sandboxed");
+
+        # the sandboxed code and trusted code submit at the same time, so that their submissions overlap
+        Counter start(1);
+        Counter done(2);
+        background sub () {
+            on_exit done.dec();
+            start.waitForZero(HangGuard);
+            p.callFunction("run", ctl, target, results, Rounds);
+        }();
+        background sub () {
+            on_exit done.dec();
+            start.waitForZero(HangGuard);
+            submit_bodies(ctl, target, results, "trusted", Rounds);
+        }();
+        start.dec();
+        done.waitForZero(HangGuard);
+
+        hash<string, int> wrong = {"sandboxed": 0, "trusted": 0};
+        for (int i = 0; i < Rounds * 2; ++i) {
+            hash<auto> r = results.get(HangGuard);
+            # a sandboxed submitter's body runs governed, a trusted submitter's body with no sandbox
+            if (r.governed != (r.who == "sandboxed")) {
+                ++wrong{r.who};
+            }
+        }
+        assertEq(0, wrong.sandboxed, "every sandboxed submitter's body runs governed by its sandbox");
+        assertEq(0, wrong.trusted, "every trusted submitter's body runs with no sandbox");
+    }
+}
