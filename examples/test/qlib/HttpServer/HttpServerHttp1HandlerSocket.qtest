@@ -151,6 +151,7 @@ class ProbeHandler inherits AbstractHttpRequestHandler {
             }
             case "other": {
                 r.connect = try_it(sub () { s.connect("localhost:1", 1s); });
+                # all-interfaces: none; the handler's socket refuses bind() (otherTest() checks HTTP-HANDLER-SOCKET-ERROR)
                 r.bind = try_it(sub () { s.bind(0); });
                 r.listen = try_it(sub () { s.listen(); });
                 r.accept = try_it(sub () { s.accept(1s); });
