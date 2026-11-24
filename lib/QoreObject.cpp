@@ -1301,9 +1301,7 @@ void qore_object_private::getContextStorageMembers(const qore_class_private* sto
     }
 }
 
-QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) const {
-    // get the current class context for possible internal data
-    const qore_class_private* class_ctx = runtime_get_class();
+QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink, const qore_class_private* class_ctx) const {
     // a class context with no private access to the object's class still has the storage of some members (issue #7180)
     const qore_class_private* storage_ctx = nullptr;
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
