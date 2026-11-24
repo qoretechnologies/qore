@@ -182,6 +182,8 @@ module YamlDocumentDataProvider {
                 "- `flow_style`: use compact inline YAML output (default: `False`)\n"
                 "- `encoding`: character encoding (default: `UTF-8`)\n",
             "action_code": DPAT_CREATE,
+            # the data is generated in memory and returned; the path and stream options are not offered (qore#7454)
+            "mutates_state": False,
             "cls": "YamlDocumentDataProvider::YamlDocumentWriteDataProvider",
             "output_data_type": DPAD_CREATE_OUTPUT,
             "output_type": GeneratedDataOutputDataType,

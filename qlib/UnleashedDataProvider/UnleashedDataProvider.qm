@@ -116,6 +116,7 @@ module UnleashedDataProvider {
             "short_desc": "Get a customer by GUID",
             "desc": "Retrieve detailed information about a specific customer by their unique identifier (GUID).",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": UnleashedGetCustomerDataProvider::ProviderInfo,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 UnleashedGetCustomerRequestDataType::Fields),
@@ -183,6 +184,7 @@ module UnleashedDataProvider {
             "short_desc": "Get a product by GUID",
             "desc": "Retrieve detailed information about a specific product.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": UnleashedGetProductDataProvider::ProviderInfo,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 UnleashedGetProductRequestDataType::Fields),
@@ -265,6 +267,7 @@ module UnleashedDataProvider {
             "short_desc": "Get a sales order by GUID",
             "desc": "Retrieve detailed information about a specific sales order.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": UnleashedGetSalesOrderDataProvider::ProviderInfo,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 UnleashedGetSalesOrderRequestDataType::Fields),
@@ -363,6 +366,7 @@ module UnleashedDataProvider {
             "short_desc": "Get a credit note by GUID",
             "desc": "Retrieve detailed information about a specific credit note.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": UnleashedGetCreditNoteDataProvider::ProviderInfo,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 UnleashedGetCreditNoteRequestDataType::Fields),

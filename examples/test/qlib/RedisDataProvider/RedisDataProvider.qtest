@@ -499,6 +499,18 @@ public class RedisDataProviderTest inherits QUnit::Test {
             assertTrue(action_map{action_name}.data_dependent_options,
                 sprintf("action %y has data_dependent_options", action_name));
         }
+
+        # GET, MGET and the HGET family only read: the actions declare that they are read-only (qore#7454)
+        foreach string action_name in ("get-string", "get-hash") {
+            hash<DataProviderActionInfo> action = action_map{action_name};
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), action_name);
+            assertFalse(action.mutates_state, action_name);
+            assertFalse(DataProviderActionCatalog::actionMutatesState(action), action_name);
+        }
+        # a pop removes the element it returns, and the other actions write or publish
+        foreach string action_name in ("set-string", "set-hash", "push-list", "pop-list", "publish-message") {
+            assertTrue(DataProviderActionCatalog::actionMutatesState(action_map{action_name}), action_name);
+        }
     }
 
     #! Each command of a pipeline has one result, and array replies keep their elements

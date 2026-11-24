@@ -119,6 +119,7 @@ namespace Priv {
             "short_desc": "Get the agent's card",
             "desc": "Retrieve the A2A agent's card with its capabilities and skills",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "output_type": A2aClientDataProvider::A2aAgentCardResultDataType,
         });
 
@@ -130,6 +131,7 @@ namespace Priv {
             "short_desc": "Get authenticated extended agent card",
             "desc": "Get the authenticated extended agent card with additional details",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "output_type": A2aClientDataProvider::A2aAgentCardResultDataType,
         });
 
@@ -162,6 +164,7 @@ namespace Priv {
             "short_desc": "Get task status by ID",
             "desc": "Retrieve the current status of an A2A task by its ID",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 A2aTaskGetRequestDataType::Fields, {
                     "preselected": True,
@@ -196,6 +199,7 @@ namespace Priv {
             "short_desc": "List tasks with optional filtering",
             "desc": "List A2A tasks, optionally filtered by context ID",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 A2aTaskListRequestDataType::Fields,
             ),
@@ -230,6 +234,7 @@ namespace Priv {
             "short_desc": "Get push notification config for a task",
             "desc": "Get the push notification configuration for an A2A task",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 A2aPushNotificationTaskRequestDataType::Fields, {
                     "preselected": True,
@@ -247,6 +252,7 @@ namespace Priv {
             "short_desc": "List push notification configs for a task",
             "desc": "List all push notification configurations for an A2A task",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 A2aPushNotificationTaskRequestDataType::Fields, {
                     "preselected": True,

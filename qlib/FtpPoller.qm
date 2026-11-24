@@ -72,6 +72,8 @@ module FtpPoller {
                 "Set remote_file_disposition to DELETE or MOVE to remove the remote file after processing. With NONE, "
                 "the handler must move, rename or delete the file, or it will be delivered again on the next poll.",
             "action_code": DPAT_EVENT,
+            # remote_file_disposition DELETE or MOVE deletes or moves the remote file (qore#7454)
+            "mutates_state": True,
             "action_val": EVENT_FTP_FILE,
             "output_type": FtpPollerFileEventInfoDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(

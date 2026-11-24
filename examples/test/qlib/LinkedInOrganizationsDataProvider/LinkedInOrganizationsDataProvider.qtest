@@ -325,6 +325,14 @@ public class LinkedInOrganizationsDataProviderTest inherits QUnit::Test {
 
         assertEq(expected.size() + 2, actions.size(), "no action may be registered twice");
 
+        # every API action of the module only reads (GET requests of the Community Management API): they
+        # declare that they are read-only, which the catalogue reports as such (qore#7454)
+        list<hash<DataProviderActionInfo>> ro_actions = select actions, inlist($1.action, expected);
+        assertEq(expected.size(), ro_actions.size());
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
+
         # every action path must resolve to a provider
         FakeDmaRestClientIo rest = client();
         LinkedInOrganizationsDataProvider::LinkedInOrganizationsDataProvider dp(rest);

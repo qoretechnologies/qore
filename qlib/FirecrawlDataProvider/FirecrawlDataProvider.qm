@@ -157,6 +157,7 @@ module FirecrawlDataProvider {
             "short_desc": "Get the status and results of a batch scrape job",
             "desc": "Gets the current status and results of a batch scrape job by its ID.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FirecrawlGetBatchScrapeStatusRequestDataType::Fields{"id",}, {
                     "required": True,
@@ -212,6 +213,7 @@ module FirecrawlDataProvider {
             "short_desc": "Get the status and results of a crawl job",
             "desc": "Gets the current status and results of a crawl job by its ID.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FirecrawlGetCrawlStatusRequestDataType::Fields{"id",}, {
                     "required": True,
@@ -259,6 +261,7 @@ module FirecrawlDataProvider {
                 "Supports search filtering, subdomain inclusion, sitemap usage, and "
                 "geolocation settings.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FirecrawlMapRequestDataType::Fields{"url",}, {
                     "required": True,
@@ -347,6 +350,7 @@ module FirecrawlDataProvider {
             "short_desc": "Get the status and results of an extraction job",
             "desc": "Gets the current status and results of an extraction job by its ID.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FirecrawlGetExtractStatusRequestDataType::Fields{"id",}, {
                     "required": True,
@@ -421,6 +425,7 @@ module FirecrawlDataProvider {
             "short_desc": "Get the status and results of an agent job",
             "desc": "Gets the current status and results of an agent job by its ID.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FirecrawlGetAgentStatusRequestDataType::Fields{"id",}, {
                     "required": True,

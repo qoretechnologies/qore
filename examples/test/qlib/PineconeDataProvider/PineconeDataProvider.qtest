@@ -66,6 +66,7 @@ public class PineconeDataProviderTest inherits QUnit::Test {
         conn_name = LiveProvider::get("pinecone", "PINECONE_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + actions registered", \registrationTest());
+        addTestCase("read-only operations declare that they change nothing", \readOnlyActionsTest());
         addTestCase("the manifests agree with the pinned schemas", \schemaTest());
         addTestCase("every action publishes a usable form", \actionShapeTest());
         addTestCase("action presentation", \actionPresentationTest());
@@ -89,6 +90,24 @@ public class PineconeDataProviderTest inherits QUnit::Test {
         printOption("-c,--connection=ARG",
             "set the Pinecone connection name; without it (and without the PINECONE_CONNECTION "
             "environment variable) the live tests are skipped", OptionColumn);
+    }
+
+    #! the POST operations that the vendored API description documents as pure queries, validations,
+    #! estimates or stateless inference declare mutates_state False; the others keep the default (qore#7454)
+    private readOnlyActionsTest() {
+        foreach string name in (("describe-index-stats", "query-vectors", "fetch-vectors-by-metadata", "search-records", "search-documents", "fetch-documents", "list-documents", "embed", "rerank",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("Pinecone", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # operations that create, change or start something on the server still declare a change
+        foreach string name in (("upsert-vectors", "delete-vectors", "update-documents", "start-import",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("Pinecone", name);
+            assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
     }
 
     private registrationTest() {

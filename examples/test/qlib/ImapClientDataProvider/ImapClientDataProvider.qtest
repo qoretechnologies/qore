@@ -624,6 +624,24 @@ public class ImapClientDataProviderTest inherits QUnit::Test {
         foreach hash<DataProviderActionInfo> ai in (actions) {
             by_action{ai.action} = ai;
         }
+        # search (EXAMINE or SELECT, then UID SEARCH), get-attachment (EXAMINE, BODY.PEEK) and list-mailboxes only
+        # read; get-message keeps the default as mark_seen sets \Seen, and the watch events declare a change
+        # explicitly as mark_seen and delete_messages flag or delete the reported messages (qore#7454)
+        foreach string name in (("search", "get-attachment", "list-mailboxes")) {
+            assertEq(NT_BOOLEAN, by_action{name}.mutates_state.typeCode(), name);
+            assertFalse(by_action{name}.mutates_state, name);
+            assertFalse(DataProviderActionCatalog::actionMutatesState(by_action{name}), name);
+        }
+        assertTrue(exists by_action."get-message".options.mark_seen);
+        assertTrue(DataProviderActionCatalog::actionMutatesState(by_action."get-message"));
+        foreach string name in (("watch", "watch-attachment")) {
+            assertEq(DPAT_EVENT, by_action{name}.action_code, name);
+            assertTrue(exists by_action{name}.options.mark_seen, name);
+            assertTrue(exists by_action{name}.options.delete_messages, name);
+            assertEq(NT_BOOLEAN, by_action{name}.mutates_state.typeCode(), name);
+            assertTrue(by_action{name}.mutates_state, name);
+            assertTrue(DataProviderActionCatalog::actionMutatesState(by_action{name}), name);
+        }
         foreach string name in (("search", "get-message", "get-attachment", "list-mailboxes",
             "set-flags", "move-messages", "append-message", "watch", "watch-attachment")) {
             assertTrue(exists by_action{name}, sprintf("action %y registered", name));

@@ -88,6 +88,7 @@ module TavilyDataProvider {
                 "to read, and `include_raw_content` to get each page's full text back with the "
                 "results instead of fetching it separately with **Read Pages**.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Search",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 TavilySearchRequestDataType::Fields{"query",}, {
@@ -124,6 +125,7 @@ module TavilyDataProvider {
                 "Pages that cannot be read are reported in `failed_results` rather than failing "
                 "the request, so a partial success is normal and worth checking.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Extract",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 TavilyExtractRequestDataType::Fields{"urls",}, {
@@ -155,6 +157,7 @@ module TavilyDataProvider {
                 "`allow_external` defaults to `True`, so a crawl meant to stay on one site must "
                 "set it to `False`.  Use **Map a Site** first when only the URLs are wanted.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Crawl",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 TavilyCrawlRequestDataType::Fields{"url",}, {
@@ -185,6 +188,7 @@ module TavilyDataProvider {
                 "This is the cheap survey step: map a site first to see what is there, then read "
                 "the pages that matter with **Read Pages** rather than crawling everything.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Crawl",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 TavilyMapRequestDataType::Fields{"url",}, {
@@ -246,6 +250,7 @@ module TavilyDataProvider {
                 "`failed` - and `content` and `sources` are present once it is `completed`.  A "
                 "task that is still running is not an error: read `status` and ask again.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Research",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 TavilyGetResearchRequestDataType::Fields{"request_id",}, {
@@ -266,6 +271,7 @@ module TavilyDataProvider {
                 "Comparing `account.plan_usage` with `account.plan_limit` is what lets a flow "
                 "stop before it runs out of credits rather than discovering it mid-run.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Account",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 TavilyUsageRequestDataType::Fields
@@ -285,6 +291,7 @@ module TavilyDataProvider {
                 "individual requests that produced it.  Narrow the listing with `endpoints`, a "
                 "date window, or `filter_by_api_key` to see only this key's own requests.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Account",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 TavilyLogsRequestDataType::Fields{"limit", "endpoints",}, {

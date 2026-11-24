@@ -530,6 +530,19 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
             ShipStationDataProvider::AppName, "order-notify");
         assertTrue(exists orderNotifyAction, "order-notify action should exist");
         assertEq(DPAT_EVENT, orderNotifyAction.action_code);
+
+        # these actions only make GET requests: they declare that they are read-only, which the catalogue reports
+        # as such (qore#7454)
+        list<string> read_only = ("get-carrier", "get-customer", "get-order", "get-product", "get-store",
+            "get-warehouse", "list-packages", "list-services");
+        list<hash<DataProviderActionInfo>> ro_actions = select actions, inlist($1.action, read_only);
+        assertEq(read_only, sort(map $1.action, ro_actions));
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
+        # an action that creates a resource still changes state
+        assertTrue(DataProviderActionCatalog::actionMutatesState(DataProviderActionCatalog::getAppAction(
+            ShipStationDataProvider::AppName, "create-order")));
     }
 
     #! Integration tests - require SHIPSTATION_API_KEY and SHIPSTATION_API_SECRET
