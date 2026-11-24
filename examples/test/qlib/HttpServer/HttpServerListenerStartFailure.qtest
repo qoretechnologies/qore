@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - the setup and rollback of HTTP and HTTP/3 (QUIC) listeners in the async I/O controller
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServerUtil
+%requires HttpServer
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerListenerStartFailureTest
+
+#! A server whose async I/O controller can be stopped, so that the start of the next listener fails (qore#7436)
+class StartFailingServer inherits HttpServer {
+    public {
+        #! if set, the controller is stopped once the paired QUIC listener of an HTTP/3 listener has been added, so
+        #! that the start of the TCP listener fails with its QUIC listener in place
+        bool stop_after_quic;
+    }
+
+    constructor() : HttpServer(<HttpServerOptionInfo>{}) {
+    }
+
+    hash<auto> addQuicListener(hash<HttpListenerOptionInfo> opts, int port = 0) {
+        hash<auto> rv = HttpServer::addQuicListener(opts, port);
+        if (stop_after_quic) {
+            stopController();
+        }
+        return rv;
+    }
+
+    #! Stops the async I/O controller: a listener added after this cannot be started
+    stopController() {
+        asyncIo.stop();
+    }
+}
+
+#! A listener whose start in the async I/O controller fails is not kept registered or counted (qore#7436)
+class HttpServerListenerStartFailureTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerListenerStartFailure", "1.0") {
+        addTestCase("a listener that cannot be started is removed", \startFailureTest(), False);
+        addTestCase("an HTTP/3 listener that cannot be started is removed with its QUIC listener",
+            \startFailureTest(), True);
+        addTestCase("the count of a running listener is not changed by a failed start", \runningListenerTest());
+        set_return_value(main());
+    }
+
+    #! Returns the options of a listener on localhost on a random port, an HTTP/3 one if \a h3
+    private hash<HttpListenerOptionInfo> listenerOptions(bool h3) {
+        hash<HttpListenerOptionInfo> opts = <HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0};
+        if (h3) {
+            opts += <HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+                "enable_h3": True,
+            };
+        }
+        return opts;
+    }
+
+    #! Stops \a srv in a thread of its own and waits for the stop; a count of running listeners that a failed start
+    #! leaked makes the stop wait for a listener that never runs
+    private stopServer(HttpServer srv) {
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            srv.stop();
+        }();
+        assertEq(0, done.waitForZero(60s), "the server stopped");
+    }
+
+    startFailureTest(bool h3) {
+        StartFailingServer srv();
+        on_exit delete srv;
+        if (h3) {
+            # the paired QUIC listener is added; the start of the TCP listener then fails
+            srv.stop_after_quic = True;
+        } else {
+            srv.stopController();
+        }
+        assertThrows("CONTROLLER-ADD-LISTENER-ERROR", \srv.addListener(), listenerOptions(h3),
+            "the start of the listener failed");
+        # nothing of the listener is kept: neither the listener nor its paired QUIC listener
+        assertEq({}, srv.getListeners(), "no listener is registered");
+        assertEq(0, srv.getRunningListenerCount(), "no listener is counted");
+        stopServer(srv);
+    }
+
+    runningListenerTest() {
+        StartFailingServer srv();
+        on_exit delete srv;
+        srv.addListener(listenerOptions(False));
+        assertEq(1, srv.getRunningListenerCount());
+        srv.stopController();
+        assertThrows("CONTROLLER-ADD-LISTENER-ERROR", \srv.addListener(), listenerOptions(False));
+        assertEq(1, srv.getListeners().size(), "only the running listener is registered");
+        assertEq(1, srv.getRunningListenerCount(), "the count of the running listener is unchanged");
+        stopServer(srv);
+        assertEq(0, srv.getRunningListenerCount());
+    }
+}
