@@ -121,6 +121,11 @@
   pipeline (design/ci-test-base-image-digests.md, `examples/test/runner/test_resolve_image_digests.py`).
 
 ## Running Tests Under valgrind
+- `run_tests.sh` passes `examples/test/valgrind.supp` to every valgrind that a test starts (`VALGRIND_OPTS`); give it
+  to a manual run with `--suppressions=examples/test/valgrind.supp`.  It suppresses the reports of LLVM 21's JIT that
+  are not errors (each by its exact frames, with the standalone reproduction in the file), never a report of Qore's own
+  code (`qore/misc/valgrind-suppressions.qtest` checks it); add a library false positive there only with such a
+  reproduction.
 - Disable signal handling with `-b` (`--disable-signals`), for example
   `QORE_PCRE2_NO_JIT=1 valgrind qore -b --exec-mode=ir --enable-debug <test>`.  Qore wakes its signal handling thread
   with `SIGSYS`, and valgrind treats `SIGSYS` as a fault signal: a wake-up that arrives while the signal thread is
