@@ -332,10 +332,17 @@ public string sub getAccessTokenFromServiceAccountFile(string sa_json_path,
     @return the bearer access token
 
     @throw GCP-AUTH-ERROR metadata server unreachable or returned an error, or no \c metadata_endpoint is given while
-    \c QORE_GCP_ADC_DISABLED is set (see @ref gcpauthintro)
+    \c QORE_GCP_ADC_DISABLED is set (see @ref gcpauthintro), or the calling code is restricted from external
+    information (see @ref Qore::SandboxManager::callerMayReadExternalInfo()
+    "SandboxManager::callerMayReadExternalInfo()"): the metadata server's token is the host's identity
 */
 public string sub getAccessTokenFromMetadataServer(list<string> scopes,
         *hash<auto> opts) {
+    # the host's instance identity is not given to a caller restricted from external information (qore#6844)
+    if (!SandboxManager::callerMayReadExternalInfo()) {
+        throw "GCP-AUTH-ERROR", "the metadata server's credentials of the host are not available to code restricted "
+            "from external information; give a credential file explicitly";
+    }
     if (!opts.metadata_endpoint && adcDisabled()) {
         throw "GCP-AUTH-ERROR", "the default metadata server is not used: QORE_GCP_ADC_DISABLED is set";
     }
@@ -392,7 +399,9 @@ public string sub getAccessTokenFromMetadataServer(list<string> scopes,
 
     @return the bearer access token
 
-    @throw GCP-AUTH-ERROR all candidate sources failed
+    @throw GCP-AUTH-ERROR all candidate sources failed; for code restricted from external information (see
+    @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), when no
+    \a sa_json_path is given: the application default credentials and the metadata server are the host's (qore#6844)
 */
 public string sub getAccessToken(*string sa_json_path, list<string> scopes,
         *hash<auto> opts) {
@@ -413,9 +422,18 @@ public string sub getAccessToken(*string sa_json_path, list<string> scopes,
 #! Resolves the supported file-based ADC chain without acquiring a token
 /** @param location explicit credential location, or NOTHING for ADC
     @return the selected credential location, or NOTHING for compute metadata credentials
+
+    @note For code restricted from external information (see @ref Qore::SandboxManager::callerMayReadExternalInfo()
+    "SandboxManager::callerMayReadExternalInfo()"), only an explicit \a location is returned: the application default
+    credentials of the environment and of the user's home are the host's (qore#6844)
 */
 public *string sub resolveCredentialLocation(*string location) {
     *string candidate = location;
+    # the host's application default credentials are not resolved for a caller restricted from external information
+    # (qore#6844)
+    if (!candidate.val() && !SandboxManager::callerMayReadExternalInfo()) {
+        return;
+    }
     if (!candidate.val()) {
         *string env_path = getenv("GOOGLE_APPLICATION_CREDENTIALS");
         if (env_path.val()) {

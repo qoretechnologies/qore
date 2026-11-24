@@ -284,11 +284,18 @@ public string sub getEntraTokenClientCredentials(string tenant, string client_id
 
     @return the bearer access token
 
-    @throw AZURE-AUTH-ERROR IMDS unreachable or returned an error
+    @throw AZURE-AUTH-ERROR IMDS unreachable or returned an error, or the calling code is restricted from external
+    information (see @ref Qore::SandboxManager::callerMayReadExternalInfo()
+    "SandboxManager::callerMayReadExternalInfo()"): the managed identity is the host's (qore#6844)
     @throw AZURE-AUTH-MISSING-JSON-MODULE the json module is unavailable
 */
 public string sub getEntraTokenManagedIdentity(string resource, *string client_id,
         *hash<auto> opts) {
+    # the host's managed identity is not given to a caller restricted from external information (qore#6844)
+    if (!SandboxManager::callerMayReadExternalInfo()) {
+        throw "AZURE-AUTH-ERROR", "the managed identity of the host is not available to code restricted from "
+            "external information; give client credentials explicitly";
+    }
     string endpoint = opts.imds_endpoint ?? ImdsEndpoint;
     string api_version = opts.api_version ?? ImdsApiVersion;
     string group = sprintf("mi|%s|%s", resource, client_id ?? "");

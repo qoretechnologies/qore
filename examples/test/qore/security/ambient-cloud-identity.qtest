@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires GcpAuth
+%requires AzureAuth
+%requires ./ambient-host/AmbientCallers.qm
+
+%exec-class AmbientCloudIdentityTest
+
+#! GcpAuth and AzureAuth resolve no identity of the host for code restricted from external information (qore#6844)
+/** The application default credentials of the environment and of the user's home, the GCP metadata server's token and
+    the Azure managed identity are the host's; a credential file that the caller names is its own
+*/
+class AmbientCloudIdentityTest inherits QUnit::Test {
+    public {
+        #! the code of the Programs; it reports what it gets, or the error it gets
+        const Source = "%modern
+%requires GcpAuth
+%requires AzureAuth
+auto sub try_call(code c) {
+    try {
+        return c();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+*string sub location(*string loc) {
+    return GcpAuth::resolveCredentialLocation(loc);
+}
+auto sub gcp_metadata(string url) {
+    return try_call(auto sub () {
+        return GcpAuth::getAccessTokenFromMetadataServer((\"scope-a\",), {\"metadata_endpoint\": url});
+    });
+}
+auto sub gcp_token(string url) {
+    return try_call(auto sub () {
+        return GcpAuth::getAccessToken(NOTHING, (\"scope-b\",), {\"metadata_endpoint\": url});
+    });
+}
+auto sub azure_mi(string url) {
+    return try_call(auto sub () {
+        return AzureAuth::getEntraTokenManagedIdentity(\"https://res.example\", NOTHING, {\"imds_endpoint\": url});
+    });
+}
+";
+
+        #! what the error of a refused caller says
+        const Refused = "restricted from external information";
+    }
+
+    private {
+        hash<string, Program> pgms;
+        AmbientCallers::FakeMetadataServer mds();
+        TmpDir tmp("ambient-cloud-identity-");
+    }
+
+    constructor() : Test("AmbientCloudIdentity", "1.0", \ARGV) {
+        addTestCase("GCP application default credentials", \adcTest());
+        addTestCase("GCP metadata server", \gcpMetadataTest());
+        addTestCase("Azure managed identity", \azureTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        pgms = AmbientCallers::make_programs(Source, "cloud");
+    }
+
+    private string writeFile(string name) {
+        string path = tmp.path + DirSep + name;
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("{\"type\": \"service_account\"}");
+        f.close();
+        return path;
+    }
+
+    #! the credential file of the environment and of the gcloud configuration directory
+    adcTest() {
+        string adc = writeFile("adc.json");
+        mkdir(tmp.path + DirSep + "gcloud");
+        string cfg = writeFile("gcloud" + DirSep + "application_default_credentials.json");
+        foreach hash<auto> i in ({
+                "GOOGLE_APPLICATION_CREDENTIALS": {
+                    "env": {"GOOGLE_APPLICATION_CREDENTIALS": adc, "QORE_GCP_ADC_DISABLED": NOTHING},
+                    "path": adc,
+                },
+                "CLOUDSDK_CONFIG": {
+                    "env": {"GOOGLE_APPLICATION_CREDENTIALS": NOTHING, "QORE_GCP_ADC_DISABLED": NOTHING,
+                        "CLOUDSDK_CONFIG": tmp.path + DirSep + "gcloud"},
+                    "path": cfg,
+                },
+                "HOME": {
+                    "env": {"GOOGLE_APPLICATION_CREDENTIALS": NOTHING, "QORE_GCP_ADC_DISABLED": NOTHING,
+                        "CLOUDSDK_CONFIG": NOTHING, "HOME": tmp.path + DirSep + "home"},
+                    "path": NOTHING,
+                },
+            }.pairIterator()) {
+            AmbientCallers::EnvHelper env(i.value.env);
+            *string path = i.value.path;
+            if (i.key == "HOME") {
+                mkdir(tmp.path + DirSep + "home" + DirSep + ".config" + DirSep + "gcloud", 0755, True);
+                path = writeFile("home/.config/gcloud/application_default_credentials.json");
+            }
+            assertEq(path, GcpAuth::resolveCredentialLocation(), "host: " + i.key);
+            foreach string kind in (AmbientCallers::Kinds) {
+                string label = kind + ": " + i.key;
+                assertEq(AmbientCallers::restricted(kind) ? NOTHING : path,
+                    pgms{kind}.callFunction("location"), label);
+                # a location that the caller gives is its own
+                assertEq(adc, pgms{kind}.callFunction("location", adc), label);
+            }
+        }
+    }
+
+    #! the GCP metadata server's token, also one that the host's call cached
+    gcpMetadataTest() {
+        AmbientCallers::EnvHelper env({"GOOGLE_APPLICATION_CREDENTIALS": NOTHING, "CLOUDSDK_CONFIG": NOTHING,
+            "HOME": tmp.path, "QORE_GCP_ADC_DISABLED": NOTHING});
+        assertEq("host-gcp-token", GcpAuth::getAccessTokenFromMetadataServer(("scope-a",),
+            {"metadata_endpoint": mds.url}), "host");
+        foreach string kind in (AmbientCallers::Kinds) {
+            if (AmbientCallers::restricted(kind)) {
+                assertRegex("^GCP-AUTH-ERROR: .*" + Refused, pgms{kind}.callFunction("gcp_metadata", mds.url), kind);
+                assertRegex("^GCP-AUTH-ERROR: .*" + Refused, pgms{kind}.callFunction("gcp_token", mds.url), kind);
+            } else {
+                assertEq("host-gcp-token", pgms{kind}.callFunction("gcp_metadata", mds.url), kind);
+                assertEq("host-gcp-token", pgms{kind}.callFunction("gcp_token", mds.url), kind);
+            }
+        }
+    }
+
+    #! the Azure managed identity's token, also one that the host's call cached
+    azureTest() {
+        assertEq("host-azure-token", AzureAuth::getEntraTokenManagedIdentity("https://res.example", NOTHING,
+            {"imds_endpoint": mds.url}), "host");
+        foreach string kind in (AmbientCallers::Kinds) {
+            if (AmbientCallers::restricted(kind)) {
+                assertRegex("^AZURE-AUTH-ERROR: .*" + Refused, pgms{kind}.callFunction("azure_mi", mds.url), kind);
+            } else {
+                assertEq("host-azure-token", pgms{kind}.callFunction("azure_mi", mds.url), kind);
+            }
+        }
+    }
+}
