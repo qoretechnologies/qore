@@ -24668,6 +24668,76 @@ bool dbg_arm_scan_hold(std::vector<ScanRootHold>& holds, const QoreListNode* par
 }
 }
 
+namespace {
+//! an armed hold of dbg_hold_object_cleanup()
+struct ObjectCleanupHold {
+    // compared only, never dereferenced: the hold is armed with a reference that the test keeps
+    const QoreObject* obj;
+    Counter* held;
+    Counter* release;
+};
+
+std::mutex object_cleanup_hold_lock;
+//! the holds of dbg_hold_object_cleanup(), guarded by object_cleanup_hold_lock
+std::vector<ObjectCleanupHold> object_cleanup_holds;
+
+//! runs in the cleanup of a deleted object once its private data is freed; holds it if a hold is armed for the object
+void dbg_object_cleanup_hold_hook(QoreObject& obj) {
+    ExceptionSink xsink;
+    ReferenceHolder<Counter> held(&xsink);
+    ReferenceHolder<Counter> release(&xsink);
+    {
+        std::lock_guard<std::mutex> l(object_cleanup_hold_lock);
+        for (auto i = object_cleanup_holds.begin(), e = object_cleanup_holds.end(); i != e; ++i) {
+            if (i->obj == &obj) {
+                held = i->held;
+                release = i->release;
+                object_cleanup_holds.erase(i);
+                break;
+            }
+        }
+    }
+    if (!held) {
+        return;
+    }
+    held->dec(&xsink);
+    if (!xsink) {
+        release->waitForZero(&xsink);
+    }
+}
+}
+
+//! holds the cleanup of an object when it is deleted, once its private data is freed and before its members are released
+/** The thread that deletes the object waits until \a release reaches zero, after the object is marked deleted and its
+    lock released; tests use this to make a call that another thread makes with the object meanwhile deterministic.
+    The hold is used once.
+
+    @param obj the object
+    @param held decremented once the cleanup is held
+    @param release the cleanup goes on when this Counter reaches zero
+*/
+static QoreValue f_dbg_hold_object_cleanup(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<Counter> held(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 2, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    {
+        std::lock_guard<std::mutex> l(object_cleanup_hold_lock);
+        object_cleanup_holds.push_back({obj, *held, *release});
+        // the armed hold owns the references now
+        held.release();
+        release.release();
+    }
+    // the hook stays installed; it does nothing while no hold is armed
+    qore_object_private::dbg_cleanup_hook.store(dbg_object_cleanup_hold_hook, std::memory_order_release);
+    return QoreValue();
+}
+
 //! holds the next pass of a recursive-reference scan whose root is an object of a class, with the root locked
 /** The pass holds the rsection of its root until \a release reaches zero, so that another scan reaching the root
     collides with it; tests use this to make scans collide deterministically.  Each call arms one hold, which is used
@@ -28507,6 +28577,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_scan_wait_notify", f_dbg_scan_wait_notify, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "c");
     qns.addBuiltinVariant("dbg_hold_object_lock", f_dbg_hold_object_lock, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 3, objectTypeInfo, QORE_PARAM_NO_ARG, "obj", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
+    qns.addBuiltinVariant("dbg_hold_object_cleanup", f_dbg_hold_object_cleanup, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 3, objectTypeInfo, QORE_PARAM_NO_ARG, "obj", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
     qns.addBuiltinVariant("dbg_hold_scan", f_dbg_hold_scan, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

@@ -903,7 +903,20 @@ public:
         }
     }
 
-    DLLLOCAL void cleanup(ExceptionSink* xsink, QoreHashNode* td, cdmap_t* cdm);
+    //! frees the private data, members and class-specific members that were detached from a deleted object
+    /** Called without the object's lock, once the object is marked deleted and the storage is detached from it with the
+        lock held
+    */
+    DLLLOCAL void cleanup(ExceptionSink* xsink, KeyList* pd, QoreHashNode* td, cdmap_t* cdm);
+
+#ifdef DEBUG
+    //! Test hook run by cleanup() once the private data of a deleted object is freed, before its members are released
+    /** Tests hold the cleanup of a deleted object here to make a call that another thread makes with the object
+        deterministic; see dbg_hold_object_cleanup().
+    */
+    typedef void (*dbg_cleanup_t)(QoreObject& obj);
+    DLLLOCAL static std::atomic<dbg_cleanup_t> dbg_cleanup_hook;
+#endif
 
     //! Invalidate an incomplete object while its owner keeps its reference alive.
     /** Clears member and native storage without calling user destructors or
@@ -1030,8 +1043,15 @@ public:
     // add virtual IDs for private data to class list
     DLLLOCAL void addVirtualPrivateData(qore_classid_t key, AbstractPrivateData* apd);
 
+    //! removes the private data of the given class from the object and returns it; the caller owns it
+    /** Raises OBJECT-ALREADY-DELETED and returns nullptr if the object is deleted, also while its private data is freed
+    */
     DLLLOCAL AbstractPrivateData* getAndRemovePrivateData(qore_classid_t key, ExceptionSink* xsink) {
         QoreSafeVarRWWriteLocker sl(rml);
+        if (status == OS_DELETED) {
+            makeAccessDeletedObjectException(xsink, theclass->getName());
+            return nullptr;
+        }
         return privateData ? privateData->getAndRemovePtr(key) : nullptr;
     }
 

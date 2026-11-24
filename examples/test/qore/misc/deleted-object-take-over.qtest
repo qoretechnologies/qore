@@ -1,0 +1,59 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DeletedObjectTakeOverTest
+
+#! A call that takes over an object that another thread is deleting
+/** Once an object is marked deleted, another thread can take the object's lock while the thread that deletes it frees
+    its private data.  A call that takes over the object then raises OBJECT-ALREADY-DELETED and does not use the
+    private data that is being freed.  The test holds the deletion after the private data is freed with a debug hook,
+    so it runs only in debug builds.
+*/
+class DeletedObjectTakeOverTest inherits QUnit::Test {
+    public {
+        #! the module that the call loads: it does not exist
+        const NoModule = "deleted-object-take-over-no-such-module";
+    }
+
+    constructor() : QUnit::Test("deleted object take over", "1.0") {
+        addTestCase("take over an object being deleted", \takeOverTest());
+        set_return_value(main());
+    }
+
+    takeOverTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hook that holds the deletion of an object is only in debug builds");
+        }
+
+        Program p();
+        Counter held(1);
+        Counter release(1);
+        Counter done(1);
+        call_function("dbg_hold_object_cleanup", p, held, release);
+
+        code del = sub (Program x) {
+            on_exit done.dec();
+            delete x;
+        };
+        background del(p);
+        held.waitForZero();
+
+        string err;
+        try {
+            load_user_module_with_program(NoModule, p);
+            err = "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err;
+        }
+        release.dec();
+        done.waitForZero();
+
+        assertEq("OBJECT-ALREADY-DELETED", err);
+    }
+}

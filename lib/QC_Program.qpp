@@ -3497,7 +3497,8 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
 #endif
     qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM, xsink);
 #ifdef DEBUG
-    assert(pgm == p);
+    // or the object was deleted meanwhile
+    assert(pgm == p || *xsink);
 #endif
     if (!*xsink) {
         QMM.runTimeLoadModule(*xsink, *xsink, module_name->c_str(), 0, p,
@@ -3557,7 +3558,8 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
 #endif
     qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM, xsink);
 #ifdef DEBUG
-    assert(pgm == p);
+    // or the object was deleted meanwhile
+    assert(pgm == p || *xsink);
 #endif
     if (!*xsink) {
         ExceptionSink wsink;
@@ -3616,7 +3618,8 @@ Program::loadApplyToPrivateUserModule(
 #endif
     qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM, xsink);
 #ifdef DEBUG
-    assert(pgm == p);
+    // or the object was deleted meanwhile
+    assert(pgm == p || *xsink);
 #endif
     if (!*xsink) {
         QMM.runTimeLoadModule(*xsink, *xsink, module_name->c_str(), 0, p, QMLO_INJECT | QMLO_PRIVATE,
@@ -3672,7 +3675,8 @@ Program::loadApplyToPrivateUserModule(
 #endif
     qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM, xsink);
 #ifdef DEBUG
-    assert(pgm == p);
+    // or the object was deleted meanwhile
+    assert(pgm == p || *xsink);
 #endif
     if (!*xsink) {
         ExceptionSink wsink;
