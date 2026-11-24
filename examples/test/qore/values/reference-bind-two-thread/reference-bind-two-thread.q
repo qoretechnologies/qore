@@ -30,6 +30,24 @@ hashdecl H {
     list<reference<softint>> r;
 }
 
+class HashHolder {
+    public {
+        auto v;
+        hash<string, reference<softint>> h = {};
+    }
+
+    constructor(string v) {
+        self.v = v;
+    }
+}
+
+# an object whose members += merges into a hash
+class Source {
+    public {
+        auto a;
+    }
+}
+
 our hash<H> g1 = cast<hash<H>>({"v": "1"});
 our hash<H> g2 = cast<hash<H>>({"v": "2"});
 
@@ -157,6 +175,34 @@ sub run(string label, list<code> stores, code check) {
         list<auto> rv = (a.r.fullType(), b.r.fullType(), a.v.type(), a.v, b.v.type(), b.v);
         a.r = ();
         b.r = ();
+        return rv;
+    });
+}
+
+# push into members of two objects, each element referring to the other object's member
+{
+    Holder a("6");
+    Holder b("7");
+    run("push into members of two objects", (sub () { push a.r, \b.v; }, sub () { push b.r, \a.v; }), auto sub () {
+        list<auto> rv = (a.r.size(), b.r.size(), a.v.type(), a.v, b.v.type(), b.v);
+        a.r = ();
+        b.r = ();
+        return rv;
+    });
+}
+
+# += of an object on the hashes of two objects, the members of each object referring to the other target's object
+{
+    HashHolder a("8");
+    HashHolder b("9");
+    Source sa();
+    sa.a = \b.v;
+    Source sb();
+    sb.a = \a.v;
+    run("hash += object in two objects", (sub () { a.h += sa; }, sub () { b.h += sb; }), auto sub () {
+        list<auto> rv = (a.h.size(), b.h.size(), a.v.type(), a.v, b.v.type(), b.v);
+        a.h = {};
+        b.h = {};
         return rv;
     });
 }

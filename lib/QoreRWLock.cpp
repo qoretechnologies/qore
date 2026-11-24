@@ -37,6 +37,10 @@
 #include "qore/intern/QoreProgramObjectLockOps.h"
 
 QoreRWLock::QoreRWLock() : priv(new qore_var_rwlock_priv) {
+#ifdef DEBUG
+    // not the lock of an lvalue: its write locks are not counted in qore_lvalue_write_locks_held (qore#7391)
+    priv->lvalue_lock = false;
+#endif
 }
 
 QoreRWLock::~QoreRWLock() {

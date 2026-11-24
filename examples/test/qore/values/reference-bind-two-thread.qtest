@@ -21,9 +21,10 @@
     with it held, which deadlocks when the two threads do it at the same time.  The binds are made with no lvalue lock
     held: a debug hook (dbg_reference_bind_rendezvous()) makes the binds of both threads wait for each other, so that
     they are in progress at the same time, and makes a bind made with an lvalue write lock held fail at once with
-    \c DBG-REFERENCE-BIND-HELD instead of waiting.  The program covers members of two objects, global variables,
-    closure-bound variables and a member of the object of the target itself (qore#7380), in the AST, IR, JIT and tiered
-    modes; qcc executables are not built, as the hook is a debug function of the library.
+    \c DBG-REFERENCE-BIND-HELD instead of waiting.  The program covers assignments to members of two objects, global
+    variables, closure-bound variables and a member of the object of the target itself (qore#7380), push into the
+    members of two objects and += of an object on the hashes of two objects, in the AST, IR, JIT and tiered modes; qcc
+    executables are not built, as the hook is a debug function of the library.
 
     The program is in \c reference-bind-two-thread/.
 */

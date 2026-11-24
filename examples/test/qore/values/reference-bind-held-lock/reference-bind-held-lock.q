@@ -121,10 +121,77 @@ hashdecl H {
     list<reference<softint>> s;
 }
 
+# the targets of the operations that store values into a container (qore#7391)
+class Ops {
+    public {
+        auto v = "1";
+        auto w = "x";
+        list<reference<softint>> l = ();
+        list<reference<softint>> lv = ();
+        list<reference<softint>> lw = ();
+        list<list<reference<softint>>> ll = ();
+        hash<string, reference<softint>> h = {};
+        *hash<string, reference<softint>> nh;
+        hash<string, list<reference<softint>>> hl = {};
+        hash<string, hash<string, list<reference<int>>>> hh = {};
+    }
+}
+
+class OpsHolder {
+    public {
+        Ops o();
+    }
+}
+
+# an object whose members += merges into a hash
+class Src {
+    public {
+        auto a;
+        auto b;
+    }
+}
+
+# a hashdecl whose member initializer binds a reference argument (qore#7391)
+hashdecl M3 {
+    int a = m3_init(\g_m3v);
+    list<reference<softint>> s;
+}
+
+class M3Holder {
+    public {
+        auto v = "2";
+        *hash<M3> h;
+    }
+}
+
 our hash<H> g_h = cast<hash<H>>({"b": 5});
 our hash<H> g_conv = cast<hash<H>>({"b": "5"});
 our auto g_anc;
 our hash<H> g_lref = cast<hash<H>>({"b": "9"});
+# the number of calls of k()
+our int g_k = 0;
+# the number of calls of m3_init(), and the variable whose reference it is given
+our int g_m3 = 0;
+our auto g_m3v = "5";
+
+# a debug build raises DBG-REFERENCE-BIND-HELD for a bind made with an lvalue write lock held, which a store path that
+# still binds a reference under its lock would make: the output of that store then shows the error (qore#7391); a
+# qcc executable has no debug functions
+if (function_exists("dbg_reference_bind_strict")) {
+    call_function("dbg_reference_bind_strict", True);
+}
+
+# a key whose evaluation is counted
+string sub k() {
+    ++g_k;
+    return "a";
+}
+
+# the initializer of hashdecl M3
+int sub m3_init(reference<int> r) {
+    ++g_m3;
+    return r;
+}
 
 # stores a value through a typed reference held by a local variable (a parameter)
 sub store_typed_ref(reference<list<reference<softint>>> r, list<auto> v) {
@@ -631,4 +698,221 @@ show("soft list element refused", auto sub () {
     } catch (hash<ExceptionInfo> ex) {
         return (ex.err, c.b);
     }
+});
+
+# push binds the reference elements of the value with no lock held: one refers to the target's own object, one to
+# another object (qore#7391)
+show("push into a member list", auto sub () {
+    Ops o();
+    Ops p();
+    p.v = "2";
+    push o.l, \o.v;
+    push o.l, \p.v;
+    list<auto> rv = (o.l.fullType(), o.l.size(), o.v.type(), o.v, p.v.type(), p.v);
+    # breaks the cycle
+    o.l = ();
+    return rv;
+});
+
+show("unshift into a member list", auto sub () {
+    Ops o();
+    Ops p();
+    o.w = "3";
+    p.v = "4";
+    unshift o.l, \o.w;
+    unshift o.l, \p.v;
+    # the first element refers to p.v
+    o.l[0] = 40;
+    list<auto> rv = (o.l.size(), o.w.type(), o.w, p.v.type(), p.v);
+    o.l = ();
+    return rv;
+});
+
+show("splice into a member list", auto sub () {
+    Ops o();
+    Ops p();
+    o.w = "5";
+    p.v = "6";
+    push o.l, \o.v;
+    list<auto> rep = (\o.w, \p.v);
+    splice o.l, 0, 1, rep;
+    list<auto> rv = (o.l.fullType(), o.l.size(), o.w.type(), o.w, p.v.type(), p.v);
+    o.l = ();
+    return rv;
+});
+
+show("extract from a member list", auto sub () {
+    Ops o();
+    Ops p();
+    o.w = "7";
+    p.v = "8";
+    push o.l, \o.v;
+    list<auto> rep = (\o.w, \p.v);
+    auto removed = extract o.l, 0, 1, rep;
+    list<auto> rv = (removed.size(), o.l.size(), o.w.type(), o.w, p.v.type(), p.v);
+    o.l = ();
+    return rv;
+});
+
+show("+= on a member list", auto sub () {
+    Ops o();
+    Ops p();
+    p.v = "9";
+    o.l += \o.v;
+    list<auto> add = (\p.v,);
+    o.l += add;
+    list<auto> rv = (o.l.fullType(), o.l.size(), o.v.type(), o.v, p.v.type(), p.v);
+    o.l = ();
+    return rv;
+});
+
+show("hash += hash", auto sub () {
+    Ops o();
+    Ops p();
+    p.v = "10";
+    hash<auto> add = {"a": \o.v, "b": \p.v};
+    o.h += add;
+    list<auto> rv = (o.h.fullType(), o.h.keys(), o.v.type(), o.v, p.v.type(), p.v);
+    o.h = {};
+    return rv;
+});
+
+# the members of the object are checked as those of a hash before the hash is changed
+show("hash += object", auto sub () {
+    Ops o();
+    Ops p();
+    p.v = "11";
+    Src s();
+    s.a = \o.v;
+    s.b = \p.v;
+    o.h += s;
+    list<auto> rv = (o.h.fullType(), o.h.keys(), o.v.type(), o.v, p.v.type(), p.v);
+    o.h = {};
+    return rv;
+});
+
+# the lvalue has no value: += assigns it a hash first, after the members have been checked
+show("*hash += object", auto sub () {
+    Ops o();
+    o.w = "12";
+    Src s();
+    s.a = \o.v;
+    s.b = \o.w;
+    o.nh += s;
+    list<auto> rv = (o.nh.fullType(), o.nh.keys(), o.v.type(), o.v, o.w.type(), o.w);
+    remove o.nh;
+    return rv;
+});
+
+show("list assignment", auto sub () {
+    Ops o();
+    Ops p();
+    o.w = "13";
+    p.v = "14";
+    list<auto> a = (\o.w,);
+    list<auto> b = (\p.v,);
+    (o.lv, o.lw) = (a, b);
+    list<auto> rv = (o.lv.fullType(), o.lw.fullType(), o.w.type(), o.w, p.v.type(), p.v);
+    o.lv = ();
+    o.lw = ();
+    return rv;
+});
+
+show("object merge", auto sub () {
+    Ops o();
+    Ops p();
+    p.v = "15";
+    hash<auto> add = {"l": (\o.v, \p.v)};
+    o += add;
+    list<auto> rv = (o.l.fullType(), o.l.size(), o.v.type(), o.v, p.v.type(), p.v);
+    o.l = ();
+    return rv;
+});
+
+# the object is the value of a member: the merge is made after the lock of that member has been released
+show("object merge through a member", auto sub () {
+    OpsHolder hd();
+    hash<auto> add = {"l": (\hd.o.v,)};
+    hd.o += add;
+    list<auto> rv = (hd.o.l.fullType(), hd.o.v.type(), hd.o.v);
+    hd.o.l = ();
+    return rv;
+});
+
+# the list is written back to the member after the loop
+show("foreach reference loop", auto sub () {
+    Ops o();
+    o.w = "16";
+    list<auto> init = ((\o.v,),);
+    o.ll = init;
+    foreach list<auto> e in (\o.ll) {
+        e += (\o.w,);
+    }
+    list<auto> rv = (o.ll.fullType(), o.ll[0].size(), o.v.type(), o.v, o.w.type(), o.w);
+    o.ll = ();
+    return rv;
+});
+
+# the keys of the path of a store that is made again are evaluated once
+show("key evaluated once", auto sub () {
+    g_k = 0;
+    Ops o();
+    list<auto> x = (\o.v,);
+    o.hl{k()} = x;
+    list<auto> rv = (g_k, o.hl.keys(), o.hl.a.fullType(), o.v.type(), o.v);
+    o.hl = {};
+    return rv;
+});
+
+show("index evaluated once", auto sub () {
+    Ops o();
+    int i = 0;
+    list<auto> x = (\o.v,);
+    o.ll[i++] = x;
+    list<auto> rv = (i, o.ll.size(), o.v.type(), o.v);
+    o.ll = ();
+    return rv;
+});
+
+# a local variable that holds a reference with a key: the key was evaluated when the reference was made
+show("local reference with a key", auto sub () {
+    g_k = 0;
+    Ops o();
+    list<auto> x = (\o.v,);
+    store_untyped_ref(\o.hl{k()}, x);
+    list<auto> rv = (g_k, o.hl.keys(), o.v.type(), o.v);
+    o.hl = {};
+    return rv;
+});
+
+# the containers created to reach the target of a store that is refused are removed again
+show("refused store with created containers", auto sub () {
+    Ops o();
+    list<auto> x = (\o.w,);
+    try {
+        o.hh.k1.k2 = x;
+    } catch (hash<ExceptionInfo> ex) {
+        return (ex.err, o.hh.size(), o.w);
+    }
+    return "no exception";
+});
+
+# the initializer of a hashdecl member is Qore code that the check of the store runs with the target locked: it cannot
+# bind a reference, which would be bound under that lock
+show("hashdecl initializer binding a reference under the lock of a store", auto sub () {
+    M3Holder m();
+    hash<auto> src = {"s": (\m.v,)};
+    try {
+        m.h = src;
+    } catch (hash<ExceptionInfo> ex) {
+        return (ex.err, g_m3, g_m3v.type(), m.v.type(), exists m.h);
+    }
+    return "no exception";
+});
+
+show("hashdecl initializer binding a reference with no lock held", auto sub () {
+    M3Holder m();
+    hash<auto> src = {"s": (\m.v,)};
+    *hash<M3> h = src;
+    return (h.a, g_m3, g_m3v.type(), m.v.type(), m.v);
 });

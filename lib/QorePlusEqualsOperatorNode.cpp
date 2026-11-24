@@ -237,7 +237,8 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QorePlusEqualsOperatorNode::evalImplInternal
 
     // a store whose check records reference elements is made again after they have been bound with no lvalue lock
     // held (qore#7391)
-    QoreBindRetry retry(xsink);
+    QoreBindKeys keys(xsink);
+    QoreBindRetry retry;
     do {
         // a retry adds the value that an assignment of the first round took
         if (retry.hasValue()) [[unlikely]] {
@@ -245,7 +246,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QorePlusEqualsOperatorNode::evalImplInternal
         }
 
         // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-        LValueHelper v(left, xsink, false, retry);
+        LValueHelper v(left, xsink, false, retry, keys);
         if (!v) {
             return QoreValue();
         }
@@ -274,7 +275,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QorePlusEqualsOperatorNode::evalImplInternal
             rv = doPlusEqualsOnLValue(v, right_holder, xsink);
         }
         if (probe) [[unlikely]] {
-            qore_container_store_probe_end(v, probe);
+            probe.reset();
         }
         // an assignment of the operation (to an lvalue with no value) can leave the store to be made again
         if (retry.isPending()) [[unlikely]] {

@@ -28813,6 +28813,15 @@ static QoreValue f_dbg_reference_bind_rendezvous_result(const QoreListNode* para
     return rv.release();
 }
 
+//! sets whether a bind of a reference element made with an lvalue write lock held raises DBG-REFERENCE-BIND-HELD
+/** see qore_dbg_reference_bind_strict (qore#7391): a test arms it so that a store path that still binds a reference
+    under an lvalue lock fails it with an exception instead of an assertion; returns the previous setting
+*/
+static QoreValue f_dbg_reference_bind_strict(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    bool strict = get_param_value(params, 0).getAsBool();
+    return qore_dbg_reference_bind_strict.exchange(strict);
+}
+
 namespace {
 //! holds the thread that tears down a Program after the cleanup callback, before it marks the Program as torn down
 /** While the thread is held, other threads can enter the Program, as they could while the callback ran
@@ -35164,6 +35173,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_reference_bind_rendezvous_result", f_dbg_reference_bind_rendezvous_result,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 0);
+    qns.addBuiltinVariant("dbg_reference_bind_strict", f_dbg_reference_bind_strict, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "strict");
     qns.addBuiltinVariant("dbg_hold_program_teardown", f_dbg_hold_program_teardown, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_wait_program_teardown_held", f_dbg_wait_program_teardown_held, QCF_NO_FLAGS,

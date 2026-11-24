@@ -155,10 +155,11 @@ int ForEachStatement::execCommon(QoreValue& return_value, ExceptionSink* xsink) 
 
             // a store whose check records reference elements is made again after they have been bound with no
             // lvalue lock held (qore#7391)
-            QoreBindRetry retry(xsink);
+            QoreBindKeys keys(xsink);
+            QoreBindRetry retry;
             bool stored = false;
             do {
-                LValueHelper n(var, xsink, false, retry);
+                LValueHelper n(var, xsink, false, retry, keys);
                 if (!n)
                     break;
 
@@ -239,10 +240,11 @@ int ForEachStatement::execCommon(RuntimeConfig& rc, QoreValue& return_value, Exc
 
             // a store whose check records reference elements is made again after they have been bound with no
             // lvalue lock held (qore#7391)
-            QoreBindRetry retry(xsink);
+            QoreBindKeys keys(xsink);
+            QoreBindRetry retry;
             bool stored = false;
             do {
-                LValueHelper n(var, rc, xsink, false, retry);
+                LValueHelper n(var, rc, xsink, false, retry, keys);
                 if (!n)
                     break;
 
@@ -320,10 +322,11 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
         {
             // a store whose check records reference elements is made again after they have been bound with no
             // lvalue lock held (qore#7391)
-            QoreBindRetry retry(xsink);
+            QoreBindKeys keys(xsink);
+            QoreBindRetry retry;
             bool stored = false;
             do {
-                LValueHelper n(var, xsink, false, retry);
+                LValueHelper n(var, xsink, false, retry, keys);
                 if (!n) {
                     return 0;
                 }
@@ -397,7 +400,7 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
 
     // write the value back to the lvalue; a store whose check records reference elements is made again after they have
     // been bound with no lvalue lock held, and the reference is resolved again for it (qore#7391)
-    QoreBindRetry retry(xsink);
+    QoreBindRetry retry;
     do {
         LValueHelper val(**vr, xsink);
         if (!val) {
@@ -459,10 +462,11 @@ int ForEachStatement::execRef(RuntimeConfig& rc, QoreValue& return_value, Except
         {
             // a store whose check records reference elements is made again after they have been bound with no
             // lvalue lock held (qore#7391)
-            QoreBindRetry retry(xsink);
+            QoreBindKeys keys(xsink);
+            QoreBindRetry retry;
             bool stored = false;
             do {
-                LValueHelper n(var, rc, xsink, false, retry);
+                LValueHelper n(var, rc, xsink, false, retry, keys);
                 if (!n) {
                     return 0;
                 }
@@ -546,7 +550,7 @@ int ForEachStatement::execRef(RuntimeConfig& rc, QoreValue& return_value, Except
 
     // write the value back to the lvalue; a store whose check records reference elements is made again after they have
     // been bound with no lvalue lock held, and the reference is resolved again for it (qore#7391)
-    QoreBindRetry retry(xsink);
+    QoreBindRetry retry;
     do {
         LValueHelper val(**vr, rc, xsink);
         if (!val) {

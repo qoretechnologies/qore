@@ -6119,7 +6119,18 @@ bool QoreTypeInfo::unionHasEnumTypeFor(const QoreTypeInfo* ti, const QoreValue& 
 
 #ifdef DEBUG
 std::atomic<qore_dbg_reference_bind_hook_t> qore_dbg_reference_bind_hook{nullptr};
+std::atomic<bool> qore_dbg_reference_bind_strict{false};
 #endif
+
+//! raises the exception of a bind refused in Qore code that the check of a store holding an lvalue lock runs (qore#7391)
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD void qore_reference_bind_raise_refused(const QoreTypeInfo* target_ti,
+        ExceptionSink* xsink) {
+    if (xsink) {
+        xsink->raiseException("REFERENCE-BIND-ERROR", "cannot bind a reference to type '%s' in code run by the type "
+            "check of a value stored into a locked lvalue (such as the initializer of a hashdecl member): it would be "
+            "bound under the lock of that lvalue", QoreTypeInfo::getName(target_ti));
+    }
+}
 
 //! Binds the reference \a r to the reference type of \a target_ti with no lvalue lock held (qore#7391)
 /** The value of the referenced lvalue is checked or converted to \a target_ti and written back if the conversion
@@ -6134,9 +6145,12 @@ static void qore_reference_bind_unlocked(ReferenceNode* r, const QoreTypeInfo* t
     if (QoreReferenceBindFrame::active(r, target_ti)) {
         return;
     }
-    QoreReferenceBindFrame frame(r, target_ti);
-    // a check that runs with a probe installed binds no reference itself
-    QoreReferenceBindProbeSuspend suspend;
+    // Qore code that the check of a store holding an lvalue lock runs cannot bind: the bind would be made under that
+    // lock (see QoreReferenceBindCodeScope)
+    if (qore_reference_bind_refused) [[unlikely]] {
+        qore_reference_bind_raise_refused(target_ti, xsink);
+        return;
+    }
 #ifdef DEBUG
     // a test checks that no lvalue lock is held here and makes threads bind at the same time
     // (dbg_reference_bind_rendezvous())
@@ -6150,7 +6164,20 @@ static void qore_reference_bind_unlocked(ReferenceNode* r, const QoreTypeInfo* t
             return;
         }
     }
+    // a store path that binds under an lvalue lock is a bug: a test that arms dbg_reference_bind_strict() gets an
+    // exception for it, any other bind fails the assertion
+    if (qore_lvalue_write_locks_held && qore_dbg_reference_bind_strict.load(std::memory_order_relaxed)) {
+        if (xsink) {
+            xsink->raiseException("DBG-REFERENCE-BIND-HELD", "a reference element was bound while the thread held %d "
+                "lvalue write lock(s)", qore_lvalue_write_locks_held);
+        }
+        return;
+    }
+    assert(!qore_lvalue_write_locks_held);
 #endif
+    QoreReferenceBindFrame frame(r, target_ti);
+    // a check that runs with a probe installed binds no reference itself
+    QoreReferenceBindProbeSuspend suspend;
 
     // issue #2891: do not create a value in the source reference if none already exists
     // do not process if there is no type restriction
@@ -6181,7 +6208,7 @@ static void qore_reference_bind_unlocked(ReferenceNode* r, const QoreTypeInfo* t
 
     // the write-back is a store: one whose check records references of the value of the referenced lvalue is made
     // again after they have been bound; the lvalue is resolved again for each round, as for any use of the reference
-    QoreBindRetry retry(xsink);
+    QoreBindRetry retry;
     do {
         // the variable is resolved for reading first: one that the reference cannot write, such as a
         // read-only import, is left as it is when its value already has the reference's type
@@ -6227,14 +6254,23 @@ static void qore_reference_bind_unlocked(ReferenceNode* r, const QoreTypeInfo* t
 }
 
 //! Records the reference \a r found by the check of a store that holds an lvalue lock (qore#7391)
+/** A probe that verifies (the probe of a container operation whose values were checked before it) refuses a reference
+    that needs a bind: the check raises REFERENCE-BIND-ERROR then, and the operation does not store the value
+*/
 template <typename FilterPolicy>
-static void qore_reference_bind_record(QoreReferenceBindProbe& probe, ReferenceNode* r,
-        const QoreTypeInfo* target_ti, FilterPolicy policy) {
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD void qore_reference_bind_record(QoreReferenceBindProbe& probe,
+        ReferenceNode* r, const QoreTypeInfo* target_ti, FilterPolicy policy, ExceptionSink* xsink) {
+    bool ok;
     if constexpr (std::is_same<FilterPolicy, LexicalTypeFilterPolicy>::value) {
-        probe.record(r, target_ti, policy.policy, true);
+        ok = probe.record(r, target_ti, policy.policy, true);
     } else {
         static_assert(std::is_same<FilterPolicy, DefaultTypeFilterPolicy>::value, "a filter policy of a check");
-        probe.record(r, target_ti, LexicalSemanticPolicy(), false);
+        ok = probe.record(r, target_ti, LexicalSemanticPolicy(), false);
+    }
+    if (!ok && xsink) {
+        xsink->raiseException("REFERENCE-BIND-ERROR", "a reference element of a value stored into a locked container "
+            "needs a bind to type '%s' that the check made before the container was changed did not find",
+            QoreTypeInfo::getName(target_ti));
     }
 }
 
@@ -6539,7 +6575,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     // the check of a store that holds an lvalue lock records the reference, which the store binds
                     // after it has released the lock (qore#7391); any other check binds it here
                     if (QoreReferenceBindProbe* probe = qore_reference_bind_probe) [[unlikely]] {
-                        qore_reference_bind_record(*probe, r, uTi(), policy);
+                        qore_reference_bind_record(*probe, r, uTi(), policy, xsink);
                     } else {
                         qore_reference_bind_unlocked(r, uTi(), xsink, policy);
                     }

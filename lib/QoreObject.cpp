@@ -962,7 +962,8 @@ int qore_object_private::mergeAccessorMembers(const QoreHashNode* ext, const qor
 template <bool Lexical>
 static QORE_INTERN_NOINLINE QORE_INTERN_COLD int mergeCheckBoundMember(const QoreTypeInfo* ti, const char* key,
         ValueHolder& qv, ExceptionSink* xsink, LexicalSemanticPolicy policy, const QoreReferenceBindPairList* bound) {
-    QoreReferenceBindProbe probe(nullptr, bound);
+    // the object's lock is held
+    QoreReferenceBindProbe probe(nullptr, bound, true);
     if constexpr (Lexical) {
         QoreTypeInfo::acceptInputMember(ti, key, *qv, xsink, policy);
     } else {
@@ -986,8 +987,9 @@ template <bool Lexical>
 QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_object_private::mergeBindReferences(const QoreHashNode* h,
         const qore_class_private* class_ctx, const AutoVLock& vl, QoreReferenceBindPairList& bound,
         ExceptionSink* xsink, LexicalSemanticPolicy policy) {
-    // the references are recorded by one probe, which records each one once
-    QoreReferenceBindProbe probe(nullptr, &bound);
+    // the references are recorded by one probe, which records each one once; the object's lock is not held yet,
+    // but the lvalue that holds the object can be locked
+    QoreReferenceBindProbe probe(nullptr, &bound, static_cast<bool>(vl));
     {
         // the errors of the access and of the type checks are raised by the merge itself
         ExceptionSink check_xsink;

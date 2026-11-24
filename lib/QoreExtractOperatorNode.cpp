@@ -162,10 +162,11 @@ QoreValue QoreExtractOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* 
 
     // a store whose check records reference elements is made again after they have been bound with no lvalue lock
     // held; the operands are evaluated once (qore#7391)
-    QoreBindRetry retry(xsink);
+    QoreBindKeys keys(xsink);
+    QoreBindRetry retry;
     do {
         // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-        LValueHelper val(lvalue_exp, xsink, false, retry);
+        LValueHelper val(lvalue_exp, xsink, false, retry, keys);
         if (!val)
             return QoreValue();
 
@@ -244,7 +245,7 @@ QoreValue QoreExtractOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* 
                         rv = qore_list_private::replace(*vl, offset, length, *exp, true, xsink);
                     }
                     if (probe) [[unlikely]] {
-                        qore_container_store_probe_end(val, probe);
+                        probe.reset();
                     }
                 }
             }

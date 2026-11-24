@@ -184,11 +184,12 @@ QoreValue QoreListAssignmentOperatorNode::evalCommon(bool& needs_deref, Exceptio
 
         // a store whose check records reference elements is made again after they have been bound with no lvalue
         // lock held; each round takes its value from the list again (qore#7391)
-        QoreBindRetry retry(xsink);
+        QoreBindKeys keys(xsink);
+        QoreBindRetry retry;
         bool stored = false;
         do {
             // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-            LValueHelper v(lv, xsink, true, retry);
+            LValueHelper v(lv, xsink, true, retry, keys);
             if (!v)
                 return QoreValue();
 

@@ -3029,19 +3029,19 @@ static QORE_INTERN_NOINLINE QoreValue evalPlusEquals(const QoreValue& lvalue, co
 QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right, ExceptionSink* xsink);
 QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
 
-//! Assigns a value to a local whose lvalue is locked and whose type can bind a reference element (qore#7391)
-/** The local holds a reference to a member or to a global or closure-bound variable, or is closure-bound (see
-    qore_local_store_needs_bind_retry()): the store is made with a QoreBindRetry, which binds the reference elements
-    of the value with no lvalue lock held, and the local is resolved again for each round
-
-    @param resolve <tt>int (LValueHelper&)</tt>: resolves the local
-    @param value the value, which this function owns in every case
-    @param desc the description of the lvalue in a type error
+//! Makes the retries of a store to a local whose first round recorded reference elements to bind (qore#7391)
+/** The local holds a reference to a member or to a global or closure-bound variable, or is closure-bound: its lvalue is
+    locked, and the first round of the store left \a retry pending.  The references are bound with no lvalue lock held,
+    and the local is resolved again for each round (a reference that it holds is resolved again, as for any use of
+    it); the store assigns the value that the last round converted.  Out of line and cold: the first round is made by
+    the caller with the cost of a null pointer for the retry.
 */
-template <typename Resolve>
-static QORE_INTERN_NOINLINE QORE_INTERN_COLD void qore_ir_assign_local_bind_retry(Resolve&& resolve, QoreValue value,
-        const char* desc, ExceptionSink* xsink) {
-    qore_store_with_bind_retry(xsink, false, value, resolve,
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD void qore_ir_assign_local_bind_retry(QoreBindRetry& retry,
+        LocalVar* var, const char* desc, ExceptionSink* xsink) {
+    qore_store_bind_retry_rounds(retry, xsink, false,
+        [var](LValueHelper& helper) -> int {
+            return var->getLValue(helper, false, true);
+        },
         [desc](LValueHelper& helper, QoreValue v) -> int {
             return helper.assign(v, desc);
         });
@@ -3056,24 +3056,23 @@ static void assignLocalVarValue(LocalVar* var, const QoreValue& value, Exception
     if (!var) {
         return;
     }
+    // a store whose check records reference elements (the local's lvalue is locked: it holds a reference to a member
+    // or to a global or closure-bound variable) is made again after they have been bound with no lvalue lock held;
+    // the first round resolves the local once (qore#7391)
+    QoreBindRetry retry;
     {
         LValueHelper helper(xsink);
         if (var->getLValue(helper, false, true)) {
             return;
         }
-        if (!qore_local_store_needs_bind_retry(helper)) [[likely]] {
-            // refSelf before assign — assign takes ownership of the reference
-            QoreValue stored = value.needsRef() ? value.refSelf() : value;
-            helper.assign(stored, desc);
+        helper.setBindRetry(retry);
+        // refSelf before assign — assign takes ownership of the reference
+        QoreValue stored = value.needsRef() ? value.refSelf() : value;
+        if (!helper.assign(stored, desc) || !retry.isPending()) [[likely]] {
             return;
         }
-        // the lvalue is locked and its type can bind a reference element: the entries created to reach it are
-        // removed, and the store is made out of line after the helper has released the lock (qore#7391)
-        helper.rollbackVivification();
     }
-    qore_ir_assign_local_bind_retry([var](LValueHelper& helper) -> int {
-            return var->getLValue(helper, false, true);
-        }, value.needsRef() ? value.refSelf() : value, desc, xsink);
+    qore_ir_assign_local_bind_retry(retry, var, desc, xsink);
 }
 
 // Variant of assignLocalVarValue that TRANSFERS ownership of value's reference
@@ -3091,23 +3090,21 @@ static void assignLocalVarValueTransfer(LocalVar* var, QoreValue value, Exceptio
         value.discard(xsink);
         return;
     }
+    // see assignLocalVarValue() (qore#7391)
+    QoreBindRetry retry;
     {
         LValueHelper helper(xsink);
         if (var->getLValue(helper, false, true)) {
             value.discard(xsink);
             return;
         }
-        if (!qore_local_store_needs_bind_retry(helper)) [[likely]] {
-            // Transfer: no refSelf. helper.assign takes ownership of the passed ref.
-            helper.assign(value, desc);
+        helper.setBindRetry(retry);
+        // Transfer: no refSelf. helper.assign takes ownership of the passed ref.
+        if (!helper.assign(value, desc) || !retry.isPending()) [[likely]] {
             return;
         }
-        // see assignLocalVarValue() (qore#7391)
-        helper.rollbackVivification();
     }
-    qore_ir_assign_local_bind_retry([var](LValueHelper& helper) -> int {
-            return var->getLValue(helper, false, true);
-        }, value, desc, xsink);
+    qore_ir_assign_local_bind_retry(retry, var, desc, xsink);
 }
 
 //! Mirrors a value that the IR slot cache already holds to the thread's local variable, if it has one
@@ -3118,6 +3115,8 @@ static void assignLocalVarValueTransfer(LocalVar* var, QoreValue value, Exceptio
 */
 static void mirrorLocalVarValueTransfer(LocalVar* var, QoreValue value, ExceptionSink* xsink) {
     assert(var);
+    // see assignLocalVarValue() (qore#7391)
+    QoreBindRetry retry;
     {
         LValueHelper helper(xsink);
         LocalVarLValueLookup rc = var->tryGetLValue(helper, false, true);
@@ -3126,17 +3125,13 @@ static void mirrorLocalVarValueTransfer(LocalVar* var, QoreValue value, Exceptio
             value.discard(xsink);
             return;
         }
-        if (!qore_local_store_needs_bind_retry(helper)) [[likely]] {
-            helper.assign(value);
+        helper.setBindRetry(retry);
+        if (!helper.assign(value) || !retry.isPending()) [[likely]] {
             return;
         }
-        // see assignLocalVarValue() (qore#7391)
-        helper.rollbackVivification();
     }
     // the variable was found above, on this thread, where it stays instantiated
-    qore_ir_assign_local_bind_retry([var](LValueHelper& helper) -> int {
-            return var->getLValue(helper, false, true);
-        }, value, "<lvalue>", xsink);
+    qore_ir_assign_local_bind_retry(retry, var, "<lvalue>", xsink);
 }
 
 //! Returns the value stored in an IR-only local, with the reference its slot owns
@@ -3251,7 +3246,7 @@ static void assignClosureVarValue(LocalVar* var, const QoreValue& value, Excepti
     ClosureVarValue* cv = findClosureVarValueForIR(var);
     // a store whose check records reference elements is made again after they have been bound with no lvalue lock
     // held (qore#7391)
-    QoreBindRetry retry(xsink);
+    QoreBindRetry retry;
     do {
         LValueHelper helper(xsink);
         helper.setBindRetry(retry);
@@ -3309,7 +3304,7 @@ static void assignClosureVarValueTransfer(LocalVar* var, QoreValue value, Except
     ClosureVarValue* cv = findClosureVarValueForIR(var);
     // a store whose check records reference elements is made again after they have been bound with no lvalue lock
     // held; the first round takes the value, and a retry assigns the value that it converted (qore#7391)
-    QoreBindRetry retry(xsink);
+    QoreBindRetry retry;
     do {
         LValueHelper helper(xsink);
         helper.setBindRetry(retry);
@@ -3344,7 +3339,7 @@ static QoreValue assignGlobalVarValueStored(Var* var, const QoreValue& value, Ex
     }
     // a store whose check records reference elements is made again after they have been bound with no lvalue lock
     // held (qore#7391)
-    QoreBindRetry retry(xsink);
+    QoreBindRetry retry;
     do {
         LValueHelper helper(xsink);
         helper.setBindRetry(retry);
@@ -3387,7 +3382,7 @@ static void assignObjectMemberValue(QoreObject* obj, const char* key, const Qore
 
     // a store whose check records reference elements is made again after they have been bound with no lvalue lock
     // held (qore#7391)
-    QoreBindRetry retry(xsink);
+    QoreBindRetry retry;
     do {
         LValueHelper helper(xsink, true);
         helper.setBindRetry(retry);
@@ -10903,7 +10898,7 @@ static QORE_INTERN_NOINLINE void qore_ir_release_failed_method_call(QoreListNode
 */
 static QORE_INTERN_NOINLINE int qore_ir_store_local_mode(const LocalVar* local, const QoreValue& val,
         const char* desc, AssignmentMode mode, bool want_result, QoreValue& res, ExceptionSink* xsink) {
-    QoreBindRetry retry(xsink);
+    QoreBindRetry retry;
     do {
         LValueHelper helper(xsink);
         helper.setBindRetry(retry);
@@ -11146,7 +11141,7 @@ static int qore_ir_run_lvalue_path_ternary_round(const QoreIRLValuePathInstructi
 static QORE_INTERN_NOINLINE int qore_ir_run_lvalue_path_ternary(const QoreIRLValuePathInstruction* path_inst,
         IRLVPath& path_copy, const QoreValue& offset_val, const QoreValue& length_val,
         const QoreValue& replacement_val, QoreValue& res, ExceptionSink* xsink) {
-    QoreBindRetry retry(xsink);
+    QoreBindRetry retry;
     do {
         if (!qore_ir_run_lvalue_path_ternary_round(path_inst, path_copy, offset_val, length_val, replacement_val, res,
                 retry, xsink)) {
@@ -25036,9 +25031,10 @@ QoreValue QoreIRInterpreter::evalLValueStore(const QoreValue& lvalue, const Qore
     ValueHolder eval_holder(xsink);
     // a store whose check records reference elements is made again after they have been bound with no lvalue lock
     // held; the keys of the lvalue expression are evaluated once (qore#7391)
-    QoreBindRetry retry(xsink);
+    QoreBindKeys keys(xsink);
+    QoreBindRetry retry;
     do {
-        LValueHelper helper(lvalue, xsink, false, retry);
+        LValueHelper helper(lvalue, xsink, false, retry, keys);
         if (!helper) {
             return QoreValue();
         }
@@ -25540,13 +25536,14 @@ static QORE_INTERN_NOINLINE QoreValue evalPlusEquals(const QoreValue& lvalue, co
     ValueHolder right_holder(right.refSelf(), xsink);
     // a store whose check records reference elements is made again after they have been bound with no lvalue lock
     // held; the keys of the lvalue expression are evaluated once (qore#7391)
-    QoreBindRetry retry(xsink);
+    QoreBindKeys keys(xsink);
+    QoreBindRetry retry;
     do {
         // a retry adds the value that an assignment of the first round took
         if (retry.hasValue()) [[unlikely]] {
             right_holder = retry.takeValue();
         }
-        LValueHelper v(lvalue, xsink, false, retry);
+        LValueHelper v(lvalue, xsink, false, retry, keys);
         if (!v) {
             return QoreValue();
         }
@@ -25559,7 +25556,7 @@ static QORE_INTERN_NOINLINE QoreValue evalPlusEquals(const QoreValue& lvalue, co
         }
         ValueHolder rv(doPlusEqualsOnLValue(v, right_holder, xsink), xsink);
         if (probe) [[unlikely]] {
-            qore_container_store_probe_end(v, probe);
+            probe.reset();
         }
         // an assignment of the operation (to an lvalue with no value) can leave the store to be made again
         if (retry.isPending()) [[unlikely]] {
@@ -25929,11 +25926,26 @@ static QoreValue evalDivideEquals(const QoreValue& lvalue, const QoreValue& righ
 static QoreValue evalUnshift(const QoreValue& lvalue, const QoreValue& right, ExceptionSink* xsink) {
     // a store whose check records reference elements is made again after they have been bound with no lvalue lock
     // held; the keys of the lvalue expression are evaluated once (qore#7391)
-    QoreBindRetry retry(xsink);
+    QoreBindKeys keys(xsink);
+    QoreBindRetry retry;
     do {
-        LValueHelper val(lvalue, xsink, false, retry);
+        LValueHelper val(lvalue, xsink, false, retry, keys);
         if (!val) {
             return QoreValue();
+        }
+
+        // an element type that can bind a reference: the value is checked with a probe before anything is changed,
+        // also before an lvalue with no value is assigned the list that the operation makes for it
+        std::optional<QoreReferenceBindProbe> probe;
+        {
+            qore_type_t vt = val.getType();
+            if ((vt == NT_LIST && qore_list_private::get(*val.getValue().get<const QoreListNode>())
+                        ->elementMayBindReference())
+                    || (vt == NT_NOTHING && qore_list_push_nothing_may_bind(val))) [[unlikely]] {
+                if (qore_container_store_probe(val, right, false, nullptr, probe)) {
+                    continue;
+                }
+            }
         }
 
         // assign to a blank list if the lvalue has no value yet but is typed as a list or a softlist
@@ -25959,16 +25971,9 @@ static QoreValue evalUnshift(const QoreValue& lvalue, const QoreValue& right, Ex
 
         val.ensureUnique();
         QoreListNode* l = val.getValue().get<QoreListNode>();
-        // an element type that can bind a reference: the value is checked with a probe before it is added
-        std::optional<QoreReferenceBindProbe> probe;
-        if (qore_list_private::get(*l)->elementMayBindReference()) [[unlikely]] {
-            if (qore_container_store_probe(val, right, false, nullptr, probe)) {
-                continue;
-            }
-        }
         qore_list_private::insertCanonical(*l, right.refSelf(), xsink);
         if (probe) [[unlikely]] {
-            qore_container_store_probe_end(val, probe);
+            probe.reset();
         }
 
         if (*xsink) {

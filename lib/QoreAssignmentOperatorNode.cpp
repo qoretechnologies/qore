@@ -934,11 +934,12 @@ static QORE_INTERN_NOINLINE QoreValue qore_weak_assign_hold_copy(const QoreValue
 
         // a store whose check records reference elements is made again after they have been bound with no lvalue
         // lock held (qore#7391)
-        QoreBindRetry retry(xsink);
+        QoreBindKeys keys(xsink);
+        QoreBindRetry retry;
         bool stored = false;
         do {
             // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-            LValueHelper v(left, xsink, true, retry);
+            LValueHelper v(left, xsink, true, retry, keys);
             if (!v) {
                 return QoreValue();
             }
@@ -1065,10 +1066,11 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreAssignmentOperatorNode::evalInternImpl(E
 
     // a store whose check records reference elements is made again after they have been bound with no lvalue lock
     // held (qore#7391)
-    QoreBindRetry retry(xsink);
+    QoreBindKeys keys(xsink);
+    QoreBindRetry retry;
     do {
         // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-        LValueHelper v(left, xsink, true, retry);
+        LValueHelper v(left, xsink, true, retry, keys);
         if (!v)
             return QoreValue();
 

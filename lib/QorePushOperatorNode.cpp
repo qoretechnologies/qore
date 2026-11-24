@@ -53,12 +53,31 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QorePushOperatorNode::evalImplInternal(bool&
 
     // a store whose check records reference elements is made again after they have been bound with no lvalue lock
     // held; each round takes its value from the operand again (qore#7391)
-    QoreBindRetry retry(xsink);
+    QoreBindKeys keys(xsink);
+    QoreBindRetry retry;
     do {
         // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-        LValueHelper val(left, xsink, false, retry);
+        LValueHelper val(left, xsink, false, retry, keys);
         if (!val)
             return QoreValue();
+
+        // an element type that can bind a reference: the value is checked with a probe before anything is changed,
+        // also before an lvalue with no value is assigned the list that the operation makes for it
+        std::optional<QoreReferenceBindProbe> probe;
+        {
+            qore_type_t vt = val.getType();
+            if ((vt == NT_LIST && qore_list_private::get(*val.getValue().get<const QoreListNode>())
+                        ->elementMayBindReference())
+                    || (vt == NT_NOTHING && qore_list_push_nothing_may_bind(val))) [[unlikely]] {
+                LexicalSemanticPolicy policy;
+                if constexpr (Lexical) {
+                    policy = getSemanticPolicy();
+                }
+                if (qore_container_store_probe(val, *res, false, Lexical ? &policy : nullptr, probe)) {
+                    continue;
+                }
+            }
+        }
 
         // assign to a blank list if the lvalue has no value yet but is typed as a list or a softlist
         if (val.getType() == NT_NOTHING) {
@@ -89,25 +108,13 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QorePushOperatorNode::evalImplInternal(bool&
 
         QoreListNode* l = val.getValue().get<QoreListNode>();
 
-        // an element type that can bind a reference: the value is checked with a probe before it is pushed
-        std::optional<QoreReferenceBindProbe> probe;
-        if (qore_list_private::get(*l)->elementMayBindReference()) [[unlikely]] {
-            LexicalSemanticPolicy policy;
-            if constexpr (Lexical) {
-                policy = getSemanticPolicy();
-            }
-            if (qore_container_store_probe(val, *res, false, Lexical ? &policy : nullptr, probe)) {
-                continue;
-            }
-        }
-
         if constexpr (Lexical) {
             qore_list_private::push(*l, res.getReferencedValue(), xsink, getSemanticPolicy());
         } else {
             qore_list_private::pushCanonical(*l, res.getReferencedValue(), xsink);
         }
         if (probe) [[unlikely]] {
-            qore_container_store_probe_end(val, probe);
+            probe.reset();
         }
 
         // reference for return value

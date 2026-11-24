@@ -956,9 +956,10 @@ QORE_INTERN_ALWAYS_INLINE QoreValue VarRefNewObjectNode::evalImplInternal(Runtim
 
     // a store whose check records reference elements is made again after they have been bound with no lvalue lock
     // held (qore#7391)
-    QoreBindRetry retry(xsink);
+    QoreBindKeys keys(xsink);
+    QoreBindRetry retry;
     do {
-        LValueHelper lv(QoreValue(const_cast<VarRefNewObjectNode*>(this)), rc, xsink, false, retry);
+        LValueHelper lv(QoreValue(const_cast<VarRefNewObjectNode*>(this)), rc, xsink, false, retry, keys);
         if (!lv)
             return QoreValue();
         // a retry assigns the value that the first round converted

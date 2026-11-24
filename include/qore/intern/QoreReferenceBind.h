@@ -37,6 +37,9 @@
 
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <new>
 #include <optional>
 #include <type_traits>
 #include <vector>
@@ -48,18 +51,34 @@
     written back.  A store checks its value with the lock of its target held, so binding there could lock a second
     lvalue under the first one (two threads that do it in the opposite order deadlock) or the same one again.
 
-    A store whose target's type can bind a reference (QoreTypeInfo::mayBindReference()) and whose helper holds an
-    lvalue lock checks its value with a QoreReferenceBindProbe installed: the check records each reference that it
-    would bind with the reference type instead of binding it.  If anything was recorded, nothing is stored: the
-    helper rolls back the entries created for the store and hands the value and the references to the QoreBindRetry
-    of the store, and returns -1 with no exception.  The store site then leaves its helper, which releases every lock,
-    and QoreBindRetry::again() binds the references with no lock held and has the store made again.  The second check
-    accepts the references bound already without binding them.
+    A store whose target's type can bind a reference (QoreTypeInfo::mayBindReference(), a cached byte) and whose
+    helper holds an lvalue lock checks its value with a QoreReferenceBindProbe installed: the check records each
+    reference that it would bind with the reference type instead of binding it.  If anything was recorded, nothing is
+    stored: the helper rolls back the entries created for the store and hands the value and the references to the
+    QoreBindRetry of the store, and returns -1 with no exception.  The store site then leaves its helper, which
+    releases every lock, and QoreBindRetry::again() binds the references with no lock held and has the store made
+    again.  The second check accepts the references bound already without binding them.
+
+    The normal path of a store costs the cached byte of the type and the null pointer that QoreBindRetry is: its state
+    is allocated only when a store records references.
+
+    The keys and indices of the path of an AST store are evaluated once.  The steps of the first round leave the keys
+    that they evaluate with the QoreBindKeys of the store site, which releases them after the store, after the lvalue
+    locks (a move: no reference is taken, as the step would have released its key); a retry resolves the path with
+    them instead of evaluating the key expressions again.  The keys of the path of an IR or JIT/AOT instruction are
+    evaluated before the store, which resolves the path with them for each round.
+
+    A reference at the root of the path (a variable that holds a reference, or a reference given as the target) is
+    resolved again by a retry, as by any other use of the reference.  The keys of the path of a reference are evaluated
+    when the reference is made, so its resolution evaluates no key expression; what runs again is the code that the
+    resolution of its path runs, such as the write gate of a member, and only when the store is made again: a store
+    that records no reference resolves its target once.
 
     A store site:
-        QoreBindRetry retry(xsink);
+        QoreBindKeys keys(xsink);
+        QoreBindRetry retry;
         do {
-            LValueHelper h(exp, xsink, true, retry);
+            LValueHelper h(exp, xsink, true, retry, keys);
             if (!h) {
                 return ...;
             }
@@ -72,8 +91,14 @@
 
     A store whose target is resolved with no key expression to evaluate (a variable, a member, a reference, or the path
     of an IR or JIT/AOT instruction, whose keys are evaluated already) uses qore_store_with_bind_retry() or
-    qore_reference_store_with_bind_retry() (Variable.h), which make this loop.  A merge into an object binds the
-    references of its values before it takes the object's lock (qore_object_private::mergeBindReferences()).
+    qore_reference_store_with_bind_retry() (Variable.h), which make the first round inline and the retries out of line.
+    A merge into an object binds the references of its values before it takes the object's lock
+    (qore_object_private::mergeBindReferences()).
+
+    Qore code that a check made with a probe runs (the member initializers of a hashdecl that a hash is converted to)
+    runs with the probe suspended and with binds refused (QoreReferenceBindCodeScope): a reference that it binds would
+    be bound under the lvalue lock of the outer store, so it raises REFERENCE-BIND-ERROR, and the code records nothing in
+    the probe of the outer store.
 
     A store made with a helper that has no QoreBindRetry and that records a reference fails closed: it raises
     REFERENCE-BIND-ERROR and leaves its target unchanged.
@@ -84,7 +109,6 @@ class QoreTypeInfo;
 class ExceptionSink;
 class LValueHelper;
 class QoreBindRetry;
-struct QoreBindRetryState;
 
 //! A reference element and the type that a bind applies to its lvalue (qore#7391)
 struct QoreReferenceBindPair {
@@ -140,6 +164,198 @@ private:
     std::vector<QoreReferenceBindPair> pairs;
 };
 
+//! The state of a store whose check recorded reference elements to bind (qore#7391)
+/** Allocated by the first round that records references (QoreBindRetry::setPending())
+*/
+struct QoreBindRetryState {
+    //! the exception sink of the store
+    ExceptionSink* xsink;
+    //! the references that the last round recorded, which are bound before the store is made again
+    QoreReferenceBindPairList pending;
+    //! the references bound by the earlier rounds, which the check accepts without binding them again
+    QoreReferenceBindPairList bound;
+    //! the exception that the check raised after it recorded references, reported after they have been bound
+    ExceptionSink error;
+    //! the value of the last round, if has_value is set
+    QoreValue value;
+    //! the number of rounds that bound references
+    unsigned rounds = 0;
+    //! true if value holds the value of the last round
+    bool has_value = false;
+    //! true if the last round recorded references
+    bool is_pending = false;
+
+    DLLLOCAL explicit QoreBindRetryState(ExceptionSink* xsink) : xsink(xsink) {
+    }
+};
+
+//! The retry of a store whose check recorded references to bind (qore#7391)
+/** A null pointer until a round of the store records references: constructing it and testing it costs nothing more
+    on the normal path.  Created by the store site before the LValueHelper of the store, which it is given to;
+    again() is called after the helper has been destroyed, with no lvalue lock held.
+*/
+class QoreBindRetry {
+public:
+    //! the number of rounds after which a store whose check keeps recording references fails
+    static constexpr unsigned MaxRounds = 16;
+
+    DLLLOCAL QoreBindRetry() = default;
+
+    DLLLOCAL ~QoreBindRetry() {
+        if (state) [[unlikely]] {
+            release();
+        }
+    }
+
+    QoreBindRetry(const QoreBindRetry&) = delete;
+    QoreBindRetry& operator=(const QoreBindRetry&) = delete;
+
+    //! returns true if the store has to be made again; binds the references recorded with no lvalue lock held
+    /** Called after the helper of the store has been destroyed.  Returns false if the store did not record a
+        reference (it succeeded or failed, and the caller reports that), or if a bind raised an exception, or if the
+        check raised an exception after it recorded a reference: the exception is in the exception sink of the store
+        then.
+    */
+    DLLLOCAL bool again() {
+        return state ? againIntern() : false;
+    }
+
+    //! returns true if the last round recorded references and has to be made again (see again())
+    /** For a store site whose operation can fail with no exception for this reason only, such as += through a
+        default value
+    */
+    DLLLOCAL bool isPending() const {
+        return state && state->is_pending;
+    }
+
+    //! returns true if the value of the last round is kept for the store (see takeValue())
+    DLLLOCAL bool hasValue() const {
+        return state && state->has_value;
+    }
+
+    //! returns the value of the last round, which the caller owns
+    DLLLOCAL QoreValue takeValue();
+
+    //! returns true if a reference recorded by an earlier round of this store was bound to \a ti
+    DLLLOCAL bool isBound(const ReferenceNode* r, const QoreTypeInfo* ti) const {
+        return state && state->bound.contains(r, ti);
+    }
+
+    //! records that the store has to be made again (LValueHelper)
+    /** @param value the value of the store, which the retry takes; a value of an earlier round that the store site did
+        not take is handed to \a lvh, which releases it after its locks
+        @param pairs the references to bind, which the retry takes
+        @param error the exception that the check raised after it recorded the references, which the retry takes
+        @param lvh the helper of the store, which holds an lvalue lock
+    */
+    DLLLOCAL void setPending(QoreValue& value, QoreReferenceBindPairList& pairs, ExceptionSink& error,
+            LValueHelper& lvh);
+
+private:
+    //! the state of a store that recorded references, allocated when needed
+    QoreBindRetryState* state = nullptr;
+
+    //! binds the references recorded and returns true if the store has to be made again
+    DLLLOCAL bool againIntern();
+
+    //! releases the value and the references held
+    DLLLOCAL void release();
+};
+
+//! A key or an index of the path of an AST store that the store site keeps for a retry (qore#7391)
+struct QoreBindKey {
+    QoreValue value;
+    //! true if the store site holds a reference to the value
+    bool owned;
+};
+
+//! The keys and indices of the path of an AST store, kept for a retry of the store (qore#7391)
+/** Declared by the store site before its loop, and given to the LValueHelper of each round.  The helper of the first
+    round leaves each key that a step of the path takes here, in the order that the steps take them, until the root of
+    the path is reached (the path of a reference at the root is resolved again: see the top of this file): the
+    step hands its key over instead of releasing it, which costs no reference count operation.  A retry resolves the
+    path with them.  The keys are released when the store site leaves its loop, after the lvalue locks.
+*/
+class QoreBindKeys {
+public:
+    DLLLOCAL explicit QoreBindKeys(ExceptionSink* xsink) : xsink(xsink) {
+    }
+
+    DLLLOCAL ~QoreBindKeys() {
+        // only keys that the store site holds a reference to are released; the keys of most paths are borrowed (the
+        // constants of the expression, the values of variables) or need no reference (ints)
+        if (owned_mask || more) [[unlikely]] {
+            release();
+        }
+    }
+
+    QoreBindKeys(const QoreBindKeys&) = delete;
+    QoreBindKeys& operator=(const QoreBindKeys&) = delete;
+
+    //! keeps \a key; \a owned is true if the reference that the caller held for it is handed over
+    DLLLOCAL void add(const QoreValue& key, bool owned) {
+        if (count < BufSize) [[likely]] {
+            new (&reinterpret_cast<QoreValue*>(buf)[count]) QoreValue(key);
+            // a value that needs no reference is not released
+            if (owned && key.needsRef()) {
+                owned_mask |= static_cast<uint8_t>(1u << count);
+            }
+            ++count;
+            return;
+        }
+        addMore(key, owned);
+    }
+
+    //! takes a reference to each key that is only borrowed, before code runs that could release its owner
+    /** Called before the check of a store that can record references (the cold path); a key borrowed from a variable
+        would otherwise be read again by a retry after the variable could have been assigned
+    */
+    DLLLOCAL void hold();
+
+    //! returns the number of keys kept
+    DLLLOCAL size_t size() const {
+        return count;
+    }
+
+    //! returns the key at position \a i (0 = the key that the first step took), borrowed from this object
+    DLLLOCAL QoreValue get(size_t i) const {
+        return i < BufSize ? reinterpret_cast<const QoreValue*>(buf)[i] : (*more)[i - BufSize].value;
+    }
+
+    //! returns true once the first round has resolved the path, whose keys are kept here then
+    DLLLOCAL bool isRecorded() const {
+        return recorded;
+    }
+
+    //! records that the first round has resolved the path
+    DLLLOCAL void setRecorded() {
+        recorded = true;
+    }
+
+private:
+    //! the number of keys held without an allocation
+    static constexpr size_t BufSize = 4;
+
+    //! the exception sink of the store
+    ExceptionSink* xsink;
+    //! the keys after the first BufSize, allocated for a long path only
+    std::unique_ptr<std::vector<QoreBindKey>> more;
+    //! the first BufSize keys (the first count are valid)
+    alignas(QoreValue) unsigned char buf[BufSize * sizeof(QoreValue)];
+    //! the number of keys kept
+    uint32_t count = 0;
+    //! the keys of buf that the store site holds a reference to, one bit each
+    uint8_t owned_mask = 0;
+    //! true once the first round has resolved the path
+    bool recorded = false;
+
+    //! keeps a key after the first BufSize
+    DLLLOCAL void addMore(const QoreValue& key, bool owned);
+
+    //! releases the keys that the store site holds
+    DLLLOCAL void release();
+};
+
 //! The probe of the type check of a store that holds an lvalue lock (qore#7391)
 /** While installed, QTS_COMPLEXREF in QoreTypeSpec::acceptInputImpl() records the references that it would bind
     instead of binding them.  The probe is installed for the current thread and restores the probe that it replaced
@@ -148,12 +364,19 @@ private:
 class QoreReferenceBindProbe {
 public:
     //! installs the probe; \a retry gives the references that were bound already, if any
-    DLLLOCAL explicit QoreReferenceBindProbe(const QoreBindRetry* retry);
+    /** @param verify true for the probe of a container operation whose values were checked before it (see
+        qore_container_store_probe()): a reference that needs a bind and was not bound already is refused, and the
+        check of the operation raises REFERENCE-BIND-ERROR before the operation stores the value
+    */
+    DLLLOCAL explicit QoreReferenceBindProbe(const QoreBindRetry* retry, bool verify = false);
 
     //! installs the probe; \a bound gives the references that were bound already, if any (qore#7391)
     /** For a store that binds the references of its values before it takes its lock, such as a merge into an object
+
+        @param locked true if the thread holds an lvalue lock while the probe is installed: Qore code that the check
+        runs then refuses to bind references (QoreReferenceBindCodeScope)
     */
-    DLLLOCAL QoreReferenceBindProbe(const QoreBindRetry* retry, const QoreReferenceBindPairList* bound);
+    DLLLOCAL QoreReferenceBindProbe(const QoreBindRetry* retry, const QoreReferenceBindPairList* bound, bool locked);
 
     //! uninstalls the probe if it is still installed; the pairs left are released with no exception sink
     DLLLOCAL ~QoreReferenceBindProbe();
@@ -165,11 +388,18 @@ public:
     DLLLOCAL void uninstall();
 
     //! records that the check accepted \a r for the reference type of \a ti; accepted with no record if bound already
-    DLLLOCAL void record(ReferenceNode* r, const QoreTypeInfo* ti, LexicalSemanticPolicy policy, bool lexical);
+    /** @return false if the reference needs a bind and the probe verifies (no record is made), true if not
+    */
+    DLLLOCAL bool record(ReferenceNode* r, const QoreTypeInfo* ti, LexicalSemanticPolicy policy, bool lexical);
 
     //! returns true if a reference was recorded
     DLLLOCAL bool recorded() const {
         return !pairs.empty();
+    }
+
+    //! returns true if the thread holds an lvalue lock while the probe is installed
+    DLLLOCAL bool isLocked() const {
+        return locked;
     }
 
     //! the references recorded, which have to be bound before the store can be made
@@ -184,14 +414,21 @@ private:
     QoreReferenceBindProbe* prev;
     //! true while the probe is installed
     bool installed = true;
+    //! true if a reference that needs a bind is refused instead of recorded
+    bool verify = false;
+    //! true if the thread holds an lvalue lock while the probe is installed
+    bool locked = true;
 };
 
 //! the probe installed for the current thread, or nullptr
 DLLLOCAL extern thread_local QoreReferenceBindProbe* qore_reference_bind_probe;
 
+//! true while Qore code runs that the check of a store holding an lvalue lock runs (see QoreReferenceBindCodeScope)
+DLLLOCAL extern thread_local bool qore_reference_bind_refused;
+
 //! Uninstalls the probe of the current thread for a check that binds inline, and installs it again (qore#7391)
-/** For a check made with no lvalue lock held in code that runs while a probe is installed, such as a store to a local
-    variable, or a bind itself
+/** For a check made with no lvalue lock held in code that runs while a probe is installed, such as the write-back of
+    a bind
 */
 class QoreReferenceBindProbeSuspend {
 public:
@@ -208,6 +445,45 @@ public:
 
 private:
     QoreReferenceBindProbe* prev;
+};
+
+//! Runs Qore code from a type check that can be made with a probe installed (qore#7391)
+/** The only Qore code that a type check runs is the member initializers of a hashdecl that a hash is converted to
+    (typed_hash_decl_private): this scope is around their evaluation.  With no probe installed, it does nothing.  With a
+    probe installed, the code runs with the probe suspended, so that its own checks record nothing in the probe of the
+    outer store, and, if the outer store holds an lvalue lock, with binds refused: a reference that the code binds (an
+    argument for a reference<T> parameter, a store to a local variable) would be bound under that lock, which can
+    deadlock, so the bind raises REFERENCE-BIND-ERROR instead (qore_reference_bind_unlocked()).
+*/
+class QoreReferenceBindCodeScope {
+public:
+    DLLLOCAL QoreReferenceBindCodeScope() : prev(qore_reference_bind_probe) {
+        if (prev) [[unlikely]] {
+            enter();
+        }
+    }
+
+    DLLLOCAL ~QoreReferenceBindCodeScope() {
+        if (prev) [[unlikely]] {
+            qore_reference_bind_probe = prev;
+            qore_reference_bind_refused = prev_refused;
+        }
+    }
+
+    QoreReferenceBindCodeScope(const QoreReferenceBindCodeScope&) = delete;
+    QoreReferenceBindCodeScope& operator=(const QoreReferenceBindCodeScope&) = delete;
+
+private:
+    QoreReferenceBindProbe* prev;
+    bool prev_refused = false;
+
+    DLLLOCAL void enter() {
+        prev_refused = qore_reference_bind_refused;
+        qore_reference_bind_probe = nullptr;
+        if (prev->isLocked()) {
+            qore_reference_bind_refused = true;
+        }
+    }
 };
 
 //! A bind of a reference in progress in the current thread (qore#7391)
@@ -239,159 +515,42 @@ private:
 */
 DLLLOCAL bool qore_container_store_may_bind(const QoreValue& container);
 
+//! returns true if push or unshift into the lvalue of \a lvh, which has no value, can bind a reference (qore#7391)
+/** The operation assigns the lvalue a new list of the element type of its list type first: true if that type can
+    bind a reference.  Out of line, for an lvalue with no value; the caller tests a list's own element type inline
+    (qore_list_private::elementMayBindReference()).
+*/
+DLLLOCAL bool qore_list_push_nothing_may_bind(const LValueHelper& lvh);
+
 //! Checks the values that an operation stores into the container that \a lvh holds before it changes it (qore#7391)
-/** For a container for which qore_container_store_may_bind() returns true.  The values are checked as the operation
-    checks them, on references of their own, with a probe installed: if the probe records references, nothing is
-    changed and the store is made again after they have been bound (LValueHelper::deferBinds()).  Otherwise the probe
-    is left installed in \a probe for the operation itself, which then records nothing, as the references of its
-    values need no bind; the caller calls qore_container_store_probe_end() after the operation.  An exception that
-    the check raises here is dropped: the operation raises it again.
+/** For a container for which qore_container_store_may_bind() returns true, or an lvalue with no value whose type can
+    bind a reference, before the operation stores the container that it makes for it.  The values are checked as the
+    operation checks them, on references of their own, with a probe installed; the members of an object operand of +=
+    on a hash are copied under the object's read lock first.  If the probe records references, nothing is changed and
+    the store is made again after they have been bound (LValueHelper::deferBinds()).  Otherwise a probe that verifies
+    is left installed in \a probe for the operation itself: its check finds only references that need no bind or that
+    were bound already, and a reference that needs a bind anyway (the values changed meanwhile) is refused by the
+    check of the operation, as a value of the wrong type is, before the operation stores it.  An exception that the
+    check raises here is dropped: the operation raises it again.
 
     @param lvh the helper of the operation, which holds the lvalue lock
     @param operand the value that the operation stores
     @param merge true if the operation stores the elements of a list operand (into a list) or the members of a hash
-    operand (into a hash), false if it stores \a operand itself
+    or an object operand (into a hash), false if it stores \a operand itself
     @param policy the lexical semantic policy of the operation, if any
-    @param probe the probe, installed here if the operation is checked with it
+    @param probe the probe, installed here if the operation is checked with it; the caller resets it after the
+    operation
 
-    @return -1 if the operation must not be made: the store is made again, or an exception was raised; 0 if not
+    @return -1 if the operation must not be made: the store is made again; 0 if not
 */
 DLLLOCAL int qore_container_store_probe(LValueHelper& lvh, const QoreValue& operand, bool merge,
         const LexicalSemanticPolicy* policy, std::optional<QoreReferenceBindProbe>& probe);
-
-//! Uninstalls the probe that qore_container_store_probe() left for an operation (qore#7391)
-/** A reference recorded by the operation itself, which its check found to need no bind, raises REFERENCE-BIND-ERROR
-
-    @return -1 if an exception was raised, 0 if not
-*/
-DLLLOCAL int qore_container_store_probe_end(LValueHelper& lvh, std::optional<QoreReferenceBindProbe>& probe);
 
 //! Binds a reference to the reference type of \a pair.type with no lvalue lock held (lib/QoreTypeInfo.cpp)
 /** The bind of QTS_COMPLEXREF in QoreTypeSpec::acceptInputImpl(): the value of the referenced lvalue is checked or
     converted to the type and written back if it was converted (qore#7391)
 */
 DLLLOCAL void qore_reference_bind_pair(const QoreReferenceBindPair& pair, ExceptionSink* xsink);
-
-//! The retry of a store whose check recorded references to bind (qore#7391)
-/** Created by the store site before the LValueHelper of the store, which it is given to; again() is called after the
-    helper has been destroyed, with no lvalue lock held.
-
-    The keys and indices of the path of the target are evaluated once: the helper of the first round records them in
-    the order that its steps take them, and the helper of a retry resolves the path with them instead of evaluating
-    the key expressions again.
-*/
-class QoreBindRetry {
-public:
-    //! the number of rounds after which a store whose check keeps recording references fails
-    static constexpr unsigned MaxRounds = 16;
-
-    DLLLOCAL explicit QoreBindRetry(ExceptionSink* xsink) : xsink(xsink) {
-    }
-
-    DLLLOCAL ~QoreBindRetry() {
-        if (state || owned_keys) [[unlikely]] {
-            release();
-        }
-    }
-
-    QoreBindRetry(const QoreBindRetry&) = delete;
-    QoreBindRetry& operator=(const QoreBindRetry&) = delete;
-
-    //! returns true if the store has to be made again; binds the references recorded with no lvalue lock held
-    /** Called after the helper of the store has been destroyed.  Returns false if the store did not record a
-        reference (it succeeded or failed, and the caller reports that), or if a bind raised an exception, or if the
-        check raised an exception after it recorded a reference: the exception is in the exception sink then.
-    */
-    DLLLOCAL bool again() {
-        return state ? againIntern() : false;
-    }
-
-    //! returns true if the last round recorded references and has to be made again (see again())
-    /** For a store site whose operation can fail with no exception for this reason only, such as += through a
-        default value
-    */
-    DLLLOCAL bool isPending() const {
-        return pending;
-    }
-
-    //! returns true if the value of the last round is kept for the store (see takeValue())
-    DLLLOCAL bool hasValue() const {
-        return value_kept;
-    }
-
-    //! returns the value of the last round, which the caller owns
-    DLLLOCAL QoreValue takeValue();
-
-    //! returns true if a reference recorded by an earlier round of this store was bound to \a ti
-    DLLLOCAL bool isBound(const ReferenceNode* r, const QoreTypeInfo* ti) const;
-
-    //! records that the store has to be made again (LValueHelper)
-    /** @param value the value of the store, which the retry takes; a value of an earlier round that the store site did
-        not take is handed to \a lvh, which releases it after its locks
-        @param pairs the references to bind, which the retry takes
-        @param error the exception that the check raised after it recorded the references, which the retry takes
-        @param lvh the helper of the store, which holds an lvalue lock
-    */
-    DLLLOCAL void setPending(QoreValue& value, QoreReferenceBindPairList& pairs, ExceptionSink& error,
-            LValueHelper& lvh);
-
-    //! returns true if the keys of the path of the target have been recorded
-    DLLLOCAL bool keysJournaled() const {
-        return keys_journaled;
-    }
-
-    //! records that the helper of the first round has resolved the path, whose keys are recorded then
-    DLLLOCAL void setKeysJournaled() {
-        keys_journaled = true;
-    }
-
-    //! records a key or an index of the path of the target
-    /** @param key the key
-        @param evaluated true if the key was evaluated, false if it is the constant of the expression, which lives as
-        long as the expression and is recorded without a reference
-    */
-    DLLLOCAL void recordKey(const QoreValue& key, bool evaluated);
-
-    //! returns the number of keys recorded
-    DLLLOCAL size_t keyCount() const {
-        return key_count;
-    }
-
-    //! returns the key recorded at position \a i (0 = the key that the first step took)
-    DLLLOCAL QoreValue getKey(size_t i) const;
-
-private:
-    //! the number of keys held without an allocation
-    static constexpr size_t KeyBufSize = 8;
-
-    //! the exception sink of the store
-    ExceptionSink* xsink;
-    //! the state of a store that recorded references, allocated when needed
-    QoreBindRetryState* state = nullptr;
-    //! the first KeyBufSize keys recorded (the first key_count are valid); the others are in the state
-    alignas(QoreValue) unsigned char key_buf[KeyBufSize * sizeof(QoreValue)];
-    //! the number of keys recorded
-    size_t key_count = 0;
-    //! the number of keys recorded with a reference of the retry
-    size_t owned_keys = 0;
-    //! the keys of key_buf recorded with a reference of the retry, one bit each
-    unsigned owned_key_mask = 0;
-    //! true once the keys of the path have been recorded
-    bool keys_journaled = false;
-    //! true if the state holds the value of the last round (see hasValue())
-    bool value_kept = false;
-    //! true if the last round recorded references (see isPending())
-    bool pending = false;
-
-    //! binds the references recorded and returns true if the store has to be made again
-    DLLLOCAL bool againIntern();
-
-    //! releases the value, the keys and the references held
-    DLLLOCAL void release();
-
-    //! returns the state, allocating it if needed
-    DLLLOCAL QoreBindRetryState& getState();
-};
 
 #ifdef DEBUG
 //! called by the bind of a reference element before it resolves the referenced lvalue (qore#7391)
@@ -401,6 +560,12 @@ private:
 */
 typedef bool (*qore_dbg_reference_bind_hook_t)(int held);
 DLLLOCAL extern std::atomic<qore_dbg_reference_bind_hook_t> qore_dbg_reference_bind_hook;
+
+//! true if a bind made with an lvalue write lock held raises DBG-REFERENCE-BIND-HELD instead of aborting (qore#7391)
+/** Set by dbg_reference_bind_strict() (lib/ql_debug.cpp): a test arms it so that a store path that still binds under
+    a lock fails the test with an exception; otherwise such a bind fails an assertion
+*/
+DLLLOCAL extern std::atomic<bool> qore_dbg_reference_bind_strict;
 #endif
 
 #endif

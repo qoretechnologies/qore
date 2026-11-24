@@ -43,10 +43,51 @@ QoreTypeSafeReferenceHelper::QoreTypeSafeReferenceHelper(const ReferenceNode* re
         : priv(new qore_type_safe_ref_helper_priv_t(ref, xsink)) {
 }
 
+int qore_type_safe_ref_helper_priv_t::resolveAgain(LValueHelper& lvh) const {
+    size_t first_step = 0;
+    switch (bind_base) {
+        case BindBase::Reference:
+            if (lvh.set(*ref) || !lvh) {
+                return -1;
+            }
+            break;
+        case BindBase::Object: {
+            assert(!bind_steps.empty());
+            const std::pair<std::string, bool>& step = bind_steps[0];
+            // as setObjKey() resolves it
+            lvh.setObjectContext(qore_object_private::get(*base_obj));
+            if (lvh.doObjLValue(base_obj, step.first.c_str(), step.second)) {
+                return -1;
+            }
+            first_step = 1;
+            break;
+        }
+        case BindBase::None:
+            assert(false);
+            return -1;
+    }
+    // the keys are moved to as moveToHashObjKey() moved to them
+    for (size_t i = first_step, e = bind_steps.size(); i < e; ++i) {
+        const std::pair<std::string, bool>& step = bind_steps[i];
+        if (step.second) {
+            lvh.startRemovalPath();
+        }
+        QoreValue v = lvh.getValue();
+        int rc = v.getType() == NT_OBJECT
+            ? lvh.doObjLValue(v.get<QoreObject>(), step.first.c_str(), step.second)
+            : lvh.doHashLValue(lvh.getType(), step.first.c_str(), step.second);
+        if (rc) {
+            return -1;
+        }
+    }
+    lvh.disableRemovalScanSkip();
+    return lvh ? 0 : -1;
+}
+
 QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_type_safe_ref_helper_priv_t::assignWithBindRetry(QoreValue val) {
-    assert(ref);
+    assert(bind_base != BindBase::None);
     ExceptionSink* xsink = lvalue.vl.xsink;
-    QoreBindRetry retry(xsink);
+    QoreBindRetry retry;
     // the helper outlives the retry: the retry is removed from it however the assignment ends
     class BindRetryScope {
     public:
@@ -70,26 +111,19 @@ QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_type_safe_ref_helper_priv_t::assi
         rc = lvalue.assignNative(val, "<reference>");
     }
     while (rc && retry.isPending()) {
-        // the helper is reset, which releases its locks, and empty if the reference cannot be resolved again
+        // the helper is reset, which releases its locks, and stays empty if the lvalue cannot be resolved again
         lvalue.~LValueHelper();
         new (&lvalue) LValueHelper(xsink);
         if (!retry.again()) {
             return -1;
         }
-        lvalue.~LValueHelper();
-        try {
-            new (&lvalue) LValueHelper(*ref, xsink);
-        } catch (...) {
-            // the empty constructor allocates nothing
-            new (&lvalue) LValueHelper(xsink);
-            throw;
-        }
-        if (!lvalue) {
+        // the lvalue is resolved again as the helper resolved it: through the reference, and with the keys that it
+        // moved to
+        if (resolveAgain(lvalue)) {
             return -1;
         }
-        lvalue.disableRemovalScanSkip();
         BindRetryScope scope(*this, retry);
-        rc = lvalue.assignNative(retry.hasValue() ? retry.takeValue() : QoreValue(), "<reference>");
+        rc = lvalue.assignNative(retry.takeValue(), "<reference>");
     }
     return rc;
 }
@@ -100,6 +134,7 @@ QoreTypeSafeReferenceHelper::~QoreTypeSafeReferenceHelper() {
 
 int QoreTypeSafeReferenceHelper::set(const ReferenceNode* ref) {
     int rc = priv->lvalue.set(*ref);
+    // the lvalue can be resolved again for a store made again after reference elements have been bound (qore#7391)
     if (!rc) {
         priv->setReference(ref);
     }
@@ -140,6 +175,8 @@ const char* QoreTypeSafeReferenceHelper::getTypeName() const {
 
 int QoreTypeSafeReferenceHelper::setObjKey(QoreObject* obj, const char* key, bool for_remove) {
     priv->lvalue.setObjectContext(qore_object_private::get(*obj));
+    // the lvalue can be resolved again for a store made again after reference elements have been bound (qore#7391)
+    priv->setObjectBase(obj, key, for_remove);
     return priv->doObjLValue(obj, key, for_remove);
 }
 
@@ -148,6 +185,8 @@ int QoreTypeSafeReferenceHelper::moveToHashObjKey(const char* key, bool for_remo
         // the path information of the hash is recorded for removal (qore#6435)
         priv->lvalue.startRemovalPath();
     }
+    // the lvalue can be resolved again for a store made again after reference elements have been bound (qore#7391)
+    priv->addBindStep(key, for_remove);
     QoreValue v = priv->getValue();
     if (v.getType() == NT_OBJECT) {
         return priv->doObjLValue(v.get<QoreObject>(), key, for_remove);
