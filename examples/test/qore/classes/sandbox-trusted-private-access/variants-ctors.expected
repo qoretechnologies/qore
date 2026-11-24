@@ -32,4 +32,5 @@ initialiser: OK "public constructor"
 implicit-private-default-ctor: RUNTIME-OVERLOAD-ERROR: no variant matching '::TrustedPrivateOnly::constructor()' can be found; no variants were accessible in this execution context
 no-ctor-private-default-ctor: RUNTIME-OVERLOAD-ERROR: no variant matching '::TrustedPrivateOnly::constructor()' can be found; no variants were accessible in this execution context
 no-ctor-private-default-ctor-create-object: RUNTIME-OVERLOAD-ERROR: no variant matching '::TrustedPrivateOnly::constructor()' can be found; no variants were accessible in this execution context
+base-private-ctor-runtime: RUNTIME-OVERLOAD-ERROR: no variant matching '::TrustedPrivateOnly::constructor(string)' can be found; no variants were accessible in this execution context
 trusted: OK ["public variant", "private constructor: trusted/private variant 2"]

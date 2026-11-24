@@ -162,5 +162,12 @@ show("no-ctor-private-default-ctor", auto sub () { return p.callFunction("runCla
 show("no-ctor-private-default-ctor-create-object", auto sub () {
     return p.callFunction("runClass", "TNoConstructor", "createObject");
 });
+# a base class constructor call whose arguments are resolved at run time: the private constructor is refused then
+if (*Program rp = sandboxed("base-private-ctor-runtime", "class TR inherits TrustedPrivateOnly {
+    constructor(auto x) : TrustedPrivateOnly(x) {}
+}
+auto sub make() { return new TR('x').how; }")) {
+    show("base-private-ctor-runtime", auto sub () { return rp.callFunction("make"); });
+}
 # trusted code calls the private variant and constructor of its class
 show("trusted", auto sub () { return (shared.op(), Trusted::viaPrivate()); });
