@@ -29835,6 +29835,51 @@ static QoreValue f_dbg_wait_bg_compile_teardown_waiting(const QoreListNode* para
     return QoreJIT::instance().dbgWaitBgCompileTeardownWaiting(get_param_value(params, 0).getAsBigInt());
 }
 
+//! reads a value that was never written and branches on it, so that valgrind reports an error of Qore's own code
+/** For examples/test/qore/misc/valgrind-suppressions.qtest: the suppressions of examples/test/valgrind.supp must not
+    hide a report of Qore's code; the value is read from a heap allocation that is not initialized, through a volatile
+    pointer, so that the compiler can neither assume nor remove the read
+
+    @return 1 or 2, depending on the value read
+*/
+// the two outcomes of the branch of dbg_read_uninitialized(), not inlined, so that the compiler keeps a branch (and
+// does not select the value without one, which would move the report to the code that uses the value)
+static QORE_INTERN_NOINLINE int64 dbg_uninitialized_positive() {
+    return 1;
+}
+
+static QORE_INTERN_NOINLINE int64 dbg_uninitialized_not_positive() {
+    return 2;
+}
+
+static QoreValue f_dbg_read_uninitialized(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    std::unique_ptr<int[]> v(new int[1]);
+    volatile int* p = v.get();
+    if (*p > 0) {
+        return dbg_uninitialized_positive();
+    }
+    return dbg_uninitialized_not_positive();
+}
+
+//! reads memory after it was freed, so that valgrind reports an error of Qore's own code
+/** For examples/test/qore/misc/valgrind-suppressions.qtest: the suppressions of examples/test/valgrind.supp must not
+    hide it; the pointer is read through a volatile, so that the compiler can neither assume nor remove the read
+*/
+static QoreValue f_dbg_use_after_free(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int* volatile p = new int(1);
+    int* q = p;
+    delete q;
+    return (int64)*p;
+}
+
+//! passes an optimization level that was never written to LLVM's pipeline (qore_jit_dbg_pipeline_uninitialized_level())
+/** For examples/test/qore/misc/valgrind-suppressions.qtest: an uninitialised value that Qore's code passes to LLVM is
+    reported in the LLVM function that uses it, which the suppressions of examples/test/valgrind.supp do not match
+*/
+static QoreValue f_dbg_llvm_uninitialized_level(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return (int64)qore_jit_dbg_pipeline_uninitialized_level();
+}
+
 //! waits until the background JIT compiler has no queued or in-progress work, detached work included
 static QoreValue f_dbg_wait_bg_compile_idle(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     QoreJIT::instance().waitForBgCompileQueue();
@@ -35815,6 +35860,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_wait_bg_compile_idle", f_dbg_wait_bg_compile_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_read_uninitialized", f_dbg_read_uninitialized, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_use_after_free", f_dbg_use_after_free, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_llvm_uninitialized_level", f_dbg_llvm_uninitialized_level, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_bg_compile_discarded_count", f_dbg_get_bg_compile_discarded_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_ir_returns_pass_through_without_thread_data",
