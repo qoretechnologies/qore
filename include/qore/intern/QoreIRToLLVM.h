@@ -59,6 +59,7 @@ class QoreIRFunction;
 struct QoreJITObjectLayout;
 class QoreCallTargetCheckCache;
 class QoreIRBasicBlock;
+class QoreIRBlockReachability;
 class QoreIRInstruction;
 class QoreIRPhiInstruction;
 class AbstractQoreFunctionVariant;
@@ -78,6 +79,21 @@ enum QoreFinalizeLoop : int {
 //! first reaches that loop at that index, on any thread, which can be a callee of the batch of another function
 DLLLOCAL void qore_dbg_force_finalize_cancel(int loop, int64_t index);
 #endif
+
+//! The metadata that marks the reference that the prologue of a fast entry takes to a boxed argument
+//! (QoreIRToLLVM::materializeOwnedFastEntries())
+#define QORE_FAST_ENTRY_ARG_REF_MD "qore.fast_entry_arg_ref"
+//! The metadata that marks a return of a fast entry before its prologue acquires its parameters (the stack check and
+//! the debugger entry), where the copy that takes its arguments over releases the arguments that it owns
+//! (QoreIRToLLVM::materializeOwnedFastEntries())
+#define QORE_FAST_ENTRY_EARLY_EXIT_MD "qore.fast_entry_early_exit"
+//! The infix of the name of a fast entry that takes its arguments over: \<fast entry\>.own.\<mask\>, the mask having
+//! a '1' for each parameter whose argument it takes over and a '0' for the others
+#define QORE_OWNED_FAST_ENTRY_INFIX ".own."
+
+//! Returns true if the fast entry of \a variant cannot be called by a call that gives the callee a temporary argument
+//! (\a call_gives_args), which a parameter of the callee takes over (see QoreIRToLLVM.cpp)
+DLLLOCAL bool qore_ir_fast_entry_refuses_given_args(bool call_gives_args, const AbstractQoreFunctionVariant* variant);
 
 class QoreIRToLLVM {
 public:
@@ -104,6 +120,17 @@ public:
     //! Remove decref calls whose value is proven to be NOTHING.
     //! @return the number of calls removed
     static size_t pruneNoopDecrefs(llvm::Module& module);
+
+    //! Defines the AOT fast entries that take their arguments over, which the calls in the module declared
+    /** A call that gives a temporary argument to a fast entry whose parameter takes it over calls an entry declared by
+        ownedFastEntry(): a copy of the fast entry without the references that its prologue takes to the arguments
+        that the call gives (marked with QORE_FAST_ENTRY_ARG_REF_MD), whose references the call hands over to it.
+        Called once all functions of the module are lowered, before it is optimized (issue #6105).
+
+        @return false with \a error set if an entry cannot be defined (its fast entry is not defined in the module,
+        or an argument that a call gives has no marked reference): the call would leak or release its argument
+    */
+    DLLLOCAL static bool materializeOwnedFastEntries(llvm::Module& module, std::string& error);
 
     //! Gives each block that uses the address of a slot of the cleanup frame a copy of its constant GEP
     /** Called on the optimized module before code generation (JIT and AOT).  The addresses of the slots of a
@@ -261,6 +288,9 @@ public:
 private:
     llvm::LLVMContext& ctx;
 
+    //! The arguments that a call hands over to the fast entry that takes its arguments over (defined below)
+    struct FastEntryTakeOver;
+
     // Type cache
     llvm::Type* i64_type = nullptr;
     llvm::Type* i32_type = nullptr;
@@ -352,6 +382,8 @@ private:
     std::unordered_map<int32_t, std::pair<llvm::Value*, llvm::Value*>> aot_cross_module_targets;
     // The buffer of the state of a call of another module's function, in the function's entry block
     llvm::AllocaInst* cross_module_call_state_storage = nullptr;
+    // Calls in the same activation reuse the buffer after the preceding method returns.
+    llvm::AllocaInst* native_method_context_storage = nullptr;
 
     // Exact-class checks for stable local receivers, materialized once in the
     // logical function entry. Object validity remains guarded at each call.
@@ -564,7 +596,21 @@ private:
     // Boxed source values retained when a typed collection read is unboxed.
     // Generic calls and NOTHING guards must observe the source value rather
     // than re-boxing a native zero produced from a sparse list entry.
+    // The source of a ListGetInt or ListGetFloat is an element borrowed from its list, which boxValue() and the
+    // arguments of a compiled call give to later consumers without a reference of their own.  This is safe because
+    // the IR reads a typed element so only where nothing can release the list while the read is used (qore#7372):
+    // in a bounded loop over a list local, only when the loop neither assigns nor changes the list and makes no call
+    // that can (qore_ir_specialize_bounded_typed_list_reads()), and the read itself is used only in the loop: that
+    // function does not check it, but it holds by construction, as a use after the loop takes the value through a
+    // Phi, and a Phi never has an entry here (entries are added only by the lowering of ListGetInt and
+    // ListGetFloat); and in a functional operator (map, select, foldl, foldr, map with select), from its input
+    // list, which is held for all its iterations (a read of a local that the operator's expressions can assign
+    // takes a reference of its own, see qore_ir_find_local_reads_overwritten_before_use()), whose results are new
+    // values or Phis of native values, not the read itself
     std::unordered_map<uint32_t, llvm::Value*> native_boxed_sources;
+    //! The native arguments of fast entries that QORE_AOT_DEBUG reported as needing no NOTHING guard (see
+    //! fastEntryArgumentNeedsNothingGuard()), so that each is reported once
+    mutable std::unordered_set<uint32_t> reported_native_fast_entry_args;
     std::unordered_map<uint32_t, BatchCalleeParamKind>
         native_boxed_source_kinds;
 
@@ -690,6 +736,22 @@ private:
     // cleanup can run without dangling cached locals.
     std::vector<llvm::AllocaInst*> fast_entry_param_allocas;
     std::unordered_map<const void*, llvm::AllocaInst*> fast_entry_param_allocas_by_local;
+    //! the arguments of native locals that the prologue of a fast entry took a reference to, released at exit with
+    //! preinstantiated_entry_loads
+    std::vector<llvm::Value*> fast_entry_converted_arg_refs;
+    //! the block that returns from the debugger entry of an AOT fast entry (emitAOTDebugFastEntry())
+    llvm::BasicBlock* debug_fast_entry_end = nullptr;
+    //! Marks the returns of the paths that leave a fast entry before its prologue acquires its parameters:
+    //! \a stack_overflow_bb and the debugger entry (QORE_FAST_ENTRY_EARLY_EXIT_MD)
+    /** The prologue acquires the parameters after the call is admitted (#7091), so the entry owns no reference at these
+        returns; the copy that takes its arguments over (materializeOwnedFastEntries()) owns those that its callers
+        hand over from its start, and releases them there (issue #6105)
+    */
+    DLLLOCAL void emitFastEntryEarlyExitReleases(llvm::Module& module, llvm::BasicBlock* stack_overflow_bb);
+    //! Emits the call of the fast entry \a owned_fn that takes over the arguments of \a take_over: the slots that it
+    //! hands over are cleared right before the call (issue #6105)
+    DLLLOCAL llvm::CallInst* emitOwnedFastEntryCall(llvm::Function* owned_fn, const FastEntryTakeOver& take_over,
+            llvm::ArrayRef<llvm::Value*> call_args);
 
     // Boxed IR-only locals that are neither fast-entry params nor backed by a
     // pre-instantiated cleanup slot. Their alloca owns the current value and
@@ -1252,6 +1314,9 @@ private:
     //! from the local cache is borrowed from it, so each of these takes a reference of its own, released as a
     //! temporary's
     std::unordered_set<uint32_t> overwritten_local_reads;
+    //! The reads of a local whose value has a native representation (NativeInt or NativeFloat facts), which are
+    //! unboxed where they are read (see findNativeLocalReads())
+    std::unordered_set<uint32_t> native_local_reads;
 
     // Locals assigned through the weak assignment operator. Loads must go
     // through LocalVar::eval() so weak refs are resolved to the current target
@@ -1279,6 +1344,16 @@ private:
         Closure-bound, weak-assigned and foreach variables have mechanisms of their own.
     */
     bool usesReferenceFlag(const void* key) const;
+
+    //! Returns true if a weak or opaque store to a local on the runtime stack can assign through a reference it holds
+    /** A local that holds a reference assigns the referenced lvalue (LocalVarValue::getLValue()), whose type, known
+        only when the store runs, converts the value before the weak or opaque reference is made, as the AST
+        interpreter assigns it; such a store is made by qore_rt_assign_local_mode() (qore#7164).  A local of a reference
+        type, and a local of no type, \c auto or \c any that can be given a reference (a parameter, a local of an
+        enclosing scope, a body local that a store or an element of a foreach loop can give one, or a local of a
+        function that creates one; see usesReferenceFlag()), can.
+    */
+    bool modeStoreMayAssignThroughReference(const void* key) const;
 
     //! Returns true if a local keeps a reference it holds in its native cache (QoreIRFunction::reference_slot_locals)
     bool isReferenceSlotLocal(const void* key) const {
@@ -1317,8 +1392,39 @@ private:
     //! released, so that the value loaded holds the only reference that the call gave (qore_rt_take_param())
     llvm::Value* emitParamTake(const void* key, llvm::IRBuilder<>& b, llvm::Module& module);
     //! Returns true if the call \a inst gives the callee the cleanup slot of an argument (buildArgCleanupArray()):
-    //! such a call does not call the fast entry of a callee whose parameter takes its argument over (issue #5958)
+    //! such a call does not call the fast entry of a callee whose parameter takes its argument over (issue #5958),
+    //! unless it can call the entry that takes its arguments over (callCanTakeOverToFastEntry())
     bool callGivesArgs(const QoreIRInstruction* inst) const;
+    //! Returns true if the call \a inst of \a variant, which gives its callee arguments (callGivesArgs()), can call
+    //! the fast entry of \a info that takes its arguments over (ownedFastEntry(), issue #6105)
+    /** For a local callee whose fast entry refuses the arguments that a call gives
+        (qore_ir_fast_entry_refuses_given_args()). A JIT batch can lower its body again when an earlier batch
+        owns the ordinary entry. The AOT entry must belong to this image. The call must give only the cleanup slots of temporaries (no slot of a read through a
+        reference, whose value is known at run time only: givenReferenceReadSlot()), at least one of them to a
+        parameter whose fast entry takes a reference of its own (qore_aot_fast_entry_param_takes_ref())
+    */
+    DLLLOCAL bool callCanTakeOverToFastEntry(const QoreIRInstruction* inst, int arg_start,
+            const AbstractQoreFunctionVariant* variant, const BatchCalleeInfo& info) const;
+    //! The arguments that a call hands over to the fast entry that takes its arguments over (issue #6105)
+    struct FastEntryTakeOver {
+        //! for each parameter, the cleanup slot of the argument whose reference the call hands over, or nullptr for
+        //! an argument that the entry takes a reference to itself
+        std::vector<llvm::Value*> slots;
+        //! true if the call gives a slot that it does not hand over (the slot of an argument of a borrowed
+        //! parameter), which it releases when the call returns
+        bool releases_given = false;
+        bool hasOwnedSlot() const;
+    };
+    //! Returns the cleanup slots that a call of the fast entry of \a info that takes its arguments over hands over
+    /** \a given_slots are the slots of the temporaries that the call gives, by argument (buildArgCleanupArray())
+    */
+    DLLLOCAL FastEntryTakeOver fastEntryTakeOverSlots(const AbstractQoreFunctionVariant* variant,
+            const BatchCalleeInfo& info, const std::vector<llvm::Value*>& given_slots) const;
+    //! Returns the declaration of the copy of \a fast_fn that takes over the arguments of the parameters with a slot in
+    //! \a take_over (fastEntryTakeOverSlots()), which materializeOwnedFastEntries() defines, or nullptr if the call
+    //! hands nothing over; sets \a releases_given if the call then releases a given slot (issue #6105)
+    DLLLOCAL llvm::Function* ownedFastEntry(llvm::Function* fast_fn, const FastEntryTakeOver& take_over,
+            llvm::Module& module, bool& releases_given) const;
     //! Returns the slot of the reference that the read of argument \a value_id through a reference took, if the call
     //! \a inst gives it to the callee (buildArgCleanupArray()), or nullptr
     /** The value read through a reference by a local with a reference flag is kept in the slot of its read site
@@ -1585,7 +1691,7 @@ private:
     // is cached at runtime.  Emit a guarded fast-entry call with a normal AOT
     // helper fallback for linked/source-stripped cases where the fast entry is
     // visible but the callee context is not cached.
-    llvm::Value* emitAotBatchFastEntryOrFallback(llvm::Module& module,
+    DLLLOCAL llvm::Value* emitAotBatchFastEntryOrFallback(llvm::Module& module,
             llvm::Function* llvm_func, const QoreIRInstruction* inst,
             int32_t slot, llvm::Function* fast_fn,
             const BatchCalleeInfo& callee_info,
@@ -1600,7 +1706,8 @@ private:
             const char* fallback_throwing_name = nullptr,
             const char* fallback_consume_throwing_name = nullptr,
             bool require_exact_object_class = false,
-            const std::vector<uint8_t>* date_kind_guards = nullptr);
+            const std::vector<uint8_t>* date_kind_guards = nullptr,
+            const FastEntryTakeOver* take_over = nullptr);
 
     //! Emits the entry into the Program of another module's function before its native call (qore#6035)
     /** qore_rt_enter_cross_module_call() enters the Program with the state that the runtime call path sets up
@@ -2126,6 +2233,26 @@ private:
         the inline form for every function.
     */
     static size_t getReloadChainCallThreshold();
+
+    //! The product of the tracked locals and the IR instructions of a function at which the temp-boundary flush uses
+    //! the runtime helpers with fewer tracked locals than getReloadChainCallThreshold() (qore#7187)
+    /** The inline form's code is in the product of the tracked locals and the boundaries.  Overridable with
+        QORE_JIT_RELOAD_CHAIN_COST_BUDGET; 0 disables the rule.  Not applied when QORE_JIT_RELOAD_CHAIN_CALL_THRESHOLD
+        is 0 (the inline form for every function).
+    */
+    static size_t getReloadChainCostBudget();
+
+    //! returns true if the IR block being lowered is in a cycle of its function (a loop), or if that is not known
+    /** Computed for each block once per function, with the reachability of the function's blocks (qore#7187)
+    */
+    bool isLoweringBlockInCycle();
+
+    //! the reachability of the blocks of the function being lowered, built on the first use of isLoweringBlockInCycle()
+    /** A shared pointer, whose deleter is made where the type is complete (QoreIRToLLVM.cpp)
+    */
+    std::shared_ptr<QoreIRBlockReachability> block_reachability;
+    //! whether each block of the function being lowered is in a cycle (isLoweringBlockInCycle())
+    std::unordered_map<const QoreIRBasicBlock*, bool> block_in_cycle;
 
     // Emit qore_rt_exec_on_block_exit call to execute registered on_block_exit handlers
     void emitOnBlockExitExec(llvm::Module& module);
@@ -2683,7 +2810,7 @@ private:
     */
     llvm::CallInst* emitNativeCall(llvm::FunctionCallee fn, llvm::ArrayRef<llvm::Value*> args,
             const AbstractQoreFunctionVariant* callee, llvm::Module& module, llvm::Function* llvm_func,
-            const llvm::Twine& name = "", llvm::Value* arg_cleanups = nullptr, int nargs = 0);
+            const llvm::Twine& name = "", llvm::Value* arg_cleanups = nullptr, int nargs = 0, const FastEntryTakeOver* take_over = nullptr);
 
     //! Emits a call that AOT-compiled code makes directly to a native entry of user code, with its frame
     /** As emitNativeCall(); the callee is the call target of \a target_slot in this function's context, and the
@@ -2935,6 +3062,25 @@ private:
     // if any was released, as releasing can raise an exception
     bool releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::Module& module, bool use_pending);
 
+    //! Finds the reads of locals that have a native representation
+    /** Fills native_local_reads with the LoadLocal results whose facts are NativeInt or NativeFloat (assigned, never
+        NOTHING).  The IR gives such a value no owner in the statement that reads it (see design/qore-ir-spec.md),
+        and the fixed-aggregate scalar replacement forwards it to the statements that read the members; a local
+        whose storage is boxed here gives a value of the local, which is borrowed or released with the temporaries of
+        the statement, so each such read is unboxed where it is read (qore#7372).
+
+        @return false if the analysis was cancelled
+    */
+    bool findNativeLocalReads(const QoreIRFunction& func);
+
+#ifndef NDEBUG
+    //! Asserts that every read in native_local_reads that was lowered has its native value
+    /** Called after the function's blocks are lowered, so that it covers the reads used by Phis whose incoming
+        values are added after the Phi, and those used in blocks lowered before the defining block.
+    */
+    void assertNativeLocalReadsUnboxed() const;
+#endif
+
     // Releases the object that the load of a weak-assigned local kept for the call \a inst whose receiver it is
     // (weak_receiver_holds) when the call returns, after its arguments, as the AST interpreter releases the object of a
     // method call; on the exception edge of a call that is no invoke, the cleanup slot releases it as a temporary of
@@ -2988,9 +3134,11 @@ private:
     // Build an entry-block alloca'd array of cleanup slot pointers for
     // operands[arg_start..].  The runtime uses this to clear consumed
     // call-argument temporaries after callee parameter instantiation.
-    llvm::Value* buildArgCleanupArray(const QoreIRInstruction* inst, int arg_start,
+    // With given_slots, the cleanup slots of the temporaries that the call gives are returned in it by argument
+    // (nullptr for an argument whose slot is not given or is the slot of a read through a reference).
+    DLLLOCAL llvm::Value* buildArgCleanupArray(const QoreIRInstruction* inst, int arg_start,
             llvm::Function* llvm_func, int nargs, bool& has_cleanup,
-            int borrowed_prefix = 0);
+            int borrowed_prefix = 0, std::vector<llvm::Value*>* given_slots = nullptr);
 
     // Clear ownership slots after a direct fast-entry call.
     void emitArgCleanupClear(llvm::Module& module,

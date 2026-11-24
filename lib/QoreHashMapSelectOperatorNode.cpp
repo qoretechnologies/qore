@@ -109,6 +109,8 @@ int QoreHashMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
         // the code runs for each element with the element's index as $# (qore#5690)
         QoreParseContextFlagHelper element_flag(parse_context);
         element_flag.setFlags(PF_IMPLICIT_ELEMENT);
+        // a $# in the code reads the index of this operator, not that of the code around it (qore#7270)
+        QoreParseImplicitElementScope element_scope(parse_context);
 
         // check key expression
         parse_context.typeInfo = nullptr;

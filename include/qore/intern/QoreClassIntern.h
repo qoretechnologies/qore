@@ -3278,6 +3278,8 @@ public:
     //! true if the class is the copy of a class of another namespace (a builtin class, a module's class, a class
     //! that a Program imports), which outlives the Program the copy is in; see ownedByProgram()
     bool ns_copy = false;
+    //! false when an AOT class was reconstructed without proof that its loading Program declared it
+    bool declaration_owner_known = true;
     //! true if the class was declared with PO_ALLOW_BARE_REFS, so that a member is reached by its unscoped name in
     //! the class (issue #3286)
     bool parse_abr = false;
@@ -3748,6 +3750,11 @@ public:
 
     // This function must only be called from QoreObject
     DLLLOCAL QoreValue evalMemberGate(QoreObject* self, const char* nme, ExceptionSink* xsink) const;
+
+    //! A reconstructed source Program alone cannot establish ownership of an embedded class.
+    DLLLOCAL bool declaredBy(const QoreProgram* pgm) const {
+        return pgm && declaration_owner_known && spgm.load() == pgm;
+    }
 
     DLLLOCAL const char* getModuleName() const {
         return from_module.empty() ? nullptr : from_module.c_str();
@@ -4313,6 +4320,18 @@ public:
 
     DLLLOCAL int parseInitConstants();
 
+    //! The receiver's name for a member diagnostic, qualified when another declaration shares its name.
+    DLLLOCAL const char* memberDiagnosticName() const;
+
+    DLLLOCAL static void raiseCastError(ExceptionSink* xsink, const QoreClass& actual, const QoreClass& expected,
+        bool private_access);
+
+    //! Keep the leading :: on a root class, where it distinguishes the path from the short name.
+    DLLLOCAL static const char* diagnosticPath(const QoreClass& cls) {
+        const char* path = cls.getPath();
+        return !strncmp(path, "::", 2) && strstr(path + 2, "::") ? path + 2 : path;
+    }
+
     DLLLOCAL int parseCheckMemberAccess(const QoreProgramLocation* loc, const char* mem,
             const QoreTypeInfo*& memberTypeInfo, int pflag) const {
         const_cast<qore_class_private*>(this)->parseInitPartial();
@@ -4337,17 +4356,17 @@ public:
                 qore_class_private* self = const_cast<qore_class_private*>(this);
                 if (self->parseFindNormalMethodIntern(mem, this) || self->parseFindStaticMethodIntern(mem, this)) {
                     parse_error(*loc, "member '%s' of class '%s' is not declared, and '%s' is a method of the class: "
-                        "a method is called with an argument list, as in %s()", mem, name.c_str(), mem, mem);
+                        "a method is called with an argument list, as in %s()", mem, memberDiagnosticName(), mem, mem);
                     rc = -1;
                 } else if (parseHasPublicMembersInHierarchy()) {
                     parse_error(*loc, "illegal access to unknown member '%s' in class '%s' which has a public " \
-                        "member list (or inherited public member list)", mem, name.c_str());
+                        "member list (or inherited public member list)", mem, memberDiagnosticName());
                     rc = -1;
                 } else if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
                     parse_error(*loc, "member '%s' of class '%s' referenced has no type information because it was " \
                         "not declared in a public or private member list, but parse options require type " \
                         "information for all declarations",
-                        mem, name.c_str());
+                        mem, memberDiagnosticName());
                     rc = -1;
                 }
             }
@@ -4369,7 +4388,7 @@ public:
                     || !parseCheckPrivateMemberAccess(qc, access)
                     || (access == Internal && omi->local() && qc == this))) {
             memberTypeInfo = nullptr;
-            parse_error(*loc, "illegal access to private member '%s' of class '%s'", mem, name.c_str());
+            parse_error(*loc, "illegal access to private member '%s' of class '%s'", mem, memberDiagnosticName());
             return -1;
         }
         // a member that this class reaches only through a base class that one of its base classes inherits with
@@ -4378,7 +4397,7 @@ public:
         if (access == Inaccessible && !parseHasMemberGate() && parse_get_class_priv() == this) {
             memberTypeInfo = nullptr;
             parse_error(*loc, "illegal access to member '%s' of class '%s', which class '%s' inherits through a "
-                "class inherited with private:internal", mem, qc->name.c_str(), name.c_str());
+                "class inherited with private:internal", mem, qc->memberDiagnosticName(), memberDiagnosticName());
             return -1;
         }
         return 0;
@@ -4422,7 +4441,7 @@ public:
         // #6669; see parseResolveInternalMemberAccess())
         if (omi && access == Inaccessible) {
             parse_error(*loc, "illegal access to member '%s' of class '%s', which class '%s' inherits through a "
-                "class inherited with private:internal", mem, qc->name.c_str(), name.c_str());
+                "class inherited with private:internal", mem, qc->memberDiagnosticName(), memberDiagnosticName());
             memberTypeInfo = nullptr;
             return -1;
         }
@@ -4447,20 +4466,20 @@ public:
             if (((pflag & PF_FOR_ASSIGNMENT) ? !member_write_gate : !memberGate)
                     && (self->parseFindNormalMethodIntern(mem, this) || self->parseFindStaticMethodIntern(mem, this))) {
                 parse_error(*loc, "member '%s' of class '%s' is not declared, and '%s' is a method of the class: "
-                    "a method is called with an argument list, as in %s()", mem, name.c_str(), mem, mem);
+                    "a method is called with an argument list, as in %s()", mem, memberDiagnosticName(), mem, mem);
                 if (!rc) {
                     rc = -1;
                 }
             } else if (parseHasPublicMembersInHierarchy()) {
                 parse_error(*loc, "illegal access to unknown member '%s' in class '%s' which has a public member " \
-                    "list (or inherited public member list)", mem, name.c_str());
+                    "list (or inherited public member list)", mem, memberDiagnosticName());
                 if (!rc) {
                     rc = -1;
                 }
             } else if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
                 parse_error(*loc, "member '%s' of class '%s' referenced has no type information because it was not " \
                     "declared in a public or private member list, but parse options require type information for " \
-                    "all declarations", mem, name.c_str());
+                    "all declarations", mem, memberDiagnosticName());
                 if (!rc) {
                     rc = -1;
                 }
@@ -6007,7 +6026,11 @@ public:
     DLLLOCAL void parseCommit();
     DLLLOCAL void parseCommitRuntimeInit(ExceptionSink* xsink);
     DLLLOCAL void parseRollback();
-    DLLLOCAL int addUserMethod(const char* mname, MethodVariantBase* f, bool n_static);
+    //! adds a user method variant; a method that it creates gets the given declaration sequence number, if any
+    /** \a decl_seq is given by the loader of an AOT image: the image records the declaration order of each method,
+        as the loader creates the methods in the order of the method maps (issue #7169)
+    */
+    DLLLOCAL int addUserMethod(const char* mname, MethodVariantBase* f, bool n_static, int64_t decl_seq = -1);
     DLLLOCAL void addLocalMembersForInit();
 
     DLLLOCAL QoreValue evalPseudoMethod(const QoreValue n, const char* name, const QoreListNode* args,
@@ -6525,8 +6548,9 @@ public:
         qc.priv->resolveCopy();
     }
 
-    DLLLOCAL static int addUserMethod(QoreClass& qc, const char* mname, MethodVariantBase* f, bool n_static) {
-        return qc.priv->addUserMethod(mname, f, n_static);
+    DLLLOCAL static int addUserMethod(QoreClass& qc, const char* mname, MethodVariantBase* f, bool n_static,
+            int64_t decl_seq = -1) {
+        return qc.priv->addUserMethod(mname, f, n_static, decl_seq);
     }
 
     DLLLOCAL static void initialize(QoreClass& qc) {
@@ -6976,6 +7000,13 @@ public:
 
     //! returns the next declaration sequence number
     DLLLOCAL static uint64_t nextDeclSeq();
+
+    //! reserves \a n declaration sequence numbers and returns the first of them
+    /** The loader of an AOT image gives the methods that it creates the sequence numbers of their declaration order
+        from such a block (see qore_class_private::addUserMethod()), so that the methods created after them have
+        greater ones
+    */
+    DLLLOCAL static uint64_t reserveDeclSeq(uint64_t n);
 
     //! returns the declaration sequence number of the method
     DLLLOCAL static uint64_t getDeclSeq(const QoreMethod& m) {

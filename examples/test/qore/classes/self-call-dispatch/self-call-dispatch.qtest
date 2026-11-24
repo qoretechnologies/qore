@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of self method calls (m(), Base::m()) and their fast call path
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class SelfCallDispatchTest
+
+#! Tests the dispatch of calls of methods of self, unqualified and qualified (m(), Base::m(); issue #7267)
+/** An unqualified call of a method of self (\c m(i) in a method) is virtual: on an object of the class of the call or
+    of the method's class, it calls the method and variant resolved at parse time, which the compiled execution modes
+    call with their fast method call path; on an object of any other class, the method is looked up by name in the
+    object's class, which reaches a subclass's override.
+
+    SelfCallDispatch.q makes such calls at the same call sites on objects of the class of the call, of subclasses that
+    override the methods and of subclasses that only inherit them: of normal, private, \c private:internal, static and
+    abstract methods, with default, named, variable and reference arguments, of methods that throw exceptions, in
+    recursion, from closures, constructors and destructors, in a diamond hierarchy (qore#6798), in a final class and in
+    a child Program; its output must be the one in SelfCallDispatch.expected, which the AST interpreter prints, in
+    every execution mode, on the IR tier and in programs compiled with qcc -O0 and -O3.
+
+    SelfCallLocalValues.q reads and writes the body locals that such calls (also qualified ones: Base::m(x)) take as
+    arguments after the calls, in loops, after try blocks, in catch blocks and on_exit handlers, with negative NaN, big
+    ints, floats, strings and hashes; its output must be the one in SelfCallLocalValues.expected in the same runs.
+
+    SelfCallLocals.q shows, with get_local_vars() in the callee of a program compiled with qcc, that such a body local
+    is not kept on the runtime stack of local variables: the arguments of the call are not evaluated from the
+    expression of its node, so they do not make a local visible to the AST (issue #7267).
+*/
+class SelfCallDispatchTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir();
+    }
+
+    constructor() : QUnit::Test("self call dispatch (unqualified and Base:: calls)", "1.0", \ARGV) {
+        # the dispatch of the calls, and the values of the locals that the calls take, as the AST interpreter gives
+        # them in every execution mode, on the IR tier and in programs compiled with qcc
+        foreach string name in (("SelfCallDispatch", "SelfCallLocalValues")) {
+            string fixture = name;
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                string execution_mode = mode;
+                addTestCase(fixture + ": execution mode " + mode, sub () {
+                    assertEq(expected(fixture), ExecModeHarness::run(command(fixture, execution_mode)));
+                });
+            }
+            addTestCase(fixture + ": IR tier", sub () {
+                assertEq(expected(fixture), ExecModeHarness::run_ir_tier(command(fixture, "tiered")));
+            });
+            addTestCase(fixture + ": qcc -O0", sub () { checkQcc(fixture, 0); });
+            addTestCase(fixture + ": qcc -O3", sub () { checkQcc(fixture, 3); });
+        }
+        # the body locals that calls of methods of self take are not kept on the runtime stack of local variables by
+        # compiled code, which get_local_vars() shows in a program compiled with qcc (issue #7267)
+        addTestCase("SelfCallLocals: qcc -O0", sub () { checkQcc("SelfCallLocals", 0); });
+        addTestCase("SelfCallLocals: qcc -O3", sub () { checkQcc("SelfCallLocals", 3); });
+
+        set_return_value(main());
+    }
+
+    private string expected(string name) {
+        return ReadOnlyFile::readTextFile(dir + "/" + name + ".expected");
+    }
+
+    private string command(string name, string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode,
+            shellQuote(dir + "/" + name + ".q"));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(string name, int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string tmp = make_tmp_dir();
+        on_exit remove_tree(tmp);
+        string program = tmp + "/" + name;
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(dir + "/" + name + ".q")));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected(name), backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

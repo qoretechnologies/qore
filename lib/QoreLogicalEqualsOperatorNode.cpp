@@ -316,6 +316,41 @@ bool QoreLogicalEqualsOperatorNode::softEqualNative(const QoreValue& left, const
     return softEqualImpl<true, true>(left, right, xsink, {});
 }
 
+//! Compares two values of the same cheap scalar type as softEqualImpl() does (qore#7266)
+/** For the values of the members of two containers being compared; it gives the result that the generic comparison
+    gives: two ints are compared as ints, two floats as floats (so that NaN is not equal to anything, itself included),
+    and two inline short strings with the same bits are the same UTF-8 string.
+
+    @param l the left value
+    @param r the right value
+    @param rc set to the result of the comparison if the function returns true
+
+    @return true if the values were compared and \a rc is the result, false if they must be compared by
+    softEqualImpl()
+*/
+static QORE_INTERN_ALWAYS_INLINE bool soft_equal_same_scalar(const QoreValue& l, const QoreValue& r, bool& rc) {
+    if (l.isInt()) {
+        if (r.isInt()) {
+            rc = l.getInt() == r.getInt();
+            return true;
+        }
+        return false;
+    }
+    if (l.isFloat()) {
+        if (r.isFloat()) {
+            rc = l.getDouble() == r.getDouble();
+            return true;
+        }
+        return false;
+    }
+    // short strings with different bits can be equal after conversion; the generic comparison decides then
+    if (l.isShortString() && r.isShortString() && l.shortStringEquals(r)) {
+        rc = true;
+        return true;
+    }
+    return false;
+}
+
 template <bool Lexical, bool Native>
 bool QoreLogicalEqualsOperatorNode::softEqualImpl(const QoreValue& left, const QoreValue& right,
         ExceptionSink* xsink, LexicalSemanticPolicy policy) {
@@ -433,10 +468,20 @@ bool QoreLogicalEqualsOperatorNode::softEqualImpl(const QoreValue& left, const Q
         const QoreListNode* ll = l.get<const QoreListNode>();
         const QoreListNode* rl = r.get<const QoreListNode>();
         if (ll->size() != rl->size() || (xsink && q_check_stack(xsink))) return false;
+        // an exception raised before makes the first element unequal, also when the inline comparison compares it
+        if (xsink && ll->size() && *xsink) return false;
         for (size_t i = 0; i < ll->size(); ++i) {
             // Keep the public list comparison's operand order.
-            if (!softEqualImpl<Lexical, Native>(rl->retrieveEntry(i), ll->retrieveEntry(i), xsink, policy)
-                    || (xsink && *xsink)) return false;
+            const QoreValue lv = rl->retrieveEntry(i);
+            const QoreValue rv = ll->retrieveEntry(i);
+            bool rc;
+            if (soft_equal_same_scalar(lv, rv, rc)) {
+                if (!rc) {
+                    return false;
+                }
+                continue;
+            }
+            if (!softEqualImpl<Lexical, Native>(lv, rv, xsink, policy) || (xsink && *xsink)) return false;
         }
         return true;
     }
@@ -445,15 +490,19 @@ bool QoreLogicalEqualsOperatorNode::softEqualImpl(const QoreValue& left, const Q
         const QoreHashNode* lh = l.get<const QoreHashNode>();
         const QoreHashNode* rh = r.get<const QoreHashNode>();
         if (lh->size() != rh->size() || (xsink && q_check_stack(xsink))) return false;
-        const qore_hash_private* right_hash = qore_hash_private::get(*rh);
-        ConstHashIterator hi(lh);
-        while (hi.next()) {
-            hm_hm_t::const_iterator found = right_hash->findIter(hi.getKey());
-            if (found == right_hash->hm.end()
-                    || !softEqualImpl<Lexical, Native>(hi.get(), (*found->second)->val, xsink, policy)
-                    || (xsink && *xsink)) return false;
-        }
-        return true;
+        // an exception raised before makes the first member unequal, also when the inline comparison compares it
+        const qore_hash_private* left_hash = qore_hash_private::get(*lh);
+        if (xsink && !left_hash->empty() && *xsink) return false;
+        // the members are compared in the order of the left hash, as a lookup of each of its keys in the right hash
+        // does (qore#7266)
+        return left_hash->membersEqual(*qore_hash_private::get(*rh),
+            [xsink, &policy](const QoreValue& lv, const QoreValue& rv) -> bool {
+                bool rc;
+                if (soft_equal_same_scalar(lv, rv, rc)) {
+                    return rc;
+                }
+                return softEqualImpl<Lexical, Native>(lv, rv, xsink, policy) && !(xsink && *xsink);
+            });
     }
 
     const AbstractQoreNode* ln = l.getInternalNode();

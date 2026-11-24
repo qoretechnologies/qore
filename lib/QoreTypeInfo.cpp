@@ -990,6 +990,12 @@ static void qore_purge_derived_types_intern(const void* owner, std::set<const Qo
                 &cslon_map}) {
             for (tmap_t::iterator i = m->begin(); i != m->end();) {
                 if (dead.count(i->first)) {
+                    // the key is not freed yet: a destroyed type is purged before it is freed, and a retired one
+                    // is freed only after the threads that can read it have passed its epoch; a retired type
+                    // keeps no cached reference type that cr_map no longer holds for it
+                    if (m == &cr_map && i->first) {
+                        i->first->setComplexReferenceTypeCache(nullptr);
+                    }
                     retire(i->second);
                     i = m->erase(i);
                 } else {
@@ -3027,6 +3033,16 @@ const QoreTypeInfo* qore_get_complex_hard_reference_type(const QoreTypeInfo* vti
 }
 
 const QoreTypeInfo* qore_get_complex_reference_type(const QoreTypeInfo* vti) {
+    // every reference created at run time looks up its type here: the type cached in the value type is the entry of
+    // cr_map for it, so no lock is taken once the type exists (qore#7269); only a key of cr_map has it cached, which
+    // a type nested too deeply never is
+    if (vti) {
+        const QoreTypeInfo* rv = vti->getComplexReferenceTypeCache();
+        if (rv) {
+            return rv;
+        }
+    }
+
     if (qore_container_type_too_deep(vti)) {
         vti = autoTypeInfo;
     }
@@ -3034,12 +3050,19 @@ const QoreTypeInfo* qore_get_complex_reference_type(const QoreTypeInfo* vti) {
     AutoLocker al(ctl);
 
     tmap_t::iterator i = cr_map.lower_bound(vti);
-    if (i != cr_map.end() && i->first == vti)
+    if (i != cr_map.end() && i->first == vti) {
+        if (vti) {
+            vti->setComplexReferenceTypeCache(i->second);
+        }
         return i->second;
+    }
 
     QoreComplexReferenceTypeInfo* ti = qore_new_container_type<QoreComplexReferenceTypeInfo>(vti);
     derived_type_keys.insert(vti);
     cr_map.insert(i, tmap_t::value_type(vti, ti));
+    if (vti) {
+        vti->setComplexReferenceTypeCache(ti);
+    }
     return ti;
 }
 
@@ -5805,6 +5828,9 @@ bool QoreTypeSpec::acceptInputComplexHashImpl(ExceptionSink* xsink, const QoreTy
     } else {
         qore_hash_private* hp = qore_hash_private::get(*h);
         hp->complexTypeInfo = complex_type;
+        // the hash converted to another type is a new hash, as the copy above is, which can be changed also when the
+        // hash it was converted from was freed under a weak reference (qore#7199)
+        hp->valid = true;
     }
 
     // now we have to fold the value types into our type
@@ -5880,6 +5906,9 @@ bool QoreTypeSpec::acceptInputComplexListImpl(ExceptionSink* xsink, const QoreTy
         // Use the base complex type, not the optional field type
         const QoreTypeInfo* complex_type = qore_get_complex_list_type(uTi());
         lp->complexTypeInfo = complex_type;
+        // the list converted to another type is a new list, as the copy above is, which can be changed also when the
+        // list it was converted from was freed under a weak reference (qore#7199)
+        lp->valid = true;
     }
 
     // now we have to fold the value types into our type
@@ -6308,6 +6337,13 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 //printd(5, "cr: %p '%s' == %p '%s': %d\n", uTi(), QoreTypeInfo::getName(uTi()), ti, QoreTypeInfo::getName(ti), QoreTypeInfo::outputSuperSetOf(ti, uTi()));
                 // first check types before instantiating reference
                 if (QoreTypeInfo::outputSuperSetOf(ti, uTi())) {
+                    // a variable of the reference's type whose value the assignment below would leave as it is is
+                    // not read and assigned (qore#7264); -1: the exception that resolving the reference raises, as
+                    // for the error described below
+                    if (qore_reference_binding_keeps_value(r, uTi(), xsink)) {
+                        ok = true;
+                        break;
+                    }
                     // issue #2891: do not create a value in the source reference if none already exists
                     // do not process if there is no type restriction
                     // the value read from the lvalue is assigned back to the same lvalue in order to apply the
@@ -8929,22 +8965,59 @@ const QoreTypeInfo* QoreTypeInfo::getReturnComplexBufferOrNothing(const QoreType
     return ti->return_vec[0].spec.getComplexBuffer();
 }
 
-void QoreTypeInfo::getNodeType(QoreString& str, const QoreValue& n) {
+bool QoreTypeInfo::diagnosticNamesCollide(const QoreTypeInfo* left, const QoreTypeInfo* right) {
+    if (!left || !right || left == right) {
+        return false;
+    }
+    const QoreClass* left_class = getReturnClass(left);
+    const QoreClass* right_class = getReturnClass(right);
+    if (left_class && right_class && !strcmp(left_class->getName(), right_class->getName())
+            && strcmp(left_class->getPath(), right_class->getPath())) {
+        return true;
+    }
+    // Includes classes nested in containers and generic arguments.
+    return !strcmp(getName(left), getName(right)) && strcmp(getPath(left), getPath(right));
+}
+
+std::string QoreTypeInfo::diagnosticTypePath(const QoreTypeInfo* ti) {
+    const QoreClass* cls = getReturnClass(ti);
+    if (cls && dynamic_cast<const QoreClassTypeInfo*>(ti)) {
+        return std::string(ti->tname.c_str()[0] == '*' ? "*object<" : "object<")
+            + qore_class_private::diagnosticPath(*cls) + ">";
+    }
+    return getPath(ti);
+}
+
+void QoreTypeInfo::describeTypeComparison(QoreString& str, const QoreTypeInfo* left, const char* separator,
+        const QoreTypeInfo* right) {
+    if (diagnosticNamesCollide(left, right)) {
+        str.sprintf("%s%s%s", diagnosticTypePath(left).c_str(), separator, diagnosticTypePath(right).c_str());
+    } else {
+        getThisType(left, str);
+        str.concat(separator);
+        getThisType(right, str);
+    }
+}
+
+void QoreTypeInfo::describeTypeMismatch(QoreString& str, const QoreValue& n) const {
+    bool qualify = diagnosticNamesCollide(this, n.getFullTypeInfo());
+    str.sprintf("expects type '%s', but got ", qualify ? diagnosticTypePath(this).c_str() : tname.c_str());
     qore_type_t nt = n.getType();
     if (nt == NT_NOTHING) {
         str.concat("no value");
         return;
     }
     if (nt != NT_OBJECT) {
-        str.sprintf("type '%s'", n.getFullTypeName());
+        str.sprintf("type '%s'", qualify ? n.getFullTypeName(true) : n.getFullTypeName());
         return;
     }
     const QoreObject* obj = n.get<const QoreObject>();
+    const char* name = qualify ? qore_class_private::diagnosticPath(*obj->getClass()) : obj->getClassName();
     if (!obj->isValid()) {
-        str.sprintf("no value (deleted object of class '%s')", obj->getClassName());
+        str.sprintf("no value (deleted object of class '%s')", name);
         return;
     }
-    str.sprintf("an object of class '%s'", obj->getClassName());
+    str.sprintf("an object of class '%s'", name);
 }
 
 void QoreTypeInfo::ptext(QoreString& str, const char* arg_type, int param_num, const char* param_name) {
@@ -8996,8 +9069,7 @@ int QoreTypeInfo::doTypeException(const char* arg_type, int param_num, const cha
 
     SimpleRefHolder<QoreStringNode> desc(new QoreStringNode);
     QoreTypeInfo::ptext(**desc, arg_type, param_num, param_name);
-    desc->sprintf("expects type '%s', but got ", tname.c_str());
-    QoreTypeInfo::getNodeType(**desc, n);
+    describeTypeMismatch(**desc, n);
     desc->concat(" instead");
     // the structured diagnostic of the error, for tools and coding assistants; see QoreRuntimeDiagnostic.h
     const char* container = nullptr;
@@ -9027,7 +9099,10 @@ int QoreTypeInfo::doTypeException(const char* arg_type, int param_num, const cha
 }
 
 QoreHashNode* QoreTypeInfo::makeRuntimeDiagnostic(const QoreValue& n, const char* container) const {
-    std::vector<std::pair<std::string, std::string>> facts = {{"expectedType", tname.c_str()}};
+    bool qualify = diagnosticNamesCollide(this, n.getFullTypeInfo());
+    std::vector<std::pair<std::string, std::string>> facts = {
+        {"expectedType", qualify ? diagnosticTypePath(this) : tname.c_str()}
+    };
     if (n.isNothing()) {
         return qore_make_runtime_diagnostic(QORE_RTD_NO_VALUE_FOR_TYPE,
             "a value of this type is required, but there is no value (NOTHING), as for a variable that was declared "
@@ -9037,7 +9112,7 @@ QoreHashNode* QoreTypeInfo::makeRuntimeDiagnostic(const QoreValue& n, const char
              "declare an optional type, such as *int, where no value is expected"});
     } else {
         QoreString actual;
-        facts.push_back({"actualType", n.getFullTypeName(false, actual)});
+        facts.push_back({"actualType", n.getFullTypeName(qualify, actual)});
         if (container) {
             facts.push_back({"container", container});
             return qore_make_runtime_diagnostic(QORE_RTD_CONTAINER_VALUE_TYPE,
@@ -9058,8 +9133,8 @@ int QoreTypeInfo::doObjectHashDeclTypeException(const char* arg_type, const char
         ExceptionSink* xsink) const {
     assert(xsink);
     SimpleRefHolder<QoreStringNode> desc(new QoreStringNode);
-    desc->sprintf("%s '%s' expects type '%s', but got ", arg_type, param_name, tname.c_str());
-    QoreTypeInfo::getNodeType(**desc, n);
+    desc->sprintf("%s '%s' ", arg_type, param_name);
+    describeTypeMismatch(**desc, n);
     desc->concat(" instead");
     ReferenceHolder<QoreHashNode> diag(makeRuntimeDiagnostic(n, nullptr), nullptr);
     xsink->raiseExceptionArg("RUNTIME-TYPE-ERROR", diag.release(), desc.release());
@@ -9183,13 +9258,12 @@ static bool qore_retype_element_accepted(QoreValue& v, const QoreTypeInfo* elem_
         // AOT deserializer restores a sibling class constant declared later in the class as one and
         // resolves it afterwards, and the resolved value has its own type applied then.
         // qore_runtime_accepts_call_arg() in Function.cpp makes the same allowance for call
-        // arguments.  Weak references and lvalue references are unwrapped by dedicated branches in
-        // QoreTypeSpec::acceptInput(); the runtime match below does not see through them.
+        // arguments.  Weak references are unwrapped by dedicated branches in QoreTypeSpec::acceptInput(); the runtime
+        // match below does not see through them.
         case NT_RTCONSTREF:
         case NT_WEAKREF:
         case NT_WEAKREF_HASH:
         case NT_WEAKREF_LIST:
-        case NT_REFERENCE:
             return true;
 
         default:
@@ -9201,7 +9275,16 @@ static bool qore_retype_element_accepted(QoreValue& v, const QoreTypeInfo* elem_
     // converted to its base value by an element type of its base type, although that type is a superset of the
     // enum's type (qore#6274)
     qore_type_result_e rv = policy.value(elem_ti, v, false);
-    if (!v.isEnum()
+    // an lvalue reference whose declared type cannot match the element type must not label the container, or the typed
+    // reads of the compiled modes read it as a value of that type: it goes to the error below, which takes no lock.  A
+    // reference that can match, or that a soft list type would wrap, is kept as it is and not bound or wrapped here:
+    // that can read the referenced variable, and a retype can run while the assignment holds the lock of that variable
+    // (qore#2889, qore#7377; the cases kept this way are qore#7380)
+    if (v.getType() == NT_REFERENCE) {
+        if (rv != QTI_NOT_EQUAL) {
+            return true;
+        }
+    } else if (!v.isEnum()
             && (rv == QTI_IDENT || (rv != QTI_NOT_EQUAL && QoreTypeInfo::superSetOf(elem_ti, v.getTypeInfo())))) {
         return true;
     }

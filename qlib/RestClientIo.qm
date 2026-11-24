@@ -222,10 +222,6 @@ resp = rc.restGet("/api/data");
 
     @subsection restclientio_v1_0 Version 1.0
     - initial release
-    - supports sealed OAuth2 credentials (@ref RestClient::SealedOAuth2Credentials "SealedOAuth2Credentials", option
-      \c oauth2_sealed_credentials); with them, @ref RestClientIo::RestClientIo::startOAuth2PollRefreshToken()
-      "startOAuth2PollRefreshToken()" returns the poll operation of the token request instead of the request
-      (<a href="https://github.com/qoretechnologies/qore/issues/7248">issue 7248</a>)
 */
 
 #! Main namespace for the RestClientIo module
@@ -733,6 +729,15 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" is thread-safe.
     */
     public class RestClientIo inherits RestClient::AbstractRestClient {
+        private:internal {
+            #! The proof of the code that created the client, given to the manager that it creates (qore#7262)
+            /** Taken when the client is created (see HttpClientIo::HttpClientCreatorProof::forClient()): a client that
+                trusted code, or a connection that trusted code created, creates for restricted code is the creator's,
+                bound to the creator's target, proxy and CA locations
+            */
+            *HttpClientIo::HttpClientCreatorProof creator_proof;
+        }
+
         private {
             #! Connection manager for HTTP/2 and HTTP/3 connections
             HttpClientIo::HttpClientConnectionManager mgr;
@@ -1555,7 +1560,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                     cookie_jar = new HttpClientIo::CookieJar();
                 }
             } else {
-                mgr = buildManager(opts, credentials);
+                # the manager is the creator's, also for restricted code that was lent the client or its connection
+                # (qore#7262)
+                creator_proof = HttpClientIo::HttpClientCreatorProof::forClient(url, {"proxy": opts.proxy});
+                mgr = buildManager(opts, credentials, creator_proof);
                 mgr_owner = new RestClientIoConnectionManagerOwner(mgr);
                 cookie_jar = mgr.getCookieJar();
             }
@@ -1590,6 +1598,25 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         #! Returns the underlying connection manager
         HttpClientIo::HttpClientConnectionManager getConnectionManager() {
             return mgr;
+        }
+
+        #! Sets the code that is called once, when the first request is submitted on a connection of the client
+        /** See @ref HttpClientIo::HttpClientConnectionManager::setFirstConnectionCallback(); the code is set on the
+            connection manager that the client created, and not on a shared connection manager given to it, whose
+            connections are also those of other clients.
+
+            @param cb the code to call, or @ref nothing to remove the code set before
+
+            @return @ref True if the code was set, @ref False if the client uses a shared connection manager
+
+            @since RestClientIo 1.0
+        */
+        bool setFirstConnectionCallback(*code<nothing()> cb) {
+            if (!owns_mgr) {
+                return False;
+            }
+            mgr.setFirstConnectionCallback(cb);
+            return True;
         }
 
         #! Starts a persistent (connection-scoped) session that pins one connection
@@ -5420,7 +5447,8 @@ rest.addSensitiveHeaders("Qorus-Token");
         }
 
         private:internal static HttpClientIo::HttpClientConnectionManager buildManager(hash<auto> opts,
-                *hash<RestClient::RestConnectionTlsCredentials> credentials) {
+                *hash<RestClient::RestConnectionTlsCredentials> credentials,
+                *HttpClientIo::HttpClientCreatorProof proof) {
             hash<HttpClientIo::HttpClientConnectionManagerOptions> mgr_opts();
             if (opts.connect_timeout) {
                 mgr_opts.connect_timeout = opts.connect_timeout;
@@ -5501,7 +5529,9 @@ rest.addSensitiveHeaders("Qorus-Token");
             if (client_pk) {
                 mgr_opts.client_pk = client_pk;
             }
-            return new HttpClientIo::HttpClientConnectionManager(mgr_opts);
+            return proof
+                ? new HttpClientIo::HttpClientConnectionManager(mgr_opts, proof)
+                : new HttpClientIo::HttpClientConnectionManager(mgr_opts);
         }
 
         #! Loads an X.509 client certificate from \c ssl_cert_path or \c ssl_cert_data
@@ -6632,8 +6662,18 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
                 "has_on_complete": True,
             });
         } catch (hash<ExceptionInfo> ex) {
+            bool cancelled;
+            {
+                AutoLock al(m);
+                cancelled = done;
+            }
             cancelPendingStream();
             fail(ex);
+            # a startup cancelled while it started (its request then fails with HTTPCLIENT-CANCELLED) ends quietly,
+            # as one cancelled later does
+            if (cancelled) {
+                return;
+            }
             rethrow;
         }
     }
@@ -6784,7 +6824,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         HttpClientIo::HttpClientConnectionManager mgr = rcio.getConnectionManager();
         if (isRedirected()) {
             # the request was prepared for the original request; it is sent as changed by the redirects
-            pending_stream = mgr.acquireStream(rf.getOrigin());
+            setPendingStream(mgr.acquireStream(rf.getOrigin()));
             pending_stream.startStreaming(rf.getMethod(), rf.getPath(),
                 rcio.addClientCookies(rf.getOrigin(), rf.getPath(), rf.getHeaders()), False, rf.getBody(),
                 stream_notifier, True);
@@ -6796,7 +6836,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         if (!prepared_attempt) {
             prepareAttempt();
         }
-        pending_stream = mgr.acquireStream(rcio.getUrl());
+        setPendingStream(mgr.acquireStream(rcio.getUrl()));
         # sse_install_eligible=True: this flow always completes with installSseState()
         # after the response start is validated, so the underlying ChannelAction must be
         # retained past end_stream to drain buffered body bytes into the SSE parser.
@@ -6895,7 +6935,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
                     \negotiate_context)) {
             negotiate_retried = True;
             cancelPendingStream();
-            remove pending_stream;
+            clearPendingStream();
             doStartConnecting();
             return;
         }
@@ -6913,7 +6953,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
             # the body of the redirect response is discarded, and the next request goes to the origin of the
             # redirect target
             cancelPendingStream();
-            remove pending_stream;
+            clearPendingStream();
             remove response;
             connector = new RestClientIoAsyncConnector(rcio, rf.getOrigin());
             waiting_for_connection = False;
@@ -6955,7 +6995,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         pending_stream.installSseState(sse_queue, stream_notifier,
             initial_body);
         HttpClientIo::HttpClientStreamHandle started_stream = pending_stream;
-        remove pending_stream;
+        clearPendingStream();
         goal_reached = True;
         state = SPS_COMPLETE;
         observable.activateStartedStream(started_stream, sse_queue,
@@ -7032,10 +7072,40 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         observable.startupFailed(ex);
     }
 
+    #! Records the stream of the request about to be submitted
+    /** @ref cancel() runs in another thread and cancels the stream it finds recorded, so the stream is recorded under
+        the lock that @ref cancel() takes; a stream acquired after the startup was cancelled is not used.
+
+        @throw HTTPCLIENT-CANCELLED the startup was cancelled; the stream is released
+    */
+    private setPendingStream(HttpClientIo::HttpClientStreamHandle stream) {
+        {
+            AutoLock al(m);
+            if (!done) {
+                pending_stream = stream;
+                return;
+            }
+        }
+        # the stream has no request; cancelling it releases its reservation
+        stream.cancel();
+        throw "HTTPCLIENT-CANCELLED", "SSE observable startup was canceled";
+    }
+
+    #! Forgets the stream of the request, under the lock that @ref cancel() takes
+    private clearPendingStream() {
+        AutoLock al(m);
+        remove pending_stream;
+    }
+
     private cancelPendingStream() {
-        if (pending_stream) {
+        *HttpClientIo::HttpClientStreamHandle stream;
+        {
+            AutoLock al(m);
+            stream = pending_stream;
+        }
+        if (stream) {
             try {
-                pending_stream.cancel();
+                stream.cancel();
             } catch () {
             }
         }

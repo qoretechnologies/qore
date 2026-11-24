@@ -675,10 +675,18 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
             "-Wl,-rpath,%s -lqore %s -o %s 2>&1", cxx, root, libdir, dir, libdir, libdir, flags,
             run_exe));
         assertTrue(is_file(run_exe), "compile run host: " + run_out);
+        run_out = ExecModeHarness::run_any(sprintf("%s %s v4", env, run_exe));
+        assertRegex("PARSE-OPTION-ERROR: %modern and %broken-range cannot be set together: .*; rebuild the "
+            "program with this version of Qore", run_out, "v4");
+        assertRegex("rc=2", run_out, "v4");
+        assertFalse(run_out =~ /STALE-CODE-RAN/, "v4");
+        # the entry points of executables compiled before the AOT runtime identity check of executables are refused
+        # for their identity (issue #6898)
         foreach string entry in (("v1", "v3")) {
             run_out = ExecModeHarness::run_any(sprintf("%s %s %s", env, run_exe, entry));
-            assertRegex("PARSE-OPTION-ERROR: %modern and %broken-range cannot be set together: .*; rebuild the "
-                "program with this version of Qore", run_out, entry);
+            assertRegex("AOT-RUNTIME-MISMATCH: the AOT-compiled program \\(stale\\) was compiled for AOT runtime "
+                "identity '<none: compiled by a qcc that predates the runtime identity check of its kind>'", run_out,
+                entry);
             assertRegex("rc=2", run_out, entry);
             assertFalse(run_out =~ /STALE-CODE-RAN/, entry);
         }

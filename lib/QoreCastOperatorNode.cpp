@@ -841,6 +841,14 @@ QoreValue QoreScalarCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink*
     return result;
 }
 
+void qore_class_private::raiseCastError(ExceptionSink* xsink, const QoreClass& actual, const QoreClass& expected,
+        bool private_access) {
+    bool qualify = !strcmp(actual.getName(), expected.getName()) && strcmp(actual.getPath(), expected.getPath());
+    xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from class '%s' to %sclass '%s'%s",
+        qualify ? diagnosticPath(actual) : actual.getName(), private_access ? "privately-accessible " : "",
+        qualify ? diagnosticPath(expected) : expected.getName(), private_access ? " in this context" : "");
+}
+
 // checks if the value matches the expected type
 int QoreClassCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const {
     // issue #3331: ignore nothing if it's an "or nothing" cast, or if broken-cast is in effect
@@ -860,14 +868,12 @@ int QoreClassCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue&
         bool priv;
         const QoreClass* tc = oc->getClass(*qc, priv);
         if (!tc) {
-            xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from class '%s' to class '%s'",
-                obj->getClassName(), qc->getName());
+            qore_class_private::raiseCastError(xsink, *oc, *qc, false);
             return -1;
         }
         //printd(5, "QoreCastOperatorNode::evalImpl() %s -> %s priv: %d\n", oc->getName(), tc->getName(), priv);
         if (priv && !qore_class_private::runtimeCheckPrivateClassAccess(*tc)) {
-            xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from class '%s' to privately-accessible " \
-                "class '%s' in this context", obj->getClassName(), qc->getName());
+            qore_class_private::raiseCastError(xsink, *oc, *qc, true);
             return -1;
         }
     }

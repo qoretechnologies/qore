@@ -421,6 +421,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     }
 
     private:internal {
+        #! The code called once when the first request is submitted on a connection (see setFirstConnectionCallback())
+        *code<nothing()> first_connection_callback;
+
+        #! Serializes the first connection callback
+        Mutex first_connection_lock();
+
         #! Credentials for target TLS handshakes, omitted from the subclass-visible options
         transient *hash<HttpClientOriginTlsCredentials> origin_tls_credentials;
 
@@ -647,11 +653,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         \c FILESYSTEM and CA certificate locations are given
     */
     private:internal static checkCreator(*hash<HttpClientConnectionManagerOptions> opts) {
-        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+        if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             throw "PERMISSION-DENIED", "the calling code may not create an HTTP client connection manager, as it is "
                 "restricted from the NETWORK functional domain";
         }
-        if ((opts.ssl_ca_file || opts.ssl_ca_path) && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+        if ((opts.ssl_ca_file || opts.ssl_ca_path) && SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
             throw "PERMISSION-DENIED", "the calling code may not give an HTTP client connection manager CA "
                 "certificate locations, as it is restricted from the FILESYSTEM functional domain";
         }
@@ -916,7 +922,40 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         if (from_pool) {
             stream.markConnectionReused();
         }
+        # the first request submitted on a connection tells the code waiting for the first connection (qore#7274)
+        if (first_connection_callback) {
+            stream.setSubmittedCallback(\notifyFirstConnection());
+        }
         return stream;
+    }
+
+    #! Sets the code that is called once, when the first request is submitted on a connection of this manager
+    /** A request can be submitted only on a connection that is established: connected, and with the TLS handshake
+        made for HTTPS.  The code is therefore called once a connection of the manager was made successfully, whatever
+        the request's result; a connection that cannot be made (a closed port, a refused certificate) never calls it.
+        It is called once, in the thread that submitted the request, and is then removed; an exception that it raises
+        is logged and ignored.  @ref ConnectionProvider::AbstractConnection::getAsync() "AbstractConnection::getAsync()"
+        sets it to mark its connection up when the client that it created was first connected (qore#7274).
+
+        @param cb the code to call, or @ref nothing to remove the code set before
+
+        @since HttpClientIo 1.0
+    */
+    setFirstConnectionCallback(*code<nothing()> cb) {
+        AutoLock al(first_connection_lock);
+        first_connection_callback = cb;
+    }
+
+    #! Calls the first connection callback once, if it is still set
+    private:internal notifyFirstConnection() {
+        *code<nothing()> cb;
+        {
+            AutoLock al(first_connection_lock);
+            cb = remove first_connection_callback;
+        }
+        if (cb) {
+            cb();
+        }
     }
 
     #! Ensures a connection to the given URL is being established, returning an EventNotifier
@@ -1036,7 +1075,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 # turns a single dead-server failure into a 45s+ hang.
                 if (isHttp3ConnectionCloseError(ex.err)) {
                     if (!h3_close_retried && retries < max_retries
-                            && canRetryRequest(method, stream, ex.err)) {
+                            && canRetryRequest(method, stream, ex)) {
                         h3_close_retried = True;
                         ++retries;
                         log(LoggerLevel::DEBUG, "streaming %s, retrying once on fresh connection (%d/%d)",
@@ -1047,8 +1086,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     }
                     rethrow;
                 }
-                if (isConnectionError(ex.err) && retries < max_retries
-                        && canRetryRequest(method, stream)) {
+                if ((isConnectionError(ex.err) || isUnsentOnPooledConnection(ex, stream)) && retries < max_retries
+                        && canRetryRequest(method, stream, ex)) {
                     ++retries;
                     log(LoggerLevel::DEBUG, "streaming connection error %s, retrying (%d/%d)",
                         ex.err, retries, max_retries);
@@ -1168,7 +1207,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 }
                 if (isHttp3ConnectionCloseError(ex.err)) {
                     if (!h3_close_retried && retries < max_retries
-                            && canRetryRequest(method, stream, ex.err)) {
+                            && canRetryRequest(method, stream, ex)) {
                         h3_close_retried = True;
                         ++retries;
                         log(LoggerLevel::DEBUG, "async %s, retrying once on fresh connection (%d/%d)",
@@ -1179,10 +1218,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     }
                     rethrow;
                 }
-                if ((isCapacityError(ex.err) || isConnectionError(ex.err))
-                        && retries < max_retries && canRetryRequest(method, stream)) {
+                if ((isCapacityError(ex.err) || isConnectionError(ex.err) || isUnsentOnPooledConnection(ex, stream))
+                        && retries < max_retries && canRetryRequest(method, stream, ex)) {
                     ++retries;
-                    if (isConnectionError(ex.err)) {
+                    if (isConnectionError(ex.err) || isUnsentOnPooledConnection(ex, stream)) {
                         log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)",
                             ex.err, retries, max_retries);
                         evictDeadConnections(url);
@@ -2364,7 +2403,7 @@ printf("%d connection(s) migrated\n", migrated);
 
     #! Applies the connection's credential policy to a REST client copy sharing this transport
     nothing checkTlsCredentialCopy(string url) {
-        if (origin_tls_credentials.file_backed && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+        if (origin_tls_credentials.file_backed && SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
             throw "ILLEGAL-FILESYSTEM-ACCESS", "copying a REST client with TLS credential paths requires filesystem access";
         }
         HttpClientConnectionManager::checkTlsCredentialOrigin(url);
@@ -4734,7 +4773,9 @@ printf("%d connection(s) migrated\n", migrated);
         @ref requestAsync()), and the request operations of the RestClientIo module.  A request is sent again, on a
         connection acquired anew:
         - whatever its method, if the server refused it without processing it (see
-          @ref isRefusedRequestErrorStatic()), or if it was not submitted
+          @ref isRefusedRequestErrorStatic()), if it was not submitted, or if it was never written because the
+          server closed the pooled HTTP/1.1 connection just before (see @ref isUnsentRequestErrorStatic()), also
+          when the server's data came before the first request on a connection taken from the pool
         - once, if its HTTP/3 connection closed or failed to read, and it was not submitted, its method is idempotent,
           or the transport proves that it was not processed
         - if its connection failed or was at capacity, and it was not submitted, or its method is idempotent
@@ -4780,7 +4821,7 @@ printf("%d connection(s) migrated\n", migrated);
         # HTTP3-CONNECTION-CLOSED / HTTP3-READ-ERROR are retried once only — see acquireAndStartStreaming for the
         # rationale
         if (isHttp3ConnectionCloseError(ex.err)) {
-            if (state.h3_close_retried || !canRetryRequest(method, stream, ex.err)) {
+            if (state.h3_close_retried || !canRetryRequest(method, stream, ex)) {
                 return False;
             }
             state.h3_close_retried = True;
@@ -4790,9 +4831,10 @@ printf("%d connection(s) migrated\n", migrated);
             evictDeadConnections(url);
             return True;
         }
-        if ((isCapacityError(ex.err) || isConnectionError(ex.err)) && canRetryRequest(method, stream)) {
+        if ((isCapacityError(ex.err) || isConnectionError(ex.err) || isUnsentOnPooledConnection(ex, stream))
+                && canRetryRequest(method, stream, ex)) {
             ++state.retries;
-            if (isConnectionError(ex.err)) {
+            if (isConnectionError(ex.err) || isUnsentOnPooledConnection(ex, stream)) {
                 log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)", ex.err,
                     state.retries, max_retries);
                 evictDeadConnections(url);
@@ -4852,20 +4894,54 @@ printf("%d connection(s) migrated\n", migrated);
     /** Connection-only failures can be retried for any method.  After stream
         submission, only idempotent methods are retried automatically, unless
         the transport itself proves the peer never processed the request (see
-        @ref isUnprocessedOnReusedConnection()), or the server refused it (see
+        @ref isUnprocessedOnReusedConnection()), the request was never written (see
+        @ref isUnsentRequestErrorStatic()), or the server refused it (see
         @ref isRefusedRequestErrorStatic()).
 
         @param method the request method
         @param stream the failed stream handle, if any
-        @param err the transport error code that failed the request, when the
-            caller has one; omitted by callers that retry before any error
-            classification
+        @param ex the error that failed the request, when the caller has one; omitted by callers that retry before
+        any error classification
     */
     private bool canRetryRequest(string method, *HttpClientStreamHandle stream,
-            *string err) {
+            *hash<ExceptionInfo> ex) {
+        *string err = ex.err;
         return isConnectionOnlyFailure(stream) || isIdempotentMethod(method)
             || isUnprocessedOnReusedConnection(err, stream)
-            || (err.val() && isRefusedRequestErrorStatic(err));
+            || (err.val() && isRefusedRequestErrorStatic(err))
+            || (ex && isUnsentRequestErrorStatic(ex));
+    }
+
+    #! Returns @ref True if the error of a request says that the request was never written
+    /** The check that precedes the send of a request on an HTTP/1.1 keep-alive connection finds that the server
+        closed the connection (or sent the response with which it closed it, such as a 408) and does not write the
+        request; the error (\c HTTP1-CONNECTION-CLOSED) then has \c request_sent set to @ref False in its argument.
+        Nothing reached the server, so the request can be sent again on a new connection whatever its method
+        (qore#7278).
+
+        @param ex the error of a request
+
+        @return @ref True if the error says that the request was never written
+
+        @since HttpClientIo 1.0
+    */
+    static bool isUnsentRequestErrorStatic(hash<ExceptionInfo> ex) {
+        return ex.arg.typeCode() == NT_HASH && ex.arg.hasKey("request_sent") && ex.arg.request_sent === False;
+    }
+
+    #! Internal: True if a request taken to a pooled connection was never written because of what the server did
+    /** Data that the server sent before the first request on a connection taken from the pool (a connection that
+        finished connecting after its request gave up, for example) is how the server closed the idle connection,
+        such as a 408 (\c HTTP1-UNEXPECTED-DATA with \c request_sent set to @ref False): nothing reached the
+        server, and the request is sent again on a new connection like after any other connection error (qore#7345).
+        On a connection created for the request, the same data is a protocol problem of the server, and the error
+        ends the request.
+
+        @param ex the error of the request
+        @param stream the failed stream handle, if any
+    */
+    private bool isUnsentOnPooledConnection(hash<ExceptionInfo> ex, *HttpClientStreamHandle stream) {
+        return stream && stream.wasConnectionReused() && isUnsentRequestErrorStatic(ex);
     }
 
     #! Internal: True when a pooled connection died before the peer processed the request
@@ -4911,6 +4987,7 @@ printf("%d connection(s) migrated\n", migrated);
         return err == "HTTP3-CONNECTION-CLOSED"  # legacy umbrella, still emitted from some sites
             || err == "HTTP3-IDLE-CLOSE"          # local idle timer expired
             || err == "HTTP3-PEER-UNRESPONSIVE"   # no packet from the peer after a request (qore#6930)
+            || err == "HTTP3-STATELESS-RESET"     # the server has no state for the connection (qore#6931)
             || err == "HTTP3-LOCAL-CLOSE"         # we sent CONNECTION_CLOSE
             || err == "HTTP3-PEER-CLOSE"          # peer sent CONNECTION_CLOSE
             || err == "HTTP3-READ-ERROR";
@@ -4943,6 +5020,7 @@ printf("%d connection(s) migrated\n", migrated);
             || err == "HTTP3-CONNECTION-CLOSED"  # legacy umbrella; still emitted from some sites
             || err == "HTTP3-IDLE-CLOSE"          # local idle timer expired
             || err == "HTTP3-PEER-UNRESPONSIVE"   # no packet from the peer after a request (qore#6930)
+            || err == "HTTP3-STATELESS-RESET"     # the server has no state for the connection (qore#6931)
             || err == "HTTP3-LOCAL-CLOSE"         # we sent CONNECTION_CLOSE
             || err == "HTTP3-PEER-CLOSE"          # peer sent CONNECTION_CLOSE
             || err == "HTTP3-READ-ERROR"

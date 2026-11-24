@@ -1912,6 +1912,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
 
     // the copy of a class of another namespace outlives the Program it is in (see ownedByProgram())
     ns_copy = true;
+    declaration_owner_known = old.declaration_owner_known;
 
     // copy methods and maintain method pointers
     for (auto& i : old.hm) {
@@ -2090,6 +2091,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
 
     // the copy of a class of another namespace outlives the Program it is in (see ownedByProgram())
     ns_copy = true;
+    declaration_owner_known = old.declaration_owner_known;
 
     // copy methods and maintain method pointers
     for (auto& i : old.hm) {
@@ -6531,6 +6533,23 @@ int64 QoreClass::getDomain() const {
     return priv->domain;
 }
 
+const char* qore_class_private::memberDiagnosticName() const {
+    QoreProgram* pgm = getProgram();
+    if (pgm) {
+        const auto* root = qore_root_ns_private::get(*pgm->getRootNS());
+        qore_root_ns_private::RuntimeNamespaceReadLocker lock(root);
+        ConstAllNamespacesIterator i(root->nsmap);
+        while (i.next()) {
+            // Formatting an error must not invoke a namespace's class handler.
+            const QoreClass* other = qore_ns_private::get(*i.get())->classList.find(name.c_str());
+            if (other && path != other->getPath()) {
+                return diagnosticPath(*cls);
+            }
+        }
+    }
+    return name.c_str();
+}
+
 const char* QoreClass::getName() const {
     return priv->name.c_str();
 }
@@ -7526,9 +7545,15 @@ void qore_class_private::parseRollback() {
     has_new_user_changes = false;
 }
 
+//! the next declaration sequence number of a method (see qore_method_private::decl_seq)
+static std::atomic<uint64_t> qore_method_decl_seq{0};
+
 uint64_t qore_method_private::nextDeclSeq() {
-    static std::atomic<uint64_t> seq{0};
-    return seq.fetch_add(1, std::memory_order_relaxed);
+    return qore_method_decl_seq.fetch_add(1, std::memory_order_relaxed);
+}
+
+uint64_t qore_method_private::reserveDeclSeq(uint64_t n) {
+    return qore_method_decl_seq.fetch_add(n, std::memory_order_relaxed);
 }
 
 QoreMethod::QoreMethod(const QoreClass* n_parent_class, MethodFunctionBase* n_func, bool n_static)
@@ -9432,7 +9457,7 @@ int BCList::addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bo
     return 0;
 }
 
-int qore_class_private::addUserMethod(const char* mname, MethodVariantBase* f, bool n_static) {
+int qore_class_private::addUserMethod(const char* mname, MethodVariantBase* f, bool n_static, int64_t decl_seq) {
     // FIXME: set class name at parse time
     const char* tname = name.c_str();
     printd(5, "QoreClass::addUserMethod(%s, umv: %p, priv: %d, static: %d) this: %p %s\n", mname, f, f->isPrivate(),
@@ -9538,6 +9563,10 @@ int qore_class_private::addUserMethod(const char* mname, MethodVariantBase* f, b
         }
 
         m = new QoreMethod(cls, mfb, n_static);
+        // a method that the loader of an AOT image creates has the sequence of its declaration (issue #7169)
+        if (decl_seq >= 0) {
+            m->priv->decl_seq = static_cast<uint64_t>(decl_seq);
+        }
     }
 
     // add this variant to the method
@@ -12418,9 +12447,8 @@ int UserCopyVariant::parseInit(QoreFunction* f) {
                 // raise parse exception if parse exceptions have not been suppressed
                 if (qore_program_ops(getProgram()).getParseExceptionSink()) {
                     QoreStringNode* desc = new QoreStringNode("the copy constructor will be passed ");
-                    QoreTypeInfo::getThisType(parent_class.getTypeInfo(), *desc);
-                    desc->concat(", but the object's parameter was defined expecting ");
-                    QoreTypeInfo::getThisType(typeInfo, *desc);
+                    QoreTypeInfo::describeTypeComparison(*desc, parent_class.getTypeInfo(),
+                        ", but the object's parameter was defined expecting ", typeInfo);
                     desc->concat(" instead");
                     qore_program_private::makeParseException(getProgram(), *signature.getParseLocation(),
                         "PARSE-TYPE-ERROR", desc);
@@ -13720,9 +13748,8 @@ int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
             if (qore_program_ops(getProgram()).getParseExceptionSink()) {
                 QoreStringNode* desc = new QoreStringNode("initialization expression for ");
                 desc->sprintf("%s member '%s' returns ", privpub(access), name);
-                QoreTypeInfo::getThisType(argTypeInfo, *desc);
-                desc->concat(", but the member was declared as ");
-                QoreTypeInfo::getThisType(typeInfo, *desc);
+                QoreTypeInfo::describeTypeComparison(*desc, argTypeInfo, ", but the member was declared as ",
+                    typeInfo);
                 qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
             }
             if (!err) {
@@ -13797,9 +13824,8 @@ int QoreVarInfo::parseInit(const char* name) {
             if (qore_program_ops(getProgram()).getParseExceptionSink()) {
                 QoreStringNode* desc = new QoreStringNode("initialization expression for ");
                 desc->sprintf("%s class static variable '%s' returns ", privpub(access), name);
-                QoreTypeInfo::getThisType(argTypeInfo, *desc);
-                desc->concat(", but the variable was declared as ");
-                QoreTypeInfo::getThisType(typeInfo, *desc);
+                QoreTypeInfo::describeTypeComparison(*desc, argTypeInfo, ", but the variable was declared as ",
+                    typeInfo);
                 qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
             }
             if (!err) {

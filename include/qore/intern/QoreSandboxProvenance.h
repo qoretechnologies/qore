@@ -65,7 +65,7 @@ class QoreProgram;
     @param spans true if a base class of the object's class has the code of another Program
 */
 DLLLOCAL QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm = nullptr,
-    bool spans = false);
+    bool spans = false, bool* capability = nullptr);
 //! Returns the functional-domain restrictions that an object or call reference created now records (qore#6844)
 /** Its code runs for the code that creates it: the restrictions of that code are recorded if the code that it runs
     is the code of a module (a library module or one loaded by its path, also when module code creates it), whose

@@ -1236,20 +1236,6 @@ public:
     }
 };
 
-//! Returns the node as a MethodCallNode if it is one, otherwise nullptr
-/** The same result as dynamic_cast<const MethodCallNode*>(), from the node type: only MethodCallNode's constructors
-    give NT_METHOD_CALL, and the lexical variants made by qore_make_function_call() keep the type of their base class.
-    A dynamic_cast searches the class hierarchy with string comparisons of the type names, which is too slow for the
-    per-call paths.
-*/
-DLLLOCAL inline const MethodCallNode* qore_get_method_call_node(const AbstractQoreNode* n) {
-    const MethodCallNode* rv = (n && n->getType() == NT_METHOD_CALL)
-        ? static_cast<const MethodCallNode*>(n)
-        : nullptr;
-    assert(rv == dynamic_cast<const MethodCallNode*>(n));
-    return rv;
-}
-
 //! Returns the node as a SelfFunctionCallNode if it is one, otherwise nullptr
 /** The same result as dynamic_cast<const SelfFunctionCallNode*>(), from the node type: only SelfFunctionCallNode's
     constructors give NT_SELF_CALL, and its subclasses keep it (SetSelfFunctionCallNode copies a self call; the

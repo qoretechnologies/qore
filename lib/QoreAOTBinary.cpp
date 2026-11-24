@@ -145,6 +145,7 @@
 #include <qore/QoreEnumDecl.h>
 
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/qore_number_private.h"
 #include "qore/intern/QoreIRBuilder.h"
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRVerifier.h"
@@ -702,6 +703,18 @@ int hasLegacyModuleInfoTrailer(AOTModuleFileReader& f) {
 }
 } // anonymous namespace
 
+bool qoreAOTIsBuiltinApiIdentity(const std::string& identity) {
+    if (identity.size() != QORE_BUILTIN_API_IDENTITY_LEN) {
+        return false;
+    }
+    for (char c : identity) {
+        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool qoreAOTEncodeModuleInfo(const QoreAOTModuleFileInfo& info, std::vector<uint8_t>& record, std::string& error) {
     record.clear();
     std::vector<uint8_t> payload;
@@ -800,6 +813,15 @@ bool qoreAOTEncodeModuleInfo(const QoreAOTModuleFileInfo& info, std::vector<uint
     }
     moduleInfoPut32(payload, static_cast<uint32_t>(static_cast<uint64_t>(info.restricted_domains)));
     moduleInfoPut32(payload, static_cast<uint32_t>(static_cast<uint64_t>(info.restricted_domains) >> 32));
+    // the builtin API identity (version 5, qore#7183)
+    if (!qoreAOTIsBuiltinApiIdentity(info.builtin_api_identity)) {
+        error = "the builtin API identity '" + info.builtin_api_identity + "' is not "
+            + std::to_string(QORE_BUILTIN_API_IDENTITY_LEN) + " lowercase hexadecimal digits";
+        return false;
+    }
+    if (!put_string(info.builtin_api_identity, "builtin API identity")) {
+        return false;
+    }
     record.reserve(QORE_AOT_MODULE_INFO_HEADER_SIZE + payload.size());
     moduleInfoPut32(record, QORE_AOT_MODULE_INFO_MAGIC);
     moduleInfoPut32(record, QORE_AOT_MODULE_INFO_VERSION);
@@ -961,6 +983,10 @@ QoreAOTModuleInfoStatus qoreAOTDecodeModuleInfo(const uint8_t* data, size_t len,
         if (info.restricted_domains & ~static_cast<int64>(QDOM_ALL)) {
             return fail(moduleInfoDamaged("the record restricts unknown functional domain bits"));
         }
+    }
+    // the builtin API identity (version 5, qore#7183)
+    if (!get_string(info.builtin_api_identity) || !qoreAOTIsBuiltinApiIdentity(info.builtin_api_identity)) {
+        return fail(moduleInfoDamaged("the record has no valid builtin API identity"));
     }
     if (pos != size) {
         return fail(moduleInfoDamaged("the record has " + std::to_string(size - pos) + " unexpected bytes after "
@@ -2981,6 +3007,17 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
         return rv;
     }
 
+    // A wildcard starts its accept specs with itself. A union may start with a wildcard
+    // member, so check its identity before writing the bound instead of the whole union.
+    if (!ti->isAcceptVecEmpty()) {
+        const auto* wildcard = ti->getFirstAcceptSpec().spec.getWildcardTypeInfo();
+        if (wildcard == ti && qore_type_contains_type_parameter(wildcard->getBound())) {
+            const char* prefix = wildcard->getKind() == QoreWildcardKind::Extends ? "? extends " : "? super ";
+            std::string bound_path = getAOTSerializableTypePath(wildcard->getBound());
+            return bound_path.empty() ? std::string() : prefix + bound_path;
+        }
+    }
+
     if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
         std::string rv = cti->isOrNothing() ? "*code<" : "code<";
         rv += cti->getReturnType() ? getAOTSerializableTypePath(cti->getReturnType()) : "nothing";
@@ -4059,6 +4096,20 @@ private:
     const size_t len;
 };
 
+bool qore_aot_format_number(const QoreNumberNode& number, QoreString& str) {
+    // Keep the usual decimal spelling while the exponent is bounded by the stored precision.
+    // Beyond that range fixed-point notation pads the significand with arbitrarily many zeros.
+    mpfr_srcptr value = qore_number_private::get(number)->num;
+    mpfr_exp_t exponent = mpfr_regular_p(value) ? mpfr_get_exp(value) : 0;
+    mpfr_prec_t precision = mpfr_get_prec(value);
+    ExceptionSink xsink;
+    if (number.toStringRoundTrip(str, exponent > precision || exponent < -precision, &xsink)) {
+        xsink.clear();
+        return false;
+    }
+    return true;
+}
+
 bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
     const uint32_t start_pos = position();
     auto fail = [this, start_pos, &v]() -> bool {
@@ -4205,11 +4256,8 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                 // string LENGTH, which is unrelated to the number's own, so digits alone rebuild a
                 // DIFFERENT number.  See issue #5461 and QORE_AOT_NUMBER_PRECISION_VERSION.
                 QoreString str;
-                ExceptionSink xsink;
-                if (num->toStringRoundTrip(str, false, &xsink) || xsink) {
-                    xsink.clear();
-                    str.clear();
-                    num->toString(str, QORE_NF_RAW);
+                if (!qore_aot_format_number(*num, str)) {
+                    return fail();
                 }
                 writeU32(static_cast<uint32_t>(str.size()));
                 writeStringRef(str.c_str(), str.size());
@@ -6777,6 +6825,22 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveStructuredComplexType(const char
     bool or_nothing = false;
     std::vector<std::string> args;
 
+    // The source-type parser handles concrete wildcard bounds. An encoded type parameter
+    // inside a bound must be resolved with this resolver's current signature or class.
+    if (*path == '?' && strstr(path, "typeparam<")) {
+        constexpr char extends_prefix[] = "? extends ";
+        constexpr char super_prefix[] = "? super ";
+        const bool upper = !strncmp(path, extends_prefix, sizeof(extends_prefix) - 1);
+        if (upper || !strncmp(path, super_prefix, sizeof(super_prefix) - 1)) {
+            std::string error;
+            const char* bound_path = path + (upper ? sizeof(extends_prefix) - 1 : sizeof(super_prefix) - 1);
+            if (const QoreTypeInfo* bound = resolve(bound_path, error)) {
+                return upper ? qore_get_wildcard_extends_type(bound) : qore_get_wildcard_super_type(bound);
+            }
+            return nullptr;
+        }
+    }
+
     if (extract_aot_type_args(path, "object", or_nothing, args)) {
         if (args.size() != 1) {
             return nullptr;
@@ -7300,6 +7364,8 @@ struct AOTSerializeState {
         const QoreMethod* method;
         uint32_t class_idx;
         bool is_static;
+        //! the position of the method in the declaration order of the user methods of its map (issue #7169)
+        uint32_t decl_index;
     };
     std::vector<MethodInfo> methods;
 
@@ -7573,23 +7639,26 @@ static bool collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                 uint32_t class_idx = static_cast<uint32_t>(state.classes.size());
                 state.classes.push_back({cls, priv, ns_idx});
 
-                // Collect user methods for this class
-                // in the order in which they were declared: the loader creates the methods of a class in the order
-                // of the binary, and the enumeration of a class's methods follows that order (issue #7169)
-                for (QoreMethod* m : qore_methods_in_declaration_order(priv->hm)) {
-                    if (cancelled()) {
-                        return false;
+                // Collect user methods for this class in the order of the method maps, which is the order in
+                // which the loader creates them, so that the loader builds the maps as the parser did; each record
+                // carries the position of its method in the declaration order of the user methods of its map, which
+                // the loader restores for the enumeration of the methods (issue #7169)
+                for (int st = 0; st < 2; ++st) {
+                    const hm_method_t& mmap = st ? priv->shm : priv->hm;
+                    std::unordered_map<const QoreMethod*, uint32_t> decl_index;
+                    for (QoreMethod* m : qore_methods_in_declaration_order(mmap)) {
+                        if (m->isUser()) {
+                            decl_index.emplace(m, static_cast<uint32_t>(decl_index.size()));
+                        }
                     }
-                    if (m->isUser()) {
-                        state.methods.push_back({m, class_idx, false});
-                    }
-                }
-                for (QoreMethod* m : qore_methods_in_declaration_order(priv->shm)) {
-                    if (cancelled()) {
-                        return false;
-                    }
-                    if (m->isUser()) {
-                        state.methods.push_back({m, class_idx, true});
+                    for (auto& mi : mmap) {
+                        if (cancelled()) {
+                            return false;
+                        }
+                        if (mi.second->isUser()) {
+                            assert(decl_index.find(mi.second) != decl_index.end());
+                            state.methods.push_back({mi.second, class_idx, st != 0, decl_index[mi.second]});
+                        }
                     }
                 }
             }
@@ -7743,12 +7812,12 @@ static bool collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
         }
     }
 
-    // Collect user functions
-    for (auto fi = ns->func_list.begin(), fe = ns->func_list.end(); fi != fe; ++fi) {
+    // Collect user functions, in the order in which they were declared: the loader creates them in the order of the
+    // binary, and the enumeration of a namespace's functions follows that order (issue #7171)
+    for (FunctionEntry* entry : ns->func_list.getEntriesInDeclarationOrder()) {
         if (cancelled()) {
             return false;
         }
-        FunctionEntry* entry = fi->second;
         QoreFunction* func = entry->getFunction();
         if (func && !entry->hasBuiltin()) {
             // Filter out functions from reexported dependencies
@@ -7794,11 +7863,11 @@ static bool collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
     }
 
     // Recurse into child namespaces (filter out namespaces from reexported dependencies)
-    for (auto ni = ns->nsl.nsmap.begin(), ne = ns->nsl.nsmap.end(); ni != ne; ++ni) {
+    // (in the order in which they were declared, as the loader creates them in the order of the binary: issue #7171)
+    for (QoreNamespace* child_ns : qore_namespaces_in_declaration_order(ns->nsl.nsmap)) {
         if (cancelled()) {
             return false;
         }
-        QoreNamespace* child_ns = ni->second;
         if (child_ns) {
             qore_ns_private* child_priv = qore_ns_private::get(*child_ns);
             // Cross-module namespace shells (e.g. ::OMQ, ::Qore, ::Priv)
@@ -11662,7 +11731,7 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
 
         // flags: bit 0 = pub, bit 1 = final, bit 2 = injected import,
         // bit 3 = reexported import, bit 4 = raw generic accepts,
-        // bit 5 = raw generic construction
+        // bit 5 = raw generic construction, bit 6 = declaration belongs to the serialized Program
         uint16_t flags = 0;
         if (priv->pub) {
             flags |= 0x0001;
@@ -11684,10 +11753,21 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                 flags |= 0x0020;
             }
         }
+        if (priv->declaredBy(writer.serialization_program)) {
+            flags |= QORE_AOT_CLASS_DECLARED_BY_PROGRAM;
+        }
         writer.writeU16(flags);
 
-        // domain
-        writer.writeI64(priv->domain);
+        // domain: the loader adds the domains of the class's parents as they are loaded (qore#7400)
+        int64 class_domain = priv->domain;
+#ifdef DEBUG
+        // test hook: writes a class as a module compiled before its parent classes were placed in their functional
+        // domains does, without the domains it inherits, so that a test checks that the loader adds them
+        if (QoreEnvironmentValue no_domain_holder("QORE_AOT_TEST_NO_CLASS_DOMAIN"); no_domain_holder.c_str()) {
+            class_domain = 0;
+        }
+#endif
+        writer.writeI64(class_domain);
 
         // Parser-produced class signature hash. Runtime class compatibility
         // uses this hash to compare same-named classes across Program objects;
@@ -12474,6 +12554,8 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
         writer.writeU32(mi.class_idx);
         writer.writeStringRef(method->getName());
         writer.writeU8(mi.is_static ? 1 : 0);
+        // the position of the method in the declaration order of the user methods of its map (format v52, #7169)
+        writer.writeU32(mi.decl_index);
 
         // get the method's underlying function
         const qore_method_private* mp = qore_method_private::get(*method);
@@ -13779,14 +13861,11 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     // QoreNumberNode: number literal constant; the precision follows the digits (see #5461 and
     // QORE_AOT_NUMBER_PRECISION_VERSION) because digits alone rebuild a different number
     if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
-        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NUMBER));
         QoreString str;
-        ExceptionSink xsink;
-        if (num->toStringRoundTrip(str, false, &xsink) || xsink) {
-            xsink.clear();
-            str.clear();
-            num->toString(str);
+        if (!qore_aot_format_number(*num, str)) {
+            return false;
         }
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NUMBER));
         writer.writeStringRef(str.c_str());
         writer.writeStringRef(std::to_string(num->getPrec()).c_str());
         return true;
@@ -17715,6 +17794,32 @@ bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm,
     return resolveAll(error);
 }
 
+//! returns true if \a path is the path of a namespace other than the root namespace: names separated by "::", each
+//! non-empty and without a colon, after "::" (which deserializeNamespaces() adds when it is missing)
+static bool qore_aot_valid_ns_path(const char* path) {
+    const char* p = path;
+    if (p[0] == ':' && p[1] == ':') {
+        p += 2;
+    }
+    while (true) {
+        // a name: non-empty, without a colon
+        const char* start = p;
+        while (*p && *p != ':') {
+            ++p;
+        }
+        if (p == start) {
+            return false;
+        }
+        if (!*p) {
+            return true;
+        }
+        if (p[1] != ':' || !p[2]) {
+            return false;
+        }
+        p += 2;
+    }
+}
+
 bool QoreAOTBinaryDeserializer::deserializeNamespaces(std::string& error) {
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::NAMESPACES);
     if (!sec) {
@@ -17780,6 +17885,17 @@ bool QoreAOTBinaryDeserializer::deserializeNamespaces(std::string& error) {
         // string: every namespace but the root has a name (qore#6265)
         if ((!name || !*name) && parent_idx != UINT32_MAX) {
             error = "invalid NAMESPACES section: namespace " + std::to_string(i) + " has no name";
+            return false;
+        }
+        // a reference into a string of the pool, such as a path, can give a name or a path that is not valid, from
+        // which the namespace could not be made (qore#7358): a name is one name, without a colon, and the path of the
+        // root namespace is "::"
+        if (parent_idx != UINT32_MAX && strchr(name, ':')) {
+            error = "invalid NAMESPACES section: namespace " + std::to_string(i) + " has a name that is not valid";
+            return false;
+        }
+        if (path && *path && (parent_idx == UINT32_MAX ? strcmp(path, "::") : !qore_aot_valid_ns_path(path))) {
+            error = "invalid NAMESPACES section: namespace " + std::to_string(i) + " has a path that is not valid";
             return false;
         }
 
@@ -18005,6 +18121,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         QoreClass* qc = new QoreClass(name, path, domain);
         qore_class_private* priv = qore_class_private::get(*qc);
         priv->loc = getBlobLocation();
+        // Older records and embedded foreign classes do not attest a declaration in this Program.
+        priv->declaration_owner_known = (flags & QORE_AOT_CLASS_DECLARED_BY_PROGRAM) != 0;
         priv->pub = (flags & 0x0001) != 0;
         if (flags & 0x0002) {
             priv->final = true;
@@ -18388,6 +18506,11 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
                 // Add base class to this class with proper access level
                 qc->addBaseClass(const_cast<QoreClass*>(base),
                     static_cast<ClassAccess>(pbc.access), pbc.is_virtual);
+                // the class is in the functional domains of its parent class as it is loaded, as when the class is
+                // parsed (BCNode::initialize()): the value stored in the module is the one of the parents when the
+                // module was compiled, and a parent may have been placed in a domain since (qore#7400); the base
+                // classes of the module were resolved first, with the domains of their own parents
+                qore_class_private::get(*qc)->domain |= qore_class_private::get(*base)->domain;
                 if (!pbc.type_path.empty()) {
                     std::string type_error;
                     const QoreTypeInfo* base_type = type_resolver->resolve(pbc.type_path.c_str(), type_error);
@@ -21045,11 +21168,15 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
     QoreAOTSectionBounds bounds(ptr, sec->size);
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
-    // a method has at least its class index, name, static flag and variant count
+    // a method has at least its class index, name, static flag, declaration index and variant count
     if (qore_aot_section_overrun(bounds, "METHODS", error)
-            || qore_aot_count_exceeds(bounds, count, 13, ptr, "METHODS", error)) {
+            || qore_aot_count_exceeds(bounds, count, 17, ptr, "METHODS", error)) {
         return false;
     }
+    // the methods created here get the sequence numbers of their declaration order from a block of their own, so that
+    // the methods created after them, as a method for an inherited concrete variant of an abstract method when the
+    // class is committed, follow them (issue #7169)
+    const uint64_t decl_seq_base = qore_method_private::reserveDeclSeq(count);
 
     // Fine-grained sub-timing for the per-variant inner loop.
     // Gated by QORE_AOT_PHASE_TIMING; totals across all sessions
@@ -21069,6 +21196,7 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
         uint32_t class_idx = QoreAOTBinaryReader::readU32(ptr);
         const char* method_name = reader.readStringRef(ptr);
         uint8_t is_static = QoreAOTBinaryReader::readU8(ptr);
+        uint32_t decl_index = QoreAOTBinaryReader::readU32(ptr);
         uint32_t num_variants = QoreAOTBinaryReader::readU32(ptr);
         // a variant has at least its access, flags, return type and parameter count
         if (qore_aot_section_overrun(bounds, "METHODS", error)
@@ -21078,6 +21206,13 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
         // a reference into the string pool can give an empty string (qore#6265)
         if (!method_name || !*method_name) {
             error = "invalid METHODS section: method " + std::to_string(i) + " has no name";
+            return false;
+        }
+        // the position of a method in the declaration order of the user methods of its map is less than the number
+        // of methods (issue #7169)
+        if (decl_index >= count) {
+            error = "invalid METHODS section: method " + std::to_string(i) + " has declaration index "
+                + std::to_string(decl_index) + " of " + std::to_string(count) + " methods";
             return false;
         }
 
@@ -21337,7 +21472,8 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
 
             // Add method to class
             uint64_t t_add0 = time_on ? now_us() : 0;
-            if (qore_class_private::addUserMethod(*qc, method_name, mvb, is_static != 0)) {
+            if (qore_class_private::addUserMethod(*qc, method_name, mvb, is_static != 0,
+                    static_cast<int64_t>(decl_seq_base + decl_index))) {
                 error = "cannot add AOT method '";
                 error += qc->getName();
                 error += "::";
@@ -23401,4 +23537,27 @@ std::string qore_aot_constant_symbol_path(const ClassNs& ptr, const char* name) 
         return getNamespaceConstantPath(ptr.getNs(), name);
     }
     return getClassConstantPath(ptr.getClass(), name);
+}
+
+void qore_aot_key_to_process_encoding(std::string& key) {
+    if (QCS_DEFAULT == QCS_UTF8) {
+        return;
+    }
+    bool ascii = true;
+    for (unsigned char c : key) {
+        if (c & 0x80) {
+            ascii = false;
+            break;
+        }
+    }
+    if (ascii) {
+        return;
+    }
+    ExceptionSink xsink;
+    QoreString utf8(key.data(), key.size(), QCS_UTF8);
+    TempEncodingHelper converted(utf8, QCS_DEFAULT, &xsink);
+    if (converted) {
+        key.assign(converted->c_str(), converted->size());
+    }
+    xsink.clear();
 }

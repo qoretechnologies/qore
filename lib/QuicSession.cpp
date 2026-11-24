@@ -33,6 +33,7 @@
 #include <qore/QoreAbstractLoggerInterface.h>
 #include <qore/QoreSSLCertificate.h>
 #include <qore/QoreSSLPrivateKey.h>
+#include <qore/ScopeGuard.h>
 
 #include "qore/intern/QuicSession.h"
 #include "qore/intern/HttpClientDrainDebug.h"
@@ -41,6 +42,8 @@
 #include "qore/intern/HttpFastRoutes.h"
 
 #include <openssl/rand.h>
+#include <openssl/evp.h>
+#include <openssl/kdf.h>
 #include <openssl/err.h>
 
 #include "qore/intern/QoreDatagramDispatcher.h"
@@ -988,6 +991,10 @@ QuicSession::QuicSession() : session_id_(next_session_id_.fetch_add(1, std::memo
 
 QuicSession::~QuicSession() {
 #ifdef DEBUG
+    // server sessions are recorded for dbg_quic_wait_idle() (see createServer()), which only a debug build has
+    if (is_server_) {
+        qore_dbg_quic_unregister_session(session_id_);
+    }
     // the extended-CONNECT buffers are released with the session (issue #5821)
     for (auto& i : connect_stream_data_) {
         qore_dbg_quic_connect_buffered.fetch_sub(static_cast<int64_t>(i.second.size()), std::memory_order_relaxed);
@@ -1142,6 +1149,118 @@ std::shared_ptr<QuicSession> QuicSession::createClient(
     return session;
 }
 
+// --- the stateless resets of a QUIC server listener (qore#6931) ---
+
+//! the salt and the label of the HKDF that derives the static key of a listener's stateless resets from its private
+//! key: a label of their own, so that the key is used for nothing else
+static const char quic_sr_hkdf_salt[] = "qore QUIC stateless reset key salt v1";
+static const char quic_sr_hkdf_info[] = "qore QUIC stateless reset key v1";
+
+//! Derives the static key of the stateless resets of a listener from its private key (RFC 9000 section 10.3.2)
+/** HKDF-SHA256 with the DER encoding of the private key as its input key material, under a salt and a label of its
+    own: the same private key gives the same key in any process, and the key reveals nothing of the private key
+
+    @return true if the key was derived
+*/
+static bool quic_derive_stateless_reset_key(EVP_PKEY* pkey, uint8_t* out, size_t outlen) {
+    unsigned char* der = nullptr;
+    int derlen = i2d_PrivateKey(pkey, &der);
+    if (derlen <= 0 || !der) {
+        return false;
+    }
+    ON_BLOCK_EXIT([der, derlen] { OPENSSL_clear_free(der, static_cast<size_t>(derlen)); });
+    EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, nullptr);
+    if (!ctx) {
+        return false;
+    }
+    ON_BLOCK_EXIT([ctx] { EVP_PKEY_CTX_free(ctx); });
+    size_t len = outlen;
+    return EVP_PKEY_derive_init(ctx) > 0
+        && EVP_PKEY_CTX_set_hkdf_md(ctx, EVP_sha256()) > 0
+        && EVP_PKEY_CTX_set1_hkdf_salt(ctx, reinterpret_cast<const unsigned char*>(quic_sr_hkdf_salt),
+            static_cast<int>(sizeof(quic_sr_hkdf_salt) - 1)) > 0
+        && EVP_PKEY_CTX_set1_hkdf_key(ctx, der, derlen) > 0
+        && EVP_PKEY_CTX_add1_hkdf_info(ctx, reinterpret_cast<const unsigned char*>(quic_sr_hkdf_info),
+            static_cast<int>(sizeof(quic_sr_hkdf_info) - 1)) > 0
+        && EVP_PKEY_derive(ctx, out, &len) > 0
+        && len == outlen;
+}
+
+bool QoreDatagramDispatcher::ensureStatelessResetKey(QoreSSLPrivateKey* pk) {
+    if (sr_key_set.load(std::memory_order_acquire)) {
+        return true;
+    }
+    AutoLocker al(lock);
+    if (sr_key_set.load(std::memory_order_relaxed)) {
+        return true;
+    }
+    if (sr_key_failed || !pk || !pk->getData()) {
+        return false;
+    }
+    if (!quic_derive_stateless_reset_key(pk->getData(), sr_key, sizeof(sr_key))) {
+        OPENSSL_cleanse(sr_key, sizeof(sr_key));
+        sr_key_failed = true;
+        qore_async_io_log(QORE_LOG_LEVEL_WARN, "QUIC: the static key of the listener's stateless resets could not "
+            "be derived from its private key; its connections get random stateless reset tokens, and it sends no "
+            "stateless reset");
+        return false;
+    }
+    sr_key_set.store(true, std::memory_order_release);
+    return true;
+}
+
+bool QoreDatagramDispatcher::makeStatelessResetToken(const uint8_t* cid, size_t cidlen, uint8_t* token) const {
+    if (!sr_key_set.load(std::memory_order_acquire) || !cidlen || cidlen > NGTCP2_MAX_CIDLEN) {
+        return false;
+    }
+    ngtcp2_cid c;
+    ngtcp2_cid_init(&c, cid, cidlen);
+    return !ngtcp2_crypto_generate_stateless_reset_token(token, sr_key, sizeof(sr_key), &c);
+}
+
+size_t QoreDatagramDispatcher::makeStatelessReset(const uint8_t* pkt, size_t pktlen, uint8_t* out, size_t outlen,
+        uint64_t now_ns) {
+    // a long-header packet is not answered: its connection is not established (an Initial makes a new one)
+    if (!pktlen || (pkt[0] & 0x80) || !sr_key_set.load(std::memory_order_acquire)) {
+        return 0;
+    }
+    size_t randlen = statelessResetRandLen(pktlen);
+    if (!randlen || outlen < randlen + NGTCP2_STATELESS_RESET_TOKENLEN) {
+        return 0;
+    }
+    // the rate limit: one more reset each StatelessResetRefillNs, up to the burst
+    {
+        AutoLocker al(lock);
+        if (!sr_last_refill_ns || now_ns < sr_last_refill_ns) {
+            sr_last_refill_ns = now_ns;
+        } else if (sr_bucket < StatelessResetBurst) {
+            uint64_t refills = (now_ns - sr_last_refill_ns) / StatelessResetRefillNs;
+            if (refills) {
+                sr_bucket = refills >= (uint64_t)(StatelessResetBurst - sr_bucket)
+                    ? StatelessResetBurst : sr_bucket + static_cast<int>(refills);
+                sr_last_refill_ns += refills * StatelessResetRefillNs;
+            }
+        } else {
+            sr_last_refill_ns = now_ns;
+        }
+        if (!sr_bucket) {
+            return 0;
+        }
+        --sr_bucket;
+    }
+    // the DCID follows the first byte; the server issued it, with its length
+    uint8_t token[NGTCP2_STATELESS_RESET_TOKENLEN];
+    if (!makeStatelessResetToken(pkt + 1, ServerCidLen, token)) {
+        return 0;
+    }
+    uint8_t rand[StatelessResetMaxRandLen];
+    if (RAND_bytes(rand, static_cast<int>(randlen)) != 1) {
+        return 0;
+    }
+    ngtcp2_ssize n = ngtcp2_pkt_write_stateless_reset(out, outlen, token, rand, randlen);
+    return n > 0 && static_cast<size_t>(n) < pktlen ? static_cast<size_t>(n) : 0;
+}
+
 //! Process-wide secret for Retry tokens; tokens are only valid in the process that issued them
 static const uint8_t* quic_retry_secret(size_t& len) {
     static uint8_t secret[32];
@@ -1246,6 +1365,11 @@ std::shared_ptr<QuicSession> QuicSession::createServer(
     session->setMaxHeaderListSize(sock->getMaxHeaderSize());
     // Clear the temporary socket pointer; it was only needed during init
     session->clearSockPtr();
+#ifdef DEBUG
+    // a handler of a request of the session can find it by its ID with dbg_quic_wait_idle() (issue #7354), which only
+    // a debug build has
+    qore_dbg_quic_register_session(session);
+#endif
     return session;
 }
 
@@ -1313,6 +1437,10 @@ const char* QuicSession::raiseSettingsWaitCloseError(ExceptionSink* xsink) const
             xsink->raiseException("HTTP3-PEER-CLOSE", "QUIC connection closed by the server before its HTTP/3 "
                 "SETTINGS were received; the request was not sent");
             return "HTTP3-PEER-CLOSE";
+        case CloseReason::StatelessReset:
+            xsink->raiseException("HTTP3-STATELESS-RESET", "QUIC connection reset by the server (stateless reset): "
+                "it has no state for the connection (ex: it restarted); the request was not sent");
+            return "HTTP3-STATELESS-RESET";
         default:
             // closed locally, or the session was released from its waiters (its client operation was closed, or the
             // socket dropped it)
@@ -1746,6 +1874,7 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     callbacks.decrypt = ngtcp2_crypto_decrypt_cb;
     callbacks.hp_mask = ngtcp2_crypto_hp_mask_cb;
     callbacks.recv_retry = ngtcp2_crypto_recv_retry_cb;
+    callbacks.recv_stateless_reset = recvStatelessResetCallback;
     callbacks.update_key = ngtcp2_crypto_update_key_cb;
     callbacks.delete_crypto_aead_ctx = ngtcp2_crypto_delete_crypto_aead_ctx_cb;
     callbacks.delete_crypto_cipher_ctx = ngtcp2_crypto_delete_crypto_cipher_ctx_cb;
@@ -2011,19 +2140,23 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
     }
     params.original_dcid_present = 1;
 
-    // Generate stateless reset token using a random secret
-    uint8_t secret[32];
-    if (RAND_bytes(secret, sizeof(secret)) != 1) {
+    // the stateless reset token of the initial connection ID: from the listener's static key, so that the listener
+    // can reset the connection also after a restart (qore#6931), or from a random secret if it has none
+    if (!dispatcher_ || !dispatcher_->makeStatelessResetToken(scid.data, scid.datalen,
+            params.stateless_reset_token)) {
+        uint8_t secret[32];
+        if (RAND_bytes(secret, sizeof(secret)) != 1) {
+            OPENSSL_cleanse(secret, sizeof(secret));
+            xsink->raiseException("QUIC-ERROR", "failed to generate random secret");
+            return -1;
+        }
+        int sr_rv = ngtcp2_crypto_generate_stateless_reset_token(
+            params.stateless_reset_token, secret, sizeof(secret), &scid);
         OPENSSL_cleanse(secret, sizeof(secret));
-        xsink->raiseException("QUIC-ERROR", "failed to generate random secret");
-        return -1;
-    }
-    int sr_rv = ngtcp2_crypto_generate_stateless_reset_token(
-        params.stateless_reset_token, secret, sizeof(secret), &scid);
-    OPENSSL_cleanse(secret, sizeof(secret));
-    if (sr_rv != 0) {
-        xsink->raiseException("QUIC-ERROR", "failed to generate stateless reset token");
-        return -1;
+        if (sr_rv != 0) {
+            xsink->raiseException("QUIC-ERROR", "failed to generate stateless reset token");
+            return -1;
+        }
     }
     params.stateless_reset_token_present = 1;
 
@@ -2294,16 +2427,23 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
     // raiseReadErrorLocked() can tell why it failed (the queue is per thread, and this thread drives other
     // connections too)
     ERR_clear_error();
+    // the packets that the connection took before this one, while the peer is waited for
+    uint64_t taken = peer_response_deadline_ ? processedPacketsLocked() : 0;
     int rv = ngtcp2_conn_read_pkt(conn_, &path, &pi, data, len, last_rx_ts_);
-    if (!rv) {
+    if (!rv && peer_response_deadline_ && processedPacketsLocked() > taken) {
         // the peer answered: its connection state is alive (see setPeerResponseTimeout())
         peer_response_deadline_ = 0;
     }
     if (rv != 0) {
         // Handle specific error codes
         if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
-            // the peer closed the connection, or it is closing: the threads waiting for the SETTINGS see it closed
+            // the peer closed the connection, or it is closing: the threads waiting for the SETTINGS see it closed,
+            // and so do those waiting for a stream to drain, as nothing more can be sent (waitForStreamDrain() then
+            // returns -1): a handler whose send waited for a full stream buffer waited until its own timeout for a
+            // peer that had closed the connection (qoretechnologies/qore#7282); the data received before the close
+            // stays readable, so the session is not marked closed for its readers here
             wakeSettingsWaiters();
+            notifyStreamDrain();
             return 0;  // connection closing gracefully
         }
         // A server receives these for a client Initial whose CRYPTO data does not start the
@@ -2333,6 +2473,10 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
     pending_write_.store(true, std::memory_order_release);
 #ifdef DEBUG
     quic_test_count_rx(is_server_);
+    // the packet can have acknowledged the data in flight (issue #7354)
+    if (qore_dbg_quic_idle_waiters.load(std::memory_order_acquire)) {
+        qore_dbg_quic_notify_idle_waiters();
+    }
 #endif
 
     return 0;
@@ -2428,9 +2572,11 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
             break;  // a dropped connection processes no further packets (see dropped_)
         }
         last_rx_ts_ = nowLocked();
+        // the packets that the connection took before this one, while the peer is waited for
+        uint64_t taken = peer_response_deadline_ ? processedPacketsLocked() : 0;
         int rv = ngtcp2_conn_read_pkt(conn_, &packets[i].path, &pi,
                                        packets[i].data, packets[i].len, last_rx_ts_);
-        if (!rv) {
+        if (!rv && peer_response_deadline_ && processedPacketsLocked() > taken) {
             // the peer answered: its connection state is alive (see setPeerResponseTimeout())
             peer_response_deadline_ = 0;
         }
@@ -2438,6 +2584,7 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
             if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
                 // see readPacketLocked()
                 wakeSettingsWaiters();
+                notifyStreamDrain();
                 break;  // connection shutting down — no more packets can be processed
             }
             // see readPacketLocked(): drop silently so the client's retransmitted Initial starts
@@ -2459,6 +2606,12 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
 
     // Signal pending write once for the entire batch
     pending_write_.store(true, std::memory_order_release);
+#ifdef DEBUG
+    // the packets can have acknowledged the data in flight (issue #7354)
+    if (qore_dbg_quic_idle_waiters.load(std::memory_order_acquire)) {
+        qore_dbg_quic_notify_idle_waiters();
+    }
+#endif
 
     return 0;
 }
@@ -2687,6 +2840,14 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                 }
             }
 
+            // a stream whose streamed response broke its declared length in this iteration is reset in this cycle:
+            // the next iteration applies the reset and writes it; the session's next write cycle can come only when
+            // the peer sends something, and a peer that has nothing in flight and waits for the response sends
+            // nothing (issue #7354)
+            if (!pending_length_resets_.empty()) {
+                continue;
+            }
+
             ASYNC_IO_TRACE("QuicSession::writePacketsLocked nwrite=0 session=%lld stream_id=%lld total_packets=%d bytes_cwnd_left=%llu pending_datagrams=%zu\n",
                 (long long)getSessionId(), (long long)stream_id, total_packets,
                 (unsigned long long)ngtcp2_conn_get_cwnd_left(conn_),
@@ -2744,7 +2905,8 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
         }
     }
 
-    // a reset found in the last iteration is sent with the next write
+    // a reset found in an iteration that ended the loop otherwise (a full batch, or a connection that is closing) is
+    // sent with the next write
     if (!pending_length_resets_.empty()) {
         applyLengthResetsLocked();
         pending_write_.store(true, std::memory_order_release);
@@ -2903,11 +3065,41 @@ static bool quic_test_idle_close_at_submit() {
     quic_test_idle_close_last_token = token;
     return true;
 }
+
+//! the last value of QORE_QUIC_TEST_UNRESPONSIVE_CLOSE_AT_SUBMIT that closed a session (guarded by
+//! quic_test_idle_close_lock)
+static std::string quic_test_unresponsive_close_last_token;
+
+//! Test hook: closes the session of the next client request submitted after
+//! QORE_QUIC_TEST_UNRESPONSIVE_CLOSE_AT_SUBMIT got a new value as unresponsive, as if the peer response timeout of an
+//! earlier request had expired between connect and submit (see setPeerResponseTimeout())
+/** It fires once per value, as quic_test_idle_close_at_submit() does.
+
+    @return true if the session of the request is to be closed
+*/
+static bool quic_test_unresponsive_close_at_submit() {
+    QoreEnvironmentValue token_holder("QORE_QUIC_TEST_UNRESPONSIVE_CLOSE_AT_SUBMIT");
+    const char* token = token_holder.c_str();
+    if (!token || !*token) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(quic_test_idle_close_lock);
+    if (quic_test_unresponsive_close_last_token == token) {
+        return false;
+    }
+    quic_test_unresponsive_close_last_token = token;
+    return true;
+}
 #endif
 
 bool QuicSession::refuseRequestOnClosedLocked(ExceptionSink* xsink) {
 #ifdef DEBUG
     if (!idle_closed_.load(std::memory_order_acquire) && quic_test_idle_close_at_submit()) {
+        closeIdleLocked();
+    }
+    if (!idle_closed_.load(std::memory_order_acquire) && quic_test_unresponsive_close_at_submit()) {
+        // closed as handleExpiryLocked() closes a connection whose peer response timeout expired
+        peer_unresponsive_.store(true, std::memory_order_release);
         closeIdleLocked();
     }
 #endif
@@ -2939,6 +3131,10 @@ bool QuicSession::refuseRequestOnClosedLocked(ExceptionSink* xsink) {
         case CloseReason::PeerClose:
             xsink->raiseException("HTTP3-PEER-CLOSE", "QUIC connection closed by the peer before the request was "
                 "sent; the request was not sent");
+            break;
+        case CloseReason::StatelessReset:
+            xsink->raiseException("HTTP3-STATELESS-RESET", "QUIC connection reset by the server (stateless reset): "
+                "it has no state for the connection (ex: it restarted); the request was not sent");
             break;
     }
     return true;
@@ -3847,7 +4043,9 @@ int QuicSession::waitForStreamDrain(int64_t stream_id, int timeout_ms) {
         }
     }
 
-    return closed_.load(std::memory_order_acquire) ? -1 : 1;
+    // a connection that the peer closed, or that is closing, sends nothing more: the stream will not drain
+    // (qoretechnologies/qore#7282); isClosed() also covers an idle close and a dropped connection
+    return (closed_.load(std::memory_order_acquire) || isClosed()) ? -1 : 1;
 }
 
 int64_t QuicSession::streamAckedBytes(int64_t stream_id) {
@@ -4881,6 +5079,12 @@ bool QuicSession::isHandshakeComplete() const {
     return handshake_completed_.load(std::memory_order_acquire);
 }
 
+uint64_t QuicSession::processedPacketsLocked() const {
+    ngtcp2_conn_info cinfo;
+    ngtcp2_conn_get_conn_info(conn_, &cinfo);
+    return cinfo.pkt_recv;
+}
+
 bool QuicSession::isClosed() const {
     return getCloseReason() != CloseReason::Open;
 }
@@ -4907,9 +5111,23 @@ QuicSession::CloseReason QuicSession::getCloseReason() const {
         return CloseReason::LocalClose;
     }
     if (ngtcp2_conn_in_draining_period(conn_)) {
-        return CloseReason::PeerClose;
+        // a stateless reset puts the connection in its draining period as a CONNECTION_CLOSE does
+        return stateless_reset_received_.load(std::memory_order_acquire) ? CloseReason::StatelessReset
+            : CloseReason::PeerClose;
     }
     return CloseReason::Open;
+}
+
+int QuicSession::recvStatelessResetCallback(ngtcp2_conn* /* conn */, const ngtcp2_pkt_stateless_reset* /* sr */,
+        void* user_data) {
+    // ngtcp2 calls it only for a reset whose token is that of the server's connection ID; the connection then
+    // drains (NGTCP2_ERR_DRAINING)
+    static_cast<QuicSession*>(user_data)->stateless_reset_received_.store(true, std::memory_order_release);
+#ifdef DEBUG
+    // counted for dbg_quic_stateless_reset_counts(), which only a debug build has
+    qore_dbg_quic_stateless_resets_received.fetch_add(1, std::memory_order_relaxed);
+#endif
+    return 0;
 }
 
 void QuicSession::markClosed() {
@@ -5219,14 +5437,19 @@ int QuicSession::getNewConnectionIdCallback(ngtcp2_conn* /* conn */,
     }
     cid->datalen = cidlen;
 
-    if (RAND_bytes(token, NGTCP2_STATELESS_RESET_TOKENLEN) != 1) {
-        return NGTCP2_ERR_CALLBACK_FAILURE;
-    }
-
     // Register new CID with dispatcher for packet routing.
     // THREADING: dispatcher_ access is safe here — this callback is invoked from
     // ngtcp2_conn_writev_stream() or ngtcp2_conn_read_pkt(), both of which hold mtx_.
     auto* session = static_cast<QuicSession*>(user_data);
+
+    // the token of a server's connection ID is derived from the listener's static key, as that of its initial one
+    // (qore#6931); a client's, or one of a listener without the key, is random
+    if (!session->is_server_ || !session->dispatcher_
+            || !session->dispatcher_->makeStatelessResetToken(cid->data, cid->datalen, token)) {
+        if (RAND_bytes(token, NGTCP2_STATELESS_RESET_TOKENLEN) != 1) {
+            return NGTCP2_ERR_CALLBACK_FAILURE;
+        }
+    }
     if (session->dispatcher_) {
         try {
             std::string cid_str(reinterpret_cast<const char*>(cid->data), cid->datalen);

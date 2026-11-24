@@ -53,7 +53,7 @@
 #include "qore/intern/QoreLibIntern.h"
 
 // list of pseudo-classes for basic types + 2 entries for closures and call references
-static QoreClass* po_list[NODE_ARRAY_LEN + 2];
+QoreClass* qore_pseudo_basic_classes[NODE_ARRAY_LEN + 2];
 static QoreClass* pseudo_buffer;
 static QoreClass* pseudo_char;
 
@@ -77,31 +77,31 @@ void pseudo_classes_init() {
     assert(QC_PSEUDOVALUE);
 
     // initialize list of pseudo-classes for basic types
-    po_list[NT_NOTHING] = initPseudoNothingClass(); //do_type_code("<nothing>", (q_method_int64_t)PSEUDONOTHING_typeCode);
-    po_list[NT_NULL] = do_type_code("<null>", (q_method_t)PSEUDONULL_typeCode);
+    qore_pseudo_basic_classes[NT_NOTHING] = initPseudoNothingClass(); //do_type_code("<nothing>", (q_method_int64_t)PSEUDONOTHING_typeCode);
+    qore_pseudo_basic_classes[NT_NULL] = do_type_code("<null>", (q_method_t)PSEUDONULL_typeCode);
 
-    po_list[NT_INT] = initPseudoIntClass();
-    po_list[NT_FLOAT] = initPseudoFloatClass();
-    po_list[NT_BOOLEAN] = initPseudoBoolClass();
-    po_list[NT_STRING] = initPseudoStringClass();
-    po_list[NT_DATE] = initPseudoDateClass();
-    po_list[NT_BINARY] = initPseudoBinaryClass();
-    po_list[NT_LIST] = initPseudoListClass();
-    po_list[NT_HASH] = initPseudoHashClass();
-    po_list[NT_OBJECT] = initPseudoObjectClass();
-    po_list[NT_NUMBER] = initPseudoNumberClass();
+    qore_pseudo_basic_classes[NT_INT] = initPseudoIntClass();
+    qore_pseudo_basic_classes[NT_FLOAT] = initPseudoFloatClass();
+    qore_pseudo_basic_classes[NT_BOOLEAN] = initPseudoBoolClass();
+    qore_pseudo_basic_classes[NT_STRING] = initPseudoStringClass();
+    qore_pseudo_basic_classes[NT_DATE] = initPseudoDateClass();
+    qore_pseudo_basic_classes[NT_BINARY] = initPseudoBinaryClass();
+    qore_pseudo_basic_classes[NT_LIST] = initPseudoListClass();
+    qore_pseudo_basic_classes[NT_HASH] = initPseudoHashClass();
+    qore_pseudo_basic_classes[NT_OBJECT] = initPseudoObjectClass();
+    qore_pseudo_basic_classes[NT_NUMBER] = initPseudoNumberClass();
     pseudo_buffer = initPseudoBufferClass();
     pseudo_char = initPseudoCharClass();
 
     // + 2 pseudo classes with runtime type values outside the value type range
-    po_list[NODE_ARRAY_LEN] = initPseudoCallrefClass();
-    po_list[NODE_ARRAY_LEN + 1] = initPseudoClosureClass();
+    qore_pseudo_basic_classes[NODE_ARRAY_LEN] = initPseudoCallrefClass();
+    qore_pseudo_basic_classes[NODE_ARRAY_LEN + 1] = initPseudoClosureClass();
 }
 
 void pseudo_classes_del() {
     // delete pseudo-classes
     for (unsigned i = 0; i < NODE_ARRAY_LEN + 2; ++i)
-        qore_class_private::derefClass(*po_list[i], true, false, true);
+        qore_class_private::derefClass(*qore_pseudo_basic_classes[i], true, false, true);
     qore_class_private::derefClass(*pseudo_buffer, true, false, true);
     qore_class_private::derefClass(*pseudo_char, true, false, true);
 
@@ -112,13 +112,13 @@ void pseudo_classes_del() {
 static QoreClass* pseudo_get_class(qore_type_t t) {
     if (t >= 0) {
         if (t < NODE_ARRAY_LEN) {
-            return po_list[t];
+            return qore_pseudo_basic_classes[t];
         }
         if (t == NT_FUNCREF) {
-            return po_list[NODE_ARRAY_LEN];
+            return qore_pseudo_basic_classes[NODE_ARRAY_LEN];
         }
         if (t == NT_RUNTIME_CLOSURE) {
-            return po_list[NODE_ARRAY_LEN + 1];
+            return qore_pseudo_basic_classes[NODE_ARRAY_LEN + 1];
         }
         if (t == NT_BUFFER) {
             return pseudo_buffer;
@@ -127,13 +127,13 @@ static QoreClass* pseudo_get_class(qore_type_t t) {
             return pseudo_char;
         }
         if (t == NT_WEAKREF) {
-            return po_list[NT_OBJECT];
+            return qore_pseudo_basic_classes[NT_OBJECT];
         }
         if (t == NT_WEAKREF_HASH) {
-            return po_list[NT_HASH];
+            return qore_pseudo_basic_classes[NT_HASH];
         }
         if (t == NT_WEAKREF_LIST) {
-            return po_list[NT_LIST];
+            return qore_pseudo_basic_classes[NT_LIST];
         }
     }
 
@@ -141,7 +141,7 @@ static QoreClass* pseudo_get_class(qore_type_t t) {
 }
 
 const QoreClass* qore_pseudo_find_class_by_path(const char* path) {
-    for (const QoreClass* qc : po_list) {
+    for (const QoreClass* qc : qore_pseudo_basic_classes) {
         if (qc && !strcmp(qc->getPath(), path)) {
             return qc;
         }
@@ -158,6 +158,15 @@ const QoreClass* qore_pseudo_get_class(qore_type_t t) {
     return pseudo_get_class(t);
 }
 
+bool qore_pseudo_receiver_accepts_slow(const QoreClass* qc, const QoreValue n) {
+    if (qc == QC_PSEUDOVALUE || qc == pseudo_get_class(n.getType())) {
+        return true;
+    }
+    // a comparison of untyped operands is typed bool by the parser, but gives the elementwise buffer<bool> with a
+    // buffer operand: the method of the parse type (bool) is called on it (qore#6356)
+    return n.getType() == NT_BUFFER && qc == qore_pseudo_basic_classes[NT_BOOLEAN];
+}
+
 const QoreClass* qore_pseudo_get_class(const QoreTypeInfo* t) {
     ValueHolder v(QoreTypeInfo::getDefaultQoreValue(t), nullptr);
     qore_type_t nt = v->getType();
@@ -170,15 +179,15 @@ const QoreClass* qore_pseudo_get_class(const QoreTypeInfo* t) {
     }
 
     if (QoreTypeInfo::isType(t, NT_OBJECT)) {
-        return po_list[NT_OBJECT];
+        return qore_pseudo_basic_classes[NT_OBJECT];
     }
 
     if (QoreTypeInfo::isType(t, NT_FUNCREF)) {
-        return po_list[NODE_ARRAY_LEN];
+        return qore_pseudo_basic_classes[NODE_ARRAY_LEN];
     }
 
     if (QoreTypeInfo::isType(t, NT_RUNTIME_CLOSURE)) {
-        return po_list[NODE_ARRAY_LEN + 1];
+        return qore_pseudo_basic_classes[NODE_ARRAY_LEN + 1];
     }
 
     return QC_PSEUDOVALUE;
@@ -198,10 +207,10 @@ static __attribute__((noinline, cold)) QoreValue pseudo_classes_dispatch_weak(co
         F f, Args... args) {
     if (n.getType() == NT_WEAKREF_HASH) {
         ReferenceHolder<QoreHashNode> target(n.get<WeakHashReferenceNode>()->lock(), xsink);
-        return f(po_list[NT_HASH], QoreValue(*target), args...);
+        return f(qore_pseudo_basic_classes[NT_HASH], QoreValue(*target), args...);
     }
     ReferenceHolder<QoreListNode> target(n.get<WeakListReferenceNode>()->lock(), xsink);
-    return f(po_list[NT_LIST], QoreValue(*target), args...);
+    return f(qore_pseudo_basic_classes[NT_LIST], QoreValue(*target), args...);
 }
 
 template <typename F, typename... Args>
@@ -212,12 +221,12 @@ static QoreValue pseudo_classes_dispatch(const QoreValue n, ExceptionSink* xsink
                 char buf[7];
                 n.getShortString(buf);
                 ValueHolder str(new QoreStringNode(buf, n.shortStringLen(), QCS_UTF8), xsink);
-                return f(po_list[NT_STRING], *str, args...);
+                return f(qore_pseudo_basic_classes[NT_STRING], *str, args...);
             }
             break;
 
         case NT_WEAKREF:
-            return f(po_list[NT_OBJECT], QoreValue(n.get<WeakReferenceNode>()->get()), args...);
+            return f(qore_pseudo_basic_classes[NT_OBJECT], QoreValue(n.get<WeakReferenceNode>()->get()), args...);
 
         case NT_WEAKREF_HASH:
         case NT_WEAKREF_LIST:

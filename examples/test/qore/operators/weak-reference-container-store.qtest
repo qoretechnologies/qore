@@ -23,8 +23,8 @@
     and its copy-on-write check took that reference for an owner.  The AST interpreter changes the container that the
     weak reference designates, in place.  The program covers the element and key stores through typed and untyped
     locals, a loop, a container that the weak assignment made unique, a freed container, and the other changes of the
-    container through the local, which raise in every mode (\c push, \c +=, \c splice: qore#7297).  Every mode must
-    print the output of the AST.
+    container through the local, which change the container as well (\c push, \c +=, \c splice: qore#7297).  Every
+    mode must print the output of the AST.
 
     The program is in \c weak-reference-container-store/.
 */

@@ -204,10 +204,7 @@ Program p(opts);
       @ref background "background" operator (ex: \c "background c()" or \c "background o.m()" in module code that
       was given \c c or \c o), in every execution mode; a closure that is only an argument of the call (ex:
       \c "background f(c, x + 1)") is given by the code that starts the thread to the code that it calls, and is not
-      refused; a known limitation of code compiled with \c qcc (a module or an executable): it does not give the
-      callee when the new thread computes the arguments or the callee of the call, and refuses every closure, call
-      reference and object of such code that the expression takes when the thread starts, also one that is only an
-      argument of a call of trusted code (ex: \c "background call_function(\\hc(), c)")
+      refused, also in code compiled with \c qcc (a module or an executable)
       (<a href="https://github.com/qoretechnologies/qore/issues/7087">issue 7087</a>)
     - code of such a %Program that the expression of the @ref background "background" operator calls itself, which
       is not a value when the thread starts: a callable or object that the new thread computes (an element of a list,
@@ -740,6 +737,65 @@ authenticate();
     module, where the calling code is not looked up (see @ref sandbox_module_init): a declared domain that their code
     calls is refused as it would be for their creator (\c INVALID-FUNCTION-ACCESS).
 
+    @anchor sandbox_lent_objects
+    Objects that the host lends are grants: an object of a class of a module (a library module or one loaded by its
+    path, or of a class that inherits one) that the host's code creates, while no restriction applies to that code (a restriction of
+    @ref sandbox_uncontrolled_api "uncontrolled APIs" aside), is lent to the code that the host gives it to.  When the
+    code of another %Program that is not a module's calls one of its methods itself, the method runs as under the
+    host's policy barrier (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()"):
+    the calling code's restrictions of the file system, the network and external information
+    (@ref Qore::DOM_FILESYSTEM "DOM_FILESYSTEM", @ref Qore::DOM_NETWORK "DOM_NETWORK" and
+    @ref Qore::DOM_EXTERNAL_INFO "DOM_EXTERNAL_INFO") do not count for the code of the method and the code that it
+    calls, so a connection object that the host gives a restricted %Program creates its client when that %Program uses
+    it, while the %Program cannot create a connection itself.  The other domains (such as \c DATABASE, \c PROCESS or
+    \c THREAD_CONTROL) are not lent, and neither is the loading of native code (see @ref sandbox_uncontrolled_api): a
+    host that lends an object whose methods need them gives the restricted code a capability instead
+    (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") or runs the
+    operation for it.
+
+    Only code that holds the object uses it as a grant, by calling its methods itself; this is any code of a %Program
+    that is not a module's that obtains the object, so a host that keeps such objects in a registry that restricted
+    code can read (a library function that returns them) lends them to all of that code:
+    - library code that acts on such an object for its caller lends nothing: a library function that uses a
+      connection that the host registered with it, or a helper to which the restricted code gives the lent object, is
+      checked against the restricted code as before (\c INVALID-FUNCTION-ACCESS)
+    - neither do the closures of the object's code, the builtin methods that its class inherits, calls of its methods
+      by code of its own module (its own %Program), and its destructor, also when the restricted code releases the
+      last reference to the object; all of them are checked against their callers
+    - what the restricted code gives the method is still its own: an object or call reference that it created keeps
+      its restrictions, and a callback that it gives runs as restricted code; a method called through a call reference
+      that restricted code created runs for that code
+    - an object that a method of a lent object creates is lent too if its class is of the module of the method's code
+      (the %Program of the class that declares the method: for a method that the lent object's class inherits from a
+      class of another module, that module, not the module of the lent object's class), unless a library module is
+      initialized in the method (its first load): the objects that the initialization creates belong to nobody; an
+      object of another module's class, or of a class that the restricted code supplies (its subclass of a module's
+      class), is not, so a method that creates an object of a class that its caller names (a factory) does not hand
+      out capabilities of other modules' classes; it does hand out those of every class of its own module, with the
+      constructor arguments that the caller gives, and a method that deserializes data creates objects of its own
+      module's classes with the member values that the caller gives, which are lent too
+    - a thread that a method of a lent object starts keeps what was lent for its whole life, also after the method
+      returns; code of the restricted code that such a thread runs (a callback that it is given) is still restricted,
+      and the objects that the thread creates are not lent
+    - an object that library code creates in its initialization, or with no code of the host on the stack (the
+      library's own shared state), is not lent, and neither is an object that restricted code creates, a copy that it
+      makes of a lent object, or an object that trusted code creates for it under a host grant (a policy barrier or a
+      system-policy capability): the grant does not outlive itself
+    - a sandbox that governs the calling code still governs the method's code (its policy, limits and interrupts);
+      only the restrictions of the calling code's functional domains are lent
+
+    @warning Every public method of every module object that the host hands to restricted code (also an object that
+    a host API creates from parameters of the restricted code, such as a data provider created by name) lends the
+    file system, the network and external information, whatever the object itself needs: a method of a network
+    client that resolves a location string can read files for code restricted from the file system.  Hand restricted
+    code only objects whose every method may act for it, and govern it with a
+    @ref Qore::SandboxManager "SandboxManager", whose policy is the actual boundary of what it can reach.  This also
+    holds for a client object that the host hands over directly (a @ref RestClient::RestClient "RestClient" or any
+    other synchronous client of Qore code): it is lent as any module object is, and is not bound to the target that
+    the host gave it, as the clients of a connection object are (see @ref sandbox_lent_connections): its methods (to
+    copy it for another URL, for example) reach what the restricted code chooses; hand over the connection object
+    instead.
+
     The \c SqlUtil and \c DbDataProvider modules refuse a connection string or datasource configuration this way: the
     variants of @ref SqlUtil::AbstractTable::getTable() "AbstractTable::getTable()",
     @ref SqlUtil::AbstractDatabase::getDatabase() "AbstractDatabase::getDatabase()" and the constructors of
@@ -752,6 +808,35 @@ authenticate();
     \c DATABASE domain runs the module code with that restriction, so it cannot open a connection through them
     either: \c INVALID-FUNCTION-ACCESS).  A module that creates connection objects when they are first looked up
     must therefore create them in the host's context, or before restricted code can look them up.
+
+    @since %Qore 3.0
+
+    @subsection sandbox_lent_connections Connections That the Host Lends
+
+    A connection object that the host creates and gives to restricted code is the host's: the code that it was lent
+    to uses the target that the host gave, not one of its own.  A connection object takes a proof of the code that
+    creates it (@ref HttpClientIo::HttpClientCreatorProof "HttpClientCreatorProof"), bound to its HTTP target (TLS or
+    not, host, port), its proxy and its CA certificate locations; the HTTP clients that it creates for code restricted
+    from the \c NETWORK domain (its async client from
+    @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()", the clients of the WebSocket, JSON-RPC,
+    YAML-RPC, MCP and A2A connections, a REST connection's async client) connect only to that target, through that
+    proxy, also if the restricted code changes the connection's members or the client.  A synchronous client of Qore
+    code (a @ref RestClient::RestClient "RestClient" or @ref YamlRpcClient::YamlRpcClient "YamlRpcClient", the
+    client of a server-sent event connection), which makes its requests for any caller from targets that the caller
+    can change, is not given to code restricted from the \c NETWORK domain: the connection's
+    @ref ConnectionProvider::AbstractConnection::get() "get()" and
+    @ref ConnectionProvider::AbstractConnection::getPollImpl() "getPollImpl()" raise \c PERMISSION-DENIED for it,
+    and it uses the connection's async client where that is bound.  A connection that restricted code looks up by
+    name and that is created for it then has no proof of the host (see @ref sandbox_caller_domains), so its clients
+    are refused to it.
+
+    @warning The connections whose clients are not HTTP clients (for example Telnet, SMTP, POP3, IMAP, FTP, Redis,
+    Memcached, MLLP and MongoDB connections) are not yet bound to their creator's target: their module code connects for the code that they were lent to, to the
+    target in the connection's members, which that code can change, and sends the connection's credentials there.
+    The parse options of the restricted code do not stop it; a @ref Qore::SandboxManager "SandboxManager" that
+    governs the code does, as its network policy decides the connections of the module code that it runs (see
+    <a href="https://github.com/qoretechnologies/qore/issues/7327">issue 7327</a>).  Lend such connections only to
+    code governed by a sandbox whose network policy allows just their targets.
 
     @since %Qore 3.0
 

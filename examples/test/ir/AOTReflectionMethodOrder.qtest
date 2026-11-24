@@ -1,0 +1,139 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - qcc native executable and AOT module linking and loading
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class AOTReflectionMethodOrderTest
+
+#! reflection enumerates the methods of a class in declaration order in every execution mode (qore#7169)
+/** Covers what qore/misc/reflection-method-order.qtest does not: qcc -O0 and -O3 executables run as such, the class of
+    an AOT module (.qmod) in the Program that loads it and in every execution mode, and a method that a class gets when
+    it is committed for an inherited concrete variant of an abstract method, which follows the methods it declares.
+    A qcc image records the methods of a class in the order of its method maps and the position of each in the
+    declaration order (format v52), which the loader restores.
+*/
+class AOTReflectionMethodOrderTest inherits QUnit::Test {
+    private {
+        string qore_bin = executablePath(TestInterpreter::qore_interpreter());
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string dir = get_script_dir() + "/AOTReflectionMethodOrder";
+        string probe = dir + "/probe.q";
+
+        # the methods and variants in declaration order; a method that a class gets when it is committed, for an
+        # inherited variant that implements an abstract method, follows the methods it declares
+        const Expected = "Order static: sz,sa,sm,sb,sy
+Order normal: nz,na,nm,nb
+Order methods: constructor,copy,nz,na,nm,nb,destructor,sz,sa,sm,sb,sy
+Order all static: sz,sa,sm,sb,sy
+Order all normal: nz,na,nm,nb
+Order static variants: sz(),sa(int),sa(string),sm(),sb(),sy()
+Order variants: constructor(),copy(),nz(),na(),nm(),nb(),destructor(),sz(),sa(int),sa(string),sm(),sb(),sy()
+OrderChild static: sc,sa
+OrderChild normal: nk,nc
+OrderChild methods: nk,nc,sc,sa
+OrderChild all static: sc,sa,sz,sb,sy
+OrderChild all normal: nk,nc,nz,na,nb
+OrderChild static variants: sc(),sa(float)
+OrderChild variants: nk(),nc(),sc(),sa(float)
+Implementing static: 
+Implementing normal: zz,aa,impl
+Implementing methods: zz,aa,impl
+Implementing all static: 
+Implementing all normal: zz,aa,impl
+Implementing static variants: 
+Implementing variants: zz(),aa(),impl()
+call: sz
+";
+
+        # the methods of the module's class in declaration order, in the Program that loads the module
+        const ExpectedModule = "static: sz,sa,sm
+methods: constructor,nz,na,nm,sz,sa,sm
+call: sz
+";
+    }
+
+    constructor() : Test("AOT reflection method order", "1.0", \ARGV) {
+        addTestCase("source modes", \sourceModes());
+        addTestCase("qcc executables", \compiled());
+        addTestCase("module classes", \moduleClasses());
+        set_return_value(main());
+    }
+
+    sourceModes() {
+        foreach string mode in ("ast", "ir", "jit") {
+            assertEq(Expected, run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, probe)), mode);
+        }
+        assertEq(Expected, run(("QORE_JIT_SYNC_COMPILE=1", "QORE_IR_THRESHOLD=1", "QORE_JIT_THRESHOLD=1", qore_bin,
+            "-b", "--enable-debug", "--exec-mode=tiered", probe)), "tiered");
+    }
+
+    compiled() {
+        foreach string level in ("-O0", "-O3") {
+            TmpDir tmp("qore-aot-reflection-method-order-");
+            string exe = tmp.path + "/probe";
+            run((qcc_bin, level, "-o", exe, probe));
+            assertEq(Expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
+        }
+    }
+
+    moduleClasses() {
+        string script = dir + "/LoadMethodOrderMod.q";
+        # the class of the module's source
+        string srcpath = "QORE_MODULE_DIR=" + modulePath(dir + "/qmod");
+        assertEq(ExpectedModule, run((srcpath, qore_bin, "-b", "--enable-debug", script)), "module source");
+
+        # the class of the AOT module
+        TmpDir images("qore-aot-reflection-method-order-qmod-");
+        string modpath = "QORE_MODULE_DIR=" + modulePath(images.path);
+        run((modpath, qcc_bin, "-O3", "-m", "-o", images.path + "/MethodOrderMod.qmod", dir
+            + "/qmod/MethodOrderMod.qm"));
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            assertEq(ExpectedModule, run((modpath, "QORE_JIT_SYNC_COMPILE=1", "QORE_IR_THRESHOLD=1",
+                "QORE_JIT_THRESHOLD=1", qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, script)),
+                "qmod " + mode);
+        }
+    }
+
+    #! returns the module path with the given directory first
+    private static string modulePath(string path) {
+        return ENV.QORE_MODULE_DIR ? path + ":" + ENV.QORE_MODULE_DIR : path;
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+}

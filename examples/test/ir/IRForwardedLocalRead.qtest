@@ -1,0 +1,150 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - qcc native code generation and the release of boxed values by native code
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class IRForwardedLocalReadTest
+
+#! Regression coverage for qore#7372: a member of a fixed hash or list built from a local that is written afterwards
+/** The IR optimizer replaces a local hash or list with a fixed layout by one scalar per member, and replaces the
+    reads of a member with the value that built it: a value with a native representation is forwarded from the read of
+    a local to later statements.  Native code read a local whose storage is boxed as a value borrowed from the local,
+    or as a reference released with the temporaries of the statement, so a negative NaN, a double whose bits collide
+    with a value tag or an integer outside the inline range was a node that a later write to the local (or the end of
+    its scope) released before the member was read.  The scenario runs in every tier, in the IR tier alone and as a
+    compiled executable, and must print what the AST tier prints.  In a debug build, the native code generator
+    asserts that every such read is native (QoreIRToLLVM::assertNativeLocalReadsUnboxed()), which the compiles of the
+    scenario (qcc, jit and tiered) fail every time without the fix.
+*/
+class IRForwardedLocalReadTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string fixture;
+        #! the AST output that every other tier must reproduce
+        *string ast_output;
+
+        #! lines of the AST output, computed independently of Qore
+        const AstLines = (
+            "floatMul: [.nan, .nan]",
+            "floatMul: [-4e+307, -8e+307]",
+            "floatMul: [1.5, 3.0]",
+            "floatDiv: [-4e+307, -2e+307]",
+            "floatIncDec: [1.5, 2.5]",
+            "floatAssign: [-4e+307, 2.0]",
+            "floatLoop: [-4e+307, -1.6e+308]",
+            "floatBranch: [-4e+307, -8e+307]",
+            "floatBranch: [-4e+307, -4e+307]",
+            "floatParam: [-4e+307, -8e+307]",
+            "floatParamInc: [1.5, 2.5]",
+            "floatList: [-4e+307, -8e+307]",
+            "floatParamList: [-4e+307, -8e+307]",
+            "typedHash: [-4e+307, -8e+307]",
+            "hashDecl: [-4e+307, 1152921504606846979, -8e+307, 3458764513820540937]",
+            "loopCarried: [-4e+307, 1152921504606846979, -8e+307, 3458764513820540937]",
+            "memberStore: [-4e+307, -4e+307, -8e+307]",
+            "memberStoreParam: [-4e+307, -8e+307]",
+            "memberStoreParam.lt: False",
+            "elementStore: [-4e+307, -8e+307]",
+            "intMemberStore: [1152921504606846979, 5]",
+            "optionalNull: [True, True, True, True, True]",
+            "selfCalls: \"True -4e+307 9007199254740993 -9223372036854775807 True -4e+307 9007199254740993 "
+                "9007199254740995 -8e+307\"",
+            "namedArgs: \"True 1.25 9007199254740993 -9223372036854775807 True 1.25 9007199254740993 "
+                "9007199254740995 2.5\"",
+            "intOps: [1152921504606846979, 6917529027641081875]",
+            "intOps: [7, 43]",
+            "intList: [-2305843009213693957, -2305843009213693993]",
+            "intParam: [1152921504606846979, 384307168202282327]",
+            "referenceWrite: [-4e+307, 1152921504606846979, 2.5, 9]",
+            "closureWrite: [-4e+307, -2305843009213693957, 3.5, 11]",
+            "scopeEnd: [-4e+307, 1152921504606846979]",
+        );
+    }
+
+    constructor() : QUnit::Test("IRForwardedLocalReadTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        fixture = get_script_dir() + "/IRForwardedLocalReadScenario.qr";
+
+        addTestCase("ast", \testAst());
+        foreach string tier in (("ir", "jit", "tiered")) {
+            # a local of the loop body, so that each closure binds its own
+            string mode = tier;
+            addTestCase(mode, sub () {
+                assertEq(astOutput(), run(mode), sprintf("exec-mode=%s output matches AST", mode));
+            });
+        }
+        addTestCase("ir tier", \testIrTier());
+        addTestCase("aot", \testAot());
+
+        set_return_value(main());
+    }
+
+    testAst() {
+        string output = astOutput();
+        list<string> lines = output.split("\n");
+        foreach string line in (AstLines) {
+            assertTrue(inlist(line, lines), "AST output has: " + line);
+        }
+        assertFalse(output =~ /null/, "no member reads as NOTHING: " + output);
+        # every scenario call runs three times
+        assertEq(0, lines.size() % 3, "line count: " + output);
+    }
+
+    testIrTier() {
+        string command = sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=tiered %s",
+            shellQuote(libqore_dir), shellQuote(qore_bin), shellQuote(fixture));
+        assertEq(astOutput(), ExecModeHarness::run_ir_tier(command), "IR tier output matches AST");
+    }
+
+    testAot() {
+        if (!is_file(qcc_bin) && !backquote("command -v " + qcc_bin + " 2>/dev/null")) {
+            testSkip("qcc not available");
+        }
+        TmpDir tmp("qore-ir-forwarded-local-read-");
+        foreach int level in ((0, 3)) {
+            string exe = sprintf("%s/scenario-O%d", tmp.path, level);
+            # in a debug build, the compile asserts that every native read of a local is native
+            string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O%d -o %s %s 2>&1",
+                shellQuote(libqore_dir), shellQuote(qcc_bin), level, shellQuote(exe), shellQuote(fixture)));
+            assertTrue(is_file(exe), sprintf("AOT -O%d compile produced an executable: %s", level, compile_out));
+            assertEq(astOutput(), ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s %s",
+                shellQuote(libqore_dir), shellQuote(exe))), sprintf("AOT -O%d output matches AST", level));
+        }
+    }
+
+    private string run(string mode) {
+        # ExecModeHarness compiles synchronously, so tiered execution reaches native code deterministically
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+            shellQuote(libqore_dir), shellQuote(qore_bin), mode, shellQuote(fixture)));
+    }
+
+    private string astOutput() {
+        if (!exists ast_output) {
+            ast_output = run("ast");
+        }
+        return ast_output;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

@@ -896,6 +896,9 @@ public:
         //! a client connection on which the peer sent nothing for its peer response timeout after a request was
         //! submitted (see setPeerResponseTimeout()): the peer's connection state is gone (ex: it restarted)
         Unresponsive = 4,
+        //! a client connection that the server reset with a stateless reset (RFC 9000 section 10.3): it has no state
+        //! for the connection (ex: it restarted) (qore#6931)
+        StatelessReset = 5,
     };
 
     //! The peer response timeout of a client connection when its client gives no connect timeout
@@ -1724,6 +1727,17 @@ private:
         the stream closed, which needs the peer's acknowledgment of that RESET_STREAM, so a response could be read
         whole while a send still went out unreported.  See @ref recordPeerStopSending().
     */
+    //! Returns the number of packets that the connection took (decrypted and processed); the caller holds the lock
+    /** A packet that ngtcp2_conn_read_pkt() discards without an error (one that cannot be decrypted, or a stateless
+        reset with another token) is not counted: it does not show that the peer's connection state is alive, so it
+        does not end the wait for the peer's response (see setPeerResponseTimeout(); qore#6931)
+    */
+    DLLLOCAL uint64_t processedPacketsLocked() const;
+
+    //! a stateless reset that ends a client connection (qore#6931): its close reason is then StatelessReset
+    DLLLOCAL static int recvStatelessResetCallback(ngtcp2_conn* conn, const ngtcp2_pkt_stateless_reset* sr,
+        void* user_data);
+
     DLLLOCAL static int recvStopSendingCallback(ngtcp2_conn* conn, int64_t stream_id, uint64_t app_error_code,
                                    void* user_data, void* stream_user_data);
 
@@ -1953,6 +1967,8 @@ private:
     ngtcp2_tstamp peer_response_deadline_ = 0;
     //! set when the connection was closed because the peer did not respond (see setPeerResponseTimeout())
     std::atomic<bool> peer_unresponsive_{false};
+    //! set when the server reset the client connection with a stateless reset (qore#6931)
+    std::atomic<bool> stateless_reset_received_{false};
     int64_t max_request_body_size_ = 0;             //!< maximum request body size (0 = unlimited); consistent with Http2Session
     //! Maximum size of a client response body received into memory; <= 0 = no limit
     // atomic: set from the thread that polls the session while it can be read by callbacks

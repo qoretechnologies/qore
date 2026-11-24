@@ -323,8 +323,8 @@ enum QoreBackgroundHelperSelf : uint8_t {
     expression is, or the object of a call of a method (which is checked as the AST interpreter checks the callee;
     qore#7087), QBH_CHECK_IN_THREAD if the expression has no such callee among the values (the new thread computes the
     code that it calls, which is checked when it is called: qore_check_background_direct_entry()), or
-    QBH_CALLEE_UNKNOWN if the starting code does not say (the code of a compiled module: every closure, call reference
-    and object of the values is checked then, qore#7056)
+    QBH_CALLEE_UNKNOWN if the starting code does not say (every closure, call reference and object of the values is
+    checked then, qore#7056)
     @param xsink for exceptions raised starting the thread
 
     @return the TID of the new thread, or NOTHING if an exception was raised
@@ -938,6 +938,12 @@ DLLLOCAL bool qore_module_init_library();
 */
 DLLLOCAL void qore_module_init_set_program(const QoreProgram* pgm);
 
+//! forgets \a pgm as the Program of the library module of the innermost barrier, if it was recorded there
+/** For the Program of a compiled module that its initialization recorded although its own load is not library code
+    (see QoreModuleManager::loadBinaryModuleFromDesc(), qore#7361)
+*/
+DLLLOCAL void qore_module_init_unset_program(const QoreProgram* pgm);
+
 //! returns true if a closure of \a pgm created now is created by the initialization of its library module
 /** That is, the innermost module initialization barrier is the one of the library module whose Program is \a pgm;
     such a closure can be run later as deferred module initialization (call_module_init_closure(), qore#6337)
@@ -1271,6 +1277,9 @@ public:
     QoreSandboxBudgetList budgets;
     //! true if the context was captured in a trusted build (see QoreSandboxBudgetStack::attach())
     bool in_build = false;
+    //! true for the context of a call reference (not of an object): a method of a lent object that a reference that
+    //! restricted code created calls runs for that code (qore#7052)
+    bool reference = false;
     //! the isolation of the trusted build in which the context was captured (referenced), or nullptr: it holds in the
     //! continuation as well (qore#6536)
     QoreSandboxIsolation* isolation = nullptr;
@@ -2168,6 +2177,9 @@ DLLLOCAL bool qore_program_is_sandboxed(const QoreProgram* pgm);
 //! Marks the Program's code as sandboxed (see qore_program_is_sandboxed())
 DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
 
+//! Returns true if the Program is sandboxed or its parse options restrict a functional domain
+DLLLOCAL bool qore_program_code_is_untrusted(const QoreProgram* pgm);
+
 //! Returns true if the code that calls the current builtin is not trusted itself (issue #5659)
 /** True if the current Program is sandboxed (see qore_program_is_sandboxed()) or restricts a functional domain.
     Unlike qore_caller_is_untrusted(), trusted code that a sandbox governs because sandboxed code called it (a
@@ -2302,6 +2314,15 @@ DLLLOCAL void qore_append_line_safe_text(QoreString& out, const char* text, size
     that the host chose (its loggers, its own code called from such an object) is written
 */
 DLLLOCAL bool qore_caller_restricts_terminal_io();
+
+//! Returns true if the code that a method of a lent object was lent to is restricted from any of the given domains
+/** As qore_caller_restricts_domain(), but a method of an object that the host lent (a capability frame, qore#7052)
+    lends nothing: the code below it, which the object was lent to, counts, so library code that binds what it does
+    to the target that the object's creator gave (qore#7262) sees the restrictions of the borrower; the host's policy
+    barriers and system-policy capabilities still lend what they lend.  Without a capability frame it answers as
+    qore_caller_restricts_domain(); it never answers less restricted than that
+*/
+DLLLOCAL bool qore_caller_lent_to_restricts_domain(int64 domain);
 
 //! returns true if the calling code may have the process load native code that it chose (a binary module from outside
 //! the module path)
@@ -2508,6 +2529,56 @@ DLLLOCAL void qore_module_cleanup_report_canceled(int kind, const std::vector<st
 
 //! Reads and validates the QORE_MODULE_CLEANUP_TIMEOUT environment variable; called by qore_init()
 DLLLOCAL void qore_init_module_cleanup_timeout();
+//! sets the grace period of the handles of handed-over module cleanup work from QORE_MODULE_CLEANUP_HANDOVER_GRACE,
+//! unless qore_set_module_cleanup_handover_grace() has set it (qore#7239)
+DLLLOCAL void qore_init_module_cleanup_handover_grace();
+//! returns true if the current thread runs work of the module cleanup that the cleanup counts (a dispatcher item or
+//! a task) (qore#7239)
+DLLLOCAL bool qore_module_cleanup_counted_work_running();
+//! hands the work of the module cleanup that the current thread runs over to another thread: returns a handle that
+//! the cleanup counts until qore_module_cleanup_release_work() releases it, or 0 if the current thread does not run
+//! work that the cleanup counts (qore#7239)
+/** @param where who takes the handle and where, for the warning of the cleanup if the handle is not released within
+    the grace period after its deadline (qore_get_module_cleanup_handover_grace())
+*/
+DLLLOCAL int64 qore_module_cleanup_hold_work(const std::string& where);
+//! releases a handle of qore_module_cleanup_hold_work(); returns false if it was released before, if the cleanup no
+//! longer counts it, or for 0 (qore#7239)
+DLLLOCAL bool qore_module_cleanup_release_work(int64 id);
+//! returns true once the module cleanup has stopped waiting for handles of handed-over work that were not released
+//! in time: the modules and their Programs are then left as they are (qore#7239)
+DLLLOCAL bool qore_module_cleanup_abandoned();
+//! returns true if the given handle of handed-over module cleanup work is held (qore#7239)
+DLLLOCAL bool qore_module_cleanup_handle_held(int64 id);
+//! returns the number of handles of handed-over module cleanup work that are held (qore#7239)
+DLLLOCAL size_t qore_module_cleanup_handle_count();
+//! true while the current thread runs a dispatcher item that the module cleanup counts (qore#7239)
+DLLLOCAL extern thread_local bool qore_module_cleanup_counted_item_running;
+
+//! the owner of the dispatcher item that the module cleanup counts and that the current thread runs, if any
+//! (qore#7239)
+DLLLOCAL extern thread_local const std::string* qore_module_cleanup_counted_owner;
+
+//! marks the dispatcher item that the current thread runs as work that the module cleanup counts (qore#7239)
+class QoreModuleCleanupCountedWorkScope {
+public:
+    DLLLOCAL QoreModuleCleanupCountedWorkScope(bool counted, const std::string* owner)
+            : prev(qore_module_cleanup_counted_item_running), prev_owner(qore_module_cleanup_counted_owner) {
+        if (counted) {
+            qore_module_cleanup_counted_item_running = true;
+            qore_module_cleanup_counted_owner = owner;
+        }
+    }
+
+    DLLLOCAL ~QoreModuleCleanupCountedWorkScope() {
+        qore_module_cleanup_counted_item_running = prev;
+        qore_module_cleanup_counted_owner = prev_owner;
+    }
+
+private:
+    bool prev;
+    const std::string* prev_owner;
+};
 
 #ifdef DEBUG
 //! Debug-only: re-queues the work items that the dbg_async_io_hold_module_cleanup_work() test hook held
@@ -2515,6 +2586,10 @@ DLLLOCAL void qore_init_module_cleanup_timeout();
     there are any; with \a end_hold, the hook holds no more items
 */
 DLLLOCAL void qore_dbg_release_held_module_cleanup_work(const char* by, bool end_hold);
+//! Debug-only: waits until at least \a count handles of handed-over module cleanup work are held, only counting
+//! those whose description (who took the handle and where) contains \a where if not null; returns false on timeout
+//! (qore#7239)
+DLLLOCAL bool qore_dbg_module_cleanup_wait_handles(size_t count, const char* where, int64 timeout_ms);
 
 //! Debug-only: holds the calling ThreadPool task of the module cleanup while the
 //! dbg_async_io_hold_module_cleanup_work() test hook holds its work, until the cleanup waits for its work
@@ -2706,6 +2781,42 @@ DLLLOCAL void thread_ensure_local_program_data();
 
 DLLLOCAL int thread_ref_set(const lvalue_ref* r);
 DLLLOCAL void thread_ref_remove(const lvalue_ref* r);
+
+//! Checks whether resolving a reference in the current thread can raise an exception before its lvalue is reached
+/** This makes the checks of RuntimeReferenceHelperBase without changing the thread's state: it enters no Program and
+    does not add the reference to the thread's references being resolved (qore#7264)
+
+    @param pgm the reference's Program (lvalue_ref::pgm)
+    @param r the reference
+    @param xsink for the exception of the stack check
+
+    @return 1 if the resolution can raise nothing before its lvalue: the reference's Program is the one that the thread
+    runs (entering it does nothing), the stack is within its limit and the reference is not being resolved by the
+    thread; 0 if the Program would have to be entered or the reference is being resolved (the caller resolves it with
+    RuntimeReferenceHelper, which raises the exception if any); -1 if \c STACK-LIMIT-EXCEEDED was raised in \a xsink,
+    as RuntimeReferenceHelper would raise it
+*/
+DLLLOCAL int qore_reference_resolution_check(const QoreProgram* pgm, const lvalue_ref* r, ExceptionSink* xsink);
+
+//! Starts the resolution of a reference whose lvalue needs neither its Program to be entered nor its object context
+/** For the fast read of a reference (qore_local_reference_eval(), qore#7268): this makes the checks of
+    RuntimeReferenceHelperBase as qore_reference_resolution_check() does, and if they pass, adds the reference to the
+    thread's references being resolved, as RuntimeReferenceHelperBase does; the caller removes it with
+    thread_ref_remove() when it has read the lvalue.  Neither the Program nor the object context are entered: the
+    caller must use the lvalue only in ways that depend on neither, or resolve the reference with
+    RuntimeReferenceHelper instead (after removing it).
+
+    @param pgm the reference's Program (lvalue_ref::pgm)
+    @param r the reference
+    @param xsink for the exception of the stack check
+
+    @return 1 if the reference was added; 0 if the Program would have to be entered or the reference is being resolved
+    (nothing is changed, and the caller resolves the reference with RuntimeReferenceHelper, which raises the exception
+    if any); -1 if \c STACK-LIMIT-EXCEEDED was raised in \a xsink, as RuntimeReferenceHelper would raise it
+
+    Throws std::bad_alloc, with nothing changed, if the reference cannot be added, as RuntimeReferenceHelper does
+*/
+DLLLOCAL int qore_reference_fast_resolution_enter(const QoreProgram* pgm, const lvalue_ref* r, ExceptionSink* xsink);
 
 // pushes a new argv reference counter
 DLLLOCAL void new_argv_ref();
@@ -3356,7 +3467,6 @@ private:
    QoreProgram* referenced_class_pgm = nullptr;
    //! the sink for the release of \a referenced_class_pgm
    ExceptionSink* call_pgm_xsink = nullptr;
-   bool do_rc_update;
    //! true if the constructor changed the call Program context
    bool call_pgm_switched = false;
 
@@ -3662,6 +3772,11 @@ public:
             bool runtime) {
         set(xsink, pgm, runtime);
     }
+    //! enters the Program of a method of the given object, as set() with the object does
+    DLLLOCAL ProgramThreadCountContextHelper(ExceptionSink* xsink, QoreProgram* pgm, bool runtime,
+            const QoreObject* obj) {
+        set(xsink, pgm, runtime, obj);
+    }
     DLLLOCAL ~ProgramThreadCountContextHelper();
 
     //! enters the Program; a C++ exception of the entry (std::bad_alloc) is raised in \a xsink as a Qore exception
@@ -3672,6 +3787,13 @@ public:
         #6255).
     */
     DLLLOCAL void set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
+
+    //! enters the Program of a method of \a obj as set() does
+    /** If the call switches to the Program and the object is a capability (lent by the host, qore#7052), the context
+        entered is marked as a grant that the caller walk stops at (see ThreadData::CapabilityFrame); a call within the
+        Program, the usual case, does nothing more than set()
+    */
+    DLLLOCAL void set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime, const QoreObject* obj);
 
     //! enters the Program as set() does, except that a C++ exception of the entry propagates
     /** For the C++ API (QoreExternalProgramContextHelper): the exception propagates once the thread is as it was
@@ -3803,6 +3925,12 @@ protected:
 
     //! set() raised an exception; see enterFailed()
     bool failed = false;
+
+private:
+    //! the part of set() after the check for a call within the current Program
+    DLLLOCAL void setSlow(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
+    //! marks the context entered for a method of a lent object (qore#7052)
+    DLLLOCAL void markCapability(const QoreObject* obj);
 
 private:
     //! restores the thread's context as it was before set() switched it

@@ -498,6 +498,13 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                         err_code = "HTTP3-PEER-CLOSE";
                         err_desc = "QUIC connection closed by peer during read";
                         break;
+                    case QuicSession::CloseReason::StatelessReset:
+                        // the server has no state for the connection: it restarted, or dropped it (qore#6931)
+                        err_code = "HTTP3-STATELESS-RESET";
+                        err_desc = "QUIC connection reset by the server (stateless reset): it has no state for the "
+                                   "connection (ex: it restarted); the request may have been received by the server "
+                                   "before it went away";
+                        break;
                     case QuicSession::CloseReason::Open:
                         // Race: inner_op observed closed but session re-opened
                         // (extremely unlikely).  Fall through to umbrella code.
@@ -1146,12 +1153,14 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
     }
     if (*xsink || stream_id < 0) {
         endSubmitFail();
-        // a request refused because the QUIC connection is closed (by its idle timer, locally or by the peer) was
-        // not sent: the connection is closed now, so that a retry finds a new one
+        // a request refused because the QUIC connection is closed (by its idle timer, for lack of a response from
+        // the peer, locally, by the peer or with a stateless reset) was not sent: the connection is closed now, so
+        // that a retry finds a new one (qore#7385)
         if (*xsink) {
             // the error code and description can be inline short strings, which have no node (issue #7038)
             QoreStringDataHelper err(xsink->getExceptionErr());
-            if (err == "HTTP3-IDLE-CLOSE" || err == "HTTP3-LOCAL-CLOSE" || err == "HTTP3-PEER-CLOSE") {
+            if (err == "HTTP3-IDLE-CLOSE" || err == "HTTP3-PEER-UNRESPONSIVE" || err == "HTTP3-LOCAL-CLOSE"
+                    || err == "HTTP3-PEER-CLOSE" || err == "HTTP3-STATELESS-RESET") {
                 QoreStringDataHelper desc(xsink->getExceptionDesc());
                 setSubmitError(err.c_str(), desc ? desc.c_str() : "");
             }
@@ -1649,6 +1658,22 @@ void Http3ClientPollOperationPriv::setSubmitError(const char* err, const char* d
     }
     failMigrations();
     wakeSettingsWaiters();
+    // the connection is closed as when the I/O thread finds the close (see setError()): its manager gives it out no
+    // more, and the other requests on it get the error; before, it stayed ready in the manager's pool, and every later
+    // request on it failed with HTTP3-STATE-ERROR (qore#7385)
+    AbstractHttpPollConnectionPriv* cp = nullptr;
+    {
+        AutoLocker al(stream_lock);
+        cp = connection_priv;
+        connection_priv = nullptr;
+    }
+    if (cp) {
+        cp->setClosed();
+        ExceptionSink xsink;
+        notifyPendingStreams(err, desc, &xsink);
+        // the constructor's ref is released only after the waiters have been notified (see setError())
+        cp->deref(&xsink);
+    }
 }
 
 int64_t Http3ClientPollOperationPriv::requestMigration(ExceptionSink* xsink) {
@@ -2527,6 +2552,8 @@ nothing Http3ClientPollOperationBase::waitStreamCapacity(int timeout_ms) [flags=
     @throw HTTP3-IDLE-CLOSE the QUIC connection was closed by its idle timer while the request waited; the operation
     is closed, and the request can be repeated on a new connection
     @throw HTTP3-PEER-CLOSE the QUIC connection was closed by the server while the request waited; as above
+    @throw HTTP3-STATELESS-RESET the server reset the QUIC connection with a stateless reset while the request waited: it
+    has no state for the connection (ex: it restarted) (since %Qore 3.0); as above
     @throw HTTP3-LOCAL-CLOSE the QUIC connection or the operation was closed locally while the request waited
     @throw THREAD-CANCELLED the thread was cancelled while it waited (see @ref Qore::cancel_thread() "cancel_thread()")
     @throw PROGRAM-INTERRUPTED the thread's @ref Qore::Program "Program" was interrupted while it waited

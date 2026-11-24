@@ -1998,7 +1998,7 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
         if (caller_pgm && caller_pgm != pgm_ctx && qore_program_is_module_inline(pgm_ctx)) {
             module_po_override.set(qore_get_module_call_runtime_po_override(pgm_ctx, caller_runtime_po, caller_pgm));
         }
-        set(xsink, pgm_ctx, true);
+        set(xsink, pgm_ctx, true, self);
         if (*xsink) {
             return;
         }
@@ -3324,6 +3324,22 @@ int UserSignature::resolveTypes() {
     return err;
 }
 
+UserSignature::~UserSignature() {
+    // type-parameter types are cached by signature address, which the next signature allocated can reuse
+    qore_purge_derived_types(this, nullptr, nullptr);
+    for (ptype_vec_t::iterator i = parseTypeList.begin(), e = parseTypeList.end(); i != e; ++i) {
+        delete* i;
+    }
+    delete parseReturnTypeInfo;
+}
+
+const QoreTypeInfo* UserSignature::parseGetReturnTypeInfo(int& err) const {
+    if (const_cast<UserSignature*>(this)->resolve() && !err) {
+        err = -1;
+    }
+    return returnTypeInfo;
+}
+
 int UserSignature::resolve() {
     if (resolved) {
         return 0;
@@ -3356,9 +3372,7 @@ int UserSignature::resolve() {
             if (!QoreTypeInfo::parseAccepts(typeList[i], argTypeInfo)) {
                 QoreStringNode* desc = new QoreStringNode;
                 desc->sprintf("parameter '%s' expects ", names[i].c_str());
-                QoreTypeInfo::getThisType(typeList[i], *desc);
-                desc->concat(", but the default value is ");
-                QoreTypeInfo::getThisType(argTypeInfo, *desc);
+                QoreTypeInfo::describeTypeComparison(*desc, typeList[i], ", but the default value is ", argTypeInfo);
                 desc->concat(" instead");
                 qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
                 if (!err) {

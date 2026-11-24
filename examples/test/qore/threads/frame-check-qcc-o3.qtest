@@ -1,0 +1,145 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the stack guard and the frames of AOT code optimized by LLVM
+# test-exec-mode: children - its checks run in a qcc executable and in child processes that set their own mode
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class FrameCheckQccO3Test
+
+#! A function whose frame is larger than the stack guard checks the stack for its frame also when LLVM removes its
+#! unused parameters (qore#7072)
+/** A call in qcc code that gives a temporary to a parameter that the callee writes calls an internal copy of the
+    callee's fast entry that takes the argument over (qore#6105); with qcc -O3, LLVM's dead-argument elimination
+    removes a parameter of the copy whose value the copy does not need (an unused parameter is stored in its local,
+    which needs no value when every call gives it the same constant).  The stack check for the copy's frame
+    (qore#6414) found the ExceptionSink parameter and the arguments that the copy owns by their indexes, which no
+    longer matched: the copy got no thunk, and qcc refused the program as the copy's frame was larger than its stack
+    check covers.  The function here has a frame larger than the stack guard (a hash of
+    hashdecl casts), an unused first parameter that each call gives 1 and a written list parameter after it that each
+    call gives a temporary with an object, and calls itself; it is compiled with qcc -O3 (the copy's frame check must
+    be reported as a thunk), and the executable and the interpreter in each execution mode run it deep enough to reach
+    the stack limit: each raises STACK-LIMIT-EXCEEDED.  In the executable every object is destroyed: the thunk of the
+    copy releases the list that the copy owns, which follows the removed parameter (the interpreter in an execution
+    mode can keep an argument of the call that raised the exception: qore#6861).
+*/
+public class FrameCheckQccO3Test inherits QUnit::Test {
+    public {
+        #! the number of entries of the hash of the function with a large frame (about 140KB of frame: more than the
+        #! stack guard, 80KB on x86_64 and aarch64)
+        const Entries = 3000;
+
+        #! the depth of the recursion asked for: far more than any stack holds frames of the function
+        const Depth = 100000;
+
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the stack size of the interpreter in each execution mode in KB (ulimit -s), far more than the stack guard:
+        #! the interpreter keeps the hash of each level of the recursion, and the default stack size held enough levels
+        #! for a few GB
+        const ModeStackKb = 1024;
+    }
+
+    private {
+        string qore_bin;
+        string libdir;
+        *string qcc_bin;
+        *TmpDir dir;
+    }
+
+    constructor() : Test("FrameCheckQccO3Test", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler();
+        addTestCase("qcc -O3 executable", \qccTest());
+        addTestCase("execution modes", \modesTest());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! the script: a function with a large frame, a parameter that takes a temporary over and an unused parameter
+    #! that every call gives the same value, which calls itself
+    private string script() {
+        string code = "%modern\nhashdecl HD { int a = 0; }\n"
+            "our int made = 0;\nour int freed = 0;\n"
+            "class T {\n    constructor() { ++made; }\n    destructor() { ++freed; }\n}\n"
+            "int sub big(int unused, list<auto> l, int depth) {\n    l = ();\n    hash<auto> h = {\n";
+        for (int i = 0; i < Entries; ++i) {
+            code += sprintf("        \"k%d\": cast<hash<HD>>({\"a\": depth + %d}),\n", i, i);
+        }
+        code += "    };\n"
+            "    return depth ? big(1, (depth, new T()), depth - 1) + h.size() : h.size();\n"
+            "}\n"
+            "*string err;\n"
+            "try {\n"
+            "    printf(\"size: %d\\n\", big(1, (0, new T()), " + Depth + "));\n"
+            "} catch (hash<ExceptionInfo> ex) {\n"
+            "    err = ex.err;\n"
+            "}\n"
+            # the objects are counted when the statement that raised the exception has ended
+            "printf(\"ex: %s made: %y live: %d\\n\", err, made > 0, made - freed);\n";
+        return code;
+    }
+
+    private string writeScript() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        if (!dir) {
+            dir = new TmpDir("qore-frame-check-qcc-o3-");
+        }
+        string file = dir.path + "/big.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(script());
+        f.close();
+        return file;
+    }
+
+    private qccTest() {
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        string file = writeScript();
+        string exe = dir.path + "/big";
+        int status;
+        string out = backquote(sprintf("QORE_FRAME_CHECK_REPORT=1 QORE_LIBDIR=%s %s -O3 -o %s %s 2>&1",
+            quote(libdir), quote(qcc_bin), quote(exe), quote(file)), \status);
+        assertEq(0, status, "qcc -O3 compiles the script: " + out);
+        assertTrue(is_file(exe), "the executable: " + out);
+        assertTrue(out =~ /frame check: [^\n]*big[^\n:]*\.own\.[^\n:]*: [0-9]+ bytes: thunk/,
+            "the copy of the fast entry without its unused parameter has a thunk: " + out);
+        string run = backquote(sprintf("ulimit -c 0; LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", quote(libdir),
+            quote(libdir), quote(exe)), \status);
+        assertEq(0, status, "the executable ends normally: " + run);
+        assertEq("ex: STACK-LIMIT-EXCEEDED made: True live: 0\n", run,
+            "the deep recursion raises STACK-LIMIT-EXCEEDED and every object is destroyed");
+    }
+
+    private modesTest() {
+        string file = writeScript();
+        foreach string mode in (ExecModes) {
+            int status;
+            # a stack of its own size: the interpreter keeps the hash of each level of the recursion, and a smaller
+            # stack holds fewer levels
+            string run = backquote(sprintf("ulimit -c 0; ulimit -s %d; QORE_JIT_SYNC_COMPILE=1 LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s 2>&1", ModeStackKb, quote(libdir), quote(libdir),
+                quote(qore_bin), mode, quote(file)), \status);
+            assertEq(0, status, mode + ": the interpreter ends normally: " + run);
+            # the objects that are left are not counted here: qore#6861
+            assertRegex("^ex: STACK-LIMIT-EXCEEDED made: True live: [0-9]+\n$", run,
+                mode + ": the deep recursion raises STACK-LIMIT-EXCEEDED");
+        }
+    }
+}

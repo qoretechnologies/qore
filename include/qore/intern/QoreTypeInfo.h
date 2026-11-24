@@ -442,6 +442,21 @@ public:
     //! computes and caches the type returned by getOrNothingListType()
     DLLLOCAL static const QoreTypeInfo* getOrNothingListTypeIntern(const QoreTypeInfo* lti);
 
+    //! Returns the reference type of this type (reference<T> for T) if it is cached, otherwise nullptr
+    /** Read without a lock by qore_get_complex_reference_type(): the cached type is always the one that the cache of
+        reference types holds for this type, so that the type of a reference has the same identity whichever way it
+        is looked up (qore#7269)
+    */
+    DLLLOCAL const QoreTypeInfo* getComplexReferenceTypeCache() const {
+        return complex_reference_cache.load(std::memory_order_acquire);
+    }
+
+    //! Sets or clears the type returned by getComplexReferenceTypeCache(); the caller holds the lock of the cache of
+    //! reference types and changes its entry for this type at the same time
+    DLLLOCAL void setComplexReferenceTypeCache(const QoreTypeInfo* ti) const {
+        complex_reference_cache.store(ti, std::memory_order_release);
+    }
+
     // static version of method, checking for null pointer
     DLLLOCAL static qore_type_result_e runtimeAcceptsValue(const QoreTypeInfo* ti, const QoreValue n) {
         return ti && hasType(ti) ? ti->runtimeAcceptsValue(n) : QTI_WILDCARD;
@@ -880,6 +895,12 @@ public:
         else
             str.sprintf("no value");
     }
+
+    //! Describes both types in a diagnostic, qualifying class names when their short forms collide.
+    DLLLOCAL static void describeTypeComparison(QoreString& str, const QoreTypeInfo* left, const char* separator,
+        const QoreTypeInfo* right);
+    DLLLOCAL static bool diagnosticNamesCollide(const QoreTypeInfo* left, const QoreTypeInfo* right);
+    DLLLOCAL static std::string diagnosticTypePath(const QoreTypeInfo* ti);
 
     // static version of method, checking for null pointer; inlined explicitly: the fast path of the parameters of
     // every call, whose inlining depended on the size of the libqore unit (qore#6494; tools/hot-inlining.txt)
@@ -1696,7 +1717,7 @@ protected:
             bool& may_not_match, bool& may_need_filter, bool& t_no_match, bool& ok, qore_type_result_e& max_result,
             bool known_initial_assignment);
 
-    DLLLOCAL static void getNodeType(QoreString& str, const QoreValue& n);
+    DLLLOCAL void describeTypeMismatch(QoreString& str, const QoreValue& n) const;
 
     DLLLOCAL static void ptext(QoreString& str, const char* arg_type, int param_num, const char* param_name);
 
@@ -1740,6 +1761,8 @@ private:
     mutable uint16_t builtin_or_nothing_index = 0;
     //! for a complex list type: its list<*T> type; see getOrNothingListType()
     mutable std::atomic<const QoreTypeInfo*> or_nothing_list_cache {nullptr};
+    //! the reference type of this type, if cached; see getComplexReferenceTypeCache()
+    mutable std::atomic<const QoreTypeInfo*> complex_reference_cache {nullptr};
 };
 
 class QoreAnyTypeInfo : public QoreTypeInfo {

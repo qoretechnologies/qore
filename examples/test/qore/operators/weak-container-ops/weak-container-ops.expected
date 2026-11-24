@@ -1,0 +1,57 @@
+push: [1, 2, 3, 4, 5, 6, 7, 8, 9] / [1, 2, 3, 4, 5, 6, 7, 8, 9]
+unshift: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] / [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+pop: 9 / [0, 1, 2, 3, 4, 5, 6, 7, 8]
+shift: 0 / [1, 2, 3, 4, 5, 6, 7, 8]
+splice: [2, 3, 4, 5, 6, 7, 8] / [2, 3, 4, 5, 6, 7, 8]
+splice insert: [10, 11, 2, 3, 4, 5, 6, 7, 8] / [10, 11, 2, 3, 4, 5, 6, 7, 8]
+extract: [10] / [11, 2, 3, 4, 5, 6, 7, 8]
+remove element: RUNTIME-TYPE-ERROR / [11, 2, 3, 4, 5, 6, 7, 8]
+delete element: RUNTIME-TYPE-ERROR / [11, 2, 3, 4, 5, 6, 7, 8]
+remove elements: [2, 3] / [11, 4, 5, 6, 7, 8]
+remove range: [11, 4] / [5, 6, 7, 8]
++=: [5, 6, 7, 8, 20, 21] / [5, 6, 7, 8, 20, 21]
+typed remove element: RUNTIME-TYPE-ERROR / [1, 2, 3]
+typed push: RUNTIME-TYPE-ERROR / [1, 2, 3]
+trim: ["a", "b"]
+chomp: ["a", "b"]
+released: []
+freed push: LIST-ERROR
+freed unshift: LIST-ERROR
+freed pop: LIST-ERROR
+freed shift: LIST-ERROR
+freed splice: LIST-ERROR
+freed extract: LIST-ERROR
+freed remove: LIST-ERROR
+freed delete: LIST-ERROR
+-= key: {b: 2, c: 3, d: 4, e: " x "} / {b: 2, c: 3, d: 4, e: " x "}
+-= list: {c: 3, d: 4, e: " x "} / {c: 3, d: 4, e: " x "}
+delete key: {d: 4, e: " x "} / {d: 4, e: " x "}
+remove key: 4 / {e: " x "}
+trim: {e: "x"} / {e: "x"}
+remove slice: {f: 6, g: 7} / {e: "x"}
+released: {}
+freed -=: HASH-ERROR
+freed remove: HASH-ERROR
+freed delete: HASH-ERROR
+freed slice: HASH-ERROR
+lvalues: [2, 3]
+plain locals: 5 0 [2] [3] / [4, 6]
+plain hash locals: {c: 3, d: 4}
+thread_local: [1, 2, 3, 4] {b: 2, c: 3}
+closure: [1, 2] {b: 2}
+member key holder: RUNTIME-TYPE-ERROR / [1, 2, 3] (list<int>)
+member key holder delete: RUNTIME-TYPE-ERROR / [1, 2, 3]
+element holder: RUNTIME-TYPE-ERROR / [1, 2, 3]
+hash push: PUSH-ERROR
+hash unshift: UNSHIFT-ERROR
+hash splice: EXTRACT-ERROR
+hash extract: EXTRACT-ERROR
+freed hash push: PUSH-ERROR
+freed hash pop: POP-ERROR
+freed hash shift: SHIFT-ERROR
+freed hash splice: EXTRACT-ERROR
+shared copy: a [1, 2, 3] b [1, 2, 3]
+self entry shift: the list 2
+self entry pop: the list [1, 2]
+cycle destroyed: ["o", "typed", "cycle"]
+removed destroyed: ["o", "typed", "cycle", "removed"]

@@ -670,13 +670,9 @@ public:
         std::vector<uint8_t>&& paramFlags = std::vector<uint8_t>(),
         QoreProgram* localOwnerPgm = nullptr);
 
-    DLLLOCAL virtual ~UserSignature() {
-        // type-parameter types are cached by signature address, which the next signature allocated can reuse
-        qore_purge_derived_types(this, nullptr, nullptr);
-        for (ptype_vec_t::iterator i = parseTypeList.begin(), e = parseTypeList.end(); i != e; ++i)
-            delete* i;
-        delete parseReturnTypeInfo;
-    }
+    // exported and defined in the library: it calls functions that are hidden there, so code built with the internal
+    // headers must not emit it
+    DLLEXPORT virtual ~UserSignature();
 
     DLLLOCAL void setFirstParamType(const QoreTypeInfo* typeInfo) {
         assert(!typeList.empty());
@@ -793,13 +789,9 @@ public:
         }
     }
 
-    // called at parse time to ensure types are resolved
-    DLLLOCAL virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const {
-        if (const_cast<UserSignature*>(this)->resolve() && !err) {
-            err = -1;
-        }
-        return returnTypeInfo;
-    }
+    // called at parse time to ensure types are resolved; exported and defined in the library, as it calls the hidden
+    // resolve(), so code built with the internal headers must not emit it
+    DLLEXPORT virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const;
 
     DLLLOCAL const QoreProgramLocation* getParseLocation() const {
         return loc;

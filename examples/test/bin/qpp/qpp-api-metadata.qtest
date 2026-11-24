@@ -1,0 +1,207 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires json
+
+%exec-class QppApiMetadataTest
+
+#! qpp --api-metadata writes the metadata without documentation and source path (qore#7183)
+/** libqore's builtin API identity is a digest of the API metadata of its qpp files, which qcc records in every AOT
+    module (see cmake/QoreWriteBuiltinApiIdentity.cmake): it must change with the functional domains, flags and
+    signatures of the builtin classes, methods and functions, and must not change with their documentation, with the
+    code of a method or with the directory of the source.
+*/
+class QppApiMetadataTest inherits QUnit::Test {
+    private {
+        string qpp_bin;
+
+        const Source = "/** @defgroup api_test_functions API Test Functions
+    Test functions
+*/
+///@{
+//! returns its argument
+/** @param i an integer
+
+    @return its argument
+*/
+int api_test_identity(int i) [flags=CONSTANT] {
+    return i;
+}
+///@}
+
+/** @defgroup api_test_constants API Test Constants
+    Test constants
+*/
+///@{
+namespace Qore;
+//! a test constant
+const API_TEST_ONE = 1;
+///@}
+
+//! a test class
+/** a class to test the API metadata
+*/
+qclass ApiTestCls [arg=void* p; ns=Qore; dom=NETWORK];
+
+//! returns one
+/** @return one
+*/
+int ApiTestCls::one() [flags=CONSTANT] {
+    return 1;
+}
+";
+    }
+
+    constructor() : QUnit::Test("QppApiMetadataTest", "1.0", \ARGV) {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string bin_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qpp_bin = ENV.QPP ?? ENV.QORE_QPP
+            ?? (is_file(bin_dir + "/qpp") ? bin_dir + "/qpp" : dirname(qore_bin) + "/qpp");
+
+        addTestCase("the API metadata has no documentation and no source path", \testContent());
+        addTestCase("the API metadata does not change with documentation, code or directory", \testUnchanged());
+        addTestCase("the API metadata changes with domains, flags and signatures", \testChanged());
+        addTestCase("the API metadata of a failed run is removed", \testFailedRun());
+
+        set_return_value(main());
+    }
+
+    #! runs qpp on \a source in a new directory below \a dir named \a name, with the extra arguments \a args
+    /** @return a hash with the exit status (\c status), the combined output (\c out), the metadata (\c meta) and the
+        API metadata (\c api, the text of the file) when they were written
+    */
+    private hash<auto> runQpp(string dir, string name, string source, string args = "") {
+        if (!is_file(qpp_bin)) {
+            testSkip("qpp binary not found at %y; set QPP or QORE_LIBDIR", qpp_bin);
+        }
+        string run_dir = dir + "/" + name;
+        mkdir(run_dir);
+        File f();
+        f.open2(run_dir + "/api.qpp", O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(source);
+        f.close();
+
+        string qpp = absolute_path(qpp_bin) ? qpp_bin : getcwd() + "/" + qpp_bin;
+        string out = backquote(sprintf("cd %s && %s --javadoc=java --output=api.cpp --dox-output=api.dox.h "
+            "--metadata=api.meta.json --api-metadata=api.api.json %s api.qpp 2>&1; echo $? > status",
+            shellQuote(run_dir), shellQuote(qpp), args));
+        hash<auto> rv = {
+            "out": out,
+            "status": trim(ReadOnlyFile::readTextFile(run_dir + "/status")).toInt(),
+        };
+        if (is_file(run_dir + "/api.meta.json")) {
+            rv.meta = parse_json(ReadOnlyFile::readTextFile(run_dir + "/api.meta.json"));
+        }
+        if (is_file(run_dir + "/api.api.json")) {
+            rv.api = ReadOnlyFile::readTextFile(run_dir + "/api.api.json");
+        }
+        return rv;
+    }
+
+    testContent() {
+        TmpDir tmp("qore-qpp-api-");
+        hash<auto> r = runQpp(tmp.path, "a", Source);
+        assertEq(0, r.status, r.out);
+        assertEq(Type::String, r.api.type(), "the API metadata is written");
+
+        hash<auto> api = parse_json(r.api);
+        # the same metadata as the metadata file without the descriptions and the source path
+        assertEq(Type::String, r.meta.source_file.type(), "the metadata has the source path");
+        assertEq(Type::String, r.meta.classes[0].description.type(), "the metadata has the descriptions");
+        assertEq(stripDocs(r.meta - "source_file"), api);
+        assertFalse(r.api =~ /"description"/, "no description: " + r.api);
+        assertFalse(r.api =~ /"source_file"/, "no source path: " + r.api);
+
+        # what compiled modules depend on is there
+        assertEq("ApiTestCls", api.classes[0].name);
+        assertEq(("NETWORK",), api.classes[0].domains);
+        assertEq("int ApiTestCls::one()", api.classes[0].instance_methods[0].signature);
+        assertEq(("CONSTANT",), api.classes[0].instance_methods[0].flags);
+        assertEq("api_test_identity", api.functions[0].name);
+        assertEq(("CONSTANT",), api.functions[0].flags);
+        assertEq("API_TEST_ONE", api.constants[0].name);
+    }
+
+    testUnchanged() {
+        TmpDir tmp("qore-qpp-api-");
+        hash<auto> r = runQpp(tmp.path, "a", Source);
+        assertEq(0, r.status, r.out);
+
+        # other documentation, other code of a method and of a function, in another directory
+        string changed = replace(Source, "a class to test the API metadata", "another description of the class");
+        changed = replace(changed, "//! returns one", "//! returns the number one");
+        changed = replace(changed, "    return 1;", "    int v = 1;\n    return v;");
+        changed = replace(changed, "    return i;", "    return i + 0;");
+        assertNeq(Source, changed);
+        hash<auto> c = runQpp(tmp.path, "other-directory", changed);
+        assertEq(0, c.status, c.out);
+        assertEq(Type::String, r.api.type(), "the API metadata is written: " + r.out);
+        assertEq(Type::String, c.api.type(), "the API metadata is written: " + c.out);
+        assertEq(r.api, c.api, "the API metadata is the same");
+        assertNeq(r.meta, c.meta, "the metadata is not");
+    }
+
+    testChanged() {
+        TmpDir tmp("qore-qpp-api-");
+        hash<auto> r = runQpp(tmp.path, "a", Source);
+        assertEq(0, r.status, r.out);
+        assertEq(Type::String, r.api.type(), "the API metadata is written: " + r.out);
+
+        hash<string, string> changes = {
+            "a domain of the class": replace(Source, "dom=NETWORK", "dom=NETWORK,FILESYSTEM"),
+            "the flags of a method": replace(Source, "int ApiTestCls::one() [flags=CONSTANT]",
+                "int ApiTestCls::one() [flags=RET_VALUE_ONLY]"),
+            "the signature of a method": replace(Source, "int ApiTestCls::one()", "float ApiTestCls::one()"),
+            "the flags of a function": replace(Source, "int api_test_identity(int i) [flags=CONSTANT]",
+                "int api_test_identity(int i) [flags=RET_VALUE_ONLY]"),
+            "the value of a constant": replace(Source, "const API_TEST_ONE = 1;", "const API_TEST_ONE = 2;"),
+        };
+        int i = 0;
+        foreach hash<auto> change in (changes.pairIterator()) {
+            assertNeq(Source, change.value, change.key);
+            hash<auto> c = runQpp(tmp.path, sprintf("change-%d", ++i), change.value);
+            assertEq(0, c.status, change.key + ": " + c.out);
+            assertNeq(r.api, c.api, change.key + " changes the API metadata");
+        }
+    }
+
+    testFailedRun() {
+        TmpDir tmp("qore-qpp-api-");
+        # the stub, which qpp writes after the metadata files, cannot be written
+        hash<auto> r = runQpp(tmp.path, "a", Source, "--stub-output=missing-dir/api.stub.qc");
+        assertEq(1, r.status, r.out);
+        assertRegex("creating API metadata file", r.out, "the API metadata was written before the error");
+        assertRegex("missing-dir/api.stub.qc", r.out);
+        assertFalse(exists r.api, "the API metadata of the failed run is removed");
+        assertFalse(exists r.meta, "as the metadata is");
+    }
+
+    private static string shellQuote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+
+    #! returns \a v without the descriptions of its objects
+    private static auto stripDocs(auto v) {
+        switch (v.typeCode()) {
+            case NT_HASH: {
+                hash<auto> rv = {};
+                foreach hash<auto> i in (v.pairIterator()) {
+                    if (i.key != "description") {
+                        rv{i.key} = stripDocs(i.value);
+                    }
+                }
+                return rv;
+            }
+            case NT_LIST:
+                return map stripDocs($1), v;
+        }
+        return v;
+    }
+}

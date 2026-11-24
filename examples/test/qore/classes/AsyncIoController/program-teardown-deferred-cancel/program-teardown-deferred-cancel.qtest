@@ -1,0 +1,178 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - the async I/O controller's I/O thread, its callback workers and the teardown of a Program
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../../qlib"
+%requires QUnit
+%requires ../../../../TestInterpreter.qm
+%requires ../../../../ExecModeHarness.qm
+
+%exec-class ProgramTeardownDeferredCancelTest
+
+#! The cancellation of an async I/O operation whose step is in flight when its Program is deleted (qore#6703)
+/** The teardown of a Program cancels its operations (AsyncIoControllerPriv::cancelByProgram()); an operation whose
+    step runs on a callback worker is canceled when the step's result reaches its I/O thread.  Nothing waited for
+    that: if the I/O thread processed the result after the cancellation had ended, the operation's callbacks were
+    dispatched to a worker when the Program had been torn down, and the worker's failure to enter it was reported as
+    an unhandled exception ("PROGRAM-ERROR: the Program accessed has already been deleted").  The cancellation now
+    waits until the deferred cancellations have run, while the Program is still marked as shutting down, so the
+    callbacks are discarded as those of the Program's other operations are.
+
+    teardown-deferred-cancel.qr makes the worker that takes the operation's step wait before it enters the Program,
+    until the cancellation has deferred the operation's cancellation, and the I/O thread wait before it runs a deferred
+    cancellation that no caller waits for, as a slow I/O thread does, with debug hooks.  In the second variant the
+    operation is canceled by its owner while its step is in flight, before the Program is deleted.
+*/
+class ProgramTeardownDeferredCancelTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir();
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+
+        const Expected = "step paused: True\nabort\ndone\n";
+
+        const ExpectedBarrier = "step paused: True\nsocket cancel waits: True\nabort\nsocket cancel returned: True\n"
+            "done\n";
+
+        const ExpectedSocket = "step paused: True\nsocket claimed: True\nsocket cancel waits: True\n"
+            "socket claimed: False\nabort\n"
+            "socket cancel returned: True\ndone\n";
+
+        const ExpectedNative = "step paused: True\nsocket claimed: True\nsocket cancel waits: True\n"
+            "socket claimed: False\n"
+            "socket cancel returned: True\nnative abort calls: 1\ndone\n";
+
+        const ExpectedAbortException = "operations waiting: True\nabort: active exception: False\n"
+            "abort: active exception: False\ndone\n";
+
+        const ExpectedRaces = {
+            "quit-batch": "step paused: True\nhanded back: True\nabort on the deleting thread: True\n"
+                "threads ended: True\nattached from the Quit batch: True\ndone\n",
+            "exit-drain": "step paused: True\nhanded back: True\nabort on the deleting thread: True\n"
+                "threads ended: True\ndone\n",
+            "stop": "step paused: True\nhanded back: True\nstop waits: True\nabort on the deleting thread: True\n"
+                "threads ended: True\ndispatcher taken during the cancellation: False\ndone\n",
+        };
+
+        const ExpectedParked = "next release: active exception: False\nraised: RELEASE-ERROR\ndone\n";
+
+        const ExpectedLongStep = "step held: True\nthread stays: True\nabort: step has run: True\n"
+            "onComplete: canceled: True\nresult received: True\ndone\n";
+    }
+
+    constructor() : QUnit::Test("ProgramTeardownDeferredCancelTest", "1.0", \ARGV) {
+        addTestCase("a Program deleted while a step of its operation is in flight", \testModes());
+        addTestCase("a Program deleted while a socket cancel waits for the step of an operation that closes the socket",
+            \testBarrier());
+        addTestCase("the exception of a canceled operation's release is not active in the next abort()",
+            \testAbortException());
+        addTestCase("the cancellation of a Program races with the stop of the controller", \testRaces());
+        addTestCase("the exception of a parked release is not active in the next release", \testParked());
+        addTestCase("an I/O thread stays for an operation whose cancellation waits for its step",
+            \testLongStep());
+        set_return_value(main());
+    }
+
+    testModes() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for the debug hooks of the async I/O controller");
+        }
+        # the operation is canceled only by the Program's teardown, or by its owner first
+        foreach string variant in (("", "owner")) {
+            foreach string mode in (Modes) {
+                hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --enable-debug "
+                    "--exec-mode=%s %s/teardown-deferred-cancel.qr %s", qore_bin, mode, dir, variant));
+                string label = sprintf("%s%s", mode, variant ? " " + variant : "");
+                assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+                # nothing on stderr: no exception of the operation's callbacks is reported, and onComplete() does not
+                # run
+                assertEq(Expected, r.out, label);
+            }
+        }
+    }
+
+    #! the socket cancel ends at the hand-back: the operation's abort() closes the socket without waiting for it
+    testBarrier() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for the debug hooks of the async I/O controller");
+        }
+        hash<string, string> expected = {
+            "barrier": ExpectedBarrier,
+            "socket": ExpectedSocket,
+            "native": ExpectedNative,
+        };
+        foreach string variant in (keys expected) {
+            foreach string mode in (Modes) {
+                hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --enable-debug "
+                    "--exec-mode=%s %s/teardown-deferred-cancel.qr %s", qore_bin, mode, dir, variant));
+                string label = sprintf("%s %s", mode, variant);
+                assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+                assertEq(expected{variant}, r.out, label);
+            }
+        }
+    }
+
+    #! each abort() runs without the exception raised by the release of the operation canceled before it
+    testAbortException() {
+        foreach string mode in (Modes) {
+            # the exceptions of the releases are reported on stderr when the Program is deleted
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --enable-debug "
+                "--exec-mode=%s %s/teardown-abort-exception.qr 2>/dev/null", qore_bin, mode, dir));
+            assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+            assertEq(ExpectedAbortException, r.out, mode);
+            # the exceptions of both releases are reported: they are not lost while they are held
+            r = ExecModeHarness::run_command(sprintf("%s --enable-debug --exec-mode=%s %s/teardown-abort-exception.qr "
+                "2>&1 >/dev/null", qore_bin, mode, dir));
+            assertEq(2, r.out.split("RELEASE-ERROR:").size() - 1, sprintf("%s: reported exceptions: %y", mode, r.out));
+        }
+    }
+
+    #! a cancellation whose command follows Quit, or is found in the last drain, still gets the operation handed back,
+    #! and stop() waits for a cancellation in progress
+    testRaces() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for the debug hooks of the async I/O controller");
+        }
+        foreach string race in (keys ExpectedRaces) {
+            foreach string mode in (Modes) {
+                hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("QORE_IO_THREADS=1 %s "
+                    "--enable-debug --exec-mode=%s %s/teardown-stop-races.qr %s", qore_bin, mode, dir, race));
+                string label = sprintf("%s %s", mode, race);
+                assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+                assertEq(ExpectedRaces{race}, r.out, label);
+            }
+        }
+    }
+
+    #! each parked release runs without the exception of the one before it, which reaches the caller
+    testParked() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for the debug hooks of the async I/O controller");
+        }
+        foreach string mode in (Modes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --enable-debug "
+                "--exec-mode=%s %s/teardown-parked-exception.qr", qore_bin, mode, dir));
+            assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+            assertEq(ExpectedParked, r.out, mode);
+        }
+    }
+
+    #! the I/O thread stays until the step's result arrives, so abort() does not run during the step
+    testLongStep() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for the debug hooks of the async I/O controller");
+        }
+        foreach string mode in (Modes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --enable-debug "
+                "--exec-mode=%s %s/teardown-long-step.qr", qore_bin, mode, dir));
+            assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+            assertEq(ExpectedLongStep, r.out, mode);
+        }
+    }
+}

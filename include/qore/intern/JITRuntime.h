@@ -225,6 +225,36 @@ uint64_t qore_rt_make_string(const char* str);
 
 //! Create a QoreStringNode from string bytes and return as NaN-boxed QoreValue.
 uint64_t qore_rt_make_string_len(const char* str, uint64_t len);
+
+//! A constant hash key of AOT code that is not ASCII text, which the image converts to the process encoding (qore#6840)
+/** qcc compiles in UTF-8, while a compiled program runs in the default encoding of its process, in which the keys of
+    the hashes that it makes at run time are stored: such a key is converted once, when it is first used, by
+    qore_rt_aot_key().  The layout is that of the LLVM global that QoreIRToLLVM::emitHashKeyOperands() emits:
+    <tt>{ptr, i64, ptr, i64, i32, i32}</tt>
+*/
+struct QoreAotKeySlot {
+    //! the key in UTF-8, with a terminating NUL
+    const char* src;
+    //! the size of src in bytes
+    uint64_t src_len;
+    //! the key in the default encoding of the process, with a terminating NUL, once it has been converted
+    const char* key;
+    //! the 64-bit prehash of key (as qore_ir_precompute_string_hash() computes it)
+    uint64_t hash64;
+    //! the 32-bit prehash of key
+    uint32_t hash32;
+    //! 1 once key and the hashes are set (read with acquire semantics)
+    uint32_t state;
+};
+
+//! Returns the key of the slot in the default encoding of the process, converting it on its first use (qore#6840)
+/** A key that the process encoding cannot represent raises the ENCODING-CONVERSION-ERROR that the interpreted modes
+    raise for the same key, at each use, and the UTF-8 bytes are returned then, which name no key of a hash in the
+    process encoding; the generated code branches to its exception path before it uses them
+
+    @return the key; never nullptr
+*/
+const char* qore_rt_aot_key(QoreAotKeySlot* slot, ExceptionSink* xsink);
 //! As qore_rt_make_string_len() for ASCII text: the string has its ASCII prefix known (qore#6625)
 uint64_t qore_rt_make_ascii_string_len(const char* str, uint64_t len);
 
@@ -288,12 +318,12 @@ uint64_t qore_rt_background_helper_throwing(const QoreIRBackgroundInstruction* i
 */
 uint64_t qore_rt_background_helper_aot(QoreAOTContext* ctx,
     uint64_t (*helper_fn)(QoreAOTContext*, ExceptionSink*), const int32_t* param_slots, uint64_t* values,
-    int nvalues, int uses_self, ExceptionSink* xsink);
+    int nvalues, int uses_self, int callee, ExceptionSink* xsink);
 
 //! Throwing wrapper for EH paths.
 uint64_t qore_rt_background_helper_aot_throwing(QoreAOTContext* ctx,
     uint64_t (*helper_fn)(QoreAOTContext*, ExceptionSink*), const int32_t* param_slots, uint64_t* values,
-    int nvalues, int uses_self, ExceptionSink* xsink);
+    int nvalues, int uses_self, int callee, ExceptionSink* xsink);
 
 //! Returns 1 if the sink holds a thread_exit, else 0; CatchException branches past the catch block when it does.
 //! An exception pending with the thread_exit is caught and deleted, as TryStatement::execImpl() does when the
@@ -1105,6 +1135,14 @@ void qore_rt_push_native_function_context_v1(void* storage, void* thread_data);
 
 //! Restores the context replaced by qore_rt_push_native_function_context_v1()
 void qore_rt_pop_native_function_context_v1(void* storage);
+
+//! Enters the declaring class and receiver of a local owning method call. A refusal leaves the caller intact.
+int qore_rt_try_enter_native_method_v1(void* storage, QoreAOTContext* ctx, int32_t slot,
+    const void* expected_entry, uint64_t receiver, ExceptionSink* xsink);
+void qore_rt_leave_native_method_v1(void* storage);
+//! Storage reserved by callers of the v1 method entry in their native frame.
+constexpr size_t QORE_RT_NATIVE_METHOD_STATE_SIZE = 320;
+constexpr size_t QORE_RT_NATIVE_METHOD_STATE_ALIGN = 16;
 
 //! AOT slot-indexed variant of qore_rt_sync_local().
 void qore_rt_sync_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t value);
@@ -1926,6 +1964,16 @@ void qore_rt_assign_local_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_
 //! Returns the variable of an AOT local slot
 LocalVar* qore_rt_aot_local_var(QoreAOTContext* ctx, int32_t idx);
 
+// the coercion of the value of a weak assignment to a local (qore#7237; see qore_weak_assignment_conversion())
+uint64_t qore_rt_coerce_value_weak(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr,
+        ExceptionSink* xsink);
+uint64_t qore_rt_coerce_value_weak_throwing(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr,
+        ExceptionSink* xsink);
+uint64_t qore_rt_coerce_value_weak_aot(QoreAOTContext* ctx, int32_t local_idx, uint64_t value,
+        uint64_t* cleanup_ptr, ExceptionSink* xsink);
+uint64_t qore_rt_coerce_value_weak_aot_throwing(QoreAOTContext* ctx, int32_t local_idx, uint64_t value,
+        uint64_t* cleanup_ptr, ExceptionSink* xsink);
+
 // the store helpers of the assignment of an element to the variable of a foreach loop (see JITRuntime.cpp)
 uint64_t qore_rt_coerce_value_foreach(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr,
         ExceptionSink* xsink);
@@ -2050,6 +2098,10 @@ uint64_t qore_rt_load_closure_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSin
 //! Store to a closure variable via AOT context slot (uses locals array)
 void qore_rt_store_closure_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 uint64_t qore_rt_store_closure_mode_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, int32_t mode,
+    ExceptionSink* xsink);
+//! Weak or opaque store to a local via an AOT local slot, which can assign through a reference that the local holds;
+//! see qore_rt_assign_local_mode() (qore#7164)
+uint64_t qore_rt_assign_local_mode_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, int32_t mode,
     ExceptionSink* xsink);
 
 //! Add a native integer delta to a typed local via an AOT local slot

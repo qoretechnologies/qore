@@ -4,9 +4,11 @@
 # execution mode must change as the AST interpreter does; included by weak-local-changes-worker.q, so that the checks
 # run in the execution mode of the worker, and by WeakLocalChangeChecks.qm for the compiled run
 #
-# a read of such a variable gives the target of its weak reference, but an operator that changes the variable (+=,
-# -=, ++, push, ...) sees the weak reference as the variable holds it, as the AST interpreter's lvalue does, and
-# the target is not changed; each check returns the variable and the target after the change, or the error raised
+# a read of such a variable gives the target of its weak reference; an operator that changes the list or the hash
+# that the variable holds (+=, a hash -=, push, ...) changes the container that the weak reference designates, and the
+# variable keeps the weak reference (qore#7297), and an arithmetic operator (-, *, ++, ...) changes the variable, as for
+# a variable that holds the container itself; each check returns the variable and the target after the change, or the
+# error raised
 
 public namespace WeakLocalChangeChecks {
     #! an object to hold weakly

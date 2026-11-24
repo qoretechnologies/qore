@@ -1,0 +1,47 @@
+%modern
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+module OwnedMethodModule {
+    version = "1.0";
+    desc = "Test ownership of temporary arguments inside a compiled module";
+    author = "Qore";
+    license = "MIT";
+}
+public namespace OwnedMethodModule {
+    public class Box {
+        private { int offset = 1; }
+        int length(list<auto> a) { int n = a.size(); a = (); return offset + n; }
+    }
+    public class Marker {
+        destructor() { printf("released\n"); }
+    }
+    public final class FinalBox {
+        replaceArg(list<auto> a) {
+            a = ();
+            printf("replaced\n");
+        }
+        static int forgetArg(*list<auto> a) {
+            a = NOTHING;
+            return 3;
+        }
+        static *list<auto> makeArg(int n) {
+            return (n, new Marker());
+        }
+        int nested(int n) {
+            replaceArg((n, new Marker()));
+            try {
+                replaceArg((n, new Marker()));
+                return FinalBox::forgetArg(FinalBox::makeArg(n));
+            } catch (hash<ExceptionInfo> e) {
+                rethrow;
+            }
+        }
+    }
+    public int sub value(int n) {
+        Box b();
+        FinalBox other();
+        try { return b.length((n, n + 1)) + other.nested(n); }
+        catch (hash<ExceptionInfo> e) { rethrow; }
+    }
+}
