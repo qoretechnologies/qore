@@ -22806,6 +22806,14 @@ static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_n
 #endif
 
 #if !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT) || defined(QORE_JIT_RUNTIME_TAKE_OVER_UNIT)
+//! calls the pseudo-method of a value found by name in the pseudo-class of its type (qore#6813), as a call of a
+//! value with no declared type does (a weak reference or a reference gives its target); out of line, so that the
+//! dispatch of a pseudo-method of the value's class keeps its frame
+static QORE_INTERN_NOINLINE __attribute__((cold)) uint64_t qore_rt_eval_pseudo_method_by_name(QoreValue base,
+        const char* name, const QoreListNode* args, ExceptionSink* xsink) {
+    return toBits(pseudo_classes_eval(base, name, args, xsink));
+}
+
 static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
@@ -22830,7 +22838,9 @@ static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, c
     // normal name-based dispatch before pseudo-method dispatch.  This preserves
     // user method overrides such as className() and hash member callrefs such as
     // h.size().
-    switch (base.getType()) {
+    // the type is read once (see below)
+    qore_type_t bt = base.getType();
+    switch (bt) {
         case NT_OBJECT:
         case NT_WEAKREF:
         case NT_HASH:
@@ -22841,18 +22851,6 @@ static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, c
             break;
     }
 
-    // Unwrap weak references — pseudo method handlers expect the underlying value
-    if (base.getType() == NT_WEAKREF) {
-        QoreObject* o = base.get<const WeakReferenceNode>()->get();
-        if (!o || !o->isValid()) {
-            qore_raise_deleted_object(xsink, 
-                "cannot call %s::%s() on a deleted weak reference",
-                qc->getName(), method->getName());
-            return toBits(QoreValue());
-        }
-        base = QoreValue(o);
-    }
-
     ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
     if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
         return toBits(QoreValue());
@@ -22860,9 +22858,20 @@ static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, c
     RuntimeConfig& rc = rc_get_current_ref();
 
     // If base is nothing and class is not <nothing>, use <nothing> pseudo class
-    if (base.isNothing() && qc != QC_PSEUDONOTHING) {
-        return toBits(qore_class_private::evalPseudoMethod(QC_PSEUDONOTHING, base, method->getName(),
-            *arg_list, rc, xsink));
+    if (bt == NT_NOTHING) {
+        if (qc != QC_PSEUDONOTHING) {
+            return toBits(qore_class_private::evalPseudoMethod(QC_PSEUDONOTHING, base, method->getName(),
+                *arg_list, rc, xsink));
+        }
+    } else {
+        // the method that the parse-time resolution found is called only on a value of its class: a value of another
+        // type (the value of a builtin whose declared type is wrong) finds the method by name in the pseudo-class of
+        // its type, as a value with no declared type does (qore#6813), with the predicate of the check of the receiver
+        // before the arguments (qore_pseudo_class_accepts_type(), which takes a weak reference or a reference for no
+        // class: the call by name gives the method its target, qore#7363)
+        if (!qore_pseudo_class_accepts_type(qc, bt)) [[unlikely]] {
+            return qore_rt_eval_pseudo_method_by_name(base, method->getName(), *arg_list, xsink);
+        }
     }
     return toBits(qore_class_private::evalPseudoMethod(qc, method, variant, base, *arg_list, rc, xsink));
 }
@@ -24568,6 +24577,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_list_bool_guarded_aot(QoreAOTContex
 
 static uint64_t qore_rt_list_first_last(uint64_t base_bits, bool last) {
     QoreValue base = fromBits(base_bits);
+    // the value is proven to be a list; any other value is never taken for one (qore#7363)
+    if (base.getType() != NT_LIST) [[unlikely]] {
+        return toBits(QoreValue());
+    }
     const QoreListNode* list = base.get<const QoreListNode>();
     size_t size = list->size();
     if (!size) {
@@ -24581,15 +24594,29 @@ static uint64_t qore_rt_list_first_last(uint64_t base_bits, bool last) {
     return toBits(result);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_size(uint64_t val_bits);
+
+//! the size of a value that the helpers below take for a list or a binary but is not one (out of line)
+static QORE_INTERN_NOINLINE __attribute__((cold)) int64_t qore_rt_pseudo_size_other(uint64_t base_bits) {
+    return fromBits(qore_rt_pseudo_size(base_bits)).getAsBigInt();
+}
+
+// the value is proven to be a list (or a binary); any other value is never taken for one (qore#7363)
 extern "C" DLLEXPORT int64_t qore_rt_pseudo_list_size_native_noguard(
         uint64_t base_bits) {
     QoreValue base = fromBits(base_bits);
+    if (base.getType() != NT_LIST) [[unlikely]] {
+        return qore_rt_pseudo_size_other(base_bits);
+    }
     return static_cast<int64_t>(base.get<const QoreListNode>()->size());
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_pseudo_binary_size_native_noguard(
         uint64_t base_bits) {
     QoreValue base = fromBits(base_bits);
+    if (base.getType() != NT_BINARY) [[unlikely]] {
+        return qore_rt_pseudo_size_other(base_bits);
+    }
     return static_cast<int64_t>(base.get<const BinaryNode>()->size());
 }
 
@@ -24622,9 +24649,37 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_list_value_guarded_aot(QoreAOTConte
 // ============================================================================
 
 //! Fast pseudo-method: typeCode() - return type code as NaN-boxed int
+//! the pseudo-methods of a weak reference to a list or a hash are those of its target (qore#7363): the type of the
+//! target of a weak container reference \a v
+static QORE_INTERN_NOINLINE __attribute__((cold)) qore_type_t qore_rt_pseudo_weak_target_type(const QoreValue& v) {
+    return v.getType() == NT_WEAKREF_LIST ? NT_LIST : NT_HASH;
+}
+
+//! the size of the target of a weak container reference \a v
+/** The size is read with a reference to the target, as the pseudo-method dispatch reads it
+    (pseudo_classes_dispatch_weak()): without one, another thread can release the target's last reference and free it
+    meanwhile, which writes the size that is read (the length of a list, the member list of a hash) without
+    synchronization.  A target whose last reference was released gives an empty stand-in.  The release of the
+    reference can be the target's last one, whose free can run destructors: their exceptions are handled as those of
+    the other releases that have no exception sink of the caller (see WeakListReferenceNode::getAsBoolImpl())
+*/
+static QORE_INTERN_NOINLINE __attribute__((cold)) int64_t qore_rt_pseudo_weak_target_size(const QoreValue& v) {
+    ExceptionSink xsink;
+    if (v.getType() == NT_WEAKREF_LIST) {
+        ReferenceHolder<QoreListNode> target(v.get<const WeakListReferenceNode>()->lock(), &xsink);
+        return static_cast<int64_t>(target->size());
+    }
+    ReferenceHolder<QoreHashNode> target(v.get<const WeakHashReferenceNode>()->lock(), &xsink);
+    return static_cast<int64_t>(target->size());
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_typeCode(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
-    return toBits(QoreValue(static_cast<int64_t>(v.getType())));
+    qore_type_t t = v.getType();
+    if (t == NT_WEAKREF_LIST || t == NT_WEAKREF_HASH) [[unlikely]] {
+        t = qore_rt_pseudo_weak_target_type(v);
+    }
+    return toBits(QoreValue(static_cast<int64_t>(t)));
 }
 
 //! Fast pseudo-method: size()/strlen() - return byte/container size as NaN-boxed int.
@@ -24636,6 +24691,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_size(uint64_t val_bits) {
     switch (v.getType()) {
         case NT_LIST:
             size = static_cast<int64_t>(v.get<const QoreListNode>()->size());
+            break;
+        case NT_WEAKREF_LIST:
+        case NT_WEAKREF_HASH:
+            size = qore_rt_pseudo_weak_target_size(v);
+            break;
+        // <buffer>::size(): the number of elements; the value of a call resolved at parse time for another type can
+        // be a buffer (qore#7363)
+        case NT_BUFFER:
+            size = static_cast<int64_t>(v.get<const QoreBufferNode>()->size());
             break;
         case NT_STRING:
             {
@@ -24678,6 +24742,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_empty(uint64_t val_bits) {
         case NT_LIST:
             is_empty = v.get<const QoreListNode>()->empty();
             break;
+        case NT_WEAKREF_LIST:
+        case NT_WEAKREF_HASH:
+            is_empty = !qore_rt_pseudo_weak_target_size(v);
+            break;
+        // <buffer>::empty() (see qore_rt_pseudo_size())
+        case NT_BUFFER:
+            is_empty = v.get<const QoreBufferNode>()->empty();
+            break;
         case NT_STRING:
             {
                 QoreStringValueHelper str(v);
@@ -24708,6 +24780,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_val(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
     bool has_value = false;
     switch (v.getType()) {
+        case NT_WEAKREF_LIST:
+        case NT_WEAKREF_HASH:
+            has_value = qore_rt_pseudo_weak_target_size(v) != 0;
+            break;
+        // <buffer>::val() (see qore_rt_pseudo_size())
+        case NT_BUFFER:
+            has_value = !v.get<const QoreBufferNode>()->empty();
+            break;
         case NT_LIST:
             has_value = !v.get<const QoreListNode>()->empty();
             break;
@@ -25173,6 +25253,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_to_int_noguard(uint64_t val_
 //! Fast pseudo-method: type() - return type name string
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_type(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
+    qore_type_t t = v.getType();
+    // the type of the target of a weak reference to a list or a hash (qore#7363)
+    if (t == NT_WEAKREF_LIST || t == NT_WEAKREF_HASH) [[unlikely]] {
+        return toBits(QoreValue::makeStringValue(qore_rt_pseudo_weak_target_type(v) == NT_LIST ? "list" : "hash"));
+    }
     return toBits(QoreValue::makeStringValue(v.getTypeName()));
 }
 

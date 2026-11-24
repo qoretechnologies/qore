@@ -30,11 +30,12 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QorePseudoMethods.h"
 
 //! Methods in this pseudo-class can be executed on @ref call_reference "call references"
 /**
  */
-qclass <callref> [arg=const ResolvedCallReferenceNode* c = v.get<ResolvedCallReferenceNode>();vparent=<value>];
+qclass <callref> [arg=const ResolvedCallReferenceNode* c = qore_pseudo_callref_receiver(v, false, "<callref>", xsink);vparent=<value>];
 
 //! Returns Qore::NT_CALLREF
 /**

@@ -6008,8 +6008,16 @@ qore_type_t QoreClass::getPseudoClassType() const {
         return NT_BOOLEAN;
     }
 
+    if (priv->name == "<buffer>") {
+        return NT_BUFFER;
+    }
+
     if (priv->name == "<callref>") {
         return NT_FUNCREF;
+    }
+
+    if (priv->name == "<char>") {
+        return NT_CHAR;
     }
 
     if (priv->name == "<closure>") {
@@ -6026,10 +6034,6 @@ qore_type_t QoreClass::getPseudoClassType() const {
 
     if (priv->name == "<hash>") {
         return NT_HASH;
-    }
-
-    if (priv->name == "<int>") {
-        return NT_INT;
     }
 
     if (priv->name == "<int>") {

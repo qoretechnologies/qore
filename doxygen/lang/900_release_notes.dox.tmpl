@@ -2817,6 +2817,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a pseudo-method call runs the method of the pseudo-class of the value's type at run time, also when the parser
+      resolved the call from another type, and the code of a pseudo-class refuses a value of another type with an
+      exception (see the note on pseudo-classes in @ref qore_classes;
+      <a href="https://github.com/qoretechnologies/qore/issues/7363">issue 7363</a>)
     - @ref RestClient::AbstractRestConnection::getAsync() "RestConnection::getAsync(False, rtopts)" accepts
       string-valued runtime options when it adds the default \c skip_login flag (issue #7408).
     - the frames of the calls that the initialization of a module makes name the module's
