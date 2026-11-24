@@ -1131,10 +1131,12 @@ public class HttpAsyncSocketIoController {
         no-ops; subclasses such as the HttpServer integration override them to
         capture and restore framework-specific thread-local data.
 
-        The ThreadPool task takes no arguments. The pool hands off the
-        target/body pair through its queue.  This
-        avoids submitting a wrapper closure that captures request-local values
-        and can lose delayed dispatch state under heavy async scheduling.
+        The task that runs \a body is submitted to the pool by this call, so
+        \a body runs with the context (sandbox restrictions and provenance) of
+        the code that calls it: the task takes the target/body pair from a
+        handoff of this submission only, never the pair of another submission
+        (qore#7494), and releases them before it ends; the closure that the
+        pool keeps captures only the handoff.
 
         Exceptions raised by \a body are not caught here; callers may add their
         own try/catch inside \a body for dispatch-specific error handling.
@@ -1152,8 +1154,11 @@ public class HttpAsyncSocketIoController {
         check_thread_callable(body, "HttpAsyncSocketIoController::submitToHandlerPool()");
         check_thread_callable(target, "HttpAsyncSocketIoController::submitToHandlerPool()");
         Priv::HttpHandlerPool pool = handler_pool;
-        pool.submit(handlerTaskRunner(pool));
-        pool.tasks.push({"target": target, "body": body});
+        # the runner takes the work item of this submission only: a task of the pool runs with the context (sandbox
+        # restrictions and provenance) of the code that submitted it, so the work item of another submission taken
+        # from a shared queue could run with the wrong context (qore#7494)
+        Priv::HttpHandlerHandoff handoff(target, body);
+        pool.submit(handlerTaskRunner(pool, handoff));
     }
 
     #! Takes the handler-pool thread that runs the calling task out of the handler pool
@@ -1173,13 +1178,14 @@ public class HttpAsyncSocketIoController {
         return pool ? pool.detachCurrentThread() : False;
     }
 
-    #! Binds the worker to this generation of the pool, including its handoff queue. The request and body are
-    #! handed off separately so the submitted closure captures neither.
-    private code<nothing()> handlerTaskRunner(Priv::HttpHandlerPool pool) {
-        return sub () { runHandlerPoolTask(pool); };
+    #! Binds the worker to this generation of the pool and to the handoff of its own submission (qore#7494). The
+    #! submitted closure captures the handoff, not the request and body: the worker takes them out of it, so that they
+    #! are released when the worker's task ends, not with the closure.
+    private code<nothing()> handlerTaskRunner(Priv::HttpHandlerPool pool, Priv::HttpHandlerHandoff handoff) {
+        return sub () { runHandlerPoolTask(pool, handoff); };
     }
 
-    private runHandlerPoolTask(Priv::HttpHandlerPool pool) {
+    private runHandlerPoolTask(Priv::HttpHandlerPool pool, Priv::HttpHandlerHandoff handoff) {
         # ThreadPool clears thread-local variables after releasing the submitted callable. Leaving the pool
         # identity installed also recognizes a stop in a destructor run by that release.
         Priv::running_handler_pool = pool;
@@ -1192,19 +1198,13 @@ public class HttpAsyncSocketIoController {
                 count.dec();
             }
         }
-        runHandlerBody(pool);
+        runHandlerBody(handoff);
     }
 
-    #! The handoff, body, target and dispatch context are released before this worker drops its active count.
-    private runHandlerBody(Priv::HttpHandlerPool pool) {
-        hash<auto> task;
-        try {
-            task = pool.tasks.get(10s);
-        } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::ERROR, "handler-pool task handoff failed: %s: %s",
-                ex.err, ex.desc);
-            return;
-        }
+    #! The body, target and dispatch context are released before this worker drops its active count.
+    private runHandlerBody(Priv::HttpHandlerHandoff handoff) {
+        # the work item of this worker's own submission (qore#7494)
+        *hash<auto> task = handoff.take();
 
         *HttpAsyncTarget target = task.target;
         *code<nothing()> body = task.body;
@@ -6351,15 +6351,34 @@ public class HttpAsyncSocketIoController {
 
 #! @cond nodoc
 namespace Priv {
-#! The pool and its queue stay together until the last worker of that generation returns.
+#! The pool stays until the last worker of that generation returns.
 class HttpHandlerPool inherits ThreadPool {
     public {
-        Queue tasks();
         Counter active();
     }
 
     constructor(hash<auto> opts) : ThreadPool(opts.max_handler_threads ?? 0,
             opts.min_idle_handler_threads ?? 0, opts.max_idle_handler_threads ?? 0) {
+    }
+}
+
+#! The work item of one submission to the handler pool, which only the worker of that submission takes (qore#7494)
+/** A task of the pool runs with the context (sandbox restrictions and provenance) of the code that submitted it: the
+    work item is handed to the worker of its own submission, never to a worker submitted by other code
+*/
+class HttpHandlerHandoff {
+    private {
+        *hash<auto> task;
+    }
+
+    constructor(object target, code body) {
+        task = {"target": target, "body": body};
+    }
+
+    #! Returns the work item and releases the handoff's reference to it; the worker calls it once
+    *hash<auto> take() {
+        *hash<auto> rv = remove task;
+        return rv;
     }
 }
 
