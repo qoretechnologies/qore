@@ -1,13 +1,14 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - pooled TCP and UNIX socket connections and their filesystem and network policy checks
 # Copyright 2026 Qore Technologies, s.r.o.
 
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestSocketDir.qm
 %requires Util
-%requires FsUtil
 %requires Mime
 %requires Logger
 %requires HttpServerUtil
@@ -215,7 +216,7 @@ public class PooledConnectionSandboxTest inherits QUnit::Test {
         string url_a;
         #! the URL of the server on a UNIX socket
         string url_unix;
-        TmpDir tmp;
+        TestSocketDir tmp;
         KeepAliveServer proxy;
         #! a server on a UNIX socket
         KeepAliveServer unix_server;
@@ -251,7 +252,7 @@ public class PooledConnectionSandboxTest inherits QUnit::Test {
     }
 
     globalSetUp() {
-        tmp = new TmpDir("pooled-connection-sandbox-");
+        tmp = new TestSocketDir();
         server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("pooled-connection-sandbox",
             LoggerLevel::getLevelInfo())});
         server.setDefaultHandler("test", handler);

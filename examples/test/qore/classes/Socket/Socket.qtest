@@ -10,6 +10,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../../TestSocketDir.qm
 
 %exec-class SocketTest
 
@@ -2595,8 +2596,8 @@ class SocketTest inherits QUnit::Test {
         testSkip("skipping because UNIX-domain sockets are not available on Windows");
 %endif
 
-        string path = tmp_location() + DirSep + "qore-socket-" + get_random_string(12);
-        on_exit unlink(path);
+        TestSocketDir socket_dir();
+        string path = socket_dir.path + "/server.sock";
 
         Socket server();
         server.bindUNIX(path);
