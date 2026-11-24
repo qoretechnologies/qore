@@ -340,7 +340,8 @@ public class HttpAsyncSocketIoController {
     */
     static dbgSetDrainSnapshotHook(*code<nothing(HttpAsyncSocketIoController)> hook) [dom=PROCESS_CONTROL] {
         SandboxManager::checkProcessWideRegistration("set the drain snapshot hook of HTTP servers");
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", "cannot set the drain snapshot hook of HTTP servers from a context with "
                 "restricted process control";
         }
