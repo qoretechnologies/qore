@@ -1437,6 +1437,10 @@ private:
             }
         }
     };
+    DLLLOCAL void processStreamInputStream(int32_t stream_id, StreamInputStreamInfo& info, ExceptionSink* xsink);
+    DLLLOCAL void resetFailedInputStream(int32_t stream_id, StreamInputStreamInfo& info, ExceptionSink& error,
+        ExceptionSink* xsink);
+
     std::unordered_map<int32_t, StreamInputStreamInfo> stream_input_streams_;
 
     //! Atomic flag for lock-free hasActiveStreamInputStreams() checks in the I/O hot path
