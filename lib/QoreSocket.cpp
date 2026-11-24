@@ -17224,10 +17224,10 @@ size_t SocketSendPollOperation::getBytesSent() const {
     return static_cast<SocketSendPollState*>(poll_state.get())->getBytesSent();
 }
 
-int64 SocketSendPollOperation::getDeliveredBytes() const {
-    AutoLocker al(sock->priv->m);
-    return std::max<int64>(0, static_cast<int64>(getBytesSent())
-        - qore_socket_private::getUnacknowledgedBytes(qore_socket_private::get(*sock->priv->socket)->sock));
+int64 qore_socket_poll_events_ops::getDeliveredBytes(const SocketSendPollOperation& op) {
+    AutoLocker al(op.sock->priv->m);
+    return std::max<int64>(0, static_cast<int64>(op.getBytesSent())
+        - qore_socket_private::getUnacknowledgedBytes(qore_socket_private::get(*op.sock->priv->socket)->sock));
 }
 
 const char* SocketSendPollOperation::getStateImpl() const {
