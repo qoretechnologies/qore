@@ -237,6 +237,12 @@ static QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_check_sandboxed_delete(con
 }
 
 int qore_check_object_delete(const QoreObject& obj, const char* action, ExceptionSink* xsink) {
+    // a system constant object is never deleted, as with the delete operator
+    if (qore_object_private::get(obj)->system_object) {
+        xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot %s a system constant object (class '%s')", action,
+            obj.getClassName());
+        return -1;
+    }
     return qore_sandboxed_code_active() ? qore_check_sandboxed_delete(obj, action, xsink) : 0;
 }
 
@@ -3057,6 +3063,8 @@ void QoreObject::deleteMemberValue(const char* key, ExceptionSink* xsink) {
     }
 
     QoreValue v{};
+    // the removed edge can be counted in a recursive set only if this object is in one (#6335)
+    bool in_set = false;
     const qore_class_private* cls = qore_class_private::get(*priv->theclass);
     if (cls->findAccessorMember(key)) {
         // a declared member held in external storage is read and cleared with its accessors
@@ -3075,13 +3083,40 @@ void QoreObject::deleteMemberValue(const char* key, ExceptionSink* xsink) {
 
         QoreHashNode* odata = member_class_ctx ? priv->getInternalData(member_class_ctx) : priv->data;
         if (odata) {
-            v = odata->takeKeyValue(key);
+            // a system constant object is never deleted: the member is left as it is, as with the delete operator
+            const QoreValue cv = odata->getKeyValue(key);
+            if (cv.getType() == NT_OBJECT && qore_object_private::get(*cv.get<const QoreObject>())->system_object) {
+                xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot delete a system constant object (class '%s')",
+                    cv.get<const QoreObject>()->getClassName());
+                return;
+            }
+            // counted in the object's scan count, not in the member hash's, as by qore_object_private::takeMember()
+            v = qore_hash_private::get(*odata)->takeKeyValueIntern(key, priv);
+            if (needs_scan(v)) {
+                // the removal can take a reference out of this object's recursive set
+                priv->clearRSetClosed();
+                in_set = priv->rset.load(std::memory_order_acquire) != nullptr;
+            }
+        }
+    }
+
+    // the recursive sets are repaired before the removed value is deleted or released, as by
+    // qore_object_private::takeMember()
+    if (needs_scan(v)) {
+        {
+            RSetHelper rsh(*priv, xsink);
+        }
+        if (in_set) {
+            qore_scan_removed_value_objects(v, priv, xsink);
         }
     }
 
     // an object is deleted only if the current code may delete it, otherwise it is released (qore#6842)
     if (v.getType() == NT_OBJECT) {
-        qore_operator_delete_object(v.get<QoreObject>(), xsink);
+        QoreObject* o = v.get<QoreObject>();
+        if (!qore_check_object_delete(*o, "delete", xsink)) {
+            o->doDelete(xsink);
+        }
     }
     v.discard(xsink);
 }

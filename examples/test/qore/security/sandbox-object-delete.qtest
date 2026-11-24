@@ -8,7 +8,7 @@
 # do a call of a destructor with the reflection API, delete_thread_data(), which leaves the key as it is, and the
 # functions and methods that take over or delete a Program object; the object stays as it is.  A value that goes out of scope is
 # released as before, and code that only a sandbox at the enforcement level of code safety governs deletes as trusted
-# code does.
+# code does.  No code deletes a system constant object, with any of these forms.
 
 %modern
 %no-child-restrictions
@@ -153,6 +153,15 @@ HostItem sub make() {
     return new HostItem();
 }
 
+#! deletes the system constant object stdin with the given form of deletion
+string sub del_system(string form) {
+    try {
+        return del(form, stdin);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
 #! deletes an object of the tenant's own
 string sub del_own(string form) {
     return del(form, new HostItem());
@@ -196,6 +205,7 @@ class SandboxObjectDeleteTest inherits QUnit::Test {
         foreach string mode in (keys ExecModes) {
             addTestCase("delete in " + mode, getTest(mode));
             addTestCase("take over in " + mode, getTakeTest(mode));
+            addTestCase("system objects in " + mode, getSystemTest(mode));
         }
         set_return_value(main());
     }
@@ -208,6 +218,10 @@ class SandboxObjectDeleteTest inherits QUnit::Test {
         return sub () { takeTest(mode); };
     }
 
+    private code getSystemTest(string mode) {
+        return sub () { systemTest(mode); };
+    }
+
     #! creates a tenant
     private static Program tenant(string mode, int level = QSEL_TENANT_ISOLATION) {
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_INJECTION);
@@ -217,6 +231,24 @@ class SandboxObjectDeleteTest inherits QUnit::Test {
         p.setSandboxManager(sm);
         p.parse(TenantSource, "tenant");
         return p;
+    }
+
+    #! creates a Program without a sandbox
+    private static Program trusted(string mode) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_INJECTION);
+        p.setExecMode(ExecModes{mode});
+        p.parse(TenantSource, "trusted");
+        return p;
+    }
+
+    #! returns True if the system constant object stdin is not deleted
+    private static bool stdinAlive() {
+        try {
+            stdin.isOpen();
+            return True;
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
     }
 
     #! returns True if the Program object is not deleted
@@ -294,6 +326,26 @@ class SandboxObjectDeleteTest inherits QUnit::Test {
         HostItem host_obj();
         assertEq("ok", a.callFunction("release", host_obj), mode + ": release");
         assertTrue(alive(host_obj), mode + ": the released object is not deleted");
+    }
+
+    #! a system constant object is never deleted, by any form of deletion and whatever code makes it
+    systemTest(string mode) {
+        hash<string, Program> programs = {
+            "tenant isolation": tenant(mode),
+            "code safety": tenant(mode, QSEL_CODE_SAFETY),
+            "trusted": trusted(mode),
+        };
+        hash<auto> results;
+        hash<auto> expected;
+        foreach string form in ("var", "thread-data", "thread-data-list") {
+            foreach hash<auto> i in (programs.pairIterator()) {
+                results{form}{i.key} = i.value.callFunction("del_system", form);
+                results{form}{i.key + ": stdin is alive"} = stdinAlive();
+                expected{form}{i.key} = "SYSTEM-OBJECT-ERROR";
+                expected{form}{i.key + ": stdin is alive"} = True;
+            }
+        }
+        assertEq(expected, results, mode + ": system constant objects");
     }
 
     #! a Program object taken over or deleted by a call: refused for the objects of another sandbox and of the host

@@ -1,0 +1,53 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires cppapiuser
+
+%exec-class MemberDeleteSystemObjectTest
+
+#! an object with a member that holds another object
+class Holder {
+    public {
+        auto m;
+    }
+}
+
+#! QoreObject::deleteMemberValue() does not delete a system constant object, as the delete operator does not
+class MemberDeleteSystemObjectTest inherits QUnit::Test {
+    constructor() : QUnit::Test("MemberDeleteSystemObjectTest", "1.0") {
+        addTestCase("a system constant object in a member", \systemObjectTest());
+        addTestCase("another object in a member", \objectTest());
+        set_return_value(main());
+    }
+
+    systemObjectTest() {
+        Holder h();
+        h.m = stdin;
+        assertThrows("SYSTEM-OBJECT-ERROR", sub () {
+            CppApiTest::MemberAccessorProbe::cppWrite(h, "m", NOTHING, "deleteMemberValue");
+        });
+        # the member is left as it is, and the object is not deleted
+        assertTrue(h.m === stdin, "the member is left as it is");
+        bool alive;
+        try {
+            stdin.isOpen();
+            alive = True;
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        assertTrue(alive, "stdin is not deleted");
+    }
+
+    objectTest() {
+        Holder h();
+        Holder o();
+        h.m = o;
+        CppApiTest::MemberAccessorProbe::cppWrite(h, "m", NOTHING, "deleteMemberValue");
+        assertNothing(h.m);
+        assertThrows("OBJECT-ALREADY-DELETED", sub () { o.m = 1; });
+    }
+}

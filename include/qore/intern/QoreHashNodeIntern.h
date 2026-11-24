@@ -378,7 +378,8 @@ public:
             return;
 
         qhlist_t::iterator li = i->second;
-        // an object is deleted only if the current code may delete it; otherwise the key is left as it is (qore#6842)
+        // an object is deleted only if the current code may delete it (not a system constant object); otherwise the
+        // key is left as it is (qore#6842)
         if ((*li)->val.getType() == NT_OBJECT
             && qore_check_object_delete(*(*li)->val.get<const QoreObject>(), "delete", xsink)) {
             return;

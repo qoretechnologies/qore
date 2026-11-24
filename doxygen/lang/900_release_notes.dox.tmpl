@@ -3980,6 +3980,13 @@
       constructor and @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()" raise the
       module's exception, where the C++ exception of the module escaped from the creation of a registered %Program
       (<a href="https://github.com/qoretechnologies/qore/issues/6786">issue 6786</a>)
+    - @ref Qore::delete_thread_data() "delete_thread_data()" and the C++ API's \c QoreHashNode::deleteKey() and
+      \c QoreObject::deleteMemberValue() raise \c SYSTEM-OBJECT-ERROR for a system constant object such as
+      @ref Qore::stdout "stdout", as the @ref delete "delete operator" does, where they deleted it
+      (<a href="https://github.com/qoretechnologies/qore/issues/6842">issue 6842</a>)
+    - the C++ API's \c QoreObject::deleteMemberValue() keeps the recursive reference counts of the object when it
+      removes a member that holds an object, which debug builds asserted
+      (<a href="https://github.com/qoretechnologies/qore/issues/6842">issue 6842</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 
