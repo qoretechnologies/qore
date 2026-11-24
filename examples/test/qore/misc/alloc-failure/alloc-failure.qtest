@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own --exec-mode and in qcc executables
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+
+%exec-class AllocFailureTest
+
+#! Memory that cannot be allocated fails the operation that needed it with a catchable exception, and the process goes
+#! on (issue #7466)
+/** The allocation fails with dbg_fail_allocation() (debug builds only) in the storage of a string or a list.  Before
+    the fix, the storage was replaced with a null pointer and the process ended with SIGSEGV, or the std::bad_alloc of
+    the allocation ended it with std::terminate().  The scenarios run in child processes in each execution mode and
+    compiled with qcc.
+*/
+class AllocFailureTest inherits QUnit::Test {
+    public {
+        #! the scenarios of the child and what each prints
+        const Scenarios = {
+            "builtin": "caught MEMORY-ALLOCATION-ERROR\nagain: 100000\n",
+            "callback": "caught MEMORY-ALLOCATION-ERROR\nagain: 10\n",
+            "thread": "caught MEMORY-ALLOCATION-ERROR\nagain: 100000\n",
+            "server": "ping: 200 pong\nfail: 503 MEMORY-ALLOCATION-ERROR\nping: 200 pong\n"
+                "fail-uncaught: 500 MEMORY-ALLOCATION-ERROR\nping: 200 pong\n",
+        };
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string child = get_script_dir() + "/alloc-failure-child.q";
+        FsUtil::TmpDir tmp("alloc-failure-");
+    }
+
+    constructor() : Test("AllocFailureTest", "1.0") {
+        addTestCase("operations that fail for lack of memory", \operationTest());
+        addTestCase("a statement that fails for lack of memory", \statementTest());
+        addTestCase("compiled code", \compiledTest());
+        set_return_value(main());
+    }
+
+    operationTest() {
+        checkDebug();
+        foreach string mode in (Modes) {
+            foreach hash<auto> s in (Scenarios.pairIterator()) {
+                hash<auto> r = run(sprintf("%s %s", interpreter(mode), s.key));
+                assertEq(0, r.rc, sprintf("%s, %s: the process goes on: %s", mode, s.key, r.out));
+                assertEq(s.value, r.out, sprintf("%s, %s", mode, s.key));
+            }
+        }
+    }
+
+    #! the AST interpreter fails the statement; the other modes end the process with a message that says why
+    statementTest() {
+        checkDebug();
+        foreach string mode in (Modes) {
+            hash<auto> r = run(sprintf("%s statement", interpreter(mode)), True);
+            if (mode == "ast") {
+                assertEq(0, r.rc, sprintf("%s: the process goes on: %s", mode, r.out));
+                assertEq("caught MEMORY-ALLOCATION-ERROR\nagain: 100000\n", r.out, mode);
+            } else {
+                assertNeq(0, r.rc, mode);
+                assertRegex("qore: MEMORY-ALLOCATION-ERROR: memory could not be allocated", r.out, mode);
+            }
+        }
+    }
+
+    compiledTest() {
+        checkDebug();
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            testSkip("no qcc");
+        }
+        foreach int opt in ((0, 3)) {
+            string exe = sprintf("%s/child-O%d", tmp.path, opt);
+            hash<auto> c = run(sprintf("%s -O%d -o %s %s", quote(qcc), opt, quote(exe), quote(child)), True);
+            assertEq(0, c.rc, sprintf("qcc -O%d: %s", opt, c.out));
+            if (c.rc) {
+                continue;
+            }
+            foreach hash<auto> s in (Scenarios.pairIterator()) {
+                hash<auto> r = run(sprintf("%s %s", quote(exe), s.key));
+                assertEq(0, r.rc, sprintf("qcc -O%d, %s: the process goes on: %s", opt, s.key, r.out));
+                assertEq(s.value, r.out, sprintf("qcc -O%d, %s", opt, s.key));
+            }
+        }
+    }
+
+    private string interpreter(string mode) {
+        string opts = mode == "tiered" ? "--exec-mode=tiered --jit-ir-threshold=3 --jit-jit-threshold=10"
+            : "--exec-mode=" + mode;
+        return sprintf("%s %s %s", quote(TestInterpreter::qore_interpreter()), opts, quote(child));
+    }
+
+    private static string quote(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+
+    #! runs the command with no core dump: a child that ends with std::terminate() would dump core
+    private hash<auto> run(string cmd, *bool with_stderr) {
+        int rc;
+        string out = backquote(sprintf("ulimit -c 0; %s%s", cmd, with_stderr ? " 2>&1" : " 2>/dev/null"), \rc);
+        return {"rc": rc, "out": out};
+    }
+
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_fail_allocation() is only in debug builds of the library");
+        }
+    }
+}

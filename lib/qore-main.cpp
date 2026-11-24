@@ -33,6 +33,7 @@
 #include <qore/DBI.h>
 #include <qore/QoreHttpClientObject.h>
 
+#include "qore/intern/QoreAllocFailure.h"
 #include "qore/intern/QoreSandboxLimits.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/ModuleInfo.h"
@@ -217,6 +218,8 @@ static bool qore_check_duplicate_libqore(std::string& self_path) {
 
 void qore_init(qore_license_t license, const char* def_charset, bool show_module_errors, int n_qore_library_options) {
     qore_ensure_standard_fds();
+    // an allocation failure that no code can handle is reported before the process ends (qore#7466)
+    qore_install_terminate_handler();
 
     qore_license = license;
     qore_library_options = n_qore_library_options;

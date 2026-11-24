@@ -40,6 +40,7 @@
 #include "qore/intern/qore_container_free.h"
 #include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/QoreSandboxMemory.h"
+#include "qore/intern/QoreAllocFailure.h"
 
 typedef ReferenceHolder<QoreListNode> safe_qorelist_t;
 
@@ -768,11 +769,20 @@ struct qore_list_private {
             return;
         // make larger
         if (num >= allocated) {
-            size_t d = num >> 2;
-            allocated = num + (d < LIST_PAD ? LIST_PAD : d);
-            entry = static_cast<QoreValue*>(realloc(static_cast<void*>(entry), sizeof(QoreValue) * allocated));
-            sb.sync(sizeof(QoreValue) * allocated);
+            grow(num);
         }
+    }
+
+    //! grows the list's storage to hold \a num entries; memory that cannot be allocated fails the operation with
+    //! std::bad_alloc and leaves the list unchanged (the storage was replaced with a null pointer, and the next write
+    //! ended the process; qore#7466)
+    DLLLOCAL void grow(size_t num) {
+        size_t d = num >> 2;
+        size_t new_allocated = num + (d < LIST_PAD ? LIST_PAD : d);
+        entry = static_cast<QoreValue*>(qore_realloc_or_throw(static_cast<void*>(entry),
+            sizeof(QoreValue) * new_allocated));
+        allocated = new_allocated;
+        sb.sync(sizeof(QoreValue) * allocated);
     }
 
     DLLLOCAL void resize(size_t num) {
@@ -784,10 +794,7 @@ struct qore_list_private {
         // make larger
         if (num >= length) {
             if (num >= allocated) {
-                size_t d = num >> 2;
-                allocated = num + (d < LIST_PAD ? LIST_PAD : d);
-                entry = static_cast<QoreValue*>(realloc(static_cast<void*>(entry), sizeof(QoreValue) * allocated));
-                sb.sync(sizeof(QoreValue) * allocated);
+                grow(num);
             }
             zeroEntries(length, num);
         }

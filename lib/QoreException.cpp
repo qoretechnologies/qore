@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreAllocFailure.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreThreadList.h"
@@ -85,6 +86,9 @@ void QoreException::del(ExceptionSink* xsink) {
         delete e;
         e = n;
     }
+    // the memory held back for the exception of an allocation that failed is taken again once the code that failed
+    // has released its memory (qore#7466)
+    qore_check_allocation_failure_reserve();
 }
 
 class QoreExceptionHolder {
