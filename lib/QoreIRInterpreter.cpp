@@ -3031,13 +3031,15 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
 
 //! Makes the retries of a store to a local whose first round recorded reference elements to bind (qore#7391)
 /** The local holds a reference to a member or to a global or closure-bound variable, or is closure-bound: its lvalue is
-    locked, and the first round of the store left \a retry pending.  The references are bound with no lvalue lock held,
-    and the local is resolved again for each round (a reference that it holds is resolved again, as for any use of
-    it); the store assigns the value that the last round converted.  Out of line and cold: the first round is made by
-    the caller with the cost of a null pointer for the retry.
+    locked, and the first round of the store left its helper \a first pending, which is released here with its locks.
+    The references are bound with no lvalue lock held, and the local is resolved again for each round (a reference
+    that it holds is resolved again, as for any use of it); the store assigns the value that the last round converted.
+    Out of line and cold: the first round is made by the caller with the cost of the byte that enables the retry.
 */
-static QORE_INTERN_NOINLINE QORE_INTERN_COLD void qore_ir_assign_local_bind_retry(QoreBindRetry& retry,
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD void qore_ir_assign_local_bind_retry(LValueHelper& first,
         LocalVar* var, const char* desc, ExceptionSink* xsink) {
+    QoreBindRetry retry;
+    first.releaseForBindRetry(retry);
     qore_store_bind_retry_rounds(retry, xsink, false,
         [var](LValueHelper& helper) -> int {
             return var->getLValue(helper, false, true);
@@ -3056,23 +3058,19 @@ static void assignLocalVarValue(LocalVar* var, const QoreValue& value, Exception
     if (!var) {
         return;
     }
-    // a store whose check records reference elements (the local's lvalue is locked: it holds a reference to a member
-    // or to a global or closure-bound variable) is made again after they have been bound with no lvalue lock held;
-    // the first round resolves the local once (qore#7391)
-    QoreBindRetry retry;
-    {
-        LValueHelper helper(xsink);
-        if (var->getLValue(helper, false, true)) {
-            return;
-        }
-        helper.setBindRetry(retry);
-        // refSelf before assign — assign takes ownership of the reference
-        QoreValue stored = value.needsRef() ? value.refSelf() : value;
-        if (!helper.assign(stored, desc) || !retry.isPending()) [[likely]] {
-            return;
-        }
+    LValueHelper helper(xsink);
+    if (var->getLValue(helper, false, true)) {
+        return;
     }
-    qore_ir_assign_local_bind_retry(retry, var, desc, xsink);
+    // a store whose check records reference elements (the local's lvalue is locked: it holds a reference to a member
+    // or to a global or closure-bound variable) is made again out of line after they have been bound with no lvalue
+    // lock held; the first round resolves the local once (qore#7391)
+    helper.enableBindRetry();
+    // refSelf before assign — assign takes ownership of the reference
+    QoreValue stored = value.needsRef() ? value.refSelf() : value;
+    if (helper.assign(stored, desc) && helper.isBindPending()) [[unlikely]] {
+        qore_ir_assign_local_bind_retry(helper, var, desc, xsink);
+    }
 }
 
 // Variant of assignLocalVarValue that TRANSFERS ownership of value's reference
@@ -3090,21 +3088,17 @@ static void assignLocalVarValueTransfer(LocalVar* var, QoreValue value, Exceptio
         value.discard(xsink);
         return;
     }
-    // see assignLocalVarValue() (qore#7391)
-    QoreBindRetry retry;
-    {
-        LValueHelper helper(xsink);
-        if (var->getLValue(helper, false, true)) {
-            value.discard(xsink);
-            return;
-        }
-        helper.setBindRetry(retry);
-        // Transfer: no refSelf. helper.assign takes ownership of the passed ref.
-        if (!helper.assign(value, desc) || !retry.isPending()) [[likely]] {
-            return;
-        }
+    LValueHelper helper(xsink);
+    if (var->getLValue(helper, false, true)) {
+        value.discard(xsink);
+        return;
     }
-    qore_ir_assign_local_bind_retry(retry, var, desc, xsink);
+    // see assignLocalVarValue() (qore#7391)
+    helper.enableBindRetry();
+    // Transfer: no refSelf. helper.assign takes ownership of the passed ref.
+    if (helper.assign(value, desc) && helper.isBindPending()) [[unlikely]] {
+        qore_ir_assign_local_bind_retry(helper, var, desc, xsink);
+    }
 }
 
 //! Mirrors a value that the IR slot cache already holds to the thread's local variable, if it has one
@@ -3115,23 +3109,19 @@ static void assignLocalVarValueTransfer(LocalVar* var, QoreValue value, Exceptio
 */
 static void mirrorLocalVarValueTransfer(LocalVar* var, QoreValue value, ExceptionSink* xsink) {
     assert(var);
-    // see assignLocalVarValue() (qore#7391)
-    QoreBindRetry retry;
-    {
-        LValueHelper helper(xsink);
-        LocalVarLValueLookup rc = var->tryGetLValue(helper, false, true);
-        if (rc != LocalVarLValueLookup::Found) {
-            assert(rc == LocalVarLValueLookup::NotInstantiated || *xsink);
-            value.discard(xsink);
-            return;
-        }
-        helper.setBindRetry(retry);
-        if (!helper.assign(value) || !retry.isPending()) [[likely]] {
-            return;
-        }
+    LValueHelper helper(xsink);
+    LocalVarLValueLookup rc = var->tryGetLValue(helper, false, true);
+    if (rc != LocalVarLValueLookup::Found) {
+        assert(rc == LocalVarLValueLookup::NotInstantiated || *xsink);
+        value.discard(xsink);
+        return;
     }
-    // the variable was found above, on this thread, where it stays instantiated
-    qore_ir_assign_local_bind_retry(retry, var, "<lvalue>", xsink);
+    // see assignLocalVarValue() (qore#7391)
+    helper.enableBindRetry();
+    if (helper.assign(value) && helper.isBindPending()) [[unlikely]] {
+        // the variable was found above, on this thread, where it stays instantiated
+        qore_ir_assign_local_bind_retry(helper, var, "<lvalue>", xsink);
+    }
 }
 
 //! Returns the value stored in an IR-only local, with the reference its slot owns
@@ -3229,6 +3219,31 @@ static ClosureVarValue* resolve_closure_var_value(const LocalVar* var) {
 // ClosureVarValue so that changes are visible outside the IR interpreter.
 static ClosureVarValue* findClosureVarValueForIR(LocalVar* var);
 
+//! Makes the retries of assignClosureVarValue() after its first round recorded reference elements (qore#7391)
+/** Out of line and cold: \a first, the helper of the first round, is released with its locks, the references are bound
+    with no lvalue lock held, and the variable is resolved again for each round; the other arguments are those of
+    assignClosureVarValue()
+*/
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD void qore_ir_assign_closure_bind_retry(LValueHelper& first, LocalVar* var,
+        ClosureVarValue* cv, bool initial_assignment, const char* desc, AssignmentMode mode, QoreValue* converted,
+        ExceptionSink* xsink) {
+    auto resolve = [var, cv, initial_assignment](LValueHelper& helper) -> int {
+        return cv ? cv->getLValue(helper, false, initial_assignment)
+            : var->getLValue(helper, false, initial_assignment);
+    };
+    auto assign = [desc, mode, converted, xsink](LValueHelper& helper, QoreValue stored) -> int {
+        if (helper.assign(stored, desc, true, mode)) {
+            return -1;
+        }
+        if (converted) {
+            *converted = helper.getReferencedValue();
+            evaluateOwnedWeakReferenceResult(*converted, xsink);
+        }
+        return 0;
+    };
+    qore_store_bind_retry_continue(first, resolve, assign);
+}
+
 //! Assigns a value to a closure variable
 /** @param mode the mode of the assignment: a weak or opaque assignment is given the value assigned, whose type the
     assignment checks before it makes the weak or opaque reference that the variable holds, as the AST interpreter
@@ -3243,30 +3258,26 @@ static void assignClosureVarValue(LocalVar* var, const QoreValue& value, Excepti
     if (!var) {
         return;
     }
+    LValueHelper helper(xsink);
     ClosureVarValue* cv = findClosureVarValueForIR(var);
-    // a store whose check records reference elements is made again after they have been bound with no lvalue lock
-    // held (qore#7391)
-    QoreBindRetry retry;
-    do {
-        LValueHelper helper(xsink);
-        helper.setBindRetry(retry);
-        // a closure variable that is not found is assigned in the local's storage: a function that has closureUse()
-        // variables can execute in its own body context (not as a closure)
-        if (cv ? cv->getLValue(helper, false, initial_assignment)
-                : var->getLValue(helper, false, initial_assignment)) {
-            return;
-        }
-        // a retry assigns the value that the first round converted
-        QoreValue stored = retry.hasValue() ? retry.takeValue() : (value.needsRef() ? value.refSelf() : value);
-        if (helper.assign(stored, desc, true, mode)) {
-            continue;
-        }
-        if (converted) {
-            *converted = helper.getReferencedValue();
-            evaluateOwnedWeakReferenceResult(*converted, xsink);
+    // a closure variable that is not found is assigned in the local's storage: a function that has closureUse()
+    // variables can execute in its own body context (not as a closure)
+    if (cv ? cv->getLValue(helper, false, initial_assignment) : var->getLValue(helper, false, initial_assignment)) {
+        return;
+    }
+    // a store whose check records reference elements is made again out of line after they have been bound with no
+    // lvalue lock held (qore#7391)
+    helper.enableBindRetry();
+    if (helper.assign(value.needsRef() ? value.refSelf() : value, desc, true, mode)) {
+        if (helper.isBindPending()) [[unlikely]] {
+            qore_ir_assign_closure_bind_retry(helper, var, cv, initial_assignment, desc, mode, converted, xsink);
         }
         return;
-    } while (retry.again());
+    }
+    if (converted) {
+        *converted = helper.getReferencedValue();
+        evaluateOwnedWeakReferenceResult(*converted, xsink);
+    }
 }
 
 static ClosureVarValue* findClosureVarValueForIR(LocalVar* var) {
@@ -3296,30 +3307,82 @@ static bool incrementClosureVarIntFast(LocalVar* var, int64_t delta, int64_t& re
 
 // Variant of assignClosureVarValue that TRANSFERS ownership of value's reference.
 // See assignLocalVarValueTransfer for rationale.
+//! Makes the retries of assignClosureVarValueTransfer() after its first round recorded reference elements (qore#7391)
+/** Out of line and cold; see qore_ir_assign_closure_bind_retry()
+*/
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD void qore_ir_assign_closure_transfer_bind_retry(LValueHelper& first,
+        LocalVar* var, ClosureVarValue* cv) {
+    auto resolve = [var, cv](LValueHelper& helper) -> int {
+        return cv ? cv->getLValue(helper, false) : var->getLValue(helper, false, false);
+    };
+    auto assign = [](LValueHelper& helper, QoreValue stored) -> int {
+        return helper.assign(stored);
+    };
+    qore_store_bind_retry_continue(first, resolve, assign);
+}
+
 static void assignClosureVarValueTransfer(LocalVar* var, QoreValue value, ExceptionSink* xsink) {
     if (!var) {
         value.discard(xsink);
         return;
     }
     ClosureVarValue* cv = findClosureVarValueForIR(var);
-    // a store whose check records reference elements is made again after they have been bound with no lvalue lock
-    // held; the first round takes the value, and a retry assigns the value that it converted (qore#7391)
-    QoreBindRetry retry;
-    do {
-        LValueHelper helper(xsink);
-        helper.setBindRetry(retry);
-        // without a closure variable, the value is assigned in the local's storage
-        if (cv ? cv->getLValue(helper, false) : var->getLValue(helper, false, false)) {
-            value.discard(xsink);
-            return;
-        }
-        QoreValue stored = retry.hasValue() ? retry.takeValue() : value;
-        value = QoreValue();
-        if (helper.assign(stored)) {
-            continue;
-        }
+    LValueHelper helper(xsink);
+    // without a closure variable, the value is assigned in the local's storage
+    if (cv ? cv->getLValue(helper, false) : var->getLValue(helper, false, false)) {
+        value.discard(xsink);
         return;
-    } while (retry.again());
+    }
+    // a store whose check records reference elements is made again out of line after they have been bound with no
+    // lvalue lock held; a retry assigns the value that the first round converted (qore#7391)
+    helper.enableBindRetry();
+    if (helper.assign(value) && helper.isBindPending()) [[unlikely]] {
+        qore_ir_assign_closure_transfer_bind_retry(helper, var, cv);
+    }
+}
+
+//! Resolves the global variable \a var in \a helper for a store (qore#7391)
+/** A global variable holding a reference is assigned through it, as LValueHelper::doLValue() resolves the variable of
+    an assignment in the AST interpreter
+*/
+static QORE_INTERN_ALWAYS_INLINE int qore_ir_resolve_global_var(LValueHelper& helper, Var* var) {
+    if (var->getLValue(helper, false)) {
+        return -1;
+    }
+    if (const ReferenceNode* ref = helper.getReference()) {
+        helper.clearPtr();
+        if (helper.doLValue(ref, false)) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+//! Makes the retries of assignGlobalVarValueStored() after its first round recorded reference elements (qore#7391)
+/** Out of line and cold: \a first, the helper of the first round, is released with its locks, the references are bound
+    with no lvalue lock held, and the variable is resolved again for each round
+
+    @return see assignGlobalVarValueStored()
+*/
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue qore_ir_assign_global_bind_retry(LValueHelper& first, Var* var,
+        AssignmentMode mode, ExceptionSink* xsink) {
+    QoreValue rv;
+    auto resolve = [var](LValueHelper& helper) -> int {
+        return qore_ir_resolve_global_var(helper, var);
+    };
+    auto assign = [mode, &rv, xsink](LValueHelper& helper, QoreValue stored) -> int {
+        if (helper.assign(stored, "<lvalue>", true, mode)) {
+            return -1;
+        }
+        // see assignGlobalVarValueStored()
+        rv = helper.getReferencedValue();
+        if (mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque) {
+            evaluateOwnedWeakReferenceResult(rv, xsink);
+        }
+        return 0;
+    };
+    qore_store_bind_retry_continue(first, resolve, assign);
+    return rv;
 }
 
 // Write-through for global and thread-local variable stores: writes the value to the actual Var so that changes are
@@ -3337,39 +3400,63 @@ static QoreValue assignGlobalVarValueStored(Var* var, const QoreValue& value, Ex
     if (!var) {
         return QoreValue();
     }
-    // a store whose check records reference elements is made again after they have been bound with no lvalue lock
-    // held (qore#7391)
-    QoreBindRetry retry;
-    do {
-        LValueHelper helper(xsink);
-        helper.setBindRetry(retry);
-        if (var->getLValue(helper, false)) {
-            return QoreValue();
+    LValueHelper helper(xsink);
+    if (qore_ir_resolve_global_var(helper, var)) {
+        return QoreValue();
+    }
+    // a weak or opaque assignment is given the value assigned, whose type the assignment checks before it makes the
+    // weak or opaque reference that the variable holds, as the AST interpreter does (qore#6979); a store whose check
+    // records reference elements is made again out of line after they have been bound with no lvalue lock held
+    // (qore#7391)
+    helper.enableBindRetry();
+    QoreValue stored = value.needsRef() ? value.refSelf() : value;
+    if (helper.assign(stored, "<lvalue>", true, mode)) {
+        if (helper.isBindPending()) [[unlikely]] {
+            return qore_ir_assign_global_bind_retry(helper, var, mode, xsink);
         }
-        // a global variable holding a reference is assigned through it, as LValueHelper::doLValue() resolves the
-        // variable of an assignment in the AST interpreter
-        if (const ReferenceNode* ref = helper.getReference()) {
-            helper.clearPtr();
-            if (helper.doLValue(ref, false)) {
-                return QoreValue();
-            }
+        return QoreValue();
+    }
+    // the value of a weak or opaque assignment is read while the helper keeps a container that the variable's type
+    // converted to a copy of its own (qore#7084)
+    QoreValue rv = helper.getReferencedValue();
+    if (mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque) {
+        evaluateOwnedWeakReferenceResult(rv, xsink);
+    }
+    return rv;
+}
+
+//! Resolves the member \a key of \a obj in \a helper for a store (qore#7391)
+static QORE_INTERN_ALWAYS_INLINE int qore_ir_resolve_object_member(LValueHelper& helper, QoreObject* obj,
+        const char* key, const qore_class_private* class_ctx, ExceptionSink* xsink) {
+    if (qore_object_private::getLValue(*obj, key, helper, class_ctx, false, xsink)) {
+        return -1;
+    }
+    if (!class_ctx) {
+        qore_auto_vlock_ops(helper.vl).addMemberNotification(obj, key);
+    }
+    // a member that holds a reference is assigned through it, as the AST interpreter assigns it (qore#6661)
+    if (const ReferenceNode* ref = helper.getReference()) {
+        helper.clearPtr();
+        if (helper.doLValue(ref, false)) {
+            return -1;
         }
-        // a weak or opaque assignment is given the value assigned, whose type the assignment checks before it makes
-        // the weak or opaque reference that the variable holds, as the AST interpreter does (qore#6979); a retry
-        // assigns the value that the first round converted
-        QoreValue stored = retry.hasValue() ? retry.takeValue() : (value.needsRef() ? value.refSelf() : value);
-        if (helper.assign(stored, "<lvalue>", true, mode)) {
-            continue;
-        }
-        // the value of a weak or opaque assignment is read while the helper keeps a container that the variable's
-        // type converted to a copy of its own (qore#7084)
-        QoreValue rv = helper.getReferencedValue();
-        if (mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque) {
-            evaluateOwnedWeakReferenceResult(rv, xsink);
-        }
-        return rv;
-    } while (retry.again());
-    return QoreValue();
+    }
+    return 0;
+}
+
+//! Makes the retries of assignObjectMemberValue() after its first round recorded reference elements (qore#7391)
+/** Out of line and cold: \a first, the helper of the first round, is released with its locks, the references are bound
+    with no lvalue lock held, and the member is resolved again for each round, which adds its member notification again
+*/
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD void qore_ir_assign_object_member_bind_retry(LValueHelper& first,
+        QoreObject* obj, const char* key, const qore_class_private* class_ctx, ExceptionSink* xsink) {
+    auto resolve = [obj, key, class_ctx, xsink](LValueHelper& helper) -> int {
+        return qore_ir_resolve_object_member(helper, obj, key, class_ctx, xsink);
+    };
+    auto assign = [](LValueHelper& helper, QoreValue stored) -> int {
+        return helper.assign(stored);
+    };
+    qore_store_bind_retry_continue(first, resolve, assign);
 }
 
 static void assignObjectMemberValue(QoreObject* obj, const char* key, const QoreValue& value,
@@ -3380,33 +3467,18 @@ static void assignObjectMemberValue(QoreObject* obj, const char* key, const Qore
         class_ctx = qore_class_private::runtimeGetMemberStorageContext(*obj->getClass(), key, class_ctx);
     }
 
-    // a store whose check records reference elements is made again after they have been bound with no lvalue lock
-    // held (qore#7391)
-    QoreBindRetry retry;
-    do {
-        LValueHelper helper(xsink, true);
-        helper.setBindRetry(retry);
-        if (qore_object_private::getLValue(*obj, key, helper, class_ctx, false, xsink)) {
-            return;
-        }
-        if (!class_ctx) {
-            qore_auto_vlock_ops(helper.vl).addMemberNotification(obj, key);
-        }
-        // a member that holds a reference is assigned through it, as the AST interpreter assigns it (qore#6661)
-        if (const ReferenceNode* ref = helper.getReference()) {
-            helper.clearPtr();
-            if (helper.doLValue(ref, false)) {
-                return;
-            }
-        }
-
-        // a retry assigns the value that the first round converted
-        QoreValue stored = retry.hasValue() ? retry.takeValue() : (value.needsRef() ? value.refSelf() : value);
-        if (helper.assign(stored)) {
-            continue;
-        }
+    LValueHelper helper(xsink, true);
+    if (qore_ir_resolve_object_member(helper, obj, key, class_ctx, xsink)) {
         return;
-    } while (retry.again());
+    }
+
+    // a store whose check records reference elements is made again out of line after they have been bound with no
+    // lvalue lock held (qore#7391)
+    helper.enableBindRetry();
+    QoreValue stored = value.needsRef() ? value.refSelf() : value;
+    if (helper.assign(stored) && helper.isBindPending()) [[unlikely]] {
+        qore_ir_assign_object_member_bind_retry(helper, obj, key, class_ctx, xsink);
+    }
 }
 
 
@@ -10883,86 +10955,55 @@ static QORE_INTERN_NOINLINE void qore_ir_release_failed_method_call(QoreListNode
         } \
     }
 
-//! makes a weak, opaque or element store (StoreLocal with a mode) to a local on the runtime stack
-/** The store's own mode is given, not Weak: assigning as Weak made '@=' on a local give up the ownership that separates
-    it from ':=', destroying a target whose only reference was the opaque one; an element store assigns its weak
-    reference as a Normal store would assign it.  A local that holds a reference assigns the referenced lvalue under
-    its lock: a store whose check records reference elements is made again after they have been bound with no lvalue
-    lock held (qore#7391).  Out of line: its LValueHelper would otherwise be in the frame of
-    QoreIRInterpreter::execute(), which is at its stack budget (tools/stack-usage-budgets.txt)
+//! Makes the retries of a store to a local with a mode (StoreLocal) in its helper \a lvh (qore#7391)
+/** Out of line and cold: called only when the first round, made in QoreIRInterpreter::execute(), left \a lvh pending.
+    The references are bound with no lvalue lock held, and the local is resolved again in \a lvh for each round; when
+    the store is made, \a lvh holds the local, as after a store made in one round.
 
-    @param want_result true to give the value of the assignment in @a res: the value assigned, converted to the
-    variable's type, for a weak or opaque store (qore#7084), the value that the variable holds for an element store
-
-    @return -1 if the variable could not be resolved, -2 if the assignment raised an exception, 0 if it was made
+    @return 0 if the store was made, -1 if not (an exception was raised)
 */
-static QORE_INTERN_NOINLINE int qore_ir_store_local_mode(const LocalVar* local, const QoreValue& val,
-        const char* desc, AssignmentMode mode, bool want_result, QoreValue& res, ExceptionSink* xsink) {
-    QoreBindRetry retry;
-    do {
-        LValueHelper helper(xsink);
-        helper.setBindRetry(retry);
-        if (local->getLValue(helper, false, true)) {
-            return -1;
-        }
-        // a retry assigns the value that the first round converted
-        QoreValue stored = retry.hasValue() ? retry.takeValue() : (val.needsRef() ? val.refSelf() : val);
-        if (helper.assign(stored, desc, true, mode)) {
-            continue;
-        }
-        if (want_result) {
-            res = helper.getReferencedValue();
-            if (mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque) {
-                evaluateOwnedWeakReferenceResult(res, xsink);
-            }
-        }
-        return 0;
-    } while (retry.again());
-    return -2;
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_ir_store_local_mode_bind_retry(LValueHelper& lvh,
+        const LocalVar* local, const char* desc, AssignmentMode mode) {
+    auto resolve = [local](LValueHelper& helper) -> int {
+        return local->getLValue(helper, false, true);
+    };
+    auto assign = [desc, mode](LValueHelper& helper, QoreValue stored) -> int {
+        return helper.assign(stored, desc, true, mode);
+    };
+    return qore_store_bind_retry_continue(lvh, resolve, assign);
 }
 
-//! assigns @a value, which this function owns, through the reference that the slot of an IR-only local holds
-/** A store whose check records reference elements is made again after they have been bound with no lvalue lock held,
-    and the reference is resolved again for it (qore#7391).  Out of line: its LValueHelper would otherwise be in the
-    frame of QoreIRInterpreter::execute(), which is at its stack budget (tools/stack-usage-budgets.txt)
+//! Makes the retries of a store through the reference that the slot of an IR-only local holds (qore#7391)
+/** Out of line and cold: called only when the first round, made in QoreIRInterpreter::execute(), left \a lvh pending.
+    The reference is resolved again in \a lvh for each round, as for any use of it.
 */
-static QORE_INTERN_NOINLINE void qore_ir_reference_slot_store(const ReferenceNode& ref, QoreValue value,
-        const char* desc, ExceptionSink* xsink) {
-    qore_reference_store_with_bind_retry(ref, xsink, value, [desc](LValueHelper& lvh, QoreValue v) -> int {
-        return lvh.assign(v, desc);
-    });
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD void qore_ir_reference_slot_store_bind_retry(LValueHelper& lvh,
+        const ReferenceNode& ref, const char* desc) {
+    auto resolve = [&ref](LValueHelper& helper) -> int {
+        return helper.set(ref) || !helper ? -1 : 0;
+    };
+    auto assign = [desc](LValueHelper& helper, QoreValue v) -> int {
+        return helper.assign(v, desc);
+    };
+    qore_store_bind_retry_continue(lvh, resolve, assign);
 }
 
-//! makes the store of QoreIROpcode::LValuePathAssign to the lvalue at @a path_copy; returns -1 for an error, 0 for OK
-/** A store whose check records reference elements is made again after they have been bound with no lvalue lock held,
-    and the path is resolved again with the keys evaluated already (qore#7391).  Out of line: its LValueHelper would
-    otherwise be in the frame of QoreIRInterpreter::execute(), which is at its stack budget
-    (tools/stack-usage-budgets.txt)
+//! Makes the retries of the store of QoreIROpcode::LValuePathAssign in its helper \a lvh (qore#7391)
+/** Out of line and cold: called only when the first round, made in QoreIRInterpreter::execute(), left \a lvh pending.
+    The path is resolved again in \a lvh with the keys evaluated already for each round; when the store is made, \a lvh
+    holds its target, as after a store made in one round.
 
-    @param value the value, which this function owns in every case
-    @param want_result true if the value of the assignment is given in @a res
+    @return 0 if the store was made, -1 if not (an exception was raised)
 */
-static QORE_INTERN_NOINLINE int qore_ir_lv_path_assign(IRLVPath& path_copy, QoreValue value, AssignmentMode mode,
-        bool want_result, QoreValue& res, ExceptionSink* xsink) {
-    return qore_store_with_bind_retry(xsink, true, value,
-        [&path_copy](LValueHelper& lvh) -> int {
-            return lvh.navigatePath(path_copy.data(), path_copy.size(), false);
-        },
-        [&](LValueHelper& lvh, QoreValue v) -> int {
-            // LValueHelper::assign() owns the value on failure as well
-            if (lvh.assign(v, "<lvalue>", true, mode)) {
-                return -1;
-            }
-            if (want_result) {
-                res = lvh.getReferencedValue();
-                // the value of a weak or opaque assignment is the value assigned, converted to the lvalue's type,
-                // read while the helper keeps a container that the conversion copied (qore#7122)
-                if (mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque) {
-                    evaluateOwnedWeakReferenceResult(res, xsink);
-                }
-            }
-            return 0;
-        });
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_ir_lv_path_assign_bind_retry(LValueHelper& lvh,
+        IRLVPath& path_copy, AssignmentMode mode) {
+    auto resolve = [&path_copy](LValueHelper& helper) -> int {
+        return helper.navigatePath(path_copy.data(), path_copy.size(), false);
+    };
+    auto assign = [mode](LValueHelper& helper, QoreValue v) -> int {
+        return helper.assign(v, "<lvalue>", true, mode);
+    };
+    return qore_store_bind_retry_continue(lvh, resolve, assign);
 }
 
 //! makes a round of qore_ir_run_lvalue_path_ternary(); returns -1 if the operation was not made (an exception was
@@ -17246,10 +17287,24 @@ load_local_done:
                                 && local_inst->slot_id < func.interpreter_reference_slots.size()
                                 && func.interpreter_reference_slots[local_inst->slot_id])
                             || local_inst->mode == AssignmentMode::Element)) {
-                        // raw slot: the reference is assigned through
-                        qore_ir_reference_slot_store(*reinterpret_cast<const ReferenceNode*>(
-                            locals_slot_cache.storage(local_inst->slot_id).getInternalNode()),
-                            val.needsRef() ? val.refSelf() : val, store_desc, xsink);
+                        {
+                            // raw slot: the reference is assigned through
+                            LValueHelper lvh(*reinterpret_cast<const ReferenceNode*>(
+                                locals_slot_cache.storage(local_inst->slot_id).getInternalNode()), xsink);
+                            if (lvh) {
+                                // a store whose check records reference elements is made again out of line after
+                                // they have been bound with no lvalue lock held, and the reference is resolved again
+                                // for it (qore#7391)
+                                lvh.enableBindRetry();
+                                if (lvh.assign(val.needsRef() ? val.refSelf() : val, store_desc)
+                                        && lvh.isBindPending()) [[unlikely]] {
+                                    qore_ir_reference_slot_store_bind_retry(lvh,
+                                        *reinterpret_cast<const ReferenceNode*>(
+                                            locals_slot_cache.storage(local_inst->slot_id).getInternalNode()),
+                                        store_desc);
+                                }
+                            }
+                        }
                         // the referenced lvalue can be another variable whose value a slot caches
                         cleanupLocalCaches();
                         if (xsink && *xsink) {
@@ -17356,13 +17411,8 @@ load_local_done:
                             && local_inst->slot_id < locals_lvar_cache.size()) {
                         locals_lvar_cache[local_inst->slot_id] = nullptr;
                     }
-                    // the result of a weak or opaque assignment is the value assigned, converted to the variable's
-                    // type, as the AST interpreter gives it to its consumers (qore#7084); an element store gives the
-                    // value the variable holds
-                    QoreValue res;
-                    int store_rc = qore_ir_store_local_mode(local_inst->local, val, store_desc, store_mode,
-                        local_inst->result.isValid(), res, xsink);
-                    if (store_rc == -1) {
+                    LValueHelper helper(xsink);
+                    if (local_inst->local->getLValue(helper, false, true)) {
                         if (branchToExceptionTarget(inst)) {
                             break;
                         }
@@ -17370,12 +17420,23 @@ load_local_done:
                         cleanupLocalCaches();
                         return exitAfterUnwind();
                     }
+                    // a store whose check records reference elements is made again out of line after they have been
+                    // bound with no lvalue lock held, in this helper (qore#7391)
+                    helper.enableBindRetry();
+                    // the store's own mode, not Weak: this branch is taken for every
+                    // non-Normal mode, and assigning as Weak here made '@=' on a local give up
+                    // the ownership that separates it from ':=', destroying a target whose only
+                    // reference was the opaque one; an element store assigns its weak reference as
+                    // a Normal store would assign it
+                    if (helper.assign(val.needsRef() ? val.refSelf() : val, store_desc, true, store_mode)
+                            && helper.isBindPending()) [[unlikely]] {
+                        qore_ir_store_local_mode_bind_retry(helper, local_inst->local, store_desc, store_mode);
+                    }
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < local_init_slots.size()) {
                         local_init_slots[local_inst->slot_id] = UINT32_MAX;
                     }
-                    if (store_rc) {
-                        assert(xsink && *xsink);
+                    if (xsink && *xsink) {
                         if (inst->exception_target) {
                             cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
                             prev_block = block;
@@ -17388,6 +17449,13 @@ load_local_done:
                         return exitAfterUnwind();
                     }
                     if (local_inst->result.isValid()) {
+                        // the result of a weak or opaque assignment is the value assigned, converted to the variable's
+                        // type, as the AST interpreter gives it to its consumers (qore#7084); an element store gives
+                        // the value the variable holds
+                        QoreValue res = helper.getReferencedValue();
+                        if (store_mode == AssignmentMode::Weak || store_mode == AssignmentMode::Opaque) {
+                            evaluateOwnedWeakReferenceResult(res, xsink);
+                        }
                         setValueSlot(values, local_inst->result.id, res, xsink);
                         if (res.needsRef()) {
                             cleanup.push_back(local_inst->result.id);
@@ -20534,12 +20602,28 @@ load_local_done:
                 QoreValue res;
                 if (!assignment_failed) {
                     invalidateLValuePathLocalCaches(path_inst);
-                    // the store owns the value in every case
-                    if (qore_ir_lv_path_assign(path_copy, consume
+                    LValueHelper lvh(xsink, true);
+                    // a store whose check records reference elements is made again out of line after they have been
+                    // bound with no lvalue lock held, in this helper, and the path is resolved again with the keys
+                    // evaluated already (qore#7391)
+                    lvh.enableBindRetry();
+                    if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
+                        assignment_failed = true;
+                    } else if (lvh.assign(consume
                                 ? (assign_eval ? eval_holder.release() : val_holder.release())
                                 : assign_val.refSelf(),
-                            path_inst->mode, path_inst->result.isValid(), res, xsink)) {
+                            "<lvalue>", true, path_inst->mode)
+                            && (!lvh.isBindPending()
+                                || qore_ir_lv_path_assign_bind_retry(lvh, path_copy, path_inst->mode))) {
+                        // LValueHelper::assign() owns the value on failure as well
                         assignment_failed = true;
+                    } else if (path_inst->result.isValid()) {
+                        res = lvh.getReferencedValue();
+                        // the value of a weak or opaque assignment is the value assigned, converted to the lvalue's
+                        // type, read while the helper keeps a container that the conversion copied (qore#7122)
+                        if (path_inst->mode == AssignmentMode::Weak || path_inst->mode == AssignmentMode::Opaque) {
+                            evaluateOwnedWeakReferenceResult(res, xsink);
+                        }
                     }
                 }
                 // lvh is now destructed — object lock released
@@ -25025,38 +25109,62 @@ QoreValue QoreIRInterpreter::evalLValueLoad(const QoreValue& lvalue, ExceptionSi
     return helper.getReferencedValue();
 }
 
-QoreValue QoreIRInterpreter::evalLValueStore(const QoreValue& lvalue, const QoreValue& value, ExceptionSink* xsink,
-        AssignmentMode mode) {
-    QoreValue assign_value = value;
-    ValueHolder eval_holder(xsink);
-    // a store whose check records reference elements is made again after they have been bound with no lvalue lock
-    // held; the keys of the lvalue expression are evaluated once (qore#7391)
-    QoreBindKeys keys(xsink);
+//! Makes the retries of QoreIRInterpreter::evalLValueStore() after its first round recorded references (qore#7391)
+/** Out of line and cold: \a first, the helper of the first round, is released with its locks, the references are bound
+    with no lvalue lock held, and \a lvalue is resolved again for each round with the keys that the first round kept in
+    \a keys; the store assigns the value that the last round converted
+
+    @return the value of the assignment with a reference if the store was made, otherwise no value
+*/
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue qore_ir_eval_lvalue_store_bind_retry(LValueHelper& first,
+        QoreBindKeys& keys, const QoreValue& lvalue, AssignmentMode mode, ExceptionSink* xsink) {
     QoreBindRetry retry;
-    do {
+    first.releaseForBindRetry(retry);
+    // the first round resolved the path: the retries resolve it with the keys that it kept
+    keys.setRecorded();
+    while (retry.again()) {
         LValueHelper helper(lvalue, xsink, false, retry, keys);
         if (!helper) {
             return QoreValue();
         }
-        // only a weak and an element store keep a weak reference as it is; an opaque store must reference the target;
-        // a retry assigns the value that the first round converted
-        if (!retry.hasValue() && mode != AssignmentMode::Weak && mode != AssignmentMode::Element) {
-            normalizeWeakReferenceForAssignment(assign_value, eval_holder, xsink);
-            if (xsink && *xsink) {
-                return QoreValue();
-            }
-        }
-        // refSelf() before passing to assign() - assign() takes ownership via
-        // assignAssume()/takeNode(), but value is a borrowed reference from the
-        // caller's values map; without the extra ref, both the variable and the
-        // values map would think they own the same single reference
-        QoreValue stored = retry.hasValue() ? retry.takeValue() : assign_value.refSelf();
-        if (helper.assign(stored, "<lvalue>", true, mode)) {
+        assert(retry.hasValue());
+        if (helper.assign(retry.hasValue() ? retry.takeValue() : QoreValue(), "<lvalue>", true, mode)) {
             continue;
         }
         return helper.getReferencedValue();
-    } while (retry.again());
+    }
     return QoreValue();
+}
+
+QoreValue QoreIRInterpreter::evalLValueStore(const QoreValue& lvalue, const QoreValue& value, ExceptionSink* xsink,
+        AssignmentMode mode) {
+    // a store whose check records reference elements is made again out of line after they have been bound with no
+    // lvalue lock held; the steps of the path keep their keys here, so that they are evaluated once (qore#7391)
+    QoreBindKeys keys;
+    LValueHelper helper(lvalue, xsink, false, keys);
+    if (!helper) {
+        return QoreValue();
+    }
+    QoreValue assign_value = value;
+    ValueHolder eval_holder(xsink);
+    // only a weak and an element store keep a weak reference as it is; an opaque store must reference the target
+    if (mode != AssignmentMode::Weak && mode != AssignmentMode::Element) {
+        normalizeWeakReferenceForAssignment(assign_value, eval_holder, xsink);
+        if (xsink && *xsink) {
+            return QoreValue();
+        }
+    }
+    // refSelf() before passing to assign() - assign() takes ownership via
+    // assignAssume()/takeNode(), but value is a borrowed reference from the
+    // caller's values map; without the extra ref, both the variable and the
+    // values map would think they own the same single reference
+    if (helper.assign(assign_value.refSelf(), "<lvalue>", true, mode)) {
+        if (helper.isBindPending()) [[unlikely]] {
+            return qore_ir_eval_lvalue_store_bind_retry(helper, keys, lvalue, mode, xsink);
+        }
+        return QoreValue();
+    }
+    return helper.getReferencedValue();
 }
 
 QoreValue QoreIRInterpreter::evalLValueUnary(QoreIROpcode op, const QoreValue& lvalue, ExceptionSink* xsink) {

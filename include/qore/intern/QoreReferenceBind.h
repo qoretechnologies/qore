@@ -36,6 +36,7 @@
 #include "qore/intern/LexicalSemanticPolicy.h"
 
 #include <atomic>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -59,14 +60,18 @@
     releases every lock, and QoreBindRetry::again() binds the references with no lock held and has the store made
     again.  The second check accepts the references bound already without binding them.
 
-    The normal path of a store costs the cached byte of the type and the null pointer that QoreBindRetry is: its state
-    is allocated only when a store records references.
+    The normal path of a store costs the cached byte of the type: a store site whose helper can be made again enables
+    the retry of the helper (LValueHelper::enableBindRetry()), whose QoreBindRetry is a null pointer until a store
+    records references, and tests LValueHelper::isBindPending() only when its store failed.  A pending store is made
+    again out of line: LValueHelper::releaseForBindRetry() takes the retry and releases the helper with its locks, as
+    its destructor does, and the retries are made with helpers of their own (qore_store_bind_retry_rounds()).
 
     The keys and indices of the path of an AST store are evaluated once.  The steps of the first round leave the keys
     that they evaluate with the QoreBindKeys of the store site, which releases them after the store, after the lvalue
     locks (a move: no reference is taken, as the step would have released its key); a retry resolves the path with
-    them instead of evaluating the key expressions again.  The keys of the path of an IR or JIT/AOT instruction are
-    evaluated before the store, which resolves the path with them for each round.
+    them instead of evaluating the key expressions again.  They cannot be kept only when the store is made again: the
+    steps release their keys before the store checks its value.  The keys of the path of an IR or JIT/AOT instruction
+    are evaluated before the store, which resolves the path with them for each round.
 
     A reference at the root of the path (a variable that holds a reference, or a reference given as the target) is
     resolved again by a retry, as by any other use of the reference.  The keys of the path of a reference are evaluated
@@ -75,6 +80,21 @@
     that records no reference resolves its target once.
 
     A store site:
+        QoreBindKeys keys(xsink);
+        LValueHelper h(exp, xsink, true, keys);
+        if (!h) {
+            return ...;
+        }
+        if (h.assign(<value>, ...)) {
+            if (h.isBindPending()) [[unlikely]] {
+                return <cold out-of-line function: h.releaseForBindRetry(retry), then the retries>;
+            }
+            return ...;
+        }
+        return ...;
+
+    A store site that makes each round in a loop (an operation of its own that is not an assignment) uses a
+    QoreBindRetry of its own:
         QoreBindKeys keys(xsink);
         QoreBindRetry retry;
         do {
@@ -90,8 +110,9 @@
         return ...;
 
     A store whose target is resolved with no key expression to evaluate (a variable, a member, a reference, or the path
-    of an IR or JIT/AOT instruction, whose keys are evaluated already) uses qore_store_with_bind_retry() or
-    qore_reference_store_with_bind_retry() (Variable.h), which make the first round inline and the retries out of line.
+    of an IR or JIT/AOT instruction, whose keys are evaluated already) uses qore_store_with_bind_retry(),
+    qore_store_with_bind_retry_lazy() or qore_reference_store_with_bind_retry() (Variable.h), which make the first round
+    inline and the retries out of line.
     A merge into an object binds the references of its values before it takes the object's lock
     (qore_object_private::mergeBindReferences()).
 
@@ -191,8 +212,10 @@ struct QoreBindRetryState {
 
 //! The retry of a store whose check recorded references to bind (qore#7391)
 /** A null pointer until a round of the store records references: constructing it and testing it costs nothing more
-    on the normal path.  Created by the store site before the LValueHelper of the store, which it is given to;
-    again() is called after the helper has been destroyed, with no lvalue lock held.
+    on the normal path.  Created by a store site that makes each round in a loop before the LValueHelper of the store,
+    which it is given to, or allocated by a helper whose store site enabled the retry when its store records references
+    (LValueHelper::enableBindRetry()); again() is called after the helper has been destroyed or released, with no
+    lvalue lock held.
 */
 class QoreBindRetry {
 public:
@@ -251,6 +274,13 @@ public:
     DLLLOCAL void setPending(QoreValue& value, QoreReferenceBindPairList& pairs, ExceptionSink& error,
             LValueHelper& lvh);
 
+    //! takes the state of \a other, which has none afterwards; this retry must have none
+    DLLLOCAL void takeFrom(QoreBindRetry& other) {
+        assert(!state);
+        state = other.state;
+        other.state = nullptr;
+    }
+
 private:
     //! the state of a store that recorded references, allocated when needed
     QoreBindRetryState* state = nullptr;
@@ -270,21 +300,27 @@ struct QoreBindKey {
 };
 
 //! The keys and indices of the path of an AST store, kept for a retry of the store (qore#7391)
-/** Declared by the store site before its loop, and given to the LValueHelper of each round.  The helper of the first
-    round leaves each key that a step of the path takes here, in the order that the steps take them, until the root of
-    the path is reached (the path of a reference at the root is resolved again: see the top of this file): the
-    step hands its key over instead of releasing it, which costs no reference count operation.  A retry resolves the
-    path with them.  The keys are released when the store site leaves its loop, after the lvalue locks.
+/** Declared by the store site before its helper, and given to the LValueHelper of each round.  The helper of the first
+    round leaves each key that a step of the path takes here, in the order that the steps take them, until a reference
+    is followed (the path of a reference is resolved again: see the top of this file): the step hands its key over
+    instead of releasing it, which costs no reference count operation.  A retry resolves the path with them.  The keys
+    are released when the store site leaves, after the lvalue locks.
+
+    Constructing it costs one store, and destroying it the test of one byte: the exception sink and the keys after the
+    first BufSize are set only when they are used.
 */
 class QoreBindKeys {
 public:
-    DLLLOCAL explicit QoreBindKeys(ExceptionSink* xsink) : xsink(xsink) {
+    DLLLOCAL QoreBindKeys() = default;
+
+    //! for a store site that has an exception sink at hand; the keys are released with the sink of the helper
+    DLLLOCAL explicit QoreBindKeys(ExceptionSink* /* xsink */) {
     }
 
     DLLLOCAL ~QoreBindKeys() {
         // only keys that the store site holds a reference to are released; the keys of most paths are borrowed (the
         // constants of the expression, the values of variables) or need no reference (ints)
-        if (owned_mask || more) [[unlikely]] {
+        if (release_bits) [[unlikely]] {
             release();
         }
     }
@@ -293,24 +329,27 @@ public:
     QoreBindKeys& operator=(const QoreBindKeys&) = delete;
 
     //! keeps \a key; \a owned is true if the reference that the caller held for it is handed over
-    DLLLOCAL void add(const QoreValue& key, bool owned) {
+    /** @param xsink the exception sink that the keys held are released with
+    */
+    DLLLOCAL void add(const QoreValue& key, bool owned, ExceptionSink* xsink) {
         if (count < BufSize) [[likely]] {
             new (&reinterpret_cast<QoreValue*>(buf)[count]) QoreValue(key);
             // a value that needs no reference is not released
             if (owned && key.needsRef()) {
-                owned_mask |= static_cast<uint8_t>(1u << count);
+                this->xsink = xsink;
+                release_bits |= static_cast<uint8_t>(1u << count);
             }
             ++count;
             return;
         }
-        addMore(key, owned);
+        addMore(key, owned, xsink);
     }
 
     //! takes a reference to each key that is only borrowed, before code runs that could release its owner
     /** Called before the check of a store that can record references (the cold path); a key borrowed from a variable
         would otherwise be read again by a retry after the variable could have been assigned
     */
-    DLLLOCAL void hold();
+    DLLLOCAL void hold(ExceptionSink* xsink);
 
     //! returns the number of keys kept
     DLLLOCAL size_t size() const {
@@ -335,24 +374,27 @@ public:
 private:
     //! the number of keys held without an allocation
     static constexpr size_t BufSize = 4;
+    //! the bit of release_bits set when the keys after the first BufSize are allocated
+    static constexpr uint8_t MoreBit = 1u << BufSize;
 
-    //! the exception sink of the store
-    ExceptionSink* xsink;
-    //! the keys after the first BufSize, allocated for a long path only
-    std::unique_ptr<std::vector<QoreBindKey>> more;
-    //! the first BufSize keys (the first count are valid)
-    alignas(QoreValue) unsigned char buf[BufSize * sizeof(QoreValue)];
+    // the first three members are initialized together, with the stores merged
     //! the number of keys kept
     uint32_t count = 0;
-    //! the keys of buf that the store site holds a reference to, one bit each
-    uint8_t owned_mask = 0;
+    //! the keys of buf that the store site holds a reference to, one bit each, and MoreBit; 0 if nothing is released
+    uint8_t release_bits = 0;
     //! true once the first round has resolved the path
     bool recorded = false;
+    //! the exception sink that the keys held are released with; set when the first one is held
+    ExceptionSink* xsink;
+    //! the keys after the first BufSize, allocated for a long path only; valid if MoreBit is set in release_bits
+    std::vector<QoreBindKey>* more;
+    //! the first BufSize keys (the first count are valid)
+    alignas(QoreValue) unsigned char buf[BufSize * sizeof(QoreValue)];
 
     //! keeps a key after the first BufSize
-    DLLLOCAL void addMore(const QoreValue& key, bool owned);
+    DLLLOCAL void addMore(const QoreValue& key, bool owned, ExceptionSink* xsink);
 
-    //! releases the keys that the store site holds
+    //! releases the keys that the store site holds and the keys allocated
     DLLLOCAL void release();
 };
 

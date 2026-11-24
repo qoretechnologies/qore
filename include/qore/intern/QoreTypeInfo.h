@@ -435,18 +435,22 @@ public:
     /** True if the type is or contains, through list, softlist, hash and hashdecl member types and unions, a
         reference type (reference<T>, *reference<T>), whose check binds a reference to an lvalue of a wider type; a
         store whose target has such a type does not check its value with the target's lock held without a
-        QoreReferenceBindProbe.  Cached in the type.
+        QoreReferenceBindProbe.  Cached in the type: the normal path is one relaxed load of the cached byte, and a type
+        with no type restriction ("auto", "any") caches 0 like any other type that binds nothing.
     */
-    DLLLOCAL static bool mayBindReference(const QoreTypeInfo* ti) {
-        if (!hasType(ti)) {
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE static bool mayBindReference(const QoreTypeInfo* ti) {
+        if (!ti) {
             return false;
         }
         signed char c = ti->may_bind_reference_cache.load(std::memory_order_relaxed);
-        return c >= 0 ? c : mayBindReferenceIntern(ti);
+        if (c >= 0) [[likely]] {
+            return c;
+        }
+        return mayBindReferenceIntern(ti);
     }
 
-    //! computes and caches the value returned by mayBindReference()
-    DLLLOCAL static bool mayBindReferenceIntern(const QoreTypeInfo* ti);
+    //! computes and caches the value returned by mayBindReference(); out of line and cold: once per type
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD static bool mayBindReferenceIntern(const QoreTypeInfo* ti);
 
     //! returns true if \a ti can bind a reference; \a seen holds the types and hashdecls being walked
     DLLLOCAL static bool mayBindReferenceWalk(const QoreTypeInfo* ti, std::vector<const void*>& seen);

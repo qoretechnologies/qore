@@ -15428,7 +15428,7 @@ static int executeInitFunctions(
                     }
                     // a store whose check records reference elements is made again after they have been bound with
                     // no lvalue lock held (qore#7391)
-                    qore_store_with_bind_retry(&xsink, false, result.refSelf(),
+                    qore_store_with_bind_retry_lazy(&xsink, false, [&]() -> QoreValue { return result.refSelf(); },
                         [var](LValueHelper& lvh) -> int {
                             return var->getLValue(lvh, false);
                         },
@@ -15485,7 +15485,7 @@ static int executeInitFunctions(
                         || target_var->parseGetVar() != shadow_var->parseGetVar())) {
                     // a store whose check records reference elements is made again after they have been bound with
                     // no lvalue lock held (qore#7391)
-                    qore_store_with_bind_retry(&xsink, false, result.refSelf(),
+                    qore_store_with_bind_retry_lazy(&xsink, false, [&]() -> QoreValue { return result.refSelf(); },
                         [shadow_var](LValueHelper& lvh) -> int {
                             return shadow_var->getLValue(lvh, false);
                         },

@@ -1188,9 +1188,15 @@ private:
     bool member_lvalue_modified = false;
     //! true while the path is resolved with the keys that the first round of a store kept (qore#7391)
     bool bind_key_replay = false;
-    //! true while the steps of the path keep their keys in bind_keys, until the root of the path (qore#7391)
+    //! true while the steps of the path keep their keys in bind_keys, until a reference is followed (qore#7391)
     bool bind_keys_retain = false;
-    //! the retry of the store that this helper makes, if the store site has one (qore#7391)
+    //! true if the store site tests isBindPending() and makes the store again itself (enableBindRetry(), qore#7391)
+    bool bind_retry_enabled = false;
+    //! true if bind_retry was allocated by this helper for a store site that enabled the retry, when its store
+    //! recorded references; it is released after the locks if the store site does not take it (qore#7391)
+    bool bind_retry_allocated = false;
+    //! the retry of the store that this helper makes, if the store site has one, or the retry allocated for a store
+    //! site that enabled it (qore#7391)
     QoreBindRetry* bind_retry = nullptr;
     //! the keys of the path of an AST store, kept by the store site for a retry (qore#7391)
     QoreBindKeys* bind_keys = nullptr;
@@ -1247,13 +1253,56 @@ public:
     DLLLOCAL LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_assignment,
         QoreBindRetry& retry, QoreBindKeys& keys);
 
+    //! resolves the target \a exp of the first round of an AST store whose retry is enabled (qore#7391)
+    /** The steps leave the keys and indices of the path in \a keys; a retry resolves the path with them, so that the
+        key expressions are evaluated once (see QoreBindKeys).  If the check of the value records references, the store
+        site finds isBindPending() true after assign() failed, and makes the store again out of line after
+        releaseForBindRetry().
+    */
+    DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_assignment, QoreBindKeys& keys);
+
+    //! enables the retry of the store that this helper makes, for a store site that tests isBindPending() (qore#7391)
+    /** A store whose check records references then stores nothing, and assign() returns -1 with no exception and
+        isBindPending() true; without it, the store fails closed (see deferBinds())
+    */
+    DLLLOCAL void enableBindRetry() {
+        bind_retry_enabled = true;
+    }
+
+    //! returns true if the store failed because its check recorded references to bind (see enableBindRetry())
+    /** Tested only after assign() (or the operation that assigns) failed; the retry is allocated only then
+    */
+    DLLLOCAL bool isBindPending() const {
+        return bind_retry_allocated && bind_retry->isPending();
+    }
+
+    //! hands the pending retry to \a retry and releases the helper with its locks, as its destructor does (qore#7391)
+    /** The helper is left empty, as made by LValueHelper(ExceptionSink*, bool): the store site makes the store again
+        with helpers of its own, and destroys this one with nothing left to do.  Out of line and cold.
+    */
+    DLLLOCAL void releaseForBindRetry(QoreBindRetry& retry);
+
+    //! gives the helper the state of \a retry for a round of a store made again in it (qore#7391)
+    /** The helper releases it after its locks unless the round is pending again (see qore_store_bind_retry_continue());
+        out of line and cold
+    */
+    DLLLOCAL void adoptBindRetry(QoreBindRetry& retry);
+
+    //! returns the value of the last round of the retry that the helper holds, which the caller owns (qore#7391)
+    DLLLOCAL QoreValue takeBindRetryValue() {
+        assert(bind_retry);
+        return bind_retry->hasValue() ? bind_retry->takeValue() : QoreValue();
+    }
+
     //! gives the helper the retry of its store, for a target whose path has no key to record (qore#7391)
     DLLLOCAL void setBindRetry(QoreBindRetry& retry) {
+        assert(!bind_retry_allocated);
         bind_retry = &retry;
     }
 
     //! removes the retry given with setBindRetry(), for a helper that outlives it (qore#7391)
     DLLLOCAL void clearBindRetry() {
+        assert(!bind_retry_allocated);
         bind_retry = nullptr;
     }
 
@@ -1643,23 +1692,16 @@ public:
     /** The key is handed over: the step does not release it, and the store site releases it after the store
     */
     DLLLOCAL void retainBindKey(ValueOptionalRefHolder& rh) {
-        if (!root_hook) [[unlikely]] {
-            retainBindKeyFirst(rh);
-            return;
-        }
-        bind_keys->add(*rh, rh.isTemp());
+        bind_keys->add(*rh, rh.isTemp(), vl.xsink);
         rh.clearTemp();
     }
-
-    //! keeps the first key of the path, and installs the root hook that ends the keeping of the keys (qore#7391)
-    DLLLOCAL void retainBindKeyFirst(ValueOptionalRefHolder& rh);
 
     //! takes a reference to the keys of the path kept by the store site that are only borrowed (qore#7391)
     /** Called before the check of a store that can record references, which can run code
     */
     DLLLOCAL void holdBindKeys();
 
-    //! the root hook of an AST store made with a QoreBindKeys: ends the keeping or the replay of the keys (qore#7391)
+    //! the root hook of a retry of an AST store made with a QoreBindKeys: ends the replay of the keys (qore#7391)
     DLLLOCAL static int bindKeyRootHook(void* arg);
 
     //! Navigate an lvalue using a structured path (IR-based alternative to AST-based doLValue)
@@ -2099,19 +2141,58 @@ QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_store_bind_retry_rounds(QoreBindR
     return -1;
 }
 
+//! Makes the retries of a store whose first round left its helper \a lvh pending, in \a lvh itself (qore#7391)
+/** Out of line and cold: called only when the first round of the store left \a lvh pending
+    (LValueHelper::isBindPending()).  The helper is released with its locks (LValueHelper::releaseForBindRetry()), and
+    each round binds the references recorded with no lvalue lock held (QoreBindRetry::again()), resolves the target
+    again in \a lvh with \a resolve, and assigns the value that the last round converted with \a assign.  When the store
+    is made, \a lvh holds its target as after a store made in one round, so that the store site goes on with it as it
+    does on its normal path.
+
+    @param lvh the helper of the store site
+    @param resolve <tt>int (LValueHelper&)</tt>: resolves the target of the store; returns non-zero, with an exception,
+    if it cannot be
+    @param assign <tt>int (LValueHelper&, QoreValue)</tt>: assigns the value given, which it owns, and returns the
+    result of LValueHelper::assign()
+
+    @return 0 if the store was made, -1 if not (an exception was raised)
+*/
+template <typename Resolve, typename Assign>
+QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_store_bind_retry_continue(LValueHelper& lvh, Resolve& resolve,
+        Assign& assign) {
+    QoreBindRetry retry;
+    lvh.releaseForBindRetry(retry);
+    while (retry.again()) {
+        // the helper holds the retry, with the references bound already and the value of the last round, which it
+        // releases after its locks if the round does not take them
+        lvh.adoptBindRetry(retry);
+        if (resolve(lvh)) {
+            return -1;
+        }
+        if (!assign(lvh, lvh.takeBindRetryValue())) {
+            return 0;
+        }
+        if (!lvh.isBindPending()) {
+            return -1;
+        }
+        lvh.releaseForBindRetry(retry);
+    }
+    return -1;
+}
+
 //! Makes a store whose target has no key expressions to evaluate, binding its reference elements outside its locks
-/** The store is made with a QoreBindRetry (see QoreReferenceBind.h): if the check of the value records reference
-    elements to bind under the lvalue lock of the target, nothing is stored, the helper is destroyed, which releases
-    the locks, the references are bound, and the target is resolved and the store made again with the value that the
-    first round converted (qore#7391).  For a store whose target is resolved from values that the caller evaluated
-    already (a variable, a member, the path of an IR or a JIT/AOT instruction with its evaluated keys, a reference),
-    which are resolved again for each round with no expression evaluated again.  The first round is made inline, with
-    the cost of a null pointer for the retry; the retries are made out of line (qore_store_bind_retry_rounds()).
+/** If the check of the value records reference elements to bind under the lvalue lock of the target, nothing is
+    stored, the helper is released with its locks, the references are bound, and the target is resolved and the store
+    made again with the value that the first round converted (see QoreReferenceBind.h; qore#7391).  For a store whose
+    target is resolved from values that the caller evaluated already (a variable, a member, the path of an IR or a
+    JIT/AOT instruction with its evaluated keys), which are resolved again for each round with no expression evaluated
+    again.  The first round is made inline, as a store with no retry is, with the cost of a byte stored to enable the
+    retry and of a test after a failed assignment; the retries are made out of line (qore_store_bind_retry_continue()).
 
     @param xsink the exception sink of the store
     @param for_assignment the \a for_assignment argument of the helper
-    @param value the value, which this function owns in every case: it is released after the locks of the helper if
-    the store is not made
+    @param make_value <tt>QoreValue ()</tt>: returns the value of the first round, which the store owns; called once
+    the target has been resolved, and not called if it cannot be
     @param resolve <tt>int (LValueHelper&)</tt>: resolves the target of the store; returns non-zero, with an exception,
     if it cannot be
     @param assign <tt>int (LValueHelper&, QoreValue)</tt>: assigns the value given, which it owns, with
@@ -2120,64 +2201,79 @@ QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_store_bind_retry_rounds(QoreBindR
 
     @return 0 if the store was made, -1 if not (an exception was raised)
 */
+template <typename MakeValue, typename Resolve, typename Assign>
+QORE_INTERN_ALWAYS_INLINE int qore_store_with_bind_retry_lazy(ExceptionSink* xsink, bool for_assignment,
+        MakeValue&& make_value, Resolve&& resolve, Assign&& assign) {
+    LValueHelper lvh(xsink, for_assignment);
+    lvh.enableBindRetry();
+    if (resolve(lvh)) {
+        return -1;
+    }
+    if (!assign(lvh, make_value())) {
+        return 0;
+    }
+    if (!lvh.isBindPending()) [[likely]] {
+        return -1;
+    }
+    return qore_store_bind_retry_continue(lvh, resolve, assign);
+}
+
+//! As qore_store_with_bind_retry_lazy(), for a value that the store owns in every case (qore#7391)
+/** @param value the value, which this function owns in every case: it is released after the locks of the helper if
+    the store is not made
+*/
 template <typename Resolve, typename Assign>
 QORE_INTERN_ALWAYS_INLINE int qore_store_with_bind_retry(ExceptionSink* xsink, bool for_assignment, QoreValue value,
         Resolve&& resolve, Assign&& assign) {
-    QoreBindRetry retry;
-    {
-        // released after the locks of the helper if the store is not made
-        ValueHolder holder(value, xsink);
-        LValueHelper lvh(xsink, for_assignment);
-        lvh.setBindRetry(retry);
-        if (resolve(lvh)) {
-            return -1;
-        }
-        if (!assign(lvh, holder.release())) {
-            return 0;
-        }
-        if (!retry.isPending()) [[likely]] {
-            return -1;
-        }
-    }
-    return qore_store_bind_retry_rounds(retry, xsink, for_assignment, resolve, assign);
+    // released after the locks of the helper if the store is not made
+    ValueHolder holder(value, xsink);
+    return qore_store_with_bind_retry_lazy(xsink, for_assignment, [&holder]() -> QoreValue {
+            return holder.release();
+        }, resolve, assign);
 }
 
 //! Makes a store through the reference \a ref, binding its reference elements outside its locks (qore#7391)
-/** As qore_store_with_bind_retry(), for a target named by a reference, which is resolved again for each retry, as for
-    any use of the reference
+/** As qore_store_with_bind_retry_lazy(), for a target named by a reference, which is resolved again for each retry,
+    as for any use of the reference
 
     @param ref the reference
     @param xsink the exception sink of the store
-    @param value the value, which this function owns in every case
-    @param assign <tt>int (LValueHelper&, QoreValue)</tt>: see qore_store_with_bind_retry()
+    @param make_value <tt>QoreValue ()</tt>: see qore_store_with_bind_retry_lazy()
+    @param assign <tt>int (LValueHelper&, QoreValue)</tt>: see qore_store_with_bind_retry_lazy()
     @param for_assignment the \a for_assignment argument of the helper
 
     @return 0 if the store was made, -1 if not (an exception was raised)
 */
+template <typename MakeValue, typename Assign>
+QORE_INTERN_ALWAYS_INLINE int qore_reference_store_with_bind_retry_lazy(const ReferenceNode& ref,
+        ExceptionSink* xsink, MakeValue&& make_value, Assign&& assign, bool for_assignment = false) {
+    LValueHelper lvh(ref, xsink, false, for_assignment);
+    if (!lvh) {
+        return -1;
+    }
+    lvh.enableBindRetry();
+    if (!assign(lvh, make_value())) {
+        return 0;
+    }
+    if (!lvh.isBindPending()) [[likely]] {
+        return -1;
+    }
+    // the reference is resolved again for each retry, as for any use of it
+    auto resolve = [&ref](LValueHelper& h) -> int {
+        return h.set(ref) || !h ? -1 : 0;
+    };
+    return qore_store_bind_retry_continue(lvh, resolve, assign);
+}
+
+//! As qore_reference_store_with_bind_retry_lazy(), for a value that the store owns in every case (qore#7391)
 template <typename Assign>
 QORE_INTERN_ALWAYS_INLINE int qore_reference_store_with_bind_retry(const ReferenceNode& ref, ExceptionSink* xsink,
         QoreValue value, Assign&& assign, bool for_assignment = false) {
-    QoreBindRetry retry;
-    {
-        // released after the locks of the helper if the store is not made
-        ValueHolder holder(value, xsink);
-        LValueHelper lvh(ref, xsink, false, for_assignment);
-        if (!lvh) {
-            return -1;
-        }
-        lvh.setBindRetry(retry);
-        if (!assign(lvh, holder.release())) {
-            return 0;
-        }
-        if (!retry.isPending()) [[likely]] {
-            return -1;
-        }
-    }
-    // the reference is resolved again for each retry, as for any use of it
-    return qore_store_bind_retry_rounds(retry, xsink, for_assignment,
-        [&ref](LValueHelper& lvh) -> int {
-            return lvh.set(ref) || !lvh ? -1 : 0;
-        }, assign);
+    // released after the locks of the helper if the store is not made
+    ValueHolder holder(value, xsink);
+    return qore_reference_store_with_bind_retry_lazy(ref, xsink, [&holder]() -> QoreValue {
+            return holder.release();
+        }, assign, for_assignment);
 }
 
 class LValueRemoveHelper {

@@ -403,7 +403,7 @@ int QoreExternalStaticMember::setValue(const QoreValue val, ExceptionSink* xsink
     // a store whose check records reference elements is made again after they have been bound with no lvalue lock
     // held (qore#7391)
     QoreVarInfo* vi = const_cast<QoreVarInfo*>(reinterpret_cast<const QoreVarInfo*>(this));
-    qore_store_with_bind_retry(xsink, false, val.refSelf(),
+    qore_store_with_bind_retry_lazy(xsink, false, [&]() -> QoreValue { return val.refSelf(); },
         [vi](LValueHelper& lvh) -> int {
             return vi->getLValue(lvh);
         },
@@ -744,7 +744,7 @@ int QoreExternalGlobalVar::setValue(const QoreValue val, ExceptionSink* xsink) c
     // a store whose check records reference elements is made again after they have been bound with no lvalue lock
     // held (qore#7391)
     Var* var = const_cast<Var*>(reinterpret_cast<const Var*>(this));
-    qore_store_with_bind_retry(xsink, false, val.refSelf(),
+    qore_store_with_bind_retry_lazy(xsink, false, [&]() -> QoreValue { return val.refSelf(); },
         [var](LValueHelper& lvh) -> int {
             return var->getLValue(lvh, false);
         },

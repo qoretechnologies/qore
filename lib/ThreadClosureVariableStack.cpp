@@ -117,7 +117,7 @@ int ThreadClosureVariableStack::setVarValue(int frame, const char* name, const Q
             if (!strcmp(var->id, name)) {
                 // a store whose check records reference elements is made again after they have been bound with no
                 // lvalue lock held (qore#7391)
-                return qore_store_with_bind_retry(xsink, false, val.refSelf(),
+                return qore_store_with_bind_retry_lazy(xsink, false, [&]() -> QoreValue { return val.refSelf(); },
                     [var](LValueHelper& lvh) -> int {
                         return var->getLValue(lvh, false);
                     },

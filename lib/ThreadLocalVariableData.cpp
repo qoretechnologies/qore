@@ -170,7 +170,7 @@ int ThreadLocalVariableData::setVarValue(int frame, const char* name, const Qore
                 // the value is assigned as an assignment in the code assigns it: converted to the type of the
                 // variable, or refused, as is a read-only variable; a store whose check records reference elements
                 // is made again after they have been bound with no lvalue lock held (qore#7391)
-                return qore_store_with_bind_retry(xsink, false, val.refSelf(),
+                return qore_store_with_bind_retry_lazy(xsink, false, [&]() -> QoreValue { return val.refSelf(); },
                     [&var](LValueHelper& lvh) -> int {
                         return var.local_var
                             ? static_cast<const LocalVar*>(var.local_var)->getLValueForValue(var, lvh)

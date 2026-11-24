@@ -1170,27 +1170,31 @@ bool QoreBindRetry::againIntern() {
     return true;
 }
 
-void QoreBindKeys::addMore(const QoreValue& key, bool owned) {
-    if (!more) {
-        more = std::make_unique<std::vector<QoreBindKey>>();
+void QoreBindKeys::addMore(const QoreValue& key, bool owned, ExceptionSink* xsink) {
+    if (!(release_bits & MoreBit)) {
+        more = new std::vector<QoreBindKey>;
+        release_bits |= MoreBit;
     }
+    this->xsink = xsink;
     // the key is counted once it is held, so that a failed allocation leaves its reference with the caller
-    more->push_back({key, owned});
+    more->push_back({key, owned && key.needsRef()});
     ++count;
 }
 
-void QoreBindKeys::hold() {
+void QoreBindKeys::hold(ExceptionSink* xsink) {
     QoreValue* keys = reinterpret_cast<QoreValue*>(buf);
     for (size_t i = 0; i < count; ++i) {
         if (i < BufSize) {
-            if (!(owned_mask & (1u << i)) && keys[i].needsRef()) {
+            if (!(release_bits & (1u << i)) && keys[i].needsRef()) {
                 keys[i].refSelf();
-                owned_mask |= static_cast<uint8_t>(1u << i);
+                this->xsink = xsink;
+                release_bits |= static_cast<uint8_t>(1u << i);
             }
         } else {
             QoreBindKey& key = (*more)[i - BufSize];
             if (!key.owned && key.value.needsRef()) {
                 key.value.refSelf();
+                this->xsink = xsink;
                 key.owned = true;
             }
         }
@@ -1198,21 +1202,23 @@ void QoreBindKeys::hold() {
 }
 
 void QoreBindKeys::release() {
+    // the keys after the first BufSize are freed however the release of a key ends
+    std::unique_ptr<std::vector<QoreBindKey>> more_holder((release_bits & MoreBit) ? more : nullptr);
     QoreValue* keys = reinterpret_cast<QoreValue*>(buf);
     for (size_t i = 0; i < count; ++i) {
         if (i < BufSize) {
-            if (owned_mask & (1u << i)) {
+            if (release_bits & (1u << i)) {
                 keys[i].discard(xsink);
             }
         } else {
-            QoreBindKey& key = (*more)[i - BufSize];
+            QoreBindKey& key = (*more_holder)[i - BufSize];
             if (key.owned) {
                 key.value.discard(xsink);
             }
         }
     }
     count = 0;
-    owned_mask = 0;
+    release_bits = 0;
 }
 
 template <typename F>
@@ -1261,21 +1267,11 @@ int LValueHelper::bindKeyRootHook(void* arg) {
     LValueHelper& lvh = *static_cast<LValueHelper*>(arg);
     // the steps of the path have taken their keys; the path of a reference that the root holds, whose keys were
     // evaluated when the reference was made, is resolved again by a retry, as by any other use of the reference
-    lvh.bind_keys_retain = false;
     if (lvh.bind_key_replay) {
         lvh.path_keys = nullptr;
         lvh.bind_key_replay = false;
     }
     return 0;
-}
-
-QORE_INTERN_NOINLINE QORE_INTERN_COLD void LValueHelper::retainBindKeyFirst(ValueOptionalRefHolder& rh) {
-    // the first key of the path: the root hook ends the keeping of the keys at the root of the path
-    assert(!root_hook);
-    root_hook = bindKeyRootHook;
-    root_hook_arg = this;
-    bind_keys->add(*rh, rh.isTemp());
-    rh.clearTemp();
 }
 
 template <typename F>
@@ -1284,16 +1280,50 @@ QORE_INTERN_ALWAYS_INLINE void LValueHelper::resolveWithBindKeysOnce(QoreBindKey
         resolveWithBindKeys(resolve);
         return;
     }
-    // the steps of the first round keep their keys in the store site's QoreBindKeys until the root of the path is
-    // reached
+    // the steps of the first round keep their keys in the store site's QoreBindKeys until a reference is followed
+    // (startReferenceLValue())
     bind_keys_retain = true;
     resolve();
     bind_keys_retain = false;
-    if (root_hook == bindKeyRootHook) {
-        // the path failed before its root was reached
-        root_hook = nullptr;
-    }
     keys.setRecorded();
+}
+
+// the steps keep their keys in the store site's QoreBindKeys until a reference is followed (startReferenceLValue()); a
+// retry made with them records that they were kept (qore#7391).  The flags are set with the other flags of the helper.
+LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_assignment, QoreBindKeys& keys)
+        : vl(xsink), assignment_only(for_assignment), bind_keys_retain(true), bind_retry_enabled(true),
+        bind_keys(&keys) {
+    if (!exp.isNothing() && exp.hasNode()) {
+        try {
+            doLValue(exp, false);
+        } catch (...) {
+            // see LValueHelper(const QoreValue&, ExceptionSink*, bool, bool)
+            ref_pgms.release(nullptr);
+            throw;
+        }
+    }
+    bind_keys_retain = false;
+}
+
+QORE_INTERN_NOINLINE QORE_INTERN_COLD void LValueHelper::releaseForBindRetry(QoreBindRetry& retry) {
+    assert(isBindPending());
+    retry.takeFrom(*bind_retry);
+    ExceptionSink* xsink = vl.xsink;
+    bool for_assignment = assignment_only;
+    // the helper is released as its destructor releases it, with its locks, and is left empty: the destructor of the
+    // store site then has nothing to do
+    this->~LValueHelper();
+    new (this) LValueHelper(xsink, for_assignment);
+}
+
+QORE_INTERN_NOINLINE QORE_INTERN_COLD void LValueHelper::adoptBindRetry(QoreBindRetry& retry) {
+    assert(!bind_retry);
+    assert(!bind_retry_allocated);
+    std::unique_ptr<QoreBindRetry> r = std::make_unique<QoreBindRetry>();
+    r->takeFrom(retry);
+    bind_retry = r.release();
+    bind_retry_allocated = true;
+    bind_retry_enabled = true;
 }
 
 LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_assignment, QoreBindRetry& retry,
@@ -1324,7 +1354,7 @@ LValueHelper::LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSin
 
 void LValueHelper::holdBindKeys() {
     if (bind_keys) {
-        bind_keys->hold();
+        bind_keys->hold(vl.xsink);
     }
 }
 
@@ -1363,10 +1393,15 @@ LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::mo
 #endif
         write_rejected(o.write_rejected),
         member_lvalue_modified(o.member_lvalue_modified), bind_key_replay(o.bind_key_replay),
-        bind_keys_retain(o.bind_keys_retain), bind_retry(o.bind_retry), bind_keys(o.bind_keys), robj(o.robj),
+        bind_keys_retain(o.bind_keys_retain),
+        bind_retry_enabled(o.bind_retry_enabled), bind_retry_allocated(o.bind_retry_allocated),
+        bind_retry(o.bind_retry), bind_keys(o.bind_keys), robj(o.robj),
         buffer_lvalue(o.buffer_lvalue), buffer_lvalue_index(o.buffer_lvalue_index),
         buffer_lvalue_value(o.buffer_lvalue_value), val(o.val), qv(o.qv), typeInfo(o.typeInfo) {
     o.qv = nullptr;
+    // the retry that the helper allocated belongs to the new helper (qore#7391)
+    o.bind_retry_allocated = false;
+    o.bind_retry = nullptr;
     // the set of lvalue IDs is deleted by the new helper
     o.lvid_set = nullptr;
     // the entries created to reach the target belong to the new helper, which removes them if its operation fails
@@ -1783,6 +1818,12 @@ LValueHelper::~LValueHelper() {
 
     for (RObject* o : removal_objects) {
         o->tDeref();
+    }
+
+    // the retry allocated for a store that recorded references and that the store site did not take (an exception)
+    // is released after the locks (qore#7391)
+    if (bind_retry_allocated) [[unlikely]] {
+        delete bind_retry;
     }
 }
 
@@ -3085,6 +3126,10 @@ const lvalue_ref* LValueHelper::startReferenceLValue(const ReferenceNode* ref) {
     if (check_stack(vl.xsink)) {
         return nullptr;
     }
+    // the steps of the first round of an AST store keep their keys until the root of the path is reached, which comes
+    // before any reference is followed: the path of a reference, whose keys were evaluated when the reference was
+    // made, is resolved again by a retry, as by any other use of the reference (qore#7391)
+    bind_keys_retain = false;
     const lvalue_ref* r = lvalue_ref::get(ref);
     if (!lvid_set) {
         lvid_set = new lvid_set_t;
@@ -4190,7 +4235,8 @@ bool qore_assign_through_element_reference(const QoreValue& cur, const QoreValue
     ValueHolder ref(cur.refSelf(), xsink);
     // an assignment: a member behind a write gate is not read first, as the AST interpreter assigns it; a store whose
     // check records reference elements is made again after they have been bound with no lvalue lock held (qore#7391)
-    qore_reference_store_with_bind_retry(*ref->get<const ReferenceNode>(), xsink, val.refSelf(),
+    qore_reference_store_with_bind_retry_lazy(*ref->get<const ReferenceNode>(), xsink,
+        [&val]() -> QoreValue { return val.refSelf(); },
         [](LValueHelper& lvh, QoreValue v) -> int {
             return lvh.assign(v, "<lvalue>");
         }, true);
@@ -4374,6 +4420,12 @@ QORE_INTERN_NOINLINE QORE_INTERN_COLD int LValueHelper::checkTypesMayBind(QoreVa
 
 int LValueHelper::deferBinds(QoreValue& n, QoreReferenceBindPairList& pairs) {
     assert(!pairs.empty());
+    if (!bind_retry && bind_retry_enabled) {
+        // the retry of a store site that enabled it is allocated only now: the normal path of the store costs nothing
+        // for it but the byte that enabled it; the store site takes it after assign() failed (isBindPending())
+        bind_retry = new QoreBindRetry;
+        bind_retry_allocated = true;
+    }
     if (!bind_retry) {
         // a store that cannot bind outside its locks fails closed: binding here would lock the referenced lvalue
         // under the lock of the target, which can deadlock
