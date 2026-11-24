@@ -5,6 +5,7 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../LiveProviderTest.qm
 %requires QUnit
 %requires FtpPoller
 %requires ImapClientDataProvider
