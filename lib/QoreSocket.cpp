@@ -979,6 +979,10 @@ public:
         priv->deref();
     }
 
+    DLLLOCAL qore_socket_private* getPollSocket() const override {
+        return priv;
+    }
+
     DLLLOCAL virtual int getPollableDescriptor() const override {
         return priv->sock;
     }
@@ -5957,6 +5961,34 @@ std::shared_ptr<qore_socket_private::DescriptorHold> qore_socket_private::Descri
     return std::shared_ptr<DescriptorHold>(new DescriptorHold(priv, priv.shared_fd), Deleter());
 }
 
+std::shared_ptr<void> qore_socket_private::holdGenerationWake(std::function<void()> wake) {
+    struct Registration {
+        qore_socket_private& sock;
+        std::shared_ptr<std::function<void()>> wake;
+
+        Registration(qore_socket_private& sock, std::function<void()> fn)
+                : sock(sock), wake(std::make_shared<std::function<void()>>(std::move(fn))) {
+            sock.ref();
+        }
+        ~Registration() {
+            {
+                CloseLockHelper cl(sock);
+                auto& wakes = sock.generation_wakes;
+                wakes.erase(std::remove(wakes.begin(), wakes.end(), wake), wakes.end());
+            }
+            sock.deref();
+        }
+    };
+
+    auto hold = std::make_shared<Registration>(*this, std::move(wake));
+    CloseLockHelper cl(*this);
+    if (sock != QORE_INVALID_SOCKET) {
+        return nullptr;
+    }
+    generation_wakes.push_back(hold->wake);
+    return hold;
+}
+
 void qore_socket_private::DescriptorHold::setCloseWake(std::function<void()> wake) {
     bool given_up;
     {
@@ -9586,6 +9618,10 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
             hook();
         }
 #endif
+        if (socketChanged()) {
+            qore_socket_raise_canceled("connect", xsink);
+            return -1;
+        }
         int rc = continueResolve(xsink);
         if (*xsink || rc) {
             return *xsink ? -1 : SOCK_POLLIN;

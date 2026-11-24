@@ -22391,6 +22391,19 @@ static void ut_qoresocket_fd_transfer_uses_async_controller(UnitTestCounters& c)
 }
 
 #ifdef DEBUG
+//! Closes the socket directly, as a native caller can do without canceling its controller operations
+static QoreValue f_dbg_close_socket_directly(const QoreListNode* params, RuntimeConfig&, ExceptionSink* xsink) {
+    QoreObject* obj = get_param_value(params, 0).get<QoreObject>();
+    ReferenceHolder<QoreSocketObject> sock(static_cast<QoreSocketObject*>(obj->getReferencedPrivateData(CID_SOCKET,
+        xsink)), xsink);
+    if (sock) {
+        qore_socket_object_private sp(sock);
+        AutoLocker al(sp.priv->m);
+        qore_socket_private::get(*sp.priv->socket)->close_and_reset();
+    }
+    return QoreValue();
+}
+
 //! Debug-only: closes a socket from another thread at the start of its next SSL I/O call
 /** The close is made where the I/O call is about to use the TLS connection, which is where a close made by another
     thread, such as the abort of a poll operation, can release the connection under the call.  DEBUG builds only.
@@ -35350,6 +35363,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_async_io_quit_io_thread", f_dbg_async_io_quit_io_thread,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "index");
+    qns.addBuiltinVariant("dbg_close_socket_directly", f_dbg_close_socket_directly, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_close_socket_at_next_ssl_io", f_dbg_close_socket_at_next_ssl_io,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");

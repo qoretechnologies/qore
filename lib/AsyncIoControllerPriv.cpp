@@ -10018,6 +10018,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
     std::vector<AsyncIoDeferredRelease> exit_timer_refs;
     // the options of the remaining timers, released after the lock with their references (qore#6208)
     std::vector<AsyncIoRuntimeOptions> exit_timer_pos;
+    decltype(t.generation_holds) exit_generation_holds;
     std::unordered_map<std::string, std::shared_ptr<void>> exit_holds;
     // sockets that waited for a barrier and the completions waiting for them: closed and signaled after the lock is
     // released, as closing a socket can run its destructor and other code that must not run under the controller lock
@@ -10085,6 +10086,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         t.key_hashes.clear();
         // no descriptor is registered any more: the holds are released after the lock below (the last reference to a
         // socket can go with its hold), which closes the descriptors that other threads closed meanwhile
+        exit_generation_holds.swap(t.generation_holds);
         exit_holds.swap(t.fd_holds);
         exit_extra_holds.swap(t.extra_fd_holds);
         t.key_events.clear();
@@ -10376,6 +10378,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             completion->deref();
         }
     }
+    exit_generation_holds.clear();
     exit_holds.clear();
     exit_extra_holds.clear();
 
@@ -12414,6 +12417,30 @@ bool AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint
 
     updateEventLoopRegistrationIntern(t, op_id, ev_flags, socket, sock_hash, force_fd_reregister, xsink);
 
+    // While resolving, the operation waits only on the resolver. Its socket has no descriptor
+    // to carry the usual close wake. Subscribe to the socket itself for the duration of this wait.
+    if (!ev_flags && !t.registered_fds.count(sock_hash)) {
+        if (!t.generation_holds.count(op_id)) {
+            ReferenceHolder<AbstractPollableIoObjectBase> pollable(static_cast<AbstractPollableIoObjectBase*>(
+                socket->getReferencedPrivateDataIfExists(CID_ABSTRACTPOLLABLEIOOBJECTBASE)), xsink);
+            qore_socket_private* priv = nullptr;
+            if (auto* so = dynamic_cast<QoreSocketObject*>(*pollable)) {
+                priv = qore_socket_private::get(*so->priv->socket);
+            } else if (auto* wrapper = dynamic_cast<AsyncIoRoutedPollable*>(*pollable)) {
+                priv = wrapper->getPollSocket();
+            }
+            if (priv && priv->sock == QORE_INVALID_SOCKET) {
+                if (auto hold = priv->holdGenerationWake(makeCloseWake(t, sock_hash))) {
+                    t.generation_holds.emplace(op_id, std::move(hold));
+                }
+                // A close between the poll step and registration must also be observed.
+                t.wake_socket_hashes.insert(sock_hash);
+            }
+        }
+    } else {
+        t.generation_holds.erase(op_id);
+    }
+
     // the descriptor of an object whose operations wait for its events is registered, unless the object has none
     if (!computeEventUnion(t, sock_hash) || t.registered_fds.count(sock_hash)) {
         return false;
@@ -12533,6 +12560,7 @@ void AsyncIoControllerPriv::updateEventLoopRegistrationIntern(IoThreadContext& t
 
     // Different socket (or new registration)
     if (prev_sock) {
+        t.generation_holds.erase(op_id);
         // Remove key from previous socket's reverse index
         auto sit = t.sock_hash_to_ops.find(prev_sock_hash);
         if (sit != t.sock_hash_to_ops.end()) {
@@ -12617,6 +12645,7 @@ void AsyncIoControllerPriv::updateEventLoopRegistrationIntern(IoThreadContext& t
 }
 
 void AsyncIoControllerPriv::unregisterFromEventLoop(IoThreadContext& t, uint64_t op_id, ExceptionSink* xsink) {
+    t.generation_holds.erase(op_id);
     t.key_events.erase(op_id);
 
     auto prev_it = t.registered_sockets.find(op_id);

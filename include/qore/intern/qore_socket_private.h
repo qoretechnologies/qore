@@ -2094,8 +2094,16 @@ struct qore_socket_private : public QoreReferenceCounter {
         std::shared_ptr<std::function<void()>> close_wake;
     };
 
+    using CloseWakes = std::vector<std::shared_ptr<std::function<void()>>>;
+    //! Waits on a socket without a descriptor (e.g. during DNS resolution), protected by close_m.
+    CloseWakes generation_wakes;
+
+    //! Registers a one-shot wake for the next close if the socket still has no descriptor.
+    //! Releasing the returned hold unregisters it.
+    DLLLOCAL std::shared_ptr<void> holdGenerationWake(std::function<void()> wake);
+
     //! the wakes that a close that gave the descriptor up while it was held runs once @ref close_m is released
-    std::vector<std::shared_ptr<std::function<void()>>> pending_close_wakes;
+    CloseWakes pending_close_wakes;
 
     //! Runs the wakes of a close that gave the descriptor up while it was held; called without @ref close_m held
     DLLLOCAL void runPendingCloseWakes() {
@@ -2104,6 +2112,10 @@ struct qore_socket_private : public QoreReferenceCounter {
             CloseLockHelper cl(*this);
             wakes.swap(pending_close_wakes);
         }
+        runCloseWakes(wakes);
+    }
+
+    DLLLOCAL static void runCloseWakes(const CloseWakes& wakes) {
         if (wakes.empty()) {
             return;
         }
@@ -2882,13 +2894,16 @@ public:
         @return true if the socket had no descriptor, false if it has one, which the caller then closes
     */
     DLLLOCAL bool endConnectIfNoDescriptor() {
-        CloseLockHelper cl(*this);
-        if (sock != QORE_INVALID_SOCKET) {
-            return false;
+        CloseWakes wakes;
+        {
+            CloseLockHelper cl(*this);
+            if (sock != QORE_INVALID_SOCKET) {
+                return false;
+            }
+            ++fd_generation;
+            wakes.swap(generation_wakes);
         }
-        // a close of a socket without a descriptor wakes no operation: one that waits for the resolver of its host
-        // ends at the resolver's next reply or timeout (no leak, no reuse of a descriptor; qore#7371)
-        ++fd_generation;
+        runCloseWakes(wakes);
         return true;
     }
 
@@ -3036,18 +3051,18 @@ public:
 
     //! Closes the descriptor and resets the connection state; does nothing if the descriptor is already released
     DLLLOCAL int close_and_reset() {
-        int rc;
+        int rc = 0;
+        CloseWakes wakes;
         {
             CloseLockHelper cl(*this);
+            wakes.swap(generation_wakes);
             if (sock == QORE_INVALID_SOCKET) {
-                // a connection that is being made (ex: resolving its host) gives the socket no descriptor after a
-                // close (see SocketConnectInetHappyEyeballsPollState::socketChanged(), qore#7003); the close wakes no
-                // operation: one that waits for the resolver ends at its next reply or timeout (qore#7371)
                 ++fd_generation;
-                return 0;
+            } else {
+                rc = close_and_reset_locked();
             }
-            rc = close_and_reset_locked();
         }
+        runCloseWakes(wakes);
         runPendingCloseWakes();
         return rc;
     }
@@ -3444,6 +3459,7 @@ public:
         QoreStringNode* old_ssl_err_str;
         QoreObject* old_remote_cert;
         std::shared_ptr<Http2Session> old_h2_session;
+        CloseWakes wakes;
         std::function<void(int32_t, Http2StreamInfo*, ExceptionSink*)> old_h2_stream_complete_callback;
         int rc = 0;
         {
@@ -3453,6 +3469,7 @@ public:
             old_remote_cert = remote_cert;
             remote_cert = nullptr;
             old_h2_session = h2_session.take();
+            wakes.swap(generation_wakes);
             old_h2_stream_complete_callback.swap(h2_stream_complete_callback);
 
             if (sock >= 0) {
@@ -3499,9 +3516,6 @@ public:
 
                 rc = close_and_reset_locked();
             } else {
-                // a connection that is being made (ex: resolving its host) gives the socket no descriptor after a
-                // close (see SocketConnectInetHappyEyeballsPollState::socketChanged(), qore#7003); the close wakes no
-                // operation: one that waits for the resolver ends at its next reply or timeout (qore#7371)
                 ++fd_generation;
             }
         }
@@ -3524,6 +3538,7 @@ public:
             old_ssl_err_str->deref();
         }
         // the async I/O registrations of a descriptor given up while it was held (see close_and_reset_locked())
+        runCloseWakes(wakes);
         runPendingCloseWakes();
         return rc;
     }
