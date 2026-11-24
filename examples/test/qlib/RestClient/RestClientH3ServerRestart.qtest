@@ -59,8 +59,10 @@
 #! The bound on a blocking wait: a hang guard only, never a timing assertion
 const HangGuard = 60s;
 
-#! The connect timeout of the client, which bounds the wait for a server that does not answer a request
-const ConnectTimeout = 1s;
+#! The peer response timeout of a connection whose server does not answer any more (qore#7452: set with
+#! dbg_quic_set_client_peer_response_timeout() only then, so that it bounds no other wait; the client's connect timeout
+#! is the hang guard, which the load of the machine cannot exceed)
+const PeerResponseTimeout = 1s;
 
 const CertPem = "-----BEGIN CERTIFICATE-----
 MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
@@ -186,7 +188,7 @@ class RestClientH3ServerRestartTest inherits QUnit::Test {
             "url": "https://127.0.0.1:" + port,
             "ssl_verify_cert": False,
             "timeout": HangGuard,
-            "connect_timeout": ConnectTimeout,
+            "connect_timeout": HangGuard,
             "serialization": "json",
         });
         # the first response offers HTTP/3 (Alt-Svc), which the next request takes
@@ -206,9 +208,12 @@ class RestClientH3ServerRestartTest inherits QUnit::Test {
         # the new server has another key: it cannot reset the old connection (see above)
         HttpServer second = startServer(port, handler, True)[0];
         on_exit second.stop();
+        assertGe(1, call_function("dbg_quic_set_client_peer_response_timeout", PeerResponseTimeout),
+            "the peer response timeout of the old connection was shortened");
 
-        # the request is sent on the old connection, which the new server does not know: once the server has sent
-        # nothing for the connect timeout, the connection is closed; an idempotent request is repeated on a new one
+        # the request is sent on the old connection, which the new server does not know: once the server has not
+        # acknowledged it for the peer response timeout, the connection is closed; an idempotent request is repeated
+        # on a new one
         if (method == "GET") {
             assertEq("GET", rc.get("/").body.method, "the new server answered the request");
             assertEq(1, handler.requests.getCount(), "the new server received the request once");
@@ -240,7 +245,7 @@ class RestClientH3ServerRestartTest inherits QUnit::Test {
             "url": "https://127.0.0.1:" + port,
             "ssl_verify_cert": False,
             "timeout": HangGuard,
-            "connect_timeout": ConnectTimeout,
+            "connect_timeout": HangGuard,
             "serialization": "json",
         });
         # the first response offers HTTP/3 (Alt-Svc), which the next request takes
@@ -264,6 +269,8 @@ class RestClientH3ServerRestartTest inherits QUnit::Test {
         # neither side has anything to send until the next request: the next datagram of the client is its request
         assertTrue(call_function("dbg_quic_wait_all_idle", HangGuard), "nothing is in flight");
 
+        assertGe(1, call_function("dbg_quic_set_client_peer_response_timeout", PeerResponseTimeout),
+            "the peer response timeout of the connection was shortened");
         # from now on the server receives nothing from the client, as a server whose connection state is gone
         int requests = handler.requests.getCount();
         int dropped = call_function("dbg_quic_dropped_client_datagrams");

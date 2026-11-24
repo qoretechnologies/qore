@@ -32,12 +32,14 @@
 #! The bound on a blocking wait: a hang guard only, never a timing assertion
 const HangGuard = 60s;
 
-#! The connect timeout of the client when the server resets the connection: a request that waits for it (as before
-#! qore#6931) is ended by it, with HTTP3-PEER-UNRESPONSIVE, and fails the checks of the reset
+#! The connect timeout of the client, which the load of the machine cannot exceed: a request that waits for it when
+#! the server resets the connection (as before qore#6931) is ended by it, with HTTP3-PEER-UNRESPONSIVE, and fails the
+#! checks of the reset
 const LongConnectTimeout = 20s;
 
-#! The connect timeout of the client when the server cannot reset the connection
-const ShortConnectTimeout = 1s;
+#! The peer response timeout of the old connection when the server cannot reset it, set only once the old server is
+#! gone (dbg_quic_set_client_peer_response_timeout()), so that no other wait is bounded by it
+const ShortPeerResponseTimeout = 1s;
 
 #! a certificate and key other than those of TestCertificates.qm
 const OtherCertPem = "-----BEGIN CERTIFICATE-----
@@ -129,7 +131,7 @@ class RestClientH3StatelessResetTest inherits QUnit::Test {
     }
 
     #! returns a client on HTTP/3 to a server that then stops as a killed server process does, and the server's port
-    private list<auto> connectAndStop(timeout connect_timeout) {
+    private list<auto> connectAndStop() {
         CountingHandler first_handler();
         HttpServer first;
         int port;
@@ -141,7 +143,7 @@ class RestClientH3StatelessResetTest inherits QUnit::Test {
             "url": "https://127.0.0.1:" + port,
             "ssl_verify_cert": False,
             "timeout": HangGuard,
-            "connect_timeout": connect_timeout,
+            "connect_timeout": LongConnectTimeout,
             "serialization": "json",
         });
         # the first response offers HTTP/3 (Alt-Svc), which the next request takes
@@ -166,7 +168,7 @@ class RestClientH3StatelessResetTest inherits QUnit::Test {
         }
         RestClient rc;
         int port;
-        (rc, port) = connectAndStop(LongConnectTimeout);
+        (rc, port) = connectAndStop();
         CountingHandler handler();
         HttpServer second = startServer(port, handler)[0];
         on_exit second.stop();
@@ -197,14 +199,16 @@ class RestClientH3StatelessResetTest inherits QUnit::Test {
         }
         RestClient rc;
         int port;
-        (rc, port) = connectAndStop(ShortConnectTimeout);
+        (rc, port) = connectAndStop();
         CountingHandler handler();
         HttpServer second = startServer(port, handler, True)[0];
         on_exit second.stop();
+        assertGe(1, call_function("dbg_quic_set_client_peer_response_timeout", ShortPeerResponseTimeout),
+            "the peer response timeout of the old connection was shortened");
 
         hash<auto> before = call_function("dbg_quic_stateless_reset_counts");
-        # the reset of the new server has another token: the client ends the connection after its connect timeout
-        # (qore#6930), and repeats the request on a new connection
+        # the reset of the new server has another token: the client ends the connection after its peer response
+        # timeout (qore#6930), and repeats the request on a new connection
         assertEq("GET", rc.get("/").body.method, "the new server answered the request");
         assertEq(1, handler.requests.getCount(), "the new server received the request once");
         hash<auto> after = call_function("dbg_quic_stateless_reset_counts");

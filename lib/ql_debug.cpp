@@ -29999,6 +29999,43 @@ static QoreValue f_dbg_quic_wait_all_idle(const QoreListNode* params, RuntimeCon
     }, static_cast<int>(timeout_ms));
 }
 
+//! Debug-only: sets the peer response timeout of the QUIC client sessions of the process that are open (qore#7452)
+/** A test gives its client a connect timeout that the machine's load cannot exceed, and shortens the peer response
+    timeout (see QuicSession::setPeerResponseTimeout()) of its connection only when the peer cannot answer any more, so
+    that the wait that is to expire is short, and no other wait depends on the load
+
+    @param timeout_ms the peer response timeout in milliseconds
+
+    @return the number of client sessions whose timeout was set
+*/
+static QoreValue f_dbg_quic_set_client_peer_response_timeout(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64_t timeout_ms = get_param_value(params, 0).getAsBigInt();
+    if (timeout_ms <= 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_set_client_peer_response_timeout(): invalid timeout "
+            "%lld", (long long)timeout_ms);
+        return QoreValue();
+    }
+    std::vector<std::shared_ptr<QuicSession>> sessions;
+    {
+        std::lock_guard<std::mutex> lk(dbg_quic_sessions_m);
+        for (auto& i : dbg_quic_sessions) {
+            std::shared_ptr<QuicSession> session = i.second.lock();
+            if (session && !session->isServer()) {
+                sessions.push_back(std::move(session));
+            }
+        }
+    }
+    int64_t count = 0;
+    for (auto& session : sessions) {
+        if (!session->isClosed()) {
+            session->setPeerResponseTimeout(static_cast<uint64_t>(timeout_ms) * 1000000ULL);
+            ++count;
+        }
+    }
+    return count;
+}
+
 namespace {
 //! the client datagrams dropped by the QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS test hook (qore#7452)
 std::atomic<int64_t> dbg_quic_dropped_client_datagrams{0};
@@ -33313,6 +33350,8 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_quic_wait_all_idle", f_dbg_quic_wait_all_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_quic_set_client_peer_response_timeout", f_dbg_quic_set_client_peer_response_timeout,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_quic_dropped_client_datagrams", f_dbg_quic_dropped_client_datagrams, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_quic_wait_dropped_client_datagrams", f_dbg_quic_wait_dropped_client_datagrams,
