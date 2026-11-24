@@ -20067,6 +20067,10 @@ void SocketReadHttpHeaderPollOperation::init(ExceptionSink* xsink, bool defer_in
     initPollState(xsink);
 }
 
+void SocketReadHttpHeaderPollOperation::expectResponse() {
+    expect_response = true;
+}
+
 int SocketReadHttpHeaderPollOperation::initPollState(ExceptionSink* xsink) {
     assert(sock->priv->m.trylock());
     if (initialized) {
@@ -20128,7 +20132,7 @@ QoreHashNode* SocketReadHttpHeaderPollOperation::continuePoll(ExceptionSink* xsi
     // note: safe; the header data read from the socket is a string node made here
     SimpleRefHolder<QoreStringNode> hdrstr(reinterpret_cast<QoreStringNode*>(data.release()));
     ReferenceHolder<QoreHashNode> hdr(sock->priv->socket->priv->processHttpHeaderString(xsink, hdrstr, *info,
-        QORE_SOURCE_SOCKET), xsink);
+        QORE_SOURCE_SOCKET, "headers-raw", expect_response), xsink);
     if (*xsink) {
         return nullptr;
     }

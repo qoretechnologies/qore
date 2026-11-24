@@ -4702,9 +4702,87 @@ public:
         return 0;
     }
 
+    //! checks the status line at the start of the header of an HTTP/1.x response (qore#7485)
+    /** The line must be <tt>HTTP-version SP status-code [ SP [ reason-phrase ] ]</tt>:
+        <tt>HTTP-version = "HTTP/" DIGIT "." DIGIT</tt>, a single space, a status code of exactly three digits in the
+        range 100 - 599 (RFC 9110 section 15: other values are invalid), and either the end of the line or a space and
+        a reason phrase of <tt>HTAB / SP / VCHAR / obs-text</tt>, which can be empty; nothing can precede the version,
+        not even whitespace or an empty line.  The line ends with LF, which a CR can precede.  RFC 9112 section 4
+        requires the space after the status code, but a line that ends right after the code is unambiguous, and is
+        accepted, as other clients do, since servers send it.
+
+        @param xsink for the \c SOCKET-HTTP-ERROR exception raised for an invalid status line
+        @param str the header, which the first line of is checked
+
+        @return 0 if the status line is valid, -1 if not, with an exception raised
+    */
+    DLLLOCAL static int checkHttpStatusLine(ExceptionSink* xsink, const char* str) {
+        assert(str);
+        const char* lf = strchr(str, '\n');
+        size_t len = lf ? static_cast<size_t>(lf - str) : strlen(str);
+        if (len && str[len - 1] == '\r') {
+            --len;
+        }
+        // a line terminator or the end of the string is neither a digit nor a space, so each test below stops at the
+        // end of a shorter line
+        auto is_digit = [](char c) -> bool { return c >= '0' && c <= '9'; };
+        const char* why = nullptr;
+        if (strncmp(str, "HTTP/", 5) || !is_digit(str[5]) || str[6] != '.' || !is_digit(str[7]) || str[8] != ' ') {
+            why = "it does not start with an HTTP version (\"HTTP/\" DIGIT \".\" DIGIT) followed by a space";
+        } else if (!is_digit(str[9]) || !is_digit(str[10]) || !is_digit(str[11]) || len < 12
+                || (len > 12 && str[12] != ' ')) {
+            why = "the status code is not three digits followed by a space or the end of the line";
+        } else {
+            int code = (str[9] - '0') * 100 + (str[10] - '0') * 10 + (str[11] - '0');
+            if (code < 100 || code > 599) {
+                why = "the status code is not in the range 100 - 599";
+            } else {
+                for (size_t i = 13; i < len; ++i) {
+                    unsigned char c = static_cast<unsigned char>(str[i]);
+                    if ((c < 0x20 && c != '\t') || c == 0x7f) {
+                        why = "the reason phrase has a control character";
+                        break;
+                    }
+                }
+            }
+        }
+        if (!why) {
+            return 0;
+        }
+        // the start of the line is given in the argument of the exception, with its non-printable bytes escaped; it
+        // is not given in the description, which a client checks for text of its own (such as for a closed
+        // connection, which is retried)
+        QoreStringNode* line = new QoreStringNode;
+        static constexpr size_t MaxShown = 64;
+        for (size_t i = 0; i < len && i < MaxShown; ++i) {
+            unsigned char c = static_cast<unsigned char>(str[i]);
+            if (c < 0x20 || c >= 0x7f || c == '\\') {
+                line->sprintf("\\x%02x", static_cast<unsigned>(c));
+            } else {
+                line->concat(static_cast<char>(c));
+            }
+        }
+        if (len > MaxShown) {
+            line->concat("...");
+        }
+        xsink->raiseExceptionArg("SOCKET-HTTP-ERROR", line, "invalid HTTP response status line received: %s; "
+            "expecting \"HTTP/<digit>.<digit> <status code 100 - 599> <reason phrase>\" (RFC 9112 section 4)", why);
+        return -1;
+    }
+
     //! processes a header string to a hash and raises socket events
+    /** @param xsink for any exception raised
+        @param hdr the header string
+        @param info an optional hash for header information
+        @param source the event source
+        @param headers_raw_key the key of the fields with their original names in \a info
+        @param expect_response true if the header must be that of a response, as an HTTP client reads (qore#7485): its
+        first line is checked as a status line (see checkHttpStatusLine()) whatever it starts with; when false, a
+        header that starts with \c "HTTP/" is a response, whose status line is checked alike, and any other is a request
+    */
     DLLLOCAL QoreHashNode* processHttpHeaderString(ExceptionSink* xsink, QoreStringNodeHolder& hdr,
-            QoreHashNode* info, int source, const char* headers_raw_key = "headers-raw") {
+            QoreHashNode* info, int source, const char* headers_raw_key = "headers-raw",
+            bool expect_response = false) {
         // the rest of a chunked body that was not read to its end would be taken for this header (issue 7417)
         if (checkHttpChunkedBodyFinished(xsink)) {
             return nullptr;
@@ -4721,7 +4799,13 @@ public:
         // refused, as is text after the first empty line of any header: a parser that took a bare LF as a line end
         // would end the header there, and the text after it, which can be another message, would be lost; a line of
         // a response can end with LF, which a recipient may accept (RFC 9112 section 2.2)
-        bool is_request = strncmp(hdr->c_str(), "HTTP/", 5) != 0;
+        bool is_request = !expect_response && strncmp(hdr->c_str(), "HTTP/", 5) != 0;
+        // the status line of a response is checked first (qore#7485): one that is not valid, such as one with other
+        // data before it or a status code that is not three digits, would be read as a request line, or give a wrong
+        // status code
+        if (!is_request && checkHttpStatusLine(xsink, hdr->c_str())) {
+            return nullptr;
+        }
         if (checkHttpFieldLines(xsink, const_cast<char*>(hdr->c_str()), true, is_request, "SOCKET-HTTP-ERROR",
                 "header", is_request, true)) {
             return nullptr;

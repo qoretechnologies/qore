@@ -5872,6 +5872,10 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     @throw SOCKET-HTTP-ERROR the read of a chunked message body on the socket stopped before the end of the body (see
     unfinishedHttpChunkedBody()), whose rest cannot be told apart from the next message; the connection must be
     closed
+    @throw SOCKET-HTTP-ERROR a header that starts with \c "HTTP/" (a response) with an invalid status line: the line
+    must be <tt>HTTP/</tt><em>digit</em><tt>.</tt><em>digit</em>, a space, a status code of three digits in the range
+    \c 100 - \c 599, and either the end of the line or a space and a reason phrase, which can be empty, without
+    control characters other than tab (RFC 9112 section 4; since %Qore 3.0)
 
     @note
     - if the header claims a certain character encoding via a \c charset declaration in the \c "Content-Type" header, the Socket's @ref character_encoding "character encoding" is automatically set accordingly
