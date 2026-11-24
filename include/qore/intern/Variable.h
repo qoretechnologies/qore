@@ -1069,6 +1069,12 @@ private:
     };
     std::unique_ptr<MemberLValue> member_lvalue;
     bool assignment_only = false;
+    // the two flags of qore#7391 are next to assignment_only, which an assignment's helper sets from the same
+    // argument, so that the constructor sets them with one store
+    //! true while the steps of the path keep their keys in the helper, until a reference is followed (qore#7391)
+    bool bind_keys_retain = false;
+    //! true if the store site tests isBindPending() and makes the store again itself (enableBindRetry(), qore#7391)
+    bool bind_retry_enabled = false;
     //! called once, before the root of the lvalue (a variable, a member of self, a static class variable or a
     //! reference) is resolved and locked, when the keys and indices of the path to it have been evaluated (see the
     //! constructor with a root hook); a non-zero return value stops the resolution of the lvalue
@@ -1211,10 +1217,6 @@ private:
         (transferBindKeys()).
     */
     uint32_t bind_key_count = 0;
-    //! true while the steps of the path keep their keys in the helper, until a reference is followed (qore#7391)
-    bool bind_keys_retain = false;
-    //! true if the store site tests isBindPending() and makes the store again itself (enableBindRetry(), qore#7391)
-    bool bind_retry_enabled = false;
     //! the retry of the store that this helper makes, if the store site has one, or the retry allocated for a store
     //! site that enabled it (qore#7391)
     QoreBindRetry* bind_retry = nullptr;
