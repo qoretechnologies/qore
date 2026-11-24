@@ -1315,8 +1315,15 @@ private:
         qore_socket_private::DescriptorHold): the descriptor is then closed when the I/O thread has removed it, so its
         number cannot be given to another object before; otherwise it is closed now.  If a concurrent close of the
         socket has released the descriptor already, nothing is closed here.
+
+        @return true if the socket gave the descriptor up, false if it was closed, or given another descriptor, since
+        this operation last gave it one
     */
-    DLLLOCAL void releasePrimaryFd(int fd, ConnAttempt* next);
+    DLLLOCAL bool releasePrimaryFd(int fd, ConnAttempt* next);
+
+    //! Raises the connection's error, or the close's if the socket was closed since this operation last gave it a
+    //! descriptor (whose effect, such as a shutdown's error, can be what made the attempts fail)
+    DLLLOCAL void raiseConnectErrorOrClosed(ExceptionSink* xsink);
 
     //! Returns true if the socket was closed, or given another descriptor, since this operation last gave it one
     /** Read with the socket's close lock held, where a close changes the generation (see @ref sock_gen)
@@ -5818,6 +5825,11 @@ DLLLOCAL extern std::atomic<bool> qore_dbg_connect_complete_before_immediate_che
     SocketConnectInetHappyEyeballsPollState::continuePoll()
 */
 DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_before_check_attempts;
+//! Debug builds: if set, called by a happy-eyeballs connect step right after it checked that the socket was not
+//! closed, before it checks its attempts
+/** For the C++ unit tests of a close by another thread that lands after the step's check of the socket
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_after_socket_check;
 
 //! Debug builds: if set, called by a happy-eyeballs connect step right before the socket takes the winning attempt's
 //! descriptor over

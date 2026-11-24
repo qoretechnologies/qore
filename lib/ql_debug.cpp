@@ -8395,6 +8395,78 @@ public:
         }
     }
 
+    //! The socket whose close runConnectCheckAfterShutdown() starts after the step's check of the socket
+    static inline std::atomic<QoreSocket*> after_check_sock{nullptr};
+    static inline std::atomic<bool> after_check_done{false};
+
+    //! The hook after the step's check of the socket: the close's shutdown, once (prepareForClose())
+    static void shutDownAfterSocketCheck() {
+        QoreSocket* s = after_check_sock.exchange(nullptr, std::memory_order_acq_rel);
+        if (s) {
+            qore_socket_private::get(*s)->prepareForClose();
+            after_check_done.store(true, std::memory_order_release);
+        }
+    }
+
+    //! A happy-eyeballs step that sees the effect of a close after it checked the socket fails as closed (qore#7003)
+    /** A close that lands after a connection step checked that the socket was not closed, and before it checks its
+        attempts, makes the attempt that is the socket's descriptor fail (its shutdown's error, ECONNRESET): the step
+        gave the attempt up through the socket, which refused it (the close changed the descriptor generation), and
+        reported the attempt's error as a connection error (SOCKET-CONNECT-ERROR).  The test runs the close's shutdown
+        (qore_socket_private::prepareForClose(), which changes the generation with it) at that place
+        (qore_dbg_connect_after_socket_check) in the first step of a connection to a target that gets no answer, and
+        checks that the connection fails as closed.
+    */
+    static void runConnectCheckAfterShutdown(UnitTestCounters& c) {
+        const std::string when = " (a close after the step's check of the socket)";
+        ExceptionSink xsink;
+        std::vector<int> fds;
+        struct FdCloser {
+            std::vector<int>& fds;
+            ~FdCloser() {
+                for (int fd : fds) {
+                    ::close(fd);
+                }
+            }
+        } fd_closer{fds};
+        struct sockaddr_in sa = {};
+        if (!makeSilentTarget(c, fds, sa, when)) {
+            return;
+        }
+        std::string target = "127.0.0.1:" + std::to_string(ntohs(sa.sin_port));
+        // the hook is cleared before the socket is destroyed
+        std::unique_ptr<QoreSocket> s(new QoreSocket);
+        struct HookCleanup {
+            ~HookCleanup() {
+                qore_dbg_connect_after_socket_check.store(nullptr, std::memory_order_release);
+                after_check_sock.store(nullptr, std::memory_order_release);
+            }
+        } hook_cleanup;
+        after_check_done.store(false, std::memory_order_relaxed);
+        after_check_sock.store(s.get(), std::memory_order_release);
+        qore_dbg_connect_after_socket_check.store(shutDownAfterSocketCheck, std::memory_order_release);
+        int rc = -1;
+        {
+            // the state is destroyed before the socket
+            std::unique_ptr<AbstractPollState> st(s->startConnect(&xsink, target.c_str()));
+            UT_ASSERT(c, !xsink && st, ("the connection is started" + when).c_str());
+            if (!xsink && st) {
+                rc = driveConnect(*s, *st, xsink);
+            }
+        }
+        UT_ASSERT(c, after_check_done.load(std::memory_order_acquire),
+            ("the close's shutdown ran after the step's check of the socket" + when).c_str());
+        UT_ASSERT(c, rc < 0 && xsink, ("the connection fails" + when).c_str());
+        if (xsink) {
+            QoreStringValueHelper err(xsink.getExceptionErr());
+            UT_ASSERT(c, !strcmp(err->c_str(), "SOCKET-CLOSED"),
+                (std::string("the connection fails as closed: ") + err->c_str() + when).c_str());
+        }
+        xsink.clear();
+        s->close();
+        UT_ASSERT(c, s->getDescriptorForLibrary() < 0, ("the socket is closed" + when).c_str());
+    }
+
     //! The state of the hook of runConnectCloseInPreClose(), which holds the close after its shutdown
     struct PreCloseHold {
         std::mutex l;
@@ -8409,18 +8481,25 @@ public:
         bool held = false;
         bool removed_while_held = false;
     };
-    static inline PreCloseHold* pre_close_hold = nullptr;
+    //! read by the closing thread, which can be any thread: atomic
+    static inline std::atomic<PreCloseHold*> pre_close_hold{nullptr};
 
     //! Holds the close of the test's socket after its shutdown until the I/O thread ended the connection
-    static void preCloseHook(qore_socket_private* sp) {
-        PreCloseHold* h = pre_close_hold;
+    /** Called in a close, which can be made by a destructor: it throws nothing; a failed wait does not hold the close,
+        which the test then sees (removed_while_held is not set)
+    */
+    static void preCloseHook(qore_socket_private* sp) noexcept {
+        PreCloseHold* h = pre_close_hold.load(std::memory_order_acquire);
         if (!h || sp != h->sock) {
             return;
         }
-        std::unique_lock<std::mutex> g(h->l);
-        h->held = true;
-        // the order comes from the operation's end; the limit only guards against a hang
-        h->removed_while_held = h->cond.wait_for(g, std::chrono::seconds(10), [h]() { return h->removed; });
+        try {
+            std::unique_lock<std::mutex> g(h->l);
+            h->held = true;
+            // the order comes from the operation's end; the limit only guards against a hang
+            h->removed_while_held = h->cond.wait_for(g, std::chrono::seconds(10), [h]() { return h->removed; });
+        } catch (...) {
+        }
     }
 
     //! A connection step that runs between the shutdown of a close and the close fails as closed (qore#7003)
@@ -8472,7 +8551,7 @@ public:
                 xsink.clear();
                 ctrl->stopClear(&xsink);
                 xsink.clear();
-                pre_close_hold = nullptr;
+                pre_close_hold.store(nullptr, std::memory_order_release);
             }
         } cleanup{*ctrl, xsink};
         ctrl->setMaxIoThreads(1, &xsink);
@@ -8551,12 +8630,12 @@ public:
             hold.sock = qore_socket_private::get(*sock->priv->socket);
             hold.attempt_fd = attempt_fd;
         }
-        pre_close_hold = &hold;
+        pre_close_hold.store(&hold, std::memory_order_release);
         qore_dbg_after_pre_close_shutdown.store(preCloseHook, std::memory_order_release);
         // the close through the controller: its shutdown, then (once the hook let it continue) its close
         sock->close();
         qore_dbg_after_pre_close_shutdown.store(nullptr, std::memory_order_release);
-        pre_close_hold = nullptr;
+        pre_close_hold.store(nullptr, std::memory_order_release);
         {
             std::lock_guard<std::mutex> g(hold.l);
             UT_ASSERT(c, hold.held, ("the close was held after its shutdown" + when).c_str());
@@ -28606,6 +28685,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runConnectCloseRegistered(c, false);
     AsyncIoDescriptorHoldTest::runConnectCloseRegistered(c, true);
     AsyncIoDescriptorHoldTest::runConnectCloseInPreClose(c);
+    AsyncIoDescriptorHoldTest::runConnectCheckAfterShutdown(c);
     AsyncIoDescriptorHoldTest::runConnectCloseTwoAttempts(c);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, AsyncIoDescriptorHoldTest::CLOSE_BEFORE_ASSIGN, true);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, AsyncIoDescriptorHoldTest::CLOSE_BEFORE_CONNECTED, false);
