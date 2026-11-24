@@ -5209,6 +5209,14 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
         return subst ? subst : ti;
     }
 
+    // An extends wildcard exposes its bound's return specs. Specialize the bound before interpreting those
+    // specs as the declaration itself, so a parameterized bound keeps its wildcard variance.
+    if (const auto* wildcard = QoreTypeInfo::getWildcardType(ti); wildcard == ti) {
+        const QoreTypeInfo* bound = wildcard->getBound();
+        const QoreTypeInfo* subst = qore_substitute_type_params(bound, receiver_type_info, type_param_inst);
+        return subst == bound ? ti : qore_get_wildcard_type_intern(wildcard->getKind(), subst);
+    }
+
     if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
         type_vec_t args;
         args.reserve(pti->getArgCount());

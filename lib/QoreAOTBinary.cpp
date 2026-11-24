@@ -3016,7 +3016,7 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
     // member, so check its identity before writing the bound instead of the whole union.
     if (!ti->isAcceptVecEmpty()) {
         const auto* wildcard = ti->getFirstAcceptSpec().spec.getWildcardTypeInfo();
-        if (wildcard == ti && qore_type_contains_type_parameter(wildcard->getBound())) {
+        if (wildcard == ti && wildcard->getBound()) {
             const char* prefix = wildcard->getKind() == QoreWildcardKind::Extends ? "? extends " : "? super ";
             std::string bound_path = getAOTSerializableTypePath(wildcard->getBound());
             return bound_path.empty() ? std::string() : prefix + bound_path;
@@ -6841,9 +6841,8 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveStructuredComplexType(const char
     bool or_nothing = false;
     std::vector<std::string> args;
 
-    // The source-type parser handles concrete wildcard bounds. An encoded type parameter
-    // inside a bound must be resolved with this resolver's current signature or class.
-    if (*path == '?' && strstr(path, "typeparam<")) {
+    // Resolve the bound recursively, including class paths and parameters of the active signature.
+    if (*path == '?') {
         constexpr char extends_prefix[] = "? extends ";
         constexpr char super_prefix[] = "? super ";
         const bool upper = !strncmp(path, extends_prefix, sizeof(extends_prefix) - 1);

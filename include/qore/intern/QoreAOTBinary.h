@@ -693,6 +693,8 @@ constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY_VERSION = 52;
 //!        (qore_class_private::initializeIntern(), qore#7397), so that classes with the same name and declarations in
 //!        different namespaces are different types; the hashes of an earlier image do not have it, and its classes of
 //!        the same name and declarations in different namespaces would be one type
+//!      - type paths retain the variance of concrete wildcard bounds, including class bounds in local variable
+//!        declarations, as they do for bounds containing a type parameter (qore#7152)
 //!      - the signature of a user class includes the resolved declared types of its members and static variables and
 //!        the return types of its methods, with namespace paths (qore#7457): the hashes of an earlier image have
 //!        \c any for the member types that were not resolved yet, and its classes that differ only in such a type
