@@ -34,3 +34,7 @@ QoreLogicalGreaterThanOperatorNode::bigIntGreaterThan QoreStatementTempScope::ho
 QoreLogicalLessThanOrEqualsOperatorNode::bigIntLessThanOrEquals QoreStatementTempScope::holdReceiver
 QoreLogicalGreaterThanOrEqualsOperatorNode::bigIntGreaterThanOrEquals QoreStatementTempScope::holdReceiver
 QoreLogicalEqualsOperatorNode::bigIntSoftEqual QoreStatementTempScope::holdReceiver
+# Both parts of an AST integer pre-increment must stay inline together (qore#7256).
+QoreIntPreIncrementOperatorNode::evalImpl LValueHelper::LValueHelper
+QoreIntPreIncrementOperatorNode::evalImpl LValueHelper::preIncrementBigInt
+QoreIntPreIncrementOperatorNode::evalImpl LValueHelper::preIncrementBigIntInline
