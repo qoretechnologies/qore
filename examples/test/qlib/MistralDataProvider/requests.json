@@ -704,5 +704,343 @@
     "attributes": {
       "year": 2026
     }
+  },
+  "list-observability-projects": {
+    "page_size": 2
+  },
+  "get-observability-project": {
+    "project_slug": "invoices"
+  },
+  "list-project-evaluations": {
+    "project_slug": "invoices",
+    "page_size": 2
+  },
+  "get-evaluation": {
+    "evaluation_slug": "invoices"
+  },
+  "search-evaluation-runs": {
+    "evaluation_slug": "invoices",
+    "page_size": 2,
+    "run_ids": [
+      "00000000-0000-4000-8000-000000000001"
+    ]
+  },
+  "search-all-evaluation-runs": {
+    "page_size": 2,
+    "run_ids": [
+      "00000000-0000-4000-8000-000000000001"
+    ]
+  },
+  "get-evaluation-run": {
+    "run_id": "00000000-0000-4000-8000-000000000001"
+  },
+  "get-evaluation-run-statistics": {
+    "run_id": "00000000-0000-4000-8000-000000000001"
+  },
+  "compute-evaluation-run-statistics": {
+    "run_id": "00000000-0000-4000-8000-000000000001"
+  },
+  "get-evaluation-run-record": {
+    "run_id": "00000000-0000-4000-8000-000000000001",
+    "record_id": "00000000-0000-4000-8000-000000000001"
+  },
+  "search-evaluation-run-records": {
+    "run_id": "00000000-0000-4000-8000-000000000001",
+    "page_size": 2
+  },
+  "list-optimizations": {
+    "page_size": 2
+  },
+  "get-optimization": {
+    "optimization_id": "00000000-0000-4000-8000-000000000001"
+  },
+  "list-optimization-trials": {
+    "optimization_id": "00000000-0000-4000-8000-000000000001",
+    "page_size": 2
+  },
+  "list-scorers": {
+    "page_size": 2
+  },
+  "create-scorer": {
+    "name": "invoices",
+    "kind": "llm_judge",
+    "config": {
+      "model": "mistral-small-latest",
+      "prompt_template": "Rate the answer.",
+      "output_spec": {
+        "type": "boolean"
+      }
+    }
+  },
+  "get-scorer": {
+    "scorer_slug": "invoices"
+  },
+  "update-scorer": {
+    "scorer_slug": "invoices",
+    "description": "Invoice accuracy"
+  },
+  "create-audio-session": {
+    "instructions": "Read the invoice aloud."
+  },
+  "get-audio-session": {
+    "session_id": "00000000-0000-4000-8000-000000000001"
+  },
+  "update-audio-session": {
+    "session_id": "00000000-0000-4000-8000-000000000001",
+    "instructions": "Confirm the total."
+  },
+  "stop-audio-session": {
+    "session_id": "00000000-0000-4000-8000-000000000001"
+  },
+  "list-audio-agents": {
+    "page_size": 2
+  },
+  "create-audio-agent": {
+    "name": "invoices",
+    "configuration": {
+      "instructions": "Read the invoice aloud."
+    }
+  },
+  "get-audio-agent": {
+    "agent_id": "00000000-0000-4000-8000-000000000001",
+    "version": 2
+  },
+  "update-audio-agent": {
+    "agent_id": "00000000-0000-4000-8000-000000000001",
+    "name": "invoices",
+    "configuration": {
+      "instructions": "Confirm the total."
+    }
+  },
+  "delete-audio-agent": {
+    "agent_id": "00000000-0000-4000-8000-000000000001"
+  },
+  "list-audio-agent-versions": {
+    "agent_id": "00000000-0000-4000-8000-000000000001",
+    "page_size": 2
+  },
+  "list-audio-agent-sessions": {
+    "agent_id": "00000000-0000-4000-8000-000000000001",
+    "page_size": 2
+  },
+  "get-workflow-execution-trace": {
+    "execution_id": "00000000-0000-4000-8000-000000000001"
+  },
+  "get-workflow-execution-logs": {
+    "execution_id": "00000000-0000-4000-8000-000000000001",
+    "limit": 2
+  },
+  "get-workflow-schedule": {
+    "schedule_id": "00000000-0000-4000-8000-000000000001"
+  },
+  "update-workflow-schedule": {
+    "schedule_id": "00000000-0000-4000-8000-000000000001",
+    "schedule": {
+      "cron_expressions": [
+        "0 9 * * *"
+      ]
+    }
+  },
+  "pause-workflow-schedule": {
+    "schedule_id": "00000000-0000-4000-8000-000000000001",
+    "note": "Paused for the weekend"
+  },
+  "resume-workflow-schedule": {
+    "schedule_id": "00000000-0000-4000-8000-000000000001",
+    "note": "Resume delivery"
+  },
+  "trigger-workflow-schedule": {
+    "schedule_id": "00000000-0000-4000-8000-000000000001"
+  },
+  "create-workflow-deployment": {
+    "name": "invoices",
+    "spec": {
+      "revision": "main"
+    }
+  },
+  "update-workflow-deployment": {
+    "name": "invoices",
+    "resources": {
+      "replicas": 2
+    }
+  },
+  "delete-workflow-deployment": {
+    "name": "invoices"
+  },
+  "stop-workflow-deployment": {
+    "name": "invoices"
+  },
+  "start-workflow-deployment": {
+    "name": "invoices"
+  },
+  "restart-workflow-deployment": {
+    "name": "invoices"
+  },
+  "list-workflow-deployment-workers": {
+    "name": "invoices",
+    "limit": 2
+  },
+  "get-workflow-deployment-archive": {
+    "name": "invoices"
+  },
+  "get-workflow-deployment-logs": {
+    "name": "invoices",
+    "limit": 2
+  },
+  "list-workflows": {
+    "limit": 2
+  },
+  "archive-workflows": {
+    "workflow_ids": [
+      "00000000-0000-4000-8000-000000000001"
+    ]
+  },
+  "unarchive-workflows": {
+    "workflow_ids": [
+      "00000000-0000-4000-8000-000000000001"
+    ]
+  },
+  "add-workflow-tags": {
+    "workflow_identifier": "invoices",
+    "tags": [
+      "invoices"
+    ]
+  },
+  "list-ingestion-pipeline-configurations": {},
+  "register-ingestion-pipeline-configuration": {
+    "name": "invoices"
+  },
+  "update-ingestion-pipeline-run": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "execution_time": "2026-11-17T12:00:00+00:00",
+    "chunks_count": 1
+  },
+  "list-rag-deployments": {},
+  "register-rag-deployment": {
+    "name": "invoices",
+    "deployment": {
+      "vespa_version": "invoices",
+      "indexes": [
+        {
+          "name": "invoices",
+          "fields": [
+            {
+              "name": "invoices",
+              "type": "int",
+              "storage": "in_memory",
+              "ranking": "count",
+              "index_type": "ann",
+              "multidimensional": true
+            }
+          ],
+          "sd": "invoices"
+        }
+      ],
+      "query_url": "https://example.invalid/index"
+    }
+  },
+  "unregister-rag-deployment": {
+    "deployment_id": "00000000-0000-4000-8000-000000000001"
+  },
+  "update-rag-deployment-metrics": {
+    "deployment_id": "00000000-0000-4000-8000-000000000001",
+    "status": "offline",
+    "clear_metrics": true
+  },
+  "create-search-index": {
+    "name": "invoices",
+    "config": {
+      "embedding": {
+        "name": "mistral-embed",
+        "dimensions": 1024,
+        "type": "mistral"
+      }
+    }
+  },
+  "list-search-indexes": {
+    "page_size": 2
+  },
+  "get-search-index": {
+    "index_name": "invoices"
+  },
+  "update-search-index-schema": {
+    "index_name": "invoices",
+    "schema": {}
+  },
+  "delete-search-index": {
+    "index_name": "invoices"
+  },
+  "ingest-search-index-documents": {
+    "index_name": "invoices",
+    "documents": [
+      {
+        "invoice": "ABC-123"
+      }
+    ]
+  },
+  "delete-search-index-documents": {
+    "index_name": "invoices",
+    "document_ids": [
+      "00000000-0000-4000-8000-000000000001"
+    ]
+  },
+  "search-index-chunks": {
+    "index_name": "invoices",
+    "retriever": {
+      "query": "invoice",
+      "type": "keyword"
+    }
+  },
+  "navigate-search-index-chunks": {
+    "index_name": "invoices",
+    "source_id": "00000000-0000-4000-8000-000000000001",
+    "start_offset": 1,
+    "end_offset": 12,
+    "direction": "next"
+  },
+  "read-search-index-chunks": {
+    "index_name": "invoices",
+    "source_id": "00000000-0000-4000-8000-000000000001"
+  },
+  "find-text-in-search-index": {
+    "index_name": "invoices",
+    "source_id": "00000000-0000-4000-8000-000000000001",
+    "pattern": "invoice"
+  },
+  "get-search-index-chunk": {
+    "index_name": "invoices",
+    "chunk_id": "00000000-0000-4000-8000-000000000001"
+  },
+  "get-search-index-summary": {
+    "language": "en",
+    "index_name": "invoices"
+  },
+  "set-search-index-summary": {
+    "language": "en",
+    "index_name": "invoices",
+    "content": "Invoice summary",
+    "status": "handwritten",
+    "translated": true
+  },
+  "create-trigger": {
+    "event_source_id": "00000000-0000-4000-8000-000000000001",
+    "handler": "workflows",
+    "action": {
+      "primitive_id": "00000000-0000-4000-8000-000000000001",
+      "type": "start_workflow"
+    },
+    "owner_type": "workspace",
+    "title": "Invoice updates"
+  },
+  "list-triggers": {},
+  "get-trigger": {
+    "trigger_id": "00000000-0000-4000-8000-000000000001"
+  },
+  "delete-trigger": {
+    "trigger_id": "00000000-0000-4000-8000-000000000001"
+  },
+  "list-trigger-events": {
+    "trigger_id": "00000000-0000-4000-8000-000000000001",
+    "limit": 2
   }
 }

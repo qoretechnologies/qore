@@ -37,7 +37,9 @@ class MistralLiveTest inherits QUnit::Test {
                     "list-datasets", "list-workflow-runs", "list-workflow-schedules", "list-workflow-deployments",
                     "list-workflow-registrations", "list-log-fields", "list-trace-fields", "list-span-fields",
                     "list-span-evaluation-fields", "list-pipelines", "search-logs", "search-traces", "search-spans",
-                    "search-span-evaluations") {
+                    "search-span-evaluations", "list-audio-agents", "list-observability-projects", "list-optimizations",
+                    "list-scorers", "list-workflows", "list-ingestion-pipeline-configurations", "list-rag-deployments",
+                    "list-search-indexes", "list-triggers") {
                 string name = action;
                 addTestCase("preview: " + name, sub () { previewTest(name); });
             }

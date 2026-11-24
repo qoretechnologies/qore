@@ -84,7 +84,7 @@ public class MistralSchema {
             "source_url": "https://docs.mistral.ai/openapi.yaml",
             "source_sha256": "7652f1307b3bc6cb7a10526c28788a430246f641cb9785a9f1b7b0dd912cdfae",
             "source_size": 1548910,
-            "imported": 2026-11-24,
+            "imported": 2026-11-25,
             "source_paths": 251,
             "source_operations": 347,
             "source_schemas": 1106,
