@@ -1,0 +1,67 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class WeakReferenceContainerOwnerScanTest
+
+#! a change through a weak reference to a list or hash that an object holds updates the object's graph (qore#7373)
+/** A value removed or replaced in a list or a hash that an object holds, through a weak reference to the container,
+    did not make the recursive-reference scan that the same change through the object makes, as the holders of the
+    container are not known on such a path: the object's recursive set kept counting the removed edge, and an object
+    that was still referenced was collected (OBJECT-ALREADY-DELETED) in every mode.  The program covers removal and
+    assignment in a hash and a list, a nested hash, a weak reference held by a member of another object, shift, pop,
+    splice and extract of a list held in the container, a replaced list that is still referenced elsewhere (also by a
+    foreach loop over a reference), a range removed through a weak reference to a list and the same change through
+    the object, each removing one edge, and cycles broken through the weak reference, which are still collected.  It
+    keeps an object alive with a reference from outside Qore (dbg_object_external_ref()), so it needs a debug build.
+    Every mode must print the output of the AST.
+
+    The program is in \c weak-reference-container-owner-scan/.
+*/
+class WeakReferenceContainerOwnerScanTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/weak-reference-container-owner-scan";
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+        const Programs = ("weak-reference-container-owner-scan",);
+    }
+
+    constructor() : QUnit::Test("WeakReferenceContainerOwnerScanTest", "1.0", \ARGV) {
+        addTestCase("every mode keeps the recursive graph of the holder of the container", \testModes());
+        set_return_value(main());
+    }
+
+    private string expected(string name) {
+        return ReadOnlyFile::readTextFile(dir + "/" + name + ".expected");
+    }
+
+    private string run(string name, string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=%s %s/%s.q", qore_bin, mode, dir, name));
+        assertEq(0, r.rc, sprintf("%s %s: exit status (output: %y)", name, mode, r.out));
+        return r.stdout;
+    }
+
+    testModes() {
+        # the program keeps an object alive with a reference from outside Qore (dbg_object_external_ref())
+        if (!exists_function("dbg_object_external_ref")) {
+            testSkip("the library debugging functions are not available (not a debug build)");
+        }
+        foreach string name in (Programs) {
+            foreach string mode in (Modes) {
+                assertEq(expected(name), run(name, mode), name + " " + mode);
+            }
+        }
+    }
+}

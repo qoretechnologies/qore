@@ -581,7 +581,12 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             return pc.re;
         }
         Regex re(pattern);
-        pattern_cache = {"src": pattern, "re": re};
+        # a type that is a shared object caches what it compiles from itself in an update scope (qore#6843)
+        if (SandboxManager::isSharedObject(self)) {
+            SandboxManager::updateSharedObject(self, sub () { pattern_cache = {"src": pattern, "re": re}; });
+        } else {
+            pattern_cache = {"src": pattern, "re": re};
+        }
         return re;
     }
 
@@ -1282,6 +1287,11 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
         process-wide cache: sandboxed code cannot change it afterwards, as if code that no sandbox governs had created
         it (qore#6843, qore#6863).  It cannot be undone.
 
+        Code that may share objects (see @ref Qore::SandboxManager::canShareObjects() "SandboxManager::canShareObjects()"),
+        such as a shared REST schema that caches the types that it builds, also marks the type as a shared object
+        (see @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"), so that sandboxed code cannot
+        change its members in any way, also not with Reflection.
+
         @since DataProvider 3.12
     */
     freeze() {
@@ -1291,6 +1301,9 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
         frozen = True;
         shared_object = True;
         freezeImpl();
+        if (SandboxManager::canShareObjects()) {
+            SandboxManager::shareObject(self);
+        }
     }
 
     #! Makes a copy of the type that belongs to the code that makes it

@@ -86,6 +86,8 @@ module UnstructuredDataProvider {
                 "- Reading scans and photographs with the `ocr_only` or `hi_res` strategies\n\n"
                 "Give the document either inline as `file_data` or by `file_path`.",
             "action_code": DPAT_API,
+            # the document is parsed and returned; nothing is stored (qore#7454)
+            "mutates_state": False,
             "groups": ("Document Extraction",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 UnstructuredPartitionFileRequestDataType::Fields{
@@ -117,6 +119,8 @@ module UnstructuredDataProvider {
                 "element holding the raw markup, and Markdown keeps its `#` and `-` markers "
                 "in the element text.",
             "action_code": DPAT_API,
+            # the text is parsed and returned; nothing is stored (qore#7454)
+            "mutates_state": False,
             "groups": ("Document Extraction",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 UnstructuredPartitionTextRequestDataType::Fields{"text",}, {
@@ -154,6 +158,8 @@ module UnstructuredDataProvider {
                     "This action answers from the API description shipped with this module and makes "
                     "no request to Unstructured.",
                 "action_code": DPAT_API,
+                # answered from the vendored API description (qore#7454)
+                "mutates_state": False,
                 "groups": (UnstructuredPlatformManifest::GroupConnectors,),
                 "options": DataProviderActionCatalog::getActionOptionFromFields(
                     UnstructuredConnectorFieldsRequestDataType::Fields

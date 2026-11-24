@@ -1,0 +1,33 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# a library module whose class inherits a class of another module, for SharedObjectCrossModule.q
+
+%modern
+
+%requires SharedScopeBase
+
+module SharedScopeDerived {
+    version = "1.0";
+    desc = "test module: a class that inherits a class with an update scope from another module";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace SharedScopeDerived {
+#! opens an update scope in this module
+auto sub update_shared(object obj, code update) {
+    return SandboxManager::updateSharedObject(obj, update);
+}
+
+public class Derived inherits SharedScopeBase::Base {
+    #! opens an update scope with code that its caller gives, in a function of this module
+    auto forwardDerived(code update) {
+        return update_shared(self, update);
+    }
+}
+
+public Derived sub make() {
+    return new Derived();
+}
+}

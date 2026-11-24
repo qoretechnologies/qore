@@ -204,6 +204,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   processes that set their own --exec-mode
         # - member-access-private-internal (#6640): its probe runs in child processes that set their own --exec-mode
         #   and in a qcc executable
+        # - member-lookup-paths (#7194): its probe runs in child processes that set their own --exec-mode and in a
+        #   qcc executable
         # - deleted-program-types (#5790): its probes, reflection.q and bounded.qr run in child processes that set
         #   their own --exec-mode
         # - method-reference-per-class (#6062): its probes run in child processes that set their own --exec-mode and
@@ -253,6 +255,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - AOTLinkUnresolvedReference (#6902): its checks run qcc and the executables that it links in child processes
         # - parquet-memory-pool (#6171): its checks run in child processes without an execution mode, natively and
         #   under valgrind
+        # - hash-equality (#7266): its probes run in child processes that set their own --exec-mode and as qcc
+        #   executables
         # - float-int-conversion (#6181): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
         # - broken-list-range-past-end (#5757): its check runs a legacy script, which only the AST interpreter runs,
@@ -339,6 +343,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - QdpNoTty (#7125): its checks run qdp in child processes in a new session, without a controlling terminal
         # - QdpAppActionOptions (#7126): its checks run qdp in child processes of its own binary
         # - QdpListenNoTty (#7130): its checks run qdp in child processes in a new session, with stdin not a terminal
+        # - QdpInfo (#7386): its checks run qdp in child processes of its own binary
+        # - FileForegroundTty (#7387): its checks run in child processes of its own binary, on a new terminal
         # - type-name-encoding (#6814): each case runs in a child process with a default encoding of its own
         # - value-encoding (#6960): the checks run in child processes with a default encoding of their own
         # - AOTFusedFoldVerify (#6549): its checks compile with qcc and run the module in a child process started
@@ -356,7 +362,14 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   execution modes and as a qcc executable, as a module is initialized once in a process
         # - reflection-module-init-barrier-oom: its script runs in child processes that set their own execution
         #   modes and as a qcc executable, which arm a debug hook and whose failed module load ends the process
+        # - HttpServerRecvGrowFailure (#7417): the server whose read fails runs in a child process of the qore
+        #   interpreter in the default mode, under a limit of its address space
+        # - module-init-frames (#7289): its probes run in child processes that set their own --exec-mode, with the
+        #   modules loaded from source and compiled with qcc, as a module is initialized once in a process
+        # - type-retirement-aot-parent (#7464): its script runs in child processes without an execution mode, with the
+        #   modules loaded from source and compiled with qcc
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
+                                 "examples/test/qore/classes/type-retirement-aot-parent.qtest",
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
                                  "examples/test/ir/AOTModuleHeaderRequests.qtest",
@@ -391,6 +404,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/deleted-object-overload.qtest",
                                  "examples/test/qore/operators/empty-string-order.qtest",
                                  "examples/test/qore/operators/float-int-conversion.qtest",
+                                 "examples/test/qore/operators/hash-equality.qtest",
                                  "examples/test/qore/operators/UndefinedArithmetic-1.qtest",
                                  "examples/test/qore/operators/UndefinedArithmetic-2.qtest",
                                  "examples/test/qore/operators/UndefinedArithmetic-3.qtest",
@@ -431,6 +445,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/misc/reflection-typed-hash-module-caller.qtest",
                                  "examples/test/qore/misc/reflection-module-init-barrier-oom.qtest",
                                  "examples/test/qore/classes/member-access-private-internal.qtest",
+                                 "examples/test/qore/classes/member-lookup-paths.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
                                  "examples/test/ir/AOTNamedCallRefModules.qtest",
@@ -455,10 +470,13 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/DataProvider/QdpNoTty.qtest",
                                  "examples/test/qlib/DataProvider/QdpAppActionOptions.qtest",
                                  "examples/test/qlib/DataProvider/QdpListenNoTty.qtest",
+                                 "examples/test/qlib/DataProvider/QdpInfo.qtest",
+                                 "examples/test/qore/classes/File/FileForegroundTty.qtest",
                                  "examples/test/qore/parser/type-name-encoding.qtest",
                                  "examples/test/qlib/HttpClientIo/ConnectionManagerTeardown.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaImportTool.qtest",
                                  "examples/test/qlib/HttpClientIo/ModuleCleanupCancel.qtest",
+                                 "examples/test/qlib/HttpServer/HttpServerRecvGrowFailure.qtest",
                                  "examples/test/qlib/ConnectionProvider/NamedConnectionCreation.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-1.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-2.qtest",
@@ -494,6 +512,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "modules/i18n/test/short-string-access.qtest",
                                  "modules/logger_bin/test/short-string-access.qtest",
                                  "modules/tokenizer/test/short-string-access.qtest",
+                                 "examples/test/qore/misc/module-init-frames.qtest",
                                  "examples/test/qore/functions/value-string-target-encoding/value-string-target-encoding.qtest"]),
                          sorted(non_harness_children))
 

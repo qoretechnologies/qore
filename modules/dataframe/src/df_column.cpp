@@ -394,13 +394,51 @@ void appendKeyBytes(std::string& key, const char* data, size_t len) {
     key.append(data, len);
 }
 
+//! holds the targets of the weak references of a value while its key is made (qore#7231)
+/** A weak reference does not keep the entries of its list or hash: another thread can free them while they are
+    keyed, so each target is read with a reference of its own (QoreValue::resolveIndirectRef()), which is held until
+    the key is made, as the elements that are walked are borrowed from it.  The release of the last reference to a
+    target can run the destructor of an object that it holds; the key functions have no ExceptionSink, so its
+    exceptions are handled here, as those of a destructor run by a thread of its own are.
+*/
+class WeakTargetHolder {
+public:
+    WeakTargetHolder() = default;
+
+    ~WeakTargetHolder() {
+        if (targets.empty()) {
+            return;
+        }
+        ExceptionSink xsink;
+        for (QoreValue& v : targets) {
+            v.discard(&xsink);
+        }
+    }
+
+    WeakTargetHolder(const WeakTargetHolder&) = delete;
+    WeakTargetHolder& operator=(const WeakTargetHolder&) = delete;
+
+    //! returns the target of the weak reference, which is held until the key is made
+    QoreValue add(QoreValue v) {
+        // the slot is made before the reference is taken, so that the reference is never lost
+        targets.emplace_back();
+        targets.back() = v.resolveIndirectRef();
+        return targets.back();
+    }
+
+private:
+    std::vector<QoreValue> targets;
+};
+
 //! returns the value that a value of a column that holds any value stands for, and its type (qore#6107)
 /** An enum member stands for its value, as with the core operators, and an opaque or weak reference for the value
     that it refers to (a weak reference to an object is keyed as the object; one whose object is deleted as no
     value, which makes a key of its own, apart from the null cells of the column).  The tags of the value are
-    checked inline, and the reference is resolved only for a reference.
+    checked inline, and the reference is resolved only for a reference.  The target of a weak reference is read with
+    a reference of its own, held by \a held (qore#7231); that of an opaque reference is held by the value that holds
+    the reference.
 */
-static inline QoreValue resolveKeyValue(QoreValue v, qore_type_t& t) {
+static inline QoreValue resolveKeyValue(QoreValue v, qore_type_t& t, WeakTargetHolder& held) {
     // a float, held in the value, is told with no call into the library
     if (v.isFloat()) {
         t = NT_FLOAT;
@@ -414,7 +452,7 @@ static inline QoreValue resolveKeyValue(QoreValue v, qore_type_t& t) {
     }
     t = v.getType();
     if (t == NT_WEAKREF || t == NT_WEAKREF_HASH || t == NT_WEAKREF_LIST) {
-        v = v.resolveIndirect();
+        v = held.add(v);
         t = v.getType();
     }
     return v;
@@ -550,9 +588,11 @@ void appendScalarValueKey(std::string& key, QoreValue v, qore_type_t t) {
     own, so that a deeply nested value cannot exhaust the thread's stack.
 */
 void appendAutoValueKey(std::string& key, QoreValue top) {
+    // the targets of the weak references walked, held until the key is made
+    WeakTargetHolder held;
     // a value that is not a list or a hash needs no stack
     qore_type_t top_type;
-    top = resolveKeyValue(top, top_type);
+    top = resolveKeyValue(top, top_type, held);
     if (top_type != NT_LIST && top_type != NT_HASH) {
         appendScalarValueKey(key, top, top_type);
         return;
@@ -571,7 +611,7 @@ void appendAutoValueKey(std::string& key, QoreValue top) {
             appendKeyBytes(key, item.hash_key, strlen(item.hash_key));
         }
         qore_type_t t;
-        QoreValue v = resolveKeyValue(item.v, t);
+        QoreValue v = resolveKeyValue(item.v, t, held);
         switch (t) {
             case NT_LIST: {
                 const QoreListNode* l = v.get<const QoreListNode>();

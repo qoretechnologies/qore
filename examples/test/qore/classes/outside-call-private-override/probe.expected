@@ -1,0 +1,34 @@
+X1 typed: METHOD-IS-PRIVATE
+X1 through P1: METHOD-IS-PRIVATE
+X1 untyped: METHOD-IS-PRIVATE
+X1 call reference: ILLEGAL-CALL-REFERENCE
+X1 call_object_method: METHOD-IS-PRIVATE
+X1 hasCallableMethod: "no"
+X3 typed: METHOD-IS-PRIVATE
+X3 untyped: METHOD-IS-PRIVATE
+X3 call reference: ILLEGAL-CALL-REFERENCE
+X3 call_object_method: METHOD-IS-PRIVATE
+X2 typed: "P2::m"
+X2 typed call reference: "P2::m"
+X2 untyped: "P2::m"
+X2 call reference: "P2::m"
+X2 call_object_method: "P2::m"
+X2 hasCallableMethod: "yes"
+X4 typed: "B4::m"
+X4 typed call reference: "B4::m"
+X4 untyped: "B4::m"
+Z5 typed: METHOD-IS-PRIVATE
+Z5 untyped: METHOD-IS-PRIVATE
+Z5 call reference: ILLEGAL-CALL-REFERENCE
+Z5 call_object_method: METHOD-IS-PRIVATE
+X5 typed outside: METHOD-IS-PRIVATE
+typed call reference, tree: PARSE-ERROR
+typed call reference, private only: PARSE-ERROR
+static call, tree: PARSE-EXCEPTION
+static call, private only: PARSE-EXCEPTION
+static call reference, tree: INVALID-METHOD
+static call reference, private only: INVALID-METHOD
+static call, diamond f: "Q::sm"
+static call, diamond r: "Q::sm"
+call_static_method f: METHOD-IS-PRIVATE
+call_static_method d: "Q::sm"

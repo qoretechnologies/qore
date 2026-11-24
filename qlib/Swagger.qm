@@ -144,6 +144,9 @@ RestHandler handler(NOTHING, swagger);
 
 
     @section swagger_2_6 Swagger v2.6
+    - the types of a document are built in type builds, as those of an OpenAPI 3 document are (see
+      @ref Swagger::SchemaObject::getTypeBuildSchema() "SchemaObject::getTypeBuildSchema()";
+      <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
     - the server-side request validation reads the fields of a request, including the header parameters, which it
       checks and sets defaults for under \c "headers", from the \c "headers" key of its header hash, or from the top
       level of a hash built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with
@@ -364,6 +367,24 @@ RestHandler handler(NOTHING, swagger);
 
 #! main namespace for all public %Swagger declarations
 public namespace Swagger {
+#! Runs a closure that updates a cache of an object of the module, in an update scope if the object is shared
+/** A schema or schema object that trusted code created is shared by every Program of the process, so it can only be
+    changed by sandboxed code, or code that acts for it, in an update scope (qore#6843; see
+    @ref Qore::SandboxManager::updateSharedObject() "SandboxManager::updateSharedObject()").  Each caller computes the
+    new state of the cache from the object itself, never from data that its caller gives.
+
+    @param obj the object whose cache is updated
+    @param update a closure created by a method of a class of \a obj in this module
+
+    @return the value that \a update returns
+*/
+auto sub update_shared_cache(object obj, code update) {
+    if (SandboxManager::isSharedObject(obj)) {
+        return SandboxManager::updateSharedObject(obj, update);
+    }
+    return update();
+}
+
 /** @defgroup ParseOptionFlags Parse Option Flags
     Options that determine which common errors are acceptable when parsing Swagger schemas
 */
@@ -734,6 +755,8 @@ public class ParameterGroup inherits ObjectBase {
 
     #! Adds a parameter to the group
     addParameter(string key, AbstractSwaggerParameterObject p) {
+        # a shared schema cannot be changed by sandboxed code (qore#6843)
+        SandboxManager::checkSharedObjectChange(self, "add a parameter");
         if (p.inLoc == "query" && cast<OtherParameter>(p).type == "object") {
             if (exists query_obj) {
                 throw "SWAGGER-SCHEMA-ERROR", sprintf("Query parameter %y has already been defined with type "
@@ -753,6 +776,10 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
 
         #! The response copies of the types the document's schemas built, by the unique hash of the type
         transient hash<string, AbstractDataProviderType> response_types = {};
+
+        #! The number of types built from a sandboxed caller's data that a shared document keeps for a Program
+        /** see getType() and getResponseDataType() */
+        const CallerTypeCacheSize = 256;
     }
 
     public {
@@ -1215,21 +1242,101 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         return res;
     }
 
+    #! Restores the document; a shared document restores no type in its type cache (qore#6843)
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::deserializeMembers() "AbstractRestSchemaObject::deserializeMembers()"
+    */
+    private:internal deserializeMembers(*hash<auto> members) {
+        # the transient member is initialized here, as this method is defined
+        response_types = {};
+        self += members;
+        if (SandboxManager::createsSharedObjects()) {
+            remove typemap;
+        }
+    }
+
     #! Returns the reusable schema object for the given reference name or @ref nothing if there is none
     private *RestSchemaValidator::AbstractRestSchemaObject getSchemaObjectForReferenceImpl(string rstr) {
         return definitions{rstr};
     }
 
     #! Returns the data type corresponding to the values
+    /** A document that is shared by every Program (see
+        @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()") writes its type cache only in
+        its own type builds (see
+        @ref RestSchemaValidator::AbstractRestSchemaValidator::runTypeBuild() "AbstractRestSchemaValidator::runTypeBuild()"):
+        a type asked for outside a type build of the document is taken from its type cache if it is there, and
+        otherwise built with no cache write, and kept in the per-Program cache of the calling code (qore#6843)
+    */
     AbstractDataProviderType getType(string path, string typestr, *string format, *SchemaObject arrayItems,
             bool required = True) {
         string id;
+        if (SandboxManager::isSharedObject(self) && !isTypeBuildActive()) {
+            # outside a type build of a shared document: the document's cache is read, never written; the unique
+            # hash of a schema object that the document did not build is the caller's, so its id is not looked up
+            # there
+            id = sprintf("%s-%s-%s-%s", path, typestr, format ?? "x", arrayItems ? arrayItems.uniqueHash() : "x");
+            if (!arrayItems || SandboxManager::isSharedObject(arrayItems)) {
+                if (*AbstractDataProviderType rv = typemap{id}{required ? "Y" : "N"}) {
+                    return rv;
+                }
+            }
+            string key = (required ? "type-Y-" : "type-N-") + id;
+            if (*AbstractDataProviderType rv = SandboxManager::getProgramCacheValue(self, key)) {
+                return rv;
+            }
+            AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required);
+            # a value of a per-Program cache can be given to other code of the Program, also to trusted code that
+            # sandboxed code calls, so it cannot be changed (qore#6843)
+            rv.freeze();
+            SandboxManager::setProgramCacheValue(self, key, rv, CallerTypeCacheSize);
+            return rv;
+        }
         if (*AbstractDataProviderType rv = checkType(path, typestr, format, arrayItems, required, \id)) {
             return rv;
         }
         AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required);
-        typemap{id}{required ? "Y" : "N"} = rv;
+        string key = required ? "Y" : "N";
+        if (isTypeBuildActive()) {
+            # the type built from the document, which is shared as the document is (qore#6843)
+            recordTypeBuildCache(rv);
+            bool had_outer = exists typemap && typemap.hasKey(id);
+            recordTypeBuildUndo({
+                "restore": getTypeUndoRestore(),
+                "id": id,
+                "key": key,
+                "prev": typemap{id}{key},
+                "had_key": had_outer && typemap{id}.typeCode() == NT_HASH && typemap{id}.hasKey(key),
+                "had_outer": had_outer,
+                "had_cache": exists typemap,
+            });
+        }
+        update_shared_cache(self, sub () { typemap{id}{key} = rv; });
         return rv;
+    }
+
+    #! Returns the code that restores a record of getType(); it binds no variable of a caller
+    private:internal code getTypeUndoRestore() {
+        return sub (hash<auto> record) { undoCachedType(record); };
+    }
+
+    #! Restores an entry of the type cache in the failure path of the type build that made the record (qore#6843)
+    private:internal undoCachedType(hash<auto> record) {
+        if (!isUndoingTypeBuild(record.build)) {
+            return;
+        }
+        update_shared_cache(self, sub () {
+            if (record.had_key) {
+                typemap{record.id}{record.key} = record.prev;
+            } else {
+                remove typemap{record.id}{record.key};
+                if (!record.had_outer) {
+                    remove typemap{record.id};
+                }
+                if (!record.had_cache) {
+                    remove typemap;
+                }
+            }
+        });
     }
 
     private *AbstractDataProviderType checkType(string path, string typestr, *string format,
@@ -1312,6 +1419,10 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         @since Swagger 2.6
     */
     setReadOnlyProperties() {
+        # a shared schema cannot be changed by sandboxed code; a call that changes nothing is not refused (qore#6843)
+        if (!readonly_properties) {
+            SandboxManager::checkSharedObjectChange(self, "record a read-only property");
+        }
         readonly_properties = True;
     }
 
@@ -1330,7 +1441,35 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         if (!readonly_properties) {
             return type;
         }
-        return SwaggerHashDataType::forResponse(type, \response_types);
+        # a type that is not a shared object is the caller's, and its unique hash is the caller's too: its copy is
+        # made with the document's copies of the shared types that it refers to, and is kept for the calling
+        # Program only (qore#6843)
+        bool shared = SandboxManager::isSharedObject(self);
+        if (shared && SandboxManager::isSharedObject(type)) {
+            # the response copy of a type of the document that was made before
+            if (*AbstractDataProviderType rv = response_types{type.uniqueHash()}) {
+                return rv;
+            }
+        } else if (shared) {
+            string key = "response-" + type.uniqueHash();
+            if (*AbstractDataProviderType rv = SandboxManager::getProgramCacheValue(self, key)) {
+                return rv;
+            }
+            hash<string, AbstractDataProviderType> copies = response_types;
+            AbstractDataProviderType rv = SwaggerHashDataType::forResponse(type, \copies);
+            # a value of a per-Program cache cannot be changed (see getType())
+            rv.freeze();
+            SandboxManager::setProgramCacheValue(self, key, rv, CallerTypeCacheSize);
+            return rv;
+        }
+        # the response copies are a cache of the document, built from its types, and shared as the document is
+        return update_shared_cache(self, AbstractDataProviderType sub () {
+            AbstractDataProviderType rv = SwaggerHashDataType::forResponse(type, \response_types);
+            if (SandboxManager::isSharedObject(self)) {
+                rv.freeze();
+            }
+            return rv;
+        });
     }
 
     #! Returns a field definition from the Swagger parameter
@@ -4161,6 +4300,8 @@ public class SwaggerHashDataType inherits HashDataType {
         @param after the name of the property declared before it, if any
     */
     addResponseField(AbstractDataField field, *string after) {
+        # a shared type cannot be changed by sandboxed code (qore#6843)
+        checkChange("fields");
         response_fields += {"field": field, "after": after};
     }
 
@@ -4517,6 +4658,30 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         }
     }
 
+    #! Returns the document whose type builds this schema takes part in
+    /** The types of a document are built in type builds (see
+        @ref RestSchemaValidator::AbstractRestSchemaValidator::runTypeBuild() "AbstractRestSchemaValidator::runTypeBuild()"),
+        so that a build that fails leaves no part of its types in the caches, and the types and fields that a build of
+        a shared document caches are shared as the document is (qore#6843).
+
+        @return the owning document, or @ref nothing if it no longer exists: a schema can outlive its document
+        through a type that refers to it, and then builds its types as before, which is only possible from the
+        types it has already cached
+
+        @since Swagger 2.6
+    */
+    *RestSchemaValidator::AbstractRestSchemaValidator getTypeBuildSchema() {
+        # the document is held through a weak reference, which does not exist once the document is deleted
+        return exists swagger ? swagger : NOTHING;
+    }
+
+    #! Returns @ref True once the document of this schema object has been destroyed
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::isTypeBuildSchemaDestroyed() "AbstractRestSchemaObject::isTypeBuildSchemaDestroyed()"
+    */
+    bool isTypeBuildSchemaDestroyed() {
+        return !exists swagger;
+    }
+
     #! Returns the data provider type for a given type/format/items path
     /** @throw SCHEMA-DOCUMENT-DESTROYED the document of this schema object has been destroyed; a schema object
         refers to its document weakly, so keep the document while using its schema objects (the types it has built
@@ -4556,6 +4721,10 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     AbstractDataProviderType getDataType(bool required = True, *object rest) {
         if (!described_reference) {
             return AbstractRestSchemaObject::getDataType(required, rest);
+        }
+        # the defaults that a REST client gives never reach the caches of a shared schema (qore#6843)
+        if (rest && SandboxManager::isSharedObject(self)) {
+            return getRestDefaultsType(required, rest);
         }
         if (*AbstractDataProviderType t = getReplacedDataType(required)) {
             return t;

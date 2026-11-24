@@ -358,6 +358,9 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       a message only if the client's connection is the one with the given ID, so a message that belongs to one
       connection (a heartbeat) and was held across a reconnect is dropped instead of being sent on the new connection
       (<a href="https://github.com/qoretechnologies/qore/issues/7106">issue 7106</a>)
+    - a successful ping of a @ref WebSocketClient::WebSocketConnectionObject "WebSocketConnectionObject" marks the
+      connection up with the status \c "OK"; the status stayed \c "not checked"
+      (<a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>)
     - a control frame with an RSV bit set (RFC 6455 section 5.2), or a continuation frame with RSV1 set (the
       "Per-Message Compressed" bit of permessage-deflate, RFC 7692 section 6.1), closes the connection with
       @ref WebSocketUtil::WSCC_ProtocolError "WSCC_ProtocolError" (1002)
@@ -1466,6 +1469,36 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         const ReconnectDelay = 2s;
     }
 
+    private:internal {
+        #! the proof that the code that created the client passed the caller check of a connection manager
+        /** The client creates its connection manager when it connects, and again after a detach or a fallback from
+            HTTP/2 or HTTP/3 to HTTP/1.1: the code that created the client decides, so a client that the host creates
+            and lends to restricted code connects for it, only to the target that it had when it was created (the proof
+            is bound to it); nothing if the creator could not create a manager, whose client is then refused when it
+            connects (qore#7262)
+        */
+        *HttpClientIo::HttpClientCreatorProof creator_proof;
+
+        #! HttpClientIo connection manager for fully async H2/H3 connections
+        /** Created lazily when connecting via HTTP/2. Manages the H2 connection
+            lifecycle, protocol negotiation, and async I/O controller registration.  Not visible to subclasses: a
+            manager created for a client that trusted code lent is a capability of the client's target (qore#7262)
+            @since WebSocketClient 2.4
+        */
+        *HttpClientIo::HttpClientConnectionManager hcio_mgr;
+    }
+
+    private:internal {
+        #! the handles of work of the module cleanup that left its messages to the running delivery task of a
+        #! connection, by the connection's sequence number; protected by the delivery mutex
+        /** Released by the delivery task once it has delivered the messages that arrived up to then, so that the
+            cleanup at the end of the process waits for it as for the work itself (see
+            @ref Qore::AsyncIoController::holdModuleCleanupWork() "AsyncIoController::holdModuleCleanupWork()",
+            qore#7339); kept here, out of reach of other code, which must not release them
+        */
+        hash<string, list<int>> pending_cleanup_work = {};
+    }
+
     private {
         Mutex m();
         Condition sleep_cond();
@@ -1715,12 +1748,6 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         */
         *Socket async_wake_socket;
 
-        #! HttpClientIo connection manager for fully async H2/H3 connections
-        /** Created lazily when connecting via HTTP/2. Manages the H2 connection
-            lifecycle, protocol negotiation, and async I/O controller registration.
-            @since WebSocketClient 2.4
-        */
-        *HttpClientIo::HttpClientConnectionManager hcio_mgr;
 
         #! HttpClientIo stream handle for the active H2 CONNECT tunnel
         /** Provides async sendData()/readData() for bidirectional WebSocket
@@ -1895,6 +1922,19 @@ WebSocketClient ws(\event(), {
 
     #! disconnects the connection and stops the event thread if connected
     destructor() {
+        # the handles of work of the module cleanup that no delivery task took are released when the destructor
+        # ends, also on its early return (qore#7339)
+        on_exit {
+            hash<string, list<int>> left;
+            {
+                AutoLock al(delivery_mutex);
+                left = pending_cleanup_work;
+                pending_cleanup_work = {};
+            }
+            foreach list<int> handles in (left.iterator()) {
+                map AsyncIoController::releaseModuleCleanupWork($1), handles;
+            }
+        }
         # no thread of the client is started from here on, and a handshake in progress on another thread (which
         # holds the client's lock) is canceled
         lib_threads.close();
@@ -3562,6 +3602,9 @@ ws.setEventQueue();
 
     #! Common constructor code
     private constructorInit(hash<auto> opts) {
+        # the proof of the code that creates the client, or the one that the trusted creator of the connection that
+        # creates it grants, bound to its target (qore#7262)
+        creator_proof = HttpClientIo::HttpClientCreatorProof::forClient(opts.url, {"proxy": opts.proxy});
         if (opts.reconnect) {
             reconnect = True;
         }
@@ -4693,6 +4736,12 @@ ws.setEventQueue();
             }
             ++c.delivery_pending;
             if (c.delivery_active) {
+                # work of the module cleanup at the end of the process that leaves its messages to the running
+                # delivery task hands itself over to it (0 outside of such work) (qore#7339)
+                int handle = AsyncIoController::holdModuleCleanupWork();
+                if (handle) {
+                    push pending_cleanup_work{c.seq}, handle;
+                }
                 return;
             }
             c.delivery_active = True;
@@ -4731,10 +4780,14 @@ ws.setEventQueue();
         } catch (hash<ExceptionInfo> ex) {
             # Controller may be stopped during shutdown; the flag set above is this connection's own
             delivery_thread_counter.dec();
+            list<int> left;
             {
                 AutoLock al(delivery_mutex);
                 c.delivery_active = False;
+                # the work handed over to the task that does not run: the cleanup does not wait for it
+                left = remove pending_cleanup_work{c.seq} ?? ();
             }
+            map AsyncIoController::releaseModuleCleanupWork($1), left;
         }
     }
 
@@ -4775,6 +4828,11 @@ ws.setEventQueue();
         @since WebSocketClient 2.5 takes the connection
     */
     private deliverPendingMessages(WscConnection c) {
+        # the handles of the work of the module cleanup left to this task that it takes when it ends its delivery, in
+        # the section that clears the connection's delivery flag, so that it never takes the handles left to the next
+        # task; released when it returns (qore#7339)
+        list<int> ended_handles;
+        on_exit map AsyncIoController::releaseModuleCleanupWork($1), ended_handles;
         # Track this thread's TID so the destructor can detect the self-deadlock case
         # (destructor called from a user callback on this thread)
         string t = gettid().toString();
@@ -4782,6 +4840,7 @@ ws.setEventQueue();
             AutoLock al(delivery_mutex);
             if (c.claimed) {
                 c.delivery_active = False;
+                ended_handles += remove pending_cleanup_work{c.seq} ?? ();
                 return;
             }
             ++delivery_tids{t};
@@ -4811,14 +4870,20 @@ ws.setEventQueue();
 
             # Snapshot the counter to detect new callbacks
             int last_seen;
+            # the handles of the work of the module cleanup that this round delivers the messages for, released after
+            # it; the round runs as that work, so that a callback can hand work over in turn (qore#7339)
+            list<int> handed;
             {
                 AutoLock al(delivery_mutex);
                 if (c.claimed) {
                     c.delivery_active = False;
+                    ended_handles += remove pending_cleanup_work{c.seq} ?? ();
                     return;
                 }
                 last_seen = c.delivery_pending;
+                handed = remove pending_cleanup_work{c.seq} ?? ();
             }
+            on_exit map AsyncIoController::releaseModuleCleanupWork($1), handed;
 
             # Drain all available messages
             while (True) {
@@ -4830,6 +4895,7 @@ ws.setEventQueue();
                     AutoLock al(delivery_mutex);
                     if (c.claimed) {
                         c.delivery_active = False;
+                        ended_handles += remove pending_cleanup_work{c.seq} ?? ();
                         return;
                     }
                     # the connection is reported open before its first message; when no thread did it yet, this task
@@ -4838,6 +4904,10 @@ ws.setEventQueue();
                         c.connected_issued = True;
                         c.delivery_active = False;
                         open_here = True;
+                        # the task that this one starts below delivers the messages: the work of the module cleanup
+                        # left to this task goes to it (qore#7339)
+                        pending_cleanup_work{c.seq} = handed + (pending_cleanup_work{c.seq} ?? ());
+                        handed = ();
                     }
                 }
                 if (open_here) {
@@ -4856,7 +4926,13 @@ ws.setEventQueue();
                     pushEventConnectionId(c.cid);
                     on_exit popEventConnectionId();
                     try {
-                        disp = processAsyncMessage(msg);
+                        if (handed) {
+                            AsyncIoController::runModuleCleanupWork(handed[0], sub () {
+                                disp = processAsyncMessage(msg);
+                            }, False);
+                        } else {
+                            disp = processAsyncMessage(msg);
+                        }
                     } catch (hash<ExceptionInfo> ex) {
                         # Log callback exceptions and continue — don't shut down the
                         # connection for user callback errors (matching the old sync
@@ -4878,6 +4954,7 @@ ws.setEventQueue();
                     if (self) {
                         AutoLock al(delivery_mutex);
                         c.delivery_active = False;
+                        ended_handles += remove pending_cleanup_work{c.seq} ?? ();
                     }
                     return;
                 }
@@ -4892,6 +4969,7 @@ ws.setEventQueue();
                 if (c.claimed || c.delivery_pending == last_seen) {
                     # No new callbacks since we started; safe to stop
                     c.delivery_active = False;
+                    ended_handles += remove pending_cleanup_work{c.seq} ?? ();
                     return;
                 }
                 # New callbacks arrived; loop and drain again
@@ -5681,6 +5759,14 @@ ws.setEventQueue();
         return ui.path ?? "/";
     }
 
+    #! Returns the target of the connections of the URL as the connection manager names it (\c host:port)
+    /** For the timeout of a connect whose time ran out when an attempt failed (qore#7475)
+    */
+    private string getHcioTargetKey() {
+        hash<UrlInfo> ui = parse_url(http_opts.url);
+        return sprintf("%s:%d", ui.host, ui.port ?? (isUrlTls() ? 443 : 80));
+    }
+
     #! Returns True if the current URL uses TLS (https)
     private bool isUrlTls() {
         return http_opts.url =~ /^https:/i;
@@ -5730,7 +5816,10 @@ ws.setEventQueue();
     */
     private ensureHcioMgr(*string force_protocol) {
         if (!hcio_mgr) {
-            hcio_mgr = new HttpClientIo::HttpClientConnectionManager(buildHcioOpts(force_protocol));
+            # the code that created the client decides (qore#7262)
+            hcio_mgr = creator_proof
+                ? new HttpClientIo::HttpClientConnectionManager(buildHcioOpts(force_protocol), creator_proof)
+                : new HttpClientIo::HttpClientConnectionManager(buildHcioOpts(force_protocol));
         }
     }
 
@@ -5780,8 +5869,15 @@ ws.setEventQueue();
                 }
                 # a connection that could not be established is retried on a fresh one while there is time, as an
                 # HTTP/1.1 connect retries it
-                if (retries < getHcioMaxConnectRetries() && !connectDeadlinePassed(deadline)
+                if (retries < getHcioMaxConnectRetries()
                         && HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
+                    # one that would be retried when the time of the connect has run out is the timeout of the
+                    # connect, with its error, as the manager raises it for a request (qore#7475)
+                    if (connectDeadlinePassed(deadline)) {
+                        HttpClientIo::HttpClientConnectionManager::throwAttemptTimeout(sprintf("no connection to %s "
+                            "was acquired within the request's time: the time ran out when an attempt failed",
+                            getHcioTargetKey()), NOTHING, ex);
+                    }
                     ++retries;
                     logInfo("WebSocket connection error (%s: %s); retrying on a fresh connection (%d/%d)",
                         ex.err, ex.desc, retries, getHcioMaxConnectRetries());
@@ -5816,6 +5912,14 @@ ws.setEventQueue();
                 if (stream.requestDeadlineExpired() || (!stream.isSubmitted() && connectDeadlinePassed(deadline))) {
                     if (ex.err == "HTTPCLIENT-TIMEOUT" && retried_error) {
                         throwRetriedConnectTimeout(ex, retried_error);
+                    }
+                    # a connection error that would be retried if the connect had time left is the timeout of the
+                    # connect, with its error (qore#7475)
+                    if (ex.err != "HTTPCLIENT-TIMEOUT" && !stream.isSubmitted()
+                            && retries < getHcioMaxConnectRetries()
+                            && HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
+                        hash<auto> to = stream.getConnectWaitTimeout(timeout_ms);
+                        HttpClientIo::HttpClientConnectionManager::throwAttemptTimeout(to.desc, to.arg, ex);
                     }
                     rethrow;
                 }
@@ -6588,7 +6692,8 @@ public class WebSocketPingPollOperation inherits ConnectionProvider::HttpClientI
     */
     constructor(string base_url, *hash<auto> http_opts, *hash<auto> headers, *Logger::LoggerInterface logger)
             : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(
-                WebSocketPingPollOperation::getHttpOptions(http_opts), logger),
+                WebSocketPingPollOperation::getHttpOptions(http_opts), logger,
+                WebSocketPingPollOperation::getHttpUrl(base_url)),
                 WebSocketPingPollOperation::getHttpUrl(base_url), "GET",
                 HttpClientIoPollOperation::getRequestHeaders(WebSocketPingPollOperation::getHttpUrl(base_url),
                     http_opts, headers),
@@ -6910,9 +7015,12 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
         # Use a 30-second connect timeout for ping operations to prevent hanging on unresponsive endpoints
         object o = get(True, {"connect_timeout": 30000});
         on_exit o.disconnect();
+        date delta = now_us() - start;
+        # issue #7236: a successful ping marks the connection up
+        handlePingSuccess(delta);
         return rv += {
             "ok": True,
-            "time": now_us() - start,
+            "time": delta,
             "info": "OK",
         };
     }
@@ -8331,6 +8439,9 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
 */
 public class WebSocketClientHcioPollOp {
     public {
+        #! The frames that one drain of the queue processes at most; another round drains the rest (issue #6156)
+        const DrainRoundEntries = 1000;
+
         #! How long a close waits for the server's answer without a close timeout (see setCloseTimeout())
         const DefaultCloseWaitMs = 15000;
     }
@@ -8559,7 +8670,8 @@ public class WebSocketClientHcioPollOp {
             return;
         }
 
-        bool have_frames = drainMsgQueue();
+        bool more;
+        bool have_frames = drainMsgQueue(\more);
 
         # Only trigger delivery after start() — before that, poll_op isn't
         # assigned in the WebSocketClient so scheduleDelivery() would fail.
@@ -8568,6 +8680,34 @@ public class WebSocketClientHcioPollOp {
         # something (runInitialDrain(), issue #6154).
         if (have_frames && started && on_poll_complete) {
             on_poll_complete();
+        }
+        # a round is bounded: the frames that it left in the queue are drained by the next round, which is scheduled
+        # here, as no notification may come for them (a burst with nothing after it, issue #6156)
+        if (more) {
+            scheduleDrain();
+        }
+    }
+
+    #! Schedules a drain of the queued frames on a worker of the async I/O controller
+    /** The task references the operation, so that it stays valid until the task has run; a connection that was torn
+        down meanwhile is closed, and notifyIo() then only discards its frames.  A controller that is stopping runs no
+        task: the client's initial drain or close delivers the frames then.
+    */
+    private:internal scheduleDrain() {
+        WebSocketClientHcioPollOp op = self;
+        try {
+            Qore::AsyncIoController::submitTask(task: sub () {
+                try {
+                    op.notifyIo();
+                } catch (hash<ExceptionInfo> ex) {
+                    # the operation was deleted explicitly meanwhile: its client tore the connection down
+                    if (ex.err != "OBJECT-ALREADY-DELETED") {
+                        rethrow;
+                    }
+                }
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            # the controller is stopping
         }
     }
 
@@ -8593,23 +8733,9 @@ public class WebSocketClientHcioPollOp {
         started = True;
         rescheduleHeartbeatTimer();
         if (!msg_queue.empty()) {
-            # the task references the operation, so that it stays valid until the task has run; a connection that
-            # was torn down meanwhile is closed, and notifyIo() then only discards its frames
-            WebSocketClientHcioPollOp op = self;
-            try {
-                Qore::AsyncIoController::submitTask(task: sub () {
-                    try {
-                        op.notifyIo();
-                    } catch (hash<ExceptionInfo> ex) {
-                        # the operation was deleted explicitly meanwhile: its client tore the connection down
-                        if (ex.err != "OBJECT-ALREADY-DELETED") {
-                            rethrow;
-                        }
-                    }
-                });
-            } catch (hash<ExceptionInfo> ex) {
-                # the controller is stopping: the client's initial drain delivers the frames
-            }
+            # the controller is stopping when the task cannot be submitted: the client's initial drain delivers the
+            # frames then
+            scheduleDrain();
         }
     }
 
@@ -8622,7 +8748,14 @@ public class WebSocketClientHcioPollOp {
     */
     bool initialDrain() {
         AutoLock al(process_mutex);
-        return drainMsgQueue();
+        bool more;
+        bool rv = drainMsgQueue(\more);
+        # the frames that the bounded round left are drained by the next round (issue #6156); before start(), start()
+        # schedules it
+        if (more && started) {
+            scheduleDrain();
+        }
+        return rv;
     }
 
     #! Closes the connection when its stream ended without a close frame, or failed
@@ -8657,16 +8790,26 @@ public class WebSocketClientHcioPollOp {
             exists stream_error);
     }
 
-    #! Drains all typed frame hashes from msg_queue and dispatches them
-    /** Non-blocking: returns as soon as the queue is empty or a NOTHING
-        sentinel is observed.  NOTHING is the stream-ended signal emitted by
+    #! Drains the typed frame hashes from msg_queue and dispatches them, at most DrainRoundEntries per call
+    /** Non-blocking: returns as soon as the queue is empty, a NOTHING
+        sentinel is observed, or the round's bound is reached.  NOTHING is the stream-ended signal emitted by
         FrameStateAction::complete / executeError.
+
+        @param more set to @ref True if the round's bound was reached and the queue still has entries, which the
+        caller has drained by another round (issue #6156)
+
         @return True if any frames were processed
     */
-    private bool drainMsgQueue() {
+    private bool drainMsgQueue(reference<bool> more) {
         bool processed = False;
-        int max_entries = 1000;
-        while (max_entries-- > 0) {
+        more = False;
+        int max_entries = DrainRoundEntries;
+        while (True) {
+            if (max_entries-- <= 0) {
+                # the round's bound: the entries left are drained by another round
+                more = !msg_queue.empty();
+                break;
+            }
             *hash<auto> wrap = msg_queue.tryGet();
             if (!exists wrap) {
                 break;  # Queue empty

@@ -59,6 +59,8 @@ public class Http2ClientConnection inherits HttpClientConnection {
         @param client_pk private key matching \a client_cert (optional)
         @param ssl_ca_file a PEM file with the CA certificates to verify the server with instead of the default CAs
         @param ssl_ca_path a directory with the CA certificates to verify the server with instead of the default CAs
+        @param ssl_trust_store an in-memory trust store to verify the server with instead of the CA locations (since
+            %HttpClientIo 1.0, qoretechnologies/qore#7248)
         @param offer_http11 if @ref True, TLS ALPN offers \c http/1.1 after \c h2 (for an automatic protocol
         selection that falls back to HTTP/1.1)
         @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK functional domain, or from
@@ -70,6 +72,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
             *int ssl_verify_mode, bool accept_all_certs = False,
             *hash<auto> proxy_info,
             *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path,
+            *SSLTrustStore ssl_trust_store,
             bool offer_http11 = False)
             : HttpClientConnection(url_info, connect_timeout, logger,
                     max_streams, proxy_info) {
@@ -83,6 +86,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
         HttpClientCallerExemption exemption();
         poll_op = new Http2ClientPollOperation(url_info, connect_timeout, logger,
             ssl_verify_mode, accept_all_certs, proxy_info, self, client_cert, client_pk, ssl_ca_file, ssl_ca_path,
+            ssl_trust_store,
             offer_http11);
     }
 
@@ -128,6 +132,8 @@ public class Http2ClientConnection inherits HttpClientConnection {
 
     #! Closes the connection (protocol-specific)
     closeImpl(*timeout close_timeout) {
+        # a close whose caller gave no reason (qore#7443)
+        setCloseReason("closed");
         self.setClosed();
         *AsyncSocketIoController ctl;
         {

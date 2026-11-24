@@ -180,14 +180,86 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     is a server error, answered with \c 500.  A stream handler receives the chunks of an HTTP/1.1 chunked body as
     they are received, without a check (see @ref HttpServer::AbstractStreamRequest::recvImpl() "AbstractStreamRequest::recvImpl()").
 
-    @section httpserver_handler_socket The Socket of an HTTP/2 or HTTP/3 Request
+    @section httpserver_handler_socket The Socket of a Request
+
+    The handler of a request gets a socket of its own for its request (the \c s argument of its methods, the
+    \c socketobject key of the request context of a @ref resthandlerintro "RestHandler" class, the socket of a stream
+    request, and for HTTP/2 and HTTP/3 \c cx."header-info".sock), which acts on the request's own part of the
+    connection only.
+
+    The requests of an HTTP/1.x connection come one after the other on its socket, which the server keeps.  The
+    handler of an HTTP/1.x request gets a socket of its request when the handler object is declared by sandboxed
+    code, which needs nothing more, or when the handler asked for it with
+    @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()" before it was
+    registered, or when it runs the code of objects of classes of a sandboxed Program
+    (@ref HttpServer::AbstractHttpRequestHandler::hostsSandboxedCode() "hostsSandboxedCode()", decided for each
+    request); another handler gets the connection's socket.  A @ref RestHandler::RestHandler "RestHandler" object
+    gets a socket of its request when one of its REST classes is of a class of a sandboxed Program, whoever made the
+    handler and whenever the class was added, when it is declared by sandboxed code, or when it asked for it, and
+    gives that socket to its REST classes and their stream handlers (\c cx.socketobject).  A
+    @ref RestHandler::RestHandler "RestHandler" that has the connection's socket refuses a request (\c 500, and the
+    connection is closed) whose dispatch path has a REST class or a stream handler of a sandboxed Program that its
+    top-level classes did not show when the request started (one below a trusted class, one that a trusted class's
+    \c subClassImpl() returns, or one added since); a trusted @ref RestHandler::RestHandler "RestHandler" whose REST
+    classes are trusted but run code that is not trusted (a closure of a tenant, for example) must ask for it.
+
+    @warning A trusted handler that hands the socket of its HTTP/1.x request to code that is not trusted (such as
+    code of a tenant) <b>must</b> call
+    @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()": without it, that
+    code gets the connection's socket, with which it can read the next request on the connection (with its
+    \c Authorization header) and write responses to other requests
+    (<a href="https://github.com/qoretechnologies/qore/issues/7338">issue 7338</a>).
+
+    The socket of an HTTP/1.x request:
+    - sends the request's own response, once and framed: a complete response with
+      @ref Qore::Socket::sendHTTPResponse() "sendHTTPResponse()" or
+      @ref Qore::Socket::sendHTTPResponseWithCallback() "sendHTTPResponseWithCallback()", or a header with
+      @ref Qore::Socket::sendHTTPResponseHeader() "sendHTTPResponseHeader()" that gives exactly one \c Content-Length
+      (whose bytes it then counts in its raw sends) or chunked framing (whose body it then sends with
+      @ref Qore::Socket::sendHTTPChunkedBodyFromInputStream() "sendHTTPChunkedBodyFromInputStream()" or ends with
+      @ref Qore::Socket::sendHTTPChunkedBodyTrailer() "sendHTTPChunkedBodyTrailer()"); interim (\c 1xx) responses
+      before it; nothing else, nothing more, and no chunked or interim response to an HTTP/1.0 request.  A response
+      that the handler sent is not followed by the one that it returns, and one that it did not complete closes the
+      connection;
+    - reads the request's own body only: a chunked body once, by its chunks, with
+      @ref Qore::Socket::readHTTPChunkedBody() "readHTTPChunkedBody()" and its variants; a body with a
+      \c Content-Length up to its length, which the server reads before the handler gets the request, except the
+      part that it did not read of a body that a stream handler gets in parts (see
+      @ref HttpServer::Http1BodyReader "Http1BodyReader");
+    - has a character encoding and timeouts of its own, which do not change the connection's, and gives the
+      connection's information, such as @ref Qore::Socket::getPeerInfo() "getPeerInfo()";
+    - gives each send and read a timeout of at most the server's \c handler_socket_max_timeout option (see
+      @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo", 30 seconds by default): a send or read without a
+      timeout, or with a longer one, has that timeout, so that the server, which waits for the sends and reads in
+      progress before it answers the request or reads the next one, waits a bounded time;
+    - raises \c HTTP-HANDLER-SOCKET-ERROR for a read of the next request on the connection
+      (@ref Qore::Socket::readHTTPHeader() "readHTTPHeader()"), for shutdown() and close() (a handler closes the
+      connection with the \c close key of its response; code that is not sandboxed aborts it at once, as when a
+      response is cut off midway, with @ref HttpServer::http_abort_connection() "http_abort_connection()"), and for
+      the methods that connect, bind, accept or upgrade a socket or change the connection's settings;
+    - ends before the server answers the request (when the handler's code returns, or when the request is answered
+      before its handler gets it) or reads the next request: its sends and reads then raise
+      \c HTTP-HANDLER-SOCKET-ERROR.
+
+    A WebSocket handler takes over the connection of its HTTP/1.1 request, which must ask for the protocol upgrade (an
+    \c Upgrade field and the \c upgrade token in its \c Connection field; a \c 101 response to another request is
+    answered with \c 500), after the server sent the \c 101 response; the connection then serves no other request,
+    and is closed when the WebSocket connection ends.  The handler of an HTTP/1.1 event stream gets the connection's
+    socket for the stream, unless it gets the socket of its request: then the request must accept an event stream
+    (\c text/event-stream in its \c Accept field; otherwise it is answered with \c 406), the server sends the
+    stream's header, with <tt>Connection: close</tt>, makes the stream's poll operation from the connection's socket
+    and keeps it, and sets up the stream with
+    @ref ServerSentEventHandler::ServerSentEventHandler::setupAsyncSseConnectionForRequest() "setupAsyncSseConnectionForRequest()"
+    (a socket handler that does not implement it gets no stream, and the connection is closed): the handler, its
+    connection object and its event source get the socket of the request and a stream that gives no poll operation,
+    never the connection's socket.  The connection serves no other request and is closed when the event stream ends
+    (see <a href="https://github.com/qoretechnologies/qore/issues/7376">issue 7376</a>).
 
     The requests of an HTTP/2 connection share its socket, and the requests of all the HTTP/3 sessions of a listener
-    share its UDP socket.  The handler of an HTTP/2 or HTTP/3 request gets a socket of its own for its request (the
-    \c s argument of its methods and \c cx."header-info".sock): its HTTP/2 or QUIC methods act on the request's own
-    stream (and session) only, its \c shutdown() and \c close() end the request's own stream, never the connection
-    or the listener, and its other methods are those of a socket that is not connected.  So the peer's address and
-    certificate are not those of this socket's @ref Qore::Socket::getPeerInfo() "getPeerInfo()" and
+    share its UDP socket.  The socket of an HTTP/2 or HTTP/3 request acts with its HTTP/2 or QUIC methods on the
+    request's own stream (and session) only, its \c shutdown() and \c close() end the request's own stream, never the
+    connection or the listener, and its other methods are those of a socket that is not connected.  So the peer's
+    address and certificate are not those of this socket's @ref Qore::Socket::getPeerInfo() "getPeerInfo()" and
     @ref Qore::Socket::getRemoteCertificate() "getRemoteCertificate()": the request context gives them, in
     \c cx."peer-info" and \c cx."client-cert" (see @ref httpserverutil_request_context).
 
@@ -209,6 +281,10 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
       @ref HttpServer::HttpServer::removeHandlerFromListenerID() "removeHandlerFromListenerID()" also removes the propagated handler from the paired
       QUIC listener
     - Stopping a TCP listener also stops its paired QUIC listener
+    - A listener whose paired QUIC listener cannot be bound is not added: the listener method raises
+      \c HTTPSERVER-H3-BIND-ERROR, whose argument has the failures of the binds in its \c attempts key.  For a random
+      port (service \c 0), the listener is first created again on a fresh port, up to 10 times in all; each failure is
+      logged with its system error number
     - The \c Alt-Svc header is set per-listener so each TCP listener only advertises its own
       QUIC counterpart
 
@@ -281,13 +357,47 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
-    - a handler class that sandboxed code declared gets a placeholder that is not connected in place of the socket of
-      an HTTP/1.x request, which is the socket of the connection (see @ref httpserverutil_request_credentials; issue
-      #6843); the handler socket of an HTTP/2 or HTTP/3 request is given as before
+    - an HTTP/1.x request whose framing is ambiguous is answered with 400 (Bad Request), or 501 (Not Implemented)
+      for a transfer coding other than chunked, and the connection is closed: a request with both
+      \c Transfer-Encoding and \c Content-Length, a \c Transfer-Encoding that does not end with the chunked coding
+      alone, more than one \c Host, or a header line that ends with a bare LF; a chunked body that cannot be framed,
+      such as one whose trailer section has a line that ends with a bare LF or an empty line before its end, is
+      answered with 400 instead of 500; the chunked coding is recognized without regard to case and whitespace
+    - an HTTP/2 or HTTP/3 request body that the server collects for a handler and whose memory cannot be allocated
+      fails the request, which is answered with an error; before, the handler was given the part collected
+    - a request body that the server reads into memory is limited to
+      @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" (256 MiB) when no
+      \c max_request_body_size is set
+      (@ref HttpServer::HttpServerOptionInfo::max_request_body_size "HttpServerOptionInfo::max_request_body_size"),
+      and a larger body is answered with HTTP 413 (Content Too Large); a body that a handler reads as a stream is not
+      limited by the default, and an explicit \c 0 still means no limit; added
+      @ref HttpServer::HttpServer::getStreamMaxRequestBodySize() "HttpServer::getStreamMaxRequestBodySize()" and
+      @ref HttpServer::HttpListener::getStreamMaxRequestBodySize() "HttpListener::getStreamMaxRequestBodySize()"
+    - the connection of an HTTP/1.x request whose chunked body a handler stopped reading before its end is closed
+      after the response, so that the rest of the body cannot be taken for another request
+      (<a href="https://github.com/qoretechnologies/qore/issues/7417">issue 7417</a>)
+    - the handler of an HTTP/1.x request that is declared by sandboxed code, or that asks for it
+      (@ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()"), gets a socket that
+      acts on the connection for its own request only, as the handler of an HTTP/2 or HTTP/3 request does, and code
+      that is not sandboxed aborts the connection with
+      @ref HttpServer::http_abort_connection() "http_abort_connection()" (see @ref httpserver_handler_socket;
+      <a href="https://github.com/qoretechnologies/qore/issues/7305">issue 7305</a>); each send and read of that
+      socket has a timeout of at most the new \c handler_socket_max_timeout option (30 seconds by default)
+    - a stream handler that wants an HTTP/1.x request body with a \c Content-Length as a stream
+      (@ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()") gets it in binary
+      parts of at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize" bytes, each byte once, instead of
+      the whole body both as the constructor's argument and in one part; a body larger than
+      @ref HttpServer::DefaultBodyStreamThreshold "DefaultBodyStreamThreshold" is no longer read before the request
+      is dispatched, so that the memory that a streamed body needs is bounded
+      (<a href="https://github.com/qoretechnologies/qore/issues/7308">issue 7308</a>)
     - the stop notification of a listener (the \c stopc option of @ref HttpServer::HttpListenerOptionInfo
       "HttpListenerOptionInfo") is now also called when the server is destroyed while the listener is stopping, where
       it was skipped; an error that it raises is logged with the listener's logger
       (<a href="https://github.com/qoretechnologies/qore/issues/6967">issue 6967</a>)
+    - fixed adding listeners on a host name with several addresses: an error other than a bind error for one address
+      raised the error but left the listeners already added for the other addresses running; they are now stopped,
+      and the stop notification is called only for a listener that started
+      (<a href="https://github.com/qoretechnologies/qore/issues/7430">issue 7430</a>)
     - the undocumented \c startConnection() method is internal: it ran code that it was given on a thread of the
       server's pool, also code of a %Program that may not control threads (issue #7056)
     - on the thread of a dedicated persistent connection, a request for another handler than the session's (after the
@@ -408,7 +518,7 @@ log("started listener on %s", lh.desc);
       (@ref HttpServer::HttpServer::setDefaultTextEncoding() "setDefaultTextEncoding()") is the assumed encoding for text without an encoding declaration, and no longer
       replaces the encoding of a JSON body or one declared in the body
     - every request handler receives the effective maximum request body size of the listener
-      (@ref HttpServer::HttpListener::getMaxRequestBodySize() "HttpListener::getMaxRequestBodySize()") in
+      (@ref HttpServer::HttpListener::getStreamMaxRequestBodySize() "HttpListener::getStreamMaxRequestBodySize()") in
       \c cx."header-info".max_request_body_size (\c 0 = no limit), including handlers on an automatically created
       HTTP/3 listener; a handler that reads the request body as a stream enforces the total with it, since the
       server limits only the data it buffers ahead of such a handler
@@ -750,6 +860,39 @@ public string sub get_exception_string(hash<auto> ex) {
     return Util::get_exception_string(ex);
 }
 
+#! Aborts the connection of a request from the code of its handler, which is not sandboxed (qore#7305)
+/** The way that handler code aborts the connection of its request, as when a server ends a response midway to tell
+    the client that it is truncated: the client sees the connection closed without the rest of the response, and the
+    server sends no response and drops the connection.  For an HTTP/2 or HTTP/3 request, only the request's own
+    stream is ended.  It acts only on the socket that a handler got for its request (see
+    @ref httpserver_handler_socket), never on another socket.
+
+    @par Example:
+    @code{.py}
+# the response cannot be completed: the client must not take what it received for the whole response
+http_abort_connection(s);
+    @endcode
+
+    @param s the socket of the request, as the handler got it (see @ref httpserver_handler_socket)
+
+    @throw HTTP-HANDLER-SOCKET-ERROR the socket is not the socket that a handler got for its request; the calling code
+    is sandboxed (see @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()") and the request is an
+    HTTP/1.x request; or the handler's code for the HTTP/1.x request returned
+
+    @since HttpServer 1.7
+*/
+public nothing sub http_abort_connection(Socket s) {
+    if (s instanceof Http1HandlerSocket) {
+        cast<Http1HandlerSocket>(s).abortConnection();
+    } else if (s instanceof Http2HandlerSocket || s instanceof Http3HandlerSocket) {
+        # the socket of an HTTP/2 or HTTP/3 request ends its own stream
+        s.close();
+    } else {
+        throw "HTTP-HANDLER-SOCKET-ERROR", "http_abort_connection() acts only on the socket that a handler got for "
+            "its request";
+    }
+}
+
 #! Hash for HttpServer options
 public hashdecl HttpServerOptionInfo {
     #! HTTP server name
@@ -827,7 +970,7 @@ public hashdecl HttpServerOptionInfo {
     */
     int max_idle_handler_threads = 0;
 
-    #! Maximum HTTP request body size in bytes (0 = unlimited)
+    #! Maximum HTTP request body size in bytes (0 = unlimited; not set = @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" for buffered bodies)
     /** Requests with Content-Length exceeding this value, or chunked, HTTP/2, or HTTP/3 bodies
         that grow beyond this value, receive HTTP 413 (Content Too Large).  An HTTP/1.x connection
         is closed after the response; on HTTP/2 and HTTP/3 only the request's stream ends, and the
@@ -840,9 +983,20 @@ public hashdecl HttpServerOptionInfo {
         the total body size itself; for such a handler, this value limits the data that the server buffers for it,
         and a read of a body that exceeded it fails with \c HTTP-BODY-TOO-LARGE after the buffered data.
 
-        @since HttpServer 1.6
+        - a positive value is the limit
+        - \c 0 means no limit
+        - if it is not set, a body that the server reads into memory for the handler (a body that it reads before
+          dispatching the request, a body that the handler reads with
+          @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "getMessageBody()", and the rest of a chunked
+          body that the handler left unread) is limited to
+          @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" (256 MiB); a body that a handler
+          reads as a stream is not limited then (see
+          @ref HttpServer::HttpServer::getStreamMaxRequestBodySize() "HttpServer::getStreamMaxRequestBodySize()")
+
+        @since HttpServer 1.6; HttpServer 1.7 applies
+        @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" to buffered bodies when it is not set
     */
-    int max_request_body_size = 0;
+    *int max_request_body_size;
 
     #! Maximum size in bytes of the header of an HTTP/1.x request and of the trailer section of a chunked request body
     /** The server answers a request whose header is larger than this limit with HTTP 431 (Request Header Fields Too
@@ -855,6 +1009,20 @@ public hashdecl HttpServerOptionInfo {
         @since HttpServer 1.7
     */
     int max_header_size = 0;
+
+    #! The longest timeout of a send or a read of the socket that the handler of an HTTP/1.x request gets
+    /** A send or read of the socket of a request (see @ref httpserver_handler_socket) without a timeout, or with a
+        longer one, has this timeout: the server ends the socket of a request before it answers the request, after the
+        sends and reads of the socket in progress (of a thread of the handler that outlives its request), which a
+        shutdown of the connection does not end, so that this bounds how long the server waits for them.  A send or
+        read with a shorter timeout keeps it.
+
+        - a positive value is the longest timeout
+        - \c 0 (the default) uses the default of 30 seconds
+
+        @since HttpServer 1.7
+    */
+    timeout handler_socket_max_timeout = 0;
 
     #! Maximum size in bytes of a decompressed request body
     /** A request body with a \c Content-Encoding is decompressed before it is passed to the handler; a body whose
@@ -955,7 +1123,8 @@ public hashdecl HttpServerOptionInfo {
 
     #! The time allowed for an I/O operation of a connection
     /** This is the time allowed to read a request header once a request has started to arrive, to read the first
-        request of a new connection, and to send a response.  An idle keep-alive connection is waited for the idle
+        request of a new connection, and for an HTTP/1 response send by the controller to make progress.  The send
+        timeout starts again as the peer takes data.  An idle keep-alive connection is waited for the idle
         time (\c ttl) plus this time, which covers reading the header of the next request: a connection that sends
         nothing for longer is closed.  A connection whose requests are answered by fast routes renews its timeout
         with each request.
@@ -1064,6 +1233,12 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         /** @since HttpServer 1.7
         */
         const DefaultDrainTimeout = 5s;
+
+        #! The default longest timeout of a send or a read of the socket of an HTTP/1.x request (the
+        #! \c handler_socket_max_timeout option; qore#7305)
+        /** @since HttpServer 1.7
+        */
+        const DefaultHandlerSocketMaxTimeout = 30s;
 
         # logging options
         const LP_LOGPARAMS = HttpServer::LP_LOGPARAMS;
@@ -1215,6 +1390,8 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         #! The maximum time that stop() waits for the requests in progress (the \c drain_timeout option)
         timeout drain_timeout = DefaultDrainTimeout;
+        #! the longest timeout of a send or a read of the socket of an HTTP/1.x request (qore#7305)
+        timeout handler_socket_max_timeout = DefaultHandlerSocketMaxTimeout;
 
         # permanent handlers; these handlers are never removed
         HttpHandlerList handlers();
@@ -1268,8 +1445,8 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         #! Idle disconnect (TTL) for connections
         date ttl = DefaultTtl;
 
-        #! Maximum HTTP request body size in bytes (0 = unlimited)
-        int max_request_body_size = 0;
+        #! Maximum HTTP request body size in bytes (0 = unlimited; @ref nothing = not set: the default applies)
+        *int max_request_body_size;
 
         #! Maximum size in bytes of a decompressed request body (0 = default, negative = unlimited)
         int max_decoded_body_size = 0;
@@ -1593,17 +1770,39 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         self.ttl = ttl;
     }
 
-    #! Returns the maximum request body size in bytes (0 = unlimited)
-    /** @return the maximum request body size in bytes; 0 means unlimited
+    #! Returns the maximum size in bytes of a request body that the server reads into memory (0 = unlimited)
+    /** @return the maximum request body size in bytes set with the \c max_request_body_size option
+        (@ref HttpServer::HttpServerOptionInfo::max_request_body_size "HttpServerOptionInfo::max_request_body_size")
+        or setMaxRequestBodySize(), or @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" if
+        none is set; 0 means unlimited
 
-        @since HttpServer 1.6
+        @see getStreamMaxRequestBodySize()
+
+        @since HttpServer 1.6; HttpServer 1.7 returns
+        @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" if no limit is set
     */
     int getMaxRequestBodySize() {
-        return max_request_body_size;
+        return max_request_body_size ?? DefaultMaxRequestBodySize;
+    }
+
+    #! Returns the maximum size in bytes of a request body that a handler reads as a stream (0 = unlimited)
+    /** @return the maximum request body size in bytes set with the \c max_request_body_size option
+        (@ref HttpServer::HttpServerOptionInfo::max_request_body_size "HttpServerOptionInfo::max_request_body_size")
+        or setMaxRequestBodySize(), or 0 (no limit) if none is set: the default limit
+        (@ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize") applies only to the bodies that the
+        server reads into memory
+
+        @see getMaxRequestBodySize()
+
+        @since HttpServer 1.7
+    */
+    int getStreamMaxRequestBodySize() {
+        return max_request_body_size ?? 0;
     }
 
     #! Sets the maximum request body size in bytes (0 = unlimited)
-    /** @param size the maximum request body size in bytes; 0 means unlimited
+    /** @param size the maximum request body size in bytes; 0 means unlimited, also for the bodies that the server
+        reads into memory
 
         @since HttpServer 1.6
     */
@@ -1707,6 +1906,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+        @throw HTTPSERVER-H3-BIND-ERROR the paired QUIC listener of an HTTP/3 listener could not be bound (see
+        @ref httpserverhttp3)
 
         @note if \c bind begins with a "/" character then it is assumed to be a UNIX socket path and the \a family
         key of the \a info hash is ignored
@@ -1740,6 +1941,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+        @throw HTTPSERVER-H3-BIND-ERROR the paired QUIC listener of an HTTP/3 listener could not be bound (see
+        @ref httpserverhttp3)
 
         @note This method returns immediately after submitting setup work. Call
         @ref Qore::Thread::Future::get() "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
@@ -1771,6 +1974,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+        @throw HTTPSERVER-H3-BIND-ERROR the paired QUIC listener of an HTTP/3 listener could not be bound (see
+        @ref httpserverhttp3)
 
         @note if \c bind begins with a "/" character then it is assumed to be a UNIX socket path and the \a family
         key of the \a info hash is ignored
@@ -1799,6 +2004,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+        @throw HTTPSERVER-H3-BIND-ERROR the paired QUIC listener of an HTTP/3 listener could not be bound (see
+        @ref httpserverhttp3)
 
         @note This method returns immediately after submitting setup work. Call
         @ref Qore::Thread::Future::get() "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
@@ -1830,6 +2037,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+        @throw HTTPSERVER-H3-BIND-ERROR the paired QUIC listener of an HTTP/3 listener could not be bound (see
+        @ref httpserverhttp3)
 
         @note This method blocks until async I/O is ready to accept connections.
         Use @ref HttpServer::HttpServer::addListener "addListener(hash<HttpListenerOptionInfo>)" with \c sync: \c False to add listeners without blocking.
@@ -1859,6 +2068,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+        @throw HTTPSERVER-H3-BIND-ERROR the paired QUIC listener of an HTTP/3 listener could not be bound (see
+        @ref httpserverhttp3)
 
         @note This method returns immediately after submitting setup work. Call
         @ref Qore::Thread::Future::get() "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
@@ -1888,6 +2099,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+        @throw HTTPSERVER-H3-BIND-ERROR the paired QUIC listener of an HTTP/3 listener could not be bound (see
+        @ref httpserverhttp3)
 
         @note if \a sock begins with a "/" character then it is assumed to be a UNIX socket path and the \a family
         key is ignored
@@ -1923,6 +2136,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+        @throw HTTPSERVER-H3-BIND-ERROR the paired QUIC listener of an HTTP/3 listener could not be bound (see
+        @ref httpserverhttp3)
 
         @note This method returns immediately after submitting setup work. Call
         @ref Qore::Thread::Future::get() "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
@@ -2016,6 +2231,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             "max_request_body_size": opts.max_request_body_size,
             "max_decoded_body_size": opts.max_decoded_body_size,
             "sse_max_buffer_size": opts.sse_max_buffer_size,
+            "stream_send_min_rate": opts.stream_send_min_rate,
+            "stream_send_min_rate_window": opts.stream_send_min_rate_window,
             "no_bind": True,
             "ext_info": sock_info{"address", "address_desc", "family", "familystr", "port",
                 "hostname", "hostname_desc"},
@@ -3321,8 +3538,14 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             } else if (head && status_code >= 200) {
                 # the response to a HEAD request has no Content-Length added: the length of the GET response is not
                 # that of the (empty) message body sent here
-                execAsyncPollOperation(s, s.startPollSendHttpResponse(status_code,
-                    HttpServer::HttpCodes{status_code}, "1.1", hdr, NOTHING, True));
+                if (s instanceof Http1HandlerSocket) {
+                    # the socket of a handler's HTTP/1.x request sends the header block, which adds no
+                    # Content-Length either; it has no poll operations (qore#7305)
+                    s.sendHTTPResponseHeader(status_code, HttpServer::HttpCodes{status_code}, "1.1", hdr);
+                } else {
+                    execAsyncPollOperation(s, s.startPollSendHttpResponse(status_code,
+                        HttpServer::HttpCodes{status_code}, "1.1", hdr, NOTHING, True));
+                }
             } else {
                 s.sendHTTPResponse(status_code, HttpServer::HttpCodes{status_code}, "1.1", hdr,
                     response_msg ?? chunked_msg);
@@ -3783,6 +4006,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     #! Common constructor code
     private init(hash<HttpServerOptionInfo> opts) {
         drain_timeout = opts.drain_timeout ?? opts.quic_drain_timeout ?? DefaultDrainTimeout;
+        if ((opts.handler_socket_max_timeout ?? 0) < 0) {
+            throw "HTTP-SERVER-INIT-ERROR", sprintf("handler_socket_max_timeout (%d) must not be negative",
+                opts.handler_socket_max_timeout);
+        }
+        if (opts.handler_socket_max_timeout) {
+            handler_socket_max_timeout = opts.handler_socket_max_timeout;
+        }
         # checked before anything is created
         compression_levels = checkCompressionLevels(opts.compression_levels ?? {});
         int idle_threads = opts.idle_threads;
@@ -3818,7 +4048,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         if (effective_ttl) {
             setTtl(effective_ttl);
         }
-        max_request_body_size = opts.max_request_body_size ?? 0;
+        # not set: the default applies to the bodies that the server reads into memory
+        max_request_body_size = opts.max_request_body_size;
         if ((opts.max_header_size ?? 0) < 0) {
             throw "HTTP-SERVER-INIT-ERROR", sprintf("max_header_size (%d) must not be negative", opts.max_header_size);
         }
@@ -4136,12 +4367,12 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
         # A "random port" request (service == "0") lets us transparently retry
         # if the kernel-assigned TCP port turns out to be taken on UDP by
-        # something else in the process — most commonly a still-lingering
-        # ephemeral UDP socket from a previous H3 client in the same test
-        # process.  For an explicit port the caller committed to that port
-        # and we fail loudly instead of silently degrading to TCP-only (the
-        # old behaviour would leave clients hitting QUIC-HANDSHAKE-TIMEOUT
-        # with no indication why).
+        # something else (EADDRINUSE) — most commonly the ephemeral UDP socket
+        # of a QUIC client.  Any other failure of the bind would fail on a
+        # fresh port as well, and is raised at once.  For an explicit port the
+        # caller committed to that port, so it is not retried.  A listener
+        # whose paired QUIC listener cannot be bound is never kept TCP-only:
+        # its HTTP/3 clients would get no answer (qore#7420).
         bool random_port = (info.service == "0");
         bool needs_h3 = enable_h3 && info.cert && info.key && (info.enable_h3 ?? True);
         int max_attempts = (random_port && needs_h3) ? 10 : 1;
@@ -4163,6 +4394,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 sprintf("there is already an active listener with name %y", info.name);
         }
 
+        # the failures of the binds of the paired QUIC listener, one per attempt: the error code, its description and
+        # the system error number, if any (qore#7420)
+        list<string> h3_failures = ();
         for (int attempt = 1; attempt <= max_attempts; ++attempt) {
 
             c.add();
@@ -4206,6 +4440,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             bool h3_ok = True;
             *string h3_err;
             *string h3_desc;
+            # the system error number of the failure, if the exception gives one
+            *int h3_errno;
             if (needs_h3) {
                 try {
                     # Use the actual listener socket info to get the resolved address
@@ -4240,6 +4476,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         "max_decoded_body_size": info.max_decoded_body_size,
                         # and the same bound of the data held for the clients of SSE streams
                         "sse_max_buffer_size": info.sse_max_buffer_size,
+                        # and the same minimum rate of streamed responses (qore#7280)
+                        "stream_send_min_rate": info.stream_send_min_rate,
+                        "stream_send_min_rate_window": info.stream_send_min_rate_window,
                         # and the same client certificate options (qore#7261)
                         "get_remote_certs": info.get_remote_certs,
                         "ssl_verify_flags": info.ssl_verify_flags,
@@ -4259,70 +4498,44 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     h3_ok = False;
                     h3_err = ex.err;
                     h3_desc = ex.desc;
+                    if (ex.arg.typeCode() == NT_INT) {
+                        h3_errno = ex.arg;
+                    }
                 }
             }
 
             if (!h3_ok) {
-                if (random_port && attempt < max_attempts) {
-                    # Retry with a fresh random port.  Tear down everything
-                    # bound so far so the next iteration starts clean.  This
-                    # is strictly better than silently degrading to TCP-only
-                    # on a random-port listener, because the caller asked for
-                    # enable_h3 and has no way to observe that it didn't take.
-                    log("WARNING: attempt %d/%d: paired QUIC listener bind "
-                        "failed on port %d (%s: %s); retrying with a fresh "
-                        "random port", attempt, max_attempts,
-                        l.getInfo().port, h3_err, h3_desc);
-                    remove listeners{id};
-                    remove smap{effective_sock};
-                    remove nmap{info.name};
-                    try { l.stop(); } catch () {}
-                    # l.stop() drives listenerStopped() which already calls
-                    # c.done(); only decrement here if l.stop() didn't get
-                    # there (i.e. threw before reaching it).  Mirrors the
-                    # WAITGROUP-ERROR defense in listenerStopped() at the
-                    # top of this class.
-                    try {
-                        c.done();
-                    } catch (hash<ExceptionInfo> ex) {
-                        if (ex.err != "WAITGROUP-ERROR") {
-                            rethrow;
-                        }
-                    }
+                int failed_port = l.getInfo().port;
+                # the description of a system error has the error's text already
+                string failure = sprintf("attempt %d/%d on port %d: %s: %s%s", attempt, max_attempts, failed_port,
+                    h3_err, h3_desc, exists h3_errno ? sprintf(" (errno %d)", h3_errno) : "");
+                push h3_failures, failure;
+                # Tear down everything bound so far: a retry starts clean, and a listener whose paired QUIC listener
+                # could not be bound is not kept: the caller asked for HTTP/3 and has no way to observe that it did
+                # not take, and its clients would get no answer to their QUIC datagrams (qore#7420)
+                removeFailedListener(l, id, effective_sock, info.name);
+                if (random_port && attempt < max_attempts && h3_errno == EADDRINUSE) {
+                    # a random port: retry on a fresh port (the kernel-assigned TCP port can be taken on UDP by
+                    # something else, such as the ephemeral UDP socket of a QUIC client)
+                    log("WARNING: paired QUIC listener bind failed, %s; retrying with a fresh random port", failure);
                     continue;
                 }
                 if (!random_port) {
-                    # Explicit port — caller committed to this port; we can't
-                    # pick a different one behind their back.  Roll back the
-                    # TCP listener and surface a hard error so misconfiguration
-                    # (port in use, no IPv6 support, etc.) is visible.
-                    log("ERROR: failed to bind paired QUIC listener on "
-                        "explicit port %s: %s: %s",
-                        info.service, h3_err, h3_desc);
-                    remove listeners{id};
-                    remove smap{effective_sock};
-                    remove nmap{info.name};
-                    try { l.stop(); } catch () {}
-                    # See the random_port retry branch above for rationale.
-                    try {
-                        c.done();
-                    } catch (hash<ExceptionInfo> ex) {
-                        if (ex.err != "WAITGROUP-ERROR") {
-                            rethrow;
-                        }
-                    }
+                    # an explicit port: the caller committed to that port; we can't pick a different one behind
+                    # their back
+                    log("ERROR: failed to bind paired QUIC listener on explicit port %s: %s", info.service,
+                        failure);
                     throw "HTTPSERVER-H3-BIND-ERROR",
-                        sprintf("failed to bind paired HTTP/3 UDP listener on "
-                            "requested port %s: %s: %s",
-                            info.service, h3_err, h3_desc);
+                        sprintf("failed to bind paired HTTP/3 UDP listener on requested port %s: %s: %s",
+                            info.service, h3_err, h3_desc), {"attempts": h3_failures};
                 }
-                # random_port && attempt == max_attempts: retries exhausted.
-                # Keep the TCP listener running (we already told the caller we
-                # have a bind) but log a clear warning that H3 is disabled.
-                log("WARNING: exhausted %d QUIC-bind attempts for random-port "
-                    "listener %d; continuing with TCP-only (no H3) on port %d: "
-                    "last error: %s: %s",
-                    max_attempts, id, l.getInfo().port, h3_err, h3_desc);
+                # a random port whose attempts are exhausted, or whose bind failed with an error that a fresh port
+                # does not change
+                log("ERROR: failed to bind the paired QUIC listener of a random-port listener in %d attempt(s): %s",
+                    attempt, h3_failures.join("; "));
+                throw "HTTPSERVER-H3-BIND-ERROR",
+                    sprintf("failed to bind paired HTTP/3 UDP listener on a random port in %d attempt(s); last: %s",
+                        attempt, failure), {"attempts": h3_failures};
             }
 
             # the fast routes of the server, if any, are answered for the connections accepted from the listener, with
@@ -4340,9 +4553,17 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # Add the TCP listener to the async I/O controller — start accepting.
             # Done AFTER QUIC + Alt-Svc setup so the first TCP response already
             # carries the Alt-Svc header (see comment above).
-            asyncIo.addListener(l, asyncTarget, l.isSsl(), l.getSslCertificateObject(),
-                l.getSslPrivateKeyObject(), l.getHttpVersion(), l.getSslVerifyFlags(),
-                l.getSslAcceptAllCerts(), l.getGetRemoteCerts(), l.getMaxRequestBodySize(), l);
+            try {
+                asyncIo.addListener(l, asyncTarget, l.isSsl(), l.getSslCertificateObject(),
+                    l.getSslPrivateKeyObject(), l.getHttpVersion(), l.getSslVerifyFlags(),
+                    l.getSslAcceptAllCerts(), l.getGetRemoteCerts(), l.getMaxRequestBodySize(), l);
+            } catch (hash<ExceptionInfo> ex) {
+                # the listener could not be started: it is not kept registered and counted, and its paired QUIC
+                # listener and Alt-Svc entry are removed with it (qore#7436)
+                log("ERROR: listener %d could not be started: %s: %s", id, ex.err, ex.desc);
+                removeFailedListener(l, id, effective_sock, info.name);
+                rethrow;
+            }
 
             # Notify that the listener is now accepting connections.  With the
             # event-driven async I/O model there are no per-listener threads, so
@@ -4356,6 +4577,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # HttpServer::startup() completes for system listeners).  Wrapped so a
             # notification handler error cannot tear down a successfully-started
             # listener.
+            l.setStarted();
             try {
                 listenerStarted(id, l.getListenerSocketInfo());
             } catch (hash<ExceptionInfo> ex) {
@@ -4368,6 +4590,40 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
         throw "HTTPSERVER-ADDLISTENER-ERROR",
             sprintf("internal error: retry loop exhausted without a decision");
+    }
+
+    #! Removes and stops a listener that addListenerIntern() created but could not set up or start; lm must be held
+    /** The listener's stop (listenerStopped()) removes its paired QUIC listener and its Alt-Svc entry and decrements
+        the count of running listeners for it; only a stop that failed before that leaves the count to be decremented
+        here (qore#7420: it was decremented in both cases, so each failure took one from the count of another running
+        listener; qore#7436: a listener whose start failed was not removed at all).  A stop that raises before the
+        listener stopped (an unexpected error of its removal from the controller) does not reach listenerStopped(): its
+        paired QUIC listener and Alt-Svc entry, if any, are then left as they are, and the error is logged
+
+        @param l the listener
+        @param id the listener's ID
+        @param sock the key of the listener in smap
+        @param name the listener's name
+    */
+    private:internal removeFailedListener(HttpListener l, int id, string sock, string name) {
+        remove listeners{id};
+        remove smap{sock};
+        remove nmap{name};
+        try {
+            l.stop();
+        } catch (hash<ExceptionInfo> ex) {
+            logError("could not stop listener %d after its setup failed: %s: %s: %s", id, get_ex_pos(ex), ex.err,
+                ex.desc);
+        }
+        if (!l.isStopped()) {
+            try {
+                c.done();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "WAITGROUP-ERROR") {
+                    rethrow;
+                }
+            }
+        }
     }
 
     private Future addListenerInternAsync(hash<HttpListenerOptionInfo> info) {
@@ -4476,6 +4732,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 errmap{bind ?* "unknown"} = errstr;
                 if (ex.err != "HTTPLISTENER-BIND-ERROR" && ex.err != "SOCKET-BIND-ERROR") {
                     logError("add listener %s", errstr);
+                    # the listeners already started for the other addresses of the same add are stopped: a failed
+                    # add leaves no listener running (qore#7430)
+                    stopAddedListeners(rv);
                     rethrow;
                 }
 
@@ -4484,6 +4743,29 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         }
 
         return rv;
+    }
+
+    #! Stops the listeners that an add started before it failed (qore#7430)
+    /** @param added the info hashes of the listeners started
+    */
+    private stopAddedListeners(list<hash<auto>> added) {
+        foreach hash<auto> h in (added) {
+            *HttpListener l;
+            {
+                lm.enter();
+                on_exit lm.exit();
+                l = listeners{h.id};
+            }
+            if (!l) {
+                continue;
+            }
+            try {
+                l.stop();
+            } catch (hash<ExceptionInfo> ex) {
+                logError("could not stop listener %d after a failed add: %s: %s: %s", h.id, get_ex_pos(ex), ex.err,
+                    ex.desc);
+            }
+        }
     }
 
     private Future addINETListenersInternAsync(hash<HttpListenerOptionInfo> info,
@@ -4585,18 +4867,59 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     }
 
     #! @cond nodoc
+    #! Appends a part of a request body that the server collects
+    /** @throw SOCKET-RECV-ERROR the memory for the body could not be allocated: the body is not given incomplete
+        to the handler, as an HTTP/1.x body is not
+    */
+    private static appendRequestBodyPart(reference<binary> body_data, binary chunk) {
+        int size = body_data.size();
+        body_data += chunk;
+        if (body_data.size() != size + chunk.size()) {
+            throw "SOCKET-RECV-ERROR", sprintf("the memory for an HTTP message body of %d bytes could not be "
+                "allocated", size + chunk.size());
+        }
+    }
+
     #! Reads the body of a request for handleRequest()
     /** @return a hash with the body in its \c body key, or @ref nothing if the request has been answered (an error
         response was sent or captured)
     */
     private *hash<auto> getRequestBody(HttpListener listener, Socket s, reference<hash<auto>> cx, hash<auto> hdr,
             *HttpServer::AbstractHttpRequestHandler handler, int max_body, bool is_multiplexed, bool want_streaming,
-            hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+            bool want_body_reader, RequestHelper request_helper, hash<auto> info,
+            *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         *data body;
         # the fields of the request that its body is read and decoded by (qore#6851)
         auto content_type = http_get_field(hdr, "content-type");
         auto content_encoding = http_get_field(hdr, "content-encoding");
         auto req_content_length = http_get_field(hdr, "content-length");
+        if (want_body_reader) {
+            # an HTTP/1.x body with a Content-Length that the stream handler reads in parts (qore#7308): a body that
+            # exceeds the maximum size is refused before any of it is read (one that the server read before the
+            # request was dispatched too, as for a body given whole), and the handler gets the parts from a reader,
+            # which gives the bytes read before the dispatch first, in the same parts as those read from the socket
+            int content_length = http_parse_content_length(req_content_length);
+            # a body read as a stream has the limit set for the listener or the server, not the default limit of a
+            # buffered body
+            int stream_max_body = cx."header-info".max_request_body_size;
+            if (stream_max_body > 0 && content_length > stream_max_body) {
+                string etxt = sprintf("Content-Length %d exceeds maximum allowed body size %d",
+                    content_length, stream_max_body);
+                listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
+                cx.close = True;
+                sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
+                    cx."response-encoding", hdr.method == "HEAD");
+                return NOTHING;
+            }
+            # the server keeps no copy of the bytes read before the dispatch: each byte reaches the handler once
+            *binary buffered = remove cx."header-info".body;
+            # the reader, which the handler's code gets, reads the rest of the body through the socket of the
+            # handler's request, which gives no more than the rest of the body (qore#7305)
+            request_helper.h1SetBodyLength(content_length - (buffered ? buffered.size() : 0));
+            cx."header-info".body_reader = new Http1BodyReader(request_helper.handler_sock ?? s, content_length,
+                buffered, stream_max_body);
+            return {"body": NOTHING};
+        }
         if (cx."header-info".body_streaming && !want_streaming) {
             # Handler doesn't support streaming — buffer body on handler thread
             # for backward compatibility (body was previously read by I/O thread)
@@ -4625,7 +4948,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         if (!chunk) {
                             break;
                         }
-                        body_data += chunk;
+                        appendRequestBodyPart(\body_data, chunk);
                         # Incremental size check: reject early instead of buffering the full body
                         if (max_body > 0 && body_data.size() > max_body) {
                             break;
@@ -4700,7 +5023,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         h2_complete = True;
                         break;
                     }
-                    body_data += chunk;
+                    appendRequestBodyPart(\body_data, chunk);
                     # Incremental size check: reject early instead of buffering the full body
                     if (max_body > 0 && body_data.size() > max_body) {
                         hit_max_body = True;
@@ -4906,10 +5229,36 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         If thread_contexts is provided (the thread of a dedicated persistent connection), the request runs with the
         thread context of its handler (issue #6847)
     */
+    #! Starts the socket of the current HTTP/1.x request that its handler gets (qore#7305)
+    /** Called only for a request whose handler gets the socket of its request; the callers of handleRequest() end it
+        when it returns, and handleRequest() before the server answers the request
+    */
+    private startHandlerSocket(RequestHelper request_helper, Socket s, bool head, bool http10) {
+        # the callers end the socket of each request when the request is handled: a socket of a previous request on
+        # the object that is still live is ended here all the same
+        if (request_helper.h1_view) {
+            request_helper.endHandlerSocket();
+        }
+        if (request_helper.hs_state) {
+            request_helper.handler_sock = new Http1HandlerSocket(s, request_helper.hs_state,
+                request_helper.hs_state.h1Reset(s, head, http10, handler_socket_max_timeout),
+                handler_socket_max_timeout);
+        } else {
+            # a new state, started for the request: its first generation
+            request_helper.hs_state = new HandlerSocketState(s, head, http10, handler_socket_max_timeout);
+            request_helper.handler_sock = new Http1HandlerSocket(s, request_helper.hs_state, 1,
+                handler_socket_max_timeout);
+        }
+        request_helper.h1_state = 0;
+        request_helper.h1_view = True;
+    }
+
     private handleRequest(RequestHelper request_helper, HttpListener listener, Socket s,
             reference<hash<auto>> cx, hash<auto> hdr, bool head = False, HttpPersistentHandlerInfo phi,
             hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out,
             *HttpHandlerThreadContexts thread_contexts) {
+        # the socket of an HTTP/1.x request that the handler gets, if it gets one, is ended by the callers when this
+        # method returns (on every path), as well as before the server answers the request (qore#7305)
         remove cx."response-sent";
         # the listener object of the handlers (qore#6921), read once per request
         HttpServer::HttpListenerInterface hview = listener.getHandlerView();
@@ -5002,10 +5351,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         cx."compression-levels" = compression_levels;
 
         # the effective maximum request body size of the listener, read once per request so a change made with
-        # setMaxRequestBodySize() applies to the next request; handlers that read the body as a stream enforce the
-        # total themselves with this value
+        # setMaxRequestBodySize() applies to the next request: max_body limits the bodies that the server reads into
+        # memory, including DefaultMaxRequestBodySize when no limit is set; handlers that read the body as a stream
+        # enforce the total themselves with the limit set for the listener or the server, which the context gives
         int max_body = listener.getMaxRequestBodySize();
-        cx."header-info".max_request_body_size = max_body;
+        cx."header-info".max_request_body_size = listener.getStreamMaxRequestBodySize();
+        cx."header-info".stream_send_min_rate = listener.getStreamSendMinRate();
+        cx."header-info".stream_send_min_rate_window = listener.getStreamSendMinRateWindow();
 
         # erase the encoding string on exit
         on_exit remove cx.encoding;
@@ -5038,9 +5390,14 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         # handler will only return after all in-progress requests are completed; the object is only allocated if
         # needed
         DynamicHandlerHelper dhh;
+        # True if the handler's code gets the socket of its HTTP/1.x request (qore#7305)
+        bool handler_socket_view;
+        # True if the handler runs the code of other objects, which can be of a sandboxed Program (qore#7305)
+        bool hosts_code;
 
         if (phi.handler) {
             handler = phi.handler;
+            handler_socket_view = handler.needsHandlerSocketView();
         } else {
             # find a handler for the request
             *HandlerInfo hi;
@@ -5073,6 +5430,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
             if (hi) {
                 handler = hi.obj;
+                handler_socket_view = hi.handler_socket_view;
+                hosts_code = hi.hosts_code;
                 cx.handler_name = hi.name;
                 if (root_path)
                     cx.root_path = root_path;
@@ -5082,7 +5441,24 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         try {
             if (!handler && defaultHandler) {
                 handler = defaultHandler.obj;
+                handler_socket_view = defaultHandler.handler_socket_view;
+                hosts_code = defaultHandler.hosts_code;
                 cx.handler_name = defaultHandler.name;
+            }
+
+            # the handler of an HTTP/1.x request that is declared by sandboxed code, or that asked for it, gets a
+            # socket that acts on the connection for the request only; another handler gets the connection's socket,
+            # which code that is sandboxed cannot use (qore#7305)
+            # the Program of the handler's class can be sandboxed after the handler was registered, and a handler that
+            # runs the code of other objects (such as the REST classes of a RestHandler) can get objects of classes of
+            # a sandboxed Program at any time: decided again for each request, which costs a native call, and a call
+            # of the handler for one that runs the code of other objects
+            if (!handler_socket_view && handler && !is_multiplexed) {
+                handler_socket_view = SandboxManager::isFromSandboxedProgram(handler)
+                    || (hosts_code && handler.hostsSandboxedCode());
+            }
+            if (handler_socket_view && !is_multiplexed && !request_helper.handler_sock) {
+                startHandlerSocket(request_helper, s, head, hdr.http_version == "1.0");
             }
 
             # on the thread of a dedicated persistent connection, the request runs with the thread context of its
@@ -5143,10 +5519,22 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 && handler
                 && handler.wantsBodyStreaming(cx, hdr);
 
+            # an HTTP/1.x body with a Content-Length that a stream handler wants as a stream (qore#7308): decided
+            # here, on the handler thread, also for a body that the server read before the request was dispatched,
+            # so that the handler gets the body in the same parts whatever its size; a handler that is not a stream
+            # handler has no way to read the parts, and always gets the body whole
+            bool want_body_reader = !is_multiplexed
+                && !want_streaming
+                && handler
+                && handler.stream
+                && !http_get_field(hdr, "transfer-encoding")
+                && http_parse_content_length(http_get_field(hdr, "content-length")) > 0
+                && handler.wantsBodyStreaming(cx, hdr);
+
             # the request body, read in a method of its own so that its locals and early returns are not part of the
             # frame of this method, which every request runs (qore#5759); NOTHING if the request was answered there
             *hash<auto> body_info = getRequestBody(listener, s, \cx, hdr, handler, max_body, is_multiplexed,
-                want_streaming, info, \async_response_out);
+                want_streaming, want_body_reader, request_helper, info, \async_response_out);
             if (!body_info) {
                 return;
             }
@@ -5264,19 +5652,48 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         }
                     }
 
-                    # the socket that the handler gets (qore#6953): the connection's socket of an HTTP/1.x request only
-                    # for a handler class that trusted code declared; one that sandboxed code declared gets a
-                    # placeholder, which is not connected (qore#6843)
-                    Socket hsock = request_helper.handler_sock ?? s;
-                    if (!(hsock instanceof Http2HandlerSocket || hsock instanceof Http3HandlerSocket)
-                            && SandboxManager::isSandboxDeclared(handler)) {
-                        hsock = new Socket();
-                    }
-                    hash<auto!> hrv = handler.handleRequest(hview, hsock, cx, hdr, body);
+                    # the socket that the handler gets (qore#6953); that of an HTTP/1.1 request ends when the
+                    # handler's code returns, before the server sends the response and reads the next request on the
+                    # connection (qore#7305)
+                    hash<auto!> hrv = handler.handleRequest(hview, request_helper.handler_sock ?? s, cx, hdr, body);
                     if (hrv.hasKey("raw_response")) {
                         delete hrv."raw_response";
                     }
                     rv = cast<hash<HttpResponseInfo>>(hrv);
+                    # a response that the handler sent through the socket of its HTTP/1.x request, or a part of it:
+                    # the server sends no other response, and closes the connection after an incomplete one
+                    # (qore#7305)
+                    if (request_helper.h1_view) {
+                        # ended with one call when no send or read of it is in progress
+                        request_helper.h1_view = False;
+                        if ((request_helper.h1_state = request_helper.hs_state.h1End()) < 0) {
+                            request_helper.h1_state = request_helper.hs_state.endHandlerSocket();
+                        }
+                        if (request_helper.h1_state) {
+                            rv.reply_sent = True;
+                            if (request_helper.h1_state != Http1ResponseState::Complete) {
+                                cx.close = True;
+                            }
+                        } else if (rv.reply_sent) {
+                            # the handler sent no response through the socket of its request: the server answers
+                            # the request, and closes the connection
+                            string err = sprintf("handler %y returned reply_sent without sending a response through "
+                                "the socket of its HTTP/1.x request", cx.handler_name);
+                            listener.logError("cid %d: %s", cx.id, err);
+                            logViaHandlerIfPossible(handler, cx.id, err);
+                            rv = <HttpResponseInfo>{
+                                "code": 500,
+                                "body": "the handler sent no response",
+                                "hdr": {"Content-Type": "text/plain"},
+                            };
+                            cx.close = True;
+                        }
+                        # a chunked body that the socket of the request did not read to its end: the rest of it is
+                        # not read as the next request
+                        if (request_helper.hs_state.h1_chunk_open) {
+                            cx.close = True;
+                        }
+                    }
 
                     # manage persistent handler info, if applicable
                     if (!phi.handler) {
@@ -5291,6 +5708,27 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     } else if (!cx.persistent && !rv.close) {
                         cx.persistent = True;
                     }
+                }
+            }
+
+            # an HTTP/1.x body that the stream handler did not read completely (because it stopped reading, or the
+            # request was refused before it was called): the bytes that remain cannot be told apart from the next
+            # request, so the connection is closed after the response (qore#7308)
+            if (want_body_reader && cast<Http1BodyReader>(cx."header-info".body_reader).getRemaining()) {
+                cx.close = True;
+                # a response header that a stream request has already set
+                if (rv.hdr.Connection) {
+                    rv.hdr.Connection = "close";
+                }
+            }
+
+            # an HTTP/1.x chunked body whose read stopped before its end (the handler's read raised an error that it
+            # handled, or it stopped reading): the rest of the body cannot be told apart from the next request, so
+            # the connection is closed after the response (issue 7417)
+            if (!is_multiplexed && s.unfinishedHttpChunkedBody()) {
+                cx.close = True;
+                if (rv.hdr.Connection) {
+                    rv.hdr.Connection = "close";
                 }
             }
 
@@ -5331,6 +5769,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         async_response_out = <HttpAsyncResponseInfo>{
                             "streaming": True,
                             "stream_type": rv.stream_type,
+                        };
+                    } else if (request_helper.hs_state && request_helper.hs_state.stream_response_started) {
+                        # the handler submitted the response on its own stream itself: the controller sends no
+                        # other response on the stream, which would be a second response, a malformed message that
+                        # makes an HTTP/3 client fail the stream (qoretechnologies/qore#7212)
+                        async_response_out = <HttpAsyncResponseInfo>{
+                            "streaming": True,
                         };
                     } else {
                         # Async multiplexed mode: the handler claimed reply_sent but didn't actually
@@ -5390,6 +5835,25 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 phi.clear();
             }
 
+            # a response that the handler sent through the socket of its HTTP/1.x request, or a part of it: the server
+            # sends no error response after it, and closes the connection (qore#7305)
+            # (a socket of the request that already ended: the state of its response; none for a request without
+            # one, whose handler_sock is NOTHING for HTTP/1.x)
+            if (request_helper.h1_view
+                    ? request_helper.endHandlerSocket()
+                    : (!is_multiplexed && request_helper.handler_sock && request_helper.h1_state)) {
+                cx."response-sent" = True;
+                cx.close = True;
+                logError("%s", str);
+                return;
+            }
+            # a chunked body that the socket of the request did not read to its end: the rest of it is not read as the
+            # next request (qore#7305)
+            if (!is_multiplexed && request_helper.handler_sock && request_helper.hs_state
+                    && request_helper.hs_state.h1_chunk_open) {
+                cx.close = True;
+            }
+
             # if there is a pending chunked body that has not yet been read on exit, then read it and discard before sending any response
             on_exit if (s.pendingHttpChunkedBody())
                 s.readHTTPChunkedBodyBinary(HttpServer::ReadTimeout);
@@ -5403,6 +5867,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 # the trailer section of a chunked request body is larger than the limit of the socket (qore#6867)
                 case "HTTP-HEADER-TOO-LARGE": err_code = 431; break;
                 case "HTTP-BODY-ENCODING-ERROR": err_code = 400; break;
+                # a chunked request body that cannot be framed: an invalid chunk size or line end, or a trailer
+                # section that is not valid; the connection is closed
+                case "READ-HTTP-CHUNK-ERROR": err_code = 400; break;
                 default: err_code = 500; break;
             }
             # the response gives the client the error and its description; the location of the exception in the
@@ -5507,6 +5974,19 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             rv = <HttpResponseInfo>{
                 "code": 500,
                 "body": "a protocol upgrade is not possible on this connection",
+                "hdr": {"Content-Type": "text/plain"},
+            };
+        }
+        # a protocol upgrade (101) only for a request that asks for one (an Upgrade field and the upgrade token in its
+        # Connection field), so that a handler cannot take over the connection of another request (qore#7305)
+        if (rv."code" == 101 && !HttpServer::requestAsksUpgrade(hdr)) {
+            string err = sprintf("101 Switching Protocols returned from handler %y for a request that does not ask "
+                "for a protocol upgrade", cx.handler_name);
+            listener.logError("cid %d: %s", cx.id, err);
+            logViaHandlerIfPossible(handler, cx.id, err);
+            rv = <HttpResponseInfo>{
+                "code": 500,
+                "body": "the request does not ask for a protocol upgrade",
                 "hdr": {"Content-Type": "text/plain"},
             };
         }
@@ -5790,6 +6270,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     rv.body = bzip2(rv.body, levels.bzip2);
                 }
                 if (rv.hdr."Content-Encoding") {
+                    # the handler's content-length was the length of the uncompressed body: the length of the body
+                    # sent is set when the response is sent, as for a response without one; a length that does not
+                    # match the body would make the response malformed (qoretechnologies/qore#7212)
+                    remove rv.hdr."Content-Length";
                     listener.log("cid %d: %s compressed %s: %d -> %d bytes (type: %s)", cx.id,
                         cx."header-info".http3 ? "HTTP/3" : cx."header-info".http2 ? "HTTP/2" : "HTTP/1.x",
                         rv.hdr."Content-Encoding", orig_size, rv.body.size(), rv.body.type());
@@ -5874,7 +6358,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             # to the nghttp2 session.  h2op on the I/O thread will flush it.
                             s.submitHttp2ConnectResponse(stream_id, rv."code" ?? 200, resp_hdr);
                             # the handler's socket of the stream ends it gracefully from now on (qore#7214)
-                            Http2HandlerSocket::markResponseStarted(request_helper.handler_sock);
+                            request_helper.markStreamResponseStarted();
                             # Wake the I/O controller so h2op's continuePoll() flushes
                             # the pending CONNECT response
                             *AsyncSocketIo::AsyncSocketIoController ctrl = getGlobalAsyncCtrl();
@@ -6058,8 +6542,12 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     try {
                         # an asynchronous HTTP/1.1 WebSocket connection returns as soon as it is set up, and its
                         # handler runs ws_end when it ends; no thread of the handler pool waits for it
+                        # the WebSocket handler takes over the connection of an HTTP/1.1 request, whose own
+                        # socket ended with the request (qore#7305)
                         externally_managed = sockhandler.start(listener.getID(), ws_cx, hdr,
-                                request_helper.handler_sock ?? s)
+                                (cx."header-info".http2 || cx."header-info".http3)
+                                    ? (request_helper.handler_sock ?? s)
+                                    : s)
                             && holder.isAccepted();
                         if (externally_managed) {
                             # the connection stays open after the request returns
@@ -6203,6 +6691,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         refs.ctrl @= asyncIo;
         refs.target @= asyncTarget;
         return sub (code<nothing()> c) {
+            # work of the module cleanup that leaves the end to another thread hands itself over to it (qore#7239)
+            c = AsyncIoController::wrapModuleCleanupWork(c);
             *HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = refs.ctrl;
             *HttpServerAsyncIo::HttpAsyncTarget target = refs.target;
             if (ctrl && target) {
@@ -6227,6 +6717,39 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 c();
             }
         };
+    }
+
+    #! Returns @ref True if a request asks for a protocol upgrade: an \c Upgrade field, and the \c upgrade token in
+    #! its \c Connection field (RFC 9110 section 7.8; qore#7305)
+    private:internal static bool requestAsksUpgrade(hash<auto> hdr) {
+        auto upgrade = http_get_field(hdr, "upgrade");
+        if (!upgrade.val()) {
+            return False;
+        }
+        foreach auto v in (http_get_field(hdr, "connection")) {
+            if (v.typeCode() == NT_STRING) {
+                foreach string token in (v.split(",")) {
+                    if (trim(token).lwr() == "upgrade") {
+                        return True;
+                    }
+                }
+            }
+        }
+        return False;
+    }
+
+    #! Returns @ref True if a request accepts an event stream (\c text/event-stream in its \c Accept field; qore#7305)
+    private:internal static bool requestAcceptsEventStream(hash<auto> hdr) {
+        foreach auto v in (http_get_field(hdr, "accept")) {
+            if (v.typeCode() == NT_STRING) {
+                foreach string range in (v.split(",")) {
+                    if (isEventStreamMediaType(range)) {
+                        return True;
+                    }
+                }
+            }
+        }
+        return False;
     }
 
     #! Returns @ref True if a Content-Type value has the media type of an event stream (\c text/event-stream)
@@ -6320,7 +6843,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     s.submitHttp2StreamingResponseHeaders(stream_id,
                         rv."code" ?? 200, resp_hdr);
                     # the handler's socket of the stream ends it gracefully from now on (qore#7214)
-                    Http2HandlerSocket::markResponseStarted(request_helper.handler_sock);
+                    request_helper.markStreamResponseStarted();
                     if (wake_cb) {
                         wake_cb();
                     }
@@ -6412,14 +6935,71 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # async I/O controller.  See setupAsyncSseConnection() for the
             # H1 poll loop; setWakeCallback() wires the async controller
             # to re-run continuePoll() when events are queued.
+            # the handler of a request that got a socket of its request gets the connection's socket for the stream
+            # only after the server sent the stream's header, which ends the exchange with the connection, and only
+            # for a request that asked for an event stream: the connection serves no other request (qore#7305)
+            bool server_header = exists request_helper.handler_sock;
+            if (server_header) {
+                if (!HttpServer::requestAcceptsEventStream(hdr)) {
+                    string err = sprintf("an event stream returned from handler %y for a request that does not "
+                        "accept one", cx.handler_name);
+                    listener.logError("cid %d: %s", cx.id, err);
+                    logViaHandlerIfPossible(handler, cx.id, err);
+                    cx.close = True;
+                    async_response_out = buildAsyncErrorResponse(406, "the request does not accept an event stream",
+                        cx, listener, s, True);
+                    return;
+                }
+                # the stream is delimited by the end of the connection: no framing field or connection option of the
+                # handler (in any case) goes out
+                hash<auto> sse_hdr = {};
+                foreach hash<auto> i in ((rv.hdr ?? {}).pairIterator()) {
+                    string k = i.key.lwr();
+                    if (k != "content-length" && k != "transfer-encoding" && k != "connection") {
+                        sse_hdr{i.key} = i.value;
+                    }
+                }
+                try {
+                    s.sendHTTPResponseHeader(rv."code" ?? 200, HttpServer::HttpCodes{rv."code" ?? 200} ?? "OK", "1.1",
+                        sse_hdr + {"Connection": "close"});
+                } catch (hash<ExceptionInfo> ex) {
+                    listener.logError("cid %d: error sending the header of the event stream of handler %y: %s: %s",
+                        cx.id, cx.handler_name, ex.err, ex.desc);
+                    cx.close = True;
+                    async_response_out = <HttpAsyncResponseInfo>{"close": True, "sent": True};
+                    return;
+                }
+            }
+            string cid = string(cx.id);
+            bool sock_handler = handler instanceof HttpServer::AbstractHttpSocketHandlerInterface;
+            # True once the server called the handler's setup of the stream's connection for a request whose header the
+            # server sent: the setup can fail after it registered the connection (in a hook of the handler)
+            bool setup_called;
             try {
-                string cid = string(cx.id);
-                HttpServerAsyncIo::HttpSseStreamPollOperation poll_op =
-                    (handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)
-                    ? call_object_method(handler, "setupAsyncSseConnection", s, cx, hdr, cid)
-                    # a handler that is not a socket handler gets the stream from the server, for its event
-                    # source
-                    : new HttpServerAsyncIo::HttpSseStreamPollOperation(s);
+                HttpServerAsyncIo::HttpSseStreamPollOperation poll_op;
+                if (server_header) {
+                    # the server makes the stream's poll operation from the connection's socket and keeps it: the
+                    # handler, its connection and its event source get the socket of the request and a stream that
+                    # gives no poll operation (qore#7376)
+                    poll_op = new HttpServerAsyncIo::HttpSseStreamPollOperation(s);
+                    if (sock_handler) {
+                        if (!handler.hasCallableMethod("setupAsyncSseConnectionForRequest")) {
+                            throw "SSE-HANDLER-ERROR", sprintf("handler %y (class %y) gets the socket of its "
+                                "request but does not implement setupAsyncSseConnectionForRequest(), which sets up "
+                                "an HTTP/1.x event stream without the connection's socket", cx.handler_name,
+                                handler.className());
+                        }
+                        setup_called = True;
+                        call_object_method(handler, "setupAsyncSseConnectionForRequest", request_helper.handler_sock,
+                            cx, hdr, cid, new HttpServerAsyncIo::Http1SseConnection(poll_op, True));
+                    }
+                } else {
+                    poll_op = sock_handler
+                        ? call_object_method(handler, "setupAsyncSseConnection", s, cx, hdr, cid)
+                        # a handler that is not a socket handler gets the stream from the server, for its event
+                        # source
+                        : new HttpServerAsyncIo::HttpSseStreamPollOperation(s);
+                }
                 # Wire a wake callback so that events queued by a Qore-side
                 # handler thread (e.g. via ServerSentEventConnection::send())
                 # immediately trigger the async controller to re-run
@@ -6432,9 +7012,12 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     poll_op.setWakeCallback(sub () { ctrl.wakeSocket(sse_sock); });
                 }
                 configureSseStream(listener, cid, poll_op);
-                # Tell the async controller to manage this socket as an SSE stream
-                async_response_out.code = rv."code";
-                async_response_out.hdr = rv.hdr;
+                # Tell the async controller to manage this socket as an SSE stream; it sends the header unless the
+                # server sent it
+                if (!server_header) {
+                    async_response_out.code = rv."code";
+                    async_response_out.hdr = rv.hdr;
+                }
                 async_response_out.streaming = True;
                 async_response_out.stream_type =
                     HttpServerAsyncIo::HttpConnectionState::Sse;
@@ -6444,18 +7027,35 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 HttpServerAsyncIo::HttpPersistentRequestEnd pend();
                 # the controller calls it exactly once when the stream has ended, for any reason
                 poll_op.setCloseCallback(getSseStreamEndCallback(
-                    (handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)
-                    ? cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler)
-                    : NOTHING, cid, sse_run, pend));
+                    sock_handler ? cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler) : NOTHING, cid,
+                    sse_run, pend));
                 request_helper.persistent_end = pend;
                 # the event source pushes the events of the stream from now on; they are sent after the
-                # response headers
+                # response headers; the source of a handler that got the socket of its request gets a stream that
+                # gives no poll operation (qore#7376)
                 if (sse_run) {
-                    sse_run.start(new HttpServerAsyncIo::Http1SseConnection(poll_op));
+                    sse_run.start(new HttpServerAsyncIo::Http1SseConnection(poll_op, server_header));
                 }
             } catch (hash<ExceptionInfo> ex) {
                 listener.logError("cid %d: error setting up async SSE connection for handler %y: %s: %s",
                     cx.id, cx.handler_name, ex.err, ex.desc);
+                logViaHandlerIfPossible(handler, cx.id, sprintf("error setting up the event stream: %s: %s", ex.err,
+                    ex.desc));
+                # the server sent the stream's header: the connection, which serves no other request, is closed, and
+                # a connection that the handler registered for the stream, which does not start, has ended (a
+                # deregistration of a connection that is not registered does nothing)
+                if (server_header) {
+                    if (setup_called) {
+                        try {
+                            cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler).deregisterConnection(cid);
+                        } catch (hash<ExceptionInfo> ex1) {
+                            listener.logError("cid %d: error deregistering SSE connection %y of handler %y: %s",
+                                cx.id, cid, cx.handler_name, get_exception_string(ex1));
+                        }
+                    }
+                    cx.close = True;
+                    async_response_out = <HttpAsyncResponseInfo>{"close": True, "sent": True};
+                }
             }
         }
     }
@@ -6495,6 +7095,15 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         if (info.sse_max_buffer_size <= 0) {
             throw "HTTPSERVER-ADDLISTENER-ERROR", sprintf("listener option \"sse_max_buffer_size\" must be > 0; got "
                 "%d", info.sse_max_buffer_size);
+        }
+        if (info.stream_send_min_rate < 0) {
+            throw "HTTPSERVER-ADDLISTENER-ERROR", sprintf("listener option \"stream_send_min_rate\" must not be "
+                "negative; got %d", info.stream_send_min_rate);
+        }
+        if (info.stream_send_min_rate_window.absolute()
+                || get_duration_milliseconds(info.stream_send_min_rate_window) <= 0) {
+            throw "HTTPSERVER-ADDLISTENER-ERROR", sprintf("listener option \"stream_send_min_rate_window\" must be a "
+                "relative value of at least one millisecond; got %y", info.stream_send_min_rate_window);
         }
     }
 
@@ -6909,6 +7518,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         # stop notification closure
         *code<nothing(string)> stopc;
+        #! set once the listener was started (added to the async I/O controller); the stop notification is called
+        #! only for a listener that started (qore#7430)
+        bool started;
 
         string name;
 
@@ -7407,10 +8019,14 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         return ssl;
     }
 
-    #! Returns the effective maximum request body size for this listener
-    /** Returns the listener-specific limit if set, otherwise the server-level default.
+    #! Returns the effective maximum size of a request body that the server reads into memory for this listener
+    /** Returns the listener-specific limit if set, otherwise the server-level limit
+        (@ref HttpServer::HttpServer::getMaxRequestBodySize() "HttpServer::getMaxRequestBodySize()"), which is
+        @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" if none is set.
 
         @return the maximum body size in bytes; 0 means unlimited
+
+        @see getStreamMaxRequestBodySize()
 
         @since HttpServer 1.6
     */
@@ -7422,6 +8038,24 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         return rv;
     }
 
+    #! Returns the effective maximum size of a request body that a handler of this listener reads as a stream
+    /** Returns the listener-specific limit if set, otherwise the limit set for the server
+        (@ref HttpServer::HttpServer::getStreamMaxRequestBodySize() "HttpServer::getStreamMaxRequestBodySize()"); the
+        default limit (@ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize") applies only to the
+        bodies that the server reads into memory (see getMaxRequestBodySize())
+
+        @return the maximum body size in bytes; 0 means unlimited
+
+        @since HttpServer 1.7
+    */
+    int getStreamMaxRequestBodySize() {
+        int rv = opts.max_request_body_size ?? 0;
+        if (!rv) {
+            rv = serv.getStreamMaxRequestBodySize();
+        }
+        return rv;
+    }
+
     #! Returns the bound in bytes of the data held for the client of each Server-Sent Events stream of the listener
     /** @see @ref HttpServer::HttpListenerOptionInfo::sse_max_buffer_size "HttpListenerOptionInfo::sse_max_buffer_size"
 
@@ -7429,6 +8063,23 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     */
     int getSseMaxBufferSize() {
         return opts.sse_max_buffer_size ?? HttpServerAsyncIo::DefaultSseMaxBufferSize;
+    }
+
+    #! Returns the minimum rate of streamed HTTP/2 and HTTP/3 responses in bytes per second; 0 means no check
+    /** @see @ref HttpServer::HttpListenerOptionInfo::stream_send_min_rate
+        "HttpListenerOptionInfo::stream_send_min_rate"
+
+        @since HttpServer 1.7
+    */
+    int getStreamSendMinRate() {
+        return opts.stream_send_min_rate ?? DefaultStreamSendMinRate;
+    }
+
+    #! Returns the sliding window of the minimum rate of streamed HTTP/2 and HTTP/3 responses
+    /** @since HttpServer 1.7
+    */
+    date getStreamSendMinRateWindow() {
+        return opts.stream_send_min_rate_window ?? StreamSendBound::DefaultMinRateWindow;
     }
 
     #! Logs a warning in the listener's log
@@ -7482,7 +8133,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             rv = serv.getMaxDecodedBodySize();
         }
         if (!rv) {
-            rv = getMaxRequestBodySize();
+            # the limit set for the listener or the server, not the default limit of buffered bodies
+            rv = getStreamMaxRequestBodySize();
         }
         return rv ?: DefaultMaxDecodedBodySize;
     }
@@ -7684,6 +8336,24 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         background stop();
     }
 
+    #! Returns @ref True once the listener has stopped
+    /** The server's count of running listeners was decremented for the listener when it stopped
+    */
+    bool isStopped() {
+        return stopped;
+    }
+
+    #! @cond nodoc
+    #! Marks the listener as started: it was added to the async I/O controller and accepts connections
+    /** The stop notification (the \c stopc option) is called only for a listener that started: a listener that was
+        created and stopped again because it could not be set up (such as one whose paired QUIC listener could not be
+        bound) did not start, so its stop is not notified (qore#7430)
+    */
+    final setStarted() {
+        started = True;
+    }
+    #! @endcond
+
 %ifdef QoreDebug
     #! @cond nodoc
     #! Sets the test hook that stop() calls once it has marked the listener as stopping; a debug build of the library only
@@ -7802,8 +8472,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
         # the stop notification is called here, not through the server: the server's notification above can let the
         # destruction of the server end in another thread, which clears 'serv', and the notification was then not
-        # called (qore#6967)
-        if (stopc) {
+        # called (qore#6967); it is called only for a listener that started (qore#7430)
+        if (stopc && started) {
             try {
                 call_function(stopc, name);
             } catch (hash<ExceptionInfo> ex) {
@@ -8333,7 +9003,13 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # a stop of this listener that runs in this thread does not wait for this request (see stop())
         *Priv::RequestHelper prev_request = Priv::current_request;
         Priv::current_request = request_helper;
-        on_exit Priv::current_request = prev_request;
+        on_exit {
+            # the socket of an HTTP/1.x request that its handler got ends on every path (qore#7305)
+            if (request_helper.h1_view) {
+                request_helper.endHandlerSocket();
+            }
+            Priv::current_request = prev_request;
+        }
 
         bool is_multiplexed = (header_info.http2 ?? False) || (header_info.http3 ?? False);
         string sock_key;
@@ -8421,10 +9097,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         # Set user context and header info
         cx.uctx = get_thread_data("uctx");
-        # the socket that the request's handler gets, made from the server's own header information (qore#6953)
-        if (quic || header_info.http2) {
-            request_helper.handler_sock = http_handler_socket(s, header_info);
-        }
+        # the socket that the request's handler gets, made from the server's own header information (qore#6953),
+        # or for an HTTP/1.x request, one that acts on the connection's socket for the request only (qore#7305)
+        # (made when the handler is known; see HttpServer::handleRequest())
+        request_helper.handler_sock = (quic || header_info.http2)
+            ? http_handler_socket(s, header_info, request_helper)
+            : NOTHING;
         # For body_streaming, expose the socket so handlers can read body data
         # incrementally via readQuicStreamDataBlock()
         if (header_info.body_streaming) {
@@ -8644,6 +9322,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 "hdr": async_response.hdr,
                 "persistent_request_end": request_helper.persistent_end,
             };
+        }
+
+        # the server already sent what goes out for the request (the header of an event stream that does not start):
+        # no other response follows it on the connection, which is closed (qore#7376)
+        if (async_response.sent) {
+            return <HttpServerAsyncIo::HttpRequestResultInfo>{"close": True};
         }
 
         if (async_response.code && !request_helper.isDedicated()) {
@@ -8913,7 +9597,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     s.submitQuicResponseStreaming(session_id, stream_id, response.code, hdr);
                     response.input_stream.unassignThread();
                     StreamResponseProducer producer(s, stream_id, session_id,
-                        response.input_stream, io_wake);
+                        response.input_stream, io_wake,
+                        StreamSendBound::forHeaderInfo(StreamStallTimeout, header_info));
                     producer.start();
                 }
                 io_wake();
@@ -8931,7 +9616,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     s.submitHttp2StreamingResponseHeaders(stream_id, response.code, hdr);
                     response.input_stream.unassignThread();
                     StreamResponseProducer producer(s, stream_id, NOTHING,
-                        response.input_stream, io_wake);
+                        response.input_stream, io_wake,
+                        StreamSendBound::forHeaderInfo(StreamStallTimeout, header_info));
                     producer.start();
                 }
                 io_wake();
@@ -8998,95 +9684,47 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             };
         }
 
+        # the bound of the sends on the stream, kept across its chunks
+        StreamSendBound send_bound = StreamSendBound::forHeaderInfo(StreamStallTimeout, header_info);
+        # once the headers have been sent, an error cannot be answered with a response: the stream is reset so that
+        # the client does not wait for the rest of the body
+        bool headers_sent;
+        on_error if (headers_sent) {
+            StreamSendBound::resetStream(s, header_info.http3 ? header_info.session_id : NOTHING, stream_id, io_wake);
+        }
+
         # Send response headers (no body, no end_stream)
         if (header_info.http3) {
             int session_id = header_info.session_id;
             s.submitQuicResponseStreaming(session_id, stream_id, response.code, hdr);
+            headers_sent = True;
             io_wake();
 
             # Drive the producer loop inline
             while (True) {
                 *binary chunk = producer();
                 if (!exists chunk) {
-                    sendQuicDataWithBackpressure(s, session_id, stream_id,
-                        binary(), True, io_wake);
+                    send_bound.send(s, session_id, stream_id, binary(), True, io_wake);
                     break;
                 }
-                sendQuicDataWithBackpressure(s, session_id, stream_id,
-                    chunk, False, io_wake);
+                send_bound.send(s, session_id, stream_id, chunk, False, io_wake);
             }
         } else {
             # HTTP/2
             s.submitHttp2StreamingResponseHeaders(stream_id, response.code, hdr);
+            headers_sent = True;
             io_wake();
 
             while (True) {
                 *binary chunk = producer();
                 if (!exists chunk) {
-                    sendHttp2DataWithBackpressure(s, stream_id, binary(),
-                        True, io_wake);
+                    send_bound.send(s, NOTHING, stream_id, binary(), True, io_wake);
                     break;
                 }
-                sendHttp2DataWithBackpressure(s, stream_id, chunk, False,
-                    io_wake);
+                send_bound.send(s, NOTHING, stream_id, chunk, False, io_wake);
             }
         }
         logResponse(response.cx, response);
-    }
-
-    #! Sends HTTP/2 DATA with backpressure handling
-    private sendHttp2DataWithBackpressure(Socket s, int stream_id, binary data,
-            bool end_stream, code<nothing()> io_wake) {
-        int retries = 0;
-        while (True) {
-            bool backpressure = False;
-            try {
-                s.sendHttp2StreamData(stream_id, data, end_stream);
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "HTTP2-FLOW-CONTROL") {
-                    backpressure = True;
-                } else {
-                    rethrow;
-                }
-            }
-            io_wake();
-            if (!backpressure) {
-                return;
-            }
-            if (++retries > 60) {
-                throw "STREAM-BACKPRESSURE-TIMEOUT",
-                    sprintf("stream %d buffer still full after %d drain attempts",
-                        stream_id, retries);
-            }
-            s.waitForHttp2StreamDrain(stream_id, 30000);
-        }
-    }
-
-    #! Sends HTTP/3 (QUIC) DATA with backpressure handling
-    private sendQuicDataWithBackpressure(Socket s, int session_id, int stream_id,
-            binary data, bool end_stream, code<nothing()> io_wake) {
-        int retries = 0;
-        while (True) {
-            int rv = s.submitQuicStreamData(session_id, stream_id, data,
-                end_stream);
-            if (rv == 1) {
-                io_wake();
-                if (++retries > 60) {
-                    throw "STREAM-BACKPRESSURE-TIMEOUT",
-                        sprintf("stream %d buffer still full after %d drain "
-                            "attempts", stream_id, retries);
-                }
-                s.waitForQuicStreamDrain(session_id, stream_id, 30000);
-                continue;
-            }
-            if (rv != 0) {
-                throw "STREAM-SEND-ERROR",
-                    sprintf("unexpected rv=%d from submitQuicStreamData on "
-                        "stream %d", rv, stream_id);
-            }
-            io_wake();
-            return;
-        }
     }
 
     #! Cleans up a multiplexed request body stream after handler dispatch
@@ -9344,10 +9982,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
                 cx.uctx = get_thread_data("uctx");
                 # the socket that the request's handler gets, made from the server's own header information
-                # (qore#6953)
-                if (quic || conn_info.header_info.http2) {
-                    request_helper.handler_sock = http_handler_socket(s, conn_info.header_info);
-                }
+                # (qore#6953), or for an HTTP/1.x request, one that acts on the connection's socket for the request
+                # only (qore#7305)
+                # (made when the handler is known; see HttpServer::handleRequest())
+                request_helper.handler_sock = (quic || conn_info.header_info.http2)
+                    ? http_handler_socket(s, conn_info.header_info, request_helper)
+                    : NOTHING;
                 if (conn_info.header_info.body_streaming) {
                     conn_info.header_info.sock = s;
                 }
@@ -9368,6 +10008,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # Ensure h2op is resumed even if handleRequest() or response
                 # sending throws — otherwise the connection is stuck.
                 on_exit {
+                    # the socket of an HTTP/1.x request that its handler got ends on every path (qore#7305)
+                    if (request_helper.h1_view) {
+                        request_helper.endHandlerSocket();
+                    }
                     resumeQueuedPersistentEntry(entry);
                 }
                 # the thread context of the session's handler is the thread's again after the request
@@ -9571,10 +10215,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
 
             cx.uctx = get_thread_data("uctx");
-            # the socket that the request's handler gets, made from the server's own header information (qore#6953)
-            if (quic || conn_info.header_info.http2) {
-                request_helper.handler_sock = http_handler_socket(s, conn_info.header_info);
-            }
+            # the socket that the request's handler gets, made from the server's own header information (qore#6953),
+            # or for an HTTP/1.x request, one that acts on the connection's socket for the request only (qore#7305)
+            # (made when the handler is known; see HttpServer::handleRequest())
+            request_helper.handler_sock = (quic || conn_info.header_info.http2)
+                ? http_handler_socket(s, conn_info.header_info, request_helper)
+                : NOTHING;
             if (conn_info.header_info.body_streaming) {
                 conn_info.header_info.sock = s;
             }
@@ -9593,6 +10239,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             # Process request
             hash<HttpAsyncResponseInfo> async_response = <HttpAsyncResponseInfo>{};
             on_exit {
+                # the socket of an HTTP/1.x request that its handler got ends on every path (qore#7305)
+                if (request_helper.h1_view) {
+                    request_helper.endHandlerSocket();
+                }
                 resumeQueuedPersistentEntry(entry);
             }
             # the thread context of the session's handler is the thread's again after the request
@@ -9657,6 +10307,16 @@ class HttpListenerHandlerView inherits HttpServer::HttpListenerInterface {
     private:internal {
         #! the listener, weakly referenced
         *HttpListener listener;
+    }
+
+    #! Returns the minimum rate of streamed HTTP/2 and HTTP/3 responses of the listener; 0 means no check
+    int getStreamSendMinRate() {
+        return listener ? listener.getStreamSendMinRate() : DefaultStreamSendMinRate;
+    }
+
+    #! Returns the sliding window of the minimum rate of streamed HTTP/2 and HTTP/3 responses of the listener
+    date getStreamSendMinRateWindow() {
+        return listener ? listener.getStreamSendMinRateWindow() : StreamSendBound::DefaultMinRateWindow;
     }
 
     #! Creates the object for the given listener
@@ -9786,16 +10446,23 @@ class HttpListenerHandlerView inherits HttpServer::HttpListenerInterface {
     @throw HTTP3-HANDLER-SOCKET-ERROR the socket is a QUIC socket and the request's session and stream are not given
     @throw HTTP2-HANDLER-SOCKET-ERROR the socket is an HTTP/2 connection's socket and the request's stream is not given
 */
-Socket sub http_handler_socket(Socket s, *hash<auto> header_info) {
+Socket sub http_handler_socket(Socket s, *hash<auto> header_info, *RequestHelper rh) {
     if (s instanceof Http3HandlerSocket || s instanceof Http2HandlerSocket) {
         return s;
+    }
+    # the state of the request's socket, which the server holds: the response of the request's own stream has not
+    # started
+    *HandlerSocketState st;
+    if (rh && (s.isQuic() || header_info.http2)) {
+        st = rh.hs_state ?? (rh.hs_state = new HandlerSocketState());
+        st.stream_response_started = False;
     }
     if (s.isQuic()) {
         if (!exists header_info.session_id || !exists header_info.stream_id) {
             throw "HTTP3-HANDLER-SOCKET-ERROR", "the socket of an HTTP/3 request is given to its handler only for "
                 "its own session and stream";
         }
-        return new Http3HandlerSocket(s, header_info.session_id, header_info.stream_id);
+        return new Http3HandlerSocket(s, header_info.session_id, header_info.stream_id, st);
     }
     # an HTTP/2 connection's requests share its socket (qore#7214); decided by the server's own header information of
     # the request, made by the connection's HTTP/2 transport: Socket::isHttp2() queries the connection's TLS state,
@@ -9805,7 +10472,7 @@ Socket sub http_handler_socket(Socket s, *hash<auto> header_info) {
             throw "HTTP2-HANDLER-SOCKET-ERROR", "the socket of an HTTP/2 request is given to its handler only for "
                 "its own stream";
         }
-        return new Http2HandlerSocket(s, header_info.stream_id);
+        return new Http2HandlerSocket(s, header_info.stream_id, st);
     }
     return s;
 }
@@ -9842,13 +10509,18 @@ class Http3HandlerSocket inherits Qore::Socket {
         bool ended;
         #! set by close(): no more I/O on the stream
         bool closed;
+        #! set when a response has been submitted on the handler's own stream through this object
+        bool response_started;
+        #! the state of the request's socket, which records that its response was started (qore#7305)
+        *HandlerSocketState rh;
     }
 
     #! Creates the object for the given stream of a session of the listener's socket
-    constructor(Socket real, int session_id, int stream_id) {
+    constructor(Socket real, int session_id, int stream_id, *HandlerSocketState rh) {
         self.real = real;
         self.session_id = session_id;
         self.stream_id = stream_id;
+        self.rh = rh;
     }
 
     #! Ends the handler's own stream gracefully, after its pending data; does nothing if it is already ended
@@ -9920,6 +10592,8 @@ class Http3HandlerSocket inherits Qore::Socket {
     AbstractPollOperation<auto> startPollQuicSendResponse(int session_id, int stream_id, int status_code,
             *hash<auto> headers, *data body) {
         checkStream(session_id, stream_id);
+        # the poll operation submits the response when it runs, which the handler socket does not see: the
+        # response is not recorded as started (qoretechnologies/qore#7212)
         return real.startPollQuicSendResponse(session_id, stream_id, status_code, headers, body);
     }
 
@@ -9936,6 +10610,10 @@ class Http3HandlerSocket inherits Qore::Socket {
     nothing submitQuicResponse(int session_id, int stream_id, int status_code, *hash<auto> headers, *data body) {
         checkStream(session_id, stream_id);
         real.submitQuicResponse(session_id, stream_id, status_code, headers, body);
+        # the response is started once the call has succeeded (qoretechnologies/qore#7212)
+        if (session_id == self.session_id && stream_id == self.stream_id) {
+            setResponseStarted();
+        }
     }
 
     # the methods that end the whole session are refused also for the handler's own session, which can carry
@@ -9978,12 +10656,18 @@ class Http3HandlerSocket inherits Qore::Socket {
     AbstractPollOperation<auto> startPollQuicSendStreamingResponse(int session_id, int stream_id, int status_code,
             *hash<auto> headers, InputStream body, *int chunk_size) {
         checkStream(session_id, stream_id);
+        # the poll operation submits the response when it runs, which the handler socket does not see: the
+        # response is not recorded as started (qoretechnologies/qore#7212)
         return real.startPollQuicSendStreamingResponse(session_id, stream_id, status_code, headers, body, chunk_size);
     }
 
     nothing submitQuicResponseStreaming(int session_id, int stream_id, int status_code, *hash<auto> headers) {
         checkStream(session_id, stream_id);
         real.submitQuicResponseStreaming(session_id, stream_id, status_code, headers);
+        # the response is started once the call has succeeded (qoretechnologies/qore#7212)
+        if (session_id == self.session_id && stream_id == self.stream_id) {
+            setResponseStarted();
+        }
     }
 
     int submitQuicStreamWebSocketClose(int session_id, int stream_id, binary frame, softbool end_stream = False) {
@@ -10004,7 +10688,18 @@ class Http3HandlerSocket inherits Qore::Socket {
     int submitQuicStreamingResponseWithStream(int session_id, int stream_id, int status_code, *hash<auto> headers,
             InputStream body) {
         checkStream(session_id, stream_id);
-        return real.submitQuicStreamingResponseWithStream(session_id, stream_id, status_code, headers, body);
+        auto rv = real.submitQuicStreamingResponseWithStream(session_id, stream_id, status_code, headers, body);
+        # the response is started once the call has succeeded and taken the response (0); with 1, nothing was
+        # submitted (qoretechnologies/qore#7212)
+        if (!rv && session_id == self.session_id && stream_id == self.stream_id) {
+            setResponseStarted();
+        }
+        return rv;
+    }
+
+    int getQuicStreamAckedBytes(int session_id, int stream_id) {
+        checkStream(session_id, stream_id);
+        return real.getQuicStreamAckedBytes(session_id, stream_id);
     }
 
     int waitForQuicStreamDrain(int session_id, int stream_id, timeout timeout_ms = 5s) {
@@ -10020,6 +10715,10 @@ class Http3HandlerSocket inherits Qore::Socket {
     nothing submitQuicConnectResponse(int session_id, int stream_id, int status_code, *hash<auto> headers) {
         checkStream(session_id, stream_id);
         real.submitQuicConnectResponse(session_id, stream_id, status_code, headers);
+        # the response is started once the call has succeeded (qoretechnologies/qore#7212)
+        if (session_id == self.session_id && stream_id == self.stream_id) {
+            setResponseStarted();
+        }
     }
 
     *binary readQuicConnectStreamData(int session_id, int stream_id) {
@@ -10196,6 +10895,22 @@ class Http3HandlerSocket inherits Qore::Socket {
                 stream_id);
         }
     }
+
+    #! Records that a response was submitted on the handler's own stream, also on the server's object of the request
+    /** The server does not send another response on a stream whose response the handler submitted itself
+        (qoretechnologies/qore#7212); the object has no public method that changes the server's state (qore#7305)
+    */
+    private:internal setResponseStarted() {
+        setResponseStartedIntern();
+        if (rh) {
+            rh.markStreamResponseStarted();
+        }
+    }
+
+    #! Records that a response was submitted on the handler's own stream
+    private:internal synchronized setResponseStartedIntern() {
+        response_started = True;
+    }
 }
 
 #! The socket of an HTTP/2 request as the code of its handler sees it (qore#7214)
@@ -10227,12 +10942,15 @@ class Http2HandlerSocket inherits Qore::Socket {
         bool closed;
         #! set when the handler started the response of its stream through this object
         bool response_started;
+        #! the state of the request's socket, which records that its response was started (qore#7305)
+        *HandlerSocketState rh;
     }
 
     #! Creates the object for the given stream of the connection's socket
-    constructor(Socket real, int stream_id) {
+    constructor(Socket real, int stream_id, *HandlerSocketState rh) {
         self.real = real;
         self.stream_id = stream_id;
+        self.rh = rh;
     }
 
     #! Ends the handler's own stream gracefully, after its pending data; does nothing if it is already ended
@@ -10377,18 +11095,16 @@ class Http2HandlerSocket inherits Qore::Socket {
     AbstractPollOperation<auto> startPollSendHttp2Response(int stream_id, int status_code, *hash<auto> headers,
             *data body) {
         checkStream(stream_id);
-        if (stream_id == self.stream_id) {
-            setResponseStarted();
-        }
+        # the poll operation submits the response when it runs, which the handler socket does not see: the
+        # response is not recorded as started (qoretechnologies/qore#7212)
         return real.startPollSendHttp2Response(stream_id, status_code, headers, body);
     }
 
     AbstractPollOperation<auto> startPollSendHttp2StreamingResponse(int stream_id, int status_code,
             *hash<auto> headers, InputStream body, *int chunk_size) {
         checkStream(stream_id);
-        if (stream_id == self.stream_id) {
-            setResponseStarted();
-        }
+        # the poll operation submits the response when it runs, which the handler socket does not see: the
+        # response is not recorded as started (qoretechnologies/qore#7212)
         return real.startPollSendHttp2StreamingResponse(stream_id, status_code, headers, body, chunk_size);
     }
 
@@ -10402,25 +11118,28 @@ class Http2HandlerSocket inherits Qore::Socket {
 
     nothing submitHttp2Response(int stream_id, int status_code, *hash<auto> headers, *data body) {
         checkStream(stream_id);
+        real.submitHttp2Response(stream_id, status_code, headers, body);
+        # the response is started once the call has succeeded: a refused response leaves the stream to be
+        # reset by close() (qoretechnologies/qore#7212)
         if (stream_id == self.stream_id) {
             setResponseStarted();
         }
-        real.submitHttp2Response(stream_id, status_code, headers, body);
     }
 
     nothing submitHttp2ConnectResponse(int stream_id, int status_code, *hash<auto> headers) {
         checkStream(stream_id);
+        real.submitHttp2ConnectResponse(stream_id, status_code, headers);
+        # the response is started once the call has succeeded: a refused response leaves the stream to be
+        # reset by close() (qoretechnologies/qore#7212)
         if (stream_id == self.stream_id) {
             setResponseStarted();
         }
-        real.submitHttp2ConnectResponse(stream_id, status_code, headers);
     }
 
     AbstractPollOperation<auto> startPollSendHttp2ConnectResponse(int stream_id, int status_code, *hash<auto> headers) {
         checkStream(stream_id);
-        if (stream_id == self.stream_id) {
-            setResponseStarted();
-        }
+        # the poll operation submits the response when it runs, which the handler socket does not see: the
+        # response is not recorded as started (qoretechnologies/qore#7212)
         return real.startPollSendHttp2ConnectResponse(stream_id, status_code, headers);
     }
 
@@ -10436,10 +11155,12 @@ class Http2HandlerSocket inherits Qore::Socket {
 
     nothing submitHttp2StreamingResponseHeaders(int stream_id, int status_code, *hash<auto> headers) {
         checkStream(stream_id);
+        real.submitHttp2StreamingResponseHeaders(stream_id, status_code, headers);
+        # the response is started once the call has succeeded: a refused response leaves the stream to be
+        # reset by close() (qoretechnologies/qore#7212)
         if (stream_id == self.stream_id) {
             setResponseStarted();
         }
-        real.submitHttp2StreamingResponseHeaders(stream_id, status_code, headers);
     }
 
     nothing sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False) {
@@ -10479,10 +11200,13 @@ class Http2HandlerSocket inherits Qore::Socket {
 
     int submitHttp2StreamingResponseWithStream(int stream_id, int status_code, *hash<auto> headers, InputStream body) {
         checkStream(stream_id);
-        if (stream_id == self.stream_id) {
+        auto rv = real.submitHttp2StreamingResponseWithStream(stream_id, status_code, headers, body);
+        # the response is started once the call has succeeded and taken the response (0): a refused response, or
+        # one that was not submitted (1), leaves the stream to be reset by close() (qoretechnologies/qore#7212)
+        if (!rv && stream_id == self.stream_id) {
             setResponseStarted();
         }
-        return real.submitHttp2StreamingResponseWithStream(stream_id, status_code, headers, body);
+        return rv;
     }
 
     nothing cancelHttp2Stream(int stream_id) {
@@ -10525,20 +11249,27 @@ class Http2HandlerSocket inherits Qore::Socket {
         return False;
     }
 
-    #! Records that the server started the response of the request's stream on the connection's socket (qore#7214)
-    /** Called by the server after it sent the response's headers on the connection's socket (an SSE stream, the
-        response to an extended CONNECT), so that shutdown() and close() then end the stream gracefully; the class is
-        not exported, so only the module's code can call it
+    #! Records that the handler started the response of its stream, also on the server's object of the request
+    /** The server does not send another response on a stream whose response the handler submitted itself
+        (qoretechnologies/qore#7212); the object has no public method that changes the server's state (qore#7305)
     */
-    static markResponseStarted(*Socket sock) {
-        if (sock instanceof Http2HandlerSocket) {
-            cast<Http2HandlerSocket>(sock).setResponseStarted();
+    private:internal setResponseStarted() {
+        setResponseStartedIntern();
+        if (rh) {
+            rh.markStreamResponseStarted();
         }
     }
 
     #! Records that the handler started the response of its stream
-    private:internal synchronized setResponseStarted() {
+    private:internal synchronized setResponseStartedIntern() {
         response_started = True;
+    }
+
+    #! Returns @ref True "True" if the response of the request's stream was started, by the handler through this
+    #! object or by the server (an SSE stream, the response to an extended CONNECT; see
+    #! RequestHelper::markStreamResponseStarted())
+    private:internal synchronized bool isResponseStarted() {
+        return response_started || (rh && rh.isStreamResponseStarted());
     }
 
     #! Records a stream that the handler promised
@@ -10563,7 +11294,7 @@ class Http2HandlerSocket inherits Qore::Socket {
         }
         # a stream whose response has not started is reset: an end of the stream (END_STREAM) before the response's
         # headers is not a valid response
-        if (!response_started) {
+        if (!isResponseStarted()) {
             resetStream(reset_if_needed);
             return;
         }
@@ -10615,6 +11346,867 @@ class Http2HandlerSocket inherits Qore::Socket {
     }
 }
 
+#! The state of the response of an HTTP/1.x request that its handler sends through its socket (qore#7305)
+enum Http1ResponseState : int {
+    #! nothing sent, or an interim response only
+    None = 0,
+    #! the response is complete
+    Complete = 1,
+    #! a header with a Content-Length was sent; the rest of its body follows
+    Length = 2,
+    #! a header with chunked framing was sent; its body follows
+    Chunked = 3,
+    #! a send failed, or the connection was aborted: the connection is closed
+    Broken = 4,
+}
+
+#! The kinds of the sends that start the response of an HTTP/1.x request (see HandlerSocketState::h1StartResponse())
+enum Http1ResponseSend : int {
+    #! a complete response with a Content-Length that the socket adds
+    Full = 0,
+    #! a complete chunked response whose chunks a callback or an input stream gives
+    FullChunked = 1,
+    #! a response header, whose framing is given in it
+    Header = 2,
+}
+
+#! The socket of an HTTP/1.x request as the code of its handler sees it (qore#7305)
+/** The requests of an HTTP/1.x connection come one after the other on its socket, which the server keeps: it reads
+    the header of each request from it, and the next request of the client can already be waiting there (pipelining).
+    The code of a request's handler gets this object wherever it gets the socket of its request (the \c s argument
+    of the handler's methods, \c cx.socketobject of a REST handler, the socket of a stream request, and the socket
+    that an @ref HttpServer::Http1BodyReader "Http1BodyReader" reads a streamed body through): a socket of its own
+    that is not connected, whose methods act on the connection's socket for the handler's own request only.  Its
+    state is the server's (a HandlerSocketState that the request's RequestHelper holds), which no method of this
+    object changes but for the request's own I/O.
+
+    It sends the request's own response, once, framed as HTTP/1.x requires:
+    - sendHTTPResponse() and sendHTTPResponseWithCallback() send a complete response, which they frame themselves;
+      the headers that they are given cannot frame it (\c Transfer-Encoding is refused);
+    - sendHTTPResponseHeader() sends the header of a response whose body follows: the header gives its framing,
+      exactly one \c Content-Length (whose bytes are then sent with send(), send2(), sendBinary(), sendBinary2() or
+      the \c sendi*() methods, counted against it) or <tt>Transfer-Encoding: chunked</tt> (whose body is then sent
+      with sendHTTPChunkedBodyFromInputStream() or ended with sendHTTPChunkedBodyTrailer()), and a header without
+      framing, with both, or with a duplicated or invalid field is refused; for a \c HEAD request and a \c 204 or
+      \c 304 response, the header is the complete response;
+    - an interim response (a \c 1xx status other than \c 101, to an HTTP/1.1 request) is sent as a header without a
+      body, and the final response follows;
+    - a chunked response is refused for an HTTP/1.0 request, as is any send after the response is complete or that
+      exceeds its \c Content-Length, and sendFromInputStream(), whose length is not known before it is sent.
+    When the handler's code returns, a response that the handler started is not answered again by the server, and
+    a response that the handler did not complete closes the connection.
+
+    It reads the request's own body only: a chunked body once, with readHTTPChunkedBody(),
+    readHTTPChunkedBodyBinary(), their \c WithCallback() variants or readHTTPChunkedBodyToOutputStream(), which stop
+    at the end of the body (its last chunk and trailer section); a chunked body cannot be read with recv() or any
+    other method that reads bytes, as only the decoding of its chunks tells where it ends.  The server reads a body
+    with a \c Content-Length before the handler gets the request, except the part that it did not read of a body
+    that a stream handler gets in parts: recv(), recvBinary(), recvToOutputStream() and the methods that read an
+    integer read only that rest of the body (recv() and recvBinary() with a size of 0 or less, all of it), and then
+    give no data (the end of the input), or raise an exception for an integer.
+
+    Its character encoding (getEncoding(), setEncoding()) is its own: the strings that it sends are converted to it,
+    and those that it reads are in it; the connection's encoding does not change.  Its timeouts
+    (setSendTimeout(), setRecvTimeout()) are its own too: they apply to its sends and reads that are not given a
+    timeout.
+
+    Its readHTTPHeader() and readHTTPHeaderString(), which would read the next request on the connection, raise an
+    exception, as do shutdown(), shutdownWrite(), shutdownSSL() and close() (a handler closes the connection after
+    its response with the \c close key of its response, or \c cx.close, and code that is not sandboxed aborts it at
+    once with @ref HttpServer::http_abort_connection() "http_abort_connection()"), the methods that connect, bind,
+    listen, accept or upgrade a socket to TLS, those that change the connection's settings (\c TCP_NODELAY, its
+    user timeout, the maximum size of a chunked body), getPollableDescriptor(), and copy().
+
+    These give what concerns the handler's own request, from the connection's socket: getPeerInfo(),
+    getSocketInfo(), isOpen(), isSecure(), isHttp2(), isQuic(), getSSLCipherName(), getSSLCipherVersion(),
+    getAlpnProtocol(), getRemoteCertificate(), verifyPeerCertificate() and pendingHttpChunkedBody().  Its other
+    methods are those of its own, unconnected socket.
+
+    The server ends the object before it sends a response for the request, or reads the next request: its methods
+    that send or read then raise an exception, and isOpen() returns @ref False "False"; a send or read of another
+    thread that is in progress then is completed first.  The class is not exported, and it has no public static
+    method: its code reaches the server's state of the request only through its own private members.
+*/
+class Http1HandlerSocket inherits Qore::Socket {
+    private:internal {
+        #! the longest timeout of a send or a read of the object, in milliseconds: a longer timeout, or none, is this
+        #! one (the server's \c handler_socket_max_timeout option)
+        int max_to;
+        #! the connection's socket, which the server keeps
+        Socket real;
+        #! the state of the request's socket, which the server holds
+        HandlerSocketState rh;
+        #! the generation of the request on the server's object: the object ends when it is no longer the current one
+        int gen;
+        #! the object's own character encoding, once it was set; the connection's until then
+        *string enc;
+        #! the connection's character encoding when the object's own was first set
+        *string conn_enc;
+        #! the timeout of the object's sends that are given none; -1 for the connection's
+        int send_to = -1;
+        #! the timeout of the object's reads that are given none; -1 for the connection's
+        int recv_to = -1;
+    }
+
+    #! Creates the object for the current request on the connection's socket
+    /** @param real the connection's socket
+        @param rh the state of the request's socket, which the server holds
+        @param gen the generation of the request's socket in the state (see HandlerSocketState::h1Reset())
+        @param max_to the longest timeout of a send or a read of the object, in milliseconds (the server's
+        \c handler_socket_max_timeout option)
+    */
+    constructor(Socket real, HandlerSocketState rh, int gen, int max_to) {
+        self.real = real;
+        self.rh = rh;
+        self.gen = gen;
+        self.max_to = max_to;
+    }
+
+    #! Returns the object's own character encoding: the connection's until setEncoding() is called
+    string getEncoding() {
+        return enc ?? real.getEncoding();
+    }
+
+    #! Sets the object's own character encoding, of the strings that it sends and reads; the connection's does not
+    #! change
+    nothing setEncoding(string encoding) {
+        # the name is checked as the socket checks it
+        Socket::setEncoding(encoding);
+        if (!conn_enc) {
+            conn_enc = real.getEncoding();
+        }
+        enc = Socket::getEncoding();
+    }
+
+    #! Raises an exception: the object is the request's own and cannot be copied
+    copy() {
+        throw "HTTP-HANDLER-SOCKET-ERROR", "the socket of an HTTP/1.x request cannot be copied";
+    }
+
+    #! Aborts the connection: the client sees it closed, without the rest of the response, and the server drops it
+    /** For code that is not sandboxed only, as when a server ends a response midway to tell the client that it is
+        truncated; the server's response, if any, is then not sent, and the connection serves no other request.  A
+        connection that the client already closed is not an error.
+
+        @throw HTTP-HANDLER-SOCKET-ERROR the calling code is sandboxed (see
+        @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()"), or the request ended
+    */
+    nothing abortConnection() {
+        # a sandboxed caller cannot end the connection, also when it calls through code that is not sandboxed
+        if (SandboxManager::isSandboxed()) {
+            throw "HTTP-HANDLER-SOCKET-ERROR", "Socket::abortConnection() cannot be called by sandboxed code on the "
+                "socket of an HTTP/1.x request";
+        }
+        rh.h1Enter(gen, "abortConnection");
+        on_exit rh.h1Leave();
+        # the server sends no response and closes the connection
+        rh.h1Broken();
+        real.shutdown();
+    }
+
+    #! Raises an exception: the connection's socket is the server's (see http_abort_connection())
+    int shutdown() {
+        refuse("shutdown");
+    }
+
+    #! Raises an exception
+    nothing shutdownWrite() {
+        refuse("shutdownWrite");
+    }
+
+    #! Raises an exception
+    nothing shutdownSSL() {
+        refuse("shutdownSSL");
+    }
+
+    #! Raises an exception: the connection's socket is the server's (see http_abort_connection())
+    int close() {
+        refuse("close");
+    }
+
+    #! Raises an exception
+    hash<auto> readHTTPHeader(timeout timeout_ms = -1, *reference<hash<auto>> info) {
+        refuse("readHTTPHeader");
+    }
+
+    #! Raises an exception
+    string readHTTPHeaderString(timeout timeout_ms = -1) {
+        refuse("readHTTPHeaderString");
+    }
+
+    #! Raises an exception
+    hash<auto> readHTTPChunk(timeout timeout_ms = -1) {
+        refuse("readHTTPChunk");
+    }
+
+    #! Raises an exception
+    nothing connect(string target, timeout timeout_ms = -1) {
+        refuse("connect");
+    }
+
+    #! Raises an exception
+    nothing connectINET(string host, softstring service, timeout timeout_ms = -1, softint family = AF_UNSPEC,
+            softint socktype = SOCK_STREAM, softint protocol = 0) {
+        refuse("connectINET");
+    }
+
+    #! Raises an exception
+    nothing connectUNIX(string path, softint socket_type = SOCK_STREAM, softint protocol = 0) {
+        refuse("connectUNIX");
+    }
+
+    #! Raises an exception
+    nothing connectSSL(string target, timeout timeout_ms = -1) {
+        refuse("connectSSL");
+    }
+
+    #! Raises an exception
+    nothing connectINETSSL(string host, softstring service, timeout timeout_ms = -1, softint family = AF_UNSPEC,
+            softint socktype = SOCK_STREAM, softint protocol = 0) {
+        refuse("connectINETSSL");
+    }
+
+    #! Raises an exception
+    nothing connectUNIXSSL(string path, softint socket_type = SOCK_STREAM, softint protocol = 0) {
+        refuse("connectUNIXSSL");
+    }
+
+    #! Raises an exception
+    int bind(string target, softbool reuse_address = False) {
+        refuse("bind");
+    }
+
+    #! Raises an exception
+    int bind(int port, softbool reuse_address = False) {
+        refuse("bind");
+    }
+
+    #! Raises an exception
+    nothing bindUNIX(string path, softint socket_type = SOCK_STREAM, softint protocol = 0) {
+        refuse("bindUNIX");
+    }
+
+    #! Raises an exception
+    nothing bindINET(*string bind_address, *softstring service, softbool reuse_address = False,
+            softint family = AF_UNSPEC, softint socktype = SOCK_STREAM, softint protocol = 0) {
+        refuse("bindINET");
+    }
+
+    #! Raises an exception
+    int listen(int backlog = 20) {
+        refuse("listen");
+    }
+
+    #! Raises an exception
+    Socket accept() {
+        refuse("accept");
+    }
+
+    #! Raises an exception
+    *Socket accept(timeout timeout_ms) {
+        refuse("accept");
+    }
+
+    #! Raises an exception
+    Socket acceptSSL() {
+        refuse("acceptSSL");
+    }
+
+    #! Raises an exception
+    *Socket acceptSSL(timeout timeout_ms) {
+        refuse("acceptSSL");
+    }
+
+    #! Raises an exception
+    nothing upgradeClientToSSL(timeout timeout_ms = -1) {
+        refuse("upgradeClientToSSL");
+    }
+
+    #! Raises an exception
+    nothing upgradeServerToSSL(timeout timeout_ms = -1) {
+        refuse("upgradeServerToSSL");
+    }
+
+    #! Raises an exception
+    int getPollableDescriptor() {
+        refuse("getPollableDescriptor");
+    }
+
+    #! Raises an exception
+    int setNoDelay(bool enabled = True) {
+        refuse("setNoDelay");
+    }
+
+    #! Raises an exception
+    int setUserTimeout(int timeout_ms) {
+        refuse("setUserTimeout");
+    }
+
+    #! Raises an exception
+    nothing setMaxChunkedBodySize(int max_body_size) {
+        refuse("setMaxChunkedBodySize");
+    }
+
+    #! Sets the timeout of the object's sends that are given none; the connection's timeout does not change
+    /** @return 0
+    */
+    int setSendTimeout(timeout timeout_ms) {
+        send_to = timeout_ms;
+        return 0;
+    }
+
+    #! Sets the timeout of the object's reads that are given none; the connection's timeout does not change
+    /** @return 0
+    */
+    int setRecvTimeout(timeout timeout_ms) {
+        recv_to = timeout_ms;
+        return 0;
+    }
+
+    #! Returns the timeout of the object's sends that are given none
+    int getSendTimeout() {
+        return send_to >= 0 ? send_to : real.getSendTimeout();
+    }
+
+    #! Returns the timeout of the object's reads that are given none
+    int getRecvTimeout() {
+        return recv_to >= 0 ? recv_to : real.getRecvTimeout();
+    }
+
+    #! Returns @ref False "False" once the request ended, otherwise the value of the connection's socket
+    bool isOpen() {
+        return rh.h1IsCurrent(gen) && real.isOpen();
+    }
+
+    #! Returns the value of the connection's socket
+    hash<auto> getPeerInfo(bool host_lookup = True) {
+        return real.getPeerInfo(host_lookup);
+    }
+
+    #! Returns the value of the connection's socket
+    hash<auto> getSocketInfo(bool host_lookup = True) {
+        return real.getSocketInfo(host_lookup);
+    }
+
+    #! Returns the value of the connection's socket
+    bool isSecure() {
+        return real.isSecure();
+    }
+
+    #! Returns the value of the connection's socket
+    bool isHttp2() {
+        return real.isHttp2();
+    }
+
+    #! Returns the value of the connection's socket
+    bool isQuic() {
+        return real.isQuic();
+    }
+
+    #! Returns the value of the connection's socket
+    *string getSSLCipherName() {
+        return real.getSSLCipherName();
+    }
+
+    #! Returns the value of the connection's socket
+    *string getSSLCipherVersion() {
+        return real.getSSLCipherVersion();
+    }
+
+    #! Returns the value of the connection's socket
+    *string getAlpnProtocol() {
+        return real.getAlpnProtocol();
+    }
+
+    #! Returns the value of the connection's socket
+    *SSLCertificate getRemoteCertificate() {
+        return real.getRemoteCertificate();
+    }
+
+    #! Returns the value of the connection's socket
+    *string verifyPeerCertificate() {
+        return real.verifyPeerCertificate();
+    }
+
+    #! Returns @ref True "True" if the request has a chunked body that was not read yet
+    bool pendingHttpChunkedBody() {
+        return rh.h1IsCurrent(gen) && !rh.h1ChunkedBodyTaken() && real.pendingHttpChunkedBody();
+    }
+
+    # the raw sends of the bytes of a response's body with a Content-Length
+    int send(binary data, timeout timeout_ms = -1) {
+        enterSend("send", data.size());
+        on_exit rh.h1Leave();
+        return checkSent(real.send(data, sendTimeout(timeout_ms)));
+    }
+
+    int send(string data, timeout timeout_ms = -1) {
+        binary b = toBytes(data);
+        enterSend("send", b.size());
+        on_exit rh.h1Leave();
+        return checkSent(real.send(b, sendTimeout(timeout_ms)));
+    }
+
+    int sendBinary(string data, timeout timeout_ms = -1) {
+        enterSend("sendBinary", data.size());
+        on_exit rh.h1Leave();
+        return checkSent(real.sendBinary(data, sendTimeout(timeout_ms)));
+    }
+
+    int sendBinary(binary data, timeout timeout_ms = -1) {
+        enterSend("sendBinary", data.size());
+        on_exit rh.h1Leave();
+        return checkSent(real.sendBinary(data, sendTimeout(timeout_ms)));
+    }
+
+    nothing send2(binary data, timeout timeout_ms = -1) {
+        enterSend("send2", data.size());
+        on_exit rh.h1Leave();
+        sendChecked(sub () { real.send2(data, sendTimeout(timeout_ms)); });
+    }
+
+    nothing send2(string data, timeout timeout_ms = -1) {
+        binary b = toBytes(data);
+        enterSend("send2", b.size());
+        on_exit rh.h1Leave();
+        sendChecked(sub () { real.send2(b, sendTimeout(timeout_ms)); });
+    }
+
+    nothing sendBinary2(string data, timeout timeout_ms = -1) {
+        enterSend("sendBinary2", data.size());
+        on_exit rh.h1Leave();
+        sendChecked(sub () { real.sendBinary2(data, sendTimeout(timeout_ms)); });
+    }
+
+    nothing sendBinary2(binary data, timeout timeout_ms = -1) {
+        enterSend("sendBinary2", data.size());
+        on_exit rh.h1Leave();
+        sendChecked(sub () { real.sendBinary2(data, sendTimeout(timeout_ms)); });
+    }
+
+    #! Raises an exception: the length of the data is not known before it is sent
+    nothing sendFromInputStream(InputStream input_stream, softint size = -1, timeout timeout_ms = -1) {
+        throw "HTTP-HANDLER-SOCKET-ERROR", "Socket::sendFromInputStream() cannot be called on the socket of an "
+            "HTTP/1.x request: the length of the data is not known before it is sent; send the response with "
+            "Socket::sendHTTPResponse() and the input stream";
+    }
+
+    int sendi1(softint value = 0, timeout timeout_ms = -1) {
+        enterSend("sendi1", 1);
+        on_exit rh.h1Leave();
+        return checkSent(real.sendi1(value, sendTimeout(timeout_ms)));
+    }
+
+    int sendi2(softint value = 0, timeout timeout_ms = -1) {
+        enterSend("sendi2", 2);
+        on_exit rh.h1Leave();
+        return checkSent(real.sendi2(value, sendTimeout(timeout_ms)));
+    }
+
+    int sendi4(softint value = 0, timeout timeout_ms = -1) {
+        enterSend("sendi4", 4);
+        on_exit rh.h1Leave();
+        return checkSent(real.sendi4(value, sendTimeout(timeout_ms)));
+    }
+
+    int sendi8(softint value = 0, timeout timeout_ms = -1) {
+        enterSend("sendi8", 8);
+        on_exit rh.h1Leave();
+        return checkSent(real.sendi8(value, sendTimeout(timeout_ms)));
+    }
+
+    int sendi2LSB(softint value = 0, timeout timeout_ms = -1) {
+        enterSend("sendi2LSB", 2);
+        on_exit rh.h1Leave();
+        return checkSent(real.sendi2LSB(value, sendTimeout(timeout_ms)));
+    }
+
+    int sendi4LSB(softint value = 0, timeout timeout_ms = -1) {
+        enterSend("sendi4LSB", 4);
+        on_exit rh.h1Leave();
+        return checkSent(real.sendi4LSB(value, sendTimeout(timeout_ms)));
+    }
+
+    int sendi8LSB(softint value = 0, timeout timeout_ms = -1) {
+        enterSend("sendi8LSB", 8);
+        on_exit rh.h1Leave();
+        return checkSent(real.sendi8LSB(value, sendTimeout(timeout_ms)));
+    }
+
+    # complete responses, which frame their bodies themselves
+    nothing sendHTTPResponse(softint status_code, string status_description, string http_version, hash<auto> headers,
+            string body, timeout timeout_ms = -1) {
+        sendFull("sendHTTPResponse", status_code, status_description, http_version, headers, toBytes(body), NOTHING,
+            timeout_ms);
+    }
+
+    nothing sendHTTPResponse(softint status_code, string status_description, string http_version, hash<auto> headers,
+            string body, *reference<hash<auto>> info, timeout timeout_ms = -1) {
+        sendFull("sendHTTPResponse", status_code, status_description, http_version, headers, toBytes(body), \info,
+            timeout_ms);
+    }
+
+    nothing sendHTTPResponse(softint status_code, string status_description, string http_version, hash<auto> headers,
+            *binary body, timeout timeout_ms = -1) {
+        sendFull("sendHTTPResponse", status_code, status_description, http_version, headers, body, NOTHING,
+            timeout_ms);
+    }
+
+    nothing sendHTTPResponse(softint status_code, string status_description, string http_version, hash<auto> headers,
+            *binary body, *reference<hash<auto>> info, timeout timeout_ms = -1) {
+        sendFull("sendHTTPResponse", status_code, status_description, http_version, headers, body, \info,
+            timeout_ms);
+    }
+
+    nothing sendHTTPResponse(softint status_code, string status_description, string http_version, hash<auto> headers,
+            InputStream input_stream, int max_chunk_size = 4096, *reference<hash<auto>> info,
+            timeout timeout_ms = -1, *code trailers_callback) {
+        rh.h1Enter(gen, "sendHTTPResponse");
+        on_exit rh.h1Leave();
+        rh.h1StartResponse("sendHTTPResponse", status_code, headers, Http1ResponseSend::FullChunked);
+        sendChecked(sub () {
+            real.sendHTTPResponse(status_code, status_description, http_version, headers, input_stream,
+                max_chunk_size, \info, sendTimeout(timeout_ms), trailers_callback);
+        });
+    }
+
+    nothing sendHTTPResponseWithCallback(code send_callback, softint status_code, string status_description,
+            string http_version, hash<auto> headers, timeout timeout_ms = -1) {
+        sendCallback(send_callback, status_code, status_description, http_version, headers, NOTHING, timeout_ms);
+    }
+
+    nothing sendHTTPResponseWithCallback(code send_callback, softint status_code, string status_description,
+            string http_version, hash<auto> headers, *reference<hash<auto>> info, timeout timeout_ms = -1) {
+        sendCallback(send_callback, status_code, status_description, http_version, headers, \info, timeout_ms);
+    }
+
+    #! Sends the header of a response, which gives the framing of its body (see the class's description)
+    nothing sendHTTPResponseHeader(softint status_code, string status_description, string http_version,
+            hash<auto> headers, *reference<hash<auto>> info, timeout timeout_ms = -1) {
+        rh.h1Enter(gen, "sendHTTPResponseHeader");
+        on_exit rh.h1Leave();
+        rh.h1StartResponse("sendHTTPResponseHeader", status_code, headers, Http1ResponseSend::Header);
+        sendChecked(sub () {
+            real.sendHTTPResponseHeader(status_code, status_description, http_version, headers, \info,
+                sendTimeout(timeout_ms));
+        });
+    }
+
+    #! Sends the chunks of a chunked body and its end, after its header (see sendHTTPResponseHeader())
+    nothing sendHTTPChunkedBodyFromInputStream(InputStream input_stream, int max_chunk_size = 4096,
+            timeout timeout_ms = -1, *code trailers_callback) {
+        rh.h1Enter(gen, "sendHTTPChunkedBodyFromInputStream");
+        on_exit rh.h1Leave();
+        rh.h1EndChunked("sendHTTPChunkedBodyFromInputStream");
+        sendChecked(sub () {
+            real.sendHTTPChunkedBodyFromInputStream(input_stream, max_chunk_size, sendTimeout(timeout_ms),
+                trailers_callback);
+        });
+    }
+
+    #! Sends the end of a chunked body, after its header (see sendHTTPResponseHeader())
+    nothing sendHTTPChunkedBodyTrailer(*hash<auto> trailer, timeout timeout_ms = -1) {
+        rh.h1Enter(gen, "sendHTTPChunkedBodyTrailer");
+        on_exit rh.h1Leave();
+        rh.h1EndChunked("sendHTTPChunkedBodyTrailer");
+        sendChecked(sub () { real.sendHTTPChunkedBodyTrailer(trailer, sendTimeout(timeout_ms)); });
+    }
+
+    # the HTTP request methods are a client's: the connection's socket sends the request's response
+    nothing sendHTTPMessage(string method, string path, string http_version, hash<auto> headers, string body,
+            *reference<hash> info, timeout timeout_ms = -1) {
+        refuse("sendHTTPMessage");
+    }
+
+    nothing sendHTTPMessage(string method, string path, string http_version, hash<auto> headers, *binary body,
+            *reference<hash<auto>> info, timeout timeout_ms = -1) {
+        refuse("sendHTTPMessage");
+    }
+
+    nothing sendHTTPMessageWithCallback(code send_callback, string method, string path, string http_version,
+            hash<auto> headers, *reference<hash<auto>> info, timeout timeout_ms = -1) {
+        refuse("sendHTTPMessageWithCallback");
+    }
+
+    # the reads of the request's own body: the rest of a body with a Content-Length that the server did not read
+    string recv(softint size = 0, timeout timeout_ms = -1) {
+        int n = enterRead("recv", size);
+        on_exit rh.h1Leave();
+        return n ? binary_to_string(real.recvBinary(n, recvTimeout(timeout_ms)), getEncoding()) : "";
+    }
+
+    binary recvBinary(softint size = 0, timeout timeout_ms = -1) {
+        int n = enterRead("recvBinary", size);
+        on_exit rh.h1Leave();
+        return n ? real.recvBinary(n, recvTimeout(timeout_ms)) : binary();
+    }
+
+    nothing recvToOutputStream(OutputStream output_stream, softint size = -1, timeout timeout_ms = -1) {
+        int n = enterRead("recvToOutputStream", size);
+        on_exit rh.h1Leave();
+        if (n) {
+            real.recvToOutputStream(output_stream, n, recvTimeout(timeout_ms));
+        }
+    }
+
+    int recvi1(timeout timeout_ms = -1) {
+        enterIntRead("recvi1", 1);
+        on_exit rh.h1Leave();
+        return real.recvi1(recvTimeout(timeout_ms));
+    }
+
+    int recvi2(timeout timeout_ms = -1) {
+        enterIntRead("recvi2", 2);
+        on_exit rh.h1Leave();
+        return real.recvi2(recvTimeout(timeout_ms));
+    }
+
+    int recvi4(timeout timeout_ms = -1) {
+        enterIntRead("recvi4", 4);
+        on_exit rh.h1Leave();
+        return real.recvi4(recvTimeout(timeout_ms));
+    }
+
+    int recvi8(timeout timeout_ms = -1) {
+        enterIntRead("recvi8", 8);
+        on_exit rh.h1Leave();
+        return real.recvi8(recvTimeout(timeout_ms));
+    }
+
+    int recvi2LSB(timeout timeout_ms = -1) {
+        enterIntRead("recvi2LSB", 2);
+        on_exit rh.h1Leave();
+        return real.recvi2LSB(recvTimeout(timeout_ms));
+    }
+
+    int recvi4LSB(timeout timeout_ms = -1) {
+        enterIntRead("recvi4LSB", 4);
+        on_exit rh.h1Leave();
+        return real.recvi4LSB(recvTimeout(timeout_ms));
+    }
+
+    int recvi8LSB(timeout timeout_ms = -1) {
+        enterIntRead("recvi8LSB", 8);
+        on_exit rh.h1Leave();
+        return real.recvi8LSB(recvTimeout(timeout_ms));
+    }
+
+    int recvu1(timeout timeout_ms = -1) {
+        enterIntRead("recvu1", 1);
+        on_exit rh.h1Leave();
+        return real.recvu1(recvTimeout(timeout_ms));
+    }
+
+    int recvu2(timeout timeout_ms = -1) {
+        enterIntRead("recvu2", 2);
+        on_exit rh.h1Leave();
+        return real.recvu2(recvTimeout(timeout_ms));
+    }
+
+    int recvu4(timeout timeout_ms = -1) {
+        enterIntRead("recvu4", 4);
+        on_exit rh.h1Leave();
+        return real.recvu4(recvTimeout(timeout_ms));
+    }
+
+    int recvu2LSB(timeout timeout_ms = -1) {
+        enterIntRead("recvu2LSB", 2);
+        on_exit rh.h1Leave();
+        return real.recvu2LSB(recvTimeout(timeout_ms));
+    }
+
+    int recvu4LSB(timeout timeout_ms = -1) {
+        enterIntRead("recvu4LSB", 4);
+        on_exit rh.h1Leave();
+        return real.recvu4LSB(recvTimeout(timeout_ms));
+    }
+
+    hash<auto> readHTTPChunkedBody(timeout timeout_ms = -1) {
+        rh.h1EnterChunkedRead(gen, "readHTTPChunkedBody", real);
+        on_exit rh.h1Leave();
+        # the body was read to its end only if the read returns
+        on_success rh.h1_chunk_open = False;
+        # the connection's socket decodes the body in the object's encoding
+        if (ownEncoding()) {
+            real.setEncoding(enc);
+            on_exit real.setEncoding(conn_enc);
+            return real.readHTTPChunkedBody(recvTimeout(timeout_ms));
+        }
+        return real.readHTTPChunkedBody(recvTimeout(timeout_ms));
+    }
+
+    hash<auto> readHTTPChunkedBodyBinary(timeout timeout_ms = -1) {
+        rh.h1EnterChunkedRead(gen, "readHTTPChunkedBodyBinary", real);
+        on_exit rh.h1Leave();
+        # the body was read to its end only if the read returns
+        on_success rh.h1_chunk_open = False;
+        return real.readHTTPChunkedBodyBinary(recvTimeout(timeout_ms));
+    }
+
+    hash<auto> readHTTPChunkedBodyToOutputStream(OutputStream output_stream, timeout timeout_ms = -1) {
+        rh.h1EnterChunkedRead(gen, "readHTTPChunkedBodyToOutputStream", real);
+        on_exit rh.h1Leave();
+        # the body was read to its end only if the read returns
+        on_success rh.h1_chunk_open = False;
+        return real.readHTTPChunkedBodyToOutputStream(output_stream, recvTimeout(timeout_ms));
+    }
+
+    nothing readHTTPChunkedBodyWithCallback(code receive_callback, timeout timeout_ms = -1) {
+        rh.h1EnterChunkedRead(gen, "readHTTPChunkedBodyWithCallback", real);
+        on_exit rh.h1Leave();
+        # the body was read to its end only if the read returns
+        on_success rh.h1_chunk_open = False;
+        # the connection's socket decodes the chunks in the object's encoding
+        if (ownEncoding()) {
+            real.setEncoding(enc);
+            on_exit real.setEncoding(conn_enc);
+            real.readHTTPChunkedBodyWithCallback(receive_callback, recvTimeout(timeout_ms));
+            return;
+        }
+        real.readHTTPChunkedBodyWithCallback(receive_callback, recvTimeout(timeout_ms));
+    }
+
+    nothing readHTTPChunkedBodyBinaryWithCallback(code receive_callback, timeout timeout_ms = -1) {
+        rh.h1EnterChunkedRead(gen, "readHTTPChunkedBodyBinaryWithCallback", real);
+        on_exit rh.h1Leave();
+        # the body was read to its end only if the read returns
+        on_success rh.h1_chunk_open = False;
+        real.readHTTPChunkedBodyBinaryWithCallback(receive_callback, recvTimeout(timeout_ms));
+    }
+
+    #! Returns True if the object's encoding is not the connection's
+    /** A send or read of strings in the object's own encoding gives the connection's socket the object's encoding
+        for the call (\c real.setEncoding(enc)), and its encoding again at its end, before it leaves the operation
+        (an on_exit statement: also when it raises).  The server uses the connection's socket only after the sends
+        and reads of the socket of a request that are in progress ended (see HandlerSocketState::endHandlerSocket()),
+        and finds it in the connection's encoding; two sends or reads of the object of more than one thread can only
+        affect the strings of each other
+    */
+    private:internal bool ownEncoding() {
+        return enc && enc != conn_enc;
+    }
+
+    #! Returns the bytes of a string in the object's encoding
+    private:internal binary toBytes(string str) {
+        return binary(convert_encoding(str, getEncoding()));
+    }
+
+    #! Returns the timeout of a send: at most the server's longest one, so that the end of the request waits for it a
+    #! bounded time
+    private:internal int sendTimeout(int timeout_ms) {
+        int t = timeout_ms < 0 ? send_to : timeout_ms;
+        return (t < 0 || t > max_to) ? max_to : t;
+    }
+
+    #! Returns the timeout of a read: at most the server's longest one, so that the end of the request waits for it a
+    #! bounded time
+    private:internal int recvTimeout(int timeout_ms) {
+        int t = timeout_ms < 0 ? recv_to : timeout_ms;
+        return (t < 0 || t > max_to) ? max_to : t;
+    }
+
+    #! Admits a raw send of bytes of the response's body, counted against its Content-Length
+    private:internal enterSend(string method, int size) {
+        rh.h1Enter(gen, method);
+        try {
+            rh.h1TakeSend(method, size);
+        } catch (hash<ExceptionInfo> ex) {
+            rh.h1Leave();
+            rethrow;
+        }
+    }
+
+    #! Returns the result of a raw send; a send that failed leaves the response broken: the connection is closed
+    private:internal int checkSent(int rc) {
+        if (rc < 0) {
+            rh.h1Broken();
+        }
+        return rc;
+    }
+
+    #! Runs a send; a send that failed leaves the response broken: the connection is closed
+    private:internal sendChecked(code send) {
+        try {
+            send();
+        } catch (hash<ExceptionInfo> ex) {
+            rh.h1Broken();
+            rethrow;
+        }
+    }
+
+    #! Sends a complete response, which the socket frames, or an interim response
+    private:internal sendFull(string method, int status_code, string status_description, string http_version,
+            hash<auto> headers, *binary body, *reference<hash<auto>> info, int timeout_ms) {
+        rh.h1Enter(gen, method);
+        on_exit rh.h1Leave();
+        if (rh.h1StartResponse(method, status_code, headers, Http1ResponseSend::Full, body.size())) {
+            # an interim response is a header without a body (no Content-Length either)
+            sendChecked(sub () {
+                real.sendHTTPResponseHeader(status_code, status_description, http_version, headers, \info,
+                    sendTimeout(timeout_ms));
+            });
+            return;
+        }
+        sendChecked(sub () {
+            real.sendHTTPResponse(status_code, status_description, http_version, headers, body, \info,
+                sendTimeout(timeout_ms));
+        });
+    }
+
+    #! Sends a complete chunked response whose chunks a callback gives
+    private:internal sendCallback(code send_callback, int status_code, string status_description,
+            string http_version, hash<auto> headers, *reference<hash<auto>> info, int timeout_ms) {
+        rh.h1Enter(gen, "sendHTTPResponseWithCallback");
+        on_exit rh.h1Leave();
+        rh.h1StartResponse("sendHTTPResponseWithCallback", status_code, headers, Http1ResponseSend::FullChunked);
+        # the connection's socket sends the strings that the callback returns in the object's encoding
+        bool own = ownEncoding();
+        if (own) {
+            real.setEncoding(enc);
+        }
+        on_exit if (own) {
+            real.setEncoding(conn_enc);
+        }
+        sendChecked(sub () {
+            real.sendHTTPResponseWithCallback(send_callback, status_code, status_description, http_version, headers,
+                \info, sendTimeout(timeout_ms));
+        });
+    }
+
+    #! Admits a read of bytes of the request's body and returns how many bytes it reads
+    /** A chunked body can only be read by its chunks; a read of a body with a Content-Length takes at most the rest
+        of the body that the server did not read, all of it for a size of 0 or less
+
+        @return the number of bytes to read; 0 at the end of the body
+    */
+    private:internal int enterRead(string method, int size) {
+        rh.h1Enter(gen, method);
+        if (!rh.h1ChunkedBodyTaken() && real.pendingHttpChunkedBody()) {
+            rh.h1Leave();
+            throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): the chunked body of the HTTP/1.x request of "
+                "this socket is read with Socket::readHTTPChunkedBody() or its variants", method);
+        }
+        return rh.h1TakeBody(size);
+    }
+
+    #! Admits a read of an integer from the request's body, which needs the integer's bytes in the rest of the body
+    private:internal enterIntRead(string method, int width) {
+        rh.h1Enter(gen, method);
+        if ((!rh.h1ChunkedBodyTaken() && real.pendingHttpChunkedBody()) || !rh.h1TakeBodyBytes(width)) {
+            rh.h1Leave();
+            throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): no data can be read past the end of the body "
+                "of the HTTP/1.x request of this socket", method);
+        }
+    }
+
+    #! Raises the exception of a method that the handler's code cannot call on the connection's socket
+    private:internal static refuse(string method) {
+        throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s() cannot be called on the socket of an HTTP/1.x "
+            "request: the server keeps the connection; a handler closes it with the \"close\" key of its response, "
+            "or aborts it with http_abort_connection()", method);
+    }
+}
+
 }
 
 #! Private namespace
@@ -10652,6 +12244,12 @@ class HandlerInfo {
         # content type map
         *hash<string, bool> content_type_map;
         *list<string> special_header_list;
+        #! True if the handler's code gets the socket of its HTTP/1.x request, decided when the handler is set
+        #! (see AbstractHttpRequestHandler::needsHandlerSocketView(); qore#7305)
+        bool handler_socket_view;
+        #! True if the handler runs the code of other objects, which is decided for each request (see
+        #! AbstractHttpRequestHandler::hostsCode(); qore#7305)
+        bool hosts_code;
     }
 
     #! Creates the object from the parameters
@@ -10664,6 +12262,9 @@ class HandlerInfo {
             throw "HANDLER-ERROR", sprintf("missing \"handler\" from handler config: %y", info);
         }
         obj = info.handler;
+        # the object's provenance does not change: decided once; fails closed
+        handler_socket_view = obj.needsHandlerSocketView();
+        hosts_code = obj.hostsCode();
         path = info.path;
         isregex = info.isregex;
         if (isregex && path) {
@@ -11212,6 +12813,10 @@ hashdecl HttpAsyncResponseInfo {
     #! Whether to close the connection after sending
     bool close = False;
 
+    #! Whether the server already sent what goes out for the request (the header of an event stream that does not
+    #! start): nothing is sent, and the connection is closed (qore#7376)
+    bool sent = False;
+
     #! Connection context (for keep-alive)
     hash<auto> cx;
 
@@ -11303,11 +12908,25 @@ class ResponseAfterSendNotifier {
         }
         called = True;
         try {
-            background ResponseAfterSendNotifier::call(callback, cx, handler, listener, False);
+            # the release of the last reference in work of the module cleanup (the release of a canceled connection's
+            # references) hands itself over to the thread that calls the callback (qore#7339); the call is created by
+            # a static method, as a closure created here would refer to this object, which is being destroyed, and
+            # wrapped here, in this thread, as background evaluates its expression in the new thread
+            code<nothing()> c = AsyncIoController::wrapModuleCleanupWork(
+                ResponseAfterSendNotifier::getCall(callback, cx, handler, listener));
+            background c();
         } catch (hash<ExceptionInfo> ex) {
             listener.logError("cid %d: %s: cannot call the after_send callback: %s: %s", cx.id, cx.handler_name,
                 ex.err, ex.desc);
         }
+    }
+
+    #! Returns a call that reports that the response was not sent; static, so that it does not refer to an object
+    private:internal static code<nothing()> getCall(code<nothing(hash<auto>, bool)> callback, hash<auto> cx,
+            *HttpServer::AbstractHttpRequestHandler handler, HttpListener listener) {
+        return sub () {
+            ResponseAfterSendNotifier::call(callback, cx, handler, listener, False);
+        };
     }
 
     #! Reports the transmission result of the response; only the first call has any effect
@@ -11753,10 +13372,22 @@ class RequestHelper {
         */
         *HttpServerAsyncIo::HttpPersistentRequestEnd persistent_end;
 
-        #! The socket that the handler of the current request of a QUIC listener gets (qore#6953)
-        /** An Http3HandlerSocket, made by the listener from its own header information of the request, before any
-            handler code runs, and kept here, where no handler code can change it; not set for the requests of a TCP
-            listener, whose handlers get the socket of their own connection
+        #! True while the current HTTP/1.x request has a socket of its request (an Http1HandlerSocket) that is not
+        #! ended (qore#7305); read by the server's code without a call
+        bool h1_view = False;
+
+        #! The state of the response that the handler of the current HTTP/1.x request sent through the socket of its
+        #! request, when the socket ended (an Http1ResponseState value; qore#7305)
+        int h1_state = 0;
+
+        #! The state of the socket of the request's handler, which its socket references (qore#7305); made when it is
+        #! first needed; never given to handler code
+        *HandlerSocketState hs_state;
+
+        #! The socket that the handler of the current request gets (qore#6953, qore#7305)
+        /** An Http3HandlerSocket, an Http2HandlerSocket or an Http1HandlerSocket, made by the listener from its own
+            header information of the request, before any handler code runs, and kept here, where no handler code can
+            change it
         */
         *Socket handler_sock;
     }
@@ -11774,6 +13405,8 @@ class RequestHelper {
         bool dedicated_external = False;
         #! True while the request counts in the active WaitGroup (c); see releaseForStop()
         bool counted = True;
+
+
     }
 
     /**
@@ -11794,6 +13427,36 @@ class RequestHelper {
             self.s = s;
         }
     }
+
+
+    #! Ends the socket of the current HTTP/1.x request (see HandlerSocketState::endHandlerSocket())
+    /** @return the state of the response that the handler sent through the socket of the current request, also
+        after a previous call ended it; Http1ResponseState::None if the request has no such socket
+    */
+    int endHandlerSocket() {
+        if (h1_view) {
+            h1_view = False;
+            if ((h1_state = hs_state.h1End()) < 0) {
+                h1_state = hs_state.endHandlerSocket();
+            }
+        }
+        return h1_state;
+    }
+
+    #! Sets the rest of the body of the current HTTP/1.x request that the server did not read
+    h1SetBodyLength(int length) {
+        if (hs_state) {
+            hs_state.h1SetBodyLength(length);
+        }
+    }
+
+    #! Records that the server started the response of the request of an HTTP/2 or HTTP/3 stream
+    markStreamResponseStarted() {
+        HandlerSocketState st = hs_state ?? (hs_state = new HandlerSocketState());
+        st.stream_response_started = True;
+    }
+
+
 
     #! Destructor ensures counter is decremented and socket is cleaned up if needed
     /**
@@ -11908,5 +13571,425 @@ class RequestHelper {
     bool isDedicatedExternal() {
         return dedicated_external;
     }
+}
+
+#! The state of the socket that the handler of a request gets (qore#7305)
+/** Held by the server's per-request object (RequestHelper) and referenced by the handler's socket of the request
+    (Http1HandlerSocket, Http2HandlerSocket, Http3HandlerSocket) in a private:internal member: only the server's code
+    and the request's own socket reach it; the socket has no public method that changes it.  A socket that a handler
+    keeps keeps this object only, not the server's per-request object.
+*/
+class HandlerSocketState {
+    public {
+        #! True while the chunked body of the current HTTP/1.x request was taken by the socket of the request and not
+        #! read to its end: a read of it failed (its callback or output stream threw, or it timed out), or none
+        #! returned; the server then closes the connection after the response, as the rest of the body cannot be
+        #! told apart from the next request (qore#7305)
+        bool h1_chunk_open = False;
+
+        #! True once the handler of the request of an HTTP/2 or HTTP/3 stream started its response on the stream
+        #! through its socket, or the server did (qore#7214, qore#7212, qore#7305); reset by the server for each request
+        bool stream_response_started = False;
+    }
+
+    private {
+        # the state of the socket of the current HTTP/1.x request (an Http1HandlerSocket; qore#7305): only the server's
+        # code and the request's own socket, which keeps this object in a private:internal member, reach it
+        #! the generation of the request's socket: a socket of another generation is ended
+        int h1_gen = 0;
+        #! True while the socket of the current generation is not ended
+        bool h1_live = False;
+        #! the bytes of the request's body with a Content-Length that the server did not read
+        int h1_body = 0;
+        #! True once the request's chunked body is read or being read
+        bool h1_chunk_taken = False;
+        #! the state of the response that the handler sends through the socket (an Http1ResponseState value)
+        int h1_resp = 0;
+        #! the bytes of the body of a response with a Content-Length that the handler still has to send
+        int h1_resp_left = 0;
+        #! True for a HEAD request, whose response has no body
+        bool h1_head = False;
+        #! True for an HTTP/1.0 request, which has no chunked framing and no interim responses
+        bool h1_http10 = False;
+        #! the number of the sends and reads of the socket in progress
+        int h1_ops = 0;
+        #! made by the end of the socket when sends or reads are in progress; the last of them that ends releases it
+        *Counter h1_waiter;
+        #! the longest time that the end of the socket waits for its sends and reads in progress, in milliseconds (the
+        #! server's handler_socket_max_timeout option)
+        int h1_max_to = 30000;
+        #! the connection's socket of the current request, which the server keeps; never given to handler code
+        *Socket h1_real;
+    }
+
+
+    #! Creates a state without a socket of an HTTP/1.x request (for an HTTP/2 or HTTP/3 stream)
+    constructor() {
+    }
+
+    #! Creates the state of the socket of a new HTTP/1.x request, started: its generation is 1
+    constructor(Socket real, bool head, bool http10, int max_to) {
+        h1_max_to = max_to;
+        h1_real = real;
+        h1_live = True;
+        h1_head = head;
+        h1_http10 = http10;
+        h1_gen = 1;
+    }
+
+    #! Ends the socket of the current HTTP/1.x request when no send or read of it is in progress (qore#7305)
+    /** @return the state of the response that the handler sent through the socket (an Http1ResponseState value), or
+        -1 if a send or read of it is in progress: the server then calls endHandlerSocket(), which waits for it
+    */
+    synchronized int h1End() {
+        if (h1_live) {
+            h1_live = False;
+            ++h1_gen;
+            if (h1_ops) {
+                # the last send or read in progress that ends releases the end of the socket
+                h1_waiter = h1_waiter ?? new Counter(1);
+                return -1;
+            }
+        }
+        return h1_resp;
+    }
+
+    #! Ends the socket of the current HTTP/1.x request (qore#7305)
+    /** The server calls it before it sends a response for the request or reads the next request, or after h1End()
+        returned -1; a later call only returns the state.  A send or read of the socket in progress (of a thread of the
+        handler that outlives its request) is waited for, at most for its timeout, which the socket bounds (the
+        \c handler_socket_max_timeout option of the server); the response is then broken, and the connection is shut
+        down and closed by the server.  A send or read that h1End() found and that ended before this call is not in
+        progress here: the state of the response is then returned as it is.  It is called only by the server's own
+        code
+
+        @return the state of the response that the handler sent through the socket (an Http1ResponseState value)
+    */
+    int endHandlerSocket() {
+        int state;
+        # a send or read of another thread still in progress (one that h1End() found and that ended since is not):
+        # the response is broken whatever it does
+        if (*Counter waiter = h1EndLocked(\state)) {
+            h1Broken();
+            # at most the longest timeout of the socket: a send or read whose callback or stream (code of the
+            # handler) does not return is not waited for longer
+            waiter.waitForZero(h1_max_to);
+            try {
+                h1_real.shutdown();
+            } catch (hash<ExceptionInfo> ex) {
+                # the connection has already ended
+            }
+            if (h1OpsInProgress()) {
+                # a send or read still in progress (in its callback or stream), which a shutdown does not end: the
+                # connection's socket is closed, so that it fails when it goes on, and the server closes the
+                # connection
+                try {
+                    h1_real.close();
+                } catch (hash<ExceptionInfo> ex) {
+                    # the connection has already ended
+                }
+            }
+            return h1ResponseState();
+        }
+        return state;
+    }
+
+    #! Admits a send or read of the socket of the given generation; refused if that request ended
+    /** The caller calls h1Leave() at its end
+    */
+    synchronized h1Enter(int gen, string method) {
+        if (!h1_live || gen != h1_gen) {
+            throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): the HTTP/1.x request of this socket has ended",
+                method);
+        }
+        ++h1_ops;
+    }
+
+    #! Ends a send or read admitted by h1Enter() or h1EnterChunkedRead()
+    synchronized h1Leave() {
+        # the last one in progress when the socket ended releases the end
+        if (!--h1_ops && h1_waiter) {
+            h1_waiter.dec();
+            remove h1_waiter;
+        }
+    }
+
+    #! Returns the number of the sends and reads of the socket in progress
+    private synchronized int h1OpsInProgress() {
+        return h1_ops;
+    }
+
+    #! Returns True if the socket of the given generation is not ended
+    synchronized bool h1IsCurrent(int gen) {
+        return h1_live && gen == h1_gen;
+    }
+
+    #! Sets the bytes of the request's body with a Content-Length that the server did not read
+    synchronized h1SetBodyLength(int length) {
+        h1_body = length > 0 ? length : 0;
+    }
+
+    #! Takes up to the given number of bytes of the rest of the body, all of it for a size of 0 or less
+    /** The bytes are taken before they are read, so that reads in different threads never read past the body
+    */
+    synchronized int h1TakeBody(int size) {
+        int n = (size <= 0 || size > h1_body) ? h1_body : size;
+        h1_body -= n;
+        return n;
+    }
+
+    #! Takes exactly the given number of bytes of the rest of the body, or none
+    synchronized bool h1TakeBodyBytes(int width) {
+        if (h1_body < width) {
+            return False;
+        }
+        h1_body -= width;
+        return True;
+    }
+
+    #! Returns True if the request's chunked body is read or being read
+    synchronized bool h1ChunkedBodyTaken() {
+        return h1_chunk_taken;
+    }
+
+    #! Admits a chunked read of the socket of the given generation, which takes the request's chunked body
+    /** Refused if that request ended, or if it has no chunked body that was not taken; the caller calls h1Leave() at
+        the end of the read
+    */
+    synchronized h1EnterChunkedRead(int gen, string method, Socket real) {
+        if (!h1_live || gen != h1_gen) {
+            throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): the HTTP/1.x request of this socket has ended",
+                method);
+        }
+        if (h1_chunk_taken || !real.pendingHttpChunkedBody()) {
+            throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): the HTTP/1.x request of this socket has no "
+                "chunked body to read", method);
+        }
+        h1_chunk_taken = True;
+        h1_chunk_open = True;
+        ++h1_ops;
+    }
+
+    #! Records that the response is broken: a send failed, or the connection was aborted
+    synchronized h1Broken() {
+        h1_resp = Http1ResponseState::Broken;
+    }
+
+    #! Returns the state of the response (an Http1ResponseState value)
+    synchronized int h1ResponseState() {
+        return h1_resp;
+    }
+
+    #! Takes the given number of bytes of the body of a response with a Content-Length that the handler sends
+    synchronized h1TakeSend(string method, int size) {
+        if (h1_resp != Http1ResponseState::Length) {
+            throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): %s", method,
+                (h1_resp == Http1ResponseState::None)
+                    ? "the bytes of a response are sent after a header with a Content-Length "
+                        "(Socket::sendHTTPResponseHeader())"
+                    : (h1_resp == Http1ResponseState::Chunked
+                        ? "a chunked body is sent with Socket::sendHTTPChunkedBodyFromInputStream()"
+                        : "the response to the HTTP/1.x request of this socket has been sent"));
+        }
+        if (size > h1_resp_left) {
+            throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): %d bytes exceed the Content-Length of the "
+                "response, of which %d bytes remain", method, size, h1_resp_left);
+        }
+        h1_resp_left -= size;
+        if (!h1_resp_left) {
+            h1_resp = Http1ResponseState::Complete;
+        }
+    }
+
+    #! Ends a chunked body that the handler sends after a header with chunked framing
+    synchronized h1EndChunked(string method) {
+        if (h1_resp != Http1ResponseState::Chunked) {
+            throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): a chunked body is sent after a header with "
+                "chunked framing (Socket::sendHTTPResponseHeader())", method);
+        }
+        h1_resp = Http1ResponseState::Complete;
+    }
+
+    #! Starts the response that the handler sends through the socket of its HTTP/1.x request
+    /** @param method the method of the socket
+        @param status the response's status
+        @param headers the response's header fields
+        @param kind the kind of the send (an Http1ResponseSend value)
+        @param body_size the size of the body of a complete response
+
+        @return True for an interim response, which is sent as a header without a body and leaves the response not
+        started
+
+        @throw HTTP-HANDLER-SOCKET-ERROR a response was sent or started; the response or its framing is not valid
+    */
+    synchronized bool h1StartResponse(string method, int status, hash<auto> headers, int kind, *int body_size) {
+        if (h1_resp != Http1ResponseState::None) {
+            h1Refuse(method, h1_resp == Http1ResponseState::Length || h1_resp == Http1ResponseState::Chunked
+                ? "the response to the HTTP/1.x request of this socket has been started"
+                : "the response to the HTTP/1.x request of this socket has been sent");
+        }
+        if (status == 101) {
+            h1Refuse(method, "a handler cannot switch the protocol of an HTTP/1.x connection");
+        }
+        # the framing fields of the response, whatever the case of their names
+        list<string> cl_keys = ();
+        list<string> te_keys = ();
+        *string event_stream;
+        foreach string k in (keys headers) {
+            switch (k.lwr()) {
+                case "content-length": cl_keys += k; break;
+                case "transfer-encoding": te_keys += k; break;
+                case "content-type":
+                    if (headers{k}.typeCode() == NT_STRING && headers{k} =~ /^\s*text\/event-stream/i) {
+                        event_stream = k;
+                    }
+                    break;
+            }
+        }
+        # an interim response: a header without a body, to an HTTP/1.1 request
+        if (status >= 100 && status < 200) {
+            if (kind == Http1ResponseSend::FullChunked || body_size) {
+                h1Refuse(method, "an interim (1xx) response has no body");
+            }
+            if (cl_keys || te_keys) {
+                h1Refuse(method, "an interim (1xx) response has no Content-Length or Transfer-Encoding");
+            }
+            if (h1_http10) {
+                h1Refuse(method, "an HTTP/1.0 request gets no interim (1xx) response");
+            }
+            return True;
+        }
+        bool no_body = h1_head || status == 204 || status == 304;
+        switch (kind) {
+            case Http1ResponseSend::Full:
+                if (te_keys) {
+                    h1Refuse(method, "the socket frames the response: it cannot have a Transfer-Encoding");
+                }
+                if (event_stream) {
+                    h1Refuse(method, "an event stream is not sent through the socket of an HTTP/1.x request");
+                }
+                if (no_body && body_size) {
+                    h1Refuse(method, "the response has no body");
+                }
+                h1_resp = Http1ResponseState::Complete;
+                return False;
+
+            case Http1ResponseSend::FullChunked:
+                if (cl_keys || te_keys) {
+                    h1Refuse(method, "the socket frames the response: it cannot have a Content-Length or "
+                        "Transfer-Encoding");
+                }
+                if (no_body) {
+                    h1Refuse(method, "the response has no body");
+                }
+                if (h1_http10) {
+                    h1Refuse(method, "an HTTP/1.0 request gets no chunked response");
+                }
+                h1_resp = Http1ResponseState::Complete;
+                return False;
+        }
+        # a response header, whose framing is given in it
+        if (cl_keys.size() > 1 || te_keys.size() > 1) {
+            h1Refuse(method, "the response has more than one Content-Length or Transfer-Encoding");
+        }
+        if (no_body) {
+            # a response without a body has no chunked framing, and a 204 or 304 response no Content-Length but 0
+            # (the Content-Length of the response to a HEAD request is that of the response to a GET request)
+            if (te_keys) {
+                h1Refuse(method, "a response without a body has no Transfer-Encoding");
+            }
+            if ((status == 204 || status == 304) && cl_keys) {
+                auto v = headers{cl_keys[0]};
+                if (v.typeCode() != NT_INT && (v.typeCode() != NT_STRING || v !~ /^0+$/) || v.toInt()) {
+                    h1Refuse(method, "a 204 or 304 response has no Content-Length but 0");
+                }
+            }
+            h1_resp = Http1ResponseState::Complete;
+            return False;
+        }
+        if (cl_keys && te_keys) {
+            h1Refuse(method, "the response has both a Content-Length and a Transfer-Encoding");
+        }
+        if (cl_keys) {
+            auto v = headers{cl_keys[0]};
+            *int length;
+            switch (v.typeCode()) {
+                case NT_INT: length = v >= 0 ? v : NOTHING; break;
+                case NT_STRING: length = (v =~ /^[0-9]+$/) ? v.toInt() : NOTHING; break;
+            }
+            if (!exists length) {
+                h1Refuse(method, "the Content-Length of the response is not valid");
+            }
+            if (!length) {
+                h1_resp = Http1ResponseState::Complete;
+            } else {
+                h1_resp = Http1ResponseState::Length;
+                h1_resp_left = length;
+            }
+            return False;
+        }
+        if (te_keys) {
+            auto v = headers{te_keys[0]};
+            if (v.typeCode() != NT_STRING || v.lwr() !~ /^\s*chunked\s*$/) {
+                h1Refuse(method, "the Transfer-Encoding of the response is not chunked");
+            }
+            if (h1_http10) {
+                h1Refuse(method, "an HTTP/1.0 request gets no chunked response");
+            }
+            h1_resp = Http1ResponseState::Chunked;
+            return False;
+        }
+        h1Refuse(method, "the response header has no Content-Length or chunked framing");
+    }
+
+    #! Records that the handler of the request of an HTTP/2 or HTTP/3 stream, or the server, started its response
+    synchronized markStreamResponseStarted() {
+        stream_response_started = True;
+    }
+
+    #! Returns True if the response of the request of an HTTP/2 or HTTP/3 stream was started
+    synchronized bool isStreamResponseStarted() {
+        return stream_response_started;
+    }
+
+    #! Ends the socket of the current HTTP/1.x request; returns its counter of sends and reads, if any
+    private synchronized *Counter h1EndLocked(reference<int> state) {
+        state = h1_resp;
+        if (h1_live) {
+            h1_live = False;
+            ++h1_gen;
+        }
+        # the sends and reads in progress: the last one that ends releases the returned object
+        if (h1_ops) {
+            return h1_waiter ?? (h1_waiter = new Counter(1));
+        }
+    }
+
+    #! Resets the state for the socket of a new HTTP/1.x request, whose previous socket ended; returns its generation
+    synchronized int h1Reset(Socket real, bool head, bool http10, int max_to) {
+        # the socket of the previous request has ended (see HttpServer::startHandlerSocket())
+        @assert(!h1_live);
+        if (h1_live) {
+            # its sends and reads are refused from now on
+            h1_resp = Http1ResponseState::Broken;
+        }
+        h1_max_to = max_to;
+        h1_real = real;
+        h1_live = True;
+        h1_body = 0;
+        h1_chunk_taken = False;
+        h1_chunk_open = False;
+        h1_resp = Http1ResponseState::None;
+        h1_resp_left = 0;
+        h1_head = head;
+        h1_http10 = http10;
+        return ++h1_gen;
+    }
+
+    #! Raises the exception of a response that the socket of an HTTP/1.x request does not send
+    private static h1Refuse(string method, string why) {
+        throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::%s(): %s", method, why);
+    }
+
 }
 }

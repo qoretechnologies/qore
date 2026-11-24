@@ -141,12 +141,24 @@ public class HttpAsyncSocketIoController {
         #! by subclasses
         static *code<nothing(HttpAsyncSocketIoController, string)> dbg_lingering_close_hook;
 
+        #! the test hook that startDrain() calls after its snapshot of the connections, before it stops accepting (see
+        #! dbgSetDrainSnapshotHook()): not readable by subclasses
+        static *code<nothing(HttpAsyncSocketIoController)> dbg_drain_snapshot_hook;
+
         #! the test hook that the destructor calls first (see dbgSetDestructorHook()): not readable by subclasses
         static *code<nothing(HttpAsyncSocketIoController)> dbg_destructor_hook;
 
         #! Thread pool configuration for recreation after stop(); internal, as it selects functionality such as the
         #! reverse lookup of peers (qore#7056)
         hash<auto> pool_opts;
+    }
+
+    private {
+        #! The HTTP/2 and HTTP/3 connections closed most recently, with why (qore#7443); see getRecentConnectionCloses()
+        list<hash<auto>> recent_closes = ();
+
+        #! Protects @ref recent_closes
+        Mutex recent_closes_lock();
     }
 
     private {
@@ -264,7 +276,7 @@ public class HttpAsyncSocketIoController {
           @ref False "False")
         - \c io_operation_timeout: the time allowed for an I/O operation of a connection: reading the first request
           of a connection, reading a request header after the idle time (\c ttl) of a keep-alive connection, and
-          sending a response (default @ref AsyncSocketIoController::DefaultIoOperationTimeout); must be greater than
+          waiting for progress sending an HTTP/1 response (default @ref AsyncSocketIoController::DefaultIoOperationTimeout); must be greater than
           zero
 
         @throw HTTP-SERVER-INIT-ERROR \c io_operation_timeout is not greater than zero
@@ -301,6 +313,27 @@ public class HttpAsyncSocketIoController {
 
 %ifdef QoreDebug
     #! @cond nodoc
+    #! Sets the test hook that startDrain() calls after its snapshot of the connections (debug builds of the library only)
+    /** For tests: the hook runs after the drain has taken its snapshot of the connections and before it stops
+        accepting, so that a test can have a connection accepted in between (qore#7438).  It is process-wide (it is
+        called by every controller in the process), so only trusted code with process control can set it, and the
+        method exists only in a debug build of the library
+
+        @param hook the hook, called with the controller in the thread of the drain, or @ref nothing to remove it; an
+        exception that it raises is ignored
+
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+    */
+    static dbgSetDrainSnapshotHook(*code<nothing(HttpAsyncSocketIoController)> hook) [dom=PROCESS_CONTROL] {
+        SandboxManager::checkProcessWideRegistration("set the drain snapshot hook of HTTP servers");
+        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+            throw "PERMISSION-DENIED", "cannot set the drain snapshot hook of HTTP servers from a context with "
+                "restricted process control";
+        }
+        dbg_drain_snapshot_hook = hook;
+    }
+
     #! Sets the test hook that the completion of a lingering close calls (debug builds of the library only)
     /** For tests: the hook is process-wide (it is called for the connections of every server in the process), so
         only trusted code with process control can set it, and the method exists only in a debug build of the library
@@ -528,6 +561,14 @@ public class HttpAsyncSocketIoController {
                 }
             }
         }
+        # test hook (a debug build of the library only): between the snapshot of the connections and the cancel of the
+        # accept operations (qore#7438)
+        if (Option::HAVE_LIBRARY_DEBUGGING && dbg_drain_snapshot_hook) {
+            try {
+                dbg_drain_snapshot_hook(self);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
         log(LoggerLevel::INFO, "Async HTTP drain started: %d connection(s) to drain, %d HTTP/2, %d idle, %d HTTP/3 "
             "listener(s)", drain_conns.getCount(), h2ops.size(), idle_socks.size() + fused_socks.size(),
             h3_socks.size());
@@ -626,6 +667,16 @@ public class HttpAsyncSocketIoController {
         return True;
     }
 
+    #! Drains an HTTP/1.x connection that was registered after the drain started (qore#7438)
+    /** The drain's snapshot of the connections (startDrain()) did not have it: as for a connection that waits for a
+        request in the snapshot, the operation that waits for its first request ends at once if none has arrived
+        (and reads it otherwise), and is woken to see the drain
+    */
+    private drainNewH1Connection(Socket sock, string uh) {
+        sock.drainHttpConnection(True);
+        wakeSocketIfPresent(sock, uh, "drain");
+    }
+
     #! Starts the drain of an HTTP/2 connection (a GOAWAY; the connection closes when its streams end)
     private startH2Drain(Http2PollOperation h2op) {
         try {
@@ -664,9 +715,8 @@ public class HttpAsyncSocketIoController {
             case HttpConnectionState::Http3Sending:
                 return ci;
             # an HTTP/1.1 connection that was written after the drain started: its keep-alive operation must end after
-            # its response too (see startDrain()); the first request of a new connection (one that the fused operation
-            # reads, or after its TLS handshake) is served, as the drain flag set here (level 1) closes a connection
-            # only after a response
+            # its response too (see startDrain()); a new connection that waits for its first request is drained by its
+            # registration after this (drainNewH1Connection(), level 2: closed if no request has arrived, qore#7438)
             case HttpConnectionState::KeepAlive:
             case HttpConnectionState::ReadBody:
             case HttpConnectionState::SendAndReadHeader:
@@ -897,16 +947,13 @@ public class HttpAsyncSocketIoController {
             # (qore#6508)
             *LoggerInterface stop_logger = logger;
             try {
-                background sub () {
-                    try {
-                        pool.stopWait();
-                    } catch (hash<ExceptionInfo> ex) {
-                        if (stop_logger) {
-                            stop_logger.error("Async HTTP shutdown stopping handler pool failed: %s: %s", ex.err,
-                                ex.desc);
-                        }
-                    }
-                }();
+                # work of the module cleanup that stops the pool hands itself over to the thread that stops it
+                # (qore#7339); wrapped here, in this thread, as background evaluates its expression in the new
+                # thread; the call is created by a static method, as this stop can run in the destructor, where a
+                # closure created here would refer to the object being destroyed, which background refuses
+                code<nothing()> stop_pool = AsyncIoController::wrapModuleCleanupWork(
+                    HttpAsyncSocketIoController::getPoolStop(pool, stop_logger));
+                background stop_pool();
             } catch (hash<ExceptionInfo> ex) {
                 # no thread can be started (a thread limit): the pool is stopped when it is destroyed
                 logShutdownException("stopping handler pool", ex);
@@ -1077,10 +1124,14 @@ public class HttpAsyncSocketIoController {
         @param sent the transmission result
     */
     private:internal dispatchResponseSendResult(HttpAsyncTarget target, code<nothing(bool)> callback, bool sent) {
+        # work of the module cleanup that reports the result (the cancel of a connection whose response was being
+        # sent) hands itself over to the thread that calls the callback (qore#7339); the call is created by a static
+        # method, as this can run in the destructor (its cancel callbacks), where a closure created here would refer
+        # to the object being destroyed, which background refuses
+        code<nothing()> c = AsyncIoController::wrapModuleCleanupWork(
+            HttpAsyncSocketIoController::getSendResultCall(callback, sent));
         try {
-            submitToHandlerPool(target, sub () {
-                callback(sent);
-            });
+            submitToHandlerPool(target, c);
         } catch (hash<ExceptionInfo> ex) {
             # the handler pool no longer accepts tasks (the controller is stopping); the callback must still be
             # called exactly once
@@ -1088,10 +1139,28 @@ public class HttpAsyncSocketIoController {
                 ex.err, ex.desc);
             # the callback runs in a closure of this module, as on the handler pool: a callable that restricted
             # code created is not scheduled onto another thread itself (qore#7056)
-            background sub () {
-                callback(sent);
-            }();
+            background c();
         }
+    }
+
+    #! Returns a call that reports a transmission result to a callback; static, so that it does not refer to an object
+    private:internal static code<nothing()> getSendResultCall(code<nothing(bool)> callback, bool sent) {
+        return sub () {
+            callback(sent);
+        };
+    }
+
+    #! Returns a call that stops a handler pool; static, so that it does not refer to an object
+    private:internal static code<nothing()> getPoolStop(Priv::HttpHandlerPool pool, *LoggerInterface stop_logger) {
+        return sub () {
+            try {
+                pool.stopWait();
+            } catch (hash<ExceptionInfo> ex) {
+                if (stop_logger) {
+                    stop_logger.error("Async HTTP shutdown stopping handler pool failed: %s: %s", ex.err, ex.desc);
+                }
+            }
+        };
     }
 
     #! Submits a user-code body to the handler thread pool, wrapped in the target's
@@ -1130,6 +1199,10 @@ public class HttpAsyncSocketIoController {
         # (qore#7056)
         check_thread_callable(body, "HttpAsyncSocketIoController::submitToHandlerPool()");
         check_thread_callable(target, "HttpAsyncSocketIoController::submitToHandlerPool()");
+        # work of the module cleanup that dispatches the body (a request of a server that such work started, the end of
+        # a stream of a connection that the cleanup canceled) hands itself over to the handler pool's thread, so that
+        # the cleanup waits until the body has run (qore#7339); code wrapped already is taken as it is
+        body = AsyncIoController::wrapModuleCleanupWork(body);
         Priv::HttpHandlerPool pool = handler_pool;
         pool.submit(handlerTaskRunner(pool));
         pool.tasks.push({"target": target, "body": body});
@@ -2190,15 +2263,18 @@ public class HttpAsyncSocketIoController {
                 "ssl": output.secure ?? False,
             };
             hash<HttpActiveConnectionInfo> cinfo;
+            # set if the drain had started when the connection was registered
+            bool drain_new;
             {
                 AutoWriteLock al(m);
                 cinfo = (connections{uh} @= (draining ? withDrainToken(uh, new_cinfo) : new_cinfo));
+                drain_new = draining;
             }
 
             log(LoggerLevel::DEBUG, "Starting HTTP/2 connection handling for %y", uh);
             submitConnectionOp(uh, cinfo);
             # a connection set up while the server drains is drained as well (it raced startDrain())
-            if (draining) {
+            if (drain_new) {
                 startH2Drain(h2op);
             }
             return;
@@ -2228,13 +2304,30 @@ public class HttpAsyncSocketIoController {
             new_cinfo.ttl = first_request_wait;
         }
         hash<HttpActiveConnectionInfo> cinfo;
+        # set if the drain had started when the connection was registered: the drain's snapshot of the connections
+        # did not have it (qore#7438)
+        bool drain_new;
         {
             AutoWriteLock al(m);
             cinfo = (connections{uh} @= (draining ? withDrainToken(uh, new_cinfo) : new_cinfo));
+            drain_new = draining;
         }
 
         log(LoggerLevel::DEBUG, "Starting HTTP/1.x header reading for %y", uh);
         submitConnectionOp(uh, cinfo);
+        if (drain_new) {
+            drainNewH1Connection(sock, uh);
+        }
+    }
+
+    #! Returns the settings of the bound of a listener's streams, for the header info of a request (qore#7280)
+    private static hash<auto> getStreamSendSettings(*HttpServer::HttpListenerInterface listener) {
+        return {
+            "stream_send_min_rate": listener ? listener.getStreamSendMinRate() : HttpServer::DefaultStreamSendMinRate,
+            "stream_send_min_rate_window": listener
+                ? listener.getStreamSendMinRateWindow()
+                : HttpServer::StreamSendBound::DefaultMinRateWindow,
+        };
     }
 
     #! Submits a QUIC accept operation on a UDP listener
@@ -2538,32 +2631,19 @@ public class HttpAsyncSocketIoController {
         # Same interface as the HTTP/2 wrapper — handlers use this uniformly
         # regardless of protocol.  Uses CV-based waitForQuicStreamDrain()
         # for efficient backpressure instead of polling.
+        hash<auto> send_settings = getStreamSendSettings(linfo.http_listener);
+        HttpServer::StreamSendBound send_bound = HttpServer::StreamSendBound::forHeaderInfo(
+            HttpServer::StreamInteractiveStallTimeout, send_settings);
         code<nothing(*binary, bool)> send_stream_data = sub (*binary data, bool end_stream = False) {
-            int retries = 0;
-            while (listener.submitQuicStreamData(
-                    session_id, stream_id, data, end_stream) == 1) {
-                if (++retries > 200) {
-                    throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: buffer "
-                        "not draining after %d retries", stream_id, retries);
-                }
-                controller.wakeSocket(listener);
-                # CV-based wait: wakes immediately when I/O thread drains
-                # the buffer, falls back to 50ms timeout otherwise
-                int drain_rv = listener.waitForQuicStreamDrain(
-                    session_id, stream_id, 50ms);
-                if (drain_rv == -1) {
-                    throw "HTTP3-STREAM-ERROR", sprintf("stream %d: stream "
-                        "removed while waiting for drain", stream_id);
-                }
-            }
-            controller.wakeSocket(listener);
+            send_bound.sendOrReset(listener, session_id, stream_id, data, end_stream,
+                sub () { controller.wakeSocket(listener); });
         };
 
         # Convert to HttpConnectionInfo (same dispatch chain as HTTP/2)
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
             "sock": listener,
             "hdr": hdr,
-            "header_info": {
+            "header_info": send_settings + {
                 "http3": True,
                 "session_id": session_id,
                 "stream_id": stream_id,
@@ -2867,7 +2947,9 @@ public class HttpAsyncSocketIoController {
                             controller.wakeSocket(cinfo.sock);
                         };
                         HttpServer::StreamResponseProducer producer(cinfo.sock,
-                            stream_id, session_id, result.input_stream, wake_fn);
+                            stream_id, session_id, result.input_stream, wake_fn,
+                            HttpServer::StreamSendBound::forHeaderInfo(HttpServer::StreamStallTimeout,
+                                getStreamSendSettings(cinfo.listener)));
                         producer.start();
                         controller.wakeSocket(cinfo.sock);
                     }
@@ -2877,9 +2959,34 @@ public class HttpAsyncSocketIoController {
                     wakeSocketIfPresent(cinfo.sock, uh, "HTTP/2 handler error response");
                 }
             } catch (hash<ExceptionInfo> ex) {
+                # the handler submitted the response on its stream itself (ex: with a poll operation): the stream is
+                # left to it (qoretechnologies/qore#7212)
+                if (ex.desc =~ /^response already submitted/) {
+                    log(LoggerLevel::DEBUG, "HTTP/3 session=%d stream=%d on %y: the handler submitted the response",
+                        session_id, stream_id, uh);
+                    wakeSocketIfPresent(cinfo.sock, uh, "HTTP/3 response submitted by the handler");
+                    return;
+                }
                 log(LoggerLevel::ERROR,
                     "Error submitting HTTP/3 response for session=%d stream=%d on %y: %s: %s",
                     session_id, stream_id, uh, ex.err, ex.desc);
+                # the client must not wait for a response that is not sent: a response that is refused before
+                # anything is sent (such as a content-length that does not match its body) is answered with an
+                # error; otherwise the stream is cancelled (qoretechnologies/qore#7212)
+                try {
+                    cinfo.sock.submitQuicResponse(session_id, stream_id, 500, {"Content-Type": "text/plain"},
+                        HttpServer::HttpCodes{500});
+                } catch (hash<ExceptionInfo> ex2) {
+                    # a stream that has a response already, which the handler submitted itself, is left to it: it
+                    # is complete or still being sent
+                    if (ex2.desc !~ /^response already submitted/) {
+                        try {
+                            cinfo.sock.cancelQuicStream(session_id, stream_id);
+                        } catch () {
+                        }
+                    }
+                }
+                wakeSocketIfPresent(cinfo.sock, uh, "HTTP/3 refused response");
             }
             # connections{uh} stays: it's the h3op's socket-level entry, not
             # per-request.  Cleaned up on h3op close/error or result.close.
@@ -3009,6 +3116,8 @@ public class HttpAsyncSocketIoController {
 
         try {
             hash<HttpActiveConnectionInfo> cinfo;
+            # set if the drain had started when the connection was registered (qore#7438)
+            bool drain_new;
             if (is_http2) {
                 Http2PollOperation h2op(sock, True);
                 {
@@ -3033,6 +3142,7 @@ public class HttpAsyncSocketIoController {
                         remove conn_info.cx{"peer-info-future"};
                     }
                     cinfo = (connections{uh} @= (draining ? withDrainToken(uh, conn_info) : conn_info));
+                    drain_new = draining;
                 }
             } else {
                 # the listener has fast routes: the first request is read by the fused idle + read header operation,
@@ -3069,13 +3179,19 @@ public class HttpAsyncSocketIoController {
                         remove conn_info.cx{"peer-info-future"};
                     }
                     cinfo = (connections{uh} @= (draining ? withDrainToken(uh, conn_info) : conn_info));
+                    drain_new = draining;
                 }
             }
 
             submitConnectionOp(uh, cinfo);
-            # a TLS handshake that was in progress when the drain started: an HTTP/2 connection is drained as well
-            if (draining && cinfo.stream_op instanceof Http2PollOperation) {
-                startH2Drain(cast<Http2PollOperation>(cinfo.stream_op));
+            # a TLS handshake that was in progress when the drain started, which the drain's snapshot of the
+            # connections did not have as a connection that waits for a request: it is drained as well (qore#7438)
+            if (drain_new) {
+                if (cinfo.stream_op instanceof Http2PollOperation) {
+                    startH2Drain(cast<Http2PollOperation>(cinfo.stream_op));
+                } else {
+                    drainNewH1Connection(sock, uh);
+                }
             }
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "SSL post-handshake setup failed for %s: %s: %s", uh, ex.err, ex.desc);
@@ -3509,10 +3625,17 @@ public class HttpAsyncSocketIoController {
                 # reference is opaque, like that one: nothing that the controller holds references this wrapper or
                 # its closure (the global I/O controller does, until the completion has run), so it is in no cycle
                 HttpAsyncSocketIoController ctrl @= self;
-                submit_op = new DelegatingPollOperation(op,
-                    sub (hash<SocketPollResultInfo> result) {
-                        ctrl.handleConnectionResult(result, uh, state);
-                    });
+                code complete = sub (hash<SocketPollResultInfo> result) {
+                    ctrl.handleConnectionResult(result, uh, state);
+                };
+                if (state == HttpConnectionState::SendStreamResponse || state == HttpConnectionState::SendAndReadHeader
+                        || state == HttpConnectionState::SendStreamAndReadHeader) {
+                    hash<auto> settings = getStreamSendSettings(cinfo.listener);
+                    submit_op = new DelegatingPollOperation(op, complete, NOTHING, io_operation_timeout,
+                        settings.stream_send_min_rate, settings.stream_send_min_rate_window);
+                } else {
+                    submit_op = new DelegatingPollOperation(op, complete);
+                }
             }
             hash<SocketPollOperationInfo> submit_info = <SocketPollOperationInfo>{
                 "sock": cinfo.sock,
@@ -3648,8 +3771,15 @@ public class HttpAsyncSocketIoController {
                 submitConnectionOp(uh, cinfo);
                 return;
             }
-            log(LoggerLevel::DEBUG, "handleConnectionResult: error for %s state=%y: %s: %s",
-                uh, orig_state, result.ex.err, result.ex.desc);
+            # where and why an HTTP/2 operation closed the connection (qore#7443)
+            *string close_reason = result.spop instanceof Http2PollOperation
+                ? cast<Http2PollOperation>(result.spop).getCloseReason()
+                : NOTHING;
+            log(LoggerLevel::DEBUG, "handleConnectionResult: error for %s state=%y: %s: %s%s",
+                uh, orig_state, result.ex.err, result.ex.desc, close_reason ? ": " + close_reason : "");
+            if (result.spop instanceof Http2PollOperation) {
+                recordConnectionClose(uh, "h2", close_reason ?? "the operation failed", result.ex);
+            }
             if (orig_state == HttpConnectionState::SendStreamResponse && cinfo.after_send) {
                 dispatchResponseSendResult(cinfo.target, cinfo.after_send, False);
             }
@@ -3777,7 +3907,11 @@ public class HttpAsyncSocketIoController {
                         submitConnectionOp(uh, new_cinfo);
                     }
                 } else if (h3op.isClosed() || h3op.hasError()) {
-                    log(LoggerLevel::DEBUG, "HTTP/3 connection closed: %y", uh);
+                    # why the listener's operation ended (qore#7443)
+                    *hash<auto> h3err = h3op.getError();
+                    log(LoggerLevel::DEBUG, "HTTP/3 connection closed: %y%s", uh,
+                        h3err ? sprintf(" (%s: %s)", h3err.err, h3err.desc) : "");
+                    recordConnectionClose(uh, "h3", "the HTTP/3 listener's operation ended", h3err);
                     # Notify stream listeners (e.g., WebSocketStreamProcessor) so
                     # handler threads blocked in stream_done.waitForZero() wake up
                     h3op.notifyStreamListenersClosed();
@@ -4063,6 +4197,20 @@ public class HttpAsyncSocketIoController {
             }
         }
 
+        # an HTTP/1.x request whose body has a transfer coding other than chunked is answered with 501 (Not
+        # Implemented), and the connection is closed, as its body cannot be framed (RFC 9112 section 6.1)
+        if ((state == HttpConnectionState::Idle || state == HttpConnectionState::KeepAlive
+                || state == HttpConnectionState::ReadHeader
+                || state == HttpConnectionState::SendAndReadHeader)
+            && ex.err == "HTTP-UNSUPPORTED-TRANSFER-CODING"
+            && cinfo.sock.isOpen()) {
+            log(LoggerLevel::WARN, "HTTP request received on %s with an unsupported transfer coding: %s: %s; "
+                "answering with 501 (Not Implemented)", uh, ex.err, ex.desc);
+            if (sendBadRequest(uh, cinfo, ex.desc, 501, "Not Implemented")) {
+                return;
+            }
+        }
+
         # an HTTP/1.x request header that cannot be read, such as one with a NUL character, is answered with 400
         # (Bad Request), as RFC 9112 requires, and the connection is closed, as the rest of the request cannot be
         # framed; before, the connection was closed without a response
@@ -4100,7 +4248,7 @@ public class HttpAsyncSocketIoController {
         endConnectionSseStream(uh, cinfo);
     }
 
-    #! Answers an HTTP/1.x request whose header could not be read with 400 (Bad Request) or 431 (Request Header Fields Too Large), then closes the connection
+    #! Answers an HTTP/1.x request whose header could not be read with 400 (Bad Request), 431 (Request Header Fields Too Large) or 501 (Not Implemented), then closes the connection
     /** @param uh the connection's unique hash
         @param cinfo the connection
         @param desc why the header could not be read; sent as the body of the response
@@ -4186,15 +4334,19 @@ public class HttpAsyncSocketIoController {
         # the data before the handler can process it.
         # Expect: 100-continue requests fall through to the handler (which sends
         # 100-continue and reads the body synchronously) to avoid a round-trip.
+        # A body larger than DefaultBodyStreamThreshold is not pre-read either: the request is dispatched on its
+        # headers, and the body is read on the handler thread, as a stream in parts by a stream handler that wants
+        # it, whole otherwise, so that the memory that a stream handler needs for a large body is bounded
+        # (qore#7308); a small body is pre-read so that it does not hold a handler thread while it arrives.
         if (!output.info.http2 && !output.info.http3) {
             # the length is parsed as the server does (digits only): a value read differently here would pre-read a
             # body that the handler does not expect, or none that it waits for; an invalid length is left to the
             # handler, which refuses the request
             *int content_length = HttpServer::http_parse_content_length(http_get_field(output.hdr, "content-length"));
             bool has_expect = (http_get_field(output.hdr, "expect") =~ /100-continue/i);
-            bool has_body = (content_length > 0);
+            bool pre_read_body = (content_length > 0 && content_length <= HttpServer::DefaultBodyStreamThreshold);
 
-            if (has_body && !has_expect) {
+            if (pre_read_body && !has_expect) {
                 try {
                     softint cl = content_length;
                     bool conn_close = (http_get_field(output.hdr, "connection") =~ /close/i);
@@ -5134,6 +5286,10 @@ public class HttpAsyncSocketIoController {
     /** For code that must run exactly once, such as the end of a stream.
     */
     private:internal runOnHandlerPool(*HttpAsyncTarget target, code<nothing()> c) {
+        # work of the module cleanup that runs this code on another thread hands itself over to it (qore#7239,
+        # qore#7339); code that cannot run on another thread (qore#7056) is then refused here, in the caller, which
+        # passes only code of this module
+        c = AsyncIoController::wrapModuleCleanupWork(c);
         if (target) {
             try {
                 submitToHandlerPool(target, c);
@@ -5152,6 +5308,10 @@ public class HttpAsyncSocketIoController {
 
     #! Runs code on a thread of its own, or in the calling thread if no thread can be started
     private:internal runOnThreadOfItsOwn(code<nothing()> c) {
+        # work of the module cleanup that runs this code on another thread hands itself over to it (qore#7239,
+        # qore#7339); code that cannot run on another thread (qore#7056) is then refused here, in the caller, which
+        # passes only code of this module
+        c = AsyncIoController::wrapModuleCleanupWork(c);
         try {
             background c();
         } catch () {
@@ -5451,7 +5611,7 @@ public class HttpAsyncSocketIoController {
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
             "sock": dispatch_sock,
             "hdr": hdr,
-            "header_info": {
+            "header_info": getStreamSendSettings(dispatch_listener) + {
                 "http2": True,
                 "stream_id": dispatch_stream_id,
                 "accept-encoding": accept_encoding,
@@ -5755,23 +5915,43 @@ public class HttpAsyncSocketIoController {
         };
 
         # Continue reading on h2op immediately — the CONNECT stream coexists
-        # with other streams on the same connection
-        dispatch_h2op.continueReading();
-        hash<HttpActiveConnectionInfo> new_cinfo;
-        {
-            AutoWriteLock al(m);
-            # Check if connection still exists
-            if (!connections.hasKey(dispatch_uh)) {
-                try { dispatch_sock.close(); } catch () {}
-                return;
+        # with other streams on the same connection.  The handler of another stream can have resumed reading
+        # already, after the request was taken (resumeMultiplexedReading()): continueReading() then raises
+        # HTTP2-STATE-ERROR, as the operation is active again, and the request is dispatched all the same; the I/O
+        # thread is woken to apply the registration of the stream above (qoretechnologies/qore#7354)
+        bool resumed;
+        try {
+            dispatch_h2op.continueReading();
+            resumed = True;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "HTTP2-STATE-ERROR") {
+                rethrow;
             }
-            # Cast to typed hash to update fields and assign back
-            hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{dispatch_uh});
-            conn_info.stream_op = dispatch_h2op;
-            conn_info.state = HttpConnectionState::Http2;
-            new_cinfo = (connections{dispatch_uh} @= (draining ? withDrainToken(dispatch_uh, conn_info) : conn_info));
+            log(LoggerLevel::DEBUG, "HTTP/2 extended CONNECT: %y stream=%d: reading was resumed already: %s",
+                dispatch_uh, dispatch_stream_id, ex.desc);
         }
-        submitConnectionOp(dispatch_uh, new_cinfo);
+        if (resumed) {
+            hash<HttpActiveConnectionInfo> new_cinfo;
+            {
+                AutoWriteLock al(m);
+                # Check if connection still exists
+                if (!connections.hasKey(dispatch_uh)) {
+                    try { dispatch_sock.close(); } catch () {}
+                    return;
+                }
+                # Cast to typed hash to update fields and assign back
+                hash<HttpActiveConnectionInfo> conn_info =
+                    cast<hash<HttpActiveConnectionInfo>>(connections{dispatch_uh});
+                conn_info.stream_op = dispatch_h2op;
+                conn_info.state = HttpConnectionState::Http2;
+                new_cinfo = (connections{dispatch_uh} @= (draining
+                    ? withDrainToken(dispatch_uh, conn_info)
+                    : conn_info));
+            }
+            submitConnectionOp(dispatch_uh, new_cinfo);
+        } else {
+            wakeSocketIfPresent(dispatch_sock, dispatch_uh, "HTTP/2 extended CONNECT after a concurrent resume");
+        }
 
         # Build header hash
         # the fields are given under "headers", and at the top level unless the listener turned it off (the accepted
@@ -5802,37 +5982,18 @@ public class HttpAsyncSocketIoController {
         # Queues data in nghttp2 with transparent backpressure handling,
         # then wakes the I/O controller to flush.  Handlers use this
         # instead of calling sendHttp2StreamData() + io_wake() separately.
+        hash<auto> send_settings = getStreamSendSettings(dispatch_listener);
+        HttpServer::StreamSendBound send_bound = HttpServer::StreamSendBound::forHeaderInfo(
+            HttpServer::StreamInteractiveStallTimeout, send_settings);
         code<nothing(*binary, bool)> send_stream_data = sub (*binary data, bool end_stream = False) {
-            int retries = 0;
-            while (True) {
-                try {
-                    dispatch_sock.sendHttp2StreamData(dispatch_stream_id, data, end_stream);
-                    break;
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "HTTP2-FLOW-CONTROL") {
-                        if (++retries > 200) {
-                            throw "HTTP2-FLOW-CONTROL", sprintf("stream %d: buffer "
-                                "not draining after %d retries", dispatch_stream_id, retries);
-                        }
-                        # Buffer full — wake I/O thread to drain, then wait
-                        # deterministically for the CV signal
-                        controller.wakeSocket(dispatch_sock);
-                        if (dispatch_sock.waitForHttp2StreamDrain(dispatch_stream_id, 10s)) {
-                            throw "HTTP2-STREAM-ERROR", sprintf("stream %d: drain "
-                                "timed out or stream removed", dispatch_stream_id);
-                        }
-                        continue;
-                    }
-                    rethrow;
-                }
-            }
-            controller.wakeSocket(dispatch_sock);
+            send_bound.sendOrReset(dispatch_sock, NOTHING, dispatch_stream_id, data, end_stream,
+                sub () { controller.wakeSocket(dispatch_sock); });
         };
 
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
             "sock": dispatch_sock,
             "hdr": hdr,
-            "header_info": {
+            "header_info": send_settings + {
                 "http2": True,
                 "stream_id": dispatch_stream_id,
                 "is_extended_connect": True,
@@ -6016,7 +6177,9 @@ public class HttpAsyncSocketIoController {
                         controller.wakeSocket(cinfo.sock);
                     };
                     HttpServer::StreamResponseProducer producer(cinfo.sock,
-                        stream_id, NOTHING, result.input_stream, wake_fn);
+                        stream_id, NOTHING, result.input_stream, wake_fn,
+                        HttpServer::StreamSendBound::forHeaderInfo(HttpServer::StreamStallTimeout,
+                            getStreamSendSettings(cinfo.listener)));
                     producer.start();
                     controller.wakeSocket(cinfo.sock);
                     return;
@@ -6053,15 +6216,39 @@ public class HttpAsyncSocketIoController {
                     connection_gone = !cinfo.sock.isOpen();
                 } catch (hash<ExceptionInfo> ex2) {
                 }
+                # the handler submitted the response on its stream itself (ex: with a poll operation): the stream is
+                # left to it (qoretechnologies/qore#7212)
+                if (ex.desc =~ /^response already submitted/) {
+                    log(LoggerLevel::DEBUG, "HTTP/2 stream=%d on %y: the handler submitted the response", stream_id,
+                        uh);
+                    # as after a response that the controller submits
+                    try {
+                        resumeMultiplexedReading(cinfo.stream_op, uh, HttpConnectionState::Http2);
+                        controller.wakeSocket(cinfo.sock);
+                    } catch () {}
+                    return;
+                }
                 log(connection_gone ? LoggerLevel::DEBUG : LoggerLevel::ERROR,
                     "Error submitting HTTP/2 response for stream=%d on %y: %s: %s",
                     stream_id, uh, ex.err, ex.desc);
                 if (!connection_gone) {
-                    # Send RST_STREAM so the client gets an error instead of waiting forever
+                    # a response that is refused before anything is sent (such as a content-length that does not
+                    # match its body) is answered with an error (qoretechnologies/qore#7212); otherwise RST_STREAM is
+                    # sent, so the client gets an error instead of waiting forever
                     try {
-                        cinfo.sock.resetHttp2Stream(stream_id);
+                        cinfo.sock.submitHttp2Response(stream_id, 500, {"Content-Type": "text/plain"},
+                            HttpServer::HttpCodes{500});
+                        resumeMultiplexedReading(cinfo.stream_op, uh, HttpConnectionState::Http2);
                         controller.wakeSocket(cinfo.sock);
-                    } catch () {}
+                    } catch (hash<ExceptionInfo> ex2) {
+                        # a stream that has a response already, which the handler submitted itself, is left to it
+                        if (ex2.desc !~ /^response already submitted/) {
+                            try {
+                                cinfo.sock.resetHttp2Stream(stream_id);
+                                controller.wakeSocket(cinfo.sock);
+                            } catch () {}
+                        }
+                    }
                 }
             }
             return;
@@ -6104,17 +6291,51 @@ public class HttpAsyncSocketIoController {
         }
     }
 
+    #! The number of closed connections kept for getRecentConnectionCloses()
+    const RecentCloseMax = 16;
+
+    #! Returns the HTTP/2 and HTTP/3 connections closed most recently, oldest first, with why (qore#7443)
+    /** For diagnostics: the reason is where and why the server's operation closed the connection.
+
+        @return a list of hashes with the keys \c connection (the connection's key), \c protocol (\c "h2" or
+        \c "h3"), \c reason, \c err and \c desc (the error, if any) and \c closed (when); at most the last 16
+    */
+    list<hash<auto>> getRecentConnectionCloses() {
+        AutoLock al(recent_closes_lock);
+        return recent_closes;
+    }
+
+    #! Records why a connection was closed (see getRecentConnectionCloses()); only called when it is closed
+    private recordConnectionClose(string uh, string protocol, string reason, *hash<auto> error) {
+        hash<auto> entry = {
+            "connection": uh,
+            "protocol": protocol,
+            "reason": reason,
+            "err": error.err,
+            "desc": error.desc,
+            "closed": now_us(),
+        };
+        AutoLock al(recent_closes_lock);
+        push recent_closes, entry;
+        if (recent_closes.size() > RecentCloseMax) {
+            splice recent_closes, 0, 1;
+        }
+    }
+
     #! Handles HTTP/2 connection closed
     private handleHttp2ConnectionClosed(string uh, hash<HttpActiveConnectionInfo> cinfo,
             Http2PollOperation h2op) {
         *hash<auto> error = h2op.getError();
+        # where and why the operation closed the connection (qore#7443)
+        string reason = h2op.getCloseReason() ?? "no reason recorded";
+        recordConnectionClose(uh, "h2", reason, error);
         if (error) {
-            log(LoggerLevel::DEBUG, "HTTP/2 connection closed with error: %y (%s: %s)",
-                uh, error.err, error.desc);
+            log(LoggerLevel::DEBUG, "HTTP/2 connection closed with error: %y (%s: %s): %s",
+                uh, error.err, error.desc, reason);
             dispatchOnError(cinfo.target, cinfo.sock, cast<hash<ExceptionInfo>>(error),
                 cinfo.listener, cinfo.cx, uh, "HTTP/2 connection close");
         } else {
-            log(LoggerLevel::DEBUG, "HTTP/2 connection closed: %y", uh);
+            log(LoggerLevel::DEBUG, "HTTP/2 connection closed: %y: %s", uh, reason);
         }
 
         signalPersistentQueuesForConnection(uh);

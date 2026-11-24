@@ -1,0 +1,43 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ReferenceTypeCacheTest
+
+#! Checks the reference type that a value type caches for the references created at run time
+/** Every reference created at run time has the reference type of the type of its lvalue (reference<T>), which
+    qore_get_complex_reference_type() returns from the value type without a lock once it has been looked up
+    (issue #7269).  The C++ unit tests (debug builds) check that the cached type is always the one that the cache of
+    reference types holds for the value type: when looked up again, by threads that look it up for the first time at
+    once, and when a type is retired with a destroyed class, which must not keep the reference type retired with it.
+    reference-types/reference-types.qtest checks the types of the references in every execution mode.
+*/
+class ReferenceTypeCacheTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ReferenceTypeCache", "1.0", \ARGV) {
+%ifdef QoreDebug
+        addTestCase("C++ unit tests", \testUnitTests());
+%else
+        addTestCase("C++ unit tests", \testRequiresDebugBuild());
+%endif
+        set_return_value(main());
+    }
+
+%ifdef QoreDebug
+    testUnitTests() {
+        hash<auto> res = dbg_run_reference_type_cache_tests();
+        assertGt(0, res.test_count, "the C++ unit tests ran");
+        assertEq(0, res.fail_count, sprintf("all %d C++ unit test assertions passed", res.test_count));
+    }
+%else
+    testRequiresDebugBuild() {
+        testSkip("the C++ unit tests require a debug build of the Qore library: "
+            "dbg_run_reference_type_cache_tests() is only registered when the library is built with DEBUG");
+    }
+%endif
+}

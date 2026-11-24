@@ -1,0 +1,15 @@
+openapi3 trusted, shared True, while held: body, doc, string, subscription, union, with_default
+openapi3 trusted, released: none
+swagger trusted, shared True, while held: doc, field, pet, string
+swagger trusted, released: none
+tenant callers, while the host holds the document: doc, other_field, tenant_field
+tenant callers, the document released: other_field, tenant_field; destructors run: none
+after the tenant's use of its cache: other_field; destructors: tenant-field: in the tenant thread, during the tenant's next use of its cache
+after the other tenant's Program is deleted: none; destructors: other-field: in the host thread, during the deletion of the tenant's Program
+release of a document's values by a class of another Program: PROGRAM-CACHE-ERROR
+release of a document's values by a tenant: PROGRAM-CACHE-ERROR
+release of a document's values by trusted code of another Program: PROGRAM-CACHE-ERROR
+a value set with a group: "value"
+a group of another Program's class: PROGRAM-CACHE-ERROR
+after the release of its group: null
+after the release of the owner: null

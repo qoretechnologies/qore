@@ -611,7 +611,7 @@ private:
     //! The error description of the failed send; see @ref send_failure_pending
     std::string send_failure_desc;
 
-    //! Number of "100 Continue" responses received for the request in flight
+    //! Number of interim (1xx other than 101) responses received for the request in flight
     /** Bounds the work a peer can make the client do - and the recursion depth
         in handleRecvHeader() - by streaming interim responses without ever
         sending a final one.  Reset when a request starts.  I/O thread only.
@@ -750,6 +750,14 @@ private:
     //! Active request method (for HEAD / 1xx / 204 / 304 handling)
     std::string active_method;
 
+    //! True if the active request has an \c Upgrade header, which alone allows a 101 response to it
+    /** RFC 9110 section 15.2.2: a server sends a 101 response only to a request that asks for a protocol upgrade;
+        a 101 response to any other request is an error of the response.  Written with @ref active_method.
+
+        @since %Qore 3.0
+    */
+    bool active_upgrade = false;
+
     //! Next stream ID counter
     int next_stream_id = 0;
 
@@ -795,8 +803,16 @@ private:
 
     static constexpr int MAX_EMPTY_READS = 100;
     static constexpr size_t STREAMING_CHUNK_SIZE = 16384;
-    //! Maximum number of "100 Continue" responses accepted before the final response
+    //! Maximum number of interim (1xx other than 101) responses accepted before the final response
+    /** Each one is read with the size limit of a response header, so the bytes a server can send before the final
+        response are bounded too.
+    */
     static constexpr int MAX_INTERIM_RESPONSES = 16;
+
+    //! Returns true if the status is that of an interim response: 1xx other than 101 (RFC 9110 section 15.2)
+    DLLLOCAL static constexpr bool isInterimStatus(int code) {
+        return code >= 100 && code < 200 && code != 101;
+    }
 
     // --- Internal methods (I/O thread only) ---
 
@@ -1020,6 +1036,14 @@ private:
 
     // Response dispatch
     DLLLOCAL QoreHashNode* dispatchResponse(ExceptionSink* xsink);
+    //! Returns true if the connection is not used again after the complete response
+    /** It is not when data follows the response on it: bytes that the socket has already read past the end of the
+        response, or bytes that can be read now (RFC 9112 section 9.3: a connection is reused only if its data ends
+        where the response ends); a response with no body (to HEAD, 204, 304) is checked as any other.  Nor is it
+        after a 101 response, which ends HTTP/1.x on the connection, or when it failed or was closed locally.  Never
+        blocks.  I/O thread only.
+    */
+    DLLLOCAL bool connectionEndsWithResponse();
     //! Delivers the response headers to the stream; returns true if they were delivered (a stream is active, and no
     //! exception was raised)
     DLLLOCAL bool dispatchStreamingHeaders(ExceptionSink* xsink);
@@ -1039,6 +1063,9 @@ private:
         @param xsink for Qore-language exceptions
         @param arg the underlying exception argument, referenced into the error information hash when present
     */
+    //! returns the extra error information of a request that was not written: \c request_sent is @ref False (qore#7278)
+    DLLLOCAL static QoreHashNode* getUnsentRequestErrorInfo(ExceptionSink* xsink);
+
     DLLLOCAL void setError(const char* err, const char* desc, const QoreHashNode* extra, ExceptionSink* xsink,
         QoreValue arg = QoreValue());
 
@@ -1066,7 +1093,9 @@ private:
     */
     DLLLOCAL int checkResponseBodySize(int64_t size, const char* desc, ExceptionSink* xsink);
     DLLLOCAL bool getStoredError(std::string& err, std::string& desc) const;
-    DLLLOCAL void notifyPendingStreams(const char* err, const char* desc, ExceptionSink* xsink);
+    //! fails the pending request with the given error; a non-NOTHING \a arg (borrowed) is the exception argument
+    DLLLOCAL void notifyPendingStreams(const char* err, const char* desc, ExceptionSink* xsink,
+        QoreValue arg = QoreValue());
     DLLLOCAL void fireReadyCallback(ExceptionSink* xsink);
 
     //! Arms the idle deadline (if not already armed) and annotates \a poll_info

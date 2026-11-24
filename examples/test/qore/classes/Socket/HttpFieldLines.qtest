@@ -8,7 +8,8 @@
 #   a response or trailer (section 5.2); a whitespace line before the first field line is refused (section 2.2)
 # - whitespace in a field name, as between the name and the colon, is refused (section 5.1)
 # - a line without a colon is refused (section 5)
-# - a line may end with LF instead of CRLF (section 2.2)
+# - a line of a response may end with LF instead of CRLF (section 2.2); a line of a request that ends with a bare LF is
+#   refused, as the readers end a header at its first empty line with CRLF line ends
 # Before, a bare CR was kept in the value, whitespace before the colon was kept in the field name, and an obsolete
 # line folding or a line without a colon ended the header: the field lines after it, such as Content-Length, were
 # dropped without an error.
@@ -152,12 +153,13 @@ public class HttpFieldLinesTest inherits QUnit::Test {
         foreach bool async in ((False, True)) {
             string label = async ? "async" : "sync";
             (Socket client, Socket conn) = connect();
-            # a line that ends with LF ends there, also before a line that ends with CRLF
+            # a line of a request that ends with a bare LF is refused
             client.send("POST / HTTP/1.1\nHost: x\nX-B: b\r\nContent-Length: 2\r\n\r\nok");
-            hash<auto> hdr = HttpFieldLinesTest::readHeader(conn, async);
-            assertEq("POST", hdr.method, label);
-            assertEq("/", hdr.path, label);
-            assertEq("x", hdr.host, label);
+            assertThrows("SOCKET-HTTP-ERROR", "bare LF", \HttpFieldLinesTest::readHeader(), (conn, async), label);
+            # a line of a response that ends with LF ends there, also before a line that ends with CRLF
+            conn.send("HTTP/1.1 200 OK\nX-B: b\r\nContent-Length: 2\r\n\r\nok");
+            hash<auto> hdr = HttpFieldLinesTest::readHeader(client, async);
+            assertEq(200, hdr.status_code, label);
             assertEq("b", hdr."x-b", label);
             assertEq("2", hdr."content-length", label);
         }

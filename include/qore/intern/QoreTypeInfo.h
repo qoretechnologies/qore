@@ -442,6 +442,21 @@ public:
     //! computes and caches the type returned by getOrNothingListType()
     DLLLOCAL static const QoreTypeInfo* getOrNothingListTypeIntern(const QoreTypeInfo* lti);
 
+    //! Returns the reference type of this type (reference<T> for T) if it is cached, otherwise nullptr
+    /** Read without a lock by qore_get_complex_reference_type(): the cached type is always the one that the cache of
+        reference types holds for this type, so that the type of a reference has the same identity whichever way it
+        is looked up (qore#7269)
+    */
+    DLLLOCAL const QoreTypeInfo* getComplexReferenceTypeCache() const {
+        return complex_reference_cache.load(std::memory_order_acquire);
+    }
+
+    //! Sets or clears the type returned by getComplexReferenceTypeCache(); the caller holds the lock of the cache of
+    //! reference types and changes its entry for this type at the same time
+    DLLLOCAL void setComplexReferenceTypeCache(const QoreTypeInfo* ti) const {
+        complex_reference_cache.store(ti, std::memory_order_release);
+    }
+
     // static version of method, checking for null pointer
     DLLLOCAL static qore_type_result_e runtimeAcceptsValue(const QoreTypeInfo* ti, const QoreValue n) {
         return ti && hasType(ti) ? ti->runtimeAcceptsValue(n) : QTI_WILDCARD;
@@ -1740,6 +1755,8 @@ private:
     mutable uint16_t builtin_or_nothing_index = 0;
     //! for a complex list type: its list<*T> type; see getOrNothingListType()
     mutable std::atomic<const QoreTypeInfo*> or_nothing_list_cache {nullptr};
+    //! the reference type of this type, if cached; see getComplexReferenceTypeCache()
+    mutable std::atomic<const QoreTypeInfo*> complex_reference_cache {nullptr};
 };
 
 class QoreAnyTypeInfo : public QoreTypeInfo {
@@ -3580,8 +3597,11 @@ public:
 
 protected:
     // returns true if this type could contain an object or a closure
+    /** a reference leads to the closure-bound variable that it refers to, which can hold a reference back (qore#7329):
+        a variable of this type is not a leaf of the graph that the cycle collector walks
+    */
     DLLLOCAL virtual bool needsScanImpl() const {
-        return false;
+        return true;
     }
 };
 
@@ -3592,8 +3612,9 @@ public:
 
 protected:
     // returns true if this type could contain an object or a closure
+    // (a reference leads to the closure-bound variable that it refers to, see QoreReferenceTypeInfo)
     DLLLOCAL virtual bool needsScanImpl() const {
-        return false;
+        return true;
     }
 };
 

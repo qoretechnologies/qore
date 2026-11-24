@@ -1084,7 +1084,8 @@ void AbstractMethod::checkAbstract(const char* cname, const char* mname, vmap_t&
 
 // try to find match non-abstract variants in base classes (allows concrete variants to be inherited from another
 // parent class)
-void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
+bool AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
+    bool changed = false;
     //printd(5, "AbstractMethodMap::parseInit() this: %p cname: %s scl: %p ae: %d\n", this, qc.name.c_str(), scl,
     //    empty());
     for (amap_t::iterator i = begin(), e = end(); i != e;) {
@@ -1108,6 +1109,7 @@ void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
                     scl->parseAddAncestors(m);
                 }
                 qore_method_private::get(*m)->getFunction()->replaceAbstractVariant(v);
+                changed = true;
                 continue;
             }
             ++vi;
@@ -1120,6 +1122,7 @@ void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
             ++i;
         }
     }
+    return changed;
 }
 
 //! returns true if a parent class in \a scl has the abstract variant of the method \a name with the signature \a sig
@@ -3122,32 +3125,31 @@ template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE QoreObject* qore_class_private::execConstructorImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, const QoreListNode* args, const QoreClass* obj_cls,
         bool allow_abstract, const QoreTypeInfo* object_type_info, bool tmp_args) const {
-#ifdef DEBUG
-    if (!allow_abstract) {
-        // instantiation checks have to be made at parse time
-        for (auto& i : ahm) {
-            printd(0, "qore_class_private::execConstructor() %s::constructor() abstract error '%s':\n",
-                name.c_str(), i.first.c_str());
-            vmap_t& v = i.second->vlist;
-            for (auto& vi : v) {
-                printd(0, " + vlist: %s\n", vi.first);
-            }
-            v = i.second->pending_save;
-            for (auto& vi : v) {
-                printd(0, " + pending_save: %s\n", vi.first);
-            }
-        }
-        assert(ahm.empty());
-    }
-#endif
-
-    // check if the class has pending changes and is used in a constant initialization expression
+    // A constant can be evaluated before inherited abstract variants have been resolved.
+    // Only a committed class is ready for the instantiation checks below.
     if (parseHasPendingChanges()) {
         xsink->raiseException("ILLEGAL-CLASS-INSTANTIATION", new QoreStringNodeMaker("cannot instantiate '%s' class "
             "for assignment in a constant expression in the parse initialization phase when the class has "
             "uncommitted changes", name.c_str()));
         return nullptr;
     }
+
+#ifdef DEBUG
+    if (!allow_abstract) {
+        // instantiation checks have to be made at parse time
+        for (auto& i : ahm) {
+            printd(0, "qore_class_private::execConstructor() %s::constructor() abstract error '%s':\n",
+                name.c_str(), i.first.c_str());
+            for (auto& vi : i.second->vlist) {
+                printd(0, " + vlist: %s\n", vi.first);
+            }
+            for (auto& vi : i.second->pending_save) {
+                printd(0, " + pending_save: %s\n", vi.first);
+            }
+        }
+        assert(ahm.empty());
+    }
+#endif
 
     // Guard the recursion-prone construction path before any object work.
     // Member init expressions can instantiate the same class (see Test3 in
@@ -3890,6 +3892,12 @@ int BCNode::initializeHierarchy(QoreClass* cls, qcp_set_t& qcp_set) {
                 if (sclass->priv->scl) {
                     sclass->priv->scl->valid = false;
                 }
+                // the edge that closes the cycle is removed, as for a class that inherits itself
+                // (tryResolveClass()): the code of the classes is still parsed, and the lookups that do not check the
+                // validity of a hierarchy (the run-time ones, which a parse-time check such as the private access of a
+                // pseudo-method lookup uses) would otherwise follow the cycle forever (qore#7464); the parent class is
+                // not resolved again, as its name was released when it was resolved
+                sclass = nullptr;
                 return -1;
             }
             return 0;
@@ -4264,12 +4272,14 @@ void BCNode::initializeBuiltin() {
     }
 }
 
-void BCList::parseResolveAbstract() {
+bool BCList::parseResolveAbstract() {
+    bool changed = false;
     for (auto& i : *this) {
-        if (i->sclass) {
-            i->sclass->priv->parseResolveAbstract();
+        if (i->sclass && i->sclass->priv->parseResolveAbstract()) {
+            changed = true;
         }
     }
+    return changed;
 }
 
 void BCList::rescanParents(QoreClass* cls) {
@@ -4485,13 +4495,17 @@ struct RuntimeFindPublicCommittedMethodLookup {
 //! the search of a class at parse time for the method of a name that a caller outside the class hierarchy can call: as
 //! runtime_public_method_visit() with the parse-time access of the method, so that the parse-time check of a public
 //! method found through private inheritance makes the decision of the run-time check (qore#6798)
-static LookupVisit parse_public_method_visit(const QoreMethod* m) {
+/** With \a abstract_found, a public abstract method is the match, so that the call of a method that the abstract
+    methods of the classes, resolved after the code is parsed, may implement is resolved at run time (qore#7211)
+*/
+static LookupVisit parse_public_method_visit(const QoreMethod* m, bool abstract_found = false) {
     if (!m) {
         return LookupVisit::Descend;
     }
     ClassAccess ma = qore_method_private::getAccess(*m);
     if (ma == Public) {
-        return qore_method_private::get(*m)->isAbstract() ? LookupVisit::Descend : LookupVisit::Found;
+        return (!abstract_found && qore_method_private::get(*m)->isAbstract()) ? LookupVisit::Descend
+            : LookupVisit::Found;
     }
     if (ma == Private) {
         return qore_method_private::get(*m)->getFunction()->hasInheritedPublicVariant() ? LookupVisit::Found
@@ -4506,9 +4520,11 @@ struct ParseFindPublicMethodLookup {
     static constexpr bool CheckValid = true;
     ClassAccess* access = nullptr;
     const char* name;
+    //! see parse_public_method_visit()
+    bool abstract_found;
     const QoreMethod* rv = nullptr;
 
-    ParseFindPublicMethodLookup(const char* name) : name(name) {
+    ParseFindPublicMethodLookup(const char* name, bool abstract_found) : name(name), abstract_found(abstract_found) {
     }
 
     bool cut(const BCNode& n, const qore_class_private* parent) const {
@@ -4518,7 +4534,7 @@ struct ParseFindPublicMethodLookup {
     LookupVisit visit(const BCNode& n, qore_class_private& priv) {
         priv.initialize();
         const QoreMethod* m = Static ? priv.parseFindLocalStaticMethod(name) : priv.parseFindLocalMethod(name);
-        LookupVisit r = parse_public_method_visit(m);
+        LookupVisit r = parse_public_method_visit(m, abstract_found);
         if (r == LookupVisit::Found) {
             rv = m;
         }
@@ -6024,8 +6040,16 @@ qore_type_t QoreClass::getPseudoClassType() const {
         return NT_BOOLEAN;
     }
 
+    if (priv->name == "<buffer>") {
+        return NT_BUFFER;
+    }
+
     if (priv->name == "<callref>") {
         return NT_FUNCREF;
+    }
+
+    if (priv->name == "<char>") {
+        return NT_CHAR;
     }
 
     if (priv->name == "<closure>") {
@@ -6042,10 +6066,6 @@ qore_type_t QoreClass::getPseudoClassType() const {
 
     if (priv->name == "<hash>") {
         return NT_HASH;
-    }
-
-    if (priv->name == "<int>") {
-        return NT_INT;
     }
 
     if (priv->name == "<int>") {
@@ -6621,15 +6641,34 @@ const QoreMethod* qore_class_private::parseFindNormalMethod(const char* nme, con
     return parseCheckContextCallableMethod(nme, parseFindNormalMethodIntern(nme, class_ctx), class_ctx, false);
 }
 
+//! Whether a static lookup should bind to the caller's own method before looking at overrides (qore#7456).
+static bool parse_prefers_own_static_method(const qore_class_private& receiver, const qore_class_private& caller,
+        const QoreMethod& method) {
+    ClassAccess access = Public;
+    return qore_method_private::getAccess(method) == Internal
+        || (qore_method_private::get(method)->getFunction()->hasPrivateInternalVariants()
+            && receiver.inAccessHierarchy(caller, access));
+}
+
 const QoreMethod* qore_class_private::parseFindStaticMethod(const char* nme, const qore_class_private* class_ctx) {
     // if we have a class context, first we have to check here for an internal method
     if (class_ctx) {
         const QoreMethod* m = class_ctx->parseFindLocalStaticMethod(nme);
-        if (m && qore_method_private::getAccess(*m) == Internal)
+        if (m && parse_prefers_own_static_method(*this, *class_ctx, *m)) {
             return m;
+        }
     }
 
     return parseCheckContextCallableMethod(nme, parseFindStaticMethodIntern(nme, class_ctx), class_ctx, true);
+}
+
+//! returns true if the method \a m found by a parse-time lookup can be called with the class context \a class_ctx
+/** A caller outside the class hierarchy (no \a class_ctx) can call a public method and a private method that inherits
+    a public variant (qore#7074), which its lookup returns (qore#7211)
+*/
+static bool parse_lookup_callable(const QoreMethod* m, const qore_class_private* class_ctx) {
+    return class_ctx || qore_method_private::getAccess(*m) == Public
+        || qore_method_private::get(*m)->getFunction()->hasInheritedPublicVariant();
 }
 
 const QoreMethod* qore_class_private::parseFindAnyMethod(const char* nme, const qore_class_private* class_ctx) {
@@ -6651,12 +6690,11 @@ const QoreMethod* qore_class_private::parseFindAnyMethod(const char* nme, const 
     //  m ? privpub(qore_method_private::getAccess(*m)) : "n/a");
 
     if (m && strcmp(nme, "constructor") && strcmp(nme, "destructor") && strcmp(nme, "copy")
-        && ((qore_method_private::getAccess(*m) == Public) || class_ctx)) {
+        && parse_lookup_callable(m, class_ctx)) {
         // a normal method that the class context cannot call: a static method of the name that it can call is called
         // instead, as at run time (qore#6759)
         if (parseContextCannotCall(m, class_ctx)) {
-            const QoreMethod* sm = parseCheckContextCallableMethod(nme, parseFindStaticMethodIntern(nme, class_ctx),
-                class_ctx, true);
+            const QoreMethod* sm = parseFindStaticMethod(nme, class_ctx);
             if (sm && !parseContextCannotCall(sm, class_ctx)) {
                 return sm;
             }
@@ -6664,8 +6702,8 @@ const QoreMethod* qore_class_private::parseFindAnyMethod(const char* nme, const 
         return m;
     }
 
-    m = parseCheckContextCallableMethod(nme, parseFindStaticMethodIntern(nme, class_ctx), class_ctx, true);
-    return m && ((qore_method_private::getAccess(*m) == Public) || class_ctx) ? m : nullptr;
+    m = parseFindStaticMethod(nme, class_ctx);
+    return m && parse_lookup_callable(m, class_ctx) ? m : nullptr;
 }
 
 const QoreMethod* qore_class_private::parseFindAnyMethodStaticFirst(const char* nme,
@@ -6675,7 +6713,7 @@ const QoreMethod* qore_class_private::parseFindAnyMethodStaticFirst(const char* 
     // if we have a class context, first we have to check here for an internal method
     if (class_ctx) {
         m = class_ctx->parseFindLocalStaticMethod(nme);
-        if (m && qore_method_private::getAccess(*m) != Internal) {
+        if (m && !parse_prefers_own_static_method(*this, *class_ctx, *m)) {
             m = class_ctx->parseFindLocalMethod(nme);
             if (m && qore_method_private::getAccess(*m) != Internal) {
                 m = nullptr;
@@ -6686,7 +6724,7 @@ const QoreMethod* qore_class_private::parseFindAnyMethodStaticFirst(const char* 
     if (!m)
         m = parseCheckContextCallableMethod(nme, parseFindStaticMethodIntern(nme, class_ctx), class_ctx, true);
 
-    if (m && ((qore_method_private::getAccess(*m) == Public) || class_ctx)) {
+    if (m && parse_lookup_callable(m, class_ctx)) {
         // a static method that the class context cannot call: a normal method of the name that it can call is called
         // instead (qore#6759)
         if (parseContextCannotCall(m, class_ctx) && strcmp(nme, "constructor") && strcmp(nme, "destructor")
@@ -6706,7 +6744,7 @@ const QoreMethod* qore_class_private::parseFindAnyMethodStaticFirst(const char* 
         m = nullptr;
     }
 
-    return m && ((qore_method_private::getAccess(*m) == Public) || class_ctx) ? m : nullptr;
+    return m && parse_lookup_callable(m, class_ctx) ? m : nullptr;
 }
 
 // searches all methods, both pending and comitted
@@ -6762,10 +6800,24 @@ const QoreMethod* qore_class_private::parseResolveSelfMethod(const QoreProgramLo
     return qc->priv->parseResolveSelfMethod(loc, nme->getIdentifier(), this);
 }
 
+//! returns the method of the name that a caller outside the class hierarchy calls on an object of the class \a cls,
+//! found at parse time as qore_class_private::runtimeFindPublicCommittedMethod() finds it at run time (qore#6798)
+/** With \a abstract_found, a public abstract method is returned (see parse_public_method_visit()): the lookup of a
+    call from outside the class hierarchy (qore#7211)
+*/
+static const QoreMethod* parse_find_public_method(qore_class_private& cls, const char* nme, bool is_static,
+        bool abstract_found = false);
+
 // finds a non-static method in the class hierarchy at parse time, optionally initializes classes
 const QoreMethod* qore_class_private::parseFindNormalMethodIntern(const char* mname, const qore_class_private* class_ctx) {
     QORE_CLASS_HIERARCHY_STEP();
     initialize();
+    // a caller outside the class hierarchy calls the method that it calls at run time: a private method that it cannot
+    // call hides the methods of the name of the parent classes of its class (qore#6062), which are not searched
+    // (qore#7211)
+    if (!class_ctx) {
+        return parse_find_public_method(*this, mname, false, true);
+    }
     const QoreMethod* m = parseFindLocalMethod(mname);
     if (m && doParseMethodAccess(m, class_ctx)) {
         //printd(5, "qore_class_private::parseFindNormalMethodIntern() this: %p '%s' mname: '%s' m: %p\n", this, name.c_str(), mname, m);
@@ -6784,6 +6836,10 @@ const QoreMethod* qore_class_private::parseFindNormalMethodIntern(const char* mn
 // finds a static method in the class hierarchy at parse time, optionally initializes classes
 const QoreMethod* qore_class_private::parseFindStaticMethodIntern(const char* mname, const qore_class_private* class_ctx) {
     initialize();
+    // as for a normal method (qore#7211)
+    if (!class_ctx) {
+        return parse_find_public_method(*this, mname, true, true);
+    }
     const QoreMethod* m = parseFindLocalStaticMethod(mname);
     if (m && doParseMethodAccess(m, class_ctx))
         return m;
@@ -6859,11 +6915,10 @@ static const QoreMethod* parse_find_context_override_method(qore_class_private& 
             skip_public);
 }
 
-//! returns the method of the name that a caller outside the class hierarchy calls on an object of the class \a cls,
-//! found at parse time as qore_class_private::runtimeFindPublicCommittedMethod() finds it at run time (qore#6798)
-static const QoreMethod* parse_find_public_method(qore_class_private& cls, const char* nme, bool is_static) {
+static const QoreMethod* parse_find_public_method(qore_class_private& cls, const char* nme, bool is_static,
+        bool abstract_found) {
     const QoreMethod* m = is_static ? cls.parseFindLocalStaticMethod(nme) : cls.parseFindLocalMethod(nme);
-    LookupVisit r = parse_public_method_visit(m);
+    LookupVisit r = parse_public_method_visit(m, abstract_found);
     if (r == LookupVisit::Found) {
         return m;
     }
@@ -6871,8 +6926,8 @@ static const QoreMethod* parse_find_public_method(qore_class_private& cls, const
         return nullptr;
     }
     return is_static
-        ? lookup_walk<ParseFindPublicMethodLookup<true>>(*cls.scl, nme)
-        : lookup_walk<ParseFindPublicMethodLookup<false>>(*cls.scl, nme);
+        ? lookup_walk<ParseFindPublicMethodLookup<true>>(*cls.scl, nme, abstract_found)
+        : lookup_walk<ParseFindPublicMethodLookup<false>>(*cls.scl, nme, abstract_found);
 }
 
 const QoreMethod* qore_class_private::parseFindContextPublicOverride(const char* nme, const QoreMethod* m,
@@ -10494,28 +10549,35 @@ int qore_class_private::parseResolveHierarchy() {
     return 0;
 }
 
-void qore_class_private::parseResolveAbstract() {
+bool qore_class_private::parseResolveAbstract() {
     // nothing is resolved again for a committed user class (see parseInitPartial())
     if (!parse_resolve_abstract && !(committed && !sys)) {
         parse_resolve_abstract = true;
 
         if (!scl) {
-            return;
+            return false;
         }
 
         // recurses to the base classes whose abstract methods are not yet resolved (see initializeHierarchy())
         if (parse_check_stack(loc)) {
-            return;
+            return false;
         }
-        scl->parseResolveAbstract();
+        bool parents_changed = scl->parseResolveAbstract();
 
         // the abstract variants that the parent classes have implemented since they were merged are not pending here
         // (qore#7206)
         ahm.parseDropResolvedInParents(*this, *scl);
 
         // search for new concrete variants of abstract variants last
-        ahm.parseInit(*this, scl);
+        abstract_dispatch_changed = ahm.parseInit(*this, scl) || parents_changed;
+        // A concrete variant installed on a method precedes the inherited variants checked during parseInit().
+        // Recheck the effective order here and in descendants that can inherit the changed method (qore#7425).
+        if (abstract_dispatch_changed && !sys && !qore_program_ops(getProgram()).parseExceptionRaised()) {
+            DeclarationTypeParamScopeHelper type_param_scope;
+            parseCheckReturnTypeHierarchy();
+        }
     }
+    return !committed && abstract_dispatch_changed;
 }
 
 void qore_class_private::recheckBuiltinMethodHierarchy() {
@@ -11518,12 +11580,12 @@ static bool return_type_compatible(const QoreTypeInfo* parent_rt, const QoreType
 
 // returns the return type of a variant of a method as a class sees it: the type arguments of the class's parent
 // class instantiation are substituted for the type parameters of a generic parent class
-static const QoreTypeInfo* class_return_type(const qore_class_private& cls, const MethodFunctionBase* f,
-        const QoreTypeInfo* rt) {
-    if (!qore_type_contains_type_parameter(rt) || qore_class_private::sameDeclaration(f->getClass(), cls.cls)) {
+static const QoreTypeInfo* class_return_type(const qore_class_private& cls, const MethodVariantBase* v) {
+    const QoreTypeInfo* rt = v->getSignature()->getReturnTypeInfo();
+    if (!qore_type_contains_type_parameter(rt) || qore_class_private::sameDeclaration(v->getClass(), cls.cls)) {
         return rt;
     }
-    const QoreTypeInfo* receiver = cls.getConcreteParameterizedBaseTypeInfo(f->getClass(), false);
+    const QoreTypeInfo* receiver = cls.getConcreteParameterizedBaseTypeInfo(v->getClass(), false);
     return receiver ? qore_substitute_type_params_if_needed(rt, receiver) : rt;
 }
 
@@ -11549,7 +11611,7 @@ int MethodFunctionBase::checkReturnTypeResolution(const qore_class_private& cls,
         }
         pv->parseResolveUserSignature();
         const AbstractFunctionSignature* psig = pv->getSignature();
-        const QoreTypeInfo* prt = class_return_type(cls, &parent_func, psig->getReturnTypeInfo());
+        const QoreTypeInfo* prt = class_return_type(cls, pv);
         if (!QoreTypeInfo::hasType(prt)) {
             continue;
         }
@@ -11575,7 +11637,7 @@ int MethodFunctionBase::checkReturnTypeResolution(const qore_class_private& cls,
                 if (!by_position && !named_variant_may_be_selected(gv, pv)) {
                     continue;
                 }
-                const QoreTypeInfo* grt = class_return_type(cls, g, gsig->getReturnTypeInfo());
+                const QoreTypeInfo* grt = class_return_type(cls, gv);
                 if (return_type_compatible(prt, grt)) {
                     continue;
                 }
@@ -11585,20 +11647,20 @@ int MethodFunctionBase::checkReturnTypeResolution(const qore_class_private& cls,
                 const char* pname = same_name ? QoreTypeInfo::getPath(prt) : QoreTypeInfo::getName(prt);
                 QoreString desc;
                 const QoreProgramLocation* loc;
-                if (qore_class_private::sameDeclaration(g->getClass(), cls.cls)) {
+                if (qore_class_private::sameDeclaration(gv->getClass(), cls.cls)) {
                     const UserSignature* usig = dynamic_cast<const UserSignature*>(gsig);
                     loc = usig ? usig->getParseLocation() : &loc_builtin;
                     desc.sprintf("child class method %s::%s(%s) returning %s cannot %s parent class method %s::%s(%s) "
-                        "returning %s", g->getClass()->getName(), getName(), gsig->getSignatureText(), gname,
+                        "returning %s", gv->getClass()->getName(), getName(), gsig->getSignatureText(), gname,
                         gsig == override_sig ? "override" : "overload", parent_func.getClass()->getName(), getName(),
                         psig->getSignatureText(), pname);
                 } else {
                     loc = cls.loc ? cls.loc : &loc_builtin;
                     desc.sprintf("class '%s' cannot inherit method %s::%s(%s) returning %s with parent class method "
                         "%s::%s(%s) returning %s: calls of '%s' in this class are resolved in %s::%s() first",
-                        cls.name.c_str(), g->getClass()->getName(), getName(), gsig->getSignatureText(), gname,
+                        cls.name.c_str(), gv->getClass()->getName(), getName(), gsig->getSignatureText(), gname,
                         parent_func.getClass()->getName(), getName(), psig->getSignatureText(), pname, getName(),
-                        g->getClass()->getName(), getName());
+                        gv->getClass()->getName(), getName());
                 }
                 if (gsig != override_sig) {
                     desc.concat(by_position
@@ -13750,9 +13812,9 @@ std::string QoreMemberMap::dbgCheckIndex() const {
 }
 #endif
 
-QoreMemberInfo* QoreMemberMap::findIndexed(const MemberIndex& idx, const char* name) {
+QoreMemberInfo* QoreMemberMap::findIndexed(const MemberIndex& idx, const char* name, size_t len) {
     QORE_CLASS_HIERARCHY_STEP();
-    MemberIndex::const_iterator i = idx.find(std::string_view(name));
+    MemberIndex::const_iterator i = idx.find(std::string_view(name, len));
     return i == idx.end() ? nullptr : i->second;
 }
 

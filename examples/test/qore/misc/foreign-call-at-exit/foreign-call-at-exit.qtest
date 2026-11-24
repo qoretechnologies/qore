@@ -24,7 +24,8 @@
 
     The foreign thread is started by staticpgm_foreign_call() of the test module "staticpgmcode"; the scripts make
     the wait short with dbg_set_process_end_foreign_wait() except for one run, which checks the default bound.  Each
-    run is limited by a timeout, so a hang fails the test instead of the run.
+    run is limited by a timeout, so a hang fails the test instead of the run. The module registers a native exit
+    handler: it runs after a normal return and is skipped when cleanup leaves a Program to a foreign thread (#7340).
 */
 class ForeignCallAtExitTest inherits QUnit::Test {
     public {
@@ -36,7 +37,8 @@ class ForeignCallAtExitTest inherits QUnit::Test {
         const BlockedExitOutput = "script exits\n";
 
         #! the output of a script whose foreign call is released by an exit hook
-        const ReturnsOutput = "script ends\nexit hook releases the call\nforeign call returned\n";
+        const ReturnsOutput = "script ends\nexit hook releases the call\nforeign call returned\n"
+            + "staticpgmcode: process exit handler\n";
 
         #! the limit of a run, in seconds
         const Limit = 120;
@@ -48,6 +50,8 @@ class ForeignCallAtExitTest inherits QUnit::Test {
         string env;
         string dir;
         *string timeout_cmd;
+        #! the directory of the qcc executables, removed with the test
+        *TmpDir aot_tmp;
     }
 
     constructor() : QUnit::Test("foreign call at exit", "1.0", \ARGV) {
@@ -55,7 +59,7 @@ class ForeignCallAtExitTest inherits QUnit::Test {
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
-        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+        env = sprintf("QORE_STATICPGM_EXIT_MARKER=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
             libqore_dir);
         dir = get_script_dir();
         foreach string cmd in (("timeout", "gtimeout")) {
@@ -68,7 +72,8 @@ class ForeignCallAtExitTest inherits QUnit::Test {
         addTestCase("exit() with a blocked foreign call", \blockedExitTest());
         addTestCase("a foreign call that returns is waited for", \returnsTest());
         addTestCase("the default bound", \defaultBoundTest());
-        addTestCase("qcc executables", \aotTest());
+        addTestCase("qcc executables: a blocked foreign call", \aotBlockedTest());
+        addTestCase("qcc executables: a foreign call that returns", \aotReturnsTest());
         set_return_value(main());
     }
 
@@ -96,19 +101,27 @@ class ForeignCallAtExitTest inherits QUnit::Test {
             args));
     }
 
-    #! checks the output of a run; the module's own message is not part of it
+    #! The module Program can be cleared during library cleanup; its message is independent of the native exit handler.
     private checkRun(hash<auto> r, int rc, string output, string label) {
         assertEq(rc, r.rc, label + ": status (124: the run hung): " + r.out);
         assertEq(output, replace(r.out, "staticpgmcode: teardown complete\n", ""), label + ": output");
     }
 
     blockedTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the bound of the wait is made short with dbg_set_process_end_foreign_wait(), which only a library "
+                "debug build has");
+        }
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
             checkRun(runScript(mode, "foreign-call-blocked.q", "100"), 0, BlockedOutput, mode);
         }
     }
 
     blockedExitTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the bound of the wait is made short with dbg_set_process_end_foreign_wait(), which only a library "
+                "debug build has");
+        }
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
             checkRun(runScript(mode, "foreign-call-blocked.q", "100 exit"), 5, BlockedExitOutput, mode);
         }
@@ -128,24 +141,38 @@ class ForeignCallAtExitTest inherits QUnit::Test {
         assertGe(10s, now_us() - start, "the end of the process waits for the bound");
     }
 
-    aotTest() {
+    #! a qcc executable that the blocked script is compiled to ends as the script does
+    aotBlockedTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the bound of the wait is made short with dbg_set_process_end_foreign_wait(), which only a library "
+                "debug build has");
+        }
+        *string exe = compileAot("foreign-call-blocked");
+        if (exe) {
+            checkRun(run(exe + " 100"), 0, BlockedOutput, "foreign-call-blocked: AOT");
+            checkRun(run(exe + " 100 exit"), 5, BlockedExitOutput, "foreign-call-blocked: AOT exit()");
+        }
+    }
+
+    #! a qcc executable that the returning script is compiled to waits for the call
+    aotReturnsTest() {
+        *string exe = compileAot("foreign-call-returns");
+        if (exe) {
+            checkRun(run(exe), 0, ReturnsOutput, "foreign-call-returns: AOT");
+        }
+    }
+
+    #! compiles a script with qcc; skips the test if qcc is not available
+    private *string compileAot(string script) {
         if (!is_file(qcc_bin)) {
             testSkip("qcc is not available at " + qcc_bin);
         }
-        TmpDir tmp("foreign-call-at-exit-aot-");
-        foreach string script in (("foreign-call-blocked", "foreign-call-returns")) {
-            string exe = tmp.path + "/" + script;
-            hash<auto> r = run(sprintf("%s -O0 -l staticpgmcode -o %s %s/%s.q", qcc_bin, exe, dir, script));
-            assertTrue(is_file(exe), script + ": qcc compiles the script: " + r.out);
-            if (!is_file(exe)) {
-                continue;
-            }
-            if (script == "foreign-call-blocked") {
-                checkRun(run(exe + " 100"), 0, BlockedOutput, script + ": AOT");
-                checkRun(run(exe + " 100 exit"), 5, BlockedExitOutput, script + ": AOT exit()");
-            } else {
-                checkRun(run(exe), 0, ReturnsOutput, script + ": AOT");
-            }
+        if (!aot_tmp) {
+            aot_tmp = new TmpDir("foreign-call-at-exit-aot-");
         }
+        string exe = aot_tmp.path + "/" + script;
+        hash<auto> r = run(sprintf("%s -O0 -l staticpgmcode -o %s %s/%s.q", qcc_bin, exe, dir, script));
+        assertTrue(is_file(exe), script + ": qcc compiles the script: " + r.out);
+        return is_file(exe) ? exe : NOTHING;
     }
 }

@@ -1,0 +1,11 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# one module's destructor cancels another module's operation while its step is in flight, in the module cleanup
+# (qore#6703); needs a debug build of the library
+
+%requires CleanupCancelAFirst
+%requires CleanupCancelStep
+
+bool held = Holder::start(False);
+CrossHolder::arm(CleanupCancelStep::Owner, Holder::completed);
+printf("held: %y\n", held);

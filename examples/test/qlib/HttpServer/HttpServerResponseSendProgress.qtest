@@ -1,0 +1,114 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 response send progress on a backpressured TCP socket
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires HttpServer
+%requires QUnit
+%exec-class HttpServerResponseSendProgressTest
+
+class ProgressHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue sent();
+        const Size = 16 * 1024 * 1024;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path =~ /ping$/) {
+            return makeResponse(200, "ok");
+        }
+        binary payload = binary(strmul("x", Size));
+        if (hdr.path =~ /stream$/) {
+            return makeResponse(200, new BinaryInputStream(payload), {"Content-Length": Size});
+        }
+        hash<HttpResponseInfo> response = makeResponse(200, payload, {"Content-Type": "application/octet-stream"});
+        if (hdr.path =~ /stalled$/) {
+            response.after_send = sub (hash<auto> cx, bool success) { sent.push(success); };
+        }
+        return response;
+    }
+}
+
+class HttpServerResponseSendProgressTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HTTP/1.1 response send progress", "1.0", \ARGV) {
+        addTestCase("a buffered response completes while the peer keeps reading", sub () { progress(False); });
+        addTestCase("a streamed response leaves time for another request", sub () { progress(True); });
+        addTestCase("a response times out when the peer stops reading", \stalled());
+        addTestCase("the minimum rate bounds a progressing response", \belowRate());
+        set_return_value(main());
+    }
+
+    progress(bool stream) {
+        HttpServer server(<HttpServerOptionInfo>{"io_operation_timeout": 750ms, "ttl": 1s});
+        on_exit server.stop();
+        server.setDefaultHandler("large", new ProgressHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        Socket client();
+        client.connect("127.0.0.1:" + port);
+        on_exit client.close();
+        client.send(sprintf("GET /%s HTTP/1.1\r\nHost: localhost\r\nConnection: %s\r\n\r\n",
+            stream ? "stream" : "buffer", stream ? "keep-alive" : "close"));
+        hash<auto> header = client.readHTTPHeader(5s);
+        assertEq(ProgressHandler::Size, header."content-length".toInt());
+        int total = 0;
+        # Move a full TCP window regularly, for several times the configured timeout.
+        while (total < ProgressHandler::Size) {
+            *binary chunk = client.recvBinary(min(256 * 1024, ProgressHandler::Size - total), 5s);
+            if (!chunk) {
+                break;
+            }
+            total += chunk.size();
+            usleep(30000);
+        }
+        assertEq(ProgressHandler::Size, total, "complete response body");
+        if (stream) {
+            client.send("GET /ping HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+            client.readHTTPHeader(5s);
+            assertEq("ok", client.recv(2, 5s));
+        }
+    }
+
+    stalled() {
+        HttpServer server(<HttpServerOptionInfo>{"io_operation_timeout": 750ms});
+        on_exit server.stop();
+        ProgressHandler handler();
+        server.setDefaultHandler("large", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
+            "stream_send_min_rate": 0}).port;
+        Socket client();
+        client.connect("127.0.0.1:" + port);
+        on_exit client.close();
+        client.send("GET /stalled HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+        client.readHTTPHeader(5s);
+        # Leave the receive buffer full until the server reports the failed send.
+        assertEq(False, handler.sent.get(10s));
+    }
+
+    belowRate() {
+        HttpServer server(<HttpServerOptionInfo>{"io_operation_timeout": 15s});
+        on_exit server.stop();
+        server.setDefaultHandler("large", new ProgressHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
+            "stream_send_min_rate": 128 * 1024 * 1024, "stream_send_min_rate_window": 300ms}).port;
+        Socket client();
+        client.connect("127.0.0.1:" + port);
+        on_exit client.close();
+        client.send("GET /buffer HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+        client.readHTTPHeader(5s);
+        int total = 0;
+        try {
+            while (total < ProgressHandler::Size) {
+                *binary part = client.recvBinary(256 * 1024, 5s);
+                if (!part) {
+                    break;
+                }
+                total += part.size();
+                usleep(30000);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SOCKET-CLOSED", ex.err);
+        }
+        assertTrue(total > 0 && total < ProgressHandler::Size, "the slow transfer ends early");
+    }
+}

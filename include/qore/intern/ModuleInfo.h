@@ -685,6 +685,22 @@ struct QoreAOTModuleFileInfo;
 //! The attributes of the module manager's mutex: an error-checking mutex in a debug build, the default otherwise
 DLLLOCAL const pthread_mutexattr_t* qore_module_manager_mutex_attr();
 
+//! Where the module search found a module: a directory of the module search path and the name it appended
+/** Whether the module is library code is decided by where it was found (see QoreModuleManager::isTrustedModulePath()),
+    whatever the form of the directory's path (qore#7319)
+*/
+struct QoreModuleFoundIn {
+    //! the directory of the module search path, as given (prepended, configured or appended; relative or not)
+    const char* dir;
+    //! the name that the search appended to it: \c "<name>.qm", \c "<name>[-api-X.Y].qmod",
+    //! \c "<name>/<name>[-api-X.Y].qmod" or \c "<name>" (a separated module's directory)
+    std::string rel;
+    //! true if \a dir is a directory of the process-wide module path (which only trusted code sets): a module that is
+    //! library code keeps the path that it was found by only then; otherwise it keeps the canonical path judged, so
+    //! that no later change of a link in a path that a Program chose can lead its reads elsewhere (qore#7319)
+    bool process_path = false;
+};
+
 class QoreModuleManager {
     friend class QoreAbstractModule;
     friend class ModuleLoadMapHelper;
@@ -914,7 +930,8 @@ public:
 
         Reads only data that is set once by init(), so it needs no lock.
     */
-    DLLLOCAL bool isTrustedModulePath(const char* path, std::string* load_path = nullptr) const;
+    DLLLOCAL bool isTrustedModulePath(const char* path, std::string* load_path = nullptr,
+            const QoreModuleFoundIn* found_in = nullptr) const;
 
     //! Gives the Program of an AOT module being initialized the sandbox that the Program of its source module gets
     /** As for a source module (see loadSeparatedModule()), a module that is not library code (see
@@ -1169,6 +1186,16 @@ public:
         rollbackUserModuleDependency(saved);
     }
 
+    //! Passes the native module requirements of the user module \a name, which is being deleted, to the user modules
+    //! that it was applied to at run time without a record (runtime_importer_map) (qore#7310)
+    /** Each such module left requires the native modules that \a name requires, and it is recorded as an importer of
+        the user modules that \a name requires, whose native modules it then requires in their place when they are
+        deleted: the declarations that it imported can name the classes of any of them.  Called by
+        deleteUserModule(), with the mutex held or in the teardown at the end of the process (delUser(), cleanup()),
+        which runs in one thread; cleanup() also records each run-time import as a requirement of its own.
+    */
+    DLLLOCAL void passNativeRequirementsToImporters(const char* name);
+
     DLLLOCAL void removeUserModuleDependency(const char* name, const char* orig_name = 0) {
         //printd(5, "QoreModuleManager::removeUserModuleDependency() name: '%s' orig: '%s'\n", name,
         //    orig_name ? orig_name : "n/a");
@@ -1253,6 +1280,12 @@ public:
         calling this method.
     */
     DLLLOCAL bool hasUserModuleDependencyPath(const std::string& from, const std::string& to);
+
+#ifdef DEBUG
+    //! Test hook (dbg_module_load_waiters()): waits until at least \a count threads wait for the load of \a name
+    //! that another thread runs; returns false on timeout (qore#7232)
+    DLLLOCAL bool dbgWaitLoadWaiters(const char* name, unsigned count, int timeout_ms);
+#endif
 
     //! Attaches the child modules declared by \a mi with the %try-child-module parse directive
     /** Must be called with the mutex held and only after \a mi has been registered in the module map; the
@@ -1361,6 +1394,10 @@ private:
         ModuleLoadState state = MLS_INITIALIZING;
         std::string err;                        // valid iff state == MLS_FAILED
         std::string desc;                       // valid iff state == MLS_FAILED
+        // true if code that is sandboxed or acts for sandboxed code raised the failure: the waiters raise it marked
+        // (qore#7232); valid iff state == MLS_FAILED
+        bool err_sandboxed = false;
+        qore_program_id_t err_pgm_id = 0;       // the ID of the sandboxed Program of the failure, or 0
         unsigned waiters = 0;                   // cross-thread waiters currently parked on this entry
 
         DLLLOCAL ModuleLoadEntry(int tid) : owner_tid(tid) {}
@@ -1389,6 +1426,10 @@ protected:
         see qore_module_manager_mutex_attr()
     */
     QoreThreadLock mutex{qore_module_manager_mutex_attr()};
+#ifdef DEBUG
+    //! signaled when a thread starts to wait for the load of a module in another thread (see dbgWaitLoadWaiters())
+    QoreCondition dbg_load_waiter_cond;
+#endif
 
     // user module dependency map: module -> dependents
     ModMap md_map;
@@ -1408,6 +1449,13 @@ protected:
         records, and a static requirement recorded later removes the entry
     */
     ModMap runtime_dep_map;
+    //! user module -> the user modules whose Programs it was applied to at run time without being recorded as required
+    //! by them, as it requires them (a cycle; see trySetModuleProgramUserDependencyLocked()) (qore#7310)
+    /** Their Programs hold the declarations that they imported from it, which can name the classes of the native modules
+        that it requires: when it is deleted, they require those native modules in its place
+        (passNativeRequirementsToImporters()), so that such a native module is not deleted before them
+    */
+    ModMap runtime_importer_map;
 
     // module blacklist — name and reason are stored as std::string so the map owns
     // its own copies; callers pass through ephemeral buffers (TempEncodingHelper
@@ -1431,6 +1479,9 @@ protected:
         @param held the modules imported into the Programs that still hold data
     */
     DLLLOCAL strset_t getUserModulesLeftForCleanup(const strset_t& held);
+
+    //! Collects direct dependencies and runtime-only edges for both phases of module teardown
+    DLLLOCAL void getTeardownModuleDependencies(struct QoreTeardownDependencies& graph);
 
     //! Gets the modules that the given binary module requires; returns true if it is a native binary module
     /** A native binary module is a binary module that is not an AOT user module; its dependencies are those declared
@@ -1506,7 +1557,8 @@ protected:
             const char* feature = nullptr, bool reexport = false, QoreProgram* mpgm = nullptr,
             QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
             qore_binary_module_desc_t mod_desc = nullptr, bool source_available = false,
-            ExceptionSink* wsink = nullptr, int warning_mask = 0, const char* found_path = nullptr);
+            ExceptionSink* wsink = nullptr, int warning_mask = 0, const char* found_path = nullptr,
+            const QoreModuleFoundIn* found_in = nullptr);
 
     //! Returns the first module request that can be loaded now, from the %try-module requests that failed
     /** Each module is loaded if possible, as a %try-module directive in the source module would; the module
@@ -1582,7 +1634,7 @@ protected:
     DLLLOCAL QoreAbstractModule* loadUserModuleFromPath(ExceptionSink& xsink, ExceptionSink& wsink, const char* path,
             const char* feature = nullptr, QoreProgram* tpgm = nullptr, bool reexport = false,
             QoreProgram* mpgm = nullptr, QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
-            int warning_mask = QP_WARN_MODULES);
+            int warning_mask = QP_WARN_MODULES, const QoreModuleFoundIn* found_in = nullptr);
 
     DLLLOCAL QoreAbstractModule* loadUserModuleFromSource(ExceptionSink& xsink, ExceptionSink& wsink,
             const char* path, const char* feature, QoreProgram* tpgm, const char* src, bool reexport,
@@ -1591,7 +1643,8 @@ protected:
     //! loads separated module. see #2966
     DLLLOCAL QoreAbstractModule* loadSeparatedModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* path,
             const char* feature, QoreProgram* tpgm, bool reexport = false, QoreProgram* mpgm = nullptr,
-            QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE, int warning_mask = QP_WARN_MODULES);
+            QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE, int warning_mask = QP_WARN_MODULES,
+            const QoreModuleFoundIn* found_in = nullptr);
 
     DLLLOCAL QoreAbstractModule* setupUserModule(ExceptionSink& xsink, std::unique_ptr<QoreUserModule>& mi,
             QoreUserModuleDefContextHelper& qmd, unsigned load_opt = QMLO_NONE, int warning_mask = QP_WARN_MODULES);

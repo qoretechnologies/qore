@@ -34,6 +34,7 @@
 #include <qore/QoreFuture.h>
 #include <qore/AsyncCompletionAction.h>
 #include <qore/HttpClientConnectionManager.h>
+#include "qore/intern/QC_SSLTrustStore.h"
 #include "qore/intern/QoreChannel.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
@@ -47,6 +48,7 @@
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/qore_socket_private.h"
 
 #include <cstdio>
 
@@ -62,6 +64,10 @@ Http2ClientConnection::Http2ClientConnection(const char* target_host, int target
     : HttpClientConnectionBase(target_host, target_port, ssl_required),
       max_concurrent_streams_(max_concurrent_streams),
       ssl_config_(ssl_config) {
+    // a reference of its own on the trust store: the connection can outlive its manager
+    if (ssl_config_.trust_store) {
+        ssl_config_.trust_store->ref();
+    }
     if (mgr) {
         setManager(mgr);
     }
@@ -92,6 +98,9 @@ Http2ClientConnection::Http2ClientConnection(QoreObject* adopted_sock_obj,
 Http2ClientConnection::~Http2ClientConnection() {
     ExceptionSink xsink;
     closeConnection(&xsink);
+    if (ssl_config_.trust_store) {
+        ssl_config_.trust_store->deref();
+    }
     if (poll_op_obj) {
         poll_op_obj->deref(&xsink);
         poll_op_obj = nullptr;
@@ -142,6 +151,13 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
         ssl_config_.key->ref();
         sock_priv_raw->setPrivateKey(ssl_config_.key);
     }
+    if (ssl_config_.trust_store) {
+        // an in-memory trust store, which takes precedence over the CA locations (qoretechnologies/qore#7248)
+        qore_socket_object_private(sock_priv_raw).setSslTrustStoreForAsyncPoll(ssl_config_.trust_store, xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
     if (!ssl_config_.ca_file.empty() || !ssl_config_.ca_path.empty()) {
         // the socket is not submitted yet, so it is configured directly
         qore_socket_object_private(sock_priv_raw).setSslCaLocationsForAsyncPoll(
@@ -154,7 +170,7 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
 
     // Apply TCP_USER_TIMEOUT if the manager configured it.  The value is
     // stored on the socket and re-applied by qore_socket_private at the
-    // post-connect hook (confirmConnected).
+    // post-connect hook (applyTcpUserTimeout()).
     if (manager_) {
         int ut_ms = manager_->getOptions().tcp_user_timeout_ms;
         if (ut_ms > 0) {
@@ -669,7 +685,7 @@ void Http2ClientConnection::pushSendData(const void* data, size_t len, Exception
     bool end_stream = (!data || !len);
     if (end_stream) {
         // End-of-body: send empty DATA with END_STREAM
-        poll_op_priv->sendStreamData(streaming_send_stream_id, nullptr, true, xsink);
+        sendStreamDataWaitingForDrain(streaming_send_stream_id, nullptr, true, xsink);
         streaming_send_stream_id = -1;
         finishStreamingSend();
     } else {
@@ -683,11 +699,66 @@ void Http2ClientConnection::pushSendData(const void* data, size_t len, Exception
         }
         memcpy(buf.get(), data, len);
         SimpleRefHolder<BinaryNode> bin(new BinaryNode(buf.release(), len));
-        poll_op_priv->sendStreamData(streaming_send_stream_id, *bin, false, xsink);
+        sendStreamDataWaitingForDrain(streaming_send_stream_id, *bin, false, xsink);
     }
 
     // sendStreamData() delegates to the socket-level enqueue operation, which
     // wakes the controller after the DATA frame is queued.
+}
+
+void Http2ClientConnection::sendStreamDataWaitingForDrain(int64_t stream_id, const BinaryNode* data,
+        bool end_stream, ExceptionSink* xsink) {
+    // the wait is bounded by the request timeout of stalled time, not of total time: a large body that a slow peer
+    // takes makes progress all the while (as HttpClientIo's Http2ClientConnection::sendStreamData(), issue #6968)
+    int stall_timeout_ms = -1;
+    {
+        AutoLocker al(onclose_lock);
+        if (manager_ && manager_->getOptions().request_timeout_ms > 0) {
+            stall_timeout_ms = manager_->getOptions().request_timeout_ms;
+        }
+    }
+    while (true) {
+        poll_op_priv->sendStreamData(stream_id, data, end_stream, xsink);
+        if (!*xsink) {
+            return;
+        }
+        // a full send buffer took nothing of the data: the send waits for the buffer to drain and is made again
+        // (qore#7465); a send on the I/O thread cannot wait
+        // note: the error code can be held in inline short string storage, which has no QoreStringNode
+        QoreStringDataHelper err(xsink->getExceptionErr());
+        if (!err || strcmp(err.c_str(), "HTTP2-FLOW-CONTROL") || !sock_priv || qore_on_async_io_thread()) {
+            return;
+        }
+        xsink->clear();
+        // the buffered data is sent by the I/O thread
+        wakeController();
+        int64_t taken_before = qore_socket_object_h2_stream_taken(sock_priv, stream_id, xsink);
+        // 0: drained, 1: timed out, -1: the stream has no data buffered any more (sent, or the stream or the
+        // connection ended: a reset or the close of the connection ends the wait at once); the send is made again in
+        // each case, and reports a stream or a connection that ended
+#ifdef DEBUG
+        qore_dbg_http_hold(QoreDbgHttpHoldPoint::SendDrainWait, this);
+#endif
+        int rc = *xsink ? -1 : sock_priv->waitForHttp2StreamDrain(static_cast<int32_t>(stream_id),
+            stall_timeout_ms, xsink);
+        if (*xsink) {
+            // the wait failed: the thread was cancelled (THREAD-CANCELLED), its Program was interrupted, or the
+            // session is gone; the data was not sent
+            return;
+        }
+        if (rc == 1) {
+            // no drain within the timeout: a stall only if the connection took nothing of the stream's data
+            int64_t taken_after = qore_socket_object_h2_stream_taken(sock_priv, stream_id, xsink);
+            if (*xsink) {
+                return;
+            }
+            if (taken_after <= taken_before) {
+                xsink->raiseException("HTTP2-FLOW-CONTROL", "stream %lld: the peer took none of the stream's "
+                    "buffered data for %d ms; the data was not sent", (long long)stream_id, stall_timeout_ms);
+                return;
+            }
+        }
+    }
 }
 
 void Http2ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) {

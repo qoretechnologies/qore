@@ -1,0 +1,8 @@
+a callback in a closure of trusted code: built, SHARED-OBJECT-ERROR
+a closure created in a method of an object that the host created: built, SHARED-OBJECT-ERROR
+a constant initializer: built, SHARED-OBJECT-ERROR
+a default argument of a method called by the host: built, SHARED-OBJECT-ERROR
+a global variable initializer: built, SHARED-OBJECT-ERROR
+a member initializer of an object that the host creates: built, SHARED-OBJECT-ERROR
+a static member initializer: built, SHARED-OBJECT-ERROR
+the shared schema's caches are unchanged: type cache True, field cache True, use cache True

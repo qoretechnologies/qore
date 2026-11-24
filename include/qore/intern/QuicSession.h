@@ -152,6 +152,11 @@ struct QuicStreamInfo {
     //! True for client-side streaming responses (SSE, etc.) — enables incremental
     //! body delivery via completed_streams_ (same pattern as CONNECT tunnels)
     bool streaming = false;
+    //! client streaming response: an event with the response headers was taken (QuicSession::takeCompletedStream())
+    /** The headers of a streaming response are delivered when they arrive, also when no body data comes with them
+        (qore#7285); after that, a queued entry of the stream that has no new data and no end is not delivered
+    */
+    bool headers_delivered = false;
     //! client: the stream credit of the response data is granted when the application consumes it (issue #5820)
     bool credit_on_consume = false;
     //! True after the peer asked us to stop sending on this stream (STOP_SENDING)
@@ -237,6 +242,14 @@ struct QuicStreamingBodyData {
     std::vector<uint8_t> pending_pong;
     //! true once a WebSocket close frame was staged past the limit (once per stream; issue #5900)
     bool close_frame_staged = false;
+    //! a response without content (to HEAD, or with status 204 or 304): its data is not sent (qore#7212)
+    bool no_body = false;
+    //! the declared length of the response's content, -1 if not declared (qore#7212)
+    int64_t content_length = -1;
+    //! the bytes of the response's content provided to nghttp3 so far
+    uint64_t provided = 0;
+    //! true once the content is longer or shorter than declared: the stream is reset instead of ended (qore#7212)
+    bool length_error = false;
 };
 
 class qore_socket_private;
@@ -246,6 +259,8 @@ class HttpFastContext;
 struct QuicTimerWriteResult {
     ngtcp2_tstamp next_expiry = UINT64_MAX;  //!< next timer expiry after processing
     bool error = false;                       //!< true if an error occurred
+    //! the datagrams at the front of the batch that earlier sends did not send (see QuicSession::sendPackets())
+    int kept = 0;
 };
 
 //! A received QUIC packet ready for batch processing
@@ -446,6 +461,9 @@ public:
     DLLLOCAL int writePackets(QuicPacketBatch& batch, ExceptionSink* xsink);
 
     //! Get next timer expiry in nanoseconds (UINT64_MAX if none)
+    /** For a poll timeout: no later than the time to send again the datagrams kept after a send that failed with
+        ENOBUFS (see sendPackets())
+    */
     DLLLOCAL ngtcp2_tstamp getExpiry() const;
 
     //! Handle timer expiry (retransmission, keep-alive, etc.)
@@ -454,11 +472,39 @@ public:
     //! Coalesced timer check + packet generation under a single lock acquisition
     /** Replaces the separate getExpiry() → handleExpiry() → writePackets() → getExpiry()
         sequence with a single lock acquisition.
-        @param packets output: generated QUIC packets
+        The datagrams that earlier sends did not send (see sendPackets()) come first in @p packets, before those
+        written now.
+
+        @param packets output: generated QUIC packets, after the datagrams of @p packets on entry
         @param xsink exception sink
-        @return result containing next_expiry and error flag
+        @return result containing next_expiry, the number of datagrams kept from earlier sends, and error flag
     */
     DLLLOCAL QuicTimerWriteResult processTimerAndWrite(QuicPacketBatch& packets, ExceptionSink* xsink);
+
+    //! Sends the datagrams that processTimerAndWrite() wrote, and keeps those not sent for the session's next write
+    /** ngtcp2 counts a datagram as sent when it writes it, so one that is not sent is lost to the connection, which
+        recovers it only with its loss recovery (PTO), with exponential backoff.  The datagrams not sent are kept by
+        the session, not by the operation that sent them: the next processTimerAndWrite() puts them first, so that
+        whichever operation writes next for the session sends them before any written after them, and in order
+        (qore#7414).  A send that failed with ENOBUFS waits with a backoff (QuicSendBackoff; see getSendRetryAt()).
+
+        Called on the I/O thread of the session's socket, as processTimerAndWrite() is.
+
+        @param fd the socket
+        @param batch the datagrams to send; empty on return, also on an error
+        @param addr destination address, or nullptr for connected UDP sockets
+        @param addrlen destination address length, or 0 for connected UDP sockets
+        @param local_addr per-session local address for source IP pinning, or nullptr
+        @param local_addrlen local address length, or 0
+
+        @return how the datagrams kept are sent again; QuicSendResult::Error with errno set, with the datagrams not
+        sent dropped, for an error that is not retried
+    */
+    DLLLOCAL QuicSendResult sendPackets(int fd, QuicPacketBatch& batch, const struct sockaddr* addr,
+            socklen_t addrlen, const struct sockaddr* local_addr = nullptr, socklen_t local_addrlen = 0);
+
+    //! Returns the time to send again the datagrams kept after a send that failed with ENOBUFS, or UINT64_MAX
+    DLLLOCAL ngtcp2_tstamp getSendRetryAt() const;
 
     //! Process a batch of received packets under a single lock acquisition
     /** Replaces N separate readPacket() calls with a single lock acquisition.
@@ -785,6 +831,13 @@ public:
     */
     DLLLOCAL void releaseStream(int64_t stream_id);
 
+    //! Returns true if ngtcp2 still has the bidirectional stream open (either side of it has not ended)
+    /** A client stream whose response ended while its request side is still open (an extended CONNECT tunnel)
+        stays open until the client ends it, and counts against the peer's limit of streams for the life of the
+        connection (qore#7443)
+    */
+    DLLLOCAL bool isBidiStreamOpen(int64_t stream_id) const;
+
     //! Get the number of bytes in unacknowledged sent packets
     /** Uses ngtcp2_conn_get_conn_info() to read the connection-level
         bytes_in_flight counter.  A non-zero value means some packets have not
@@ -793,6 +846,18 @@ public:
         @return bytes in flight (0 if all sent data has been ACKed)
     */
     DLLLOCAL uint64_t getBytesInFlight() const;
+
+    //! true for a server session, false for a client session
+    DLLLOCAL bool isServer() const {
+        return is_server_;
+    }
+
+#ifdef DEBUG
+    //! Debug-only, for tests: the packets that the connection sent, and those of them that it declared lost
+    /** @return false if the connection is not set up
+    */
+    DLLLOCAL bool getPacketCounts(uint64_t& sent, uint64_t& lost) const;
+#endif
 
     //! Remove a dispatched stream from the session map
     /** Called after the handler has finished processing all body data.
@@ -880,32 +945,64 @@ public:
         Idle       = 1,  //!< local NGTCP2_ERR_IDLE_CLOSE — our own idle timer expired
         LocalClose = 2,  //!< we sent CONNECTION_CLOSE (in_closing_period)
         PeerClose  = 3,  //!< peer sent CONNECTION_CLOSE (in_draining_period)
-        //! a client connection on which the peer sent nothing for its peer response timeout after a request was
-        //! submitted (see setPeerResponseTimeout()): the peer's connection state is gone (ex: it restarted)
+        //! a client connection whose peer did not show within its peer response timeout that it received a request
+        //! (see setPeerResponseTimeout()): the peer's connection state is gone (ex: it restarted)
         Unresponsive = 4,
+        //! a client connection that the server reset with a stateless reset (RFC 9000 section 10.3): it has no state
+        //! for the connection (ex: it restarted) (qore#6931)
+        StatelessReset = 5,
     };
 
     //! The peer response timeout of a client connection when its client gives no connect timeout
     static constexpr uint64_t QUIC_DEFAULT_PEER_RESPONSE_TIMEOUT_NS = 30ULL * NGTCP2_SECONDS;
 
     //! Sets the peer response timeout of a client connection (qore#6930)
-    /** A request submitted on the connection arms a deadline this long after its submission, which any packet
-        received from the peer disarms: a live peer acknowledges the request within its maximum ACK delay.  If the
-        deadline passes, the peer has not received the request (QUIC acknowledges every packet it receives), so its
-        connection state is gone (ex: the server restarted, which a stateless reset reports only if the server can
-        still compute one), and the connection is closed with @ref CloseReason::Unresponsive, instead of waiting for
-        the idle timeout.  0 disables it; it is at most the connection's idle timeout.
+    /** Each request submitted on the connection must show within this time after its submission that the peer
+        received it: the peer acknowledges data of the request's stream, sends data on it, or the stream closes; a
+        live peer acknowledges the request within its maximum ACK delay.  If the time passes for a request, the peer
+        has not received it (QUIC acknowledges every packet it receives), so its connection state is gone (ex: the
+        server restarted, which a stateless reset reports only if the server can still compute one), and the
+        connection is closed with @ref CloseReason::Unresponsive, instead of waiting for the idle timeout.  Another
+        packet from the peer does not show it: one that the peer sent before it received the request (or before it
+        stopped) can arrive after the submission (qore#7452).  0 disables it; it is at most the connection's idle
+        timeout.
     */
     DLLLOCAL void setPeerResponseTimeout(uint64_t timeout_ns);
 
 private:
-    //! arms the deadline for a packet from the peer after a request, if it is not armed (client connections only)
-    DLLLOCAL void armPeerResponseDeadlineLocked();
+    //! records a request submitted on the stream for the peer response timeout (client connections only)
+    DLLLOCAL void notePeerResponseWaitLocked(int64_t stream_id);
+
+    //! the peer showed that it received the request of the stream, if it waits for that (see setPeerResponseTimeout())
+    DLLLOCAL void endPeerResponseWaitLocked(int64_t stream_id) {
+        if (!peer_response_waits_.empty()) {
+            peer_response_waits_.erase(stream_id);
+        }
+    }
+
+    //! the time by which the peer must show that it received the oldest request that it has not shown to have received,
+    //! or 0 if none (see setPeerResponseTimeout())
+    DLLLOCAL ngtcp2_tstamp peerResponseDeadlineLocked() const {
+        return peer_response_waits_.empty() ? 0 : peer_response_waits_.begin()->second + peer_response_timeout_ns_;
+    }
 
 public:
 
     //! Returns the close cause; @ref CloseReason::Open if still open.
     DLLLOCAL CloseReason getCloseReason() const;
+
+    //! Returns a description of a close cause, for diagnostics (qore#7443)
+    DLLLOCAL static const char* getCloseReasonName(CloseReason reason) {
+        switch (reason) {
+            case CloseReason::Open: return "open";
+            case CloseReason::Idle: return "its idle timer expired";
+            case CloseReason::LocalClose: return "closed locally (CONNECTION_CLOSE sent)";
+            case CloseReason::PeerClose: return "closed by the peer (CONNECTION_CLOSE received)";
+            case CloseReason::Unresponsive: return "the peer did not acknowledge a request (peer response timeout)";
+            case CloseReason::StatelessReset: return "reset by the peer (stateless reset)";
+        }
+        return "unknown";
+    }
 
     //! Drains the stream IDs reset/stop-sent by the peer since the last call
     /** One-shot reporting channel for the H3 server poll operation: each peer
@@ -1465,9 +1562,15 @@ public:
     DLLLOCAL bool hasActiveStreamInputStreams() const;
 
     //! Process one chunk from each active InputStream (called by I/O thread)
-    /** @since %Qore 3.0
+    /** An error of one stream ends that stream only: it is logged and the stream is reset for the client; no error
+        is raised in \a xsink, which is unused (qore#7434)
+
+        @since %Qore 3.0
     */
     DLLLOCAL void processStreamInputStreams(ExceptionSink* xsink);
+
+    //! Reads and sends the next chunk of one stream's InputStream; an error is the stream's alone (qore#7434)
+    DLLLOCAL void processStreamInputStream(int64_t stream_id, StreamInputStreamInfo& info, ExceptionSink* xsink);
 
     //! Clean up all InputStreams (called on session destruction)
     /** @since %Qore 3.0
@@ -1711,6 +1814,10 @@ private:
         the stream closed, which needs the peer's acknowledgment of that RESET_STREAM, so a response could be read
         whole while a send still went out unreported.  See @ref recordPeerStopSending().
     */
+    //! a stateless reset that ends a client connection (qore#6931): its close reason is then StatelessReset
+    DLLLOCAL static int recvStatelessResetCallback(ngtcp2_conn* conn, const ngtcp2_pkt_stateless_reset* sr,
+        void* user_data);
+
     DLLLOCAL static int recvStopSendingCallback(ngtcp2_conn* conn, int64_t stream_id, uint64_t app_error_code,
                                    void* user_data, void* stream_user_data);
 
@@ -1738,6 +1845,7 @@ private:
         @param app_error_code the application error code the peer sent
     */
     DLLLOCAL void recordPeerStreamReset(int64_t stream_id, uint64_t app_error_code);
+
 
     //! Handshake completed
     DLLLOCAL static int handshakeCompletedCallback(ngtcp2_conn* conn, void* user_data);
@@ -1935,10 +2043,14 @@ private:
     ngtcp2_duration local_idle_timeout_ns_ = QUIC_IDLE_TIMEOUT_NS; //!< advertised idle timeout for this session
     //! the peer response timeout (see setPeerResponseTimeout()); mtx_ must be held to access it
     uint64_t peer_response_timeout_ns_ = 0;
-    //! the deadline armed by a request for a packet from the peer, 0 if none; mtx_ must be held to access it
-    ngtcp2_tstamp peer_response_deadline_ = 0;
+    //! the submission times of the requests that the peer has not shown to have received, by stream ID (in the order
+    //! of their submission, as a client opens its streams in order); mtx_ must be held to access it (see
+    //! setPeerResponseTimeout())
+    std::map<int64_t, ngtcp2_tstamp> peer_response_waits_;
     //! set when the connection was closed because the peer did not respond (see setPeerResponseTimeout())
     std::atomic<bool> peer_unresponsive_{false};
+    //! set when the server reset the client connection with a stateless reset (qore#6931)
+    std::atomic<bool> stateless_reset_received_{false};
     int64_t max_request_body_size_ = 0;             //!< maximum request body size (0 = unlimited); consistent with Http2Session
     //! Maximum size of a client response body received into memory; <= 0 = no limit
     // atomic: set from the thread that polls the session while it can be read by callbacks
@@ -2099,6 +2211,35 @@ private:
 
     //! Streaming body data for incremental sending (used by data reader callback)
     std::unordered_map<int64_t, QuicStreamingBodyData> streaming_body_data_;
+
+    //! server: the streams whose response has been submitted, with or without a body, until they close
+    /** A second response on a stream would send a second HEADERS frame, a malformed message (RFC 9114 section 4.1),
+        so every response submit refuses a stream in this set (qoretechnologies/qore#7212)
+    */
+    std::unordered_set<int64_t> responded_streams_;
+
+    //! server: the streams whose streamed response broke its declared length, to be reset after the HTTP/3 layer's
+    //! callback that found it (qore#7212)
+    std::vector<int64_t> pending_length_resets_;
+
+    //! Resets the streams of pending_length_resets_; the caller holds the lock and is outside of nghttp3's callbacks
+    DLLLOCAL void applyLengthResetsLocked();
+
+    //! Records that a streamed response broke its declared length (\a len bytes): the stream is reset after the
+    //! callback; the caller holds the lock
+    DLLLOCAL void noteLengthErrorLocked(int64_t stream_id, QuicStreamingBodyData& sbd, uint64_t len);
+
+    //! Returns the request method of a server stream, or an empty string; the caller holds the lock
+    DLLLOCAL std::string streamMethodLocked(int64_t stream_id) const {
+        auto it = streams_.find(stream_id);
+        return it == streams_.end() ? std::string() : it->second->method;
+    }
+
+    //! Returns true if a response has been submitted on the stream; the caller holds the lock
+    DLLLOCAL bool responseSubmittedLocked(int64_t stream_id) const {
+        return responded_streams_.count(stream_id) || body_data_.count(stream_id)
+            || streaming_body_data_.count(stream_id);
+    }
 
     //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
     std::unordered_map<int64_t, size_t> deferred_stream_credit_;
@@ -2263,6 +2404,11 @@ private:
     //! markStreamComplete) that also need the lock. A non-recursive mutex
     //! would deadlock.
     mutable std::recursive_mutex mtx_;
+
+    //! the datagrams that a send did not send, which the next processTimerAndWrite() puts first (qore#7414)
+    QuicPacketBatch unsent_;
+    //! the delay of unsent_ after a send that failed with ENOBUFS
+    QuicSendBackoff send_backoff_;
 
     //! Socket objects to wake when stream drain notifications fire
     std::mutex drain_waiters_mtx_;

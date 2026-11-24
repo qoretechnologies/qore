@@ -188,6 +188,11 @@ QoreValue QoreExtractOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* 
         return QoreValue();
     }
 
+    // a list freed under a weak reference cannot be changed, as by the other changes (qore#7199)
+    if (vt == NT_LIST && qore_list_private::get(*val.getValue().get<QoreListNode>())->checkValid(xsink)) {
+        return QoreValue();
+    }
+
     size_t offset = (size_t)eoffset->getAsBigInt();
 
 #ifdef DEBUG
@@ -218,6 +223,10 @@ QoreValue QoreExtractOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* 
                 } else {
                     rv = qore_list_private::replace(*vl, offset, length, *exp, true, xsink);
                 }
+        }
+        // the elements taken out of a list reached through a weak reference (qore#7373)
+        if (rv) {
+            val.removedValueThroughWeak(QoreValue(*rv));
         }
     }
     else if (vt == NT_STRING) {

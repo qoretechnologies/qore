@@ -314,6 +314,50 @@ The work that the cleanup hands to other threads is part of the cleanup, and the
     its operations are canceled when admitted and its tasks waited for (a message delivery), and the cleanup thread
     itself can do all of it (its operations are canceled by its next round).
     Synchronous I/O and `AsyncIoController::exec()`, which use the internal `submit()`, are not refused
+  - work that the cleanup counts and that module code hands over to a thread that is already running, or to a thread of
+    its own, stays counted until that thread has done it (qore#7239, qore#7339): the work takes a handle with
+    `AsyncIoController::holdModuleCleanupWork()` (`qore_module_cleanup_hold_work()`; 0 outside of counted work, which
+    `QoreModuleCleanupCountedWorkScope` marks on a dispatcher worker, in `releaseWorkItem()`,
+    `QoreCallDispatcher::stop()` and `AsyncIoDeferredRelease::release()`, and `qore_module_cleanup_task_running` in a
+    task), which the other thread releases with `releaseModuleCleanupWork()`, or runs the code with
+    `runModuleCleanupWork()`, which marks it as counted work while it runs (so that it can hand work over in turn) and
+    releases the handle when it returns (or not, with `release` False, for a thread that releases its handles itself).
+    Code given to another thread is wrapped with `AsyncIoController::wrapModuleCleanupWork()`: outside of counted work
+    it returns the code as it is (and code it wrapped already), and in counted work it checks the code with
+    `qore_check_thread_callable()`, takes a handle and returns a native call reference
+    (`ModuleCleanupWorkReferenceNode`) that runs the code as counted work and releases the handle when the code returns,
+    raises an exception, or when the reference is destroyed without having run.  The wrapped code runs once: the first
+    call takes the code and releases it (with what only it keeps alive) as counted work before it releases the handle,
+    and a later call raises `MODULE-CLEANUP-WORK-ERROR`; unrun code is released as counted work too.  Code is wrapped in
+    the thread that hands it over, into a local, before `background` (which evaluates its whole expression, the wrap
+    included, in the new thread, where it is not counted work); and a closure handed over from a method that can run in
+    its object's destructor is created by a static method (`ResponseAfterSendNotifier::getCall()`,
+    `HttpAsyncSocketIoController::getSendResultCall()` and `getPoolStop()`, `LlmAsyncSseRequest::getStop()`), as
+    `background` refuses a closure that refers to an object being destroyed (`BACKGROUND-CLOSURE-INVALID-CAPTURE`),
+    which the wrap returns as it is outside of counted work.  The handover sites: the admission gates that leave a
+    notification to the thread already processing (`WebSocketStreamProcessor::notifyIo()`,
+    `HttpWebSocketPollOperation::onPollComplete()` and `onComplete()`, WebSocketClient's delivery task, the draining
+    gate of QoreLlmTypes' `LlmAsyncOperation`, whose posted tasks carry their own handles), which push a handle and run
+    each pass (or frame, or message round) as counted work under the first handle left to them, then release the
+    handles; and the code given to another thread through `wrapModuleCleanupWork()`:
+    `HttpAsyncSocketIoController::submitToHandlerPool()` (centrally), `runOnThreadOfItsOwn()`, `runOnHandlerPool()`,
+    `dispatchResponseSendResult()` (after_send), the end of an HTTP/1.1 WebSocket connection
+    (`HttpWebSocketPollOperation::scheduleDoneCallback()`), `HttpPersistentRequestEnd::notify()`, the pool stop in the
+    controller's `stop()`, HttpServer's handler-pool submitter and `ResponseAfterSendNotifier`, QoreLlmTypes' transport
+    stop and McpClient's server-request thread.  The gates release the handles left to them when their object is
+    destroyed.  Each handle is counted in the cleanup's count and listed with who took it and where; after the deadline
+    the cleanup waits for handles at most the grace period (`qore_get_module_cleanup_handover_grace()`:
+    `QORE_MODULE_CLEANUP_HANDOVER_GRACE` or `--module-cleanup-handover-grace`, by default the deadline but at least 5 s,
+    measured from the deadline); then it names the handles still held in a warning, stops counting them, and sets
+    `qore_module_cleanup_abandoned()`, after which `delUser()` deletes no further module and `qore_cleanup()` leaves the
+    modules and their Programs as they are, as for a foreign thread in module code, instead of tearing them down under
+    the threads that hold the handles.  Other counted work is waited for as before.  `ModuleCleanupCancel.qtest` checks:
+    the servers case (the end of the canceled server connection runs with a handle held); the gate cases (HTTP/2 and
+    HTTP/1.1: the held notification of the next frame hands the cleanup's work over at the gate, the frame is processed
+    as that work and before the next module's data is deleted, and the end of the connection is handed over); the
+    WebSocketClient delivery gate, the LLM post and the after_send cases; and the handover cases (release twice, a
+    handle outside counted work, a handle never released, discarded handed-over code, wrapped code run on another thread
+    and wrapped code that raises an exception)
   - the three windows of the drain (a step in flight at the cancel, an operation that completes after the wait and
     before the cancel round, a timer that fires after the scan of the timers) are pinned by debug hooks
     (`dbg_async_io_module_cleanup_drain_releases()` with the step-result and timer-callback holds; the first two at

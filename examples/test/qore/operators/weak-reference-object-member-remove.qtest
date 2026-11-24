@@ -1,0 +1,118 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the removal of object members through weak references
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class WeakReferenceObjectMemberRemoveTest
+
+#! remove and delete of a member of an object reached through a weak reference remove the member (qore#7346)
+/** In the AST interpreter, remove and delete of a member, a key or a slice of members of an object that an lvalue
+    holds through a weak reference removed nothing (remove gave NOTHING); the IR interpreter, the JIT and qcc removed
+    the member.  The program covers declared, typed, undeclared and private members, slices, delete of a member that
+    holds an object, weak references held by a hash, a list, a member, a closure, a global, a static class variable
+    and the object itself, nested paths, a class with a memberGate() method (read gate) and a deleted object.  Every
+    mode must print the output of the AST.  A second program, which needs the library debugging functions, checks that
+    a member removed through a weak reference changes the recursive graph of the object as one removed through a
+    strong reference does: an object that is still referenced is not collected, which it was in every mode, and a
+    cycle broken is collected.
+
+    The programs are in \c weak-reference-object-member-remove/.
+*/
+class WeakReferenceObjectMemberRemoveTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/weak-reference-object-member-remove";
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+        const Programs = ("weak-reference-object-member-remove",);
+        #! programs that need the library debugging functions (a debug build)
+        const GraphPrograms = ("weak-reference-object-member-remove-graph",);
+    }
+
+    constructor() : QUnit::Test("WeakReferenceObjectMemberRemoveTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        addTestCase("the recursive graph of the object is kept in every mode", \testGraph());
+        set_return_value(main());
+    }
+
+    private string expected(string name) {
+        return ReadOnlyFile::readTextFile(dir + "/" + name + ".expected");
+    }
+
+    private string run(string name, string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=%s %s/%s.q", qore_bin, mode, dir, name));
+        assertEq(0, r.rc, sprintf("%s %s: exit status (output: %y)", name, mode, r.out));
+        return r.stdout;
+    }
+
+    testAst() {
+        foreach string name in (Programs) {
+            assertEq(expected(name), run(name, "ast"), name + " ast");
+        }
+    }
+
+    testModes() {
+        foreach string name in (Programs) {
+            foreach string mode in (Modes) {
+                if (mode == "ast") {
+                    continue;
+                }
+                assertEq(expected(name), run(name, mode), name + " " + mode);
+            }
+        }
+    }
+
+    testGraph() {
+        # the program keeps an object alive with a reference from outside Qore (dbg_object_external_ref())
+        if (!exists_function("dbg_object_external_ref")) {
+            testSkip("the library debugging functions are not available (not a debug build)");
+        }
+        foreach string name in (GraphPrograms) {
+            foreach string mode in (Modes) {
+                assertEq(expected(name), run(name, mode), name + " " + mode);
+            }
+        }
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            *string path = backquote("command -v qcc 2>/dev/null");
+            trim path;
+            if (!path) {
+                testSkip("qcc is not available");
+            }
+            qcc_bin = path;
+        }
+        TmpDir tmp("qore-weak-reference-object-member-remove-");
+        foreach string name in (Programs) {
+            foreach string opt in (("0", "3")) {
+                string exe = sprintf("%s/%s-O%s", tmp.path, name, opt);
+                int rc;
+                string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, name), \rc);
+                assertEq(0, rc, sprintf("%s -O%s: qcc compiles the program: %s", name, opt, out));
+                if (rc || !is_file(exe)) {
+                    continue;
+                }
+                # -b must be the first argument of a compiled program
+                string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
+                assertEq(0, rc, sprintf("%s -O%s: exit status (output: %y)", name, opt, result));
+                assertEq(expected(name), result, sprintf("%s -O%s", name, opt));
+            }
+        }
+    }
+}

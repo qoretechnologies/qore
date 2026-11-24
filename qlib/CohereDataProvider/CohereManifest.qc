@@ -145,6 +145,7 @@ public class CohereManifest {
             <RestSchemaActionInfo>{
                 "action": "chat",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v2/chat",
                 "operation_id": "chatv2",
                 "display_name": "Chat",
@@ -251,6 +252,7 @@ public class CohereManifest {
             <RestSchemaActionInfo>{
                 "action": "embed",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v2/embed",
                 "operation_id": "embedv2",
                 "display_name": "Create Embeddings",
@@ -380,6 +382,7 @@ public class CohereManifest {
             <RestSchemaActionInfo>{
                 "action": "rerank",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v2/rerank",
                 "operation_id": "rerankv2",
                 "display_name": "Rerank Documents",
@@ -419,6 +422,7 @@ public class CohereManifest {
             <RestSchemaActionInfo>{
                 "action": "classify",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/classify",
                 "operation_id": "classify",
                 "display_name": "Classify Text",
@@ -526,6 +530,7 @@ public class CohereManifest {
             <RestSchemaActionInfo>{
                 "action": "tokenize",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/tokenize",
                 "operation_id": "tokenize",
                 "display_name": "Tokenize Text",
@@ -546,6 +551,7 @@ public class CohereManifest {
             <RestSchemaActionInfo>{
                 "action": "detokenize",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/detokenize",
                 "operation_id": "detokenize",
                 "display_name": "Detokenize Tokens",
@@ -566,6 +572,7 @@ public class CohereManifest {
             <RestSchemaActionInfo>{
                 "action": "parse",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v2/parse",
                 "operation_id": "parsev2",
                 "display_name": "Parse Document Image",
@@ -605,6 +612,7 @@ public class CohereManifest {
             <RestSchemaActionInfo>{
                 "action": "transcribe",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v2/audio/transcriptions",
                 "operation_id": "create-transcription",
                 "display_name": "Transcribe Audio",
@@ -1095,6 +1103,7 @@ public class CohereManifest {
             <RestSchemaActionInfo>{
                 "action": "check-api-key",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/check-api-key",
                 "operation_id": "checkAPIKey",
                 "display_name": "Check API Key",

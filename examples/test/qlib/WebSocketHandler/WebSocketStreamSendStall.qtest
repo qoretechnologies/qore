@@ -1,0 +1,582 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 and HTTP/3 (QUIC) server stream sends and their flow control
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The send timeout of a WebSocket handler on HTTP/2 and HTTP/3 bounds the time in which the peer takes none of the
+# stream's data, not the total time of the send (qore#7252): a client that was still taking a large message was
+# disconnected once the send timeout had passed, with the close code 1006.  These cases go through a real HttpServer,
+# so that the progress count is read through the socket that the server gives the handler.  The stream's data is held
+# back from the transport with a debug hook, as when the client takes nothing, and the progress of the peer is
+# simulated by the reads of the count, with no clock involved:
+# - with no progress, the client is disconnected after the send timeout
+# - with progress in the first period, the send goes on into a second period before the client is disconnected
+#
+# A client that keeps taking a very little data is disconnected by the minimum rate (qore#7280), on HTTP/1.1 with a
+# real client that reads a little at a time, on HTTP/2 and HTTP/3 with the simulated progress
+#
+# When a send of the frames queued before direct sends were enabled times out, the frames after it are dropped, not
+# sent on the stopped connection, where each waited for the send timeout and reported it (qore#7395).  Each case waits
+# for the end of its connection and checks that no other send of it timed out, so that a late report never reaches
+# the next case.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires AsyncSocketIo
+%requires HttpClientIo
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketStreamSendStallTest
+
+#! more than the 1 MiB limit of a stream's send buffer: the second message finds the buffer full
+const Payload = 3 * 1024 * 1024;
+
+#! the send timeout of the handler
+const SendTimeout = 1s;
+
+#! the send timeout in milliseconds
+const SendTimeoutMs = 1000;
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! the window of the minimum rate in the cases that check it
+const RateWindow = 1s;
+
+#! the window in milliseconds
+const RateWindowMs = 1000;
+
+#! more than the socket buffers of a loopback connection can hold, so that an HTTP/1.1 send waits for its client
+const H1Payload = 32 * 1024 * 1024;
+
+#! the time by which the HTTP/1.1 client below the rate must be disconnected, far below the send timeout, in ms
+const H1Bound = 30000;
+
+#! the minimum rate of the case with a client reading steadily at twice the rate, in bytes per second
+const H1SteadyMinRate = 32 * 1024;
+
+#! how long that client reads, in milliseconds
+const H1SteadyMs = 8000;
+
+#! far below the client's timeout (@ref HangGuard), which a disconnect that gets no answer waits for, in milliseconds
+const DisconnectBoundMs = 30000;
+
+#! Pushes the messages about a send that timed out to a Queue
+class SendLogAppender inherits LoggerAppenderWithLayout {
+    public {
+        Queue messages();
+    }
+
+    constructor() : LoggerAppenderWithLayout("send", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == LoggerAppender::EVENT_LOG && params.toString() =~ /send timed out|took less than the minimum rate/) {
+            messages.push({"msg": params.toString(), "at": clock_get_monotonic_us()});
+        }
+    }
+}
+
+#! Holds its stream's data and sends two large messages when the client asks for it
+class StallConnection inherits WebSocketConnection {
+    private {
+        StallHandler stall_handler;
+        *int session_id;
+        *int stream_id;
+    }
+
+    constructor(StallHandler handler, *int session_id, *int stream_id) : WebSocketConnection(handler) {
+        stall_handler = handler;
+        self.session_id = session_id;
+        self.stream_id = stream_id;
+    }
+
+    #! holds the setup of the connection until the sends have returned, if the handler asks for it: the client's
+    #! message is then handled before direct sends are enabled, so the sends only queue their frames, and the wait for
+    #! the stream's send buffer is made when the frames are flushed here
+    enableDirectSend() {
+        if (stall_handler.hold_setup) {
+            stall_handler.sends_returned.waitForZero(HangGuard);
+        }
+        WebSocketConnection::enableDirectSend();
+        # the frames queued before have been flushed
+        if (stall_handler.hold_setup) {
+            stall_handler.flushed.push(True);
+        }
+    }
+
+    gotMessage(string msg) {
+        if (msg != "send") {
+            return;
+        }
+        stall_handler.started.push(clock_get_monotonic_us());
+        on_exit if (stall_handler.hold_setup) {
+            stall_handler.sends_returned.dec();
+        }
+        # HTTP/1.1 has no stream: its client decides how fast the data is taken
+        if (exists stream_id) {
+            if (session_id) {
+                call_function("dbg_quic_hold_stream_data", session_id, stream_id);
+            } else {
+                call_function("dbg_http2_hold_stream_data", stream_id);
+            }
+            if (stall_handler.progress_reads) {
+                call_function("dbg_quic_simulate_stream_progress", stream_id, stall_handler.progress_reads);
+            }
+        }
+        send(binary(strmul("a", Payload)));
+        # waits for the stream's send buffer, which never drains, and ends the connection; or only queues the frame,
+        # before direct sends are enabled
+        send(binary(strmul("b", stall_handler.second_size)));
+        if (stall_handler.third_size) {
+            send(binary(strmul("c", stall_handler.third_size)));
+        }
+        stall_handler.sends_ended.push(True);
+    }
+
+    #! every case waits for the end of its connection, so that nothing of it reaches the next case
+    connectionClosed() {
+        stall_handler.closed.push(getCloseCode());
+    }
+}
+
+class StallHandler inherits WebSocketHandler {
+    public {
+        #! reports the connections that ended
+        Queue closed();
+        #! the size of the second message
+        int second_size = Payload;
+        #! the size of a third message, if any
+        int third_size = 0;
+        #! reports that the sends of a connection have returned
+        Queue sends_ended();
+        #! the time on the monotonic clock when the handler started to send, in microseconds
+        Queue started();
+        #! True to hold the setup of the connection until the sends have returned
+        bool hold_setup = False;
+        #! released when the sends have returned
+        Counter sends_returned(1);
+        #! reports that the frames queued before direct sends were enabled have been flushed
+        Queue flushed();
+        #! the reads of the progress count that see progress
+        int progress_reads = 0;
+    }
+
+    constructor(Logger logger) : WebSocketHandler(NOTHING, {"send_timeout": SendTimeout, "logger": logger}) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new StallConnection(self, cx."header-info".session_id, cx."header-info".stream_id);
+    }
+}
+
+class WebSocketStreamSendStallTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        StallHandler handler;
+        SendLogAppender appender();
+        int port;
+        #! a listener without TLS, for the client of the HTTP/1.1 cases
+        int plain_port;
+    }
+
+    constructor() : QUnit::Test("WebSocketStreamSendStall", "1.0") {
+        foreach string ver in (("2.0", "3.0")) {
+            addTestCase(sprintf("HTTP/%s: a client that takes nothing is disconnected after the send timeout", ver),
+                \testStall(), ver);
+            addTestCase(sprintf("HTTP/%s: a client that is taking the data is not cut off by the send timeout", ver),
+                \testProgress(), ver);
+        }
+        foreach string ver in (("2.0", "3.0")) {
+            addTestCase(sprintf("HTTP/%s: a client below the minimum rate is disconnected", ver), \testBelowRate(),
+                ver);
+            addTestCase(sprintf("HTTP/%s: a client above the minimum rate is not", ver), \testAboveRate(), ver);
+            addTestCase(sprintf("HTTP/%s: a minimum rate of 0 disables the check", ver), \testRateDisabled(), ver);
+        }
+        addTestCase("HTTP/1.1: a client that reads a little at a time is disconnected", \testH1BelowRate());
+        addTestCase("HTTP/1.1: a client that reads the data is not", \testH1AboveRate());
+        addTestCase("HTTP/1.1: a client still taking the data is not cut off by the send timeout",
+            \testH1Progress());
+        addTestCase("HTTP/1.1: a client reading steadily above the rate, seen in steps, is not cut off",
+            \testH1SteadyAboveRate());
+        addTestCase("HTTP/1.1: a client taking the data steadily below the rate, seen in steps, is cut off",
+            \testH1SteadyBelowRate());
+        addTestCase("the options of the minimum rate", \testRateOptions());
+        foreach string ver in (("2.0", "3.0")) {
+            addTestCase(sprintf("HTTP/%s: frames queued before direct sends: no progress", ver), \testQueuedStall(),
+                ver);
+            addTestCase(sprintf("HTTP/%s: frames queued before direct sends: a client taking the data", ver),
+                \testQueuedProgress(), ver);
+            addTestCase(sprintf("HTTP/%s: frames queued before direct sends are dropped when one times out", ver),
+                \testQueuedStallDrop(), ver);
+        }
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        Logger logger("send", LoggerLevel::getLevelInfo());
+        logger.addAppender(appender);
+        handler = new StallHandler(logger);
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("ws", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "http_version": "auto",
+        }).port;
+        plain_port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    setUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the library is not built with debugging");
+        }
+        appender.messages.clear();
+        handler.sends_ended.clear();
+        handler.closed.clear();
+        handler.second_size = Payload;
+        handler.third_size = 0;
+        handler.setSendTimeout(SendTimeout);
+        handler.setSendMinRate(0, 60s);
+        handler.started.clear();
+        handler.hold_setup = False;
+        handler.sends_returned = new Counter(1);
+        handler.flushed.clear();
+    }
+
+    #! Makes the server send to a client that takes nothing; returns the time of the send and the log message
+    private hash<auto> runSend(string ver, int progress_reads) {
+        handler.progress_reads = progress_reads;
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": sprintf("wss://localhost:%d", port),
+            "http_version": ver,
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        # runs before the disconnect above: the client's close is answered on the stream that is held
+        on_exit {
+            call_function("dbg_quic_simulate_stream_progress", 0, 0);
+            call_function("dbg_quic_release_stream_data");
+            call_function("dbg_http2_release_stream_data");
+        }
+        wsc.connect();
+        assertEq(ver == "3.0", wsc.isHttp3(), "the connection uses the HTTP version");
+        wsc.send("send");
+        hash<auto> timed_out = appender.messages.get(HangGuard);
+        # from the start of the sends to the timeout, wherever the wait was made: the return of a send says nothing,
+        # as a send before direct sends are enabled only queues its frame
+        int elapsed = (timed_out.at - handler.started.get(HangGuard)) / 1000;
+        # the release of the hold resumes the stream, whose data and end go out with the session's next write, which the
+        # client's close makes happen, so that the close is not left waiting for them until its timeout
+        call_function("dbg_quic_simulate_stream_progress", 0, 0);
+        call_function("dbg_quic_release_stream_data");
+        call_function("dbg_http2_release_stream_data");
+        int disconnect_start = clock_get_monotonic_us();
+        try {
+            wsc.disconnect();
+        } catch () {
+        }
+        assertLt(DisconnectBoundMs, (clock_get_monotonic_us() - disconnect_start) / 1000,
+            "the disconnect does not wait for its timeout");
+        checkConnectionEnded();
+        return {"msg": timed_out.msg, "elapsed": elapsed};
+    }
+
+    testStall(string ver) {
+        hash<auto> r = runSend(ver, 0);
+        assertRegex(sprintf("did not drain within %d ms", SendTimeoutMs), r.msg, "the send timed out");
+        assertRegex(ver == "3.0" ? "acknowledged no data" : "granted no credit", r.msg, "for lack of progress");
+        assertGe(SendTimeoutMs - 50, r.elapsed, "the send waited for the send timeout");
+    }
+
+    #! the first read of the count starts the wait and the next one sees progress, at the end of the first period
+    testProgress(string ver) {
+        hash<auto> r = runSend(ver, 2);
+        assertRegex(ver == "3.0" ? "acknowledged no data" : "granted no credit", r.msg,
+            "it ended for lack of progress");
+        # a deadline on the total time ended the send at the end of the first period
+        assertGe(2 * SendTimeoutMs - 50, r.elapsed, "the send went on into a second period");
+    }
+
+    #! the peer takes one byte per read of the count: far below the rate, with progress in every period
+    testBelowRate(string ver) {
+        handler.setSendTimeout(HangGuard);
+        handler.setSendMinRate(1024 * 1024, RateWindow);
+        hash<auto> r = runSend(ver, 100000);
+        assertRegex("less than the minimum rate", r.msg, "the client was below the minimum rate");
+        assertGe(RateWindowMs - 50, r.elapsed, "after a whole window");
+        assertLt(HangGuard, milliseconds(r.elapsed), "before the send timeout");
+    }
+
+    #! one byte per read is above a rate of 1 byte/s; the send then ends for lack of progress
+    testAboveRate(string ver) {
+        handler.setSendMinRate(1, RateWindow);
+        hash<auto> r = runSend(ver, 40);
+        assertRegex(ver == "3.0" ? "acknowledged no data" : "granted no credit", r.msg,
+            "not for the rate: for no progress, once the simulated peer stopped");
+        assertNRegex("minimum rate", r.msg);
+    }
+
+    testRateDisabled(string ver) {
+        hash<auto> r = runSend(ver, 0);
+        assertNRegex("minimum rate", r.msg);
+    }
+
+    #! Connects a client without TLS, and asks for the messages; returns its socket
+    private Socket h1Connect() {
+        Socket c();
+        c.connect("localhost:" + plain_port, HangGuard);
+        c.send(sprintf("GET / HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n"));
+        hash<auto> h = c.readHTTPHeader(HangGuard);
+        assertEq(101, h.status_code, "the WebSocket upgrade");
+        c.send(ws_encode_message("send", WSOP_Text, True));
+        return c;
+    }
+
+    #! reads a little at a time, far below the rate, with progress all the while, so only the rate can end the send
+    testH1BelowRate() {
+        handler.second_size = H1Payload;
+        handler.setSendTimeout(HangGuard);
+        handler.setSendMinRate(1024 * 1024, RateWindow);
+        Socket c = h1Connect();
+        on_exit c.close();
+        int start = clock_get_monotonic_us();
+        while (!handler.closed.size()) {
+            assertLt(H1Bound, (clock_get_monotonic_us() - start) / 1000,
+                "the client is disconnected before the bound");
+            if ((clock_get_monotonic_us() - start) / 1000 >= H1Bound) {
+                break;
+            }
+            try {
+                c.recvBinary(4096, 100);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "SOCKET-TIMEOUT") {
+                    break;
+                }
+            }
+            usleep(100ms);
+        }
+        assertEq(Type::Int, handler.closed.get(HangGuard).type(), "the connection ended");
+        assertGe(RateWindowMs - 50, (clock_get_monotonic_us() - start) / 1000, "after a whole window");
+        assertRegex("SOCKET-TIMEOUT: the peer took less than the minimum rate", appender.messages.get(HangGuard).msg,
+            "for its rate");
+    }
+
+    #! a client taking the data steadily above the minimum rate, seen to progress only in steps, is not cut off
+    /** The peer is simulated with dbg_http_ws_simulate_send_progress(): progress at twice the minimum rate, seen
+        once per half window, derived from the clock that the server's checks read, so that the case does not depend on
+        when the client's thread runs (a real client pacing its reads fell below the rate on a loaded host, and was cut
+        off then, rightly).  The real client takes nothing meanwhile, so the send waits and checks the rate all the
+        while; testH1BelowRate() checks the rate with the progress of a real client.
+    */
+    testH1SteadyAboveRate() {
+        handler.second_size = H1Payload;
+        handler.setSendTimeout(HangGuard);
+        handler.setSendMinRate(H1SteadyMinRate, RateWindow);
+        call_function("dbg_http_ws_simulate_send_progress", 2 * H1SteadyMinRate, RateWindowMs / 2);
+        on_exit call_function("dbg_http_ws_simulate_send_progress", 0, 0);
+        Socket c = h1Connect();
+        on_exit {
+            c.close();
+            handler.closed.get(HangGuard);
+        }
+        # the connection is not closed while the simulated peer takes the data steadily, for several windows
+        try {
+            handler.closed.get(H1SteadyMs);
+            assertTrue(False, "the connection was closed");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("QUEUE-TIMEOUT", ex.err, "the connection was not closed");
+        }
+        assertEq(0, appender.messages.size(), "no send timed out or was below the minimum rate");
+    }
+
+    #! a simulated peer taking the data steadily at a quarter of the minimum rate is cut off: the server's check sees
+    #! the simulated progress
+    testH1SteadyBelowRate() {
+        handler.second_size = H1Payload;
+        handler.setSendTimeout(HangGuard);
+        handler.setSendMinRate(H1SteadyMinRate, RateWindow);
+        call_function("dbg_http_ws_simulate_send_progress", H1SteadyMinRate / 4, RateWindowMs / 2);
+        on_exit call_function("dbg_http_ws_simulate_send_progress", 0, 0);
+        Socket c = h1Connect();
+        on_exit c.close();
+        assertEq(Type::Int, handler.closed.get(HangGuard).type(), "the connection ended");
+        assertRegex("took less than the minimum rate", appender.messages.get(HangGuard).msg, "for its rate");
+    }
+
+    #! a client that reads the messages gets all of them, with the default rate
+    testH1AboveRate() {
+        handler.second_size = H1Payload;
+        handler.setSendTimeout(HangGuard);
+        handler.setSendMinRate(1024, RateWindow);
+        Socket c = h1Connect();
+        # the end of this connection is reported before the next case starts
+        on_exit {
+            c.close();
+            handler.closed.get(HangGuard);
+        }
+        int got = 0;
+        int want = Payload + H1Payload;
+        while (got < want) {
+            got += c.recvBinary(1024 * 1024, HangGuard).size();
+        }
+        assertGe(want, got, "the whole data was read");
+        assertEq(0, handler.closed.size(), "the connection was not closed");
+        assertEq(True, handler.sends_ended.get(HangGuard), "the send ended");
+    }
+
+    #! the send takes several times the send timeout, with progress all the while
+    testH1Progress() {
+        handler.second_size = H1Payload;
+        handler.setSendTimeout(SendTimeout);
+        Socket c = h1Connect();
+        # the end of this connection is reported before the next case starts
+        on_exit {
+            c.close();
+            handler.closed.get(HangGuard);
+        }
+        int got = 0;
+        int want = Payload + H1Payload;
+        int start = clock_get_monotonic_us();
+        while (got < want) {
+            got += c.recvBinary(1024 * 1024, HangGuard).size();
+            usleep(100ms);
+        }
+        assertGt(SendTimeoutMs, (clock_get_monotonic_us() - start) / 1000, "the transfer outlasted the send timeout");
+        assertEq(0, handler.closed.size(), "the connection was not closed");
+        assertEq(True, handler.sends_ended.get(HangGuard), "the send ended");
+    }
+
+    testRateOptions() {
+        WebSocketHandler h();
+        assertEq(WebSocketHandler::DefaultSendMinRate, h.getSendMinRate());
+        assertEq(1024, WebSocketHandler::DefaultSendMinRate);
+        assertEq(60s, h.getSendMinRateWindow());
+        WebSocketHandler h1(NOTHING, {"send_min_rate": 2048, "send_min_rate_window": 5000});
+        assertEq(2048, h1.getSendMinRate());
+        assertEq(5s, h1.getSendMinRateWindow());
+        # the integer forms, in a hash of integers, which cannot hold the date that they are converted to
+        WebSocketHandler ints(NOTHING, {"send_timeout": 2000, "close_timeout": 3000, "send_min_rate_window": 4000});
+        assertEq(2s, ints.getSendTimeout());
+        assertEq(3s, ints.getCloseTimeout());
+        assertEq(4s, ints.getSendMinRateWindow());
+        WebSocketHandler h2(NOTHING, {"send_min_rate": 0});
+        assertEq(0, h2.getSendMinRate());
+        assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", "is negative", sub () {
+            WebSocketHandler x(NOTHING, {"send_min_rate": -1});
+        });
+        assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", "not a positive", sub () {
+            WebSocketHandler x(NOTHING, {"send_min_rate_window": 0s});
+        });
+        assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", "not a positive", sub () {
+            WebSocketHandler x(NOTHING, {"send_min_rate_window": 500us});
+        });
+        assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", "cannot be conv", sub () {
+            WebSocketHandler x(NOTHING, {"send_min_rate": True});
+        });
+        assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", "cannot be conv", sub () {
+            WebSocketHandler x(NOTHING, {"send_min_rate": 1.9});
+        });
+        assertEq(2048, new WebSocketHandler(NOTHING, {"send_min_rate": "2048"}).getSendMinRate());
+        assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", "expecting", sub () {
+            WebSocketHandler x(NOTHING, {"send_min_rate_window": "x"});
+        });
+    }
+
+    #! the client's message is handled before direct sends are enabled, as it can be at any time
+    testQueuedStall(string ver) {
+        handler.hold_setup = True;
+        testStall(ver);
+    }
+
+    testQueuedProgress(string ver) {
+        handler.hold_setup = True;
+        testProgress(ver);
+    }
+
+    #! the frames queued before direct sends were enabled are not sent once one of them has timed out
+    /** The send of the first queued frame times out, which stops the connection; the second must be dropped, not
+        sent after the stop, where it waited for the send timeout of its own and reported it: a second timeout that
+        reached the case after this one, which read it as its own (the flake of this test).  The stream stays held
+        until the frames have been flushed, so that a frame sent after the stop would wait for the send timeout.
+    */
+    testQueuedStallDrop(string ver) {
+        handler.hold_setup = True;
+        handler.progress_reads = 0;
+        # the first frame is taken into the stream's empty send buffer, the second times out and stops the
+        # connection, and the third must be dropped
+        handler.third_size = 1024;
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": sprintf("wss://localhost:%d", port),
+            "http_version": ver,
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        # runs before the disconnect above: the client's close is answered on the stream that is held
+        on_exit {
+            call_function("dbg_quic_simulate_stream_progress", 0, 0);
+            call_function("dbg_quic_release_stream_data");
+            call_function("dbg_http2_release_stream_data");
+        }
+        wsc.connect();
+        wsc.send("send");
+        assertRegex(sprintf("did not drain within %d ms", SendTimeoutMs), appender.messages.get(HangGuard).msg,
+            "the send of the first frame timed out");
+        assertTrue(handler.flushed.get(HangGuard), "the frames were flushed");
+        assertEq(0, appender.messages.size(), "no other send waited for the send timeout after the stop");
+        call_function("dbg_quic_simulate_stream_progress", 0, 0);
+        call_function("dbg_quic_release_stream_data");
+        call_function("dbg_http2_release_stream_data");
+        try {
+            wsc.disconnect();
+        } catch () {
+        }
+        checkConnectionEnded();
+    }
+
+    #! waits for the end of the case's connection, and checks that no other send of it timed out
+    /** A timeout reported after the one that the case read would otherwise be read by the next case as its own (the
+        flake of this test, qore#7395): it fails here, in the case whose connection reported it
+    */
+    private checkConnectionEnded() {
+        assertEq(Type::Int, handler.closed.get(HangGuard).type(), "the connection ended");
+        assertEq(0, appender.messages.size(), "no other send of the connection timed out");
+    }
+}

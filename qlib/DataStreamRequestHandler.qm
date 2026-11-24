@@ -432,7 +432,14 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
                 stdout.printf("AbstractDataStreamRequestHandler::recvImpl() data_size=%d\n", v.data.size());
             }
         }
-        if (v.deserialized && exists v.data) {
+        if (v.deserialized && !connect_mode && v.data.typeCode() == NT_BINARY
+                && http_get_field(cx.hdr, DataStreamContentEncoding.lwr()).val()) {
+            # the bytes of a DataStream v1 body given whole whose records are compressed one by one
+            # (DataStream-Content-Encoding; its content type is binary, so the REST framework does not deserialize
+            # it): the receive callback finds and decodes the compressed records (qore#7323); a body with only a
+            # Content-Encoding was decoded by the server, and is parsed below
+            recv_callback({"data": v.data, "chunked": False});
+        } else if (v.deserialized && exists v.data) {
             # Pre-deserialized body from the REST framework (non-chunked request).
             # The data may be truly deserialized (hash/list from REST validator), raw YAML
             # string, or Connect-framed binary from cx."stream-body". Deserialize as needed.

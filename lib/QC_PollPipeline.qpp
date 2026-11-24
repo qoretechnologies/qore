@@ -47,6 +47,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreSandboxPollOps.h"
 #include "qore/WebSocketFrameCodec.h"
+#include "qore/intern/ql_websocket.h"
 
 // the step type of the pipeline, for the operations of the ops class that are written outside the class
 using StepType = PollPipelinePriv::StepType;
@@ -158,6 +159,16 @@ static void wsDecodeFrame(PollPipelinePriv::Context& ctx, ExceptionSink* xsink) 
     const char* type;
     if (opcode == WSOP_TEXT) {
         type = "text";
+        // a complete, uncompressed text message that is not valid UTF-8 fails the connection with 1007, as in the
+        // WebSocket poll operations (RFC 6455 section 8.1; qore#6604, qore#6775); a fragment cannot be checked alone,
+        // and a compressed message (RSV1, permessage-deflate) is checked once it is decompressed
+        if (fin && !(rsv & 0x04) && !q_ws_utf8_valid(payload->getPtr(), payload->size())) {
+            ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
+            arg->setKeyValue("close_code", static_cast<int64>(WSCC_InvalidPayload), xsink);
+            xsink->raiseExceptionArg("WEBSOCKET-DECODE-ERROR", arg.release(), "a text message of " QLLD
+                " bytes is not valid UTF-8", static_cast<int64>(payload->size()));
+            return;
+        }
         QoreStringNode* text = new QoreStringNode(
             reinterpret_cast<const char*>(payload->getPtr()), payload->size(), QCS_UTF8);
         h->setKeyValue("data", text, xsink);
@@ -166,16 +177,23 @@ static void wsDecodeFrame(PollPipelinePriv::Context& ctx, ExceptionSink* xsink) 
         h->setKeyValue("data", payload.release(), xsink);
     } else if (opcode == WSOP_CLOSE) {
         type = "close";
-        uint16_t close_code = 1005;  // No Status Rcvd
-        if (payload->size() >= 2) {
-            const uint8_t* p = static_cast<const uint8_t*>(payload->getPtr());
-            close_code = (static_cast<uint16_t>(p[0]) << 8) | p[1];
+        // the checks of the WebSocket poll operations (qore#6604, qore#6755, qore#6775): a one-byte payload or a
+        // status code that may not be received fails the connection with 1002, a reason that is not valid UTF-8 with
+        // 1007; an empty payload has the status code 1005 (no status code received)
+        uint16_t close_code;
+        std::string reason;
+        const char* error = nullptr;
+        uint16_t fail = q_ws_parse_close_payload(payload->getPtr(), payload->size(), close_code, reason, error);
+        if (fail) {
+            ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
+            arg->setKeyValue("close_code", static_cast<int64>(fail), xsink);
+            xsink->raiseExceptionArg("WEBSOCKET-DECODE-ERROR", arg.release(), "invalid close frame: %s",
+                error ? error : "protocol error");
+            return;
         }
         h->setKeyValue("close_code", static_cast<int64>(close_code), xsink);
-        if (payload->size() > 2) {
-            h->setKeyValue("data", new QoreStringNode(
-                reinterpret_cast<const char*>(payload->getPtr()) + 2,
-                payload->size() - 2, QCS_UTF8), xsink);
+        if (!reason.empty()) {
+            h->setKeyValue("data", new QoreStringNode(reason, QCS_UTF8), xsink);
         }
     } else if (opcode == WSOP_PING) {
         type = "ping";
@@ -1958,17 +1976,21 @@ SocketPollOperationBase* qore_poll_pipeline_ops::createInnerOpImpl(PollPipelineP
                 && !strcasecmp(step.target.c_str(), "HEAD");
 
             if (b->ctx.headers) {
-                // Check Transfer-Encoding: chunked
+                // Check Transfer-Encoding: the body is chunked if the final transfer coding is chunked, and is
+                // delimited by the end of the connection if not (RFC 9112 section 6.3); the header parser has
+                // refused a request with any other Transfer-Encoding
                 QoreValue te_val = pp_get_header_field(b->ctx.headers, "transfer-encoding");
-                if (te_val.getType() == NT_STRING) {
-                    QoreStringValueHelper te_str(te_val);
-                    const char* te = te_str->c_str();
-                    if (strcasestr(te, "chunked")) {
+                bool te_close = false;
+                if (!te_val.isNothing()) {
+                    if (qore_socket_private::isHttpResponseBodyChunked(te_val)) {
                         chunked = true;
+                    } else {
+                        te_close = true;
+                        conn_close = true;
                     }
                 }
-                // Check Content-Length
-                if (!chunked) {
+                // Check Content-Length; a Transfer-Encoding overrides it (RFC 9112 section 6.3)
+                if (!chunked && !te_close) {
                     QoreValue cl_val = pp_get_header_field(b->ctx.headers, "content-length");
                     if (!cl_val.isNullOrNothing()) {
                         content_length = cl_val.getAsBigInt();
@@ -3092,6 +3114,12 @@ int PollPipeline::addRecvWsFrame() [dom=NETWORK] {
     - \c rsv1, rsv2, rsv3: boolean RSV flags (for extension processing)
     - \c data: string (text), binary (binary/ping/pong), or string (close reason)
     - \c close_code: integer close code (close frames only)
+
+    The frame checks are those of the WebSocket poll operations: the step raises \c WEBSOCKET-DECODE-ERROR, with the
+    close code that the connection is failed with in the \c close_code key of the exception argument, for a complete,
+    uncompressed text frame that is not valid UTF-8 (1007), and for a close frame with a one-byte payload or a
+    status code that may not be received (1002) or a reason that is not valid UTF-8 (1007); a fragment or a
+    compressed frame (RSV1) is decoded as received, as it cannot be checked alone (qore#6775)
 
     @return the step index
 

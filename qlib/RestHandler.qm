@@ -463,6 +463,10 @@ Content-Length: 16
       and @ref RestHandler::AbstractRestStreamRequestHandler::getArgs() "getArgs()" for subclasses, which cannot use
       the private members of the class when sandboxed code declares them; the context is a copy with the request
       metadata only (issue #6843)
+    - the handler gets the socket of an HTTP/1.x request when one of its REST classes is of a class of a sandboxed
+      Program, and refuses a request (\c 500, closing the connection) that would hand the connection's socket to a REST
+      class or a stream handler of a sandboxed Program on its dispatch path (see @ref httpserver_handler_socket;
+      <a href="https://github.com/qoretechnologies/qore/issues/7305">issue 7305</a>)
     - reads the fields of a request from the \c "headers" key of its header hash, or from the top level of a hash
       built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with the HttpServer
       option \c http_fields_at_top_level set to @ref False
@@ -485,6 +489,12 @@ Content-Length: 16
       unchanged since Qore 2.2.1 and is still called first with a copy of the response, but a 406 response no longer
       always follows it
       (<a href="https://github.com/qoretechnologies/qore/issues/7250">issue 7250</a>)
+    - an HTTP/1.x Connect or DataStream v1 request body with a \c Content-Length is given to the stream handler in
+      binary parts of at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize" bytes, whatever its size, as
+      over HTTP/2 and HTTP/3; before, the whole body was read before the handler got any of it; a REST method without a
+      stream handler still gets the body whole (see @ref RestHandler::RestHandler::wantsBodyStreaming()
+      "RestHandler::wantsBodyStreaming()";
+      <a href="https://github.com/qoretechnologies/qore/issues/7323">issue 7323</a>)
 
     @section rh_1_6_7 RestHandler v1.6.7
     - fixed responses with headers whose values all have the same type, such as a literal
@@ -1045,6 +1055,25 @@ public namespace RestHandler {
         }
     }
 
+    #! The classes of the sockets of a request that the server gives a handler: the socket of an HTTP/1.x request,
+    #! or of an HTTP/2 or HTTP/3 stream (qore#7305); an open socket of another class is the connection's
+    const RestRequestSocketClasses = {
+        "Http1HandlerSocket": True,
+        "Http2HandlerSocket": True,
+        "Http3HandlerSocket": True,
+    };
+
+    #! The response that refuses a request whose dispatch path has code of a sandboxed Program while the handler has
+    #! the connection's socket (qore#7305)
+    hash<HttpServer::HttpHandlerResponseInfo> sub rest_refuse_connection_socket(object obj) {
+        return <HttpServer::HttpHandlerResponseInfo>{
+            "code": 500,
+            "body": sprintf("the REST request is refused: %s of a sandboxed Program would get the connection's socket "
+                "(see HttpServer::AbstractHttpRequestHandler::setHandlerSocketView())", obj.className()),
+            "close": True,
+        };
+    }
+
     #! the base abstract class for REST handler classes
     public class AbstractRestClass {
         public {
@@ -1155,6 +1184,13 @@ public namespace RestHandler {
                         mn, rh.getMaskedLogString(args));
                 }
 
+                # a class of a sandboxed Program never gets the connection's socket of an HTTP/1.x request: decided
+                # when the class is handed the request, whatever the handler hosted when the request started
+                # (qore#7305)
+                if (SandboxManager::isFromSandboxedProgram(cls) && !RestRequestSocketClasses{s.className()}
+                        && s.isOpen()) {
+                    return rest_refuse_connection_socket(cls);
+                }
                 return cls.handleRequest(listener, rh, s, cl, mn, cx, args);
             }
             if (rh.isLogDebugEnabled()) {
@@ -1162,6 +1198,43 @@ public namespace RestHandler {
                     rh.getMaskedLogString(args));
             }
             return dispatchStream(listener, rh, s, mn, args, cx);
+        }
+
+        #! Reads an HTTP/1.x body that the server left to a stream request whole, for a method without a stream handler
+        /** The body is decoded, deserialized and validated as the server and RestHandler::handleRequest() do with a
+            body read before dispatching: a Connect body is binary and given in \c cx."stream-body", any other body is
+            decoded as text for a text content type and deserialized into \c cx.body, which is reflected in the
+            arguments if it is a hash (qore#7323)
+
+            @return an error response if the body cannot be decoded or deserialized, otherwise @ref nothing
+        */
+        private:internal *hash<HttpHandlerResponseInfo> readBodyWhole(HttpListenerInterface listener, RestHandler rh,
+                HttpServer::Http1BodyReader body_reader, reference<hash<auto>> cx, reference<*hash<auto>> ah) {
+            binary raw = binary();
+            while (*binary part = body_reader.read(HttpServer::ReadTimeout)) {
+                raw += part;
+            }
+            if (!raw.size()) {
+                return;
+            }
+            *string ct = http_get_field(cx.hdr, "content-type");
+            if (ct =~ /^application\/connect\+/) {
+                cx."stream-body" = raw;
+                cx."orig-request-body" = raw;
+                return;
+            }
+            # the content type rules that the server decodes a body read before dispatching with
+            data body = (ct == MimeTypeOctetStream || ct =~ /^multipart\//i)
+                ? raw
+                : AbstractHttpRequestHandler::decodeRequestText(cx.hdr, raw, listener.getDefaultTextEncoding());
+            *hash<HttpHandlerResponseInfo> err = rh.processRequestBody(\cx, body);
+            if (err) {
+                return err;
+            }
+            # reflect the body in the arguments if it is a hash
+            if (cx.body.typeCode() == NT_HASH) {
+                map ah{$1} = cx.body{$1}, keys cx.body, !exists ah{$1};
+            }
         }
 
         #! this method is called to dispatch streamed requests on the given object
@@ -1193,6 +1266,14 @@ public namespace RestHandler {
                                 if (cx.body.typeCode() == NT_HASH) {
                                     map ah{$1} = cx.body{$1}, keys cx.body, !exists ah{$1};
                                 }
+                            }
+                        } else if (*HttpServer::Http1BodyReader body_reader = cx."header-info".body_reader) {
+                            # an HTTP/1.x body with a Content-Length that the server left to a stream request
+                            # (see RestHandler::wantsBodyStreaming()) is read whole for a method without a stream
+                            # handler, and given to it as a body read before dispatching is (qore#7323)
+                            *hash<HttpHandlerResponseInfo> err = readBodyWhole(listener, rh, body_reader, \cx, \ah);
+                            if (err) {
+                                return err;
                             }
                         }
 
@@ -1226,6 +1307,12 @@ public namespace RestHandler {
                 if (!sb && cx."orig-request-body"
                         && cx.hdr."_qore_orig_content_type" == MimeTypeOctetStream) {
                     sb = cx."orig-request-body";
+                }
+                # a stream handler of a sandboxed Program never gets the connection's socket of an HTTP/1.x request
+                # (qore#7305)
+                if (SandboxManager::isFromSandboxedProgram(rsh) && !RestRequestSocketClasses{s.className()}
+                        && s.isOpen()) {
+                    return rest_refuse_connection_socket(rsh);
                 }
                 RestStreamRequest req(rsh, listener, rh, s, cx, cx.hdr, sb);
                 return req.handleRequest();
@@ -1416,6 +1503,14 @@ public namespace RestHandler {
             *list<string> rest_context_keys;
         }
 
+        #! Returns the REST classes of the handler, whose code it runs (qore#7305)
+        /** A REST class of a sandboxed Program makes the handler's code get the socket of its HTTP/1.x request (see
+            @ref httpserver_handler_socket)
+        */
+        private list<object> hostedObjects() {
+            return class_hash ? class_hash.values() : ();
+        }
+
         #! create the object optionally with the given HttpServer::AbstractAuthenticator
         /** @param auth the authentication object to use to authenticate connections (see
             HttpServer::AbstractAuthenticator); if no HttpServer::AbstractAuthenticator object is passed, then by
@@ -1425,6 +1520,9 @@ public namespace RestHandler {
         */
         constructor(*HttpServer::AbstractAuthenticator auth)
                 : HttpServer::AbstractHttpRequestHandler(auth, True) {
+            # the REST classes, which can be code of a sandboxed Program: their handler's code gets the socket of its
+            # HTTP/1.x request then (qore#7305)
+            setHostsCode();
             self.validator = new NullRestSchemaValidator();
         }
 
@@ -1437,6 +1535,9 @@ public namespace RestHandler {
         constructor(*HttpServer::AbstractAuthenticator auth,
                 RestSchemaValidator::AbstractRestSchemaValidator validator)
                 : HttpServer::AbstractHttpRequestHandler(auth, True) {
+            # the REST classes, which can be code of a sandboxed Program: their handler's code gets the socket of its
+            # HTTP/1.x request then (qore#7305)
+            setHostsCode();
             self.validator = validator;
         }
 
@@ -1450,6 +1551,9 @@ public namespace RestHandler {
         */
         constructor(Logger::LoggerInterface logger, *HttpServer::AbstractAuthenticator auth)
                 : HttpServer::AbstractHttpRequestHandler(auth, True), LoggerWrapper(logger) {
+            # the REST classes, which can be code of a sandboxed Program: their handler's code gets the socket of its
+            # HTTP/1.x request then (qore#7305)
+            setHostsCode();
             self.validator = new NullRestSchemaValidator(logger);
             self.validator.setLogger(logger);
         }
@@ -1464,37 +1568,61 @@ public namespace RestHandler {
         constructor(Logger::LoggerInterface logger, *HttpServer::AbstractAuthenticator auth,
                 RestSchemaValidator::AbstractRestSchemaValidator validator)
                 : HttpServer::AbstractHttpRequestHandler(auth, True), LoggerWrapper(logger) {
+            # the REST classes, which can be code of a sandboxed Program: their handler's code gets the socket of its
+            # HTTP/1.x request then (qore#7305)
+            setHostsCode();
             self.validator = validator;
             validator.setLogger(logger);
         }
 
-        #! Returns @ref True for HTTP/2 and HTTP/3 body streaming with Connect or DataStream protocols
+        #! Returns @ref True for body streaming with Connect or DataStream protocols
         /** For Connect protocol (DataStream 2.0) and DataStream v1 over HTTP/2 or HTTP/3,
             this allows the framework to skip pre-buffering the entire request body and instead
             pass DATA frames incrementally to the stream handler via
             \c AbstractStreamRequest::handleRequest(). This enables mid-stream error detection
             (e.g. COLUMN-ERROR during an upsert) without buffering the entire body in memory.
 
+            Over HTTP/1.x, a Connect or DataStream request body with a \c Content-Length is given to the stream
+            handler in binary parts of at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize" bytes
+            through the server's @ref HttpServer::Http1BodyReader "Http1BodyReader", whatever its size (qore#7323);
+            a DataStream v1 body with a \c Content-Encoding or \c DataStream-Content-Encoding other than \c identity
+            is read whole, as its compressed records are not delimited and are found in the whole body (Connect
+            frames are self-delimiting and are compressed one by one).  A REST method without a stream handler gets
+            such a body whole, as it would without streaming.
+
             @param cx the connection context
             @param hdr the HTTP headers
 
-            @return @ref True for HTTP/2/3 body streaming with Connect or DataStream content types
+            @return @ref True for body streaming with Connect or DataStream content types
 
             @since RestHandler 1.6.7
         */
         bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
-            if (!(cx."header-info".body_streaming ?? False)) {
+            # an HTTP/1.x body with a Content-Length is given in parts through the server's body reader
+            # (cx."header-info".body_reader; qore#7323); an HTTP/2 or HTTP/3 body when it is read as a stream
+            bool http1 = !(cx."header-info".http2 ?? False) && !(cx."header-info".http3 ?? False);
+            if (!http1 && !(cx."header-info".body_streaming ?? False)) {
                 return False;
             }
-            # For Connect or DataStream content types, read body data incrementally
+            # For Connect or DataStream content types, read body data incrementally; Connect frames are
+            # self-delimiting, and each compressed frame is decoded on its own, in any parts
             *string ct = http_get_field(hdr, "content-type");
             if (ct =~ /^application\/connect\+/) {
                 return True;
             }
             if (http_get_field(hdr, "datastream-content-type").val()) {
-                return True;
+                # an HTTP/1.x DataStream v1 body with a content encoding is read whole: its compressed records are
+                # not delimited, and are found in the whole body (see DataStreamUtil::ds_decode_content_streams())
+                return !http1 || (!encodedBody(hdr, "content-encoding")
+                    && !encodedBody(hdr, "datastream-content-encoding"));
             }
             return False;
+        }
+
+        #! Returns @ref True if the given content encoding header of the request names an encoding other than identity
+        private:internal static bool encodedBody(hash<auto> hdr, string field) {
+            *string ce = http_get_field(hdr, field);
+            return ce.val() && ce.lwr() != "identity";
         }
 
         #! returns the name of the root REST class
@@ -2066,6 +2194,12 @@ public namespace RestHandler {
                 }
             }
 
+            # a class of a sandboxed Program never gets the connection's socket of an HTTP/1.x request: decided when
+            # the class is handed the request, whatever the handler hosted when the request started (qore#7305)
+            if (SandboxManager::isFromSandboxedProgram(rcls) && !RestRequestSocketClasses{s.className()}
+                    && s.isOpen()) {
+                return rest_refuse_connection_socket(rcls);
+            }
             return rcls.handleRequest(listener, self, s, class_list, method_name, cx, args);
         }
 

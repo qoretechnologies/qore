@@ -29,7 +29,10 @@ print_usage () {
   echo "                           (-b in QORE_TEST_OPTS), is aborted at once.  On Linux, the state, CPU time and"
   echo "                           kernel wait channel of each of its threads are printed when it exceeds it and"
   echo "                           again before it is aborted, with /proc/pressure and the cgroup's cpu.stat and"
-  echo "                           memory.events.  Before any signal, the native call stacks of all threads of"
+  echo "                           memory.events; if the CPU pressure of the last 5 minutes (the \"some\" line,"
+  echo "                           avg300) was 50% or more, it says that the machine was CPU-starved and the"
+  echo "                           timeout is probably not a hang (qore#7353).  Before any signal, the native"
+  echo "                           call stacks of all threads of"
   echo "                           every other process of the test (those that descend from it, and those it"
   echo "                           started that were adopted: with its mark on Linux, in its process group"
   echo "                           elsewhere) are printed, each with its process ID and command line (gdb or"
@@ -99,12 +102,11 @@ print_usage () {
   echo "                           since, or an include/ header that a module was built with but libqore was not;"
   echo "                           ccache's hard_link or file_clone can make a built change look older (see the"
   echo "                           comment of check_build() in run_tests.sh)."
-  echo "  QORE_MODULE_DIR_ONLY     When set, QORE_MODULE_DIR is the complete module path: the directories of the"
-  echo "                           installed modules that the build compiled its qmods against (listed by cmake in"
-  echo "                           qore-external-module-dirs.txt in the build directory) are not appended to it."
-  echo "                           Otherwise they are appended to QORE_MODULE_DIR (those it already holds are not"
-  echo "                           added again), so they are searched after it and before the module directories"
-  echo "                           compiled into the qore of the build (its installation prefix)."
+  echo "  QORE_MODULE_DIR_ONLY     Configured builds use QORE_EXTERNAL_MODULE_DIRS from CMake after the build and"
+  echo "                           source paths. Set QORE_MODULE_DIR_ONLY (even to an empty value) to use the"
+  echo "                           external paths in QORE_MODULE_DIR instead. Older builds keep in-tree caller paths."
+  echo "  QORE_TEST_ALLOW_EXTERNAL_INCLUDES"
+  echo "                           Set to 1 to preserve QORE_INCLUDE_DIR entries outside the source and build trees."
   echo "  QORE_TEST_BUILD_JOBS     Jobs a test that builds a CMake project runs (default: the number of CPUs, at"
   echo "                           least 2), e.g. examples/test/ir/CMakeBuildHelpers*.qtest."
   echo "  QORE_TEST_PRESERVE_PROVIDER_ENV"
@@ -1458,19 +1460,56 @@ if [ -n "$BUILD_MODULE_DIRS" ]; then
         TEST_MODULE_DIRS="$BUILD_MODULE_DIRS"
     fi
 fi
-if [ -n "$TEST_MODULE_DIRS" ]; then
-    export QORE_MODULE_DIR=$TEST_MODULE_DIRS:$QORE_SOURCE_DIR/qlib:$QORE_MODULE_DIR
-else
-    export QORE_MODULE_DIR=$QORE_SOURCE_DIR/qlib:$QORE_MODULE_DIR
+# Print the existing directories under the source or build root, in search order. Resolve relative paths here,
+# before the runner enters the test directories. Resolve symlinks and .. before checking the directory boundary.
+in_tree_search_path() (
+    remaining=$1
+    filtered=
+    while [ -n "$remaining" ]; do
+        entry=${remaining%%:*}
+        case "$remaining" in
+            *:*) remaining=${remaining#*:} ;;
+            *) remaining= ;;
+        esac
+        [ -n "$entry" ] || continue
+        case "$entry" in
+            /*) ;;
+            *) entry=$QORE_SOURCE_DIR/$entry ;;
+        esac
+        dir=$(CDPATH= cd -P "$entry" 2>/dev/null && pwd -P) || continue
+        case "$dir/" in
+            "${QORE_SOURCE_DIR%/}/"*|"${QORE_BUILD_DIR%/}/"*) filtered=${filtered:+$filtered:}$dir ;;
+        esac
+    done
+    printf '%s' "$filtered"
+)
+
+if [ "$QORE_TEST_ALLOW_EXTERNAL_INCLUDES" != 1 ] && [ -n "${QORE_INCLUDE_DIR+set}" ]; then
+    QORE_INCLUDE_DIR=$(in_tree_search_path "$QORE_INCLUDE_DIR")
+    if [ -z "$QORE_INCLUDE_DIR" ]; then
+        unset QORE_INCLUDE_DIR
+    fi
 fi
-# The directories of the installed modules that the build compiled its qlib qmods against (written by cmake): a qmod
-# requires the modules it was compiled with, and the build's qore does not search these directories when they are
-# outside its prefix, so without them the qmod falls back to its source (BINARY-MODULE-SOURCE-FALLBACK).  They come
-# last in QORE_MODULE_DIR, so the modules of the build and of this tree come first; qore searches QORE_MODULE_DIR before
-# the module directories compiled into it, so they also come before those of its installation prefix.  A directory
-# that QORE_MODULE_DIR already holds is not added again.  With QORE_MODULE_DIR_ONLY set, the caller gives the
-# complete module path (the CI jobs give a link farm of the native modules only), and none are added; qore reads it
-# as set even when it is empty.
+
+# A configured build uses exactly its recorded paths. Older builds append their recorded paths to the caller's
+# in-tree paths. A caller setting QORE_MODULE_DIR_ONLY explicitly supplies its own external paths in either case.
+if [ -z "${QORE_MODULE_DIR_ONLY+set}" ]; then
+    if [ -f "$QORE_BUILD_DIR/qore-external-module-dirs.txt" ] && \
+            grep -q '^QORE_EXTERNAL_MODULE_DIRS:STRING=' "$QORE_BUILD_DIR/CMakeCache.txt" 2>/dev/null; then
+        QORE_MODULE_DIR=$(cat "$QORE_BUILD_DIR/qore-external-module-dirs.txt")
+        export QORE_MODULE_DIR_ONLY=1
+    elif [ -n "$QORE_MODULE_DIR" ]; then
+        QORE_MODULE_DIR=$(in_tree_search_path "$QORE_MODULE_DIR")
+    fi
+fi
+if [ -n "$TEST_MODULE_DIRS" ]; then
+    export QORE_MODULE_DIR=$TEST_MODULE_DIRS:$QORE_SOURCE_DIR/qlib${QORE_MODULE_DIR:+:$QORE_MODULE_DIR}
+else
+    export QORE_MODULE_DIR=$QORE_SOURCE_DIR/qlib${QORE_MODULE_DIR:+:$QORE_MODULE_DIR}
+fi
+# Older builds append their recorded paths after the caller directories.
+# A caller that sets QORE_MODULE_DIR_ONLY supplies its own external paths (the CI jobs use a native module farm).
+# The runtime treats even an empty QORE_MODULE_DIR_ONLY as set.
 if [ -z "${QORE_MODULE_DIR_ONLY+set}" ] && [ -f "$QORE_BUILD_DIR/qore-external-module-dirs.txt" ]; then
     _external_module_dirs=`cat "$QORE_BUILD_DIR/qore-external-module-dirs.txt"`
     _old_ifs=$IFS
@@ -3046,6 +3085,19 @@ event $1
                     echo "    pressure $resource: `tr '\n' ' ' < "$proc/pressure/$resource" 2>/dev/null`"
                 fi
             done
+            # a test that exceeds its limit on a machine whose CPUs were contended for most of the last five minutes
+            # (the "some" line of the CPU pressure: a task was waiting for a CPU for half of the time or more) was
+            # probably starved, not hung: its threads sleep in the kernel and its children keep ending (qore#7353)
+            if [ "$1" = "at its time limit" ] && [ -r "$proc/pressure/cpu" ]; then
+                starved=`awk '$1 == "some" { for (i = 2; i <= NF; ++i) if ($i ~ /^avg300=/) {
+                        v = substr($i, 8) + 0; if (v >= 50) { printf "%s", substr($i, 8); exit } } }' \
+                    "$proc/pressure/cpu" 2>/dev/null`
+                if [ -n "$starved" ]; then
+                    echo "    the machine was CPU-starved while the test ran (a task waited for a CPU ${starved}% of the" \
+                        "last 5 minutes): this timeout is probably not a hang; run the test alone, run fewer jobs at" \
+                        "once, or raise TEST_TIMEOUT"
+                fi
+            fi
             # the test's own cgroup (v2: the "0::<path>" line), which is /sys/fs/cgroup itself in a container's cgroup
             # namespace
             cgroup=$QORE_TEST_CGROUP

@@ -111,7 +111,10 @@ int main(int argc, char** argv) {
         encs = {"Shift_JIS", "SJIS//IGNORE", "CP932", "MS932", "SJIS-WIN", "SJIS-OPEN", "EUC-JP", "EUCJP", "eucJP-ms",
             "eucJP-win", "UJIS", "OSF00030010", "EUC-KR", "EUCKR", "OSF0004000A", "CP949", "UHC", "MSCP949",
             "OSF100203B5", "JOHAB", "MSCP1361", "GBK", "CP936", "GB13000", "GB2312", "EUC-CN", "CN-GB", "GB18030",
-            "Big5", "CN-BIG5", "BIG5HKSCS", "Big5-HKSCS", "CP950", "EUC-TW"};
+            "Big5", "CN-BIG5", "BIG5HKSCS", "Big5-HKSCS", "CP950", "EUC-TW",
+            // ISO 6937 and its forms: non-spacing diacritical marks before the letters (qore#6900)
+            "T.61", "ISO-IR-103", "ISO6937", "ISO_6937:1992", "ISO-IR-156", "ISO_6937-2", "ISO-IR-90", "NAPLPS",
+            "ANSI_X3.110", "CSA_T500", "ISO-IR-99"};
     }
     for (const char* name : encs) {
         const QoreEncoding* enc = QoreEncodingManager::findCreate(name);

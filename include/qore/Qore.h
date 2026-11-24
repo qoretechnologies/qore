@@ -241,6 +241,12 @@ DLLEXPORT void qore_init(qore_license_t license = QL_GPL, const char* default_en
     destructors run while the library can still run Qore code (but cannot start threads: \c THREAD-CREATION-FAILURE
     is raised then); the Program itself is freed when its owner releases it, and no Qore code can be run after this
     function returns
+    @note If the module cleanup stopped waiting for work that it handed over to other threads (once the grace period
+    after its deadline had passed, see qore_set_module_cleanup_handover_grace()), or a Program was left to a
+    foreign thread, this function leaves the library allocated, as those threads can still run in it, and
+    qore_cleanup_left_library() returns true; the process must then end without running the static destructors of the
+    library under those threads: call qore_fork_child_quick_exit() with the exit status right after this function,
+    which ends the process with \c _exit() in that case (and returns otherwise)
 
     @see qore_init()
 */
@@ -284,6 +290,47 @@ DLLEXPORT int qore_set_module_cleanup_timeout(int64 timeout_ms);
     @since %Qore 3.0
 */
 DLLEXPORT int64 qore_get_module_cleanup_timeout();
+
+//! defined for qore_set_module_cleanup_handover_grace(), qore_get_module_cleanup_handover_grace(),
+//! qore_cleanup_left_library() and QORE_DEFAULT_MODULE_CLEANUP_HANDOVER_GRACE_MS (qore#7239)
+#define _QORE_HAS_MODULE_CLEANUP_HANDOVER_GRACE 1
+
+//! the least default grace period of the work that the module cleanup hands over to other threads, in milliseconds
+#define QORE_DEFAULT_MODULE_CLEANUP_HANDOVER_GRACE_MS 5000
+
+//! sets the time that the module cleanup waits after its deadline for the work handed over to other threads
+/** Work of the module cleanup that hands itself over to another thread (Qore::AsyncIoController::holdModuleCleanupWork())
+    is waited for until this time after the deadline of the cleanup (qore_set_module_cleanup_timeout()); then the
+    cleanup writes a warning that names it, no longer waits for it, and leaves the modules and their Programs as they
+    are.  Takes precedence over the \c QORE_MODULE_CLEANUP_HANDOVER_GRACE environment variable; must be called before
+    the end of the process starts (qore_cleanup())
+
+    @param grace_ms the time in milliseconds; the default is the deadline of the cleanup, but at least
+    \c QORE_DEFAULT_MODULE_CLEANUP_HANDOVER_GRACE_MS
+
+    @return 0 for success, -1 if \a grace_ms is negative (the time is not changed)
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int qore_set_module_cleanup_handover_grace(int64 grace_ms);
+
+//! returns the time that the module cleanup waits after its deadline for the work handed over to other threads, in
+//! milliseconds
+/** @see qore_set_module_cleanup_handover_grace()
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int64 qore_get_module_cleanup_handover_grace();
+
+//! returns true if qore_cleanup() left the library allocated because the module cleanup stopped waiting for work
+//! handed over to other threads or a Program was left to a foreign thread
+/** Those threads can still run in the library: the process must then end without running the
+    static destructors of the library under them, for example with qore_fork_child_quick_exit(), which does so in this
+    case (see qore_cleanup())
+
+    @since %Qore 3.0
+*/
+DLLEXPORT bool qore_cleanup_left_library();
 
 //! returns true if all the bits set in the argument are also set in the qore library init option variable
 DLLEXPORT bool qore_check_option(int opt);

@@ -342,6 +342,24 @@ or a date, and a \c date-time string property of an object alternative a date
 
 #! main namespace for all public %OpenApi3 declarations
 public namespace OpenApi3 {
+#! Runs a closure that updates a cache of an object of the module, in an update scope if the object is shared
+/** A schema or schema object that trusted code created is shared by every Program of the process, so it can only be
+    changed by sandboxed code, or code that acts for it, in an update scope (qore#6843; see
+    @ref Qore::SandboxManager::updateSharedObject() "SandboxManager::updateSharedObject()").  Each caller computes the
+    new state of the cache from the object itself, never from data that its caller gives.
+
+    @param obj the object whose cache is updated
+    @param update a closure created by a method of a class of \a obj in this module
+
+    @return the value that \a update returns
+*/
+auto sub update_shared_cache(object obj, code update) {
+    if (SandboxManager::isSharedObject(obj)) {
+        return SandboxManager::updateSharedObject(obj, update);
+    }
+    return update();
+}
+
 #! Schema objects whose composition type the current thread is building
 /** "Any JSON value" is a string, a number, a boolean, an array of JSON values or an object of them, and
     a vendor that accepts arbitrary JSON declares exactly that - Exa's \c JsonValue is a \c oneOf whose
@@ -463,9 +481,13 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBaseValidator {
         @param oh deserialized hash from the source schema description
      */
     public constructor(string obj_type, hash<auto> oh) {
-        optional_field(obj_type, oh, "maximum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \maximum);
-        optional_field(obj_type, oh, "minimum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \minimum);
-        normalizeNumericBounds(oh);
+        # Most schemas declare few constraints. Only prepare a target reference or validate a value for a
+        # keyword the schema actually declares; hasKey also retains explicitly null values for validation.
+        if (oh.hasKey("minimum") || oh.hasKey("maximum")) {
+            optional_field(obj_type, oh, "maximum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \maximum);
+            optional_field(obj_type, oh, "minimum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \minimum);
+            normalizeNumericBounds(oh);
+        }
 
         # Handle exclusiveMaximum - can be boolean (3.0) or numeric (3.1)
         if (oh.hasKey("exclusiveMaximum")) {
@@ -493,22 +515,38 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBaseValidator {
             }
         }
 
-        optional_field(obj_type, oh, "maxLength", NT_INT, \maxLength);
-        optional_field(obj_type, oh, "minLength", NT_INT, \minLength);
-        optional_field(obj_type, oh, "pattern", NT_STRING, \pattern);
-        # a pattern that is not valid is an error of the schema, not of each request (qore#6603)
-        checkPattern();
-        optional_field(obj_type, oh, "maxItems", NT_INT, \maxItems);
-        optional_field(obj_type, oh, "minItems", NT_INT, \minItems);
-        optional_field(obj_type, oh, "uniqueItems", NT_BOOLEAN, \uniqueItems);
-        optional_field(obj_type, oh, "enum", OpenApi3ListToAnySet, \enumValues);
-        # the values of an enumeration can be of any type; one that is a list or a hash cannot be a key of
-        # enumValues, so the enumeration is kept as declared too
-        if (oh."enum".typeCode() == NT_LIST && (select oh."enum", inlist($1.typeCode(), (NT_LIST, NT_HASH)))) {
-            # a null value says that the value is nullable, as for the set (see get_value())
-            enumValueList = select oh."enum", exists $1;
+        if (oh.hasKey("maxLength")) {
+            maxLength = checked_field_value(obj_type, oh, "maxLength", NT_INT);
         }
-        optional_field(obj_type, oh, "multipleOf", (NT_FLOAT: True, NT_INT: True), \multipleOf);
+        if (oh.hasKey("minLength")) {
+            minLength = checked_field_value(obj_type, oh, "minLength", NT_INT);
+        }
+        if (oh.hasKey("pattern")) {
+            pattern = checked_field_value(obj_type, oh, "pattern", NT_STRING);
+            # a pattern that is not valid is an error of the schema, not of each request (qore#6603)
+            checkPattern();
+        }
+        if (oh.hasKey("maxItems")) {
+            maxItems = checked_field_value(obj_type, oh, "maxItems", NT_INT);
+        }
+        if (oh.hasKey("minItems")) {
+            minItems = checked_field_value(obj_type, oh, "minItems", NT_INT);
+        }
+        if (oh.hasKey("uniqueItems")) {
+            uniqueItems = checked_field_value(obj_type, oh, "uniqueItems", NT_BOOLEAN);
+        }
+        if (oh.hasKey("enum")) {
+            optional_field(obj_type, oh, "enum", OpenApi3ListToAnySet, \enumValues);
+            # the values of an enumeration can be of any type; one that is a list or a hash cannot be a key of
+            # enumValues, so the enumeration is kept as declared too
+            if (oh."enum".typeCode() == NT_LIST && (select oh."enum", inlist($1.typeCode(), (NT_LIST, NT_HASH)))) {
+                # a null value says that the value is nullable, as for the set (see get_value())
+                enumValueList = select oh."enum", exists $1;
+            }
+        }
+        if (oh.hasKey("multipleOf")) {
+            optional_field(obj_type, oh, "multipleOf", (NT_FLOAT: True, NT_INT: True), \multipleOf);
+        }
     }
 
     #! Copy constructor
@@ -753,6 +791,8 @@ public class ParameterGroup inherits Qore::Serializable {
         not declare is reported as unknown rather than folded into one of them.
     */
     addParameter(string key, ParameterObject p) {
+        # a shared schema cannot be changed by sandboxed code (qore#6843)
+        SandboxManager::checkSharedObjectChange(self, "add a parameter");
         if (p.inLoc == "query" && !p.content && p.schema && p.schema.type == "object") {
             query_objs{key} = True;
             query_obj = query_objs.size() == 1 ? key : NOTHING;
@@ -797,6 +837,12 @@ public hashdecl ComponentInfo {
 
 #! This is the root document object for the API specification. It combines what previously was the Resource Listing and API Declaration (version 1.2 and earlier) together into one document.
 public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
+    private {
+        #! The number of types built from a sandboxed caller's data that a shared document keeps for a Program
+        /** see getType() */
+        const CallerTypeCacheSize = 256;
+    }
+
     public {
         #! <a href="https://swagger.io/">OpenApi3</a> Specification version being used.
         /**
@@ -1386,16 +1432,12 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
                 throw "INVALID-REFERENCE", sprintf("cannot resolve SchemaObject %y reference %y (%y)", name, refstr);
             }
         }
-        # get all non "x-" attributes
-        *hash<auto> attr = map {$1.key: $1.value}, oh.pairIterator(), $1.key !~ /^x-/ && $1.key != "$ref";
-        *hash<auto> xmlObj;
-        # process additional attributes
-        if (optional_field("OpenApi", attr, "xml", NT_HASH, \xmlObj)) {
-            attr -= "xml";
+        # Only the XML override needs a copy of the referenced schema.
+        if (oh.hasKey("xml")) {
+            hash<auto> xmlObj = checked_field_value("OpenApi", oh, "xml", NT_HASH);
             ref = ref.copy();
             ref.xml = new XmlObject(xmlObj);
         }
-        # additional subling elements are ignored...
         return ref;
     }
 
@@ -1918,8 +1960,19 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
     }
 
     #! Returns the data type for the given type specification
+    /** A document that is shared by every Program (see
+        @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()") writes its type cache only in
+        its own type builds (see
+        @ref RestSchemaValidator::AbstractRestSchemaValidator::runTypeBuild() "AbstractRestSchemaValidator::runTypeBuild()"):
+        a type asked for outside a type build of the document is taken from its type cache if it is there, and
+        otherwise built with no type build and no cache write, and kept in the per-Program cache of the calling code
+        (qore#6843)
+    */
     AbstractDataProviderType getType(string path, string typestr, *string format, *SchemaObject arrayItems,
             bool required = True, *bool strict) {
+        if (!isTypeBuildActive() && SandboxManager::isSharedObject(self)) {
+            return getCallerType(path, typestr, format, arrayItems, required, strict);
+        }
         if (!isTypeBuildActive()) {
             return runTypeBuild(AbstractDataProviderType sub () {
                 return getType(path, typestr, format, arrayItems, required, strict);
@@ -1931,6 +1984,32 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
         }
         AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required, strict);
         setCachedType(id, required ? "Y" : "N", rv);
+        return rv;
+    }
+
+    #! Returns a type asked for outside a type build of a shared document; see getType()
+    private AbstractDataProviderType getCallerType(string path, string typestr, *string format,
+            *SchemaObject arrayItems, bool required, *bool strict) {
+        # the unique hash of a schema object that the document did not build is the caller's
+        bool own_items = !arrayItems || SandboxManager::isSharedObject(arrayItems);
+        string id;
+        if (own_items) {
+            if (*AbstractDataProviderType rv = checkType(path, typestr, format, arrayItems, required, \id, strict)) {
+                return rv;
+            }
+        } else {
+            id = sprintf("%s-%s-%s-%s%s", path, typestr, format ?? "x", arrayItems.uniqueHash(),
+                strict ? "-strict" : "");
+        }
+        string key = "type-" + (required ? "Y" : "N") + "-" + id;
+        if (*AbstractDataProviderType rv = SandboxManager::getProgramCacheValue(self, key)) {
+            return rv;
+        }
+        AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required, strict);
+        # a value of a per-Program cache can be given to other code of the Program, also to trusted code that
+        # sandboxed code calls, so it cannot be changed (qore#6843)
+        rv.freeze();
+        SandboxManager::setProgramCacheValue(self, key, rv, CallerTypeCacheSize);
         return rv;
     }
 
@@ -1948,19 +2027,45 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
     #! Caches a type, recording the write in the type build in progress
     private setCachedType(string id, string key, AbstractDataProviderType t) {
         if (isTypeBuildActive()) {
-            *AbstractDataProviderType prev = typemap{id}{key};
-            recordTypeBuildWrite(sub () {
-                if (prev) {
-                    typemap{id}{key} = prev;
-                } else {
-                    remove typemap{id}{key};
-                    if (!typemap{id}) {
-                        remove typemap{id};
-                    }
-                }
+            bool had_outer = exists typemap && typemap.hasKey(id);
+            recordTypeBuildUndo({
+                "restore": getTypeUndoRestore(),
+                "id": id,
+                "key": key,
+                "prev": typemap{id}{key},
+                "had_key": had_outer && typemap{id}.typeCode() == NT_HASH && typemap{id}.hasKey(key),
+                "had_outer": had_outer,
+                "had_cache": exists typemap,
             });
         }
-        typemap{id}{key} = t;
+        # the type built from the document, which is shared as the document is (qore#6843)
+        recordTypeBuildCache(t);
+        update_shared_cache(self, sub () { typemap{id}{key} = t; });
+    }
+
+    #! Returns the code that restores a record of setCachedType(); it binds no variable of a caller
+    private:internal code getTypeUndoRestore() {
+        return sub (hash<auto> record) { undoCachedType(record); };
+    }
+
+    #! Restores an entry of the type cache in the failure path of the type build that made the record (qore#6843)
+    private:internal undoCachedType(hash<auto> record) {
+        if (!isUndoingTypeBuild(record.build)) {
+            return;
+        }
+        update_shared_cache(self, sub () {
+            if (record.had_key) {
+                typemap{record.id}{record.key} = record.prev;
+            } else {
+                remove typemap{record.id}{record.key};
+                if (!record.had_outer) {
+                    remove typemap{record.id};
+                }
+                if (!record.had_cache) {
+                    remove typemap;
+                }
+            }
+        });
     }
 
     #! Returns the data type corresponding to the values
@@ -2043,6 +2148,16 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
     AbstractDataProviderType getSchemaDataType(string path, SchemaObject schema, bool required = True,
             *object rest) {
         return schema.getDataType(required, rest);
+    }
+
+    #! Restores the document; a shared document restores no type in its type cache (qore#6843)
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::deserializeMembers() "AbstractRestSchemaObject::deserializeMembers()"
+    */
+    private:internal deserializeMembers(*hash<auto> members) {
+        self += members;
+        if (SandboxManager::createsSharedObjects()) {
+            remove typemap;
+        }
     }
 
     #! Returns the reusable schema object for the given reference name or @ref nothing if there is none
@@ -4882,6 +4997,8 @@ public class OpenApi3HashDataType inherits HashDataType {
         @since OpenApi3 1.0
     */
     addResponseField(AbstractDataField field, *string after) {
+        # a shared type cannot be changed by sandboxed code (qore#6843)
+        checkChange("fields");
         response_fields += {"field": field, "after": after};
     }
 
@@ -5843,6 +5960,23 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         return exists openapi3 ? openapi3 : NOTHING;
     }
 
+    #! Restores the object; a shared object restores no alternative type in its cache (qore#6843)
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::deserializeMembers() "AbstractRestSchemaObject::deserializeMembers()"
+    */
+    private:internal deserializeMembers(*hash<auto> members) {
+        self += members;
+        if (SandboxManager::createsSharedObjects()) {
+            remove alternativeDataType;
+        }
+    }
+
+    #! Returns @ref True once the document of this schema object has been destroyed
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::isTypeBuildSchemaDestroyed() "AbstractRestSchemaObject::isTypeBuildSchemaDestroyed()"
+    */
+    bool isTypeBuildSchemaDestroyed() {
+        return !exists openapi3;
+    }
+
     #! private constructor; use newSchemaObject() instead
     /**
         @param name the name of the object
@@ -5956,10 +6090,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         }
 
         # check for x-nullable (3.0 style) and nullable (standard)
-        optional_field(obj_type, oh, "x-nullable", NT_BOOLEAN, \nullable);
+        if (oh.hasKey("x-nullable")) {
+            nullable = checked_field_value(obj_type, oh, "x-nullable", NT_BOOLEAN);
+        }
         # Also support standard nullable keyword (OpenAPI 3.0)
-        if (!nullable) {
-            optional_field(obj_type, oh, "nullable", NT_BOOLEAN, \nullable);
+        if (!nullable && oh.hasKey("nullable")) {
+            nullable = checked_field_value(obj_type, oh, "nullable", NT_BOOLEAN);
         }
 
         if (optional_field(obj_type, oh, "format", NT_STRING, \format)) {
@@ -5970,8 +6106,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             }
         }
 
-        optional_field(obj_type, oh, "title", NT_STRING, \title);
-        optional_field(obj_type, oh, "description", (NT_STRING: True, NT_NOTHING: True), \desc);
+        if (oh.hasKey("title")) {
+            title = checked_field_value(obj_type, oh, "title", NT_STRING);
+        }
+        if (oh.hasKey("description")) {
+            optional_field(obj_type, oh, "description", (NT_STRING: True, NT_NOTHING: True), \desc);
+        }
 
         if (optional_field(obj_type, oh, "maxProperties", NT_INT, \maxProperties)) {
             checkObjectProperty(name, "maxProperties");
@@ -5984,25 +6124,23 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                 throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: 'minProperties' field less than 0", name);
         }
 
-        {
-            hash props;
-            if (optional_field(obj_type, oh, "properties", NT_HASH, \props)) {
-                checkObjectProperty(name, "properties");
-                foreach string k in (keys props) {
-                    auto val = props{k};
-                    if (val.typeCode() != NT_HASH)
-                        throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: 'properties' field is not a hash of "
-                            "Schema Objects (got type %y; expecting \"hash\": %y)", name, val.fullType(), val);
-                    properties{k} = SchemaObject::newSchemaObject(k, val, openapi3, NOTHING, NOTHING,
-                        AbstractRestSchemaObject::childSchemaIdentity(
-                            AbstractRestSchemaObject::childSchemaIdentity(location, "properties"), k));
-                    if (!properties{k}.nullable && val."x-nullable") {
-                        nullable_properties{k} = True;
-                    }
+        if (oh.hasKey("properties")) {
+            hash props = checked_field_value(obj_type, oh, "properties", NT_HASH);
+            checkObjectProperty(name, "properties");
+            *string props_location = AbstractRestSchemaObject::childSchemaIdentity(location, "properties");
+            foreach string k in (keys props) {
+                auto val = props{k};
+                if (val.typeCode() != NT_HASH)
+                    throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: 'properties' field is not a hash of "
+                        "Schema Objects (got type %y; expecting \"hash\": %y)", name, val.fullType(), val);
+                properties{k} = SchemaObject::newSchemaObject(k, val, openapi3, NOTHING, NOTHING,
+                    AbstractRestSchemaObject::childSchemaIdentity(props_location, k));
+                if (!properties{k}.nullable && val."x-nullable") {
+                    nullable_properties{k} = True;
                 }
-            } else {
-                additionalProperties = True;
             }
+        } else {
+            additionalProperties = True;
         }
 
         if (optional_field(obj_type, oh, "additionalProperties", (NT_BOOLEAN: True, NT_HASH: True),
@@ -6059,17 +6197,27 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                     "'required' list", name);
         }
 
-        optional_field(obj_type, oh, "readOnly", NT_BOOLEAN, \readOnly);
-        optional_field(obj_type, oh, "writeOnly", NT_BOOLEAN, \writeOnly);
-        optional_field(obj_type, oh, "deprecated", NT_BOOLEAN, \deprec);
+        if (oh.hasKey("readOnly")) {
+            readOnly = checked_field_value(obj_type, oh, "readOnly", NT_BOOLEAN);
+        }
+        if (oh.hasKey("writeOnly")) {
+            writeOnly = checked_field_value(obj_type, oh, "writeOnly", NT_BOOLEAN);
+        }
+        if (oh.hasKey("deprecated")) {
+            deprec = checked_field_value(obj_type, oh, "deprecated", NT_BOOLEAN);
+        }
 
         # OpenAPI 3.1+: contentEncoding and contentMediaType for binary data
-        optional_field(obj_type, oh, "contentEncoding", NT_STRING, \contentEncoding);
-        optional_field(obj_type, oh, "contentMediaType", NT_STRING, \contentMediaType);
+        if (oh.hasKey("contentEncoding")) {
+            contentEncoding = checked_field_value(obj_type, oh, "contentEncoding", NT_STRING);
+        }
+        if (oh.hasKey("contentMediaType")) {
+            contentMediaType = checked_field_value(obj_type, oh, "contentMediaType", NT_STRING);
+        }
 
         {
-            *list allOfList;
-            if (optional_field(obj_type, oh, "allOf", NT_LIST, \allOfList)) {
+            if (oh.hasKey("allOf")) {
+                list allOfList = checked_field_value(obj_type, oh, "allOf", NT_LIST);
                 if (allOfList.size() < 1)
                     throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'allOf' is an empty list", name);
                 foreach auto val in (allOfList) {
@@ -6163,54 +6311,48 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             }
         }
 
-        {
-            *list oneOfList;
-            if (optional_field(obj_type, oh, "oneOf", NT_LIST, \oneOfList)) {
-                if (oneOfList.size() < 1)
-                    throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'oneOf' is an empty list", name);
-                foreach auto val in (oneOfList) {
-                    if (val.typeCode() != NT_HASH)
-                        throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'oneOf' list value "
-                            "datatype: %y", name, val.type());
-                    SchemaObject member = SchemaObject::newSchemaObject(name + "OneOf", val, openapi3,
-                        NOTHING, True, AbstractRestSchemaObject::childSchemaIdentity(location,
-                            "oneOf/" + oneOf.size()));
-                    oneOf[oneOf.size()] = member;
-                    # a "null"-typed member expresses nullability of the composition itself
-                    if (member.nullType) {
-                        nullable = True;
-                    }
+        if (oh.hasKey("oneOf")) {
+            list oneOfList = checked_field_value(obj_type, oh, "oneOf", NT_LIST);
+            if (oneOfList.size() < 1)
+                throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'oneOf' is an empty list", name);
+            foreach auto val in (oneOfList) {
+                if (val.typeCode() != NT_HASH)
+                    throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'oneOf' list value "
+                        "datatype: %y", name, val.type());
+                SchemaObject member = SchemaObject::newSchemaObject(name + "OneOf", val, openapi3,
+                    NOTHING, True, AbstractRestSchemaObject::childSchemaIdentity(location,
+                        "oneOf/" + oneOf.size()));
+                oneOf[oneOf.size()] = member;
+                # a "null"-typed member expresses nullability of the composition itself
+                if (member.nullType) {
+                    nullable = True;
                 }
             }
         }
 
-        {
-            *list anyOfList;
-            if (optional_field(obj_type, oh, "anyOf", NT_LIST, \anyOfList)) {
-                if (anyOfList.size() < 1)
-                    throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'anyOf' is an empty list", name);
-                foreach auto val in (anyOfList) {
-                    if (val.typeCode() != NT_HASH)
-                        throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'anyOf' list value "
-                            "datatype: %y", name, val.type());
-                    SchemaObject member = SchemaObject::newSchemaObject(name + "AnyOf", val, openapi3,
-                        NOTHING, True, AbstractRestSchemaObject::childSchemaIdentity(location,
-                            "anyOf/" + anyOf.size()));
-                    anyOf[anyOf.size()] = member;
-                    # a "null"-typed member expresses nullability of the composition itself
-                    if (member.nullType) {
-                        nullable = True;
-                    }
+        if (oh.hasKey("anyOf")) {
+            list anyOfList = checked_field_value(obj_type, oh, "anyOf", NT_LIST);
+            if (anyOfList.size() < 1)
+                throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'anyOf' is an empty list", name);
+            foreach auto val in (anyOfList) {
+                if (val.typeCode() != NT_HASH)
+                    throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'anyOf' list value "
+                        "datatype: %y", name, val.type());
+                SchemaObject member = SchemaObject::newSchemaObject(name + "AnyOf", val, openapi3,
+                    NOTHING, True, AbstractRestSchemaObject::childSchemaIdentity(location,
+                        "anyOf/" + anyOf.size()));
+                anyOf[anyOf.size()] = member;
+                # a "null"-typed member expresses nullability of the composition itself
+                if (member.nullType) {
+                    nullable = True;
                 }
             }
         }
 
-        {
-            *hash notObj;
-            if (optional_field(obj_type, oh, "not", NT_HASH, \notObj)) {
-                notSchema = SchemaObject::newSchemaObject(name + "Not", notObj, openapi3, NOTHING, True,
-                    AbstractRestSchemaObject::childSchemaIdentity(location, "not"));
-            }
+        if (oh.hasKey("not")) {
+            hash notObj = checked_field_value(obj_type, oh, "not", NT_HASH);
+            notSchema = SchemaObject::newSchemaObject(name + "Not", notObj, openapi3, NOTHING, True,
+                AbstractRestSchemaObject::childSchemaIdentity(location, "not"));
         }
 
         # a composition that is only a wrapper around one schema describes whatever that schema describes
@@ -6439,38 +6581,70 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         @return the data type of the schema as a mandatory union alternative
     */
     AbstractDataProviderType getAlternativeDataType(*object rest) {
+        # the defaults that a REST client gives never reach the caches of a shared schema, and its code never runs in
+        # a type build of one (qore#6843)
+        if (rest && SandboxManager::isSharedObject(self)) {
+            return isPlainAlternative() ? getAlternativeDataType() : getDataType(True, rest);
+        }
         *RestSchemaValidator::AbstractRestSchemaValidator schema = getTypeBuildSchema();
         if (schema && !schema.isTypeBuildActive()) {
             return schema.runTypeBuild(AbstractDataProviderType sub () {
                 return getAlternativeDataType(rest);
             });
         }
-        # the conditions under which getDataType() returns a plain scalar or array type
-        bool plain = (prefix_items ? False : additional_items)
-            && !(discriminatorMapping && !oneOf && !anyOf)
-            && !isAllOfWrapper()
-            && !((oneOf || anyOf) && !isConstraintOnlyComposition())
-            && type != "object" && !properties && !notSchema;
-        if (!plain) {
+        # an orphaned shared object reads its cache, and writes none (qore#6843)
+        if (!schema && isOrphanedSharedObject() && alternativeDataType) {
+            return alternativeDataType;
+        }
+        if (!isPlainAlternative()) {
             return getDataType(True, rest);
         }
         if (!alternativeDataType) {
+            checkCacheWrite();
             AbstractDataProviderType t = getLiveDocument().getType("/", type, format, items, !nullable, True)
                 .copyWithConstraints(getConstraintInfo());
             bool opaque;
             if (schema) {
                 opaque = schema.isTypeBuildActive() && holdCacheEntryOpaquely(schema);
-                schema.recordTypeBuildWrite(sub () {
-                    remove alternativeDataType;
+                schema.recordTypeBuildCache(t);
+                schema.recordTypeBuildUndo({
+                    "restore": getAlternativeUndoRestore(),
+                    "prev": alternativeDataType,
                 });
             }
-            if (opaque) {
-                alternativeDataType @= t;
-            } else {
-                alternativeDataType = t;
-            }
+            # the type built from this schema object
+            update_shared_cache(self, sub () {
+                if (opaque) {
+                    alternativeDataType @= t;
+                } else {
+                    alternativeDataType = t;
+                }
+            });
         }
         return alternativeDataType;
+    }
+
+    #! Returns the code that restores a record of getAlternativeDataType(); it binds no variable of a caller
+    private:internal code getAlternativeUndoRestore() {
+        return sub (hash<auto> record) { undoAlternativeDataType(record); };
+    }
+
+    #! Restores the alternative type in the failure path of the type build that made the record (qore#6843)
+    private:internal undoAlternativeDataType(hash<auto> record) {
+        *RestSchemaValidator::AbstractRestSchemaValidator schema = getTypeBuildSchema();
+        if (!schema || !schema.isUndoingTypeBuild(record.build)) {
+            return;
+        }
+        update_shared_cache(self, sub () { alternativeDataType = record.prev; });
+    }
+
+    #! Returns @ref True if getDataType() returns a plain scalar or array type, which getAlternativeDataType() builds itself
+    private bool isPlainAlternative() {
+        return (prefix_items ? False : additional_items)
+            && !(discriminatorMapping && !oneOf && !anyOf)
+            && !isAllOfWrapper()
+            && !((oneOf || anyOf) && !isConstraintOnlyComposition())
+            && type != "object" && !properties && !notSchema;
     }
 
     #! Releases the types and fields that this object caches
@@ -6482,6 +6656,15 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     releaseTypeCaches() {
         RestSchemaValidator::AbstractRestSchemaObject::releaseTypeCaches();
         remove alternativeDataType;
+    }
+
+    #! Releases the types and fields that this object caches, for its schema
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::releaseTypeCachesFor() "AbstractRestSchemaObject::releaseTypeCachesFor()"
+    */
+    releaseTypeCachesFor(RestSchemaValidator::AbstractRestSchemaValidator schema) {
+        RestSchemaValidator::AbstractRestSchemaObject::releaseTypeCachesFor(schema);
+        # the shared object was checked above
+        update_shared_cache(self, sub () { remove alternativeDataType; });
     }
 
     AbstractDataProviderType getSchemaType(string path, string typestr, *string format,
@@ -6507,13 +6690,38 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         }
     }
 
+    #! Returns the variant of this schema's type that a type build cached, or @ref nothing
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::getCachedDataType() "AbstractRestSchemaObject::getCachedDataType()"
+    */
+    *AbstractDataProviderType getCachedDataType(bool required) {
+        return RestSchemaValidator::AbstractRestSchemaObject::getCachedDataType(required && !nullable);
+    }
+
     #! Returns the data type for the schema
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::getDataType() "AbstractRestSchemaObject::getDataType()"
+    */
     AbstractDataProviderType getDataType(bool required = True, *object rest) {
+        # the defaults that a REST client gives never reach the caches of a shared schema (qore#6843)
+        if (rest && SandboxManager::isSharedObject(self)) {
+            return getRestDefaultsType(required, rest);
+        }
         *RestSchemaValidator::AbstractRestSchemaValidator schema = getTypeBuildSchema();
-        if (schema && !schema.isTypeBuildActive()) {
-            return schema.runTypeBuild(AbstractDataProviderType sub () {
-                return getDataType(required, rest);
-            });
+        if (schema) {
+            # a cached type is read without a build; a build runs only if it is not cached
+            if (*AbstractDataProviderType t = schema.getBuiltDataType(self, required)) {
+                return t;
+            }
+            if (!schema.isTypeBuildActive()) {
+                return schema.runTypeBuild(AbstractDataProviderType sub () {
+                    return getDataType(required, rest);
+                });
+            }
+        } else if (isOrphanedSharedObject()) {
+            # its caches are read, never written (qore#6843)
+            if (*AbstractDataProviderType t = getCachedDataType(required)) {
+                return t;
+            }
+            checkCacheWrite();
         }
         required = required && !nullable;
         if (*AbstractDataProviderType t = getReplacedDataType(required)) {
@@ -7430,9 +7638,9 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     */
     static SchemaObject newSchemaObject(string name, hash<auto> oh, OpenApi3Schema openapi3, *bool require_items,
             *bool composed, *string location) {
-        string refstr;
-        if (optional_field("Schema", oh, "$ref", NT_STRING, \refstr))
-            return openapi3.resolveSchemaObject(name, refstr, oh);
+        if (oh.hasKey("$ref")) {
+            return openapi3.resolveSchemaObject(name, checked_field_value("Schema", oh, "$ref", NT_STRING), oh);
+        }
 
         string hash_str;
         *SchemaObject rv = openapi3.tryGetSchemaObject(name, oh, \hash_str);
@@ -7467,6 +7675,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         @since OpenApi3 1.0
     */
     setEnumDisplayNames(hash<string, string> display_names) {
+        # a shared schema cannot be changed by sandboxed code (qore#6843)
+        SandboxManager::checkSharedObjectChange(self, "set the display names of the values");
         if (!enumValues) {
             throw "SCHEMA-ENUM-ERROR", sprintf("schema %y has no enumeration to give display names to", name);
         }
@@ -7878,6 +8088,15 @@ namespace Priv {
         OpenApi3ListToAnySet: "list<auto>",
     );
 
+    #! Get a present field of a concrete type, reporting the same errors as required_field().
+    auto sub checked_field_value(string obj_type, hash<auto> oh, string name, int typeCode) {
+        auto val = oh{name};
+        if (val.typeCode() != typeCode) {
+            check_type_code(obj_type, oh, name, val, typeCode);
+        }
+        return val;
+    }
+
     #! Check and assign a required field.
     /**
         @param obj_type type of object (e.g. "External Documentation")
@@ -7940,6 +8159,11 @@ namespace Priv {
         if (!oh || !oh.hasKey(name))
             return False;
         auto val = oh{name};
+        # Concrete types need no conversion. Only the list-to-set and security requirement codes require get_value().
+        if (val.typeCode() == typeCode) {
+            target = val;
+            return True;
+        }
         if (check_type_code(obj_type, oh, name, val, typeCode, opt_flags)) {
             return False;
         }
@@ -7967,7 +8191,7 @@ namespace Priv {
         if (!typeCodes{val.typeCode()})
             throw "INVALID-FIELD-TYPE", sprintf("%s Object%s: %y field has invalid type %y (val: %y)", obj_type,
                 oh.name ? sprintf(" %y", oh.name) : "", name, val.type(), val);
-        get_value(obj_type, name, val.typeCode(), val, \target);
+        target = val;
         return True;
     }
 

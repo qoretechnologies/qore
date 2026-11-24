@@ -33,7 +33,7 @@ class ReferenceContainerTypesTest inherits QUnit::Test {
         string dir = get_script_dir() + "/reference-container-types";
 
         const Modes = ("ast", "ir", "jit", "tiered");
-        const Programs = ("reference-container-types", "reference-element-assignment");
+        const Programs = ("reference-container-types", "reference-element-assignment", "reference-nested-cast");
     }
 
     constructor() : QUnit::Test("ReferenceContainerTypesTest", "1.0", \ARGV) {

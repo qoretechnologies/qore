@@ -44,6 +44,7 @@
 class QoreSocketObject;
 class Http3ClientPollOperationPriv;
 class QoreSSLCertificate;
+class QoreSSLTrustStore;
 class QoreSSLPrivateKey;
 
 //! HTTP/3 (QUIC) C++ client connection.
@@ -57,8 +58,9 @@ class QoreSSLPrivateKey;
     into the QUIC handshake (no separate SSL upgrade phase).
 
     @par UDP vs TCP
-    Unlike H1/H2 (TCP), this class creates a UDP socket bound to an
-    ephemeral port via @c QoreSocketObject::bindINET.  The QUIC session
+    Unlike H1/H2 (TCP), this class creates an unbound UDP socket; its poll operation resolves the host name, races
+    connection attempts to the addresses of the host (RFC 8305), and binds them on the I/O thread (see
+    SocketQuicClientPollOperation).  The QUIC session
     drives the handshake and retransmission logic; the AsyncIoController
     polls the UDP fd for readability and calls continuePoll on the H3
     poll op when data arrives.
@@ -90,7 +92,8 @@ public:
         QoreSSLCertificate* client_cert = nullptr,
         QoreSSLPrivateKey* client_key = nullptr,
         const std::string& ssl_ca_file = std::string(),
-        const std::string& ssl_ca_path = std::string());
+        const std::string& ssl_ca_path = std::string(),
+        QoreSSLTrustStore* ssl_trust_store = nullptr);
 
     DLLLOCAL virtual ~Http3ClientConnection();
 
@@ -112,8 +115,8 @@ public:
 
     DLLEXPORT int getActiveStreamCount() const override;
 
-    //! Pushes the maximum size of a response body received into memory down to the sockets of the QUIC sessions
-    /** Applies to every connection attempt and to the attempt that wins the handshake.
+    //! Pushes the maximum size of a response body received into memory down to the socket of the QUIC session
+    /** The socket's limit applies to the connection whatever attempt of its address family race wins.
     */
     DLLEXPORT void setMaxResponseBodySizeHook(int64_t max_size) override;
 
@@ -145,7 +148,14 @@ public:
         HttpClientEventSink* event_sink = nullptr) override;
 
     //! Push body data for a streaming send request (H3 DATA frame via QUIC)
-    /** @since %Qore 3.0
+    /** A send that finds the stream's send buffer full waits for the peer's flow-control windows to let the data
+        go out and the buffer to drain, and is then made again: no data is dropped however slowly the peer reads (the
+        data of a full buffer was dropped without an error; qore#7465).  The wait ends when the stream or the
+        connection ends (ex: the peer resets the stream or answers the request without reading its body) and when the
+        thread is cancelled or its Program interrupted, and raises \c HTTP3-FLOW-CONTROL only if the peer
+        acknowledged none of the stream's data for the request timeout of the connection's manager.
+
+        @since %Qore 3.0
     */
     DLLEXPORT void pushSendData(const void* data, size_t len, ExceptionSink* xsink) override;
 
@@ -158,37 +168,11 @@ public:
 
     DLLEXPORT void closeConnection(ExceptionSink* xsink) override;
 
-    //! Handshake-phase hook invoked by an inner Http3ClientPollOperationPriv
-    //! when its QUIC+TLS handshake reaches the READING state.
-    /** Happy-eyeballs coordination: the first attempt to succeed wins.  The
-        winning attempt is committed as the primary (members @c sock_priv,
-        @c poll_op_priv, etc. are populated from its tuple), losing attempts
-        are aborted, and the base class transitions to @c READY.
-        Subsequent calls (from already-canceled attempts) are no-ops.
-        @param inner the poll op priv whose handshake just completed
-        @since %Qore 3.0
-    */
-    DLLLOCAL void onInnerHandshakeReady(Http3ClientPollOperationPriv* inner);
-
-    //! Handshake-phase hook invoked by an inner Http3ClientPollOperationPriv
-    //! when its QUIC+TLS handshake fails.
-    /** Happy-eyeballs coordination: a single attempt failing does not
-        close the connection if other attempts remain.  Only when all
-        attempts have failed does the base class transition to @c CLOSED
-        with the most recent error details.
-        @param inner the poll op priv whose handshake failed
-        @param err short error code (e.g. "QUIC-HANDSHAKE-TIMEOUT")
-        @param desc human-readable description
-        @since %Qore 3.0
-    */
-    DLLLOCAL void onInnerHandshakeFailed(Http3ClientPollOperationPriv* inner,
-        const char* err, const char* desc);
-
 protected:
     DLLLOCAL QoreHashNode* getReferencedErrorInfo() override;
 
 private:
-    //! Returns the poll operation with a new reference taken under @c attempts_mu_, or nullptr if there is none
+    //! Returns the poll operation with a new reference taken under @c op_mu_, or nullptr if there is none
     DLLLOCAL Http3ClientPollOperationPriv* getReferencedPollOp() const;
 
     //! @name QoreObject refs — standalone C++ lifecycle, NOT DGC-visible
@@ -208,34 +192,11 @@ private:
 
         @par Concurrency contract
 
-        These members are populated at two distinct points:
-          1. Initial publication in @ref buildAndSubmit on the app thread,
-             BEFORE the constructor returns.  At this time the primary
-             (first) attempt's tuple is published.
-          2. Reassignment in @ref onInnerHandshakeReady on the I/O thread
-             when a different attempt wins the happy-eyeballs race.  The
-             reassignment is performed under @c attempts_mu_.
-
-        Readers of the socket members that have found the connection ready
-        see the winner's tuple: @ref onConnectionReady is called AFTER the
-        member reassignment and publishes the state change with release
-        ordering, and @c isReady() reads it with acquire ordering.
-
-        Every write of these members is made under @c attempts_mu_: the
-        publication in @ref buildAndSubmit, the reassignment in
-        @ref onInnerHandshakeReady, the nulling in @ref onInnerHandshakeFailed
-        and @ref closeConnection (racing branch), and the release in the
-        destructor.  While the attempts race, the members alias the primary
-        attempt, whose teardown can release its poll operation at any time;
-        every reader of @c poll_op_priv (the submit methods, pushSendData(),
-        setTrailers(), cancelRequest(), getReferencedErrorInfo(),
-        getActiveStreamCount() and closeConnection()) therefore takes the poll
-        operation with a reference of its own under @c attempts_mu_
-        (getReferencedPollOp()) and uses it after the lock is released.  The
-        socket members (@c sock_priv, @c sock_obj) are read without the lock
-        only by methods that have found the connection ready (a stream was
-        submitted on it): the winner's members then stay set until the
-        destructor.
+        The members are published under @c op_mu_ by @ref buildAndSubmit before the poll operation is submitted, and
+        released under it by the destructor.  Every reader of @c poll_op_priv that is not gated by the connection's
+        state (getReferencedErrorInfo(), and the methods that run while closeConnection() can run) takes the poll
+        operation with a reference of its own under @c op_mu_ (getReferencedPollOp()) and uses it after the lock is
+        released.
 
         @{
     */
@@ -248,7 +209,7 @@ private:
     int max_concurrent_streams_ = 0;
     std::string owner_str;
 
-    //! SSL configuration applied to the fresh H3 UDP socket in buildAndSubmit
+    //! SSL configuration applied to the H3 UDP socket in buildAndSubmit
     /** Propagated from HttpClientConnectionManagerBase::ssl_config so the
         QUIC handshake (which reads the socket's ssl_verify_mode /
         accept-all-certs / cert / pk) honors the user's HTTPClient settings.
@@ -260,12 +221,14 @@ private:
     bool ssl_accept_all_certs_ = false;
     std::string ssl_ca_file_;
     std::string ssl_ca_path_;
+    //! An in-memory trust store, if set; the connection holds a reference
+    QoreSSLTrustStore* ssl_trust_store_ = nullptr;
     QoreSSLCertificate* client_cert_ = nullptr;
     QoreSSLPrivateKey* client_key_ = nullptr;
 
-    //! Per-attempt QUIC handshake deadline in nanoseconds, captured at
+    //! QUIC handshake deadline in nanoseconds, captured at
     //! construction time from the manager's @c connect_timeout_ms option.
-    //! Forwarded to each @ref SocketQuicClientPollOperation in @c buildAttempt
+    //! Forwarded to the @ref SocketQuicClientPollOperation in @c buildAndSubmit, which applies it to its race
     //! so the QUIC transport bounds the handshake itself instead of relying
     //! solely on the application-layer @c waitForReadyOrError.  Without this,
     //! a closed peer UDP port (e.g., a fake @c Alt-Svc target) burns the full
@@ -277,113 +240,25 @@ private:
     //! Stream ID for the active streaming send request (-1 = none)
     int64_t streaming_send_stream_id = -1;
 
-    //! One concurrent QUIC handshake attempt during happy-eyeballs racing
-    /** Each attempt owns a dedicated UDP socket + poll op.  Raw QoreObject
-        pointers are held for deref in @c clearAttempt (on abort or when the
-        attempt loses the race).  All fields are populated synchronously at
-        @c buildAttempt time; after @c onInnerHandshakeReady commits the
-        winner, @c attempts_ is cleared and the winner's tuple is hoisted
-        into the corresponding @c sock_obj / @c sock_priv / @c poll_op_obj /
-        @c poll_op_priv members on the enclosing connection.
-    */
-    struct Attempt {
-        QoreObject* sock_obj = nullptr;
-        QoreSocketObject* sock_priv = nullptr;
-        QoreObject* poll_op_obj = nullptr;
-        Http3ClientPollOperationPriv* poll_op_priv = nullptr;
-        int family = 0;              // AF_INET / AF_INET6 for diagnostics
-        bool submitted = false;      // true once passed to AsyncIoController
-        bool finished = false;       // true once handshake outcome known
-
-        //! Default destructor is a no-op on the raw pointers: ownership
-        //! is transferred either to the enclosing connection's members
-        //! (winner) or released via @ref Http3ClientConnection::clearAttempt
-        //! (loser / teardown).  In debug builds, assert that both
-        //! QoreObject pointers were zeroed before destruction to catch
-        //! future ownership-discipline regressions.
-        ~Attempt() {
-            assert(sock_obj == nullptr);
-            assert(poll_op_obj == nullptr);
-        }
-
-        // Non-copyable — the raw pointers have a single owner at any
-        // time (the Attempt itself during racing, the connection members
-        // after winner commit).
-        Attempt() = default;
-        Attempt(const Attempt&) = delete;
-        Attempt& operator=(const Attempt&) = delete;
-    };
-
-    //! Abort + deref + zero an attempt.  Acquires @c attempts_mu_
-    //! internally to atomically null the resource fields before the
-    //! (potentially blocking) abort/deref so a concurrent
-    //! @ref submitAttempt either sees both refs alive (and refSelf's
-    //! them under the lock) or sees both nulled (and bails out).
-    //! Callers MUST NOT hold @c attempts_mu_ when calling.
-    DLLLOCAL void clearAttempt(Attempt& a, ExceptionSink* xsink);
-
-    //! Build one QUIC handshake attempt for a specific address family and
-    //! optional stagger delay.  Creates a fresh UDP socket, applies SSL
-    //! settings, wraps in a SocketQuicClientPollOperation and
-    //! Http3ClientPollOperationPriv, and appends to @c attempts_.  The
-    //! attempt is NOT yet submitted to the AsyncIoController — callers
-    //! drive submission after the full list is built so lookups via
-    //! @c poll_op_priv within submission callbacks see a consistent view.
-    //! The attempt's UDP socket is bound with the synchronous QoreSocketObject::bindINET(), which waits for the
-    //! async I/O controller.  That is only allowed because a connection of this class is only ever created by
-    //! HttpClientConnectionManagerBase::acquireConnectionRef(), acquireConnectionForStreamingSendRef() and
-    //! acquireConnectionAsyncRef(), which refuse to run on an async I/O execution path
-    //! (SocketSyncPoll::assertNotOnIoThread()); HTTPClient poll operations acquire the connection of a redirect in a
-    //! native task for that reason.  The candidate families come from resolveCandidateFamilies(), which resolves no
-    //! name.  A connection that could be created on an I/O path must instead give its poll operation an unbound
-    //! socket, which the operation binds once the target is resolved (the \c bind_unbound option of
-    //! SocketQuicClientPollOperation, used by Http3ClientPollOperationBase).
-    //! @param family AF_INET or AF_INET6 target family
-    //! @param not_before_ns_abs absolute ngtcp2 timestamp (0 = immediate)
-    //! @param xsink exception sink
-    //! @return index into @c attempts_ on success, -1 on error
-    DLLLOCAL int buildAttempt(int family, int64_t not_before_ns_abs,
-        ExceptionSink* xsink);
-
-    //! Submit one already-built attempt to the AsyncIoController.
-    //! @return 0 on success, -1 on error (sets @c submitted on success).
-    DLLLOCAL int submitAttempt(Attempt& a, ExceptionSink* xsink);
-
     //! Wake the async I/O controller so pending QUIC writes are driven on the I/O thread.
     DLLLOCAL void wakeController() const;
 
-    //! @name Happy-eyeballs racing state
-    /** During handshake, up to N attempts (one per interleaved v6/v4
-        candidate) race concurrently.  The first to report
-        @c onInnerHandshakeReady wins; the others are aborted.
-        @{
-    */
-    //! Use shared_ptr (not unique_ptr) so the submit loop in
-    //! @ref buildAndSubmit can hold its own refs to in-flight Attempts —
-    //! otherwise a concurrent @ref onInnerHandshakeReady (winner commit
-    //! on the I/O thread) can move losing attempts out of @c attempts_
-    //! into a local vector that's destroyed at function exit, freeing
-    //! the Attempt struct mid-loop.  shared_ptr ownership across the
-    //! main thread + I/O thread keeps the Attempt alive until both
-    //! drop their refs.
-    std::vector<std::shared_ptr<Attempt>> attempts_;
-    mutable std::mutex attempts_mu_;
-    //! Index of the winning attempt in @c attempts_; -1 while racing.
-    /** Written under @c attempts_mu_; read under the same or during
-        committed-state method calls where the connection is already
-        @c READY and @c attempts_ has been drained.
-    */
-    int winner_idx_ = -1;
+    //! Sends data on the stream, waiting for the stream's send buffer to drain while it is full (see pushSendData())
+    DLLLOCAL void sendStreamDataWaitingForDrain(int64_t stream_id, const void* data, size_t len, bool end_stream,
+        ExceptionSink* xsink);
 
-    //! The maximum size of a response body received into memory; <= 0 = no limit; written under @c attempts_mu_
+    //! Guards the members of the poll operation and socket (see above)
+    mutable std::mutex op_mu_;
+
+    //! The maximum size of a response body received into memory; <= 0 = no limit; written under @c op_mu_
     int64_t max_response_body_size_ = 0;
-    //! Error details from the most recently failed attempt (for diagnostics
-    //! when all attempts fail).  Protected by @c attempts_mu_.
-    std::string last_err_, last_desc_;
-    //! true if @ref last_err_ is an error of an attempt that never reached a server (see is_unreached_error())
-    bool last_err_unreached_ = false;
-    //! @}
 
+    //! Creates the socket and poll operation of the connection and submits the operation to the I/O controller
+    /** The socket is unbound: the poll operation resolves the host name and races connection attempts to its
+        addresses (RFC 8305), so nothing that can block runs here.
+
+        @return 0 for success, -1 if an exception was raised
+    */
     DLLLOCAL int buildAndSubmit(ExceptionSink* xsink);
 };
 

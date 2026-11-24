@@ -1286,7 +1286,7 @@ int typed_hash_decl_private::initHashInternInPlace(QoreHashNode* h, ExceptionSin
     qore_hash_private* hp = qore_hash_private::get(*h);
     // Match newHash()'s declaration-order iteration without reallocating members.
     auto move_member_to_back = [&](const char* key) {
-        auto member = hp->hm.find(key);
+        auto member = hp->findIter(key);
         assert(member != hp->hm.end());
         hp->member_list.splice(hp->member_list.end(),
             hp->member_list, member->second);

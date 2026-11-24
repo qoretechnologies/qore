@@ -150,8 +150,25 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     Whether the connection is kept after a response follows RFC 9112 section 9.3: an HTTP/1.1 response keeps it
     unless a \c Connection header has the \c close option, while an HTTP/1.0 response keeps it only if a
     \c Connection header has the \c keep-alive option and none has \c close.  Options are case-insensitive whole
-    tokens and are read from comma-separated lists and from every \c Connection header of the response.  The next
-    request after a response that does not keep the connection, including a redirect, opens a new connection.
+    tokens and are read from comma-separated lists and from every \c Connection header of the response.  An HTTP/1.x
+    connection is also not kept when more data follows the response on it, whether the response has no body (a
+    response to \c HEAD, or one with the status 204 or 304) or one that was read whole: data that the client has
+    already received after the end of the response, or that it can read at once, closes the connection, as does a
+    \c 101 response to a request that does not take the connection over, which ends HTTP on it.  The next
+    request after a response that does not keep the connection, including a redirect, opens a new connection.  The
+    HTTP/1.x connections of the @ref httpclientiointro "HttpClientIo" module are kept or closed alike.
+
+    @anchor httpclient_interim_responses
+    An HTTP/1.x interim response, which is any response with a \c 1xx status other than \c 101 (such as
+    <tt>100 Continue</tt>, <tt>102 Processing</tt> or <tt>103 Early Hints</tt>, and the \c 1xx codes not defined yet;
+    RFC 9110 section 15.2), is never returned as the response to a request: it is skipped, and the final response
+    that follows it on the connection is read and returned, and decides whether the connection is kept.  The header
+    of each interim response is reported to an event queue (see HTTPClient::setEventQueue()) as a
+    @ref EVENT_HTTP_MESSAGE_RECEIVED event, as that of any response is.  A request fails with an
+    \c HTTP1-RECV-ERROR exception, and the connection is closed, when the server sends more than 16 interim responses
+    before the final one, and when it sends a \c 101 response to a request that did not ask for a protocol upgrade with
+    an \c Upgrade header (RFC 9110 section 7.8), as such a request, streamed or not, has no use for the connection
+    after it.
 
     HTTP redirect responses are supported and can be limited with the \c max_redirects constructor hash key or by
     using the HTTPClient::setMaxRedirects() method. The default maximum number of redirects allowed is 5; see
@@ -598,6 +615,11 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
     - \c ssl_ca_path: a directory with CA certificates in PEM format named by the hash of their subject names; if
       set, the server's certificate is verified against these CA certificates instead of the default CA certificates
       of the system; the same restrictions apply as with \c ssl_ca_file
+    - \c ssl_trust_store: an @ref Qore::SSLTrustStore "SSLTrustStore" object: the server's certificate is verified
+      against its CA certificates, which were read when it was created, instead of \c ssl_ca_file, \c ssl_ca_path and
+      the default CA certificates of the system, on every connection path (HTTP/1.1, HTTP/2, HTTP/3); no file is read
+      and the environment is not consulted when a certificate is verified; it implies \c ssl_verify_cert unless that
+      option is given as @ref False; a client with a trust store cannot be serialized (since %Qore 3.0)
     - \c ssl_verify_cert: if @ref True "True" then the server's certificate will only be accepted if it's verified
     - \c timeout: The timeout value in milliseconds (also can be a @ref relative_dates "relative date-time value" for
       clarity, ex: \c 5m)
@@ -657,6 +679,7 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
       - \c max_response_body_size
       - \c ssl_ca_file
       - \c ssl_ca_path
+      - \c ssl_trust_store
 */
 HTTPClient::constructor(hash<auto> options) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, xsink);
@@ -2330,6 +2353,11 @@ hash<auto> msg = httpclient.sendWithSendCallback(callback, "POST", "/path", {"Co
     @note
     - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no \c "Transfer-Encoding" header is already present
     - For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
+    - Over HTTP/2 and HTTP/3, the data returned by the callback waits for the server's flow control to let it go out:
+      the callback is called for more data only when the stream's send buffer has room for it, so no data is dropped
+      however slowly the server reads; the wait ends with the stream (ex: the server answers without reading the body)
+      or when the thread is cancelled, and raises \c HTTP2-FLOW-CONTROL or \c HTTP3-FLOW-CONTROL only if the server
+      took none of the stream's data for the request timeout
 
     @see @ref httpclient_get_with_body
 
@@ -3276,7 +3304,10 @@ nothing HTTPClient::setProxyURL(string url) [flags=NAMED_ARGS] {
 }
 
 //! Returns the current proxy URL as a string or @ref nothing if no proxy URL is set
-/** @return the current proxy URL as a string or @ref nothing if no proxy URL is set
+/** @param code see @ref http_url_codes the values for this bitfield; \c UC_TARGET gives the scheme, address and port
+    (if not the default) only, without the user name and password
+
+    @return the current proxy URL as a string or @ref nothing if no proxy URL is set
 
     @par Example:
     @code{.py}
@@ -3284,9 +3315,11 @@ nothing HTTPClient::setProxyURL(string url) [flags=NAMED_ARGS] {
     @endcode
 
     @see getSafeProxyURL()
+
+    @since %Qore 3.0 the \a code parameter
 */
-*string HTTPClient::getProxyURL() [flags=CONSTANT] {
-    return client->getProxyURL();
+*string HTTPClient::getProxyURL(int code = URL_NORMAL) [flags=CONSTANT,NAMED_ARGS] {
+    return client->getProxyURL(code);
 }
 
 //! Returns the current proxy URL without the password field

@@ -43,7 +43,8 @@ O=$(mktemp -d "${TMPDIR:-/tmp}/cgrows.XXXXXX") || exit 1
 trap 'rm -rf "$O"' EXIT
 trap 'exit 1' HUP INT TERM
 
-# the cells: one line "<build tag> <build> <script> <row> <mode>" each
+# the cells: one line "<build tag> <build> <script> <row> <mode>" each: five words, which xargs -n 5 passes to one
+# command (BusyBox xargs has no -L)
 for r in $ROWS; do
     for m in $MODES; do
         echo "new $NEW ${r%%:*} ${r##*:} $m"
@@ -56,7 +57,7 @@ done > "$O/cells"
 # (the paths of the builds must not contain white space)
 export CGROW_WRAP
 # shellcheck disable=SC2016
-xargs -P "$P" -L 1 sh -c 'v=$($CGROW_WRAP sh "$0/cgmin.sh" "$3" "$0/bench/$4" "$5" "$6" 2> "$1/$2.$4.$5.$6.err") \
+xargs -P "$P" -n 5 sh -c 'v=$($CGROW_WRAP sh "$0/cgmin.sh" "$3" "$0/bench/$4" "$5" "$6" 2> "$1/$2.$4.$5.$6.err") \
     && echo "$v" > "$1/$2.$4.$5.$6"' "$D" "$O" < "$O/cells" || true
 rc=0
 for r in $ROWS; do

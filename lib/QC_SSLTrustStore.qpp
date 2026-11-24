@@ -1,0 +1,477 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_SSLTrustStore.qpp SSLTrustStore class definition */
+/*
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 David Nichols
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_SSLTrustStore.h"
+#include "qore/intern/QC_SSLCertificate.h"
+#include <qore/QoreSandboxManager.h>
+#include <qore/SystemEnvironment.h>
+
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+
+#include <algorithm>
+#include <map>
+#include <mutex>
+#include <vector>
+
+#include <dirent.h>
+#include <sys/stat.h>
+
+namespace {
+// A cache entry: the shared store and the number of objects that use it
+struct trust_store_entry {
+    X509_STORE* store;
+    size_t users;
+    // the number of distinct certificates
+    size_t count;
+};
+
+// The stores of the process by the identity of their certificate set
+std::map<std::string, trust_store_entry> trust_store_cache;
+std::mutex trust_store_lock;
+
+// Returns the hex SHA-256 digest of the sorted DER encodings of the certificates
+int trust_store_key(X509* const* certs, size_t count, std::string& key, std::vector<std::string>& ders,
+        ExceptionSink* xsink) {
+    ders.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        unsigned char* buf = nullptr;
+        int len = i2d_X509(certs[i], &buf);
+        if (len <= 0) {
+            xsink->raiseException("SSLTRUSTSTORE-ERROR", "a certificate cannot be DER-encoded");
+            return -1;
+        }
+        ders.emplace_back(reinterpret_cast<const char*>(buf), len);
+        OPENSSL_free(buf);
+    }
+    std::sort(ders.begin(), ders.end());
+    // the same certificate twice is the same set
+    ders.erase(std::unique(ders.begin(), ders.end()), ders.end());
+
+    EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+    if (!mdctx) {
+        xsink->raiseException("SSLTRUSTSTORE-ERROR", "cannot create a digest context");
+        return -1;
+    }
+    unsigned char md[EVP_MAX_MD_SIZE];
+    unsigned md_len = 0;
+    bool ok = EVP_DigestInit_ex(mdctx, EVP_sha256(), nullptr);
+    for (auto& d : ders) {
+        if (!ok) {
+            break;
+        }
+        // the length first, so that the encodings cannot run together
+        uint64_t len = d.size();
+        ok = EVP_DigestUpdate(mdctx, &len, sizeof len) && EVP_DigestUpdate(mdctx, d.data(), d.size());
+    }
+    ok = ok && EVP_DigestFinal_ex(mdctx, md, &md_len);
+    EVP_MD_CTX_free(mdctx);
+    if (!ok) {
+        xsink->raiseException("SSLTRUSTSTORE-ERROR", "cannot digest the certificates");
+        return -1;
+    }
+    static const char hex[] = "0123456789abcdef";
+    key.clear();
+    for (unsigned i = 0; i < md_len; ++i) {
+        key += hex[md[i] >> 4];
+        key += hex[md[i] & 0xf];
+    }
+    return 0;
+}
+
+// Holds X509 pointers and frees them
+class X509ListHolder {
+public:
+    std::vector<X509*> certs;
+
+    ~X509ListHolder() {
+        for (auto* c : certs) {
+            X509_free(c);
+        }
+    }
+};
+
+// Reads every certificate of a PEM file; returns -1 if an exception was raised
+int trust_store_read_file(const char* path, X509ListHolder& certs, ExceptionSink* xsink) {
+    if (q_check_path(path)) {
+        xsink->raiseException("SSLTRUSTSTORE-ERROR", "the path contains a NUL character");
+        return -1;
+    }
+    {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        if (smh && !smh->checkFilesystemAccess(path, QSEC_READ, xsink)) {
+            return -1;
+        }
+    }
+    BIO* bio = BIO_new_file(path, "r");
+    if (!bio) {
+        ERR_clear_error();
+        xsink->raiseErrnoException("SSLTRUSTSTORE-ERROR", errno, "cannot read CA certificate file '%s'", path);
+        return -1;
+    }
+    size_t before = certs.certs.size();
+    while (X509* c = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr)) {
+        certs.certs.push_back(c);
+    }
+    // the end of the file is reported as an error by PEM_read_bio_X509()
+    ERR_clear_error();
+    BIO_free(bio);
+    if (certs.certs.size() == before) {
+        xsink->raiseException("SSLTRUSTSTORE-ERROR", "the file '%s' has no PEM certificate", path);
+        return -1;
+    }
+    return 0;
+}
+
+// Reads every certificate of the PEM files of a directory, in the order of their names
+int trust_store_read_dir(const char* dir, X509ListHolder& certs, bool ignore_empty, ExceptionSink* xsink) {
+    if (q_check_path(dir)) {
+        xsink->raiseException("SSLTRUSTSTORE-ERROR", "the path contains a NUL character");
+        return -1;
+    }
+    {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        if (smh && !smh->checkFilesystemAccess(dir, QSEC_READ, xsink)) {
+            return -1;
+        }
+    }
+    DIR* d = opendir(dir);
+    if (!d) {
+        xsink->raiseErrnoException("SSLTRUSTSTORE-ERROR", errno, "cannot read CA certificate directory '%s'", dir);
+        return -1;
+    }
+    std::vector<std::string> names;
+    while (struct dirent* e = readdir(d)) {
+        if (e->d_name[0] != '.') {
+            names.push_back(e->d_name);
+        }
+    }
+    closedir(d);
+    std::sort(names.begin(), names.end());
+    for (auto& n : names) {
+        std::string path = std::string(dir) + "/" + n;
+        struct stat st;
+        if (stat(path.c_str(), &st) || !S_ISREG(st.st_mode)) {
+            continue;
+        }
+        // every file is checked: a file in the directory, or a symbolic link to one elsewhere, can be denied to the
+        // caller (the policy check resolves the path)
+        {
+            QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+            if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink)) {
+                return -1;
+            }
+        }
+        BIO* bio = BIO_new_file(path.c_str(), "r");
+        if (!bio) {
+            ERR_clear_error();
+            continue;
+        }
+        while (X509* c = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr)) {
+            certs.certs.push_back(c);
+        }
+        ERR_clear_error();
+        BIO_free(bio);
+    }
+    if (certs.certs.empty() && !ignore_empty) {
+        xsink->raiseException("SSLTRUSTSTORE-ERROR", "the directory '%s' has no PEM certificate", dir);
+        return -1;
+    }
+    return 0;
+}
+
+QoreObject* trust_store_object(QoreSSLTrustStore* ts) {
+    return new QoreObject(QC_SSLTRUSTSTORE, getProgram(), ts);
+}
+}
+
+QoreSSLTrustStore* QoreSSLTrustStore::get(X509* const* certs, size_t count, ExceptionSink* xsink) {
+    if (!count) {
+        xsink->raiseException("SSLTRUSTSTORE-ERROR", "a trust store needs at least one certificate");
+        return nullptr;
+    }
+    std::string key;
+    std::vector<std::string> ders;
+    if (trust_store_key(certs, count, key, ders, xsink)) {
+        return nullptr;
+    }
+
+    std::lock_guard<std::mutex> lock(trust_store_lock);
+    auto i = trust_store_cache.find(key);
+    if (i != trust_store_cache.end()) {
+        ++i->second.users;
+        return new QoreSSLTrustStore(i->second.store, key, i->second.count);
+    }
+
+    X509_STORE* store = X509_STORE_new();
+    if (!store) {
+        xsink->raiseException("SSLTRUSTSTORE-ERROR", "cannot create a certificate store");
+        return nullptr;
+    }
+    // the store is built from the sorted, distinct encodings: it depends only on the certificate set (its key), not on
+    // the order in which the first caller gave the certificates (the order matters to OpenSSL for certificates with
+    // the same subject)
+    for (const std::string& d : ders) {
+        const unsigned char* p = reinterpret_cast<const unsigned char*>(d.data());
+        X509* c = d2i_X509(nullptr, &p, (long)d.size());
+        // X509_STORE_add_cert() takes a reference of its own
+        if (!c || !X509_STORE_add_cert(store, c)) {
+            if (c) {
+                X509_free(c);
+            }
+            ERR_clear_error();
+            X509_STORE_free(store);
+            xsink->raiseException("SSLTRUSTSTORE-ERROR", "cannot add a certificate to the store");
+            return nullptr;
+        }
+        X509_free(c);
+    }
+    trust_store_cache[key] = {store, 1, ders.size()};
+    return new QoreSSLTrustStore(store, key, ders.size());
+}
+
+QoreSSLTrustStore::~QoreSSLTrustStore() {
+    std::lock_guard<std::mutex> lock(trust_store_lock);
+    auto i = trust_store_cache.find(key);
+    assert(i != trust_store_cache.end());
+    assert(i->second.store == store);
+    if (!--i->second.users) {
+        // connections that use the store hold references of their own
+        X509_STORE_free(i->second.store);
+        trust_store_cache.erase(i);
+    }
+}
+
+int QoreSSLTrustStore::applyTo(SSL* ssl) const {
+    // the connection takes a reference of its own; the shared store is not changed
+    return SSL_set1_verify_cert_store(ssl, store) ? 0 : -1;
+}
+
+size_t QoreSSLTrustStore::getCacheSize() {
+    std::lock_guard<std::mutex> lock(trust_store_lock);
+    return trust_store_cache.size();
+}
+
+//! An immutable set of trusted CA certificates in memory
+/** A trust store holds the CA certificates that verify the certificate of the server of a TLS connection instead of
+    the CA certificates that TLS connections trust by default, as with the \c ssl_ca_file option of
+    @ref Qore::HTTPClient "HTTPClient", but in memory: the certificates are read when the object is created, so the
+    connections that use it read no file and are not affected by a later change of the process environment or of the
+    files (qoretechnologies/qore#7248).
+
+    The certificates cannot be read back, and the store cannot be changed after it has been created.  The certificate
+    store is built once per distinct set of certificates in the process and shared by every object made from the same
+    set, also in other Programs; a copy of the object uses the same store.
+
+    @par Example:
+    @code{.py}
+# trusted code captures the CA certificates that TLS connections trust by default now
+SSLTrustStore store = SSLTrustStore::getDefault();
+HTTPClient hc({"url": "https://api.example.com", "ssl_trust_store": store});
+    @endcode
+
+    @since %Qore 3.0
+*/
+qclass SSLTrustStore [arg=QoreSSLTrustStore* ts; ns=Qore];
+
+//! Creates the trust store from certificates
+/** @param certs the certificates: @ref Qore::SSLCertificate "SSLCertificate" objects; at least one
+
+    @throw SSLTRUSTSTORE-ERROR no certificate is given, or a value is not an
+    @ref Qore::SSLCertificate "SSLCertificate" object
+
+    @par Example:
+    @code{.py}
+SSLTrustStore store((new SSLCertificate(ReadOnlyFile::readTextFile("ca.pem")),));
+    @endcode
+*/
+SSLTrustStore::constructor(softlist<auto> certs) {
+    X509ListHolder holder;
+    ConstListIterator li(certs);
+    while (li.next()) {
+        const QoreValue v = li.getValue();
+        if (v.getType() != NT_OBJECT) {
+            xsink->raiseException("SSLTRUSTSTORE-ERROR", "the certificate list contains a value of type '%s'; "
+                "expecting 'SSLCertificate' objects", v.getFullTypeName());
+            return;
+        }
+        const QoreObject* obj = v.get<const QoreObject>();
+        if (!obj->getClass(CID_SSLCERTIFICATE)) {
+            xsink->raiseException("SSLTRUSTSTORE-ERROR", "the certificate list contains an object of class '%s'; "
+                "expecting 'SSLCertificate' objects", obj->getClassName());
+            return;
+        }
+        ReferenceHolder<QoreSSLCertificate> cert(reinterpret_cast<QoreSSLCertificate*>(
+            const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SSLCERTIFICATE, xsink)), xsink);
+        if (*xsink) {
+            return;
+        }
+        if (!cert) {
+            xsink->raiseException("SSLTRUSTSTORE-ERROR", "the certificate list contains an object of class '%s'; "
+                "expecting 'SSLCertificate' objects", v.get<const QoreObject>()->getClassName());
+            return;
+        }
+        X509* c = cert->getData();
+        X509_up_ref(c);
+        holder.certs.push_back(c);
+    }
+    QoreSSLTrustStore* ts = QoreSSLTrustStore::get(holder.certs.data(), holder.certs.size(), xsink);
+    if (ts) {
+        self->setPrivate(CID_SSLTRUSTSTORE, ts);
+    }
+}
+
+//! Returns a copy of the object, which uses the same certificate store
+/**
+*/
+SSLTrustStore::copy() {
+    // the store is immutable: the copy shares it as another user of the cache entry
+    ReferenceHolder<QoreSSLTrustStore> rv(nullptr, xsink);
+    {
+        std::lock_guard<std::mutex> lock(trust_store_lock);
+        auto i = trust_store_cache.find(ts->getId());
+        assert(i != trust_store_cache.end());
+        ++i->second.users;
+        rv = new QoreSSLTrustStore(i->second.store, ts->getId(), ts->size());
+    }
+    self->setPrivate(CID_SSLTRUSTSTORE, rv.release());
+}
+
+//! Creates a trust store from the PEM certificates of a file
+/** The file is read when the trust store is created, with the filesystem policy of the caller
+
+    @param path the file; it must contain at least one certificate in PEM format
+
+    @return the trust store
+
+    @throw SSLTRUSTSTORE-ERROR the file cannot be read or has no PEM certificate
+    @throw FILESYSTEM-ACCESS-DENIED the caller's sandbox does not allow the file to be read
+*/
+static SSLTrustStore SSLTrustStore::fromFile(string path) [dom=FILESYSTEM] {
+    X509ListHolder holder;
+    if (trust_store_read_file(path->c_str(), holder, xsink)) {
+        return QoreValue();
+    }
+    QoreSSLTrustStore* ts = QoreSSLTrustStore::get(holder.certs.data(), holder.certs.size(), xsink);
+    return ts ? trust_store_object(ts) : QoreValue();
+}
+
+//! Creates a trust store from the PEM certificates of the files of a directory
+/** The files are read when the trust store is created, with the filesystem policy of the caller: unlike the
+    \c ssl_ca_path option of a connection, no file is read when a connection is verified
+
+    @param dir the directory; its regular files that contain PEM certificates are read
+
+    @return the trust store
+
+    @throw SSLTRUSTSTORE-ERROR the directory cannot be read or has no PEM certificate
+    @throw FILESYSTEM-ACCESS-DENIED the caller's sandbox does not allow the directory to be read
+*/
+static SSLTrustStore SSLTrustStore::fromDirectory(string dir) [dom=FILESYSTEM] {
+    X509ListHolder holder;
+    if (trust_store_read_dir(dir->c_str(), holder, false, xsink)) {
+        return QoreValue();
+    }
+    QoreSSLTrustStore* ts = QoreSSLTrustStore::get(holder.certs.data(), holder.certs.size(), xsink);
+    return ts ? trust_store_object(ts) : QoreValue();
+}
+
+//! Creates a trust store from the CA certificates that TLS connections trust by default
+/** The certificates of the file and the directory that @ref Qore::get_default_ssl_ca_locations()
+    "get_default_ssl_ca_locations()" returns at the time of the call are read, with the filesystem policy of the
+    caller; trusted code captures them so that a later change of the process environment or of the files does not
+    change which certificates its connections trust.  The store is built only once for the same certificates.
+
+    @return the trust store
+
+    @throw SSLTRUSTSTORE-ERROR neither location has a PEM certificate
+    @throw FILESYSTEM-ACCESS-DENIED the caller's sandbox does not allow a location to be read
+*/
+static SSLTrustStore SSLTrustStore::getDefault() [dom=FILESYSTEM,EXTERNAL_INFO] {
+    std::string file, dir;
+    {
+        QoreEnvironmentReadLock env_lock;
+        const char* f = getenv(X509_get_default_cert_file_env());
+        const char* d = getenv(X509_get_default_cert_dir_env());
+        file = f && *f ? f : X509_get_default_cert_file();
+        dir = d && *d ? d : X509_get_default_cert_dir();
+    }
+    X509ListHolder holder;
+    struct stat st;
+    if (!stat(file.c_str(), &st) && S_ISREG(st.st_mode)) {
+        if (trust_store_read_file(file.c_str(), holder, xsink)) {
+            return QoreValue();
+        }
+    }
+    // the directory can hold several directories separated by ':', as with SSL_CERT_DIR
+    size_t start = 0;
+    while (start <= dir.size()) {
+        size_t end = dir.find(':', start);
+        std::string one = dir.substr(start, end == std::string::npos ? std::string::npos : end - start);
+        if (!one.empty() && !stat(one.c_str(), &st) && S_ISDIR(st.st_mode)) {
+            if (trust_store_read_dir(one.c_str(), holder, true, xsink)) {
+                return QoreValue();
+            }
+        }
+        if (end == std::string::npos) {
+            break;
+        }
+        start = end + 1;
+    }
+    if (holder.certs.empty()) {
+        xsink->raiseException("SSLTRUSTSTORE-ERROR", "no CA certificate was found in the default locations '%s' and "
+            "'%s'", file.c_str(), dir.c_str());
+        return QoreValue();
+    }
+    QoreSSLTrustStore* ts = QoreSSLTrustStore::get(holder.certs.data(), holder.certs.size(), xsink);
+    return ts ? trust_store_object(ts) : QoreValue();
+}
+
+//! Returns the number of distinct certificates of the store
+/**
+*/
+int SSLTrustStore::size() [flags=CONSTANT] {
+    return (int64)ts->size();
+}
+
+//! Returns the identity of the certificate set: the hex SHA-256 digest of the sorted DER encodings of its certificates
+/** Two trust stores with the same identity share the same certificate store
+*/
+string SSLTrustStore::getId() [flags=CONSTANT] {
+    return new QoreStringNode(ts->getId());
+}
+
+//! Returns the number of distinct certificate stores in the process
+/** For diagnostics: trust stores made from the same certificates share one certificate store
+*/
+static int SSLTrustStore::getStoreCount() [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+    return (int64)QoreSSLTrustStore::getCacheSize();
+}

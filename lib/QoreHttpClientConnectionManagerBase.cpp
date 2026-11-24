@@ -37,6 +37,7 @@
 #include <qore/QoreSSLCertificate.h>
 #include <qore/QoreSSLPrivateKey.h>
 #include "qore/intern/QoreHttp1ClientConnection.h"
+#include "qore/intern/QC_SSLTrustStore.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/NegotiatingConnectionPollOp.h"
@@ -86,6 +87,9 @@ HttpClientConnectionManagerBase::HttpClientConnectionManagerBase(const Options& 
     }
     if (opts_.client_key) {
         opts_.client_key->ref();
+    }
+    if (opts_.ssl_trust_store) {
+        opts_.ssl_trust_store->ref();
     }
     // Validate options
     if (opts_.max_connections_per_host < 0) {
@@ -174,6 +178,9 @@ HttpClientConnectionManagerBase::~HttpClientConnectionManagerBase() {
     }
     if (opts_.client_key) {
         opts_.client_key->deref();
+    }
+    if (opts_.ssl_trust_store) {
+        opts_.ssl_trust_store->deref();
     }
     // a connection whose back-pointer is still set can call onConnectionClosed() on this manager after it has been
     // destroyed: every connection that the manager releases has its back-pointer cleared first
@@ -752,6 +759,7 @@ static Http1SslConfig get_ssl_config(const HttpClientConnectionManagerBase::Opti
     ssl_cfg.key = opts.client_key;
     ssl_cfg.ca_file = opts.ssl_ca_file;
     ssl_cfg.ca_path = opts.ssl_ca_path;
+    ssl_cfg.trust_store = opts.ssl_trust_store;
     return ssl_cfg;
 }
 
@@ -859,7 +867,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             conn = new Http3ClientConnection(host, port,
                 opts_.max_streams_per_connection, xsink, this,
                 opts_.ssl_verify_mode, opts_.accept_all_certs,
-                opts_.client_cert, opts_.client_key, opts_.ssl_ca_file, opts_.ssl_ca_path);
+                opts_.client_cert, opts_.client_key, opts_.ssl_ca_file, opts_.ssl_ca_path, opts_.ssl_trust_store);
             break;
         case HttpClientProtocol::NEGOTIATE:
         negotiate_case: {
@@ -1510,15 +1518,16 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
         return nullptr;
     }
 
-    // RFC 9110 section 9.2.2: an idempotent request can be repeated automatically when the connection fails
-    // before a response is received; a connection that has served a request can be closed by the peer while it
-    // waits in the pool, which is only detected when the next request is sent, so such a request is repeated
-    // once on a new connection
-    bool can_retry = qore_http_manager_ops(this).isIdempotentMethod(method);
+    // RFC 9110 section 9.2.2: a request that its connection refused when it was submitted, because the connection
+    // was found closed (by the peer, or by a timer that expired between the checkout and the submit), was never
+    // sent, so it is repeated once on a new connection whatever its method (qore#7385); an idempotent request is
+    // also repeated when the connection fails after it was sent, before a response is received: a connection that
+    // has served a request can be closed by the peer while it waits in the pool, which is only detected then (see
+    // requestOnceImpl())
     for (int attempt = 0; ; ++attempt) {
         bool retry = false;
         QoreHashNode* rv = qore_http_manager_ops(this).requestOnce(method, scheme, host, port, path, headers, body, body_len, timeout_ms,
-            xsink, event_sink, can_retry && !attempt ? &retry : nullptr);
+            xsink, event_sink, !attempt ? &retry : nullptr);
         if (!retry) {
             return rv;
         }
@@ -1567,7 +1576,8 @@ QoreHashNode* qore_http_manager_ops::requestOnceImpl(HttpClientConnectionManager
             ExceptionSink evict_xsink;
             b->closeAndEvict(conn, &evict_xsink);
             evict_xsink.clear();
-            // a reused connection closed by the peer while it waited in the pool
+            // a reused connection closed by the peer while it waited in the pool, or found closed at the submit:
+            // the request was not sent, so it is repeated whatever its method (qore#7385)
             if (retry && !cancelled) {
                 *retry = true;
             }
@@ -1612,8 +1622,9 @@ QoreHashNode* qore_http_manager_ops::requestOnceImpl(HttpClientConnectionManager
         // is reported as such, and the request is not repeated (issue #5793)
         bool cancelled = replaceErrorWithPendingCancel(*xsink);
         if (closed) {
-            // a reused connection that was closed by the peer is not used again, and the request is repeated
-            if (retry) {
+            // a reused connection that was closed by the peer is not used again, and the request is repeated if it
+            // is idempotent: it was sent, and the server may have processed it (RFC 9110 section 9.2.2)
+            if (retry && qore_http_manager_ops(b).isIdempotentMethod(method)) {
                 ExceptionSink evict_xsink;
                 b->closeAndEvict(conn, &evict_xsink);
                 evict_xsink.clear();
@@ -1704,16 +1715,15 @@ int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,
     if (conn_out) {
         *conn_out = nullptr;
     }
-    // As in request(): an idempotent request whose connection is found closed when the request is submitted, after
-    // the connection served a request and waited in the pool, is repeated once on a new connection (RFC 9110
-    // section 9.2.2).  The close of a pooled connection becomes visible to the pool only when it has been marked
-    // closed, which can happen between the checkout of the connection and the submit, without an error of its own
-    // when the connection was ended by an idle timeout.
-    bool can_retry = qore_http_manager_ops(this).isIdempotentMethod(method);
+    // As in request(): a request whose connection is found closed when the request is submitted, after the
+    // connection served a request and waited in the pool, is repeated once on a new connection, whatever its method,
+    // as it was never sent (RFC 9110 section 9.2.2, qore#7385).  The close of a pooled connection becomes visible to
+    // the pool only when it has been marked closed, which can happen between the checkout of the connection and the
+    // submit, without an error of its own when the connection was ended by an idle timeout.
     for (int attempt = 0; ; ++attempt) {
         bool retry = false;
         int64_t rv = qore_http_manager_ops(this).requestStreamingOnce(method, scheme, host, port, path, headers, body, body_len, channel_out,
-            xsink, event_sink, reused, can_retry && !attempt ? &retry : nullptr, conn_out);
+            xsink, event_sink, reused, !attempt ? &retry : nullptr, conn_out);
         if (!retry) {
             // a request that has been repeated is not repeated again by the caller
             if (attempt && reused) {

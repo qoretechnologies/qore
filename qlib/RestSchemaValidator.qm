@@ -101,6 +101,17 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - a schema that is shared by every Program keeps what it derives from the data of its caller, such as the types
+      with the request body defaults of a REST client, in the caller's per-Program cache, and shares the types and
+      fields that its type builds cache (see
+      @ref RestSchemaValidator::AbstractRestSchemaValidator::recordTypeBuildCache() "recordTypeBuildCache()";
+      <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>); what it keeps in the
+      per-Program caches is released with the schema
+      (@ref Qore::SandboxManager::releaseProgramCacheValues() "SandboxManager::releaseProgramCacheValues()")
+    - the cache writes of a type build are undone from records that are data
+      (@ref RestSchemaValidator::AbstractRestSchemaValidator::recordTypeBuildUndo() "recordTypeBuildUndo()"), and a
+      nested type build that fails undoes its own writes
+      (<a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
     - the server-side request validation reads the fields of a request, including the header parameters, which it
       checks and sets defaults for under \c "headers", from the \c "headers" key of its header hash, or from the top
       level of a hash built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with
@@ -347,6 +358,25 @@ public namespace RestSchemaValidator {
         string example;
     }
 
+    #! Runs a closure that updates a cache of an object of the module, in an update scope if the object is shared
+    /** A schema object or a schema that trusted code created is shared by every Program of the process (see
+        AbstractObjectBase::markShared()), so it can only be changed by sandboxed code, or code that acts for it, in an
+        update scope (qore#6843; see @ref Qore::SandboxManager::updateSharedObject() "SandboxManager::updateSharedObject()").
+        Each caller computes the new state of the cache from the object itself, never from data that its caller
+        gives.
+
+        @param obj the object whose cache is updated
+        @param update a closure created by a method of a class of \a obj in this module
+
+        @return the value that \a update returns
+    */
+    auto sub update_shared_cache(object obj, code update) {
+        if (SandboxManager::isSharedObject(obj)) {
+            return SandboxManager::updateSharedObject(obj, update);
+        }
+        return update();
+    }
+
     #! Abstract base class for objects with vendor extensions
     /** This class provides common vendor extension support shared across
         Swagger 2.0, OpenAPI 3.0, and AsyncAPI 3.0 schema definitions.
@@ -365,6 +395,7 @@ public namespace RestSchemaValidator {
 
         #! Constructor
         public constructor() {
+            AbstractObjectBase::markShared(self);
         }
 
         #! Constructor
@@ -372,12 +403,40 @@ public namespace RestSchemaValidator {
             @param oh deserialized hash from the source schema description describing the object
         */
         public constructor(hash<auto> oh) {
+            AbstractObjectBase::markShared(self);
             initialize(oh);
         }
 
         #! Copy constructor
         constructor(AbstractObjectBase other) {
+            AbstractObjectBase::markShared(self);
             vendorExtensions = other.vendorExtensions;
+        }
+
+        #! A copy is shared only if code that no sandbox governs makes it, as for an object that such code creates
+        copy() {
+            AbstractObjectBase::markShared(self);
+        }
+
+        #! A deserialized object is shared only if code that no sandbox governs deserializes it, as for an object that such code creates (qore#6843)
+        private:internal deserializeMembers(*hash<auto> members) {
+            self += members;
+            AbstractObjectBase::markShared(self);
+        }
+
+        #! Marks an object of a schema as shared if code that no sandbox governs creates it (qore#6843)
+        /** Such an object may be shared by every Program of the process (in a constant or a static variable of a
+            module), so sandboxed code cannot change its members or delete it; see
+            @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"
+
+            @param obj the object to mark
+
+            @since RestSchemaValidator 2.5
+        */
+        static markShared(object obj) {
+            if (SandboxManager::createsSharedObjects()) {
+                SandboxManager::shareObject(obj);
+            }
         }
 
         #! Initialize
@@ -714,7 +773,7 @@ public namespace RestSchemaValidator {
                 return pc.re;
             }
             Regex re(pattern);
-            pattern_cache = {"src": pattern, "re": re};
+            update_shared_cache(self, sub () { pattern_cache = {"src": pattern, "re": re}; });
             return re;
         }
 
@@ -1444,6 +1503,21 @@ public namespace RestSchemaValidator {
                 types (qore#6843)
             */
             transient bool shared_object = SandboxManager::createsSharedObjects();
+
+            #! The number of values that a shared schema object keeps in the per-Program cache of a Program
+            /** The types with REST client defaults (see getRestDefaultsType()) and the fields built for callers (see
+                getCallerField()) share it: the limit of an object applies to all of its values, so every kind uses the
+                same one, and a kind never evicts the values of another below their limit
+            */
+            const ProgramCacheSize = 256;
+
+            #! The number of types with REST client defaults that a shared schema object keeps for a Program
+            /** see getRestDefaultsType() and ProgramCacheSize */
+            const RestDefaultsCacheSize = ProgramCacheSize;
+
+            #! The number of fields built from a sandboxed caller's data that a shared schema object keeps for a Program
+            /** see getCallerField() and ProgramCacheSize */
+            const CallerFieldCacheSize = ProgramCacheSize;
         }
 
         public {
@@ -1626,12 +1700,35 @@ public namespace RestSchemaValidator {
         }
 
         #! Returns the data type for this schema
+        /** @param required @ref True for the mandatory type, @ref False for the "or nothing" type
+            @param rest a REST client object whose request body defaults (see
+            @ref RestClient::AbstractRestClient::preprocessRequestBody() "AbstractRestClient::preprocessRequestBody()")
+            become the default values of the fields of the type; for a schema that is shared by every Program (see
+            @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()"), they are given to a
+            variant of the schema's type that is kept for the calling Program only (see getRestDefaultsType())
+        */
         AbstractDataProviderType getDataType(bool required = True, *object rest) {
+            # the defaults that a REST client gives never reach the caches of a shared schema (qore#6843)
+            if (rest && SandboxManager::isSharedObject(self)) {
+                return getRestDefaultsType(required, rest);
+            }
             *AbstractRestSchemaValidator schema = getTypeBuildSchema();
-            if (schema && !schema.isTypeBuildActive()) {
-                return schema.runTypeBuild(AbstractDataProviderType sub () {
-                    return getDataType(required, rest);
-                });
+            if (schema) {
+                # a cached type is read without a build; a build runs only if it is not cached
+                if (*AbstractDataProviderType t = schema.getBuiltDataType(self, required)) {
+                    return t;
+                }
+                if (!schema.isTypeBuildActive()) {
+                    return schema.runTypeBuild(AbstractDataProviderType sub () {
+                        return getDataType(required, rest);
+                    });
+                }
+            } else if (isOrphanedSharedObject()) {
+                # its caches are read, never written
+                if (*AbstractDataProviderType t = getCachedDataType(required)) {
+                    return t;
+                }
+                checkCacheWrite();
             }
             if (*AbstractDataProviderType t = getReplacedDataType(required)) {
                 return t;
@@ -1650,6 +1747,173 @@ public namespace RestSchemaValidator {
                 getDataTypeIntern("/", False, rest);
             }
             return orNothingDataType;
+        }
+
+        #! Restores the object; a shared object restores no type or field in its caches (qore#6843)
+        /** A schema object that code that no sandbox governs deserializes is shared, as one that such code creates
+            (see @ref RestSchemaValidator::AbstractObjectBase::markShared() "AbstractObjectBase::markShared()"), so it
+            caches only what its schema's type builds build and freeze (see
+            @ref RestSchemaValidator::AbstractRestSchemaValidator::runTypeBuild() "AbstractRestSchemaValidator::runTypeBuild()"):
+            the types and fields that it would restore in its caches are dropped, and built again when they are asked
+            for, so that sandboxed code cannot change them
+        */
+        private:internal deserializeMembers(*hash<auto> members) {
+            shared_object = SandboxManager::createsSharedObjects();
+            self += members;
+            if (shared_object) {
+                remove dataType;
+                remove orNothingDataType;
+                fieldmap = {};
+                usemap = {};
+                holds_opaque_type_caches = False;
+            }
+        }
+
+        #! Returns @ref True if this object takes part in the type builds of a schema that has been destroyed
+        /** The base class returns @ref False; a subclass whose objects take part in the type builds of their document
+            (see getTypeBuildSchema()) returns @ref True once the document has been destroyed
+
+            @since RestSchemaValidator 2.5
+        */
+        bool isTypeBuildSchemaDestroyed() {
+            return False;
+        }
+
+        #! Returns @ref True if this object is shared by every Program and the schema whose type builds it takes part in has been destroyed
+        /** Such an object writes no cache: its caches are written only in the type builds of its schema (see
+            @ref RestSchemaValidator::AbstractRestSchemaValidator::runTypeBuild() "AbstractRestSchemaValidator::runTypeBuild()"),
+            which can no longer run; what it cached is read (qore#6843)
+
+            @since RestSchemaValidator 2.5
+        */
+        bool isOrphanedSharedObject() {
+            return isTypeBuildSchemaDestroyed() && SandboxManager::isSharedObject(self);
+        }
+
+        #! Throws \c SCHEMA-DOCUMENT-DESTROYED if this object is an orphaned shared object (see isOrphanedSharedObject())
+        /** Called before a cache of the object is written, so that nothing is written
+
+            @throw SCHEMA-DOCUMENT-DESTROYED the object is shared by every Program and its schema has been destroyed
+
+            @since RestSchemaValidator 2.5
+        */
+        private checkCacheWrite() {
+            if (isOrphanedSharedObject()) {
+                throw "SCHEMA-DOCUMENT-DESTROYED", sprintf("this %s object can no longer build types or resolve "
+                    "references, because its document has been destroyed; keep the document while using its schema "
+                    "objects (the types that it has already built do not need it)", self.className());
+            }
+        }
+
+        #! Returns the variant of this schema's type that a type build cached, or @ref nothing
+        /** Called by @ref RestSchemaValidator::AbstractRestSchemaValidator::getBuiltDataType() "AbstractRestSchemaValidator::getBuiltDataType()"
+            with the schema's type build lock held, when no type build is in progress: a cached type is then complete
+
+            @param required @ref True for the mandatory type, @ref False for the "or nothing" type
+
+            @since RestSchemaValidator 2.5
+        */
+        *AbstractDataProviderType getCachedDataType(bool required) {
+            return required ? dataType : orNothingDataType;
+        }
+
+        #! Returns the request body defaults that a REST client gives for the fields of this schema's type
+        /** Calls the client's @ref RestClient::AbstractRestClient::preprocessRequestBody() "preprocessRequestBody()",
+            outside any type build of a shared schema, so that the client's code never runs while the schema's type
+            build lock is held (qore#6843)
+
+            @param rest the REST client object
+
+            @return the defaults by property name, only for the properties of this schema that have a value, or
+            @ref nothing if there are none
+
+            @since RestSchemaValidator 2.5
+        */
+        private *hash<auto> getRestDefaults(object rest) {
+            auto def_body = rest.preprocessRequestBody();
+            if (def_body.typeCode() != NT_HASH || !properties) {
+                return NOTHING;
+            }
+            hash<auto> rv;
+            foreach hash<auto> i in (def_body.pairIterator()) {
+                if (properties{i.key} && exists i.value) {
+                    rv{i.key} = i.value;
+                }
+            }
+            return rv ?: NOTHING;
+        }
+
+        #! Returns the type of this schema with the request body defaults that a REST client gives
+        /** The defaults are data of the caller, so the type with them is not kept in the caches of a schema that is
+            shared by every Program: the schema's own type, built from the schema alone and kept in its caches for
+            every caller, is copied with the fields that have a default replaced by a field with the default (see
+            @ref DataProvider::HashDataType::setFieldList() "HashDataType::setFieldList()"); the other fields and every
+            type that the fields refer to are the shared ones.
+
+            The variant is kept in the per-Program cache of the calling code (see
+            @ref Qore::SandboxManager::setProgramCacheValue() "SandboxManager::setProgramCacheValue()") with the
+            defaults it was made with, if they are plain data, under the identity of the REST client and under the
+            defaults themselves: the client is asked for its defaults on each call, as they can change at any time (a
+            new token, for example) and a client has no generation of its defaults; the variant found under the
+            client's identity is used only if the defaults are the same (\c ===) as those it was made with, so a client
+            created at the address of a deleted one cannot get the other's variant, and otherwise the variant made for
+            the same defaults, by any client, is used (qore#6843).
+
+            @param required @ref True for the mandatory type, @ref False for the "or nothing" type
+            @param rest the REST client object
+
+            @return the type of this schema with the defaults of the REST client; the schema's own type if the client
+            gives no default for its fields
+
+            @since RestSchemaValidator 2.5
+        */
+        private AbstractDataProviderType getRestDefaultsType(bool required, object rest) {
+            *hash<auto> defaults = getRestDefaults(rest);
+            AbstractDataProviderType base = getDataType(required);
+            if (!defaults || !(base instanceof HashDataType)) {
+                return base;
+            }
+            *string key;
+            *string client_key;
+            if (AbstractRestSchemaObject::isPlainData(defaults)) {
+                # the identity of the client only finds the entry; the defaults decide whether it is used
+                client_key = (required ? "rest-client-Y-" : "rest-client-N-") + rest.uniqueHash();
+                *hash<auto> entry = SandboxManager::getProgramCacheValue(self, client_key);
+                if (entry && entry.defaults === defaults) {
+                    return entry.type;
+                }
+                # the variant made for the same defaults, also by another client
+                key = (required ? "rest-type-Y-" : "rest-type-N-") + sprintf("%y", defaults);
+                entry = SandboxManager::getProgramCacheValue(self, key);
+                # the serialized form of different values can be the same (a float printed with fewer digits)
+                if (entry && entry.defaults === defaults) {
+                    SandboxManager::setProgramCacheValue(self, client_key, entry, RestDefaultsCacheSize,
+                        getTypeBuildSchema());
+                    return entry.type;
+                }
+            }
+            HashDataType base_hash = cast<HashDataType>(base);
+            list<AbstractDataField> fields = ();
+            foreach hash<auto> i in (base_hash.getFields().pairIterator()) {
+                if (exists defaults{i.key} && properties{i.key} instanceof AbstractRestSchemaObject) {
+                    push fields, cast<AbstractRestSchemaObject>(properties{i.key}).getUseField(i.value, i.key,
+                        NOTHING, self.required{i.key} ?? False, defaults{i.key});
+                } else {
+                    push fields, i.value;
+                }
+            }
+            HashDataType rv = base_hash.copy();
+            rv.setFieldList(fields);
+            if (key) {
+                # a value of a per-Program cache can be given to other code of the Program, also to trusted code
+                # that sandboxed code calls, so it cannot be changed (qore#6843)
+                rv.freeze();
+                hash<auto> entry = {"defaults": defaults, "type": rv};
+                *AbstractRestSchemaValidator schema = getTypeBuildSchema();
+                SandboxManager::setProgramCacheValue(self, key, entry, RestDefaultsCacheSize, schema);
+                SandboxManager::setProgramCacheValue(self, client_key, entry, RestDefaultsCacheSize, schema);
+            }
+            return rv;
         }
 
         #! Returns the given variant of the type given to replaceType(), or @ref nothing if it has not been called
@@ -1709,10 +1973,7 @@ public namespace RestSchemaValidator {
                 schema.stopOpaqueTypeCaches();
             }
             if (schema && schema.isTypeBuildActive()) {
-                *AbstractDataProviderType prev = replacedDataType;
-                schema.recordTypeBuildWrite(sub () {
-                    replacedDataType = prev;
-                });
+                recordCacheUndo(schema, "replaced", NOTHING, NOTHING, replacedDataType, True, True);
             }
             replacedDataType = t;
             if (t.isOrNothingType()) {
@@ -1732,6 +1993,110 @@ public namespace RestSchemaValidator {
             }
         }
 
+        #! Records how to undo a write of a cache entry of this object in the type build in progress (qore#6843)
+        /** The record is data (see
+            @ref RestSchemaValidator::AbstractRestSchemaValidator::recordTypeBuildUndo() "AbstractRestSchemaValidator::recordTypeBuildUndo()"),
+            which only this class restores, in the failure path of the build that recorded it
+
+            @param schema the schema whose type build is in progress in the calling thread
+            @param kind the cache: \c "type" (\a key \c "Y" for the mandatory type, \c "N" for the "or nothing" type),
+            \c "replaced" (the type given to replaceType()), \c "field" (a canonical field) or \c "use" (a per-use field)
+            @param key the key of a field (its name or use key), or the type variant
+            @param rstr the requiredness key of a field
+            @param prev the value that the write replaces
+            @param had_key @ref True if the field cache had an entry for the key and requiredness (always for the other
+            caches)
+            @param had_outer @ref True if the field cache had an entry for the key
+            @param had_cache @ref True if the field cache had a value (it has none before its first entry)
+
+            @since RestSchemaValidator 2.5
+        */
+        private:internal recordCacheUndo(AbstractRestSchemaValidator schema, string kind, *string key, *string rstr,
+                auto prev, bool had_key, bool had_outer, bool had_cache = True) {
+            schema.recordTypeBuildUndo({
+                "restore": getCacheUndoRestore(),
+                "kind": kind,
+                "key": key,
+                "rstr": rstr,
+                "prev": prev,
+                "had_key": had_key,
+                "had_outer": had_outer,
+                "had_cache": had_cache,
+            });
+        }
+
+        #! Returns the code that restores a record of recordCacheUndo(); it binds no variable of a caller
+        private:internal code getCacheUndoRestore() {
+            return sub (hash<auto> record) { undoCacheEntry(record); };
+        }
+
+        #! Restores a cache entry from a record of recordCacheUndo()
+        /** Only in the failure path of the type build that made the record (it fails closed): see
+            @ref RestSchemaValidator::AbstractRestSchemaValidator::isUndoingTypeBuild() "AbstractRestSchemaValidator::isUndoingTypeBuild()"
+        */
+        private:internal undoCacheEntry(hash<auto> record) {
+            *AbstractRestSchemaValidator schema = getTypeBuildSchema();
+            if (!schema || !schema.isUndoingTypeBuild(record.build)) {
+                return;
+            }
+            # the schema can have stopped opaque type caches since the write
+            bool opaque_undo = record.kind != "replaced" && record.had_key && holdCacheEntryOpaquely(schema);
+            update_shared_cache(self, sub () {
+                switch (record.kind) {
+                    case "replaced":
+                        replacedDataType = record.prev;
+                        break;
+                    case "type":
+                        if (record.key == "Y") {
+                            if (opaque_undo) {
+                                dataType @= record.prev;
+                            } else {
+                                dataType = record.prev;
+                            }
+                        } else if (opaque_undo) {
+                            orNothingDataType @= record.prev;
+                        } else {
+                            orNothingDataType = record.prev;
+                        }
+                        break;
+                    case "use":
+                        if (record.had_key) {
+                            if (opaque_undo) {
+                                usemap{record.key}{record.rstr} @= record.prev;
+                            } else {
+                                usemap{record.key}{record.rstr} = record.prev;
+                            }
+                        } else {
+                            remove usemap{record.key}{record.rstr};
+                            if (!record.had_outer) {
+                                remove usemap{record.key};
+                            }
+                            if (!record.had_cache) {
+                                remove usemap;
+                            }
+                        }
+                        break;
+                    case "field":
+                        if (record.had_key) {
+                            if (opaque_undo) {
+                                fieldmap{record.key}{record.rstr} @= record.prev;
+                            } else {
+                                fieldmap{record.key}{record.rstr} = record.prev;
+                            }
+                        } else {
+                            remove fieldmap{record.key}{record.rstr};
+                            if (!record.had_outer) {
+                                remove fieldmap{record.key};
+                            }
+                            if (!record.had_cache) {
+                                remove fieldmap;
+                            }
+                        }
+                        break;
+                }
+            });
+        }
+
         #! Sets a cached data type of this schema, recording the write in the type build in progress
         /** @param required @ref True for the mandatory type, @ref False for the "or nothing" type
             @param t the type to cache
@@ -1739,38 +2104,29 @@ public namespace RestSchemaValidator {
             @since RestSchemaValidator 2.5
         */
         private setCachedDataType(bool required, AbstractDataProviderType t) {
+            checkCacheWrite();
             *AbstractRestSchemaValidator schema = getTypeBuildSchema();
             bool opaque;
             if (schema && schema.isTypeBuildActive()) {
                 opaque = holdCacheEntryOpaquely(schema);
-                *AbstractDataProviderType prev = required ? dataType : orNothingDataType;
-                schema.recordTypeBuildWrite(sub () {
-                    # the schema can have stopped opaque type caches since the write
-                    bool opaque_undo = holdCacheEntryOpaquely(schema);
-                    if (required) {
-                        if (opaque_undo) {
-                            dataType @= prev;
-                        } else {
-                            dataType = prev;
-                        }
-                    } else if (opaque_undo) {
-                        orNothingDataType @= prev;
+                schema.recordTypeBuildCache(t);
+                recordCacheUndo(schema, "type", required ? "Y" : "N", NOTHING, required ? dataType : orNothingDataType,
+                    True, True);
+            }
+            # the type built from this schema object
+            update_shared_cache(self, sub () {
+                if (required) {
+                    if (opaque) {
+                        dataType @= t;
                     } else {
-                        orNothingDataType = prev;
+                        dataType = t;
                     }
-                });
-            }
-            if (required) {
-                if (opaque) {
-                    dataType @= t;
+                } else if (opaque) {
+                    orNothingDataType @= t;
                 } else {
-                    dataType = t;
+                    orNothingDataType = t;
                 }
-            } else if (opaque) {
-                orNothingDataType @= t;
-            } else {
-                orNothingDataType = t;
-            }
+            });
         }
 
         #! Returns @ref True if this object holds a type it caches in the type build in progress through an opaque reference
@@ -1788,7 +2144,7 @@ public namespace RestSchemaValidator {
                 return False;
             }
             if (!holds_opaque_type_caches) {
-                holds_opaque_type_caches = True;
+                update_shared_cache(self, sub () { holds_opaque_type_caches = True; });
             }
             return True;
         }
@@ -1816,6 +2172,42 @@ public namespace RestSchemaValidator {
             holds_opaque_type_caches = False;
         }
 
+        #! Releases the types and fields that this object caches, for its schema
+        /** Called by the schema (see
+            @ref RestSchemaValidator::AbstractRestSchemaValidator::holdTypeCacheOpaquely() "AbstractRestSchemaValidator::holdTypeCacheOpaquely()")
+            with its type build lock held; the caches of a shared object are released in an update scope (see
+            @ref Qore::SandboxManager::updateSharedObject() "SandboxManager::updateSharedObject()"), also when the
+            schema is destroyed because sandboxed code released its last reference (qore#6843).  A shared object is
+            released only for a shared schema whose type build lock the calling thread holds, and which is the
+            object's schema or, if the object's schema has been destroyed, any such schema
+
+            @param schema the schema that releases the caches
+
+            @throw SHARED-OBJECT-ERROR the object is shared, and \a schema is not a shared schema whose type build lock
+            the calling thread holds and that the object takes part in the type builds of
+
+            @since RestSchemaValidator 2.5
+        */
+        releaseTypeCachesFor(AbstractRestSchemaValidator schema) {
+            if (!SandboxManager::isSharedObject(self)) {
+                releaseTypeCaches();
+                return;
+            }
+            if (!SandboxManager::isSharedObject(schema) || !schema.isTypeBuildActive()
+                || (!isTypeBuildSchemaDestroyed() && getTypeBuildSchema() != schema)) {
+                throw "SHARED-OBJECT-ERROR", sprintf("the caches of a shared %s object are released only by its "
+                    "schema, with its type build lock held", self.className());
+            }
+            # the caches are released in the scope's own code, as releaseTypeCaches() does
+            update_shared_cache(self, sub () {
+                remove dataType;
+                remove orNothingDataType;
+                fieldmap = {};
+                usemap = {};
+                holds_opaque_type_caches = False;
+            });
+        }
+
         #! Copies the object without the type caches it holds through opaque references
         /** A copy is not known to the schema, which releases the opaque type caches of the objects it knows (see
             releaseTypeCaches()), so a copy of an object holding such caches builds its own types.
@@ -1840,52 +2232,32 @@ public namespace RestSchemaValidator {
             @since RestSchemaValidator 2.5
         */
         private setCachedField(bool use, string key, string rstr, AbstractDataField field) {
+            checkCacheWrite();
             *AbstractRestSchemaValidator schema = getTypeBuildSchema();
             bool opaque;
             if (schema && schema.isTypeBuildActive()) {
                 opaque = holdCacheEntryOpaquely(schema);
-                *AbstractDataField prev = use ? usemap{key}{rstr} : fieldmap{key}{rstr};
-                schema.recordTypeBuildWrite(sub () {
-                    # the schema can have stopped opaque type caches since the write
-                    bool opaque_undo = prev && holdCacheEntryOpaquely(schema);
-                    if (use) {
-                        if (prev) {
-                            if (opaque_undo) {
-                                usemap{key}{rstr} @= prev;
-                            } else {
-                                usemap{key}{rstr} = prev;
-                            }
-                        } else {
-                            remove usemap{key}{rstr};
-                            if (!usemap{key}) {
-                                remove usemap{key};
-                            }
-                        }
-                    } else if (prev) {
-                        if (opaque_undo) {
-                            fieldmap{key}{rstr} @= prev;
-                        } else {
-                            fieldmap{key}{rstr} = prev;
-                        }
+                schema.recordTypeBuildCache(field);
+                *hash<auto> cache = use ? usemap : fieldmap;
+                bool had_outer = exists cache && cache.hasKey(key);
+                recordCacheUndo(schema, use ? "use" : "field", key, rstr, cache{key}{rstr},
+                    had_outer && cache{key}.typeCode() == NT_HASH && cache{key}.hasKey(rstr), had_outer,
+                    exists cache);
+            }
+            # the field built from this schema object
+            update_shared_cache(self, sub () {
+                if (use) {
+                    if (opaque) {
+                        usemap{key}{rstr} @= field;
                     } else {
-                        remove fieldmap{key}{rstr};
-                        if (!fieldmap{key}) {
-                            remove fieldmap{key};
-                        }
+                        usemap{key}{rstr} = field;
                     }
-                });
-            }
-            if (use) {
-                if (opaque) {
-                    usemap{key}{rstr} @= field;
+                } else if (opaque) {
+                    fieldmap{key}{rstr} @= field;
                 } else {
-                    usemap{key}{rstr} = field;
+                    fieldmap{key}{rstr} = field;
                 }
-            } else if (opaque) {
-                fieldmap{key}{rstr} @= field;
-            } else {
-                fieldmap{key}{rstr} = field;
-            }
+            });
         }
 
         #! Returns the data type for the given schema
@@ -1906,7 +2278,8 @@ public namespace RestSchemaValidator {
             }
 
             auto def_body;
-            if (rest) {
+            # a shared schema is never given a REST client here: see getRestDefaultsType()
+            if (rest && !SandboxManager::isSharedObject(self)) {
                 # preprocessRequestBody is now on AbstractRestClient (identity default);
                 # MewsRestClient-family subclasses override it to return the default body
                 # with injected auth-token fields used as required field defaults here
@@ -1961,15 +2334,128 @@ public namespace RestSchemaValidator {
         }
 
         #! Returns a field definition from the schema parameter
+        /** A schema that is shared by every Program (see
+            @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()") writes its caches only in
+            its own type builds (see
+            @ref RestSchemaValidator::AbstractRestSchemaValidator::runTypeBuild() "AbstractRestSchemaValidator::runTypeBuild()"),
+            in which only the schema's own code and the library code that builds its types run: a field asked for
+            outside a type build of the schema, with the data of whichever caller, is taken from the schema's caches if
+            it is there, and otherwise built without writing them and kept in the per-Program cache of the calling code
+            (see @ref Qore::SandboxManager::setProgramCacheValue() "SandboxManager::setProgramCacheValue()").  The
+            defaults of a REST client are given to a variant of the field's type that is kept for the calling Program
+            only (see getDataType()) (qore#6843)
+        */
         AbstractDataField getField(string name, *string desc, bool required = True, *object rest,
                 auto default_value) {
-            return getFieldForUse(name, name, desc, required, rest, default_value);
+            return getFieldForCaller(name, name, desc, required, rest, default_value, isOutsideSharedTypeBuild());
         }
 
         #! Returns a field definition from the schema parameter
+        /** @see getField(string, *string, bool, *object, auto)
+        */
         AbstractDataField getField(string path, string name, *string desc, bool required = True, *object rest,
                 auto default_value) {
-            return getFieldForUse(path, name, desc, required, rest, default_value);
+            return getFieldForCaller(path, name, desc, required, rest, default_value, isOutsideSharedTypeBuild());
+        }
+
+        #! Returns @ref True if this object is shared by every Program and no type build of its schema is in progress in the calling thread
+        /** Such an object writes no cache for its caller: see getField()
+
+            @since RestSchemaValidator 2.5
+        */
+        private bool isOutsideSharedTypeBuild() {
+            if (!SandboxManager::isSharedObject(self)) {
+                return False;
+            }
+            *AbstractRestSchemaValidator schema = getTypeBuildSchema();
+            return !schema || !schema.isTypeBuildActive();
+        }
+
+        #! Returns the field for one use of this schema for the caller of getField()
+        /** @param path the path of the field
+            @param name the field name
+            @param desc the description supplied by the use
+            @param required whether the use declares the field required
+            @param rest the REST client whose request body defaults apply, if any
+            @param default_value the default value supplied by the use
+            @param caller_data @ref True if the field is asked for outside a type build of a shared schema, whose
+            caches it then never reaches
+
+            @since RestSchemaValidator 2.5
+        */
+        private AbstractDataField getFieldForCaller(string path, string name, *string desc, bool required,
+                *object rest, auto default_value, bool caller_data) {
+            bool shared = SandboxManager::isSharedObject(self);
+            AbstractDataField field = caller_data
+                ? getCallerField(name, desc, required, default_value)
+                : getFieldForUse(path, name, desc, required, shared ? NOTHING : rest, default_value);
+            if (!rest || !shared || (type != "object" && !hasSchemaCompositionFeatures())) {
+                return field;
+            }
+            # the field with the type with the defaults of the REST client, kept for the calling Program only
+            AbstractDataProviderType t = getRestDefaultsType(required && !nullable, rest);
+            if (t == field.getType()) {
+                return field;
+            }
+            if (!(field instanceof QoreDataField)) {
+                return field;
+            }
+            QoreDataField rv = cast<QoreDataField>(field).copy();
+            rv.updateFieldType(t);
+            return rv;
+        }
+
+        #! Returns the field for one use of a shared schema asked for outside its type builds
+        /** The schema's caches are read, but not written: a field that they do not have is built from the schema with
+            no cache write, with the schema's own types, and kept in the per-Program cache of the caller (see
+            @ref Qore::SandboxManager::setProgramCacheValue() "SandboxManager::setProgramCacheValue()") (qore#6843)
+
+            @since RestSchemaValidator 2.5
+        */
+        private AbstractDataField getCallerField(string name, *string desc, bool required, auto default_value) {
+            string rstr = required ? "Y" : "N";
+            string ukey = AbstractRestSchemaObject::getFieldUseKey(name, desc, default_value);
+            if (*AbstractDataField rv = getCacheField(True, ukey, rstr)) {
+                return rv;
+            }
+            string key = "field-" + rstr + "-" + ukey;
+            if (*AbstractDataField rv = SandboxManager::getProgramCacheValue(self, key)) {
+                return rv;
+            }
+            AbstractDataField canonical = getCacheField(False, name, rstr) ?? getCallerCanonicalField(name, required);
+            AbstractDataField rv = ukey == AbstractRestSchemaObject::getFieldUseKey(name, NOTHING, NOTHING)
+                ? canonical
+                : getUseField(canonical, name, desc, required, default_value);
+            # a value of a per-Program cache cannot be changed (see getRestDefaultsType())
+            rv.freeze();
+            SandboxManager::setProgramCacheValue(self, key, rv, CallerFieldCacheSize, getTypeBuildSchema());
+            return rv;
+        }
+
+        #! Builds the canonical field of a name for a caller of a shared schema outside its type builds, with no cache write
+        /** As getFieldIntern(), with the schema's own types: the type of an object or composition is the schema's type
+            (see getDataType()), and the type of a scalar is built from the schema, independently of the path of the
+            use
+
+            @since RestSchemaValidator 2.5
+        */
+        private AbstractDataField getCallerCanonicalField(string name, bool required) {
+            RestSchemaExampleDataField field({
+                "name": name,
+                "desc": getMergedFieldDesc(NOTHING),
+                "type": AutoType,
+                "allowed_values": getFieldEnumValues(),
+                # the schema's default is what the API assumes when the value is not sent; it is shown, never sent
+                "remote_default_value": defaultVal,
+            } + getFieldPresenceInfo(required), getValidatedExampleCandidates(), getConstraintInfo());
+            bool required_value = required && !nullable;
+            if (type == "object" || hasSchemaCompositionFeatures()) {
+                field.updateFieldType(getDataType(required_value));
+            } else {
+                field.updateFieldType(getSchemaType("/", type, format, items, required_value)
+                    .copyWithConstraints(getConstraintInfo()));
+            }
+            return field;
         }
 
         #! Returns the field for one use of this schema, building or decorating it as needed
@@ -2068,6 +2554,24 @@ public namespace RestSchemaValidator {
             if (building{name}{rstr} || ukey == AbstractRestSchemaObject::getFieldUseKey(name, NOTHING, NOTHING)) {
                 return canonical;
             }
+            AbstractDataField rv = getUseField(canonical, name, desc, required, default_value);
+            setCachedField(True, ukey, rstr, rv);
+            return rv;
+        }
+
+        #! Returns the field for one use of this schema, built from the canonical field and not cached
+        /** @param canonical the field cached under this name
+            @param name the field name
+            @param desc the description supplied by the use, before this schema's own is merged into it
+            @param required whether the use declares the field required
+            @param default_value the default value supplied by the use
+
+            @return the field for this use
+
+            @since RestSchemaValidator 2.5
+        */
+        private AbstractDataField getUseField(AbstractDataField canonical, string name, *string desc, bool required,
+                auto default_value) {
             # built exactly as getFieldIntern() builds the canonical field, and given its finished type the
             # same way: the schema's enum values are hash keys and therefore strings, and it is
             # updateFieldType() that converts them to the type they belong to.  Constructing the copy with
@@ -2082,7 +2586,6 @@ public namespace RestSchemaValidator {
                 "remote_default_value": defaultVal,
             } + getFieldPresenceInfo(required), getValidatedExampleCandidates(), getConstraintInfo());
             rv.updateFieldType(canonical.getType());
-            setCachedField(True, ukey, rstr, rv);
             return rv;
         }
 
@@ -2259,17 +2762,29 @@ public namespace RestSchemaValidator {
             if (!rstr) {
                 rstr = required ? "Y" : "N";
             }
+            # an orphaned shared object builds no field (qore#6843)
+            checkCacheWrite();
             string field_desc = getMergedFieldDesc(desc);
             # the field registered below is handed to anything that re-enters this schema while its type
             # is being built, so it must not be copied until that build has finished; the other variant of the
             # name can be built inside this build, so only this variant is marked and unmarked here
-            building{name}{rstr} = True;
-            on_exit {
+            # the mark and the unmark are made only in the type build in progress, if there is a schema (qore#6843)
+            *AbstractRestSchemaValidator build_schema = getTypeBuildSchema();
+            int mark_build = build_schema ? build_schema.getTypeBuildId() : 0;
+            update_shared_cache(self, sub () {
+                if (!build_schema || build_schema.getTypeBuildId() == mark_build) {
+                    building{name}{rstr} = True;
+                }
+            });
+            on_exit update_shared_cache(self, sub () {
+                if (build_schema && build_schema.getTypeBuildId() != mark_build) {
+                    return;
+                }
                 remove building{name}{rstr};
                 if (!building{name}) {
                     remove building{name};
                 }
-            }
+            });
             # create the field with a placeholder type
             RestSchemaExampleDataField field({
                 "name": name,
@@ -2668,7 +3183,10 @@ public namespace RestSchemaValidator {
             transient Mutex type_build_lock();
 
             #! How to undo the cache writes of the type build in progress, in the order they were made
-            transient list<code> type_build_undo = ();
+            transient list<auto> type_build_undo = ();
+
+            #! True while the type build in progress undoes its writes; see isUndoingTypeBuild()
+            transient bool type_build_undoing = False;
 
             #! Whether schema objects may hold the types they cache through opaque references; see holdTypeCacheOpaquely()
             transient bool opaque_type_caches;
@@ -2678,14 +3196,42 @@ public namespace RestSchemaValidator {
 
             #! Whether the opaque type caches are to be released once the type build in progress has finished
             transient bool release_opaque_type_caches;
+
+            #! The number of the type build in progress, or of the last one; see getTypeBuildId()
+            transient int type_build_id = 0;
+
+            #! The types and fields that the type build in progress cached; see recordTypeBuildCache()
+            transient list<object> type_build_cached = ();
         }
 
         #! Creates the object without a logger
         constructor() {
+            AbstractObjectBase::markShared(self);
         }
 
         #! Creates the object with the given logger
         constructor(Logger::LoggerInterface logger) : LoggerWrapper(logger) {
+            AbstractObjectBase::markShared(self);
+        }
+
+        #! A copy is shared only if code that no sandbox governs makes it, as for a schema that such code creates
+        copy() {
+            AbstractObjectBase::markShared(self);
+        }
+
+        #! A deserialized schema is shared only if code that no sandbox governs deserializes it, as for a schema that such code creates (qore#6843)
+        private:internal deserializeMembers(*hash<auto> members) {
+            # the transient members are initialized here, as this method is defined
+            type_build_lock = new Mutex();
+            type_build_undo = ();
+            type_build_undoing = False;
+            opaque_type_caches = False;
+            opaque_type_cache_holders = {};
+            release_opaque_type_caches = False;
+            type_build_id = 0;
+            type_build_cached = ();
+            self += members;
+            AbstractObjectBase::markShared(self);
         }
 
         #! Releases the types that the schema objects of the schema cache through opaque references
@@ -2693,6 +3239,7 @@ public namespace RestSchemaValidator {
         */
         destructor() {
             releaseTypeCaches();
+            releaseProgramCacheValues();
         }
 
         #! Runs a type build of this schema as one transaction
@@ -2708,7 +3255,9 @@ public namespace RestSchemaValidator {
             The type builds of the schema are serialized, so a thread never reads a placeholder another thread is
             still completing; builds of different schemas run in parallel.
 
-            If the calling thread is already building types of this schema, the code runs as part of that build.
+            If the calling thread is already building types of this schema, the code runs as part of that build; if it
+            throws, the writes that it made are undone before the exception propagates (the writes of the enclosing
+            build are kept), so the enclosing build can handle the exception.
 
             @param build the code that builds types
 
@@ -2726,27 +3275,109 @@ AbstractDataProviderType type = schema.runTypeBuild(AbstractDataProviderType sub
             @since RestSchemaValidator 2.5
         */
         auto runTypeBuild(code build) {
+            # the build of a shared schema runs only code of trusted library classes for a sandboxed caller, so that
+            # sandboxed code cannot hold the schema's lock (qore#6843)
+            SandboxManager::checkSharedObjectCallback(self, build, "run a type build");
             if (type_build_lock.lockOwner()) {
-                return build();
-            }
-            type_build_lock.lock();
-            on_exit type_build_lock.unlock();
-            on_exit type_build_undo = ();
-            # run first, while the lock is held; see stopOpaqueTypeCaches()
-            on_exit if (release_opaque_type_caches) {
-                release_opaque_type_caches = False;
-                releaseOpaqueTypeCacheHolders();
-            }
-            try {
-                return build();
-            } catch (hash<ExceptionInfo> ex) {
-                # undo the writes of the build, the latest first
-                while (type_build_undo) {
-                    code undo_write = pop type_build_undo;
-                    undo_write();
+                # a nested build undoes its own writes if it fails, which the enclosing build can then handle
+                int mark = type_build_undo.size();
+                try {
+                    return build();
+                } catch (hash<ExceptionInfo> ex) {
+                    undoTypeBuildWrites(mark);
+                    rethrow;
                 }
-                rethrow;
             }
+            # unlocked through the Mutex locked, which a schema destroyed by another thread meanwhile no longer gives
+            Mutex build_lock = type_build_lock;
+            build_lock.lock();
+            on_exit build_lock.unlock();
+            # the state of the build in progress is a cache of the schema
+            return update_shared_cache(self, auto sub () {
+                ++type_build_id;
+                on_exit type_build_undo = ();
+                on_exit type_build_cached = ();
+                # run first, while the lock is held; see stopOpaqueTypeCaches()
+                on_exit if (release_opaque_type_caches) {
+                    release_opaque_type_caches = False;
+                    releaseOpaqueTypeCacheHolders();
+                }
+                try {
+                    auto rv = build();
+                    # the types and fields that a build of a shared schema cached are shared as the schema is, also
+                    # when sandboxed code asked for them: sandboxed code cannot change them (qore#6843)
+                    if (type_build_cached) {
+                        list<object> cached = type_build_cached;
+                        type_build_cached = ();
+                        map $1.freeze(), cached;
+                    }
+                    return rv;
+                } catch (hash<ExceptionInfo> ex) {
+                    undoTypeBuildWrites(0);
+                    rethrow;
+                }
+            });
+        }
+
+        #! Undoes the writes of the type build in progress recorded after the first \a mark records, the latest first
+        /** The records of recordTypeBuildUndo() and the code of recordTypeBuildWrite(), in the reverse order they were
+            made
+
+            @param mark the number of records to keep: 0 for a build, the number of records when a nested build
+            started for the nested build
+
+            @since RestSchemaValidator 2.5
+        */
+        private:internal undoTypeBuildWrites(int mark) {
+            update_shared_cache(self, sub () {
+                type_build_undoing = True;
+                on_exit type_build_undoing = False;
+                while (type_build_undo.size() > mark) {
+                    auto undo_write = pop type_build_undo;
+                    if (undo_write.typeCode() == NT_HASH) {
+                        undo_write.restore(undo_write);
+                    } else {
+                        undo_write();
+                    }
+                }
+            });
+        }
+
+        #! Returns the number of the type build that the calling thread is running, or 0 if it runs none
+        /** Each type build of the schema has a number of its own; a write that a build records (see
+            recordTypeBuildWrite()) is undone only in the same build, and once only (qore#6843)
+
+            @see runTypeBuild()
+
+            @since RestSchemaValidator 2.5
+        */
+        int getTypeBuildId() {
+            return type_build_lock.lockOwner() ? type_build_id : 0;
+        }
+
+        #! Returns the variant of a schema object's type that a finished type build cached, or @ref nothing
+        /** Reads the cache with the type build lock held, so that no type build is in progress and a cached type is
+            complete; a schema object's getDataType() starts a type build (see runTypeBuild()) only if the type is not
+            cached, so that asking for a cached type does not run a build (qore#6843)
+
+            In a type build of the calling thread, the cache of the build is read; otherwise it waits for a type build
+            of another thread
+
+            @param so the schema object
+            @param required @ref True for the mandatory type, @ref False for the "or nothing" type
+
+            @since RestSchemaValidator 2.5
+        */
+        *AbstractDataProviderType getBuiltDataType(AbstractRestSchemaObject so, bool required) {
+            # in a type build of the calling thread, the cache is the build's
+            if (type_build_lock.lockOwner()) {
+                return so.getCachedDataType(required);
+            }
+            # unlocked through the Mutex locked, which a schema destroyed by another thread meanwhile no longer gives
+            Mutex build_lock = type_build_lock;
+            build_lock.lock();
+            on_exit build_lock.unlock();
+            return so.getCachedDataType(required);
         }
 
         #! Returns @ref True if the calling thread is building types of this schema
@@ -2777,6 +3408,9 @@ AbstractDataProviderType type = schema.runTypeBuild(AbstractDataProviderType sub
             - in the type build in progress in the calling thread (see runTypeBuild())
             - until the schema is given a value that it did not build: a type given to replaceTypeForReference(), or
               a request body default that is not plain data (see stopOpaqueTypeCaches())
+            - in a schema that is shared by every Program (see
+              @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()"), for its own schema
+              objects only, which are shared as it is
 
             @param so the schema object making a cache entry
 
@@ -2800,12 +3434,16 @@ if (schema && schema.isTypeBuildActive() && schema.holdTypeCacheOpaquely(self)) 
             if (!opaque_type_caches || !type_build_lock.lockOwner()) {
                 return False;
             }
+            # a shared schema holds only its own schema objects, which are shared as it is (qore#6843)
+            if (SandboxManager::isSharedObject(self) && !SandboxManager::isSharedObject(so)) {
+                return False;
+            }
             string key = so.uniqueHash();
             # a weak reference to an object that has been destroyed gives no object, and an object created since can
             # have the same unique hash
             *AbstractRestSchemaObject holder = opaque_type_cache_holders{key};
             if (holder != so) {
-                opaque_type_cache_holders{key} := so;
+                update_shared_cache(self, sub () { opaque_type_cache_holders{key} := so; });
             }
             return True;
         }
@@ -2843,8 +3481,10 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
                 return;
             }
             # a type build of another thread finishes first
-            type_build_lock.lock();
-            on_exit type_build_lock.unlock();
+            # unlocked through the Mutex locked, which a schema destroyed by another thread meanwhile no longer gives
+            Mutex build_lock = type_build_lock;
+            build_lock.lock();
+            on_exit build_lock.unlock();
             if (opaque_type_caches) {
                 opaque_type_caches = False;
                 releaseOpaqueTypeCacheHolders();
@@ -2860,6 +3500,30 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
             opaque_type_caches = True;
         }
 
+        #! Releases the values that the schema and its schema objects keep in the per-Program caches
+        /** The types and fields that a shared schema builds for its callers outside its type builds are kept in the
+            per-Program cache of each caller (see
+            @ref RestSchemaValidator::AbstractRestSchemaObject::getField() "AbstractRestSchemaObject::getField()"),
+            with the schema as their group: they refer back to the schema objects, so they are released with the
+            schema (see @ref Qore::SandboxManager::releaseProgramCacheValues() "SandboxManager::releaseProgramCacheValues()"),
+            in the caches of sandboxed Programs by the next use of each such cache (qore#6843).
+
+            A schema destroyed while sandboxed code calls (when sandboxed code releases its last reference) cannot
+            release them: they are then released by the next change of each cache, which releases the values of an
+            object whose group was deleted.
+
+            @since RestSchemaValidator 2.5
+        */
+        private releaseProgramCacheValues() {
+            try {
+                SandboxManager::releaseProgramCacheValues(self);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "PROGRAM-CACHE-ERROR") {
+                    rethrow;
+                }
+            }
+        }
+
         #! Releases the types that the schema objects of this schema cache through opaque references
         /** Called when the schema is destroyed; see holdTypeCacheOpaquely()
 
@@ -2867,14 +3531,16 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
         */
         private releaseTypeCaches() {
             # a thread building types of the schema finishes first; one that starts after this makes no opaque entries
-            bool locked = !type_build_lock.lockOwner();
+            Mutex build_lock = type_build_lock;
+            bool locked = !build_lock.lockOwner();
             if (locked) {
-                type_build_lock.lock();
+                build_lock.lock();
             }
             on_exit if (locked) {
-                type_build_lock.unlock();
+                build_lock.unlock();
             }
-            opaque_type_caches = False;
+            # also when the schema is destroyed because sandboxed code released its last reference (qore#6843)
+            update_shared_cache(self, sub () { opaque_type_caches = False; });
             releaseOpaqueTypeCacheHolders();
         }
 
@@ -2885,13 +3551,13 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
         */
         private releaseOpaqueTypeCacheHolders() {
             hash<auto> holders = opaque_type_cache_holders;
-            opaque_type_cache_holders = {};
+            update_shared_cache(self, sub () { opaque_type_cache_holders = {}; });
             foreach string key in (keys holders) {
                 # a holder that has been destroyed has released its cache already, and its weak reference gives no
                 # object
                 *AbstractRestSchemaObject so = holders{key};
                 if (so) {
-                    so.releaseTypeCaches();
+                    so.releaseTypeCachesFor(self);
                 }
             }
         }
@@ -2906,9 +3572,79 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
             @since RestSchemaValidator 2.5
         */
         recordTypeBuildWrite(code undo_write) {
+            # the undo of a write of a shared schema's build is code of a trusted library class (qore#6843)
+            SandboxManager::checkSharedObjectCallback(self, undo_write, "record a write of a type build");
             if (type_build_lock.lockOwner()) {
-                push type_build_undo, undo_write;
+                update_shared_cache(self, sub () { push type_build_undo, undo_write; });
             }
+        }
+
+        #! Records how to undo a cache write of the type build of this schema in progress, as data
+        /** As recordTypeBuildWrite(), with a record instead of code, which keeps no variable of the code that writes
+            the cache alive until the build has finished: the schema objects of the library record the writes of
+            their caches in this way.  If the build fails, the code under the \c "restore" key is called with the
+            record, the latest record first, together with the code given to recordTypeBuildWrite(); the record has
+            the number of the build under the \c "build" key, and the code restores the entry only if
+            isUndoingTypeBuild() returns @ref True for it (qore#6843).
+
+            Has no effect if the calling thread is not building types of this schema.
+
+            @param record the record: the code that restores the entry under the \c "restore" key, which must not
+            throw, and the data that it needs
+
+            @see runTypeBuild()
+
+            @since RestSchemaValidator 2.5
+        */
+        recordTypeBuildUndo(hash<auto> record) {
+            # the restore code of a record of a shared schema's build is code of a trusted library class, which
+            # sandboxed code cannot obtain: the classes give it out from private:internal methods only (qore#6843)
+            SandboxManager::checkSharedObjectCallback(self, record.restore, "record a write of a type build");
+            if (type_build_lock.lockOwner()) {
+                # a record of its own, whatever the type of the hash given
+                hash<auto> entry = {};
+                entry += record;
+                entry.build = type_build_id;
+                update_shared_cache(self, sub () { push type_build_undo, entry; });
+            }
+        }
+
+        #! Returns @ref True if the calling thread is undoing the writes of the type build with the given number
+        /** A record of recordTypeBuildUndo() is restored only then: in the failure path of the build that made it
+
+            @param build the number of the build that made the record
+
+            @since RestSchemaValidator 2.5
+        */
+        bool isUndoingTypeBuild(int build) {
+            return type_build_lock.lockOwner() && type_build_undoing && build == type_build_id;
+        }
+
+        #! Records a type or field that the type build of this schema in progress on the calling thread caches
+        /** When the build has finished, each type or field recorded is frozen (see
+            @ref DataProvider::AbstractDataProviderType::freeze() "AbstractDataProviderType::freeze()"), so that it is
+            shared as the schema is: sandboxed code cannot change it, also when it asked for it.  Has no effect if the
+            schema is not shared (see @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()")
+            or the calling thread is not building types of this schema.
+
+            @param entry the type (@ref DataProvider::AbstractDataProviderType "AbstractDataProviderType") or field
+            (@ref DataProvider::AbstractDataField "AbstractDataField") cached
+
+            @throw SHARED-OBJECT-ERROR code that sandboxed code called in the build records an entry
+
+            @see runTypeBuild()
+
+            @since RestSchemaValidator 2.5
+        */
+        recordTypeBuildCache(object entry) {
+            if (!type_build_lock.lockOwner() || !SandboxManager::isSharedObject(self)) {
+                return;
+            }
+            if (!(entry instanceof AbstractDataProviderType) && !(entry instanceof AbstractDataField)) {
+                throw "TYPE-BUILD-ERROR", sprintf("a type build caches types and fields only; got an object of class "
+                    "%y", entry.className());
+            }
+            update_shared_cache(self, sub () { push type_build_cached, entry; });
         }
 
         #! Returns the data type corresponding to the given reusable schema reference
@@ -3129,6 +3865,11 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
         /** @param basePath the new base path value; use an empty string here to clear the basePath
         */
         setBasePath(string basePath) {
+            # a shared schema cannot be changed by sandboxed code; a call that changes nothing is not refused
+            # (qore#6843)
+            if (basePath != getBasePathImpl()) {
+                SandboxManager::checkSharedObjectChange(self, "set the base path");
+            }
             setBasePathImpl(basePath);
         }
 
@@ -3159,6 +3900,8 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
             @since RestSchemaValidator 2.1.3
         */
         setTimeZoneLocale(*TimeZone tz) {
+            # a shared schema cannot be changed by sandboxed code (qore#6843)
+            SandboxManager::checkSharedObjectChange(self, "set the time zone locale");
             # must be performed in the implementing module's Program container
             setTimeZoneLocaleImpl(tz);
         }

@@ -231,6 +231,13 @@ DLLLOCAL void qore_object_mark_process_constant(QoreValue v);
 */
 DLLLOCAL bool qore_removed_object_needs_scan(RObject* o, RObject* root);
 
+//! Returns true if the calling code may mark objects as shared by every Program of the process
+/** Code that no sandbox governs may, and so may the code of a class of a shared object in an update scope for it
+    (see SandboxManager::updateSharedObject()) as long as it does not run for sandboxed code that the scope's code
+    called; fails closed as qore_caller_is_sandboxed()
+*/
+DLLLOCAL bool qore_caller_may_share_objects();
+
 class qore_object_private : public RObject {
 public:
     const QoreClass* theclass;
@@ -283,6 +290,17 @@ public:
     //! set when the object's destruction has started; read without the object's locks as status is
     std::atomic<bool> in_destructor;
     bool recursive_ref_found;
+    //! Set when trusted code marks the object as shared by every Program of the process; never cleared (qore#6843)
+    /** Code that a sandbox governs cannot then change the object's members or delete it, except for the code of a
+        class of the object that runs in an update scope for it (see SandboxManager::updateSharedObject()); see
+        checkSharedChange().  Set before the object is published to other Programs, and read with relaxed ordering on
+        every member write.  Declared with the other flags, in the padding before the next pointer, so that it does
+        not make the object larger: every Qore object has one, and 8 more bytes take it to the next size class of the
+        allocator (16 more bytes for each object; sizeof(qore_object_private) is 520 in an x86_64 Linux release
+        build, with or without this flag).  The flags around it are plain members, not bit-fields, so it is a memory
+        location of its own.
+    */
+    std::atomic<bool> shared_object{false};
 
     QoreObject* obj;
 
@@ -312,6 +330,68 @@ public:
     //! addresses. Deferred to keep the constructor cheap (the SHA1+sprintf
     //! chain consumes stack that can push deep recursion past the stack guard).
     mutable std::atomic<QoreStringNode*> unique_hash{nullptr};
+
+
+    //! Marks the object as shared by every Program of the process; see shared_object
+    DLLLOCAL void setShared() {
+        shared_object.store(true, std::memory_order_release);
+    }
+
+    //! Returns true if the object is marked as shared by every Program of the process; see shared_object
+    DLLLOCAL bool isShared() const {
+        return shared_object.load(std::memory_order_relaxed);
+    }
+
+    //! Returns true if the calling thread is running the destructor of the object
+    DLLLOCAL bool inDestructorOfThisThread() const {
+        return status.load(std::memory_order_acquire) == q_gettid();
+    }
+
+    //! Returns 0 if the running code can change (or delete) the object, or raises SHARED-OBJECT-ERROR and returns -1
+    /** Code that a sandbox governs, or that acts for sandboxed code, cannot change an object that trusted code marked
+        as shared, unless the change is made in an update scope for the object (see
+        SandboxManager::updateSharedObject()) by the code of the Program that opened it.  The decision depends on the
+        running code only, never on a class context that a caller gives (Reflection gives the class that declares a
+        member).
+
+        @param mem the member to change, or nullptr if the whole object is deleted or its members are changed together
+        @param xsink for the exception
+        @param del true if the object is deleted
+    */
+    DLLLOCAL int checkSharedChange(const char* mem, ExceptionSink* xsink, bool del = false) const {
+        if (!shared_object.load(std::memory_order_relaxed)) [[likely]] {
+            return 0;
+        }
+        return checkSharedChangeIntern(mem, xsink, del);
+    }
+
+    //! checkSharedChange() for an object marked as shared
+    DLLLOCAL QORE_INTERN_NOINLINE int checkSharedChangeIntern(const char* mem, ExceptionSink* xsink, bool del) const;
+
+    //! Runs \a update with the object writable for the code of the Program that calls it; see
+    //! SandboxManager::updateSharedObject()
+    /** @return the value that \a update returns, or no value with an exception raised
+    */
+    DLLLOCAL QoreValue runSharedUpdate(const ResolvedCallReferenceNode* update, ExceptionSink* xsink);
+
+    //! Returns 0 if \a callback may run on behalf of the calling code while the object is changed, or raises
+    //! SHARED-OBJECT-ERROR and returns -1; see SandboxManager::checkSharedObjectCallback()
+    DLLLOCAL int checkSharedCallback(const ResolvedCallReferenceNode* callback, const char* what,
+            ExceptionSink* xsink) const;
+
+    //! Returns 0 if the calling code can change the object in a method, or raises SHARED-OBJECT-ERROR and returns -1
+    /** For SandboxManager::checkSharedObjectChange(): code that a sandbox governs cannot change a shared object, also
+        through the methods of its class
+
+        @param what what is changed, for the exception
+        @param xsink for the exception
+    */
+    DLLLOCAL int checkSharedMethodChange(const char* what, ExceptionSink* xsink) const;
+
+    //! Marks the object as shared if the calling code may share objects, or raises SHARED-OBJECT-ERROR and returns -1
+    /** see qore_caller_may_share_objects() and SandboxManager::shareObject()
+    */
+    DLLLOCAL int shareChecked(ExceptionSink* xsink);
 
     DLLLOCAL qore_object_private(QoreObject* n_obj, const QoreClass *oc, QoreProgram* p, QoreHashNode* n_data,
             const QoreTypeInfo* n_instantiated_type = nullptr);
@@ -622,6 +702,23 @@ public:
     DLLLOCAL int checkMemberAccess(const char* mem, const qore_class_private* class_ctx,
             const qore_class_private*& member_class_ctx) const;
 
+    //! as checkMemberAccess() for the member name \a mem of \a len bytes (qore#7194)
+    DLLLOCAL int checkMemberAccess(const char* mem, size_t len, const qore_class_private* class_ctx,
+            const qore_class_private*& member_class_ctx) const;
+
+    //! returns the value of the member \a mem of \a len bytes as QoreObject::evalMember() (qore#7194)
+    DLLLOCAL QoreValue evalMember(const char* mem, size_t len, ExceptionSink* xsink);
+
+    //! Reads a unique container from an ordinary stored member under the object lock (qore#7301).
+    DLLLOCAL bool tryReadUniqueWeakMember(const std::string& name, QoreValue& result);
+
+    //! returns the value of the member \a mem of \a obj as QoreObject::evalMember() (qore#7194)
+    /** Not inline, so that a call from the IR interpreter's dispatch loop is as small as a call of
+        QoreObject::evalMember(); \a mem is a key without a NUL character (made from a C string)
+    */
+    DLLLOCAL static QORE_INTERN_NOINLINE QoreValue evalMember(QoreObject* obj, const std::string& mem,
+            ExceptionSink* xsink);
+
     DLLLOCAL int checkMemberAccess(const char* mem, const qore_class_private* class_ctx,
             const qore_class_private*& member_class_ctx, ExceptionSink* xsink) const {
         int rc = checkMemberAccess(mem, class_ctx, member_class_ctx);
@@ -643,9 +740,17 @@ public:
     DLLLOCAL int checkMemberAccessGetTypeInfo(ExceptionSink* xsink, const char* mem,
             const qore_class_private* class_ctx, const qore_class_private*& member_class_ctx,
             const QoreTypeInfo*& typeInfo, bool* declared = nullptr) const {
+        return checkMemberAccessGetTypeInfo(xsink, mem, strlen(mem), class_ctx, member_class_ctx, typeInfo,
+            declared);
+    }
+
+    //! as above for the member name \a mem of \a len bytes (qore#7194)
+    DLLLOCAL int checkMemberAccessGetTypeInfo(ExceptionSink* xsink, const char* mem, size_t len,
+            const qore_class_private* class_ctx, const qore_class_private*& member_class_ctx,
+            const QoreTypeInfo*& typeInfo, bool* declared = nullptr) const {
         assert(!member_class_ctx);
         const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
-        const QoreMemberInfo* mi = theclass_priv->runtimeGetMemberInfo(mem, class_ctx);
+        const QoreMemberInfo* mi = theclass_priv->runtimeGetMemberInfo(mem, len, class_ctx);
         if (declared) {
             *declared = mi != nullptr;
         }
@@ -1189,8 +1294,12 @@ public:
         // unlock previous lock and release from AutoVLock structure
         vl.del();
 
-        // lock current object
-        qore_var_rwlock_ops(pobj->rml).wrlock();
+        // lock current object, unless the assignment of this thread holds its lock while it binds a reference: the lock
+        // and the reference to the object stay with that assignment (qore#7380)
+        if (!qore_var_rwlock_ops(pobj->rml).wrlockUnlessHeldForBind(&vl)) {
+            pobj->obj->tDeref();
+            pobj = nullptr;
+        }
     }
 
     DLLLOCAL ~qore_object_lock_handoff_helper() {
@@ -1203,8 +1312,10 @@ public:
     }
 
     DLLLOCAL void stayLocked() {
-        qore_auto_vlock_ops(vl).set(pobj->obj, &pobj->rml);
-        pobj = nullptr;
+        if (pobj) {
+            qore_auto_vlock_ops(vl).set(pobj->obj, &pobj->rml);
+            pobj = nullptr;
+        }
     }
 };
 

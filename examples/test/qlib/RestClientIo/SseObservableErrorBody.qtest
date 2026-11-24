@@ -1,0 +1,132 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# SseObservableErrorBody.qtest Copyright 2026 Qore Technologies, s.r.o. — MIT License
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires RestClientIo
+%requires DataProvider
+%requires json
+%exec-class SseObservableErrorBodyTest
+
+#! Receives the events of an SSE observable
+class QueueObserver inherits DataProvider::Observer {
+    public {
+        Queue events();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        events.push({"id": event_id, "data": data_});
+    }
+}
+
+#! An error response whose body arrives with its headers ends the startup of an SSE observable
+/** The server sends the status line, the headers and the whole body in one write, so the client receives the body
+    and the end of the stream with the headers, and its stream notifier is signaled once for all of them.
+*/
+public class SseObservableErrorBodyTest inherits QUnit::Test {
+    constructor() : Test("SseObservableErrorBodyTest", "1.0") {
+        addTestCase("an error body that arrives with the headers is read", \errorBodyWithHeaders());
+        addTestCase("a successful response that is not an event stream is refused", \notEventStream());
+        set_return_value(main());
+    }
+
+    #! Serves one response to one request on a new listener; returns the port
+    private int serveOnce(string response, Counter served) {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        served.inc();
+        background sub () {
+            on_exit {
+                listener.close();
+                served.dec();
+            }
+            Socket conn = listener.accept(60s);
+            on_exit conn.close();
+            hash<auto> hdr = conn.readHTTPHeader(60s);
+            conn.recv(hdr."content-length".toInt(), 60s);
+            conn.send(response);
+        }();
+        return listener.getSocketInfo().port;
+    }
+
+    notEventStream() {
+        string body = "{\"id\":\"x\"}";
+        string response = sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n"
+            "Content-Length: %d\r\n\r\n%s", body.size(), body);
+        Counter served();
+        on_exit served.waitForZero();
+
+        # the synchronous reader's error
+        hash<ExceptionInfo> sync_ex;
+        {
+            RestClientIo::RestClientIo rest({"url": sprintf("http://127.0.0.1:%d", serveOnce(response, served)),
+                "data": "json", "protocol": "h1"});
+            try {
+                rest.restSseReaderTarget("POST", <RestClient::RestRequestTarget>{"path": "stream"}, NOTHING,
+                    make_json({"prompt": "x"}));
+            } catch (hash<ExceptionInfo> ex) {
+                sync_ex = ex;
+            }
+        }
+        assertEq("REST-RESPONSE-ERROR", sync_ex.err);
+
+        RestClientIo::RestClientIo rest({"url": sprintf("http://127.0.0.1:%d", serveOnce(response, served)),
+            "data": "json", "protocol": "h1"});
+        HttpClientStreamingIo::SseObservable obs = rest.restObserveSseTarget("POST",
+            <RestClient::RestRequestTarget>{"path": "stream"}, {"prompt": "x"});
+        QueueObserver observer();
+        obs.registerObserver(observer);
+        obs.observersReady();
+        on_exit obs.stopEvents();
+        hash<auto> event = observer.events.get(60s);
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED, event.id);
+        assertEq("startup-error", event.data.reason);
+        assertEq(sync_ex.err, event.data.error.err);
+        assertEq(sync_ex.desc, event.data.error.desc);
+        # the effective URL names the port of each server
+        assertEq(sync_ex.arg - ("effective_url", "request_headers"), event.data.error.arg - ("effective_url",
+            "request_headers"));
+        assertEq(body, event.data.error.arg.body);
+    }
+
+    errorBodyWithHeaders() {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+        Counter served(1);
+        background sub () {
+            on_exit served.dec();
+            Socket conn = listener.accept(60s);
+            on_exit conn.close();
+            hash<auto> hdr = conn.readHTTPHeader(60s);
+            conn.recv(hdr."content-length".toInt(), 60s);
+            string body = "{\"error\":{\"message\":\"rate limited\"}}";
+            conn.send(sprintf("HTTP/1.1 429 Too Many Requests\r\nContent-Type: application/json\r\nRetry-After: 2\r\n"
+                "Connection: close\r\nContent-Length: %d\r\n\r\n%s", body.size(), body));
+        }();
+        on_exit {
+            served.waitForZero();
+            listener.close();
+        }
+
+        RestClientIo::RestClientIo rest({"url": sprintf("http://127.0.0.1:%d", port), "data": "json", "protocol": "h1"});
+        HttpClientStreamingIo::SseObservable obs = rest.restObserveSseTarget("POST",
+            <RestClient::RestRequestTarget>{"path": "stream"}, {"prompt": "x"});
+        QueueObserver observer();
+        obs.registerObserver(observer);
+        obs.observersReady();
+        on_exit obs.stopEvents();
+
+        hash<auto> event = observer.events.get(60s);
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED, event.id);
+        assertEq("startup-error", event.data.reason);
+        assertEq("REST-RESPONSE-ERROR", event.data.error.err);
+        assertEq(429, event.data.error.arg.status_code);
+        assertEq("2", event.data.error.arg.headers."retry-after");
+        assertEq({"error": {"message": "rate limited"}}, event.data.error.arg.body);
+    }
+}

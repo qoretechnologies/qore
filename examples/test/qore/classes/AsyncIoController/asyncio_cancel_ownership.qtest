@@ -330,6 +330,23 @@ printf(\"wrapper: %y\\n\", p.callFunction(\"wrapper\", k));
 printf(\"trusted: %y\\n\", AsyncIoController::cancelByKey(k));
 ";
 
+        #! the child of libraryInitTimerTest(): its tenant loads the library whose initialization adds a timer
+        const InitTimerChildSource = "%modern
+%no-child-restrictions
+Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+SandboxManager sm();
+sm.setNetworkDefaultPolicy(True);
+p.setSandboxManager(sm);
+p.parse(\"%modern\\n%requires AioCancelInitLib\\n\"
+    \"int sub timer() { return AioCancelInitLib::Lib::getTimerId(); }\\n\"
+    \"int sub own() { return AsyncIoController::addTimerDelay(1D, True); }\\n\", \"tenant\");
+int init_timer = p.callFunction(\"timer\");
+int own_timer = p.callFunction(\"own\");
+printf(\"init: %y\\n\", call_function(\"dbg_async_io_timer_adder_gen\", init_timer));
+printf(\"own: %y\\n\", call_function(\"dbg_async_io_timer_adder_gen\", own_timer) > 0);
+printf(\"canceled: %y\\n\", AsyncIoController::cancelTimer(init_timer) && AsyncIoController::cancelTimer(own_timer));
+";
+
         #! the child of callbackLibraryInitTest(): the callback of the tenant's operation loads the library whose
         #! initialization submits an operation
         const CallbackChildSource = "%modern
@@ -511,6 +528,14 @@ bool sub direct_key(string key) {
         addTestCase("module code acting for a sandboxed caller cancels only that caller's operations",
             \moduleWrapperTest());
         addTestCase("an operation of a library's initialization belongs to no tenant", \libraryInitTest());
+        addTestCase("a cancel by owner on the I/O thread refuses the queued submissions of the owner",
+            \ioThreadOwnerRefusalTest());
+        addTestCase("a restricted cancel by owner on the I/O thread refuses no other application's submissions",
+            \ioThreadOwnerOtherAppTest());
+        addTestCase("a cancel that an I/O thread processes refuses the queued submissions of the canceled key",
+            \ioThreadKeyRefusalTest());
+        addTestCase("a timer of a library's initialization has no generation that sandboxed code can match",
+            \libraryInitTimerTest());
         addTestCase("an operation submitted by a callback belongs to the callback's operation's application",
             \callbackTest());
         addTestCase("an operation of a library's initialization in a tenant's callback belongs to no tenant",
@@ -719,6 +744,123 @@ bool sub direct_key(string key) {
         assertRegex("^direct: False\\n", out, out);
         assertRegex("\nwrapper: False\n", out, out);
         assertRegex("\ntrusted: True\n", out, out);
+    }
+
+    #! holds the one I/O thread before it processes its queued commands, for the code given, and releases it
+    /** The code queues submissions and runs cancels on the held thread, which processes the queued submissions
+        after them, as when the callback of an operation cancels on the I/O thread while submissions are queued.
+        The test runs one I/O thread (set in the constructor, before the controller's first operation): the commands
+        queued while it is held and the command of a later getInfo() are in the queue of that one thread, which
+        processes them in order, so getInfo() reports the cache after the queued commands
+    */
+    private holdIoThread(code c) {
+        assertEq(1, AsyncIoController::getInfo().io_threads, "the test runs one I/O thread");
+        call_function("dbg_async_io_hold_io_commands", True);
+        on_exit call_function("dbg_async_io_hold_io_commands", False);
+        if (!call_function("dbg_async_io_wait_io_commands_held", HangGuard)) {
+            throw "TEST-ERROR", "the I/O thread was not held";
+        }
+        c();
+    }
+
+    #! a cancel by owner that runs on the I/O thread refuses the submissions of the owner queued before it, as stale
+    #! ones (the canceled-owner tombstone); a restricted cancel does so for the submissions of its own application
+    ioThreadOwnerRefusalTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the I/O thread is held with a test hook of a debug build");
+        }
+        Program a = getTenant();
+        string owner = getName("io-owner-refusal");
+        on_exit AsyncIoController::cancelByOwner(owner);
+        auto rq1 = a.callFunction("submit_own", owner, owner + "-1");
+        assertTrue(inlist(owner + "-1", AsyncIoController::getInfo().cache_keys));
+        auto rq2;
+        int count;
+        holdIoThread(sub () {
+            # the tenant's next submission of the owner is queued, then it cancels the owner on the I/O thread
+            rq2 = a.callFunction("submit_own", owner, owner + "-2");
+            count = call_function("dbg_async_io_cancel_owner_on_io_thread", owner, a.getProgramId(), HangGuard);
+        });
+        assertEq(1, count, "the cancel on the I/O thread cancels the tenant's operation");
+        # checked first, so that a submission wrongly accepted fails at once (it would wait for ever): getInfo() is
+        # answered after the commands queued before it
+        assertFalse(inlist(owner + "-2", AsyncIoController::getInfo().cache_keys),
+            "submission accepted, expected the canceled-owner refusal");
+        assertTrue(rq1.get(HangGuard).canceled, "the tenant's operation is canceled");
+        assertTrue(rq2.get(HangGuard).canceled, "the tenant's queued submission of the owner is refused");
+    }
+
+    #! a tenant's cancel by owner that runs on the I/O thread and cancels its own operation of the owner does not
+    #! refuse another tenant's submission of the same owner queued before it: the tombstone of a restricted cancel is
+    #! its application's (qore#7010)
+    ioThreadOwnerOtherAppTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the I/O thread is held with a test hook of a debug build");
+        }
+        Program a = getTenant();
+        Program b = getTenant();
+        string owner = getName("io-owner-other-app");
+        on_exit AsyncIoController::cancelByOwner(owner);
+        auto a1 = a.callFunction("submit_own", owner, owner + "-a1");
+        auto b1 = b.callFunction("submit_own", owner, owner + "-b1");
+        auto a2;
+        int count;
+        holdIoThread(sub () {
+            # a's next submission of the owner is queued, then b cancels the owner on the I/O thread
+            a2 = a.callFunction("submit_own", owner, owner + "-a2");
+            count = call_function("dbg_async_io_cancel_owner_on_io_thread", owner, b.getProgramId(), HangGuard);
+        });
+        assertEq(1, count, "b's cancel cancels its own operation only");
+        assertTrue(b1.get(HangGuard).canceled, "b's operation is canceled");
+        list<string> ck = AsyncIoController::getInfo().cache_keys;
+        assertTrue(inlist(owner + "-a2", ck), "a's queued submission of the owner is not refused");
+        assertTrue(inlist(owner + "-a1", ck), "a's operation is not canceled");
+        assertEq(0, a1.size());
+        assertEq(0, a2.size());
+    }
+
+    #! a cancel by owner that an I/O thread processes as a queued command refuses a submission of the key of an
+    #! operation that it cancels, with another owner, that was pushed before the cancel was processed (after it was
+    #! requested), as a stale one (the canceled-key tombstone; the canceled-owner tombstone of a queued cancel refuses
+    #! only the submissions pushed before the cancel was requested)
+    ioThreadKeyRefusalTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the I/O thread is held with a test hook of a debug build");
+        }
+        Program a = getTenant();
+        string key = getName("io-key-refusal");
+        on_exit {
+            AsyncIoController::cancelByOwner(key + "-1");
+            AsyncIoController::cancelByOwner(key + "-2");
+        }
+        auto rq1 = a.callFunction("submit_own", key + "-1", key);
+        assertTrue(inlist(key, AsyncIoController::getInfo().cache_keys));
+        auto rq2;
+        holdIoThread(sub () {
+            # the tenant's cancel of the owner of its operation is queued (as an I/O thread requests it of another),
+            # then its next submission of the operation's key, with another owner
+            call_function("dbg_async_io_queue_cancel_owner", key + "-1", a.getProgramId());
+            rq2 = a.callFunction("submit_own", key + "-2", key);
+        });
+        # checked first, so that a submission wrongly accepted fails at once (it would wait for ever): getInfo() is
+        # answered after the commands queued before it
+        assertFalse(inlist(key, AsyncIoController::getInfo().cache_keys),
+            "submission accepted, expected the stale-key refusal");
+        assertTrue(rq1.get(HangGuard).canceled, "the tenant's operation is canceled");
+        assertTrue(rq2.get(HangGuard).canceled, "the tenant's queued submission of the key is refused");
+    }
+
+    #! the timer that a library module's initialization adds, also when a tenant loads the module first, has no
+    #! generation (0): it belongs to no application, and no sandboxed code can match the generation of its work, not
+    #! even later work of the tenant's thread that loaded the module (qore#7010); the tenant's own timer has one
+    libraryInitTimerTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the generation of a timer is read with a test hook of a debug build");
+        }
+        string out = runChild(InitTimerChildSource);
+        assertRegex("^init: 0\n", out, out);
+        assertRegex("\nown: True\n", out, out);
+        assertRegex("\ncanceled: True\n", out, out);
     }
 
     #! an operation that the completion of a tenant's operation submits (module code, with no Program of the tenant on

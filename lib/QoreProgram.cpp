@@ -2323,6 +2323,11 @@ void qore_program_private_base::newProgram() {
         dmap["QoreHasUserModuleLicense"] = true;
     }
 
+    // DBI driver option information declares the options whose values are sensitive (qore#7070)
+    dmap["QORE_HAVE_DBI_SENSITIVE_OPTIONS"] = true;
+    // DBI drivers declare a database name that can hold credentials (qore#7275)
+    dmap["QORE_HAVE_DBI_SENSITIVE_DBNAME"] = true;
+
     // the built-in defines that the identity of an AOT image fixes (the version and the platform): a conditional on
     // them takes the same branch where the code is compiled and where it is loaded (qore#6351); not the options
     // below or QoreDebug, which depend on the build configuration of the library (a qmod compiled by one build of the
@@ -2875,6 +2880,11 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // valid (data not yet cleared, ptid == tid).  This bounds the leak an opaque reference can
         // cause to the lifetime of the Program that created it.
         clearOpaqueTargets(xsink);
+
+        // the values that library classes keep in the per-Program cache of the Program can hold objects of its
+        // classes, given by its code (a default value of a field, for example): they are released while the
+        // Program's code can still run, as its data is (qore#6843)
+        qore_program_cache_release_values(pgm, xsink);
 
         // issue #3521: clear local variables first
         clearLocalVars(xsink);

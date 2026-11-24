@@ -1,0 +1,65 @@
+member: c.l [{x: 7}, {x: 1}] w [{x: 7}, {x: 1}] literal [{x: 0}, {x: 1}]
+hash key: h.k [{x: 8}, {x: 1}] literal [{x: 0}, {x: 1}]
+list element: outer[0] [{x: 0}, {x: 9}] literal [{x: 0}, {x: 1}]
+nested path: [{x: 10}, {x: 1}] literal [{x: 0}, {x: 1}]
+static path: [{x: 11}, {x: 1}] literal [{x: 0}, {x: 1}]
+self member: l [{x: 3}, {x: 1}] literal [{x: 0}, {x: 1}]
+shared hash key: a [{x: 0}, {x: 1}] h.k [{x: 7}, {x: 1}] w [{x: 7}, {x: 1}]
+shared member: b [{x: 0}, {x: 1}] c.l [{x: 0}, {x: 5}]
+shared variable: v [{x: 0}, {x: 1}] lv [{x: 6}, {x: 1}]
+unshared: w [{x: 4}, {x: 1}]
+after remove: w []
+missing key: h {} w null
+beyond the end: l [1] w2 null
+scalar: {k: "str"} "str"
+slice: {a: [1], b: [2]}
+runtime slice: {a: [1], b: [2]}
+memberGate("zz")
+undeclared member: [9]
+memberGate("p")
+private member: [9]
+key calls: 2
+index: i 1 Mutex
+string in a hash: b
+string variable: b
+typed string: c
+binary: 2 calls 1
+missing key: null calls 1 h2 {}
+beyond the end: null calls 1 l [1]
+beyond the end: null i 4
+through NOTHING: null calls 2 h3 {a: null}
+NOTHING hash: null nh null
+NOTHING object: null
+buffer: 7
+buffer in a hash: "abc"
+freed weak hash: HASH-ERROR
+freed weak list: LIST-ERROR
+deleted object: OBJECT-ALREADY-DELETED
+index 0: [1]
+index 2: [3]
+index 3: null
+index 7: null
+index -1: [3]
+index -3: [1]
+index -4: null
+index -9: null
+constant -1: [3]
+constant -5: null
+constant 5: null
+empty list -1: null
+empty list 0: null
+empty list variable -1: null
+list after: [[1], [2], [3]] empty list after: []
+variable index: [{x: 12}, {x: 1}] literal [{x: 0}, {x: 1}]
+nested l[0][-5]: null l[-5][0]: null l[0][k]: null l[k][0]: null
+hash h.a[-5]: null h.a[k]: null
+member o.l[-5]: null o.l[k][0]: null
+static Holder::sh.k[-5]: null
+weak root wl[-5]: null wl[k][0]: null wl[-1]: [2]
+reference root r[-5]: null r[k]: null r[-1]: [2]
+after: l [[1, 2], [3]] src [[1], [2]]
+remove -5: NEGATIVE-LIST-INDEX
+delete -5: NEGATIVE-LIST-INDEX
+remove -1: 2 l [1, null]
+shared hash root: 17 0
+shared list root: 23 0

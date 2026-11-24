@@ -76,7 +76,7 @@ public class HttpClientIdleReservedTest inherits QUnit::Test {
         h2_server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
         h2_server.setDefaultHandler("ports", h2_handler);
         h2_port = h2_server.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(TestCertificates::CertPem),
             "key": new SSLPrivateKey(TestCertificates::KeyPem),
@@ -209,7 +209,7 @@ public class HttpClientIdleReservedTest inherits QUnit::Test {
     h2Test() {
         skipIfNoDebug();
         HTTPClient hc = getClient({
-            "url": sprintf("https://localhost:%d", h2_port),
+            "url": sprintf("https://127.0.0.1:%d", h2_port),
             "http_version": "2.0",
             "http3_mode": "disabled",
             "ssl_verify_cert": False,
