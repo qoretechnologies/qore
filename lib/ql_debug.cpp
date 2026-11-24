@@ -9372,17 +9372,32 @@ public:
 
 #ifdef __linux__
     //! Returns the number of open descriptors of the process
-    static int ccrOpenDescriptors() {
-        int n = 0;
+    //! Returns the sockets that the process has open, by their inodes (the targets of /proc/self/fd)
+    /** Only sockets: the descriptors that other threads open and close by themselves meanwhile (as valgrind does with
+        its own files, which it opens at the lowest free number before it moves them away) are not the test's; a
+        descriptor that is closed while the directory is read is skipped, as it is not left open
+    */
+    static std::set<std::string> ccrOpenSockets() {
+        std::set<std::string> rv;
         if (DIR* d = opendir("/proc/self/fd")) {
             while (struct dirent* e = readdir(d)) {
-                if (e->d_name[0] != '.') {
-                    ++n;
+                if (e->d_name[0] == '.') {
+                    continue;
+                }
+                char path[64], target[256];
+                snprintf(path, sizeof(path), "/proc/self/fd/%s", e->d_name);
+                ssize_t len = readlink(path, target, sizeof(target) - 1);
+                if (len <= 0) {
+                    continue;
+                }
+                target[len] = '\0';
+                if (!strncmp(target, "socket:", 7)) {
+                    rv.insert(target);
                 }
             }
             closedir(d);
         }
-        return n;
+        return rv;
     }
 #endif
 
@@ -9418,7 +9433,7 @@ public:
             UT_ASSERT(c, !ut_fd_stat(fds[i], &fds_st[i]), ("the target's descriptor is open" + when).c_str());
         }
 #ifdef __linux__
-        int open_before = ccrOpenDescriptors();
+        const std::set<std::string> sockets_before = ccrOpenSockets();
 #endif
         {
             QoreSocketObject* sock = new QoreSocketObject;
@@ -9481,7 +9496,16 @@ public:
                 ("the connections close no descriptor of another object" + when).c_str());
         }
 #ifdef __linux__
-        UT_ASSERT_EQ(c, open_before, ccrOpenDescriptors(), ("no descriptor is left open" + when).c_str());
+        {
+            // the sockets of the connections: those that are open now and were not before
+            std::string left;
+            for (const std::string& sk : ccrOpenSockets()) {
+                if (!sockets_before.count(sk)) {
+                    left += " " + sk;
+                }
+            }
+            UT_ASSERT(c, left.empty(), ("no socket of the connections is left open:" + left + when).c_str());
+        }
 #endif
     }
 
