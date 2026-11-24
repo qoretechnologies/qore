@@ -7276,6 +7276,41 @@ size_t AsyncIoControllerPriv::dbgWakeAllSockets() {
 }
 #endif
 
+#ifdef DEBUG
+std::atomic<bool> qore_dbg_close_wake_push_fails{false};
+std::atomic<bool> qore_dbg_close_wake_drain_fails{false};
+std::atomic<int> qore_dbg_close_wake_all_fails{0};
+#endif
+
+std::function<void()> AsyncIoControllerPriv::makeCloseWake(IoThreadContext& t, const std::string& sock_hash) {
+    if (!t.close_wakes) {
+        t.close_wakes = std::make_shared<CloseWakeQueue>(t.notifier);
+    }
+    std::shared_ptr<CloseWakeQueue> q = t.close_wakes;
+    // a close in a forked child notifies the notifier that it inherited from the parent: the parent's thread wakes
+    // and finds nothing to do (harmless)
+    return [q, sock_hash]() {
+        {
+            // a leaf lock (see CloseWakeQueue)
+            AutoLocker al(q->l);
+            try {
+#ifdef DEBUG
+                if (qore_dbg_close_wake_push_fails.load(std::memory_order_relaxed)) {
+                    throw std::bad_alloc();
+                }
+#endif
+                q->hashes.push_back(sock_hash);
+            } catch (...) {
+                // no memory: the thread wakes all of its sockets (nothing may leave a close)
+                q->all = true;
+            }
+        }
+        if (q->notifier) {
+            q->notifier->notify();
+        }
+    };
+}
+
 void AsyncIoControllerPriv::wakeSocket(const std::string& sock_hash) {
     if (forked()) {
         return;
@@ -8442,6 +8477,31 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             ssl_deferred_hashes.clear();
         }
 
+        // the sockets that closes made by other threads woke (see CloseWakeQueue)
+        // set when a close wake could not record its socket, or its socket could not be moved to the wake set (no
+        // memory): every operation of the thread runs again, without an allocation (see below)
+        bool wake_all = false;
+        if (t.close_wakes) {
+            AutoLocker al(t.close_wakes->l);
+            try {
+#ifdef DEBUG
+                if (!t.close_wakes->hashes.empty() && qore_dbg_close_wake_drain_fails.load(std::memory_order_relaxed)) {
+                    throw std::bad_alloc();
+                }
+#endif
+                for (std::string& h : t.close_wakes->hashes) {
+                    t.wake_socket_hashes.insert(std::move(h));
+                }
+            } catch (...) {
+                wake_all = true;
+            }
+            t.close_wakes->hashes.clear();
+            if (t.close_wakes->all) {
+                t.close_wakes->all = false;
+                wake_all = true;
+            }
+        }
+
         // Consume wake_socket_hashes (I/O-thread-only, no lock needed)
         if (!t.wake_socket_hashes.empty()) {
             woken_hashes = std::move(t.wake_socket_hashes);
@@ -8586,6 +8646,35 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             expand_ready_events(ready_socket_events);
             expand_hashes(ready_socket_hashes, true);
             expand_hashes(woken_hashes, true);
+            if (wake_all) {
+                // every operation of the thread runs again, as for a wake of its socket, also one whose own socket has
+                // no registered descriptor (one that waits only for extra descriptors, such as another Socket's): the
+                // walk records nothing; the list of the operations to run is reserved for all of them first, so that
+                // queuing one cannot fail, and if the reservation fails, the fallback runs again at the next iteration
+                // (nothing may leave the I/O thread)
+                try {
+#ifdef DEBUG
+                    if (qore_dbg_close_wake_all_fails.load(std::memory_order_relaxed) > 0) {
+                        qore_dbg_close_wake_all_fails.fetch_sub(1, std::memory_order_relaxed);
+                        throw std::bad_alloc();
+                    }
+#endif
+                    ops_to_poll.reserve(ops_to_poll.size() + t.cache.size());
+                    for (auto& [key, pinfo] : t.cache) {
+                        try_queue(pinfo, false, true);
+                    }
+                } catch (...) {
+                    std::shared_ptr<CloseWakeQueue>& q = t.close_wakes;
+                    assert(q);
+                    {
+                        AutoLocker al(q->l);
+                        q->all = true;
+                    }
+                    if (q->notifier) {
+                        q->notifier->notify();
+                    }
+                }
+            }
             // the events of the last poll have now been reported to their operations; they must not be reported
             // again when the loop goes round without polling (when a command arrives before the poll, or the poll
             // fails): an operation continued for an event may have consumed it, and would be continued again for an
@@ -12936,6 +13025,12 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, uint64_t op_id,
                     continue;
                 }
                 if (hold) {
+                    // a close of the object that bypasses the controller wakes the operation, also one made since the
+                    // hold was taken (qore#7003)
+                    OpCache::node_t* node = t.cache.findId(op_id);
+                    if (node) {
+                        qore_descriptor_hold_set_close_wake(hold, makeCloseWake(t, closeWakeKey(node->second)));
+                    }
                     t.extra_fd_holds[{op_id, fd}] = std::move(hold);
                 }
             } else {
@@ -13142,6 +13237,11 @@ int AsyncIoControllerPriv::addSocketFd(IoThreadContext& t, AbstractPollableIoObj
     }
     ASYNC_IO_TRACE("addSocketFd[%d]: add fd=%d sock='%s' hold=%d\n", t.thread_idx, fd, sock_hash.c_str(),
         hold ? 1 : 0);
+    if (hold) {
+        // a close of the socket that bypasses the controller wakes its operations, also one made since the hold was
+        // taken (qore#7003)
+        qore_descriptor_hold_set_close_wake(hold, makeCloseWake(t, sock_hash));
+    }
     t.loop->addRegistration(fd, regKey(t, sock_hash), events, socket, xsink);
     t.registered_fds[sock_hash] = fd;
     // the registration's own hold; an object that takes no hold (a pollable that Socket::poll() polls by number, a

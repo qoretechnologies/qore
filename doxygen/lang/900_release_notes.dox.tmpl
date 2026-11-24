@@ -2991,6 +2991,9 @@
       the attempt's descriptor again when the connect operation was destroyed, closing any descriptor that had been
       given the number meanwhile, such as an HTTP client's event notifier
       (<a href="https://github.com/qoretechnologies/qore/issues/6962">issue 6962</a>)
+    - a connection of a @ref Qore::Socket "Socket" closed by another thread while it was being made could still use
+      the closed socket; it now fails as closed
+      (<a href="https://github.com/qoretechnologies/qore/issues/7003">issue 7003</a>)
     - the internal state and helpers of the data provider index classes (@ref providerindexutilintro
       "ProviderIndexUtil" and @ref providerindexintro "ProviderIndex") are not visible to subclasses; see
       @ref providerindexutil_v1_2 and @ref providerindex_v1_4 (<a href="https://github.com/qoretechnologies/qore/issues/7044">issue 7044</a>)

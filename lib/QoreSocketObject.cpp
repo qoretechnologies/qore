@@ -4829,7 +4829,8 @@ void QoreSocketObject::deref() {
 void QoreSocketObject::closeIo(ExceptionSink* xsink) {
     priv->socket->priv->prepareForClose();
     AutoLocker al(priv->m);
-    if (priv->socket->isOpen()) {
+    // a socket with no descriptor gets none from a connection being made (ex: resolving its host) (qore#7003)
+    if (!priv->socket->priv->endConnectIfNoDescriptor()) {
         qore_socket_private::get(*priv->socket)->shutdown_direct();
         priv->socket->priv->close();
     }
