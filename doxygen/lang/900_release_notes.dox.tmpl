@@ -247,6 +247,11 @@
     @ref HttpServer::http_abort_connection() "http_abort_connection()" (see @ref httpserver_handler_socket; issues
     <a href="https://github.com/qoretechnologies/qore/issues/7305">7305</a>, <a href="https://github.com/qoretechnologies/qore/issues/7338">7338</a>).
 
+    @par A Handler That Gets the Socket of Its Request Gets a WebSocket Connection Only Through WebSocketHandler
+    The HTTP/1.1 WebSocket connection of such a handler is set up without the connection's socket, and another socket
+    handler's \c 101 response is answered with \c 500 (see @ref httpserver_handler_socket and
+    @ref websockethandler_v2_8; <a href="https://github.com/qoretechnologies/qore/issues/7476">issue 7476</a>).
+
     @par HTTP Handlers Get an Object of Their Listener's Interface, Not the Listener
     The handlers of an HTTP server get an object with only the methods of
     @ref HttpServer::HttpListenerInterface "HttpListenerInterface" for the listener of their request, one per listener,
