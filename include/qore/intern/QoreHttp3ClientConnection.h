@@ -148,7 +148,14 @@ public:
         HttpClientEventSink* event_sink = nullptr) override;
 
     //! Push body data for a streaming send request (H3 DATA frame via QUIC)
-    /** @since %Qore 3.0
+    /** A send that finds the stream's send buffer full waits for the peer's flow-control windows to let the data
+        go out and the buffer to drain, and is then made again: no data is dropped however slowly the peer reads (the
+        data of a full buffer was dropped without an error; qore#7465).  The wait ends when the stream or the
+        connection ends (ex: the peer resets the stream or answers the request without reading its body) and when the
+        thread is cancelled or its Program interrupted, and raises \c HTTP3-FLOW-CONTROL only if the peer
+        acknowledged none of the stream's data for the request timeout of the connection's manager.
+
+        @since %Qore 3.0
     */
     DLLEXPORT void pushSendData(const void* data, size_t len, ExceptionSink* xsink) override;
 
@@ -235,6 +242,10 @@ private:
 
     //! Wake the async I/O controller so pending QUIC writes are driven on the I/O thread.
     DLLLOCAL void wakeController() const;
+
+    //! Sends data on the stream, waiting for the stream's send buffer to drain while it is full (see pushSendData())
+    DLLLOCAL void sendStreamDataWaitingForDrain(int64_t stream_id, const void* data, size_t len, bool end_stream,
+        ExceptionSink* xsink);
 
     //! Guards the members of the poll operation and socket (see above)
     mutable std::mutex op_mu_;

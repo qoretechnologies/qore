@@ -33070,7 +33070,9 @@ static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* param
     sent and its response can arrive before the registration; \c "h3-response-buffered": an HTTP/3 client poll
     operation received the response of a request that is not registered yet and kept it for the registration (with a
     release Counter of 0, it only reports it); \c "h3-race-winner": the address family race of an HTTP/3 client
-    connection found the connection attempt that wins, before the operation's socket takes it over (the I/O thread)
+    connection found the connection attempt that wins, before the operation's socket takes it over (the I/O thread);
+    \c "send-drain-wait": an HTTP/2 or HTTP/3 client connection's streamed send found the stream's send buffer full
+    and is about to wait for it to drain (qore#7465)
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
     @param target if given, only a thread that reaches the point for this object is held: the poll operation of the
@@ -33120,6 +33122,8 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::Http3ResponseBuffered);
     } else if (!strcmp(name->c_str(), "h3-race-winner")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::Http3RaceWinner);
+    } else if (!strcmp(name->c_str(), "send-drain-wait")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::SendDrainWait);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();

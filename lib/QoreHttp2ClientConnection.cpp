@@ -48,6 +48,7 @@
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/qore_socket_private.h"
 
 #include <cstdio>
 
@@ -684,7 +685,7 @@ void Http2ClientConnection::pushSendData(const void* data, size_t len, Exception
     bool end_stream = (!data || !len);
     if (end_stream) {
         // End-of-body: send empty DATA with END_STREAM
-        poll_op_priv->sendStreamData(streaming_send_stream_id, nullptr, true, xsink);
+        sendStreamDataWaitingForDrain(streaming_send_stream_id, nullptr, true, xsink);
         streaming_send_stream_id = -1;
         finishStreamingSend();
     } else {
@@ -698,11 +699,66 @@ void Http2ClientConnection::pushSendData(const void* data, size_t len, Exception
         }
         memcpy(buf.get(), data, len);
         SimpleRefHolder<BinaryNode> bin(new BinaryNode(buf.release(), len));
-        poll_op_priv->sendStreamData(streaming_send_stream_id, *bin, false, xsink);
+        sendStreamDataWaitingForDrain(streaming_send_stream_id, *bin, false, xsink);
     }
 
     // sendStreamData() delegates to the socket-level enqueue operation, which
     // wakes the controller after the DATA frame is queued.
+}
+
+void Http2ClientConnection::sendStreamDataWaitingForDrain(int64_t stream_id, const BinaryNode* data,
+        bool end_stream, ExceptionSink* xsink) {
+    // the wait is bounded by the request timeout of stalled time, not of total time: a large body that a slow peer
+    // takes makes progress all the while (as HttpClientIo's Http2ClientConnection::sendStreamData(), issue #6968)
+    int stall_timeout_ms = -1;
+    {
+        AutoLocker al(onclose_lock);
+        if (manager_ && manager_->getOptions().request_timeout_ms > 0) {
+            stall_timeout_ms = manager_->getOptions().request_timeout_ms;
+        }
+    }
+    while (true) {
+        poll_op_priv->sendStreamData(stream_id, data, end_stream, xsink);
+        if (!*xsink) {
+            return;
+        }
+        // a full send buffer took nothing of the data: the send waits for the buffer to drain and is made again
+        // (qore#7465); a send on the I/O thread cannot wait
+        QoreValue err = xsink->getExceptionErr();
+        if (err.getType() != NT_STRING || strcmp(err.get<const QoreStringNode>()->c_str(), "HTTP2-FLOW-CONTROL")
+                || !sock_priv || qore_on_async_io_thread()) {
+            return;
+        }
+        xsink->clear();
+        // the buffered data is sent by the I/O thread
+        wakeController();
+        int64_t taken_before = qore_socket_object_h2_stream_taken(sock_priv, stream_id, xsink);
+        // 0: drained, 1: timed out, -1: the stream has no data buffered any more (sent, or the stream or the
+        // connection ended: a reset or the close of the connection ends the wait at once); the send is made again in
+        // each case, and reports a stream or a connection that ended
+#ifdef DEBUG
+        qore_dbg_http_hold(QoreDbgHttpHoldPoint::SendDrainWait, this);
+#endif
+        int rc = *xsink ? -1 : sock_priv->waitForHttp2StreamDrain(static_cast<int32_t>(stream_id),
+            stall_timeout_ms, xsink);
+        if (*xsink) {
+            // the wait failed: the thread was cancelled (THREAD-CANCELLED), its Program was interrupted, or the
+            // session is gone; the data was not sent
+            return;
+        }
+        if (rc == 1) {
+            // no drain within the timeout: a stall only if the connection took nothing of the stream's data
+            int64_t taken_after = qore_socket_object_h2_stream_taken(sock_priv, stream_id, xsink);
+            if (*xsink) {
+                return;
+            }
+            if (taken_after <= taken_before) {
+                xsink->raiseException("HTTP2-FLOW-CONTROL", "stream %lld: the peer took none of the stream's "
+                    "buffered data for %d ms; the data was not sent", (long long)stream_id, stall_timeout_ms);
+                return;
+            }
+        }
+    }
 }
 
 void Http2ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) {

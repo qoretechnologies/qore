@@ -2336,6 +2336,11 @@ hash<auto> msg = httpclient.sendWithSendCallback(callback, "POST", "/path", {"Co
     @note
     - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no \c "Transfer-Encoding" header is already present
     - For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
+    - Over HTTP/2 and HTTP/3, the data returned by the callback waits for the server's flow control to let it go out:
+      the callback is called for more data only when the stream's send buffer has room for it, so no data is dropped
+      however slowly the server reads; the wait ends with the stream (ex: the server answers without reading the body)
+      or when the thread is cancelled, and raises \c HTTP2-FLOW-CONTROL or \c HTTP3-FLOW-CONTROL only if the server
+      took none of the stream's data for the request timeout
 
     @see @ref httpclient_get_with_body
 
