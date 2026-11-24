@@ -80,8 +80,14 @@ class FindCreateTimeZoneTest inherits QUnit::Test {
             assertThrows("TZINFO-ERROR", sprintf("^unknown time zone region \"%s\"$", regex_escape(name)),
                 \cpp_api_find_create_timezone(), name, name);
         }
-        # a path is loaded as a path
-        string path = "/no/such/zoneinfo/" + get_random_string();
-        assertThrows("FILE-OPEN2-ERROR", path, \cpp_api_find_create_timezone(), path, path);
+        # a name from data is never a path: an existing zoneinfo file, a missing one and a relative path are not read
+        foreach string path in ("/usr/share/zoneinfo/UTC", "/no/such/zoneinfo/" + get_random_string(), "./UTC",
+                "../UTC") {
+            assertThrows("TZINFO-ERROR", sprintf("^unknown time zone region \"%s\"$", regex_escape(path)),
+                \cpp_api_find_create_timezone(), path, path);
+        }
+        # the name of the local zone is the local zone
+        string local = TimeZone::get().region();
+        assertEq(local, cpp_api_find_create_timezone(local).region, "the local zone");
     }
 }

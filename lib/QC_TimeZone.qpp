@@ -366,7 +366,7 @@ static nothing TimeZone::setRegion(string region) [dom=LOCALE_CONTROL;flags=NAME
     if (QoreTimeZoneManager::checkRegion(*region, false, xsink)) {
         return QoreValue();
     }
-    const AbstractQoreZoneInfo *zone = QTZM.findLoadRegion(region->getBuffer(), xsink);
+    const AbstractQoreZoneInfo *zone = QTZM.findLoadRegionOrPath(region->getBuffer(), xsink);
     if (!*xsink) {
         getProgram()->setTZ(zone);
     }

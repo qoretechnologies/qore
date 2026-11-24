@@ -69,6 +69,11 @@ code sub closure(string r) { return string sub () { return (new TimeZone(r)).reg
         addTestCase("a cached zoneinfo path stays subject to the policy", \testCachedPath());
         addTestCase("a path load does not change a region", \testPathDoesNotChangeRegion());
         addTestCase("the local zone at startup is not read from the current directory", \testStartupLocalZone());
+        addTestCase("%set-time-zone with a path in a restricted Program", \testDirective());
+        addTestCase("a FIFO given as a path fails without blocking", \testPathFifo());
+        addTestCase("a file is cached once however its path is spelled", \testPathSpellings());
+        addTestCase("a refused relative path is named as given", \testRelativePathError());
+        addTestCase("the local zone named by a path", \testLocalZonePath());
         set_return_value(main());
     }
 
@@ -460,5 +465,136 @@ code sub closure(string r) { return string sub () { return (new TimeZone(r)).reg
             string out = backquote(cmd);
             assertEq("-18000", trim(out), "TZ=" + tz);
         }
+    }
+
+    #! parses a Program with the given options and code and returns the region of its time zone or the error
+    static string directiveResult(int opts, *SandboxManager sm, string zone) {
+        try {
+            Program p(PO_NEW_STYLE | opts);
+            if (sm) {
+                p.setSandboxManager(sm);
+            }
+            p.parse("%set-time-zone " + zone + "\nstring sub r() { return TimeZone::get().region(); }", "directive");
+            return p.callFunction("r");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err + ": " + ex.desc;
+        }
+    }
+
+    testDirective() {
+        if (!zoneinfo) {
+            testSkip("no zoneinfo file to copy");
+        }
+        string path = dir + "/tz-directive";
+        copyFile(zoneinfo, path);
+        SandboxManager deny();
+        deny.setFilesystemDefaultPolicy(False);
+        # paths, relative and absolute, existing or not, are refused before anything is accessed
+        foreach string zone in (path, "./tz-directive", "/no/such/zone", "../x") {
+            foreach hash<auto> c in ({"opts": PO_NO_FILESYSTEM, "sm": NOTHING, "label": "PO_NO_FILESYSTEM"},
+                    {"opts": PO_LOCKDOWN, "sm": NOTHING, "label": "PO_LOCKDOWN"},
+                    {"opts": 0, "sm": deny, "label": "a SandboxManager"},
+                    {"opts": 0, "sm": new SandboxManager(), "label": "a default SandboxManager"}) {
+                string rv = directiveResult(c.opts, c.sm, zone);
+                assertRegex("ILLEGAL-FILESYSTEM-ACCESS.*cannot name a zoneinfo file path", rv,
+                    sprintf("%%set-time-zone %s with %s", zone, c.label));
+                # the error does not depend on the file
+                assertEq(-1, rv.find(zone), "the error does not name the path");
+            }
+        }
+        # a region and an offset are accepted
+        assertEq("Asia/Dubai", directiveResult(PO_NO_FILESYSTEM, NOTHING, "Asia/Dubai"), "a region");
+        assertEq("Asia/Dubai", directiveResult(0, deny, "Asia/Dubai"), "a region with a SandboxManager");
+        assertRegex("^\\+03", directiveResult(PO_NO_FILESYSTEM, NOTHING, "+03:00"), "an offset");
+        assertRegex("unknown time zone region", directiveResult(PO_NO_FILESYSTEM, NOTHING, "No/Such_Zone"),
+            "an unknown region");
+        # a Program without restrictions loads the path
+        assertEq(path, directiveResult(0, NOTHING, path), "a path in an unrestricted Program");
+    }
+
+    testPathFifo() {
+        string fifo = dir + "/tz-fifo";
+        if (mkfifo(fifo)) {
+            testSkip("cannot create a FIFO");
+        }
+        # no writer ever opens the FIFO: an open that blocked would never return
+        assertThrows("TZINFO-ERROR", "is not a regular file", sub () { TimeZone t(fifo); }, NOTHING,
+            "a FIFO in trusted code");
+        Program p = tenantAllow(dir);
+        assertThrows("TZINFO-ERROR", "is not a regular file", \p.callFunction(), ("tz", fifo),
+            "a FIFO in sandboxed code");
+        assertThrows("TZINFO-ERROR", "is not a regular file", sub () { TimeZone t(dir); }, NOTHING, "a directory");
+        # time zones still load
+        assertEq(-3 * 3600, (new TimeZone("America/Sao_Paulo")).UTCOffset(), "a region after the FIFO");
+    }
+
+    testPathSpellings() {
+        if (!zoneinfo) {
+            testSkip("no zoneinfo file to copy");
+        }
+        string path = dir + "/tz-spelled";
+        copyFile(zoneinfo, path);
+        TimeZone first(path);
+        list<string> spellings = (dir + "/./tz-spelled", dir + "//tz-spelled", dir + "/./././tz-spelled");
+        string old_cwd = getcwd();
+        chdir(dir);
+        on_exit chdir(old_cwd);
+        spellings += ("./tz-spelled", "./././tz-spelled", "../" + basename(dir) + "/tz-spelled");
+        # the zone of the first load is returned: it is named by the first path
+        foreach string sp in (spellings) {
+            assertEq(path, (new TimeZone(sp)).region(), "the same file as " + sp);
+        }
+        # a symbolic link to it is the same file
+        string link_path = dir + "/tz-symlink";
+        symlink(path, link_path);
+        assertEq(path, (new TimeZone(link_path)).region(), "a symbolic link");
+    }
+
+    testRelativePathError() {
+        string sub_dir = dir + "/relerr";
+        mkdir(sub_dir);
+        string old_cwd = getcwd();
+        chdir(sub_dir);
+        on_exit chdir(old_cwd);
+        Program p = tenant(0);
+        try {
+            p.callFunction("tz", "./zone");
+            assertTrue(False, "an exception is raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err, "error code");
+            assertTrue(ex.desc.find("'./zone'") >= 0, "the path is named as given: " + ex.desc);
+            assertEq(-1, ex.desc.find(sub_dir), "the current directory is not shown: " + ex.desc);
+        }
+    }
+
+    testLocalZonePath() {
+        if (!zoneinfo) {
+            testSkip("no zoneinfo file to copy");
+        }
+        # a child whose local zone is a file outside of any zoneinfo directory, so its name is the path
+        string local = dir + "/local-zone";
+        copyFile(zoneinfo, local);
+        string script = dir + "/local-zone.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+        f.write("%new-style
+string local = TimeZone::get().region();
+binary data = Serializable::serialize(2026-11-24T10:00:00);
+Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+p.setSandboxManager(new SandboxManager());
+p.parse(\"string sub sr(string r) { TimeZone::setRegion(r); return TimeZone::get().region(); }
+string sub tz(string r) { return (new TimeZone(r)).region(); }
+string sub des(binary b) { return Serializable::deserialize(b).info().zone.region(); }\", \"t\");
+list<string> out = (local,);
+foreach string fn in (\"sr\", \"tz\") {
+    try { out += p.callFunction(fn, local); } catch (hash<ExceptionInfo> ex) { out += ex.err; }
+}
+try { out += p.callFunction(\"des\", data); } catch (hash<ExceptionInfo> ex) { out += ex.err; }
+print(out.join(\"|\"));
+");
+        f.close();
+        string out = backquote(sprintf("TZ='%s' '%s' '%s'", local, qore_bin, script));
+        assertEq((local, "ILLEGAL-FILESYSTEM-ACCESS", "ILLEGAL-FILESYSTEM-ACCESS", local).join("|"), trim(out),
+            "a path naming the local zone is a path for the region APIs; a date in the local zone deserializes");
     }
 }

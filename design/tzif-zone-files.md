@@ -11,30 +11,41 @@ immutable after construction; lookups need no lock.
 The whole file is read, up to `QoreZoneInfo::MaxFileSize` (1 MiB; real zoneinfo files are less than 8 KiB), and
 parsed from memory (`QoreZoneInfo::init()`):
 
-- A path (`findLoadRegionFromPath()`, also a name starting with `/` or `.` given to `findLoadRegion()`) is made
-  absolute with the current directory once, checked against `PO_NO_FILESYSTEM` and the file-system policy of the
-  calling code (`qore_qf_private::checkOpenAccess()`) before the cache is looked at, and read with
-  `QoreFile::open2()` and `QoreFile::readBinary()` at exactly that path; it is cached by the absolute path. The name
-  of the zone drops the directory of the local time file if a canonical region name follows (#3736); the name is
-  for display and serialization only and never finds a file.
+- A path (`findLoadRegionFromPath()`; `findLoadRegionOrPath()` passes names starting with `/` or `.` from
+  `TimeZone::setRegion()` and `Program::setTimeZoneRegion()` to it) is made absolute with the current directory once,
+  checked against `PO_NO_FILESYSTEM` and the file-system policy of the code that runs
+  (`qore_qf_private::checkOpenAccess()`) before the cache is looked at (errors name a relative path as given), and
+  opened at exactly that path with `O_NONBLOCK` by `loadPath()`, which requires a regular file (`fstat()`) and
+  reads it without the lock. The zone is cached in `pathmap` by the device and inode of the file, so every spelling
+  of a path and every link to the file share one zone; at most `MaxPathZones` (4096) files are loaded, as zones are
+  never freed. The name of the zone drops the directory of the local time file if a canonical region name follows
+  (#3736); the name is for display and serialization only and never finds a file. On Windows the path is checked
+  the same way and the zone cached by the path as given (`processFile()`).
+- The `%set-time-zone` parse directive (`qore_program_private::findTimeZoneDirectiveZone()`) is processed while
+  the Program is parsed, when the code that runs is the caller of the parse: a path is refused when the parsed
+  Program has `PO_NO_FILESYSTEM` or any sandbox manager; a region goes to the region loader.
+- Deserialized dates: the region name of the local zone is the local zone (no file access, also if the name is a
+  path); a path is loaded as above; a region by the region loader.
 - The local zone at startup: a relative `TZ` value or an absolute path in the zoneinfo directory followed by a
-  canonical region name is loaded as a region; any other absolute path is read at exactly that path. Nothing is read
-  relative to the current directory.
-- A region (`QoreTimeZoneManager::findLoadRegion()`, also `find_create_timezone()`) is the runtime's own read of its
-  time zone database, not subject to the file-system policy of the code that names it, so that sandboxed code can
-  deserialize a date in a region that is not cached yet (qore#7442). The name of the local zone returns it. A
-  canonical name (`isRegionName()`: components of `[A-Za-z0-9_+-]` separated by single `/`) is looked up in the
-  cache, where only the region loader stores zones under region names, and otherwise loaded by
-  `loadRegionIntern()`: `open_region_file()` opens the `realpath()` of the zoneinfo directory with `O_DIRECTORY` and
-  walks the region's components with `openat()` and `O_NOFOLLOW` (`O_DIRECTORY` for directories, `O_NONBLOCK` for
-  the file), so a component replaced during the walk cannot lead outside; a component that is a symbolic link is
-  read with `readlinkat()` and followed only inside of the directory (`..` cannot go above it, an absolute target
-  must be in it, at most 40 links); then `fstat()` must show a regular file, which is read with `read()`. Every
-  failure up to there raises the same `TZINFO-ERROR` `unknown time zone region "<name>"` (`raiseUnknownRegion()`),
-  so the error does not show whether a path exists; errors in the data name the region. Any other name raises that
-  error too. `checkRegion()` gives it for a region string with a NUL character, a `..` or empty component or a
-  backslash. The zoneinfo directory must not be writable by untrusted code (hard links and files put there cannot
-  be told apart).
+  canonical region name is loaded as a region; any other absolute path is read at exactly that path with
+  `O_NONBLOCK`. Nothing is read relative to the current directory.
+- A region (`QoreTimeZoneManager::findLoadRegion()`) is the runtime's own read of its time zone database, not
+  subject to the file-system policy of the code that names it, so that sandboxed code can deserialize a date in a
+  region that is not cached yet (qore#7442). It takes names from data as well (`find_create_timezone()` for DBI
+  drivers and Arrow/Parquet imports, AOT/JIT date literals, regions of deserialized dates), so a name is never
+  loaded as a path there. The region name of the local zone returns it. A canonical name (`isRegionName()`:
+  components of `[A-Za-z0-9_+-]` separated by single `/`) is looked up in `tzmap` under the read lock (only the
+  region loader stores zones there under region names) and otherwise loaded by `loadRegion()` without the lock:
+  `open_region_file()` opens the `realpath()` of the zoneinfo directory with `O_DIRECTORY` and walks the region's
+  components with `openat()` and `O_NOFOLLOW` (`O_DIRECTORY` for directories, `O_NONBLOCK` for the file), so a
+  component replaced during the walk cannot lead outside; a component that is a symbolic link is read with
+  `readlinkat()` and followed only inside of the directory (`..` cannot go above it, an absolute target must be in
+  it, at most 40 links); then `fstat()` must show a regular file, which is read with `read()`. The zone is inserted
+  under the write lock; a zone that another thread inserted first is kept. Every failure up to the parse raises
+  the same `TZINFO-ERROR` `unknown time zone region "<name>"` (`raiseUnknownRegion()`), so the error does not show
+  whether a path exists; errors in the data name the region. Any other name raises that error too. `checkRegion()`
+  gives it for a region string with a NUL character, a `..` or empty component or a backslash. The zoneinfo
+  directory must not be writable by untrusted code (hard links and files put there cannot be told apart).
 - `parse()` checks the version 1 header, computes the size of each data block from the header counts in 64-bit
   arithmetic and checks it against the file size before anything in the block is read. A version 1 file is read
   from its 32-bit block. In a version 2+ file the version 1 header and block are only skipped; the 64-bit block

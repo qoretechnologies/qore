@@ -3132,7 +3132,7 @@ nothing Program::setTimeZoneRegion(string region) [flags=NAMED_ARGS] {
     if (QoreTimeZoneManager::checkRegion(*region, false, xsink)) {
         return QoreValue();
     }
-    const AbstractQoreZoneInfo *zone = QTZM.findLoadRegion(region->c_str(), xsink);
+    const AbstractQoreZoneInfo *zone = QTZM.findLoadRegionOrPath(region->c_str(), xsink);
     if (!*xsink) {
         p->setTZ(zone);
     }

@@ -2588,6 +2588,10 @@ DateTimeNode* QoreSerializable::deserializeAbsDateFromStream(StreamReader& reade
         if (QoreTimeZoneManager::checkRegion(region, is_path, xsink)) {
             return nullptr;
         }
+        // a date in the local zone is in the local zone, which needs no file access, also if its name is a path
+        if (const AbstractQoreZoneInfo* local = QTZM.findLocalZone(region.c_str())) {
+            return DateTimeNode::makeAbsolute(local, epoch, us);
+        }
         if (is_path && runtime_check_parse_option(PO_NO_FILESYSTEM)) {
             xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot create a TimeZone object from absolute path "
                 "'%s' when sandboxing restriction PO_NO_FILESYSTEM is set", region.c_str());

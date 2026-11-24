@@ -1129,11 +1129,23 @@ string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
     @note The zoneinfo directory and its subdirectories must not be writable by code that is not trusted: a file or
     a hard link put there would be read as a region.
 
-    A zoneinfo file given as an absolute path or a path starting with \c "." is a path, also when it is given to
-    one of the region APIs above: a relative path is a path in the current directory; the path is subject to
+    A zoneinfo file given as an absolute path or a path starting with \c "." is a path when code gives it to
+    @ref Qore::TimeZone::constructor() "TimeZone::constructor()",
+    @ref Qore::TimeZone::setRegion() "TimeZone::setRegion()" or
+    @ref Qore::Program::setTimeZoneRegion() "Program::setTimeZoneRegion()" and when a deserialized date names it: a
+    relative path is a path in the current directory; the path is subject to
     @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM", which refuses it without opening the file, and to the
-    filesystem policy, also when the time zone of the path was loaded already; the file is opened at exactly this
-    path, and its time zone never changes the time zone of a region name.
+    filesystem policy of the code that runs, also when the time zone of the path was loaded already; the file is
+    opened at exactly this path without blocking and must be a regular file, and its time zone never changes the
+    time zone of a region name.  The @ref set-time-zone "%set-time-zone" parse directive accepts a path only in a
+    %Program whose file-system access is not restricted (no @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" and no
+    sandbox manager), as it is processed while the %Program is parsed.
+
+    A time zone name that comes from data and not from code is never loaded as a path: a name that the C++ API
+    \c find_create_timezone() gets (from database drivers and imported Arrow or Parquet data, for example) and the
+    time zone of a date literal in compiled code are a region, the name of the local zone or a UTC offset.  The name
+    of the local zone denotes the local zone in data, also when it is a path (a local time file outside of a
+    zoneinfo directory), and also in a deserialized date, without any file access.
 
     @since %Qore 3.0
 

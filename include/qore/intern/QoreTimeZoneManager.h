@@ -419,6 +419,14 @@ protected:
     QoreString root;
     tzmap_t tzmap;
 
+#ifndef _Q_WINDOWS
+    //! the key of a zone loaded from a path: the device and inode of its file
+    typedef std::pair<dev_t, ino_t> path_key_t;
+    typedef std::map<path_key_t, AbstractQoreZoneInfo*> pathmap_t;
+    //! zones loaded from paths, by their file
+    pathmap_t pathmap;
+#endif
+
     // standard (unlocked) zone offset map
     tzomap_t tzo_std_map;
 
@@ -443,17 +451,22 @@ protected:
     DLLLOCAL void init_intern(QoreString& TZ);
 
 #ifndef _Q_WINDOWS
-    //! loads a region that is not cached; the write lock must be held
-    /** Reads the zoneinfo file of a canonical region name that resolves under the zoneinfo directory; see
-        findLoadRegion()
+    //! finds or loads a region; the lock must not be held
+    /** Reads the zoneinfo file of a canonical region name in the zoneinfo directory without the lock and caches the
+        zone by the region name under the write lock; see findLoadRegion()
     */
-    DLLLOCAL const AbstractQoreZoneInfo* loadRegionIntern(const char* region, ExceptionSink* xsink);
+    DLLLOCAL const AbstractQoreZoneInfo* loadRegion(const char* region, ExceptionSink* xsink);
 
-    //! loads the zoneinfo file at the given absolute path that is not cached; the write lock must be held
-    /** The file is opened exactly as given, subject to the file-system policy of the calling code; the zone is cached
-        by the path, which never matches a region name
+    //! finds or loads the zoneinfo file at the given absolute path; the lock must not be held
+    /** The caller has checked the path against its restrictions; the file is opened at exactly this path without
+        blocking and must be a regular file; it is read without the lock and its zone is cached by the device and
+        inode of the file under the write lock, never by a region name
+
+        @param name the path as given, for error messages
+        @param path the absolute path
+        @param xsink an exception is raised here if the file cannot be loaded
     */
-    DLLLOCAL const AbstractQoreZoneInfo* loadPathIntern(const std::string& path, ExceptionSink* xsink);
+    DLLLOCAL const AbstractQoreZoneInfo* loadPath(const char* name, const std::string& path, ExceptionSink* xsink);
 #endif
 
 public:
@@ -463,6 +476,11 @@ public:
         for (tzmap_t::iterator i = tzmap.begin(), e = tzmap.end(); i != e; ++i) {
             delete i->second;
         }
+#ifndef _Q_WINDOWS
+        for (auto& i : pathmap) {
+            delete i.second;
+        }
+#endif
 
         for (tzomap_t::iterator i = tzo_std_map.begin(), e = tzo_std_map.end(); i != e; ++i) {
             //printd(0, "QoreTimeZoneManager::~QoreTimeZoneManager() deleting %d: %s\n", i->first, i->second->getRegionName());
@@ -493,17 +511,25 @@ public:
         return localtzname.empty() ? nullptr : localtzname.c_str();
     }
 
-    //! finds or loads a time zone region: a name in the zoneinfo database (ex: \c "Europe/Prague")
-    /** A region that is not cached is loaded by the runtime itself, not by the code that names it, so the
-        file-system policy of a sandbox does not apply to its file (qore#7442); therefore only a canonical region
-        name (see isRegionName()) is read, and only from a regular file that is reached from the zoneinfo directory
-        component by component without leaving it (symbolic links are followed only inside of the directory);
-        nothing else is accessed.  An invalid, escaping or missing region raises the same \c TZINFO-ERROR (see
-        raiseUnknownRegion()), which does not show whether a file exists.
+    //! the maximum number of zoneinfo files loaded from paths; their zones are never freed
+    static constexpr unsigned MaxPathZones = 4096;
 
-        Only a region loaded this way is cached by its region name.  The name of the local zone returns the local
-        zone.  A name that is a path (see isPathName()) is loaded with findLoadRegionFromPath(), subject to the
-        file-system policy of the calling code.  An empty name is UTC (\c nullptr, no exception).
+    //! finds or loads a time zone region: a name in the zoneinfo database (ex: \c "Europe/Prague")
+    /** For names that come from data (deserialized dates, imported files, database values, compiled literals) and for
+        the C++ API (find_create_timezone()): a name is never loaded as a path.
+
+        The name of the local zone returns the local zone without any file access, also if it is a path (a local
+        time file that is not in a zoneinfo directory).  A region that is not cached is loaded by the runtime
+        itself, not by the code that names it, so the file-system policy of a sandbox does not apply to its file
+        (qore#7442); therefore only a canonical region name (see isRegionName()) is read, and only from a regular
+        file that is reached from the zoneinfo directory component by component without leaving it (symbolic links
+        are followed only inside of the directory); nothing else is accessed, and the file is read without the lock.
+        Any other name, a refused name and a missing region raise the same \c TZINFO-ERROR (see
+        raiseUnknownRegion()), which does not show whether a file exists.  Only a region loaded this way is cached by
+        its region name.  An empty name is UTC (\c nullptr, no exception).
+
+        On Windows a name is a Windows time zone name or a zoneinfo region read from the registry; an absolute path
+        is refused.
 
         @param name the region name
         @param xsink an exception is raised here if the region cannot be loaded
@@ -512,11 +538,23 @@ public:
     */
     DLLLOCAL const AbstractQoreZoneInfo* findLoadRegion(const char* name, ExceptionSink* xsink);
 
+    //! finds or loads a time zone region or a zoneinfo file given as a path by code
+    /** For the region APIs (TimeZone::setRegion(), Program::setTimeZoneRegion()): a path (see isPathName()), also
+        the path of the local zone, is loaded with findLoadRegionFromPath(), subject to the restrictions of the
+        calling code; any other name with findLoadRegion()
+    */
+    DLLLOCAL const AbstractQoreZoneInfo* findLoadRegionOrPath(const char* name, ExceptionSink* xsink);
+
+    //! returns the local zone if the name is its region name, otherwise \c nullptr
+    DLLLOCAL const AbstractQoreZoneInfo* findLocalZone(const char* name) const;
+
     //! finds or loads a time zone from a zoneinfo file given as a path
     /** A relative path is made absolute with the current directory; the absolute path is checked against
-        \c PO_NO_FILESYSTEM and the file-system policy of the calling code before anything else, also for a zone
-        that is cached already, and the file is opened at exactly that path; the zone is cached by the absolute
-        path, which never matches a region name
+        \c PO_NO_FILESYSTEM and the file-system policy of the calling code (the runtime Program) before anything else,
+        also for a zone that is cached already; errors name the path as given.  The file is opened at exactly that
+        path without blocking, must be a regular file and is read without the lock; the zone is cached by the device
+        and inode of the file (at most MaxPathZones files), never by a region name.  On Windows the zone is cached by
+        the path as given, after the same checks.
 
         @param name the path
         @param xsink an exception is raised here if the path cannot be used or its file cannot be loaded

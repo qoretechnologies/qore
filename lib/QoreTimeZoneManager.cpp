@@ -53,6 +53,10 @@
 #include <vector>
 #endif
 
+#ifndef _Q_WINDOWS
+static int read_zone_fd(int fd, std::string& data, struct stat& sbuf);
+#endif
+
 #ifdef HAVE_GLOB_H
 #include <glob.h>
 #else
@@ -1101,9 +1105,7 @@ int QoreTimeZoneManager::setLocalTZ(QoreString fname) {
 #ifndef _Q_WINDOWS
     if (region) {
         // a region is read by the region loader, never relative to the current directory
-        QoreAutoRWWriteLocker al(rwl);
-        tzmap_t::iterator i = tzmap.find(region);
-        const AbstractQoreZoneInfo* tzi = (i != tzmap.end()) ? i->second : loadRegionIntern(region, &xsink);
+        const AbstractQoreZoneInfo* tzi = loadRegion(region, &xsink);
         if (!tzi) {
             xsink.clear();
             printd(0, "ERROR: cannot read the local time zone region %s\n", region);
@@ -1121,7 +1123,28 @@ int QoreTimeZoneManager::setLocalTZ(QoreString fname) {
     if (fnamestr[0] != '/') {
         return -1;
     }
+#ifndef _Q_WINDOWS
+    // a FIFO or a device does not block the open
+    int fd;
+    do {
+        fd = open(fnamestr.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+    } while (fd < 0 && errno == EINTR);
+    if (fd < 0) {
+        printd(0, "ERROR: cannot open localtime file %s: %s\n", fnamestr.c_str(), strerror(errno));
+        return -1;
+    }
+    ON_BLOCK_EXIT(close, fd);
+    std::string data;
+    struct stat sbuf;
+    if (read_zone_fd(fd, data, sbuf)) {
+        printd(0, "ERROR: cannot read localtime file %s\n", fnamestr.c_str());
+        return -1;
+    }
+    std::unique_ptr<QoreZoneInfo> tzi(new QoreZoneInfo(fnamestr, reinterpret_cast<const unsigned char*>(data.data()),
+        data.size(), fnamestr.c_str(), &xsink));
+#else
     std::unique_ptr<QoreZoneInfo> tzi(new QoreZoneInfo(fnamestr, fnamestr.c_str(), &xsink));
+#endif
     if (!*(tzi.get())) {
         xsink.clear();
         printd(0, "ERROR: cannot read localtime file %s\n", fnamestr.c_str());
@@ -2322,22 +2345,20 @@ static int open_region_file(const QoreString& root, const char* region) {
 #endif
 }
 
-//! reads the zoneinfo file of a canonical region name; see open_region_file()
-/** @param root the zoneinfo directory
-    @param region a canonical region name
+//! reads an open zoneinfo file, which must be a regular file
+/** @param fd the descriptor of the file; not closed here
     @param data the data of the file, at most QoreZoneInfo::MaxFileSize + 1 bytes
+    @param sbuf the status of the file
 
-    @return 0 if the file was read, -1 if it cannot be read, which the caller does not distinguish
+    @return 0 if the file was read, -1 if it is not a regular file (errno is 0) or cannot be read (errno is set)
 */
-static int read_region_file(const QoreString& root, const char* region, std::string& data) {
+static int read_zone_fd(int fd, std::string& data, struct stat& sbuf) {
     assert(data.empty());
-    int fd = open_region_file(root, region);
-    if (fd < 0) {
+    if (fstat(fd, &sbuf)) {
         return -1;
     }
-    ON_BLOCK_EXIT(close, fd);
-    struct stat sbuf;
-    if (fstat(fd, &sbuf) || !S_ISREG(sbuf.st_mode)) {
+    if (!S_ISREG(sbuf.st_mode)) {
+        errno = 0;
         return -1;
     }
     // one byte more than the maximum shows a file that is too large
@@ -2359,12 +2380,39 @@ static int read_region_file(const QoreString& root, const char* region, std::str
     return 0;
 }
 
-const AbstractQoreZoneInfo* QoreTimeZoneManager::loadRegionIntern(const char* region, ExceptionSink* xsink) {
+//! reads the zoneinfo file of a canonical region name; see open_region_file()
+/** @param root the zoneinfo directory
+    @param region a canonical region name
+    @param data the data of the file, at most QoreZoneInfo::MaxFileSize + 1 bytes
+
+    @return 0 if the file was read, -1 if it cannot be read, which the caller does not distinguish
+*/
+static int read_region_file(const QoreString& root, const char* region, std::string& data) {
+    int fd = open_region_file(root, region);
+    if (fd < 0) {
+        return -1;
+    }
+    ON_BLOCK_EXIT(close, fd);
+    struct stat sbuf;
+    return read_zone_fd(fd, data, sbuf);
+}
+
+const AbstractQoreZoneInfo* QoreTimeZoneManager::loadRegion(const char* region, ExceptionSink* xsink) {
     // the name is checked before anything is accessed
     if (!isRegionName(region, strlen(region))) {
         raiseUnknownRegion(region, xsink);
         return nullptr;
     }
+    {
+        // a cached zone needs no file access
+        QoreAutoRWReadLocker al(rwl);
+        tzmap_t::iterator i = tzmap.find(region);
+        if (i != tzmap.end()) {
+            return i->second;
+        }
+    }
+
+    // the file is read without the lock
     std::string data;
     if (read_region_file(root, region, data)) {
         raiseUnknownRegion(region, xsink);
@@ -2380,6 +2428,13 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadRegionIntern(const char* re
         assert(*xsink);
         return nullptr;
     }
+
+    QoreAutoRWWriteLocker al(rwl);
+    // another thread can have loaded the region in the meantime; its zone is kept, as dates may refer to it
+    tzmap_t::iterator i = tzmap.find(name);
+    if (i != tzmap.end()) {
+        return i->second;
+    }
     QoreZoneInfo* rv = tzi.get();
     tzmap[name] = rv;
     tzi.release();
@@ -2387,62 +2442,108 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadRegionIntern(const char* re
     return rv;
 }
 
-const AbstractQoreZoneInfo* QoreTimeZoneManager::loadPathIntern(const std::string& path, ExceptionSink* xsink) {
+const AbstractQoreZoneInfo* QoreTimeZoneManager::loadPath(const char* name, const std::string& path,
+        ExceptionSink* xsink) {
     assert(!path.empty() && path[0] == '/');
-    std::string name = path;
-    std::unique_ptr<QoreZoneInfo> tzi(new QoreZoneInfo(name, path.c_str(), xsink));
+    // the file is opened and read without the lock; a FIFO or a device does not block the open
+    int fd;
+    do {
+        fd = open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+    } while (fd < 0 && errno == EINTR);
+    if (fd < 0) {
+        xsink->raiseErrnoException("FILE-OPEN2-ERROR", errno, "cannot open '%s'", name);
+        return nullptr;
+    }
+    ON_BLOCK_EXIT(close, fd);
+    std::string data;
+    struct stat sbuf;
+    if (read_zone_fd(fd, data, sbuf)) {
+        if (!errno) {
+            xsink->raiseException("TZINFO-ERROR", "time zone file '%s' is not a regular file", name);
+        } else {
+            xsink->raiseErrnoException("TZINFO-ERROR", errno, "cannot read time zone file '%s'", name);
+        }
+        return nullptr;
+    }
+
+    // the zone of a file is cached by its device and inode, however the file is named
+    path_key_t key(sbuf.st_dev, sbuf.st_ino);
+    {
+        QoreAutoRWReadLocker al(rwl);
+        pathmap_t::iterator i = pathmap.find(key);
+        if (i != pathmap.end()) {
+            return i->second;
+        }
+    }
+
+    std::string zname = path;
+    std::unique_ptr<QoreZoneInfo> tzi(new QoreZoneInfo(zname, reinterpret_cast<const unsigned char*>(data.data()),
+        data.size(), name, xsink));
     if (!*tzi) {
         assert(*xsink);
         return nullptr;
     }
+
+    QoreAutoRWWriteLocker al(rwl);
+    pathmap_t::iterator i = pathmap.find(key);
+    if (i != pathmap.end()) {
+        return i->second;
+    }
+    // zones are never freed, as dates refer to them, so the number of files is bounded
+    if (pathmap.size() >= MaxPathZones) {
+        xsink->raiseException("TZINFO-ERROR", "cannot load time zone file '%s': the maximum of %u time zone files "
+            "has been loaded", name, MaxPathZones);
+        return nullptr;
+    }
     QoreZoneInfo* rv = tzi.get();
-    tzmap[path] = rv;
+    pathmap[key] = rv;
     tzi.release();
     ++tzsize;
     return rv;
 }
 #endif
 
+const AbstractQoreZoneInfo* QoreTimeZoneManager::findLocalZone(const char* name) const {
+    assert(name);
+    return (localtz && !strcmp(AbstractQoreZoneInfo::getRegionName(localtz), name)) ? localtz : nullptr;
+}
+
 const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadRegion(const char* name, ExceptionSink* xsink) {
     assert(name);
-#ifdef _Q_WINDOWS
-    QoreAutoRWWriteLocker al(rwl);
-    // find or load region
-    return processFile(name, false, xsink);
-#else
     // an empty region is UTC
     if (!*name) {
         return nullptr;
     }
-    // the name of the local zone, which does not change after initialization, returns it (it can be a path)
-    if (localtz && !localtzname.compare(name)) {
-        return localtz;
+    // the name of the local zone, which does not change after initialization, returns it without file access, also
+    // if it is a path
+    if (const AbstractQoreZoneInfo* local = findLocalZone(name)) {
+        return local;
     }
-    if (isRegionName(name, strlen(name))) {
-        QoreAutoRWWriteLocker al(rwl);
-        // only the region loader caches a zone by a region name, so a cached zone needs no file access
-        tzmap_t::iterator i = tzmap.find(name);
-        if (i != tzmap.end()) {
-            return i->second;
-        }
-        return loadRegionIntern(name, xsink);
+#ifdef _Q_WINDOWS
+    // a name from data is never loaded as a path
+    if (q_absolute_path_windows(name)) {
+        raiseUnknownRegion(name, xsink);
+        return nullptr;
     }
-    // a path is loaded subject to the restrictions of the calling code
-    if (isPathName(name)) {
+    QoreAutoRWWriteLocker al(rwl);
+    // a zoneinfo region or Windows time zone name from the registry
+    return processFile(name, false, xsink);
+#else
+    return loadRegion(name, xsink);
+#endif
+}
+
+const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadRegionOrPath(const char* name, ExceptionSink* xsink) {
+    assert(name);
+    // a path is loaded subject to the restrictions of the calling code, also the path of the local zone
+    if (*name && isPathName(name)) {
         return findLoadRegionFromPath(name, xsink);
     }
-    raiseUnknownRegion(name, xsink);
-    return nullptr;
-#endif
+    return findLoadRegion(name, xsink);
 }
 
 const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadRegionFromPath(const char* name, ExceptionSink* xsink) {
     assert(name);
-#ifdef _Q_WINDOWS
-    QoreAutoRWWriteLocker al(rwl);
-    // find or load region
-    return processFile(name, true, xsink);
-#else
     // the restrictions of the calling code apply before anything else, also to a zone that is cached already
     if (runtime_check_parse_option(PO_NO_FILESYSTEM)) {
         xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot load a time zone from path '%s' when sandboxing "
@@ -2453,8 +2554,16 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadRegionFromPath(const ch
         xsink->raiseException("TZINFO-ERROR", "no zoneinfo file path given");
         return nullptr;
     }
-    // a relative path is made absolute with the current directory once; the file is opened at exactly this path,
-    // and the zone is cached by it
+#ifdef _Q_WINDOWS
+    if (qore_qf_private::checkOpenAccess(name, O_RDONLY, xsink)) {
+        return nullptr;
+    }
+    QoreAutoRWWriteLocker al(rwl);
+    // find or load the file
+    return processFile(name, true, xsink);
+#else
+    // a relative path is made absolute with the current directory once; the policy is checked for this path, and
+    // the file is opened at exactly this path
     std::string path;
     if (*name == '/') {
         path = name;
@@ -2471,16 +2580,24 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadRegionFromPath(const ch
         }
         path += name;
     }
-    if (qore_qf_private::checkOpenAccess(path.c_str(), O_RDONLY, xsink)) {
-        return nullptr;
+    if (path == name) {
+        if (qore_qf_private::checkOpenAccess(path.c_str(), O_RDONLY, xsink)) {
+            return nullptr;
+        }
+    } else {
+        // errors name the path as given, not the current directory
+        ExceptionSink xsink2;
+        if (qore_qf_private::checkOpenAccess(path.c_str(), O_RDONLY, &xsink2)) {
+            QoreValue err = xsink2.getExceptionErr();
+            QoreString code(err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str()
+                : "FILESYSTEM-ACCESS-DENIED");
+            xsink2.clear();
+            xsink->raiseException(code.c_str(), "access to time zone path '%s' is not permitted by the security "
+                "policy", name);
+            return nullptr;
+        }
     }
-
-    QoreAutoRWWriteLocker al(rwl);
-    tzmap_t::iterator i = tzmap.find(path);
-    if (i != tzmap.end()) {
-        return i->second;
-    }
-    return loadPathIntern(path, xsink);
+    return loadPath(name, path, xsink);
 #endif
 }
 
