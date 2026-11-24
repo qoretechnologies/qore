@@ -10087,7 +10087,6 @@ std::atomic<bool> qore_dbg_connect_fail_held_attempt{false};
 std::atomic<void (*)()> qore_dbg_connect_before_connected{nullptr};
 std::atomic<void (*)()> qore_dbg_connect_after_connected{nullptr};
 std::atomic<void (*)()> qore_dbg_before_close_wakes{nullptr};
-std::atomic<void (*)(qore_socket_private*)> qore_dbg_after_pre_close_shutdown{nullptr};
 
 //! Calls the hook that a test sets to run right before a connection gives the socket a descriptor
 static void qore_socket_dbg_before_adopt(int where) {
@@ -10098,6 +10097,7 @@ static void qore_socket_dbg_before_adopt(int where) {
 std::atomic<bool> qore_dbg_inert_socket_fails{false};
 std::atomic<bool> qore_dbg_inert_dup_fails{false};
 std::atomic<unsigned> qore_dbg_inert_socket_fallbacks{0};
+std::atomic<void (*)(qore_socket_private*)> qore_dbg_after_pre_close_shutdown{nullptr};
 
 QoreObject* qore_socket_dbg_new_controller_pollable(QoreSocket* s) {
     return new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), new QoreSocketControllerPollable(s));
