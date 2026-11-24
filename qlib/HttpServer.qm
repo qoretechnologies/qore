@@ -4612,6 +4612,19 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     }
 
     #! @cond nodoc
+    #! Appends a part of a request body that the server collects
+    /** @throw SOCKET-RECV-ERROR the memory for the body could not be allocated: the body is not given incomplete
+        to the handler, as an HTTP/1.x body is not
+    */
+    private static appendRequestBodyPart(reference<binary> body_data, binary chunk) {
+        int size = body_data.size();
+        body_data += chunk;
+        if (body_data.size() != size + chunk.size()) {
+            throw "SOCKET-RECV-ERROR", sprintf("the memory for an HTTP message body of %d bytes could not be "
+                "allocated", size + chunk.size());
+        }
+    }
+
     #! Reads the body of a request for handleRequest()
     /** @return a hash with the body in its \c body key, or @ref nothing if the request has been answered (an error
         response was sent or captured)
@@ -4672,7 +4685,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         if (!chunk) {
                             break;
                         }
-                        body_data += chunk;
+                        appendRequestBodyPart(\body_data, chunk);
                         # Incremental size check: reject early instead of buffering the full body
                         if (max_body > 0 && body_data.size() > max_body) {
                             break;
@@ -4747,7 +4760,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         h2_complete = True;
                         break;
                     }
-                    body_data += chunk;
+                    appendRequestBodyPart(\body_data, chunk);
                     # Incremental size check: reject early instead of buffering the full body
                     if (max_body > 0 && body_data.size() > max_body) {
                         hit_max_body = True;

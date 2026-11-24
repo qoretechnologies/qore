@@ -1,0 +1,198 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the server whose body collection fails runs in a child process in the default mode
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    An HTTP/2 request body that the server collects for a handler, whose memory cannot grow, fails the request: the
+    handler is not given the part of the body that was collected, the request is answered with an error on its
+    stream, and the server keeps serving other requests.  The server runs in a child process whose address space is
+    limited, so that the body cannot grow far.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class HttpServerHttp2BodyGrowFailureTest
+
+class HttpServerHttp2BodyGrowFailureTest inherits QUnit::Test {
+    private {
+        #! the room in kilobytes left in the address space of the server for the data of the request
+        const Room = 512 * 1024;
+
+        #! the size of each part of the body that is sent
+        const PartSize = 16 * 1024;
+
+        #! the most parts sent for the body: 2 GiB, far more than the room
+        const MaxParts = 128 * 1024;
+    }
+
+    constructor() : Test("HttpServerHttp2BodyGrowFailureTest", "1.0") {
+        addTestCase("an HTTP/2 request body whose memory cannot grow fails the request", \growFailureTest());
+        set_return_value(main());
+    }
+
+    growFailureTest() {
+        if (PlatformOS != "Linux") {
+            testSkip("the size of the address space of the server is read from /proc");
+        }
+
+        string qore = TestInterpreter::qore_interpreter();
+        string script = get_script_dir() + DirSep + "HttpServerHttp2BodyGrowFailureServer.q";
+
+        # the address space of the server once it is running, without a limit
+        string measure = backquote(sprintf("%s %s measure 2>&1", quote(qore), quote(script)));
+        *string vm = (measure =~ x/vm ([0-9]+)/)[0];
+        if (!vm) {
+            throw "TEST-ERROR", sprintf("the server did not report its address space: %s", measure);
+        }
+        int limit = vm.toInt() + Room;
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        # the server runs with the limit; its exit code is written to "rc" when it ends
+        backquote(sprintf("(sh -c 'echo $$ > %s; ulimit -v %d && exec \"$0\" \"$1\" serve' %s %s > %s 2> %s "
+            "< /dev/null; echo $? > %s) > /dev/null 2>&1 &", quote(dir + "/pid"), limit, quote(qore), quote(script),
+            quote(dir + "/out"), quote(dir + "/err"), quote(dir + "/rc")));
+        on_exit {
+            # the server is ended if it is still running
+            if (!waitForExit(dir, 0s)) {
+                *string pid = readFile(dir + "/pid");
+                if (pid) {
+                    system("kill -9 " + trim(pid) + " 2> /dev/null");
+                }
+                waitForExit(dir, 30s);
+            }
+        }
+
+        int port = getPort(dir);
+        int tls_port = ((readFile(dir + "/out") ?? "") =~ x/tls ([0-9]+)/)[0].toInt();
+
+        HTTPClient client({
+            "url": sprintf("https://127.0.0.1:%d", tls_port),
+            "ssl_verify_cert": False,
+            "timeout": 120s,
+        });
+        on_exit client.disconnect();
+
+        # a body larger than the memory of the server
+        binary block = binary(strmul("x", PartSize));
+        int sent = 0;
+        code send_cb = *binary sub () {
+            if (sent == MaxParts) {
+                return;
+            }
+            ++sent;
+            return block;
+        };
+        *hash<auto> resp;
+        *hash<ExceptionInfo> send_ex;
+        try {
+            resp = client.sendWithSendCallback(send_cb, "POST", "/body", {"Content-Type": "application/octet-stream"});
+        } catch (hash<ExceptionInfo> ex) {
+            send_ex = ex;
+        }
+        # the request is not served with the part of the body that the server collected
+        if (resp) {
+            assertEq(500, resp.status_code, sprintf("response after %d bytes sent: %y", sent * PartSize, resp.body));
+        } else {
+            assertTrue(exists send_ex, "the request failed");
+        }
+        assertLt(MaxParts, sent, "the server stopped the request before the whole body was sent");
+
+        # the server is still running
+        assertNothing(readFile(dir + "/rc"), sprintf("the server is running: %s%s", readFile(dir + "/out") ?? "",
+            readFile(dir + "/err") ?? ""));
+
+        # the server serves another connection, and the collection of the body raised an exception
+        assertEq("SOCKET-RECV-ERROR", get(port, "error"));
+
+        # the server ends normally
+        get(port, "quit");
+        assertTrue(waitForExit(dir, 30s), "the server ends");
+        assertEq("0", trim(readFile(dir + "/rc") ?? ""), "the exit code of the server: "
+            + (readFile(dir + "/err") ?? ""));
+    }
+
+    #! returns the port of the server, which it writes once it is running
+    private int getPort(string dir) {
+        date end = now_us() + 60s;
+        while (now_us() < end) {
+            *string out = readFile(dir + "/out");
+            *string port = (out =~ x/port ([0-9]+)/)[0];
+            if (port) {
+                return port.toInt();
+            }
+            if (exists readFile(dir + "/rc")) {
+                break;
+            }
+            usleep(50ms);
+        }
+        throw "TEST-ERROR", sprintf("the server did not start: %s", readFile(dir + "/err") ?? "");
+    }
+
+    #! returns the body of the response to a GET request on a new connection
+    private string get(int port, string path) {
+        Socket c();
+        c.connect("127.0.0.1:" + port, 10s);
+        on_exit c.close();
+        c.send(sprintf("GET /%s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", path));
+        hash<auto> hdr = c.readHTTPHeader(30s);
+        assertEq(200, hdr.status_code, path);
+        return c.recv(hdr."content-length".toInt(), 30s);
+    }
+
+    #! returns True if the server has ended within the given time
+    private bool waitForExit(string dir, date timeout) {
+        date end = now_us() + timeout;
+        while (True) {
+            if (exists readFile(dir + "/rc")) {
+                return True;
+            }
+            if (now_us() >= end) {
+                return False;
+            }
+            usleep(50ms);
+        }
+    }
+
+    #! returns the content of a file, or nothing if it does not exist or is empty
+    private static *string readFile(string path) {
+        try {
+            string s = ReadOnlyFile::readTextFile(path);
+            if (s.val()) {
+                return s;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    #! quotes a string for the shell
+    private static string quote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}
