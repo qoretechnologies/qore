@@ -2258,6 +2258,16 @@ public class HttpAsyncSocketIoController {
         submitConnectionOp(uh, cinfo);
     }
 
+    #! Returns the settings of the bound of a listener's streams, for the header info of a request (qore#7280)
+    private static hash<auto> getStreamSendSettings(*HttpServer::HttpListenerInterface listener) {
+        return {
+            "stream_send_min_rate": listener ? listener.getStreamSendMinRate() : HttpServer::DefaultStreamSendMinRate,
+            "stream_send_min_rate_window": listener
+                ? listener.getStreamSendMinRateWindow()
+                : HttpServer::StreamSendBound::DefaultMinRateWindow,
+        };
+    }
+
     #! Submits a QUIC accept operation on a UDP listener
     private submitQuicAcceptOp(Socket listener, HttpAsyncTarget target, string owner) {
         int seq;
@@ -2559,32 +2569,19 @@ public class HttpAsyncSocketIoController {
         # Same interface as the HTTP/2 wrapper — handlers use this uniformly
         # regardless of protocol.  Uses CV-based waitForQuicStreamDrain()
         # for efficient backpressure instead of polling.
+        hash<auto> send_settings = getStreamSendSettings(linfo.http_listener);
+        HttpServer::StreamSendBound send_bound = HttpServer::StreamSendBound::forHeaderInfo(
+            HttpServer::StreamInteractiveStallTimeout, send_settings);
         code<nothing(*binary, bool)> send_stream_data = sub (*binary data, bool end_stream = False) {
-            int retries = 0;
-            while (listener.submitQuicStreamData(
-                    session_id, stream_id, data, end_stream) == 1) {
-                if (++retries > 200) {
-                    throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: buffer "
-                        "not draining after %d retries", stream_id, retries);
-                }
-                controller.wakeSocket(listener);
-                # CV-based wait: wakes immediately when I/O thread drains
-                # the buffer, falls back to 50ms timeout otherwise
-                int drain_rv = listener.waitForQuicStreamDrain(
-                    session_id, stream_id, 50ms);
-                if (drain_rv == -1) {
-                    throw "HTTP3-STREAM-ERROR", sprintf("stream %d: stream "
-                        "removed while waiting for drain", stream_id);
-                }
-            }
-            controller.wakeSocket(listener);
+            send_bound.sendOrReset(listener, session_id, stream_id, data, end_stream,
+                sub () { controller.wakeSocket(listener); });
         };
 
         # Convert to HttpConnectionInfo (same dispatch chain as HTTP/2)
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
             "sock": listener,
             "hdr": hdr,
-            "header_info": {
+            "header_info": send_settings + {
                 "http3": True,
                 "session_id": session_id,
                 "stream_id": stream_id,
@@ -2888,7 +2885,9 @@ public class HttpAsyncSocketIoController {
                             controller.wakeSocket(cinfo.sock);
                         };
                         HttpServer::StreamResponseProducer producer(cinfo.sock,
-                            stream_id, session_id, result.input_stream, wake_fn);
+                            stream_id, session_id, result.input_stream, wake_fn,
+                            HttpServer::StreamSendBound::forHeaderInfo(HttpServer::StreamStallTimeout,
+                                getStreamSendSettings(cinfo.listener)));
                         producer.start();
                         controller.wakeSocket(cinfo.sock);
                     }
@@ -5542,7 +5541,7 @@ public class HttpAsyncSocketIoController {
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
             "sock": dispatch_sock,
             "hdr": hdr,
-            "header_info": {
+            "header_info": getStreamSendSettings(dispatch_listener) + {
                 "http2": True,
                 "stream_id": dispatch_stream_id,
                 "accept-encoding": accept_encoding,
@@ -5846,23 +5845,43 @@ public class HttpAsyncSocketIoController {
         };
 
         # Continue reading on h2op immediately — the CONNECT stream coexists
-        # with other streams on the same connection
-        dispatch_h2op.continueReading();
-        hash<HttpActiveConnectionInfo> new_cinfo;
-        {
-            AutoWriteLock al(m);
-            # Check if connection still exists
-            if (!connections.hasKey(dispatch_uh)) {
-                try { dispatch_sock.close(); } catch () {}
-                return;
+        # with other streams on the same connection.  The handler of another stream can have resumed reading
+        # already, after the request was taken (resumeMultiplexedReading()): continueReading() then raises
+        # HTTP2-STATE-ERROR, as the operation is active again, and the request is dispatched all the same; the I/O
+        # thread is woken to apply the registration of the stream above (qoretechnologies/qore#7354)
+        bool resumed;
+        try {
+            dispatch_h2op.continueReading();
+            resumed = True;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "HTTP2-STATE-ERROR") {
+                rethrow;
             }
-            # Cast to typed hash to update fields and assign back
-            hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{dispatch_uh});
-            conn_info.stream_op = dispatch_h2op;
-            conn_info.state = HttpConnectionState::Http2;
-            new_cinfo = (connections{dispatch_uh} @= (draining ? withDrainToken(dispatch_uh, conn_info) : conn_info));
+            log(LoggerLevel::DEBUG, "HTTP/2 extended CONNECT: %y stream=%d: reading was resumed already: %s",
+                dispatch_uh, dispatch_stream_id, ex.desc);
         }
-        submitConnectionOp(dispatch_uh, new_cinfo);
+        if (resumed) {
+            hash<HttpActiveConnectionInfo> new_cinfo;
+            {
+                AutoWriteLock al(m);
+                # Check if connection still exists
+                if (!connections.hasKey(dispatch_uh)) {
+                    try { dispatch_sock.close(); } catch () {}
+                    return;
+                }
+                # Cast to typed hash to update fields and assign back
+                hash<HttpActiveConnectionInfo> conn_info =
+                    cast<hash<HttpActiveConnectionInfo>>(connections{dispatch_uh});
+                conn_info.stream_op = dispatch_h2op;
+                conn_info.state = HttpConnectionState::Http2;
+                new_cinfo = (connections{dispatch_uh} @= (draining
+                    ? withDrainToken(dispatch_uh, conn_info)
+                    : conn_info));
+            }
+            submitConnectionOp(dispatch_uh, new_cinfo);
+        } else {
+            wakeSocketIfPresent(dispatch_sock, dispatch_uh, "HTTP/2 extended CONNECT after a concurrent resume");
+        }
 
         # Build header hash
         # the fields are given under "headers", and at the top level unless the listener turned it off (the accepted
@@ -5893,37 +5912,18 @@ public class HttpAsyncSocketIoController {
         # Queues data in nghttp2 with transparent backpressure handling,
         # then wakes the I/O controller to flush.  Handlers use this
         # instead of calling sendHttp2StreamData() + io_wake() separately.
+        hash<auto> send_settings = getStreamSendSettings(dispatch_listener);
+        HttpServer::StreamSendBound send_bound = HttpServer::StreamSendBound::forHeaderInfo(
+            HttpServer::StreamInteractiveStallTimeout, send_settings);
         code<nothing(*binary, bool)> send_stream_data = sub (*binary data, bool end_stream = False) {
-            int retries = 0;
-            while (True) {
-                try {
-                    dispatch_sock.sendHttp2StreamData(dispatch_stream_id, data, end_stream);
-                    break;
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "HTTP2-FLOW-CONTROL") {
-                        if (++retries > 200) {
-                            throw "HTTP2-FLOW-CONTROL", sprintf("stream %d: buffer "
-                                "not draining after %d retries", dispatch_stream_id, retries);
-                        }
-                        # Buffer full — wake I/O thread to drain, then wait
-                        # deterministically for the CV signal
-                        controller.wakeSocket(dispatch_sock);
-                        if (dispatch_sock.waitForHttp2StreamDrain(dispatch_stream_id, 10s)) {
-                            throw "HTTP2-STREAM-ERROR", sprintf("stream %d: drain "
-                                "timed out or stream removed", dispatch_stream_id);
-                        }
-                        continue;
-                    }
-                    rethrow;
-                }
-            }
-            controller.wakeSocket(dispatch_sock);
+            send_bound.sendOrReset(dispatch_sock, NOTHING, dispatch_stream_id, data, end_stream,
+                sub () { controller.wakeSocket(dispatch_sock); });
         };
 
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
             "sock": dispatch_sock,
             "hdr": hdr,
-            "header_info": {
+            "header_info": send_settings + {
                 "http2": True,
                 "stream_id": dispatch_stream_id,
                 "is_extended_connect": True,
@@ -6107,7 +6107,9 @@ public class HttpAsyncSocketIoController {
                         controller.wakeSocket(cinfo.sock);
                     };
                     HttpServer::StreamResponseProducer producer(cinfo.sock,
-                        stream_id, NOTHING, result.input_stream, wake_fn);
+                        stream_id, NOTHING, result.input_stream, wake_fn,
+                        HttpServer::StreamSendBound::forHeaderInfo(HttpServer::StreamStallTimeout,
+                            getStreamSendSettings(cinfo.listener)));
                     producer.start();
                     controller.wakeSocket(cinfo.sock);
                     return;

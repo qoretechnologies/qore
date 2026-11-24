@@ -365,6 +365,34 @@ private:
     int pflag;
 };
 
+//! Scope of the parse of code that has an implicit index (\c $#) of its own, such as the body of a foreach statement
+//! (qore#7270)
+/** Counts the reads of \c $# in the code (QoreParseContext::implicit_element_reads); when the scope ends, they are
+    not counted for the code around it, as a \c $# in the code reads the index of the code's own statement or
+    operator.  Code that uses no such scope counts its reads for the code around it.
+*/
+class QoreParseImplicitElementScope {
+public:
+    DLLLOCAL QoreParseImplicitElementScope(QoreParseContext& parse_context) : parse_context(parse_context),
+            reads(parse_context.implicit_element_reads) {
+    }
+
+    DLLLOCAL ~QoreParseImplicitElementScope() {
+        parse_context.implicit_element_reads = reads;
+    }
+
+    //! returns true if a \c $# parsed in the scope so far reads the index of the statement or operator
+    DLLLOCAL bool readsImplicitElement() const {
+        assert(parse_context.implicit_element_reads >= reads);
+        return parse_context.implicit_element_reads != reads;
+    }
+
+private:
+    QoreParseContext& parse_context;
+    //! the number of reads when the scope started
+    unsigned reads;
+};
+
 //! Sets one parse flag while in scope and restores only that flag: unlike QoreParseContextFlagHelper, it keeps the
 //! flags that the code parsed in its scope sets for the code around it (ex: PF_NARROWED_TYPE)
 class QoreParseContextFlagScope {
@@ -1730,6 +1758,16 @@ DLLLOCAL void qore_aot_runtime_init_once();
 //! the number of lookups of single environment variables by the library (SystemEnvironment::isSet() and
 //! QoreEnvironmentValue), for tests (dbg_environment_lookups(); qore#7086)
 DLLLOCAL extern std::atomic<uint64_t> qore_env_lookup_count;
+
+//! the number of resolutions of the type of an AOT instanceof (qore_rt_instanceof_by_type_path()), for tests
+//! (dbg_aot_instanceof_resolves(); qore#7416)
+DLLLOCAL extern std::atomic<uint64_t> qore_aot_instanceof_resolve_count;
+
+#ifdef DEBUG
+//! debug builds: maps every type path to one set of the AOT instanceof type cache, so that tests can make paths share
+//! a set whatever the layout of the compiled code (dbg_aot_instanceof_one_set(); qore#7416)
+DLLLOCAL extern std::atomic<bool> qore_aot_instanceof_one_set;
+#endif
 
 static inline bool q_env_is_set(const char* name) {
     return SystemEnvironment::isSet(name);

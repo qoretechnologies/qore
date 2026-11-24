@@ -89,6 +89,7 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <sys/ioctl.h>
 #endif
 #ifdef DARWIN
 // the socket table of the system, as netstat reads it, for the port checks of qore_socket_bind_unshadowed() and
@@ -12224,8 +12225,10 @@ void SSLSocketHelper::stopStaging() {
 
 int SSLSocketHelper::drainStaged(ExceptionSink* xsink) {
     assert(staged);
+    // a TLS write that fails is reported as SOCKET-SSL-ERROR whether its ciphertext was written at once or staged
+    // first, as the socket buffer was full, which depends on the timing of the peer and on the system (qore#7383)
     if (write_failed.load(std::memory_order_acquire)) {
-        xsink->raiseException("SOCKET-SEND-ERROR", "the transport previously failed while sending a TLS record");
+        xsink->raiseException("SOCKET-SSL-ERROR", "the transport previously failed while sending a TLS record");
         return -1;
     }
     unsigned writes = 0;
@@ -12236,13 +12239,29 @@ int SSLSocketHelper::drainStaged(ExceptionSink* xsink) {
         char* data;
         int size = BIO_nread0(staged->network, &data);
         assert(size > 0);
-        int sent = BIO_write(staged->transport, data, size);
+        int sent;
+        // true if the failure is forced by the test hook: the retry flags of the BIO are those of an earlier operation
+        bool forced = false;
+#ifdef DEBUG
+        // test hook: the transport fails as when the peer reset the connection while ciphertext was staged (see
+        // dbg_force_staged_write_failure())
+        if (dbg_fail_next_drain) {
+            dbg_fail_next_drain = false;
+            forced = true;
+            errno = EPIPE;
+            sent = -1;
+        } else
+#endif
+        sent = BIO_write(staged->transport, data, size);
         if (sent <= 0) {
-            if (BIO_should_retry(staged->transport)) {
+            if (!forced && BIO_should_retry(staged->transport)) {
                 return BIO_should_read(staged->transport) ? SOCK_POLLIN : SOCK_POLLOUT;
             }
+            // the same error as a failed write of the transport without staging (SSL_ERROR_SYSCALL in
+            // doNonBlockingIo()), with the errno: the socket stays open, so that what the peer sent before it closed
+            // or reset the connection can be read
             write_failed.store(true, std::memory_order_release);
-            xsink->raiseErrnoException("SOCKET-SEND-ERROR", sock_get_error(), "could not send a buffered TLS record");
+            xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "could not send a buffered TLS record");
             return -1;
         }
         int consumed = BIO_nread(staged->network, &data, sent);
@@ -12316,6 +12335,7 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
 
 #ifdef DEBUG
     bool dbg_forced_error_ssl = false;
+    bool dbg_forced_want_write = false;
 #endif
     if (retry_events || (awaiting_drain && (*awaiting_drain || staged || outer))) {
         int rc = resumePendingIo(xsink, mname, action, real_io, awaiting_drain);
@@ -12339,6 +12359,14 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
                 if (qs.dbg_force_ssl_error_ssl.exchange(false)) {
                     rc = 0;
                     dbg_forced_error_ssl = true;
+                    break;
+                }
+                // test hook: the write finds the socket buffer full, so its ciphertext is staged, and the transport
+                // then fails as when the peer reset the connection (dbg_force_staged_write_failure())
+                if (awaiting_drain && qs.dbg_force_staged_write_failure.exchange(false)) {
+                    rc = -1;
+                    dbg_forced_want_write = true;
+                    wireTls()->dbg_fail_next_drain = true;
                     break;
                 }
 #endif
@@ -12400,6 +12428,11 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
 
         int err = SSL_get_error(ssl, rc);
 #ifdef DEBUG
+        if (dbg_forced_want_write) {
+            // the write is made again with the same arguments once the staging starts (see above)
+            dbg_forced_want_write = false;
+            err = SSL_ERROR_WANT_WRITE;
+        }
         if (dbg_forced_error_ssl) {
             // a real TLS protocol error, as SSL_write_ex() queues it for a bad record, so the error path for a
             // queued TLS-library error runs; errno holds a stale peer-close error, which must not be taken for the
@@ -23702,4 +23735,30 @@ QoreHashNode* SocketSendToPollOperation::continuePoll(ExceptionSink* xsink) {
         return getSocketPollInfoHash(xsink, rc);
     }
     return nullptr;
+}
+
+int64 qore_socket_private::getUnacknowledgedBytes(int fd) {
+#ifdef DARWIN
+    int n = 0;
+    socklen_t len = sizeof n;
+    return getsockopt(fd, SOL_SOCKET, SO_NWRITE, &n, &len) || n < 0 ? 0 : n;
+#elif defined(TIOCOUTQ)
+    int n = 0;
+    if (::ioctl(fd, TIOCOUTQ, &n) || n <= 0) {
+        return 0;
+    }
+#if defined(__linux__) && defined(TCP_INFO)
+    // the count is the difference of the sequence numbers, which includes the FIN of a socket shut down for writing:
+    // it is not data, and a peer whose window is 0 can take it (Linux 6.10 or later accepts a bare FIN then)
+    struct tcp_info ti;
+    socklen_t len = sizeof ti;
+    if (!getsockopt(fd, IPPROTO_TCP, TCP_INFO, &ti, &len)
+            && (ti.tcpi_state == TCP_FIN_WAIT1 || ti.tcpi_state == TCP_CLOSING || ti.tcpi_state == TCP_LAST_ACK)) {
+        --n;
+    }
+#endif
+    return n;
+#else
+    return 0;
+#endif
 }

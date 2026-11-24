@@ -214,6 +214,12 @@ module HttpServerUtil {
       accepts: see @ref override_return_types); an inline request answered by
       @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "handleRequest()" accepts a string or binary
       response as the full path does (@ref HttpServer::AbstractHttpRequestHandler::makeResponseFromResult() "makeResponseFromResult()")
+    - added @ref HttpServer::StreamSendBound "StreamSendBound" and the \c stream_send_min_rate and
+      \c stream_send_min_rate_window listener options: a streamed HTTP/2 or HTTP/3 response to a client that takes
+      nothing for the stall time, or less than a minimum rate (1 KiB/s per stream by default), fails with
+      \c STREAM-SEND-TIMEOUT, and a client that keeps taking the data is no longer cut off by a limit on the number
+      of retries
+      (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>)
     - added the \c sse_max_buffer_size listener option
       (@ref HttpServer::HttpListenerOptionInfo::sse_max_buffer_size "HttpListenerOptionInfo::sse_max_buffer_size"),
       the bound of the data held for the client of each Server-Sent Events stream
@@ -1085,6 +1091,24 @@ public hashdecl HttpListenerOptionInfo {
         @since HttpServerUtil 1.6
     */
     int sse_max_buffer_size = 1048576;
+
+    #! The minimum rate in bytes per second at which a client must take a streamed HTTP/2 or HTTP/3 response
+    /** A stream that the client takes less of while the server waits for it is ended, so that the client cannot hold
+        a handler thread by taking very little data; 0 disables the check.  The rate applies to each stream, so a
+        client with many concurrent streams on one slow connection shares that connection's rate among them; a listener
+        that serves such clients may need a lower value.  The default is
+        @ref HttpServer::DefaultStreamSendMinRate "DefaultStreamSendMinRate" (1 KiB/s).  It applies to a response
+        body that a handler thread sends; a body from an @ref Qore::InputStream "InputStream" that the I/O thread
+        pumps directly holds no thread and is not checked.
+
+        @since HttpServerUtil 1.6
+    */
+    int stream_send_min_rate = 1024;
+
+    #! The sliding window of \c stream_send_min_rate; must be at least one millisecond
+    /** @since HttpServerUtil 1.6
+    */
+    date stream_send_min_rate_window = 60s;
 
     #! If True, skip bind/listen (for QUIC listeners that use a separate UDP socket)
     /** @since HttpServer 1.6
@@ -2012,6 +2036,20 @@ public class AbstractLogger {
     the same for the whole life of the listener, so a handler can keep it and use it later, also on another thread.
 */
 public class HttpListenerInterface inherits AbstractLogger {
+    #! Returns the minimum rate of streamed HTTP/2 and HTTP/3 responses in bytes per second; 0 means no check
+    /** @since HttpServerUtil 1.6
+    */
+    int getStreamSendMinRate() {
+        return DefaultStreamSendMinRate;
+    }
+
+    #! Returns the sliding window of the minimum rate of streamed HTTP/2 and HTTP/3 responses
+    /** @since HttpServerUtil 1.6
+    */
+    date getStreamSendMinRateWindow() {
+        return StreamSendBound::DefaultMinRateWindow;
+    }
+
     #! method to log a response message
     /** @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
         @param rv the response hash
@@ -2682,6 +2720,9 @@ public class AbstractStreamRequest {
     public {}
 
     private {
+        #! the bound of the replies on an interactive HTTP/2 or HTTP/3 stream
+        *StreamSendBound interactive_bound;
+
         #! an HttpListenerInterface object for the listener serving the request for logging purposes
         HttpListenerInterface listener;
         #! the request handler for the request
@@ -3295,51 +3336,15 @@ public class AbstractStreamRequest {
     }
 
     #! sends a single DATA frame (optionally with END_STREAM) on an interactive stream with backpressure
-    /** Mirrors the controller's \c send_stream_data backpressure handling: on HTTP/2 retries on
-        \c HTTP2-FLOW-CONTROL after waiting for the stream send buffer to drain; on HTTP/3 retries
-        while \c submitQuicStreamData() reports the buffer full.  The I/O thread is woken via
-        \c io_wake so it flushes the queued frame.
+    /** Waits for a peer that is not taking the data within the bound of the stream, which is kept across its replies;
+        the I/O thread is woken via \c io_wake so it flushes the queued frame.
     */
     private sendInteractiveData(int sid, int session_id, bool http3, binary data, bool end_stream,
             code<nothing()> io_wake) {
-        int retries = 0;
-        if (http3) {
-            while (s.submitQuicStreamData(session_id, sid, data, end_stream) == 1) {
-                io_wake();
-                if (++retries > 200) {
-                    throw "HTTP3-FLOW-CONTROL",
-                        sprintf("stream %d: buffer not draining after %d retries", sid, retries);
-                }
-                if (s.waitForQuicStreamDrain(session_id, sid, 50ms) == -1) {
-                    throw "HTTP3-STREAM-ERROR",
-                        sprintf("stream %d: stream removed while waiting for drain", sid);
-                }
-            }
-            io_wake();
-        } else {
-            while (True) {
-                try {
-                    s.sendHttp2StreamData(sid, data, end_stream);
-                    break;
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "HTTP2-FLOW-CONTROL") {
-                        io_wake();
-                        if (++retries > 200) {
-                            throw "HTTP2-FLOW-CONTROL",
-                                sprintf("stream %d: buffer not draining after %d retries", sid,
-                                    retries);
-                        }
-                        if (s.waitForHttp2StreamDrain(sid, 10s)) {
-                            throw "HTTP2-STREAM-ERROR",
-                                sprintf("stream %d: drain timed out or stream removed", sid);
-                        }
-                        continue;
-                    }
-                    rethrow;
-                }
-            }
-            io_wake();
+        if (!interactive_bound) {
+            interactive_bound = StreamSendBound::forHeaderInfo(StreamInteractiveStallTimeout, cx."header-info");
         }
+        interactive_bound.send(s, http3 ? session_id : NOTHING, sid, data, end_stream, io_wake);
     }
 
     #! this method returns the response message description hash by calling getResponseHeaderMessageImpl()
@@ -3604,6 +3609,220 @@ public class CallbackInputStream inherits InputStream {
     }
 }
 
+#! The time without progress from the peer after which the send of a streamed HTTP/2 or HTTP/3 response fails
+public const StreamStallTimeout = 30m;
+
+#! The default minimum rate in bytes per second at which a client must take a streamed HTTP/2 or HTTP/3 response
+/** @since HttpServerUtil 1.6
+*/
+public const DefaultStreamSendMinRate = 1024;
+
+#! The time without progress from the peer after which a reply on an interactive HTTP/2 or HTTP/3 stream fails
+public const StreamInteractiveStallTimeout = 10s;
+
+#! Sends data on an HTTP/2 or HTTP/3 stream, waiting for a peer that is not taking it within the bounds of the stream
+/** The wait ends with \c STREAM-SEND-TIMEOUT when the peer takes nothing for the stall timeout, or, with a minimum
+    rate set, when it takes less than that rate over its window.  The time counts from the last progress of the peer,
+    so a large response that a slow client keeps taking is not cut off by the stall timeout.  One object is kept for a
+    stream, across its sends, so that a peer cannot start a new rate window with each one.
+
+    @since HttpServerUtil 1.6
+*/
+public class StreamSendBound {
+    public {
+        #! The default window of the minimum rate
+        const DefaultMinRateWindow = 60s;
+    }
+
+    private {
+        #! the time without progress after which a send fails, in milliseconds
+        int stall_ms;
+        #! the rate of the peer; no value if there is no minimum rate
+        *SendRateMonitor rate;
+    }
+
+    #! Creates the object
+    /** @param stall_timeout the time without progress from the peer after which a send fails; must be positive
+        @param min_rate the minimum rate in bytes per second; 0 disables the check
+        @param window the window of the minimum rate
+
+        @throw STREAM-SEND-BOUND-ERROR the stall timeout is not positive
+        @throw SEND-RATE-ERROR the minimum rate or its window is invalid
+    */
+    constructor(timeout stall_timeout, int min_rate = 0, date window = DefaultMinRateWindow) {
+        if (stall_timeout <= 0) {
+            throw "STREAM-SEND-BOUND-ERROR", sprintf("the stall timeout must be positive; got %d ms", stall_timeout);
+        }
+        stall_ms = stall_timeout;
+        if (min_rate) {
+            rate = new SendRateMonitor(min_rate, window);
+            # the transport shows a peer's progress in steps of its flow-control window and of TCP's; the sender wakes
+            # at least every check interval, so a longer time between updates is its own delay
+            rate.enableProgressSteps();
+            rate.setMaxWaitCharge(2 * rate.getCheckInterval());
+        }
+    }
+
+    #! Creates the bound of a stream from the settings of its listener in a request's header info
+    /** Settings that the header info does not give are the defaults, with the minimum rate on.
+
+        @param stall_timeout the time without progress from the peer after which a send fails
+        @param header_info the header info hash of the request
+
+        @return the new object
+    */
+    static StreamSendBound forHeaderInfo(timeout stall_timeout, *hash<auto> header_info) {
+        return new StreamSendBound(stall_timeout, header_info.stream_send_min_rate ?? DefaultStreamSendMinRate,
+            header_info.stream_send_min_rate_window ?? DefaultMinRateWindow);
+    }
+
+    #! Sends the data, waiting for the peer as needed
+    /** @param s the socket of the stream
+        @param session_id the QUIC session ID for HTTP/3; @ref nothing for HTTP/2
+        @param stream_id the stream ID
+        @param data the data to send
+        @param end_stream @ref True to end the stream with the data
+        @param wake called so that the I/O thread sends the data that is queued
+
+        @throw STREAM-SEND-TIMEOUT the peer did not take the data within the bounds, or the stream ended first
+        @throw STREAM-SEND-ERROR an unexpected result from the HTTP/3 send
+    */
+    send(Socket s, *int session_id, int stream_id, *binary data, bool end_stream, *code<nothing()> wake) {
+        bool http3 = exists session_id;
+        # the deadline moves only when the count grows, so an unknown count (-1: the stream or session is gone) ends
+        # the wait; on the monotonic clock, in milliseconds
+        *int stall_deadline;
+        int last_taken = -1;
+        # the waits in a row that found the stream ended, with the send still refused
+        int ended_waits = 0;
+        # True once this send has waited with a minimum rate set: the time after it is not waiting for the peer
+        bool rate_wait;
+        on_error if (rate_wait) {
+            try {
+                rate.update(getTakenBytes(s, session_id, stream_id), False);
+            } catch () {
+                # the stream or its session is gone: nothing more is measured
+            }
+        }
+        while (!trySend(s, session_id, stream_id, data, end_stream)) {
+            # the data already queued must be sent before the stream can drain
+            if (wake) {
+                wake();
+            }
+            int now = clock_get_monotonic_us() / 1000;
+            int taken = getTakenBytes(s, session_id, stream_id);
+            if (!stall_deadline || taken > last_taken) {
+                last_taken = taken;
+                stall_deadline = now + stall_ms;
+            }
+            int wait_ms = stall_deadline - now;
+            if (wait_ms <= 0) {
+                throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/%d stream %d: the send buffer did not drain within %d ms "
+                    "and the peer %s meanwhile; %d bytes were not sent", http3 ? 3 : 2, stream_id, stall_ms,
+                    http3 ? "acknowledged no data" : "granted no credit", data.size());
+            }
+            if (rate) {
+                rate_wait = True;
+                if (rate.update(taken, True, now)) {
+                    throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/%d stream %d: the peer took less than the minimum "
+                        "rate of %d bytes/s; %d bytes were not sent", http3 ? 3 : 2, stream_id, rate.getMinRate(),
+                        data.size());
+                }
+                wait_ms = min(wait_ms, rate.getCheckInterval());
+            }
+            # 0: drained, 1: timed out, -1: the stream has no data buffered any more (sent or closed); the send is
+            # made again in each case; a stream that has ended and still refuses it will never take it
+            int rv = http3
+                ? s.waitForQuicStreamDrain(session_id, stream_id, wait_ms)
+                : s.waitForHttp2StreamDrain(stream_id, wait_ms);
+            if (rv >= 0) {
+                ended_waits = 0;
+            } else if (++ended_waits > 1) {
+                throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/%d stream %d: the stream ended with its send buffer full; "
+                    "%d bytes were not sent", http3 ? 3 : 2, stream_id, data.size());
+            }
+        }
+        if (wake) {
+            wake();
+        }
+        # a wait that used up the credit between two checks is decided here, so that no verdict is left for a later
+        # send; the end of the stream has nothing more to bound
+        if (rate_wait) {
+            bool below;
+            try {
+                below = rate.update(getTakenBytes(s, session_id, stream_id), False);
+            } catch () {
+                # the stream or its session is gone: nothing more is measured
+            }
+            if (below && !end_stream) {
+                throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/%d stream %d: the peer took less than the minimum rate of "
+                    "%d bytes/s", http3 ? 3 : 2, stream_id, rate.getMinRate());
+            }
+        }
+    }
+
+    #! Sends the data as @ref send() does, and ends the stream for the peer if the send timed out
+    /** For a sender whose caller may not reset the stream itself, so that the peer is not left waiting for a response
+        that will not come.
+
+        @see @ref send()
+    */
+    sendOrReset(Socket s, *int session_id, int stream_id, *binary data, bool end_stream, *code<nothing()> wake) {
+        try {
+            send(s, session_id, stream_id, data, end_stream, wake);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "STREAM-SEND-TIMEOUT") {
+                resetStream(s, session_id, stream_id, wake);
+            }
+            rethrow;
+        }
+    }
+
+    #! Resets the stream for the peer (best-effort: the stream may already be gone)
+    static resetStream(Socket s, *int session_id, int stream_id, *code<nothing()> wake) {
+        try {
+            if (exists session_id) {
+                s.cancelQuicStream(session_id, stream_id);
+            } else {
+                s.resetHttp2Stream(stream_id);
+            }
+            if (wake) {
+                wake();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream or its session is gone
+        }
+    }
+
+    #! Makes one attempt to send; returns @ref False if the send buffer of the stream is full
+    private static bool trySend(Socket s, *int session_id, int stream_id, *binary data, bool end_stream) {
+        if (exists session_id) {
+            int rv = s.submitQuicStreamData(session_id, stream_id, data, end_stream);
+            if (rv && rv != 1) {
+                throw "STREAM-SEND-ERROR", sprintf("unexpected rv=%d from submitQuicStreamData on stream %d", rv,
+                    stream_id);
+            }
+            return !rv;
+        }
+        try {
+            s.sendHttp2StreamData(stream_id, data, end_stream);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "HTTP2-FLOW-CONTROL") {
+                rethrow;
+            }
+            return False;
+        }
+        return True;
+    }
+
+    #! Returns the bytes of the stream that the peer has taken, or -1 if that is not known
+    private static int getTakenBytes(Socket s, *int session_id, int stream_id) {
+        return exists session_id
+            ? s.getQuicStreamAckedBytes(session_id, stream_id)
+            : s.getHttp2StreamTakenBytes(stream_id);
+    }
+}
+
 #! Dedicated worker that streams a non-I/O-thread-safe InputStream response body
 #! as HTTP/2 DATA frames or HTTP/3 QUIC stream data without materialization
 /** Runs on its own background thread so blocking @ref Qore::InputStream::read() "read()"
@@ -3653,10 +3872,8 @@ public class StreamResponseProducer {
 
         #! Size of each chunk pulled from the InputStream
         int chunk_size = 65536;
-        #! Per-drain wait timeout in milliseconds (CV signaled by the I/O thread)
-        int drain_timeout_ms = 30000;
-        #! Safety cap on consecutive drain retries per chunk (bounds total block time)
-        int max_drain_retries = 60;
+        #! The bound of the sends on the stream
+        StreamSendBound bound;
     }
 
     #! Creates the producer; call @ref start() to dispatch the background worker
@@ -3668,9 +3885,12 @@ public class StreamResponseProducer {
         must be unassigned from any thread (the producer will claim it)
         @param io_wake optional callback invoked after every chunk send so
         the async I/O controller can flush pending frames to the wire
+        @param bound the bound of the sends on the stream; by default a stall timeout of
+        @ref StreamStallTimeout and no minimum rate
     */
     constructor(Socket sock, int stream_id, *int session_id, InputStream is,
-            *code<nothing()> io_wake) {
+            *code<nothing()> io_wake, *StreamSendBound bound) {
+        self.bound = bound ?? new StreamSendBound(StreamStallTimeout);
         self.sock = sock;
         self.stream_id = stream_id;
         self.session_id = session_id;
@@ -3732,49 +3952,9 @@ public class StreamResponseProducer {
         }
     }
 
-    #! Sends a chunk, blocking on drain if the session buffer is full
+    #! Sends a chunk, waiting for the peer within the bound of the stream
     private sendWithBackpressure(binary data, bool end_stream) {
-        int retries = 0;
-        while (True) {
-            bool backpressure = False;
-            try {
-                if (session_id) {
-                    int rv = sock.submitQuicStreamData(session_id, stream_id,
-                        data, end_stream);
-                    if (rv == 1) {
-                        backpressure = True;
-                    } else if (rv != 0) {
-                        throw "STREAM-SEND-ERROR",
-                            sprintf("unexpected rv=%d from submitQuicStreamData on "
-                                "stream %d", rv, stream_id);
-                    }
-                } else {
-                    sock.sendHttp2StreamData(stream_id, data, end_stream);
-                }
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "HTTP2-FLOW-CONTROL") {
-                    backpressure = True;
-                } else {
-                    rethrow;
-                }
-            }
-            if (io_wake) {
-                io_wake();
-            }
-            if (!backpressure) {
-                return;
-            }
-            if (++retries > max_drain_retries) {
-                throw "STREAM-BACKPRESSURE-TIMEOUT",
-                    sprintf("stream %d buffer still full after %d drain attempts; "
-                        "peer may be stalled or disconnected", stream_id, retries);
-            }
-            if (session_id) {
-                sock.waitForQuicStreamDrain(session_id, stream_id, drain_timeout_ms);
-            } else {
-                sock.waitForHttp2StreamDrain(stream_id, drain_timeout_ms);
-            }
-        }
+        bound.send(sock, session_id, stream_id, data, end_stream, io_wake);
     }
 
     #! Sends a stream-level reset to the peer (best-effort)

@@ -77,6 +77,28 @@ public class StepOperation inherits AbstractPollOperation<auto> {
     }
 }
 
+#! an operation whose onComplete() tries to submit another one, which the module cleanup must refuse
+public class ResubmitOperation inherits StepOperation {
+    constructor(Queue completed) : StepOperation(completed) {
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        try {
+            AsyncIoController::submit(<SocketPollOperationInfo>{
+                "sock": new EventNotifier(),
+                "spop": new StepOperation(new Queue()),
+                "owner": Owner + "-resubmit",
+                "to": -1s,
+            });
+            printf("resubmit accepted\n");
+        } catch (hash<ExceptionInfo> ex) {
+            printf("resubmit refused: %s\n", ex.err);
+        }
+        flush();
+        StepOperation::onComplete(result);
+    }
+}
+
 #! cancels the operation when the module cleanup deletes it, after it has closed the modules' Programs
 public class Canceller {
     private {
@@ -118,14 +140,37 @@ public class Holder {
         static *Canceller canceller;
     }
 
+    #! submits an operation that resubmits in onComplete(), holds its step and cancels it outside the module cleanup
+    /** The module cleanup then finds the operation deferred by an earlier cancellation, and runs its callbacks
+    */
+    static bool startResubmit() {
+        call_function("dbg_async_io_hold_step_results", True);
+        on_exit call_function("dbg_async_io_hold_step_results", False);
+        notifier = new EventNotifier();
+        completed = new Queue();
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": new ResubmitOperation(completed),
+            "owner": Owner,
+            "to": -1s,
+        });
+        bool held = call_function("dbg_async_io_wait_held_step_results", 1, 20s);
+        AsyncIoController::cancelByOwner(Owner);
+        return held;
+    }
+
     #! submits the operation and returns once the result of its first step is held
-    static bool start() {
+    /** @param own_canceller if @ref False, the operation is canceled by another module's destructor
+    */
+    static bool start(bool own_canceller = True) {
         call_function("dbg_async_io_hold_step_results", True);
         # only the first step's result is held
         on_exit call_function("dbg_async_io_hold_step_results", False);
         notifier = new EventNotifier();
         completed = new Queue();
-        canceller = new Canceller(completed);
+        if (own_canceller) {
+            canceller = new Canceller(completed);
+        }
         AsyncIoController::submit(<SocketPollOperationInfo>{
             "sock": notifier,
             "spop": new StepOperation(completed),

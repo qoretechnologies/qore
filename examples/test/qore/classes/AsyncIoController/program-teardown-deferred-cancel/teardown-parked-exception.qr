@@ -1,0 +1,37 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the exception raised by the release of a parked item of a Program is not active while the destructor of the next
+# one runs, and it reaches the caller (qore#6703); needs a debug build of the library
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%no-child-restrictions
+
+const Code = "
+class Raises {
+    destructor() {
+        throw \"RELEASE-ERROR\", \"raised when the object is released\";
+    }
+}
+
+class Checks {
+    destructor() {
+        printf(\"next release: active exception: %y\\n\", active_exception());
+        flush();
+    }
+}
+
+list<object> sub make() {
+    return (new Raises(), new Checks());
+}
+";
+
+Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+p.parse(Code, "teardown-parked-exception");
+AsyncIoController::waitForProcessing(30s);
+try {
+    call_function("dbg_async_io_park_program_releases", auto sub () { return p.callFunction("make"); });
+    printf("no exception\n");
+} catch (hash<ExceptionInfo> ex) {
+    printf("raised: %s\n", ex.err);
+}
+printf("done\n");

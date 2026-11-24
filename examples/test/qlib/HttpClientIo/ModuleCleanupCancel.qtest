@@ -270,6 +270,16 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
                     "Program is deleted", mode, follow_up), sub () { runFollowUpCase(m, f); });
             }
         }
+        foreach string mode in (ExecModes) {
+            string m = mode;
+            addTestCase(sprintf("%s: a module's destructor cancels another module's operation in its step", mode),
+                sub () { runStepCase(m, "cross-module-client.qr"); });
+        }
+        foreach string mode in (ExecModes) {
+            string m = mode;
+            addTestCase(sprintf("%s: an onComplete() that the module cleanup runs cannot start new work", mode),
+                sub () { runResubmitCase(m); });
+        }
         on_exit {
             delete server;
             delete ws_server;
@@ -420,16 +430,32 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         return "'" + replace(arg, "'", "'\\''") + "'";
     }
 
-    #! the cleanup cancels an operation whose step's result is held, so the cancel waits for the step and the
-    #! operation's abort() and onComplete() run when the result arrives, sent with the context of the worker
-    private runStepCase(string mode) {
+    #! an operation canceled before the cleanup has its onComplete() run by the cleanup, which refuses new work there
+    private runResubmitCase(string mode) {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("the step results are held with a test hook of a debug build");
         }
         int status;
         string out = backquote(sprintf("QORE_MODULE_DIR=%s %s --exec-mode=%s %s 2>&1", shellQuote(module_dir),
             shellQuote(qore_bin), mode, shellQuote(get_script_dir() + DirSep + "ModuleCleanupCancel" + DirSep
-            + "step-client.qr")), \status);
+            + "resubmit-client.qr")), \status);
+        assertEq(0, status, out);
+        assertRegex("(^|\n)held: True\n", out, "the step's result is held: " + out);
+        assertRegex("(^|\n)resubmit refused: ASYNC-IO-SHUTDOWN-ERROR\n", out, "no new work: " + out);
+        assertNRegex("resubmit accepted", out, "no new work: " + out);
+        assertNRegex("PROGRAM-ERROR", out, "no module Program is refused: " + out);
+    }
+
+    #! the cleanup cancels an operation whose step's result is held, so the cancel waits for the step and the
+    #! operation's abort() and onComplete() run when the result arrives, sent with the context of the worker
+    private runStepCase(string mode, string script = "step-client.qr") {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the step results are held with a test hook of a debug build");
+        }
+        int status;
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s %s --exec-mode=%s %s 2>&1", shellQuote(module_dir),
+            shellQuote(qore_bin), mode, shellQuote(get_script_dir() + DirSep + "ModuleCleanupCancel" + DirSep
+            + script)), \status);
         assertEq(0, status, out);
         assertRegex("(^|\n)held: True\n", out, "the step's result is held: " + out);
         assertRegex("(^|\n)result received: True\n", out, "the operation's result is received: " + out);

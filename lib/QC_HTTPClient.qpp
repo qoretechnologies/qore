@@ -3282,7 +3282,10 @@ nothing HTTPClient::setProxyURL(string url) [flags=NAMED_ARGS] {
 }
 
 //! Returns the current proxy URL as a string or @ref nothing if no proxy URL is set
-/** @return the current proxy URL as a string or @ref nothing if no proxy URL is set
+/** @param code see @ref http_url_codes the values for this bitfield; \c UC_TARGET gives the scheme, address and port
+    (if not the default) only, without the user name and password
+
+    @return the current proxy URL as a string or @ref nothing if no proxy URL is set
 
     @par Example:
     @code{.py}
@@ -3290,9 +3293,11 @@ nothing HTTPClient::setProxyURL(string url) [flags=NAMED_ARGS] {
     @endcode
 
     @see getSafeProxyURL()
+
+    @since %Qore 3.0 the \a code parameter
 */
-*string HTTPClient::getProxyURL() [flags=CONSTANT] {
-    return client->getProxyURL();
+*string HTTPClient::getProxyURL(int code = URL_NORMAL) [flags=CONSTANT,NAMED_ARGS] {
+    return client->getProxyURL(code);
 }
 
 //! Returns the current proxy URL without the password field

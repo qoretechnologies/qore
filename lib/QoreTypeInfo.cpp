@@ -5827,6 +5827,9 @@ bool QoreTypeSpec::acceptInputComplexHashImpl(ExceptionSink* xsink, const QoreTy
     } else {
         qore_hash_private* hp = qore_hash_private::get(*h);
         hp->complexTypeInfo = complex_type;
+        // the hash converted to another type is a new hash, as the copy above is, which can be changed also when the
+        // hash it was converted from was freed under a weak reference (qore#7199)
+        hp->valid = true;
     }
 
     // now we have to fold the value types into our type
@@ -5902,6 +5905,9 @@ bool QoreTypeSpec::acceptInputComplexListImpl(ExceptionSink* xsink, const QoreTy
         // Use the base complex type, not the optional field type
         const QoreTypeInfo* complex_type = qore_get_complex_list_type(uTi());
         lp->complexTypeInfo = complex_type;
+        // the list converted to another type is a new list, as the copy above is, which can be changed also when the
+        // list it was converted from was freed under a weak reference (qore#7199)
+        lp->valid = true;
     }
 
     // now we have to fold the value types into our type
@@ -6362,9 +6368,49 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     // the variable is resolved for reading first: one that the reference cannot write, such as a
                     // read-only import, is left as it is when its value already has the reference's type
                     // (qore#5664)
+                    // the lock of the assignment being checked can guard the referenced lvalue (qore#7380)
                     std::optional<LValueHelper> lvh;
-                    lvh.emplace(*r, xsink, LValueHelper::ReadAccess(), true);
-                    if (*lvh && lvh->isWriteProtected()) {
+                    lvh.emplace(*r, xsink, LValueHelper::ReadAccess(), LValueHelper::ReferenceBind());
+                    if (*lvh && lvh->hasReusedBindLock()) {
+                        // under a lock of the assignment being checked the value is only inspected, where it is:
+                        // nothing is changed, so no object scan is needed, and no reference is taken, whose release
+                        // could take the lock that the assignment holds (qore#7380)
+                        lvh->suppressObjectScan();
+                        const QoreValue current = lvh->getValue();
+                        if (!current.isNothing()) {
+                            qore_type_result_e rv = QoreTypeInfo::runtimeAcceptsValue(uTi(), current);
+                            // only a value that certainly needs no conversion is accepted: a value of exactly the
+                            // type, with or without NOTHING, or a valid object of a compatible class for a type that
+                            // does not wrap it in a list; any other value could be converted or rejected by a bind
+                            bool unchanged;
+                            // a weak reference has the type of what it refers to, but a bind does not accept it as that,
+                            // and a bind resolves a reference that the lvalue holds
+                            if (current.isEnum() || current.getType() == NT_WEAKREF
+                                    || current.getType() == NT_WEAKREF_HASH || current.getType() == NT_WEAKREF_LIST
+                                    || current.getType() == NT_REFERENCE) {
+                                unchanged = false;
+                            } else if (current.getType() == NT_OBJECT) {
+                                unchanged = rv != QTI_NOT_EQUAL && current.get<const QoreObject>()->isValid()
+                                    && !QoreTypeInfo::parseAcceptsReturns(uTi(), NT_LIST);
+                            } else {
+                                const QoreTypeInfo* value_ti = current.getTypeInfo();
+                                qore_type_t vt = current.getType();
+                                // a plain scalar that the type returns as it is (an int for a softint); a date is not
+                                // one of them, as a type can restrict it to absolute or relative dates
+                                unchanged = value_ti == uTi() || get_or_nothing_type_check(value_ti) == uTi()
+                                    || (rv == QTI_IDENT && (vt == NT_INT || vt == NT_FLOAT || vt == NT_NUMBER
+                                        || vt == NT_STRING || vt == NT_BOOLEAN || vt == NT_BINARY));
+                            }
+                            if (rv == QTI_NOT_EQUAL) {
+                                xsink->raiseException("RUNTIME-TYPE-ERROR", "<reference> expects type '%s', but got "
+                                    "type '%s' instead", QoreTypeInfo::getName(uTi()), current.getFullTypeName());
+                            } else if (!unchanged) {
+                                xsink->raiseException("REFERENCE-BIND-ERROR", "cannot convert the value of a reference "
+                                    "to type '%s' while assigning to an lvalue whose lock its path goes through",
+                                    QoreTypeInfo::getName(uTi()));
+                            }
+                        }
+                    } else if (*lvh && lvh->isWriteProtected()) {
                         bool needs_write = false;
                         {
                             ValueHolder val(lvh->getReferencedValue(), xsink);
@@ -6384,8 +6430,15 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                         if (needs_write && !*xsink) {
                             // the value has to be changed: resolving the variable for writing raises the exception
                             // that says why it cannot be, unless it has become writable in the meantime
-                            lvh.emplace(*r, xsink, true);
-                            if (*lvh) {
+                            lvh.emplace(*r, xsink, LValueHelper::ReferenceBind());
+                            // the path can differ from the one read above and reach a lock that the assignment holds,
+                            // under which nothing can be written (qore#7380)
+                            if (*lvh && lvh->hasReusedBindLock()) {
+                                lvh->suppressObjectScan();
+                                xsink->raiseException("REFERENCE-BIND-ERROR", "cannot convert the value of a reference "
+                                    "to type '%s' while assigning to an lvalue whose lock its path goes through",
+                                    QoreTypeInfo::getName(uTi()));
+                            } else if (*lvh) {
                                 assign_back(*lvh);
                             }
                         }
@@ -6543,6 +6596,26 @@ bool QoreTypeSpec::operator!=(const QoreTypeSpec& other) const {
 }
 
 
+//! a reference to the list or hash of a weak reference that the type match reads, released when it is taken only
+//! (qore#7375): the match of any other value costs no exception sink
+template <typename T>
+struct qore_weak_target_ref {
+    T* target = nullptr;
+
+    DLLLOCAL qore_weak_target_ref() = default;
+    qore_weak_target_ref(const qore_weak_target_ref&) = delete;
+    qore_weak_target_ref& operator=(const qore_weak_target_ref&) = delete;
+
+    DLLLOCAL ~qore_weak_target_ref() {
+        if (target) [[unlikely]] {
+            // the release of a last reference raises its destructors' exceptions here, as
+            // WeakListReferenceNode::getAsBoolImpl() does
+            ExceptionSink xsink;
+            target->deref(&xsink);
+        }
+    }
+};
+
 qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool exact, bool fold) const {
     return runtimeAcceptsValueImpl(n, exact, fold, DefaultTypeMatchPolicy{});
 }
@@ -6668,12 +6741,16 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
         case QTS_COMPLEXHASH: {
             const QoreTypeInfo* ti = nullptr;
             const QoreHashNode* h = nullptr;
+            // the hash of a weak reference is read with a reference of its own, as another thread can free it
+            // meanwhile (qore#7375)
+            qore_weak_target_ref<QoreHashNode> weak_target;
             if (ot == NT_HASH) {
                 h = n.get<const QoreHashNode>();
                 ti = h->getValueTypeInfo();
-            } else if (ot == NT_WEAKREF_HASH) {
-                // its type and its size, which reads as empty once it is freed (see WeakHashReferenceNode::borrow())
-                h = n.get<const WeakHashReferenceNode>()->borrow();
+            } else if (ot == NT_WEAKREF_HASH) [[unlikely]] {
+                // its type and its size, which reads as empty once it is freed (see WeakHashReferenceNode::lock())
+                weak_target.target = n.get<const WeakHashReferenceNode>()->lock();
+                h = weak_target.target;
                 ti = h->getValueTypeInfo();
             }
             if (!h) {
@@ -6713,12 +6790,16 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
         case QTS_COMPLEXSOFTLIST: {
             const QoreTypeInfo* ti = nullptr;
             const QoreListNode* l = nullptr;
+            // the list of a weak reference is read with a reference of its own, as another thread can free it
+            // meanwhile (qore#7375)
+            qore_weak_target_ref<QoreListNode> weak_target;
             if (ot == NT_LIST) {
                 l = n.get<const QoreListNode>();
                 ti = l->getValueTypeInfo();
-            } else if (ot == NT_WEAKREF_LIST) {
-                // its type and its size, which reads as empty once it is freed (see WeakListReferenceNode::borrow())
-                l = n.get<const WeakListReferenceNode>()->borrow();
+            } else if (ot == NT_WEAKREF_LIST) [[unlikely]] {
+                // its type and its size, which reads as empty once it is freed (see WeakListReferenceNode::lock())
+                weak_target.target = n.get<const WeakListReferenceNode>()->lock();
+                l = weak_target.target;
                 ti = l->getValueTypeInfo();
             }
             if (l) {
@@ -9212,13 +9293,12 @@ static bool qore_retype_element_accepted(QoreValue& v, const QoreTypeInfo* elem_
         // AOT deserializer restores a sibling class constant declared later in the class as one and
         // resolves it afterwards, and the resolved value has its own type applied then.
         // qore_runtime_accepts_call_arg() in Function.cpp makes the same allowance for call
-        // arguments.  Weak references and lvalue references are unwrapped by dedicated branches in
-        // QoreTypeSpec::acceptInput(); the runtime match below does not see through them.
+        // arguments.  Weak references are unwrapped by dedicated branches in QoreTypeSpec::acceptInput(); the runtime
+        // match below does not see through them.
         case NT_RTCONSTREF:
         case NT_WEAKREF:
         case NT_WEAKREF_HASH:
         case NT_WEAKREF_LIST:
-        case NT_REFERENCE:
             return true;
 
         default:
@@ -9230,7 +9310,16 @@ static bool qore_retype_element_accepted(QoreValue& v, const QoreTypeInfo* elem_
     // converted to its base value by an element type of its base type, although that type is a superset of the
     // enum's type (qore#6274)
     qore_type_result_e rv = policy.value(elem_ti, v, false);
-    if (!v.isEnum()
+    // an lvalue reference whose declared type cannot match the element type must not label the container, or the typed
+    // reads of the compiled modes read it as a value of that type: it goes to the error below, which takes no lock.  A
+    // reference that can match, or that a soft list type would wrap, is kept as it is and not bound or wrapped here:
+    // that can read the referenced variable, and a retype can run while the assignment holds the lock of that variable
+    // (qore#2889, qore#7377; the cases kept this way are qore#7380)
+    if (v.getType() == NT_REFERENCE) {
+        if (rv != QTI_NOT_EQUAL) {
+            return true;
+        }
+    } else if (!v.isEnum()
             && (rv == QTI_IDENT || (rv != QTI_NOT_EQUAL && QoreTypeInfo::superSetOf(elem_ti, v.getTypeInfo())))) {
         return true;
     }

@@ -8807,6 +8807,7 @@ bool Socket::isQuic() [flags=CONSTANT] {
     @throw HTTP3-IDLE-CLOSE the QUIC connection was closed by its idle timer, including a connection that has been idle for longer than its idle timeout, whose timer has not run yet (RFC 9000 section 10.1); the request was not sent, and it can be repeated on a new connection
     @throw HTTP3-LOCAL-CLOSE the QUIC connection was closed locally; the request was not sent
     @throw HTTP3-PEER-CLOSE the QUIC connection was closed by the server; the request was not sent
+    @throw HTTP3-STATELESS-RESET the server reset the QUIC connection with a stateless reset: it has no state for the connection (ex: it restarted); the request was not sent, and it can be repeated on a new connection (since %Qore 3.0)
     @throw HTTP3-REQUEST-ERROR the headers have a \c ":protocol" pseudo-header: an extended CONNECT request (RFC 9220) must be made with @ref Qore::Socket::submitQuicRequestStreaming() "submitQuicRequestStreaming()" (since %Qore 3.0); the request was not sent
 
     @note This method requires an active QUIC session, typically established via
@@ -8860,6 +8861,7 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
     @throw HTTP3-IDLE-CLOSE the QUIC connection was closed by its idle timer, including a connection that has been idle for longer than its idle timeout, whose timer has not run yet (RFC 9000 section 10.1); the request was not sent, and it can be repeated on a new connection
     @throw HTTP3-LOCAL-CLOSE the QUIC connection was closed locally; the request was not sent
     @throw HTTP3-PEER-CLOSE the QUIC connection was closed by the server; the request was not sent
+    @throw HTTP3-STATELESS-RESET the server reset the QUIC connection with a stateless reset: it has no state for the connection (ex: it restarted); the request was not sent, and it can be repeated on a new connection (since %Qore 3.0)
     @throw HTTP3-EXTENDED-CONNECT-UNSUPPORTED the headers have a \c ":protocol" pseudo-header (an extended CONNECT request, RFC 9220), and the server's SETTINGS did not advertise \c SETTINGS_ENABLE_CONNECT_PROTOCOL; the request was not sent
     @throw HTTP3-EXTENDED-CONNECT-ERROR the headers have a \c ":protocol" pseudo-header, and the server's HTTP/3 SETTINGS have not been received yet (see @ref Qore::Socket::waitForQuicSettings() "waitForQuicSettings()"); the request was not sent
 
@@ -8923,6 +8925,7 @@ int stream_id = sock.submitQuicRequestStreaming("CONNECT", "/ws", {":protocol": 
     SETTINGS, while they have not been received
     @throw HTTP3-IDLE-CLOSE the QUIC connection was closed by its idle timer before the SETTINGS were received
     @throw HTTP3-PEER-CLOSE the QUIC connection was closed by the server before the SETTINGS were received
+    @throw HTTP3-STATELESS-RESET the server reset the QUIC connection with a stateless reset before the SETTINGS were received (since %Qore 3.0)
     @throw HTTP3-LOCAL-CLOSE the QUIC connection or the socket was closed locally before the SETTINGS were received
     @throw THREAD-CANCELLED the thread was cancelled while it waited (see @ref Qore::cancel_thread() "cancel_thread()")
     @throw PROGRAM-INTERRUPTED the thread's @ref Qore::Program "Program" was interrupted while it waited

@@ -161,14 +161,37 @@ class HttpServerInteractiveStatusTest inherits QUnit::Test {
         });
     }
 
+    #! sends the request body on the stream
+    /** A server that answers without reading the body, as it does when it refuses the status, closes the stream
+        (RFC 9113 section 8.1, RFC 9114 section 4.1.2): a send after its response has arrived raises
+        HTTPCLIENT-STREAM-CLOSED, and the response is read all the same (qoretechnologies/qore#7354)
+    */
+    private static sendBody(HttpClientIo::HttpClientStreamHandle st) {
+        try {
+            st.sendData(binary("x"));
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "HTTPCLIENT-STREAM-CLOSED") {
+                rethrow;
+            }
+        }
+    }
+
     #! returns the status of an interactive stream request with the given status, or the error that ended it
-    private string streamStatus(HttpClientConnectionManager mgr, int code) {
+    /** @param send_late the request body is sent after the first event of the response has been read, as a client
+        delayed under load can send it after the server has answered
+    */
+    private string streamStatus(HttpClientConnectionManager mgr, int code, bool send_late) {
         HttpClientIo::HttpClientStreamHandle st = mgr.acquireStream(url);
         st.startStreaming("POST", "/session", {"Content-Type": "text/plain", "x-code": code.toString()}, True);
-        st.sendData(binary("x"));
+        if (!send_late) {
+            sendBody(st);
+        }
         # the first event has the response headers, alone or with body data (HTTP/3 coalesces them when the
         # response is complete), or the error; a bound only guards against a hang
         auto d = st.readData(30s);
+        if (send_late) {
+            sendBody(st);
+        }
         if (d.typeCode() == NT_HASH && d.error) {
             return d.error.err;
         }
@@ -190,12 +213,16 @@ class HttpServerInteractiveStatusTest inherits QUnit::Test {
                 plain.release.push(1);
             }
             assertEq(200, mgr.request(url, "GET", "/").status_code, protocol + ": the connection is up");
-            assertEq("200", streamStatus(mgr, 200), protocol + ": a final status is sent");
-            foreach int code in ((101, 103, 100)) {
-                assertEq("500", streamStatus(mgr, code), sprintf("%s: status %d is refused with 500", protocol,
-                    code));
-                assertEq(200, mgr.request(url, "GET", "/").status_code, sprintf("%s: the connection goes on after %d",
-                    protocol, code));
+            foreach bool send_late in ((False, True)) {
+                string order = send_late ? "body sent after the response" : "body sent first";
+                assertEq("200", streamStatus(mgr, 200, send_late), sprintf("%s, %s: a final status is sent",
+                    protocol, order));
+                foreach int code in ((101, 103, 100)) {
+                    assertEq("500", streamStatus(mgr, code, send_late), sprintf("%s, %s: status %d is refused with "
+                        "500", protocol, order, code));
+                    assertEq(200, mgr.request(url, "GET", "/").status_code, sprintf("%s, %s: the connection goes on "
+                        "after %d", protocol, order, code));
+                }
             }
             plain.release.push(1);
             released = True;

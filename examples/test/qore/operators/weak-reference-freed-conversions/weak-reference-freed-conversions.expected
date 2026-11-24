@@ -1,0 +1,96 @@
+== live
+cast<hash>: changed {a: 5} type hash
+cast<hash<string, softint>>: changed {a: 5} type hash<string, softint>
+cast<hash<HD2>> of hash<HD>: changed {a: 5, b: 3} type hash<HD2>
+cast<hash<HD>> of hash<string, int>: changed {a: 5} type hash<HD>
+cast<list>: changed [1, 2, 9] type list
+cast<list<softint>>: changed [1, 2, 9] type list<softint>
+cast<hash<string, int>>: changed {a: 5} type hash<string, int>
+cast<hash<HD>> of hash<HD>: changed {a: 5} type hash<HD>
+cast<list<int>>: changed [1, 2, 9] type list<int>
+cast<*hash<string, int>>: changed {a: 5} type *hash<string, int>
+cast<*hash<HD>> of hash<HD>: changed {a: 5} type hash<HD>
+cast<*list<int>>: changed [1, 2, 9] type *list<int>
+cast<*list<softint>>: changed [1, 2, 9] type *list<softint>
+cast<hash<string, softint>> of plain hash: changed {a: 5} type hash<string, softint>
+cast<list<softint>> of plain list: changed [1, 2, 9] type list<softint>
+cast<hash> of hash<HD>: changed {a: 5} type hash
+cast<hash<string, int>> of hash<HD>: changed {a: 5} type hash<string, int>
+new hash<string, int>: changed {a: 5} type hash<string, int>
+new hash<string, softint>: changed {a: 5} type hash<string, softint>
+new hash<HD>: changed {a: 5} type hash<HD>
+hash var: changed {a: 5} type hash
+hash<string, softint> var: changed {a: 5} type hash<string, softint>
+list var: changed [1, 2, 9] type list
+list<softint> var: changed [1, 2, 9] type list<softint>
+softlist<softint> var: changed [1, 2, 9] type list<softint>
+hash<auto> var: changed {a: 5} type hash<string, int>
+auto var (hash): changed {a: 5} type hash<string, int>
+list<auto> var: changed [1, 2, 9] type list<int>
+*list<int> var: changed [1, 2, 9] type list<int>
+hash<string, softint> var of plain hash: changed {a: 5} type hash<string, softint>
+list<softint> var of plain list: changed [1, 2, 9] type list<softint>
+return hash: changed {a: 5} type hash
+return list<softint>: changed [1, 2, 9] type list<softint>
+return list<auto>: changed [1, 2, 9] type list<int>
+member hash: changed {a: 5} type hash
+member hash<auto>: changed {a: 5} type hash<string, int>
+member list<softint>: changed [1, 2, 9] type list<softint>
+element list<softint>: changed [1, 2, 9] type list<softint>
+param hash: changed {a: 5} type hash
+param hash<string, softint>: changed {a: 5} type hash<string, softint>
+param hash<auto>: changed {a: 5} type hash<string, int>
+param list: changed [1, 2, 9] type list
+param list<softint>: changed [1, 2, 9] type list<softint>
+param list<auto>: changed [1, 2, 9] type list<int>
+weak hash: changed {a: 1, y: 1}
+weak list: changed [7, 2]
+weak hashdecl hash: changed {a: 7}
+== freed
+cast<hash>: changed {a: 5} type hash
+cast<hash<string, softint>>: changed {a: 5} type hash<string, softint>
+cast<hash<HD2>> of hash<HD>: changed {a: 5, b: 3} type hash<HD2>
+cast<hash<HD>> of hash<string, int>: changed {a: 5} type hash<HD>
+cast<list>: changed [9] type list
+cast<list<softint>>: changed [9] type list<softint>
+cast<hash<string, int>>: HASH-ERROR type hash<string, int>
+cast<hash<HD>> of hash<HD>: HASH-ERROR type hash<HD>
+cast<list<int>>: LIST-ERROR type list<int>
+cast<*hash<string, int>>: HASH-ERROR type *hash<string, int>
+cast<*hash<HD>> of hash<HD>: HASH-ERROR type hash<HD>
+cast<*list<int>>: LIST-ERROR type *list<int>
+cast<*list<softint>>: changed [9] type *list<softint>
+cast<hash<string, softint>> of plain hash: changed {a: 5} type hash<string, softint>
+cast<list<softint>> of plain list: changed [9] type list<softint>
+cast<hash> of hash<HD>: changed {a: 5} type hash
+cast<hash<string, int>> of hash<HD>: changed {a: 5} type hash<string, int>
+new hash<string, int>: changed {a: 5} type hash<string, int>
+new hash<string, softint>: changed {a: 5} type hash<string, softint>
+new hash<HD>: changed {a: 5} type hash<HD>
+hash var: changed {a: 5} type hash
+hash<string, softint> var: changed {a: 5} type hash<string, softint>
+list var: changed [9] type list
+list<softint> var: changed [9] type list<softint>
+softlist<softint> var: changed [9] type list<softint>
+hash<auto> var: HASH-ERROR type hash<string, int>
+auto var (hash): HASH-ERROR type hash<string, int>
+list<auto> var: LIST-ERROR type list<int>
+*list<int> var: LIST-ERROR type list<int>
+hash<string, softint> var of plain hash: changed {a: 5} type hash<string, softint>
+list<softint> var of plain list: changed [9] type list<softint>
+return hash: changed {a: 5} type hash
+return list<softint>: changed [9] type list<softint>
+return list<auto>: LIST-ERROR type list<int>
+member hash: changed {a: 5} type hash
+member hash<auto>: HASH-ERROR type hash<string, int>
+member list<softint>: changed [9] type list<softint>
+element list<softint>: changed [9] type list<softint>
+param hash: changed {a: 5} type hash
+param hash<string, softint>: changed {a: 5} type hash<string, softint>
+param hash<auto>: HASH-ERROR type hash<string, int>
+param list: changed [9] type list
+param list<softint>: changed [9] type list<softint>
+param list<auto>: LIST-ERROR type list<int>
+weak hash: HASH-ERROR
+weak list: LIST-ERROR
+weak hashdecl hash: HASH-ERROR

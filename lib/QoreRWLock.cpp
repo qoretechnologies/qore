@@ -82,6 +82,14 @@ QoreVarRWLock::~QoreVarRWLock() {
 }
 
 //! grabs the write lock
+bool qore_var_rwlock_ops::wrlockUnlessHeldForBindImpl(QoreVarRWLock* b, const void* vl) {
+    return b->priv->wrlockUnlessHeldForBind(vl);
+}
+
+bool qore_var_rwlock_ops::heldForBindImpl(const QoreVarRWLock* b, const void* vl) {
+    return b->priv->heldForBind(vl);
+}
+
 void qore_var_rwlock_ops::wrlockImpl(QoreVarRWLock* b) {
     b->priv->wrlock();
 }

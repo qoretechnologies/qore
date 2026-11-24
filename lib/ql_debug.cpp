@@ -55,6 +55,12 @@
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QuicSession.h"
+#include "qore/intern/SocketSyncPoll.h"
+#include "qore/intern/QoreDatagramDispatcher.h"
+#include <qore/QoreSSLPrivateKey.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
+#include "qore/intern/qore_list_private.h"
 
 #include <bit>
 #include <map>
@@ -388,11 +394,74 @@ static QoreValue f_dbg_environment_lookups(const QoreListNode* params, RuntimeCo
     return static_cast<int64>(qore_env_lookup_count.load(std::memory_order_relaxed));
 }
 
+//! Returns the number of resolutions of the type of an AOT instanceof so far (qore#7416)
+static QoreValue f_dbg_aot_instanceof_resolves(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64>(qore_aot_instanceof_resolve_count.load(std::memory_order_relaxed));
+}
+
+//! Maps every type path to one set of the AOT instanceof type cache (or not); returns the previous setting (qore#7416)
+static QoreValue f_dbg_aot_instanceof_one_set(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_aot_instanceof_one_set.exchange(get_param_value(params, 0).getAsBool(), std::memory_order_relaxed);
+}
+
 static QoreValue f_dbg_generic_cache_counts(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
     h->setKeyValue("specializations", qore_live_generic_specializations.load(std::memory_order_relaxed), xsink);
     h->setKeyValue("hashdecls", qore_live_parameterized_hashdecls.load(std::memory_order_relaxed), xsink);
     h->setKeyValue("registered_types", static_cast<int64>(qore_generic_cache_registered_type_count()), xsink);
+    return h.release();
+}
+
+//! Returns whether the module manager judges a module path to be library code, and the path that it then loads
+/** For tests of every path form, also those that the loaders normalize before the check (qore#7319): \a path as the
+    loaders give it, and the directory of the module search path and the name appended to it if the search found the
+    module there; the appended name must be one that the search makes (relative, with no empty, \c "." or \c ".."
+    component)
+*/
+static QoreValue f_dbg_module_path_trust(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    // the string values can be inline short strings (issue #7038)
+    QoreStringDataHelper path(get_param_value(params, 0));
+    QoreValue dir_val = get_param_value(params, 1);
+    QoreValue rel_val = get_param_value(params, 2);
+    if ((dir_val.getType() == NT_STRING) != (rel_val.getType() == NT_STRING)) {
+        xsink->raiseException("DBG-MODULE-PATH-ERROR", "the directory and the appended name are given together");
+        return QoreValue();
+    }
+    std::string load_path;
+    bool trusted;
+    if (dir_val.getType() == NT_STRING) {
+        QoreStringDataHelper rel_str(rel_val);
+        QoreStringDataHelper dir_str(dir_val);
+        std::string rel(rel_str.c_str(), rel_str.size());
+        // only names that the module search makes: the module manager asserts it
+        bool clean = !rel.empty() && rel[0] != '/';
+        for (size_t start = 0; clean;) {
+            size_t end = rel.find('/', start);
+            std::string c = rel.substr(start, end == std::string::npos ? std::string::npos : end - start);
+            if (c.empty() || c == "." || c == "..") {
+                clean = false;
+            }
+            if (end == std::string::npos) {
+                break;
+            }
+            start = end + 1;
+        }
+        if (!clean) {
+            xsink->raiseException("DBG-MODULE-PATH-ERROR", "'%s' is not a name that the module search appends",
+                rel.c_str());
+            return QoreValue();
+        }
+        QoreModuleFoundIn found_in{dir_str.c_str(), rel};
+        trusted = QMM.isTrustedModulePath(path.c_str(), &load_path, &found_in);
+    } else {
+        trusted = QMM.isTrustedModulePath(path.c_str(), &load_path);
+    }
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("trusted", trusted, xsink);
+    if (trusted) {
+        h->setKeyValue("load_path", new QoreStringNode(load_path), xsink);
+    }
     return h.release();
 }
 
@@ -9789,7 +9858,13 @@ public:
         runCase(c, true);
         runCase(c, false);
         drainedCancelCase(c);
+        drainedRestrictedOwnerCancelCase(c);
+        idleThreadRestrictedOwnerCancelCase(c);
         failedRestartCase(c);
+        for (CancelBy by : {CancelBy::Key, CancelBy::KeyOnAllThreads, CancelBy::Owner, CancelBy::ModuleCleanup}) {
+            keptCancelCase(c, by, false);
+            keptCancelCase(c, by, true);
+        }
     }
 
 private:
@@ -9899,6 +9974,105 @@ private:
             && result->get<QoreHashNode>()->getKeyValue("canceled").getAsBool();
     }
 
+    //! the cancellations other than cancelByProgram()
+    enum class CancelBy {
+        Key,
+        KeyOnAllThreads,
+        Owner,
+        //! the cancel round of the module cleanup at its deadline, for an operation that work of the cleanup submitted
+        ModuleCleanup,
+    };
+
+    //! a key or owner cancellation cancels the submission that a thread that reads no commands keeps (qore#7311)
+    /** The thread is held past its last command drain, or (\a stopped) it has stopped and failed to start again; the
+        submission that it keeps until it starts again is canceled by the cancellation, which delivers its result, and
+        not admitted when the thread starts.  Before, these cancellations looked only at the caches and the command
+        queues of the threads, and the submission was admitted when the thread started again.
+    */
+    static void keptCancelCase(UnitTestCounters& c, CancelBy by, bool stopped) {
+        std::string what = std::string(by == CancelBy::Key ? "cancelByKey()"
+            : (by == CancelBy::KeyOnAllThreads ? "cancelByKeyOnAllThreads()"
+                : (by == CancelBy::Owner ? "cancelByOwner()" : "cancelModuleCleanupUncounted()")))
+            + (stopped ? ", stopped thread" : ", thread past its last drain");
+        ExceptionSink xsink;
+        Ctrl* ctrl = startCtrl(c, xsink);
+        CtrlStop cs{ctrl, xsink};
+        if (xsink) {
+            return;
+        }
+        ReferenceHolder<QoreObject> sock_obj(&xsink);
+        ReferenceHolder<QoreObject> queue_obj(&xsink);
+        holdStopping(*ctrl, false, true);
+        int idx = submitRunning(*ctrl, sock_obj, queue_obj, xsink);
+        UT_ASSERT(c, idx == 0 && !xsink, ("an operation is submitted to the stopping thread: " + what).c_str());
+        if (idx != 0 || xsink) {
+            return;
+        }
+        std::string key;
+        {
+            AutoLocker al(ctrl->m);
+            Ctrl::IoThreadContext& t = *ctrl->io_threads[0];
+            UT_ASSERT(c, t.preserved_submits.size() == 1, ("the thread keeps the submission: " + what).c_str());
+            if (t.preserved_submits.size() != 1) {
+                return;
+            }
+            key = t.preserved_submits[0].key;
+            if (by == CancelBy::ModuleCleanup) {
+                // the operation is work that the module cleanup waits for, as one that work of the cleanup submits
+                t.preserved_submits[0].submit_sandbox_ctx = std::make_shared<QoreSandboxContext>(nullptr,
+                    QoreSandboxContext::ModuleCleanupWork::Submitted);
+            }
+            if (stopped) {
+                // the thread stops and fails to start again
+                ctrl->dbg_fail_io_thread_start = true;
+                t.dbg_hold_after_drain = false;
+                t.dbg_cond.broadcast();
+                AsyncIoStoppingThreadTest::waitStoppedLocked(*ctrl, t);
+            }
+        }
+        switch (by) {
+            case CancelBy::Key: {
+                SimpleRefHolder<QoreStringNode> k(new QoreStringNode(key));
+                UT_ASSERT(c, ctrl->cancelByKey(*k, &xsink), ("the cancellation finds the submission: " + what).c_str());
+                break;
+            }
+            case CancelBy::KeyOnAllThreads:
+                UT_ASSERT(c, ctrl->cancelByKeyOnAllThreads(key, &xsink, nullptr, AioAppRestriction()),
+                    ("the cancellation finds the submission: " + what).c_str());
+                break;
+            case CancelBy::Owner: {
+                SimpleRefHolder<QoreStringNode> owner(new QoreStringNode("preserved"));
+                UT_ASSERT_EQ(c, 1, ctrl->cancelByOwner(*owner, &xsink),
+                    ("the cancellation counts the submission: " + what).c_str());
+                break;
+            }
+            case CancelBy::ModuleCleanup:
+                UT_ASSERT_EQ(c, 1, (int)ctrl->cancelModuleCleanupUncounted(true, nullptr, &xsink),
+                    ("the cancellation counts the submission: " + what).c_str());
+                break;
+        }
+        UT_ASSERT(c, !xsink, ("the cancellation succeeds: " + what).c_str());
+        xsink.clear();
+        UT_ASSERT(c, canceledResult(*queue_obj, xsink), ("the cancellation delivers a canceled result: " + what).c_str());
+        xsink.clear();
+        // the thread is released, or can start again: it is started for whatever it still keeps
+        {
+            AutoLocker al(ctrl->m);
+            ctrl->dbg_fail_io_thread_start = false;
+            ctrl->io_threads[0]->dbg_hold_after_drain = false;
+            ctrl->io_threads[0]->dbg_cond.broadcast();
+        }
+        ctrl->start(&xsink);
+        bool processed = !xsink && ctrl->waitForProcessing(5000, &xsink);
+        UT_ASSERT(c, processed && !xsink, ("the thread processes its commands after the cancellation: " + what).c_str());
+        xsink.clear();
+        UT_ASSERT_EQ(c, 0, ctrl->getCacheSize(), ("the canceled submission is not admitted: " + what).c_str());
+        {
+            AutoLocker al(ctrl->m);
+            UT_ASSERT(c, ctrl->io_threads[0]->preserved_submits.empty(), ("no submission is kept: " + what).c_str());
+        }
+    }
+
     //! a cancellation queued to the stopping thread before its last drain, with the submission: the drain finds both
     static void drainedCancelCase(UnitTestCounters& c) {
         ExceptionSink xsink;
@@ -9950,6 +10124,148 @@ private:
         xsink.clear();
         UT_ASSERT_EQ(c, 0, ctrl->getCacheSize(),
             "no operation of the canceled Program is admitted after a cancellation found by the last drain");
+    }
+
+    //! a restricted cancel by owner (of sandboxed code, for its application) queued to the stopping thread before its
+    //! last drain, with the submissions of the owner of two applications: the drain records the owner as canceled for
+    //! that application only, so the restarted thread refuses its submission and admits the other one (qore#7010)
+    static void drainedRestrictedOwnerCancelCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        Ctrl* ctrl = startCtrl(c, xsink);
+        CtrlStop cs{ctrl, xsink};
+        if (xsink) {
+            return;
+        }
+        // two applications that no Program has: the submissions run for them as in the callback of an operation of
+        // each (see AsyncIoControllerPriv::callerAppId())
+        const qore_program_id_t app_a = 2000000001;
+        const qore_program_id_t app_b = 2000000002;
+        ReferenceHolder<QoreObject> sock_a(&xsink);
+        ReferenceHolder<QoreObject> queue_a(&xsink);
+        ReferenceHolder<QoreObject> sock_b(&xsink);
+        ReferenceHolder<QoreObject> queue_b(&xsink);
+        holdStopping(*ctrl, true, true);
+        int idx_a;
+        {
+            AioCallbackAppScope app_scope(app_a);
+            idx_a = submitRunning(*ctrl, sock_a, queue_a, xsink);
+        }
+        int idx_b;
+        {
+            AioCallbackAppScope app_scope(app_b);
+            idx_b = submitRunning(*ctrl, sock_b, queue_b, xsink);
+        }
+        UT_ASSERT(c, idx_a == 0 && idx_b == 0 && !xsink,
+            "the submissions of the owner of two applications are queued to the stopping thread");
+        if (idx_a != 0 || idx_b != 0 || xsink) {
+            return;
+        }
+        AioAppRestriction restrict_a;
+        restrict_a.restricted = true;
+        restrict_a.app_id = app_a;
+        {
+            AutoLocker al(ctrl->m);
+            Ctrl::IoThreadContext& t = *ctrl->io_threads[0];
+            // application a's cancel of the owner, queued after the submissions, as cancelByOwner() queues it
+            Ctrl::Command cmd;
+            cmd.cmd = Ctrl::IoCommand::CancelOwner;
+            cmd.owner = "preserved";
+            cmd.restrict_app = restrict_a;
+            ++ctrl->submit_seq;
+            cmd.seq_at_push = ++t.submit_seq;
+            t.cmdq.push(std::move(cmd));
+            // the last drain runs and finds them all; the thread is held after it
+            t.dbg_hold_before_drain = false;
+            t.dbg_cond.broadcast();
+            waitHeldLocked(*ctrl, t, t.dbg_held);
+            UT_ASSERT(c, t.preserved_submits.size() == 2, "the last drain keeps both submissions");
+            UT_ASSERT(c, !t.cancelled_owners.count("preserved"),
+                "a restricted cancel found by the last drain does not record the owner for every application");
+            UT_ASSERT(c, t.cancelled_owners.count(QoreCallDispatcher::ownerMarkKey("preserved", restrict_a)) == 1,
+                "a restricted cancel found by the last drain records the owner for its application");
+            t.dbg_hold_after_drain = false;
+            t.dbg_cond.broadcast();
+        }
+        ctrl->start(&xsink);
+        bool processed = !xsink && ctrl->waitForProcessing(5000, &xsink);
+        UT_ASSERT(c, processed && !xsink, "the restarted thread processes its commands (restricted cancel)");
+        xsink.clear();
+        UT_ASSERT(c, canceledResult(*queue_a, xsink),
+            "the kept submission of the canceling application is refused");
+        xsink.clear();
+        UT_ASSERT_EQ(c, 1, ctrl->getCacheSize(), "the kept submission of the other application is admitted");
+    }
+
+    //! a restricted cancel by owner (of sandboxed code, for its application) made while the I/O thread is past its
+    //! last drain and keeps the submissions of the owner of two applications: the cancel walks the thread directly
+    //! (cancel_on_idle_thread in cancelByOwnerIntern()), cancels its application's kept submission and records the
+    //! owner as canceled for that application only, so the restarted thread admits the other one (qore#7010)
+    static void idleThreadRestrictedOwnerCancelCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        Ctrl* ctrl = startCtrl(c, xsink);
+        CtrlStop cs{ctrl, xsink};
+        if (xsink) {
+            return;
+        }
+        const qore_program_id_t app_a = 2000000011;
+        const qore_program_id_t app_b = 2000000012;
+        ReferenceHolder<QoreObject> sock_a(&xsink);
+        ReferenceHolder<QoreObject> queue_a(&xsink);
+        ReferenceHolder<QoreObject> sock_b(&xsink);
+        ReferenceHolder<QoreObject> queue_b(&xsink);
+        holdStopping(*ctrl, true, true);
+        int idx_a;
+        {
+            AioCallbackAppScope app_scope(app_a);
+            idx_a = submitRunning(*ctrl, sock_a, queue_a, xsink);
+        }
+        int idx_b;
+        {
+            AioCallbackAppScope app_scope(app_b);
+            idx_b = submitRunning(*ctrl, sock_b, queue_b, xsink);
+        }
+        UT_ASSERT(c, idx_a == 0 && idx_b == 0 && !xsink,
+            "the submissions of the owner of two applications are queued to the stopping thread (idle thread)");
+        if (idx_a != 0 || idx_b != 0 || xsink) {
+            return;
+        }
+        {
+            // the last drain keeps both submissions; the thread is held after it, reading no commands
+            AutoLocker al(ctrl->m);
+            Ctrl::IoThreadContext& t = *ctrl->io_threads[0];
+            t.dbg_hold_before_drain = false;
+            t.dbg_cond.broadcast();
+            waitHeldLocked(*ctrl, t, t.dbg_held);
+            UT_ASSERT(c, t.preserved_submits.size() == 2 && !ctrl->readsCommands(t),
+                "the thread past its last drain keeps both submissions and reads no commands");
+        }
+        AioAppRestriction restrict_a;
+        restrict_a.restricted = true;
+        restrict_a.app_id = app_a;
+        // application a's cancel of the owner walks the idle thread directly
+        int canceled = ctrl->cancelByOwnerIntern("preserved", restrict_a, &xsink);
+        UT_ASSERT(c, !xsink, "the restricted cancel on the idle thread succeeds");
+        xsink.clear();
+        UT_ASSERT_EQ(c, 1, canceled, "the restricted cancel cancels its application's kept submission only");
+        {
+            AutoLocker al(ctrl->m);
+            Ctrl::IoThreadContext& t = *ctrl->io_threads[0];
+            UT_ASSERT(c, t.preserved_submits.size() == 1, "the other application's submission is still kept");
+            UT_ASSERT(c, !t.cancelled_owners.count("preserved"),
+                "a restricted cancel on an idle thread does not record the owner for every application");
+            UT_ASSERT(c, t.cancelled_owners.count(QoreCallDispatcher::ownerMarkKey("preserved", restrict_a)) == 1,
+                "a restricted cancel on an idle thread records the owner for its application");
+            t.dbg_hold_after_drain = false;
+            t.dbg_cond.broadcast();
+        }
+        ctrl->start(&xsink);
+        bool processed = !xsink && ctrl->waitForProcessing(5000, &xsink);
+        UT_ASSERT(c, processed && !xsink, "the restarted thread processes its commands (idle thread)");
+        xsink.clear();
+        UT_ASSERT(c, canceledResult(*queue_a, xsink), "the canceling application's kept submission is canceled");
+        xsink.clear();
+        UT_ASSERT_EQ(c, 1, ctrl->getCacheSize(),
+            "the other application's kept submission is admitted after a restricted cancel on the idle thread");
     }
 
     //! the thread cannot be started again: the kept submission stays where a cancellation finds it
@@ -10134,6 +10450,10 @@ public:
         remarkCase(c);
         clearStopCase(c);
         otherThreadCase(c);
+        stopWaiterCase(c);
+        forkedScopeCase(c);
+        stopParkedCase(c);
+        bornMarkedCase(c);
     }
 
 private:
@@ -10209,6 +10529,82 @@ private:
         UT_ASSERT_EQ(c, 1, released, "the clear releases the parked release item");
         UT_ASSERT_EQ(c, 0, (int)cd->dbgParkedReleases(pgm), "no release item is left parked");
         UT_ASSERT(c, !xsink, "the mark and the clear raise no exception");
+    }
+
+    //! a dispatcher that replaces the marked one during cancelByProgram() is created marked for the Program
+    /** (qore#7311): before, it was marked only by the call's next mark, after a delivery that a destructor made, so a
+        worker of the new dispatcher could run an item of the Program that was queued on it meanwhile.  A release run
+        by the call's mark stops the controller and creates the new dispatcher, as a destructor that a delivery runs
+        can, and checks the new dispatcher at once, before the call marks it again.
+    */
+    static void bornMarkedCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        Disp* cd1 = ctrl->call_dispatcher.load();
+        QoreProgram* pgm = getProgram();
+        Disp* cd2 = nullptr;
+        bool cd2_marked = false;
+        bool done = false;
+        Disp::dbgSetReleaseHook([&]() {
+            if (done) {
+                return;
+            }
+            done = true;
+            ExceptionSink stop_xsink;
+            ctrl->stop(&stop_xsink);
+            ctrl->ensureCallDispatcher();
+            cd2 = ctrl->call_dispatcher.load();
+            cd2_marked = cd2 && cd2 != cd1 && marked(cd2, pgm);
+        });
+        queueItem(cd1, Disp::DT_NATIVE_TASK, pgm);
+        ctrl->cancelByProgram(pgm, &xsink);
+        Disp::dbgSetReleaseHook(std::function<void()>());
+        UT_ASSERT(c, cd2 && cd2 != cd1, "the release replaced the dispatcher");
+        UT_ASSERT(c, cd2_marked, "the new dispatcher is created marked for the canceled Program");
+        cd2 = ctrl->call_dispatcher.load();
+        UT_ASSERT(c, cd2 && !marked(cd2, pgm), "the end of the cancellation clears the mark");
+        UT_ASSERT(c, !xsink, "the cancellation raises no exception");
+        {
+            AutoLocker al(ctrl->m);
+            UT_ASSERT(c, ctrl->canceling_programs.empty(), "no Program is recorded as canceled after the call");
+        }
+    }
+
+    //! a dispatcher that is stopped while it holds release items parked for a Program releases them in that Program
+    /** as the clear of the Program's mark does (qore#7311): a stop() made while the Program is canceled (a destructor
+        that a delivery of cancelByProgram() runs can stop the controller) released them outside of it, in the
+        stopping thread's Program.  The items are parked for a Program other than this test's, so that the Program
+        that the release runs in shows where it was made.
+    */
+    static void stopParkedCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        // released after the controller's dispatcher, which holds a reference of it for its parked item
+        ReferenceHolder<QoreProgram> pgm(new QoreProgram(QoreParseOptions(PO_DEFAULT)), &xsink);
+        {
+            Ctrl* ctrl = newCtrl(xsink);
+            CtrlRelease cr{ctrl, xsink};
+            Disp* cd = ctrl->call_dispatcher.load();
+            int released = 0;
+            int released_in_program = 0;
+            QoreProgram* p = *pgm;
+            Disp::dbgSetReleaseHook([&released, &released_in_program, p]() {
+                ++released;
+                if (getProgram() == p) {
+                    ++released_in_program;
+                }
+            });
+            queueItem(cd, Disp::DT_RELEASE, p, "o7311");
+            cd->markProgramShuttingDown(p, &xsink);
+            UT_ASSERT_EQ(c, 1, (int)cd->dbgParkedReleases(p), "the mark parks the release item");
+            ctrl->stop(&xsink);
+            UT_ASSERT_EQ(c, 1, released, "the stop of the dispatcher releases the parked release item");
+            UT_ASSERT_EQ(c, 1, released_in_program, "the parked release item is released in its Program");
+            UT_ASSERT(c, !xsink, "the mark and the stop raise no exception");
+            xsink.clear();
+        }
+        pgm.release()->waitForTerminationAndDeref(&xsink);
+        xsink.clear();
     }
 
     //! 2: a mark whose allocation fails changes nothing
@@ -10345,6 +10741,135 @@ private:
             UT_ASSERT(c, ctrl->retired_dispatchers.empty(), "A's cancellation deleted it when it returned");
         }
         UT_ASSERT(c, !xsink, "the cancellations raise no exception");
+    }
+
+    //! the shared state of stopWaiterCase()
+    struct StopWaiterArg {
+        Ctrl* ctrl;
+        QoreProgram* pgm;
+        bool a_stopped = false;
+        bool b_stopped = false;
+        AsyncIoPreservedSubmitTest::Signal a_in_release;
+        AsyncIoPreservedSubmitTest::Signal b_in_release;
+        AsyncIoPreservedSubmitTest::Signal checked;
+        AsyncIoPreservedSubmitTest::Signal done;
+    };
+
+    //! thread A of stopWaiterCase(): it waits in stop() with the dispatcher further up its stack
+    static void stopWaiterThread(ExceptionSink* xsink, void* p) {
+        StopWaiterArg& arg = *static_cast<StopWaiterArg*>(p);
+        // the hook is per thread
+        Disp::dbgSetReleaseHook([&arg]() {
+            if (!arg.a_stopped) {
+                arg.a_stopped = true;
+                arg.a_in_release.post();
+                // B's cancellation is in progress, so this stop() waits for it
+                arg.b_in_release.wait(30000);
+                ExceptionSink stop_xsink;
+                arg.ctrl->stop(&stop_xsink);
+                // stays in its cancellation until the other thread has checked that the dispatcher is kept
+                arg.checked.wait(30000);
+            }
+        });
+        arg.ctrl->cancelByProgram(arg.pgm, xsink);
+        Disp::dbgSetReleaseHook(std::function<void()>());
+        xsink->clear();
+        arg.done.post();
+    }
+
+    //! 4c: a cancellation that retires the dispatcher and returns does not delete it while another thread's
+    //! cancellation waits in stop() with that dispatcher further up its stack (qore#6703)
+    static void stopWaiterCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        UT_ASSERT(c, !xsink, "the controller is created");
+        if (xsink) {
+            return;
+        }
+        Disp* cd = ctrl->call_dispatcher.load();
+        QoreProgram* pgm = getProgram();
+        StopWaiterArg arg;
+        arg.ctrl = ctrl;
+        arg.pgm = pgm;
+        queueItem(cd, Disp::DT_RELEASE, pgm);
+        Disp::dbgSetReleaseHook([&arg]() {
+            if (!arg.b_stopped) {
+                arg.b_stopped = true;
+                arg.b_in_release.post();
+                {
+                    AutoLocker al(arg.ctrl->m);
+                    while (arg.ctrl->program_cancels_in_stop < 1) {
+                        if (arg.ctrl->program_cancels_cond.wait2(arg.ctrl->m, 30000)) {
+                            break;
+                        }
+                    }
+                }
+                ExceptionSink stop_xsink;
+                arg.ctrl->stop(&stop_xsink);
+            }
+        });
+        int tid = q_start_thread(&xsink, stopWaiterThread, &arg);
+        UT_ASSERT(c, tid != -1 && !xsink, "thread A starts");
+        // if it started, thread A uses this frame until it has ended
+        if (tid == -1) {
+            Disp::dbgSetReleaseHook(std::function<void()>());
+            xsink.clear();
+            return;
+        }
+        UT_ASSERT(c, arg.a_in_release.wait(30000), "thread A releases its work item");
+        // the mark takes the item queued here, and the clear of this cancellation releases it
+        queueItem(cd, Disp::DT_RELEASE, pgm);
+        ctrl->cancelByProgram(pgm, &xsink);
+        {
+            AutoLocker al(ctrl->m);
+            UT_ASSERT_EQ(c, 1, (int)ctrl->retired_dispatchers.size(),
+                "the dispatcher is kept while thread A's cancellation can use it");
+        }
+        arg.checked.post();
+        // thread A uses this frame and the controller: this function cannot return while it runs
+        if (!arg.done.wait(120000)) {
+            fputs("stopWaiterCase: thread A's cancellation did not return\n", stderr);
+            abort();
+        }
+        Disp::dbgSetReleaseHook(std::function<void()>());
+        UT_ASSERT(c, arg.b_stopped, "the second cancellation stopped the controller");
+        {
+            AutoLocker al(ctrl->m);
+            UT_ASSERT(c, ctrl->retired_dispatchers.empty(), "the last cancellation to return deleted the dispatcher");
+            UT_ASSERT_EQ(c, 0, ctrl->cancel_by_program_scopes, "no cancellation is counted after they returned");
+        }
+        UT_ASSERT(c, !xsink, "the cancellations raise no exception");
+    }
+
+    //! 4d: a forked child leaves a cancellation's scope without the controller's lock, which a thread that does not
+    //! exist in the child can hold (qore#6703)
+    static void forkedScopeCase(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        Ctrl* ctrl = newCtrl(xsink);
+        CtrlRelease cr{ctrl, xsink};
+        std::unique_ptr<Ctrl::CancelByProgramScope> scope(new Ctrl::CancelByProgramScope(ctrl));
+        pid_t pid;
+        {
+            AutoLocker al(ctrl->m);
+            pid = fork();
+            if (!pid) {
+                // ended by the signal if the scope waits for the lock
+                alarm(10);
+                scope.reset();
+                _exit(0);
+            }
+        }
+        UT_ASSERT(c, pid > 0, "fork() succeeds");
+        if (pid > 0) {
+            int status = 0;
+            pid_t waited;
+            do {
+                waited = waitpid(pid, &status, 0);
+            } while (waited == -1 && errno == EINTR);
+            UT_ASSERT(c, waited == pid && WIFEXITED(status) && !WEXITSTATUS(status),
+                "the child leaves the scope without the lock");
+        }
     }
 
     //! 4: a destructor that the clear runs stops the controller: the dispatcher in use is not deleted
@@ -16000,16 +16525,19 @@ static void ut_manager_streaming_repeats_on_closed_reused_connection(UnitTestCou
     xsink.clear();
 }
 
-// The repeat is limited as in request(): a request that is not idempotent, or whose closed connection had not
-// served a request, fails with the connection's refusal, and the closed connection is evicted.
-static void ut_manager_streaming_does_not_repeat_unsafe_requests(UnitTestCounters& c) {
+// The repeat is limited as in request(): a request refused at its submit was not sent, so it is repeated whatever its
+// method (RFC 9110 section 9.2.2, qore#7385), but only when its closed connection had served a request; a request on
+// a connection that served none fails with the connection's refusal.  The closed connection is evicted either way.
+static void ut_manager_streaming_repeat_limits(UnitTestCounters& c) {
     struct {
         const char* method;
         bool served;
+        bool repeated;
         const char* label;
     } cases[] = {
-        {"POST", true, "a POST request"},
-        {"GET", false, "a request on a connection that served none"},
+        {"POST", true, true, "a POST request refused at its submit"},
+        {"GET", false, false, "a request on a connection that served none"},
+        {"POST", false, false, "a POST request on a connection that served none"},
     };
     for (auto& tc : cases) {
         ExceptionSink xsink;
@@ -16034,21 +16562,38 @@ static void ut_manager_streaming_does_not_repeat_unsafe_requests(UnitTestCounter
         mgr->addPooledForOrigin(*conn, "127.0.0.1", server.port, false);
 
         QoreChannel* channel_raw = nullptr;
+        bool reused = true;
         int64_t stream_id = mgr->requestStreaming(tc.method, "http", "127.0.0.1", server.port, "/", nullptr,
-            nullptr, 0, channel_raw, &xsink, nullptr, nullptr);
+            nullptr, 0, channel_raw, &xsink, nullptr, &reused);
         ReferenceHolder<QoreChannel> channel(channel_raw, &xsink);
         std::string label = tc.label;
-        UT_ASSERT(c, stream_id < 0 && !channel_raw, (label + " fails").c_str());
-        UT_ASSERT(c, xsink.isException(), (label + ": the refusal reaches the caller").c_str());
-        if (xsink.isException()) {
-            QoreStringValueHelper err(xsink.getExceptionErr());
-            UT_ASSERT(c, !strcmp(err->c_str(), "HTTPCLIENT-STATE-ERROR"),
-                (label + ": the error of the closed connection").c_str());
+        if (tc.repeated) {
+            UT_ASSERT(c, !xsink, (label + ": the request is repeated instead of failing").c_str());
+            UT_ASSERT(c, stream_id >= 0 && channel_raw, (label + ": the repeated request is submitted").c_str());
+            if (channel_raw) {
+                UT_ASSERT_EQ(c, (int64)200, ut_read_streaming_status(channel_raw, &xsink),
+                    (label + ": the repeated request is answered on a new connection").c_str());
+                channel_raw->close();
+            }
+            UT_ASSERT(c, !reused, (label + ": a repeated request is not reported as submitted on a reused "
+                "connection").c_str());
+        } else {
+            UT_ASSERT(c, stream_id < 0 && !channel_raw, (label + " fails").c_str());
+            UT_ASSERT(c, xsink.isException(), (label + ": the refusal reaches the caller").c_str());
+            if (xsink.isException()) {
+                QoreStringValueHelper err(xsink.getExceptionErr());
+                UT_ASSERT(c, !strcmp(err->c_str(), "HTTPCLIENT-STATE-ERROR"),
+                    (label + ": the error of the closed connection").c_str());
+            }
         }
         xsink.clear();
         UT_ASSERT_EQ(c, 1, conn->getSubmitCalls(), (label + ": the closed connection was used once").c_str());
-        UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), (label + ": the closed connection is evicted").c_str());
-        UT_ASSERT_EQ(c, 0, server.accepted.load(), (label + ": the request is not repeated").c_str());
+        // the closed connection is evicted; a repeated request leaves the new connection that served it in the pool
+        UT_ASSERT_EQ(c, tc.repeated ? 1 : 0, mgr->getPoolSize(),
+            (label + ": the closed connection is evicted").c_str());
+        UT_ASSERT_EQ(c, tc.repeated ? 1 : 0, server.accepted.load(),
+            (label + (tc.repeated ? ": the request was repeated on one new connection"
+                : ": the request is not repeated")).c_str());
         server.wakeUnused();
         mgr->closeAll(&xsink);
         xsink.clear();
@@ -19547,29 +20092,7 @@ static QoreValue f_dbg_close_socket_at_next_ssl_io(const QoreListNode* params, R
 
 //! returns the number of bytes in the send buffer of \a fd that the peer has not acknowledged, or 0 if unknown
 static int64 dbg_unacknowledged_bytes(int fd) {
-#ifdef DARWIN
-    int n = 0;
-    socklen_t len = sizeof n;
-    return getsockopt(fd, SOL_SOCKET, SO_NWRITE, &n, &len) || n < 0 ? 0 : n;
-#elif defined(TIOCOUTQ)
-    int n = 0;
-    if (::ioctl(fd, TIOCOUTQ, &n) || n <= 0) {
-        return 0;
-    }
-#if defined(__linux__) && defined(TCP_INFO)
-    // the count is the difference of the sequence numbers, which includes the FIN of a socket shut down for writing:
-    // it is not data, and a peer whose window is 0 can take it (Linux 6.10 or later accepts a bare FIN then)
-    struct tcp_info ti;
-    socklen_t len = sizeof ti;
-    if (!getsockopt(fd, IPPROTO_TCP, TCP_INFO, &ti, &len)
-            && (ti.tcpi_state == TCP_FIN_WAIT1 || ti.tcpi_state == TCP_CLOSING || ti.tcpi_state == TCP_LAST_ACK)) {
-        --n;
-    }
-#endif
-    return n;
-#else
-    return 0;
-#endif
+    return qore_socket_private::getUnacknowledgedBytes(fd);
 }
 
 //! returns the receive window that the peer last advertised for \a fd, in bytes, or -1 if the system does not tell
@@ -19812,6 +20335,29 @@ static QoreValue f_dbg_force_ssl_error_ssl(const QoreListNode* params, RuntimeCo
         return QoreValue();
     }
     qore_socket_object_private(sock).dbgForceSslErrorSslAtNextWrite();
+    return QoreValue();
+}
+
+//! Debug-only: the next TLS write of a socket finds the socket buffer full, so its ciphertext is staged, and the
+//! drain of the staged ciphertext fails as when the peer reset the connection (errno EPIPE)
+/** The write is reported as a write that the peer's reset made fail without staging is: SOCKET-SSL-ERROR with the
+    errno, the socket staying open (qore#7383: macOS stages such a write when its smaller send buffer fills first).
+    DEBUG builds only.
+*/
+static QoreValue f_dbg_force_staged_write_failure(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreSocketObject> sock(obj
+        ? reinterpret_cast<QoreSocketObject*>(const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET,
+            xsink))
+        : nullptr, xsink);
+    if (*xsink || !sock) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_force_staged_write_failure() requires a Socket argument");
+        }
+        return QoreValue();
+    }
+    qore_socket_object_private(sock).dbgForceStagedWriteFailure();
     return QoreValue();
 }
 
@@ -20247,6 +20793,84 @@ static QoreValue f_dbg_async_io_wait_owner_flush_blocked(const QoreListNode* par
     return ctrl->dbgWaitOwnerFlushBlocked(static_cast<int>(timeout_ms));
 }
 
+//! Returns the global async I/O controller (referenced) for a debug hook, or nullptr with an exception raised
+static AsyncIoControllerPriv* dbg_async_io_ctrl(ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-ERROR", "no async I/O controller");
+        }
+        return nullptr;
+    }
+    return static_cast<AsyncIoControllerPriv*>(ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink));
+}
+
+//! Debug-only: holds the I/O threads of the global async I/O controller before they drain their command queues
+//! (True), or releases them (False); clear it in an on_exit block, as a held thread processes no command (qore#7010)
+static QoreValue f_dbg_async_io_hold_io_commands(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(dbg_async_io_ctrl(xsink), xsink);
+    if (ctrl) {
+        ctrl->dbgHoldIoCommands(get_param_value(params, 0).getAsBool());
+    }
+    return QoreValue();
+}
+
+//! Debug-only: waits until the first I/O thread is held before its command queue; False if the wait timed out
+static QoreValue f_dbg_async_io_wait_io_commands_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(dbg_async_io_ctrl(xsink), xsink);
+    if (!ctrl) {
+        return QoreValue();
+    }
+    return ctrl->dbgWaitIoCommandsHeld(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+}
+
+//! Debug-only: cancels the operations of the owner on the held first I/O thread, as code there that runs for the
+//! given application (-1 none, 0 trusted code), before the thread processes its queued commands; returns the count
+static QoreValue f_dbg_async_io_cancel_owner_on_io_thread(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(dbg_async_io_ctrl(xsink), xsink);
+    if (!ctrl) {
+        return QoreValue();
+    }
+    QoreStringValueHelper owner(get_param_value(params, 0));
+    int rc_count = ctrl->dbgCancelOwnerOnIoThread(owner->c_str(), get_param_value(params, 1).getAsBigInt(),
+        static_cast<int>(get_param_value(params, 2).getAsBigInt()), xsink);
+    return *xsink ? QoreValue() : QoreValue(static_cast<int64>(rc_count));
+}
+
+//! Debug-only: queues a cancel of the operations of the owner, as code that runs for the given application (-1
+//! none, 0 trusted code) requests it on another I/O thread, to the held first I/O thread, which processes it when it
+//! is released, before the commands queued after it
+static QoreValue f_dbg_async_io_queue_cancel_owner(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(dbg_async_io_ctrl(xsink), xsink);
+    if (ctrl) {
+        QoreStringValueHelper owner(get_param_value(params, 0));
+        ctrl->dbgQueueCancelOwner(owner->c_str(), get_param_value(params, 1).getAsBigInt(), xsink);
+    }
+    return QoreValue();
+}
+
+//! Debug-only: returns the generation of the work that added the timer of the global async I/O controller with the
+//! given ID (0 for a timer that no sandboxed code may cancel by its generation), or -1 if there is no such timer
+//! (qore#7010)
+static QoreValue f_dbg_async_io_timer_adder_gen(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 id = get_param_value(params, 0).getAsBigInt();
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    return ctrl->dbgTimerAdderGen(id);
+}
+
 //! Debug-only: the number of operation objects that the async I/O controllers have registered (qore#6531)
 /** The registration of an operation without a C++ poll operation by its object ends with the operation; a test
     checks with it that a submission that is not started leaves none behind (qore#7167)
@@ -20293,6 +20917,61 @@ static QoreValue f_dbg_async_io_wait_on_complete_queued(const QoreListNode* para
         return QoreValue();
     }
     return ctrl->dbgWaitOnCompleteQueued(count, static_cast<int>(timeout_ms));
+}
+
+//! Debug-only: returns True if the async I/O controller or a controller-backed sequence has a claim on the Socket
+/** No public call of the Socket class reports the claim, which a poll operation holds until it is cleaned up
+*/
+static QoreValue f_dbg_socket_has_async_io_owner(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreSocketObject> sock(reinterpret_cast<QoreSocketObject*>(
+        const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET, xsink)), xsink);
+    if (!sock) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-ERROR", "the argument is not a Socket object");
+        }
+        return QoreValue();
+    }
+    my_socket_priv* sp = my_socket_priv::getPriv(**sock);
+    AutoLocker al(sp->m);
+    return sp->hasAsyncIoOwner();
+}
+
+//! Debug-only: requests a pause at a point of the cancellation of a Program's async I/O operations, or ends it
+/** The points are those of AsyncIoControllerPriv::DbgCancelPausePoint: 0, a callback worker that has taken a step of
+    an operation waits before it enters the operation's Program, until the cancellation of the Program's operations
+    has deferred the operation's cancellation; 1, an I/O thread waits before it runs a cancellation deferred until the
+    result of the operation's step that no caller waits for, until the pause is ended; 2, an I/O thread waits after a
+    socket cancel has started to wait for an operation's step, until the pause is ended; 3, the caller of the
+    cancellation waits before it cancels the operations handed back to it, until the pause is ended; 4, a stopping I/O
+    thread waits before its last command drain; 5, the caller of the cancellation waits after it has sent its commands;
+    6, an I/O thread waits before it drains its commands; 7 and 8 do not pause, and record that stop() waits for a
+    cancellation in progress and that an idle I/O thread stays for a cancellation that waits for a step (qore#6703).  With @a pause
+    false, the pause is ended (or cancelled if not taken yet), and the function returns True if a thread took it.
+    A test must end the pauses that it requests (also when it fails), or the thread waits until the process exits.
+*/
+static QoreValue f_dbg_async_io_pause_cancel_point(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 point = get_param_value(params, 0).getAsBigInt();
+    if (point < 0 || point >= AsyncIoControllerPriv::DBG_CANCEL_POINT_COUNT) {
+        xsink->raiseException("DBG-ERROR", "invalid cancellation pause point " QLLD, point);
+        return QoreValue();
+    }
+    return AsyncIoControllerPriv::dbgPauseCancelPoint(static_cast<int>(point), get_param_value(params, 1).getAsBool());
+}
+
+//! Debug-only: waits until a thread has taken the pause requested at a point of the cancellation of a Program's async
+//! I/O operations (see dbg_async_io_pause_cancel_point()); returns False if none did when the timeout elapsed
+static QoreValue f_dbg_async_io_wait_cancel_point(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 point = get_param_value(params, 0).getAsBigInt();
+    if (point < 0 || point >= AsyncIoControllerPriv::DBG_CANCEL_POINT_COUNT) {
+        xsink->raiseException("DBG-ERROR", "invalid cancellation pause point " QLLD, point);
+        return QoreValue();
+    }
+    return AsyncIoControllerPriv::dbgWaitCancelPointTaken(static_cast<int>(point),
+        static_cast<int>(get_param_value(params, 1).getAsBigInt()));
 }
 
 //! Debug-only: advances the QUIC test clock of the process; see qore_quic_test_advance_clock()
@@ -24615,6 +25294,140 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
 
 #ifdef DEBUG
 //! A freshly generated QUIC batch has already armed ngtcp2's pacing timer before the poll deadline is read.
+//! The stateless resets of a QUIC listener (qore#6931): QoreDatagramDispatcher
+/** The static key of the stateless resets is derived from the listener's private key: the same private key gives the
+    same tokens (a restarted server resets the connections of the server before it), another one other tokens, and
+    the key is not the private key itself; a reset answers only a short-header packet, is smaller than it, ends with
+    the token of its connection ID and is rate-limited.
+*/
+class QuicStatelessResetTest {
+    typedef QoreDatagramDispatcher Disp;
+
+public:
+    static void run(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        ReferenceHolder<QoreSSLPrivateKey> k1(newKey(xsink), &xsink);
+        ReferenceHolder<QoreSSLPrivateKey> k2(newKey(xsink), &xsink);
+        UT_ASSERT(c, k1 && k2 && !xsink, "stateless reset: the test keys are generated");
+        if (!k1 || !k2 || xsink) {
+            xsink.clear();
+            return;
+        }
+        Disp d1, d1b, d2, none;
+        UT_ASSERT(c, d1.ensureStatelessResetKey(*k1) && d1b.ensureStatelessResetKey(*k1)
+            && d2.ensureStatelessResetKey(*k2), "stateless reset: the keys are derived");
+        UT_ASSERT(c, d1.ensureStatelessResetKey(*k1), "stateless reset: a second derivation keeps the key");
+        UT_ASSERT(c, !none.ensureStatelessResetKey(nullptr) && !none.hasStatelessResetKey(),
+            "stateless reset: no key without a private key");
+
+        uint8_t cid[Disp::ServerCidLen];
+        UT_ASSERT(c, RAND_bytes(cid, sizeof(cid)) == 1, "stateless reset: a connection ID is made");
+        uint8_t t1[NGTCP2_STATELESS_RESET_TOKENLEN], t1b[NGTCP2_STATELESS_RESET_TOKENLEN],
+            t2[NGTCP2_STATELESS_RESET_TOKENLEN], t3[NGTCP2_STATELESS_RESET_TOKENLEN];
+        UT_ASSERT(c, d1.makeStatelessResetToken(cid, sizeof(cid), t1) && d1b.makeStatelessResetToken(cid,
+            sizeof(cid), t1b) && d2.makeStatelessResetToken(cid, sizeof(cid), t2), "stateless reset: tokens are made");
+        UT_ASSERT(c, !memcmp(t1, t1b, sizeof(t1)), "stateless reset: the same private key gives the same token");
+        UT_ASSERT(c, memcmp(t1, t2, sizeof(t1)), "stateless reset: another private key gives another token");
+        uint8_t cid2[Disp::ServerCidLen];
+        memcpy(cid2, cid, sizeof(cid));
+        cid2[0] ^= 1;
+        UT_ASSERT(c, d1.makeStatelessResetToken(cid2, sizeof(cid2), t3) && memcmp(t1, t3, sizeof(t1)),
+            "stateless reset: another connection ID gets another token");
+        UT_ASSERT(c, !none.makeStatelessResetToken(cid, sizeof(cid), t3), "stateless reset: no token without a key");
+        UT_ASSERT(c, !d1.makeStatelessResetToken(cid, 0, t3), "stateless reset: no token for an empty connection ID");
+        // the key is derived, not the private key's DER itself
+        {
+            unsigned char* der = nullptr;
+            int derlen = i2d_PrivateKey(k1->getData(), &der);
+            ngtcp2_cid nc;
+            ngtcp2_cid_init(&nc, cid, sizeof(cid));
+            bool differs = derlen > 0 && !ngtcp2_crypto_generate_stateless_reset_token(t3, der,
+                static_cast<size_t>(derlen), &nc) && memcmp(t1, t3, sizeof(t1));
+            if (der) {
+                OPENSSL_clear_free(der, static_cast<size_t>(derlen));
+            }
+            UT_ASSERT(c, differs, "stateless reset: the token is not derived from the private key directly");
+        }
+
+        // a short-header packet of the connection ID
+        uint8_t pkt[1200];
+        UT_ASSERT(c, RAND_bytes(pkt, sizeof(pkt)) == 1, "stateless reset: a packet is made");
+        pkt[0] = 0x40 | (pkt[0] & 0x3f);
+        memcpy(pkt + 1, cid, sizeof(cid));
+        uint8_t out[Disp::StatelessResetMaxRandLen + NGTCP2_STATELESS_RESET_TOKENLEN];
+        size_t n = d1.makeStatelessReset(pkt, sizeof(pkt), out, sizeof(out), 1);
+        UT_ASSERT_EQ(c, (int)(Disp::StatelessResetMaxRandLen + NGTCP2_STATELESS_RESET_TOKENLEN), (int)n,
+            "stateless reset: a large packet gets a reset of the largest size");
+        UT_ASSERT(c, n && !memcmp(out + n - NGTCP2_STATELESS_RESET_TOKENLEN, t1, sizeof(t1)),
+            "stateless reset: the reset ends with the token of the connection ID");
+        UT_ASSERT(c, n && !(out[0] & 0x80) && (out[0] & 0x40),
+            "stateless reset: the reset has the form of a short-header packet");
+        n = d1.makeStatelessReset(pkt, 30, out, sizeof(out), 2);
+        UT_ASSERT_EQ(c, 29, (int)n, "stateless reset: the reset is smaller than a small packet");
+        n = d1.makeStatelessReset(pkt, 22, out, sizeof(out), 3);
+        UT_ASSERT_EQ(c, 21, (int)n, "stateless reset: the smallest packet that is answered gets the smallest reset");
+        UT_ASSERT_EQ(c, 0, (int)d1.makeStatelessReset(pkt, 21, out, sizeof(out), 4),
+            "stateless reset: a packet too small for a smaller reset gets none");
+        UT_ASSERT_EQ(c, 0, (int)d1.makeStatelessReset(pkt, sizeof(pkt), out, 20, 5),
+            "stateless reset: no reset without room for it");
+        pkt[0] |= 0x80;
+        UT_ASSERT_EQ(c, 0, (int)d1.makeStatelessReset(pkt, sizeof(pkt), out, sizeof(out), 6),
+            "stateless reset: a long-header packet gets no reset");
+        pkt[0] &= 0x7f;
+        UT_ASSERT_EQ(c, 0, (int)none.makeStatelessReset(pkt, sizeof(pkt), out, sizeof(out), 7),
+            "stateless reset: no reset without the key");
+
+        // the rate limit: a burst, then one more each refill time, up to the burst
+        Disp d3;
+        d3.ensureStatelessResetKey(*k1);
+        const uint64_t t0 = 1000;
+        int sent = 0;
+        for (int i = 0; i < Disp::StatelessResetBurst + 10; ++i) {
+            if (d3.makeStatelessReset(pkt, sizeof(pkt), out, sizeof(out), t0)) {
+                ++sent;
+            }
+        }
+        UT_ASSERT_EQ(c, Disp::StatelessResetBurst, sent, "stateless reset: a burst is limited");
+        UT_ASSERT_EQ(c, 0, (int)d3.makeStatelessReset(pkt, sizeof(pkt), out, sizeof(out),
+            t0 + Disp::StatelessResetRefillNs - 1), "stateless reset: none before the refill time");
+        UT_ASSERT(c, d3.makeStatelessReset(pkt, sizeof(pkt), out, sizeof(out), t0 + Disp::StatelessResetRefillNs),
+            "stateless reset: one more after the refill time");
+        UT_ASSERT_EQ(c, 0, (int)d3.makeStatelessReset(pkt, sizeof(pkt), out, sizeof(out),
+            t0 + Disp::StatelessResetRefillNs), "stateless reset: only one more");
+        sent = 0;
+        for (int i = 0; i < Disp::StatelessResetBurst + 10; ++i) {
+            if (d3.makeStatelessReset(pkt, sizeof(pkt), out, sizeof(out), t0 + 1000 * Disp::StatelessResetRefillNs)) {
+                ++sent;
+            }
+        }
+        UT_ASSERT_EQ(c, Disp::StatelessResetBurst, sent, "stateless reset: the refill is limited to the burst");
+    }
+
+private:
+    //! returns a new private key (EC P-256), or nullptr
+    static QoreSSLPrivateKey* newKey(ExceptionSink& xsink) {
+        EVP_PKEY* pkey = EVP_PKEY_Q_keygen(nullptr, nullptr, "EC", "P-256");
+        if (!pkey) {
+            return nullptr;
+        }
+        unsigned char* der = nullptr;
+        int derlen = i2d_PrivateKey(pkey, &der);
+        EVP_PKEY_free(pkey);
+        if (derlen <= 0 || !der) {
+            return nullptr;
+        }
+        SimpleRefHolder<BinaryNode> bin(new BinaryNode);
+        bin->append(der, static_cast<size_t>(derlen));
+        OPENSSL_clear_free(der, static_cast<size_t>(derlen));
+        QoreSSLPrivateKey* k = new QoreSSLPrivateKey(*bin, &xsink);
+        if (xsink) {
+            k->deref(&xsink);
+            return nullptr;
+        }
+        return k;
+    }
+};
+
 class QuicPacketPacingTest {
 public:
     static void run(UnitTestCounters& c) {
@@ -24702,7 +25515,8 @@ static void ut_quic_send_batch_take_back(UnitTestCounters& c) {
             batch.addPacket(data, sizeof(data));
         }
     };
-    // the send system call of the sender's socket to fail (1 = the first), counted from 0 for each case
+    // the datagram of the sender's socket whose send fails (1 = the first), counted from 0 for each case: the test
+    // hook is called once for each datagram, on every platform
     int calls = 0;
     int fail_call = 0;
     // called when the send fails, before sendQuicPacketsBatch() returns
@@ -24740,15 +25554,14 @@ static void ut_quic_send_batch_take_back(UnitTestCounters& c) {
     UT_ASSERT_EQ(c, 0LL, static_cast<long long>(qore_quic_test_undelivered_to(to)),
         "QUIC send take-back: a failed send leaves no datagram to wait for");
 
-    // a send that fails after some datagrams were sent takes back the others; one system call sends up to
-    // QUIC_COMMON_MAX_SEND_BATCH datagrams with sendmmsg(), and one datagram with sendmsg() or sendto()
+    // a send that fails after some datagrams were sent takes back the others; the second datagram fails, also in a
+    // batch larger than one sendmmsg() call
     QuicPacketBatch many;
     make_batch(many, QUIC_COMMON_MAX_SEND_BATCH + 1);
     calls = 0;
     fail_call = 2;
     int sent = sendQuicPacketsBatch(sfd, many, to, rlen);
-    UT_ASSERT(c, sent > 0 && sent <= QUIC_COMMON_MAX_SEND_BATCH,
-        "QUIC send take-back: a send that fails after the first sends part of the batch");
+    UT_ASSERT_EQ(c, 1, sent, "QUIC send take-back: a send that fails after the first sends part of the batch");
     UT_ASSERT_EQ(c, static_cast<long long>(sent), static_cast<long long>(qore_quic_test_undelivered_to(to)),
         "QUIC send take-back: only the datagrams sent are waited for after a partial send");
     UT_ASSERT_EQ(c, sent, receive(sent), "QUIC send take-back: the datagrams of the partial send are read");
@@ -24763,8 +25576,7 @@ static void ut_quic_send_batch_take_back(UnitTestCounters& c) {
         qore_quic_test_set_counting(true);
     };
     sent = sendQuicPacketsBatch(sfd, many, to, rlen);
-    UT_ASSERT(c, sent > 0 && sent <= QUIC_COMMON_MAX_SEND_BATCH,
-        "QUIC send take-back: a send fails after counting started");
+    UT_ASSERT_EQ(c, 1, sent, "QUIC send take-back: a send fails after counting started");
     UT_ASSERT_EQ(c, 0LL, static_cast<long long>(qore_quic_test_undelivered_to(to)),
         "QUIC send take-back: datagrams not counted are not taken back");
     // the datagrams sent are read without counting them, as they were not counted as sent
@@ -24809,6 +25621,191 @@ static void ut_quic_send_batch_take_back(UnitTestCounters& c) {
     UT_ASSERT(c, woken, "QUIC send take-back: the datagrams taken back woke the wait");
     UT_ASSERT_EQ(c, 0LL, static_cast<long long>(qore_quic_test_undelivered_to(to)),
         "QUIC send take-back: no datagram is waited for after the wait");
+}
+#endif
+
+#ifdef DEBUG
+//! The datagrams that a QUIC send does not send are kept and sent again, and ENOBUFS waits with a backoff (qore#7414)
+/** ngtcp2 counts each datagram that it writes as sent, so one that a send dropped was lost to the connection, which
+    recovered it only with its loss recovery (PTO).  A send that failed with ENOBUFS raised QUIC-SEND-ERROR, and a
+    datagram whose send failed after others were sent was dropped by the server's timer flush.
+*/
+static void ut_quic_send_keeping_unsent(UnitTestCounters& c) {
+    int rfd = socket(AF_INET, SOCK_DGRAM, 0);
+    int sfd = socket(AF_INET, SOCK_DGRAM, 0);
+    ON_BLOCK_EXIT([rfd, sfd] () {
+        qore_quic_test_set_send_hook({});
+        if (rfd >= 0) {
+            ::close(rfd);
+        }
+        if (sfd >= 0) {
+            ::close(sfd);
+        }
+    });
+    struct sockaddr_in raddr = {};
+    raddr.sin_family = AF_INET;
+    raddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    socklen_t rlen = sizeof(raddr);
+    // a datagram that is not delivered fails the test instead of blocking it
+    struct timeval tv = {30, 0};
+    if (rfd < 0 || sfd < 0 || ::bind(rfd, reinterpret_cast<struct sockaddr*>(&raddr), sizeof(raddr))
+            || getsockname(rfd, reinterpret_cast<struct sockaddr*>(&raddr), &rlen)
+            || setsockopt(rfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv))) {
+        UT_ASSERT(c, false, "QUIC send keeping unsent: the UDP sockets are made");
+        return;
+    }
+    const struct sockaddr* to = reinterpret_cast<const struct sockaddr*>(&raddr);
+
+    // a batch of n datagrams, each with its number as its content
+    auto make_batch = [](QuicPacketBatch& batch, int n) {
+        batch.clear();
+        for (int i = 0; i < n; ++i) {
+            uint8_t data[4] = {'q', 'u', static_cast<uint8_t>(i >> 8), static_cast<uint8_t>(i)};
+            batch.addPacket(data, sizeof(data));
+        }
+    };
+    // reads n datagrams and checks that they are the datagrams [first, first + n) in order
+    auto receive = [rfd](int first, int n) -> bool {
+        for (int i = first; i < first + n; ++i) {
+            uint8_t buf[16];
+            ssize_t len = recv(rfd, buf, sizeof(buf), 0);
+            if (len != 4 || buf[2] != static_cast<uint8_t>(i >> 8) || buf[3] != static_cast<uint8_t>(i)) {
+                return false;
+            }
+        }
+        return true;
+    };
+    // returns true if the receiver has no datagram waiting
+    auto none_waiting = [rfd]() -> bool {
+        uint8_t buf[16];
+        return recv(rfd, buf, sizeof(buf), MSG_DONTWAIT) < 0 && (errno == EAGAIN || errno == EWOULDBLOCK);
+    };
+
+    // the datagrams of the sender's socket whose sends fail, counted from 1 for each case, and their error
+    int calls = 0;
+    std::set<int> fail;
+    int fail_error = ENOBUFS;
+    qore_quic_test_set_send_hook([sfd, &calls, &fail, &fail_error] (int fd) -> int {
+        if (fd != sfd) {
+            return 0;
+        }
+        return fail.count(++calls) ? fail_error : 0;
+    });
+
+    const uint64_t now = QuicSession::timestamp();
+    QuicPacketBatch batch;
+    QuicSendBackoff backoff;
+
+    // all datagrams are sent
+    make_batch(batch, 3);
+    calls = 0;
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, now, to, rlen) == QuicSendResult::Sent,
+        "QUIC send keeping unsent: a batch is sent");
+    UT_ASSERT(c, batch.empty(), "QUIC send keeping unsent: the datagrams sent are removed");
+    UT_ASSERT(c, receive(0, 3), "QUIC send keeping unsent: the datagrams are received");
+
+    // ENOBUFS on a middle datagram keeps it and those after it, and sends them after the delay
+    const int n = QUIC_COMMON_MAX_SEND_BATCH + 4;
+    make_batch(batch, n);
+    calls = 0;
+    fail = {3};
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, now, to, rlen) == QuicSendResult::Backoff,
+        "QUIC send keeping unsent: ENOBUFS on a middle datagram waits with a backoff");
+    UT_ASSERT_EQ(c, n - 2, batch.size(), "QUIC send keeping unsent: the datagrams not sent are kept");
+    UT_ASSERT_EQ(c, (long long)QuicSendBackoff::FirstDelayNs, (long long)backoff.delay(),
+        "QUIC send keeping unsent: the first delay");
+    UT_ASSERT_EQ(c, (long long)(now + QuicSendBackoff::FirstDelayNs), (long long)backoff.retryAt(),
+        "QUIC send keeping unsent: the time to send again");
+    UT_ASSERT(c, receive(0, 2), "QUIC send keeping unsent: the datagrams before the failed one are received");
+    // nothing is sent before the time to send again
+    int calls_before = calls;
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, now + QuicSendBackoff::FirstDelayNs - 1, to,
+        rlen) == QuicSendResult::Backoff, "QUIC send keeping unsent: the send waits for its time");
+    UT_ASSERT_EQ(c, calls_before, calls, "QUIC send keeping unsent: nothing is sent before the time");
+    UT_ASSERT_EQ(c, n - 2, batch.size(), "QUIC send keeping unsent: the datagrams are still kept");
+    UT_ASSERT(c, none_waiting(), "QUIC send keeping unsent: no datagram is sent before the time");
+    // at its time, the datagrams kept are sent, in order, once each
+    fail.clear();
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, backoff.retryAt(), to, rlen)
+        == QuicSendResult::Sent, "QUIC send keeping unsent: the datagrams kept are sent at their time");
+    UT_ASSERT(c, batch.empty(), "QUIC send keeping unsent: no datagram is kept after they are sent");
+    UT_ASSERT_EQ(c, 0LL, (long long)backoff.retryAt(), "QUIC send keeping unsent: a send resets the backoff");
+    UT_ASSERT(c, receive(2, n - 2), "QUIC send keeping unsent: the datagrams kept are received in order");
+    UT_ASSERT(c, none_waiting(), "QUIC send keeping unsent: each datagram is received once");
+
+    // ENOBUFS on the first datagram keeps them all; the delay doubles with each failure in a row, up to its maximum
+    make_batch(batch, 2);
+    calls = 0;
+    fail = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    uint64_t t = now;
+    uint64_t expected = QuicSendBackoff::FirstDelayNs;
+    for (int i = 0; i < 10; ++i) {
+        UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, t, to, rlen) == QuicSendResult::Backoff,
+            "QUIC send keeping unsent: ENOBUFS on the first datagram waits with a backoff");
+        UT_ASSERT_EQ(c, (long long)expected, (long long)backoff.delay(),
+            "QUIC send keeping unsent: the delay doubles up to its maximum");
+        t = backoff.retryAt();
+        expected = std::min(expected * 2, QuicSendBackoff::MaxDelayNs);
+    }
+    UT_ASSERT_EQ(c, (long long)QuicSendBackoff::MaxDelayNs, (long long)backoff.delay(),
+        "QUIC send keeping unsent: the delay stops at its maximum");
+    UT_ASSERT_EQ(c, 2, batch.size(), "QUIC send keeping unsent: no datagram is dropped while the sends fail");
+    fail.clear();
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, t, to, rlen) == QuicSendResult::Sent,
+        "QUIC send keeping unsent: the datagrams are sent once the queue drains");
+    UT_ASSERT(c, receive(0, 2), "QUIC send keeping unsent: the datagrams are received after the backoff");
+    // the backoff starts again after a send
+    make_batch(batch, 1);
+    calls = 0;
+    fail = {1};
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, t, to, rlen) == QuicSendResult::Backoff,
+        "QUIC send keeping unsent: a later ENOBUFS waits with a backoff");
+    UT_ASSERT_EQ(c, (long long)QuicSendBackoff::FirstDelayNs, (long long)backoff.delay(),
+        "QUIC send keeping unsent: the backoff starts again after a send");
+    fail.clear();
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, backoff.retryAt(), to, rlen)
+        == QuicSendResult::Sent, "QUIC send keeping unsent: the datagram is sent");
+    UT_ASSERT(c, receive(0, 1), "QUIC send keeping unsent: the datagram is received");
+
+    // a full socket buffer (EAGAIN) waits for POLLOUT, with no backoff
+    fail_error = EAGAIN;
+    make_batch(batch, 3);
+    calls = 0;
+    fail = {1};
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, now, to, rlen) == QuicSendResult::WaitWritable,
+        "QUIC send keeping unsent: EAGAIN waits until the socket is writable");
+    UT_ASSERT_EQ(c, 3, batch.size(), "QUIC send keeping unsent: EAGAIN keeps the datagrams");
+    UT_ASSERT_EQ(c, 0LL, (long long)backoff.retryAt(), "QUIC send keeping unsent: EAGAIN has no backoff");
+    calls = 0;
+    fail = {2};
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, now, to, rlen) == QuicSendResult::WaitWritable,
+        "QUIC send keeping unsent: EAGAIN on a middle datagram waits until the socket is writable");
+    UT_ASSERT_EQ(c, 2, batch.size(), "QUIC send keeping unsent: EAGAIN on a middle datagram keeps the others");
+    fail.clear();
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, now, to, rlen) == QuicSendResult::Sent,
+        "QUIC send keeping unsent: the datagrams kept after EAGAIN are sent");
+    UT_ASSERT(c, receive(0, 3), "QUIC send keeping unsent: the datagrams kept after EAGAIN are received in order");
+
+    // another error is reported: at once on the first datagram, with the batch unchanged; after some datagrams were
+    // sent, by the send of the others
+    fail_error = EPERM;
+    make_batch(batch, 3);
+    calls = 0;
+    fail = {1};
+    errno = 0;
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, now, to, rlen) == QuicSendResult::Error,
+        "QUIC send keeping unsent: another error is reported");
+    UT_ASSERT_EQ(c, EPERM, errno, "QUIC send keeping unsent: errno is the error of the send");
+    UT_ASSERT_EQ(c, 3, batch.size(), "QUIC send keeping unsent: the batch is unchanged after an error");
+    calls = 0;
+    fail = {2, 3};
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, now, to, rlen) == QuicSendResult::WaitWritable,
+        "QUIC send keeping unsent: an error after a datagram was sent keeps the others");
+    UT_ASSERT_EQ(c, 2, batch.size(), "QUIC send keeping unsent: the datagrams after the error are kept");
+    UT_ASSERT(c, receive(0, 1), "QUIC send keeping unsent: the datagram before the error is received");
+    UT_ASSERT(c, sendQuicPacketsKeepingUnsent(sfd, batch, backoff, now, to, rlen) == QuicSendResult::Error,
+        "QUIC send keeping unsent: the next send reports the error");
+    UT_ASSERT(c, none_waiting(), "QUIC send keeping unsent: no datagram is sent after the error");
 }
 #endif
 
@@ -25256,7 +26253,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     QoreCaresSocketsTest::run(c);
     QoreCaresCheckTest::run(c);
     QuicPacketPacingTest::run(c);
+    QuicStatelessResetTest::run(c);
     ut_quic_send_batch_take_back(c);
+    ut_quic_send_keeping_unsent(c);
 #ifndef _Q_WINDOWS
     HappyEyeballsLayeredConnectTest::run(c);
 #endif
@@ -25323,7 +26322,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_request_evicts_connection_closed_on_submit(c);
     ut_manager_request_keeps_open_connection_that_refuses(c);
     ut_manager_streaming_repeats_on_closed_reused_connection(c);
-    ut_manager_streaming_does_not_repeat_unsafe_requests(c);
+    ut_manager_streaming_repeat_limits(c);
     ut_manager_streaming_abandon_releases_connection(c);
     ut_manager_new_connection_closed_before_reservation(c);
     ut_manager_closed_new_connection_detached(c);
@@ -27568,6 +28567,45 @@ static QoreValue f_dbg_hold_deref_last(const QoreListNode* params, RuntimeConfig
         xsink);
 }
 
+//! returns the reads of the size of the list or hash of the weak reference in the first entry of a list, given as
+//! it is held (qore#7375)
+/** The language reads a weak reference that it evaluates through its target; native code can give the weak reference
+    itself to the boolean conversion and to the complex type match, which read the size of its container.
+
+    @param holder a list whose first entry is a weak reference to a list or a hash
+
+    @return a hash: \c bool: the non-strict boolean conversion; \c "list<int>", \c "list<string>",
+    \c "hash<string, int>", \c "hash<string, string>": whether the value matches the type (an empty container with
+    no type matches any complex type of its kind)
+
+    @throw DBG-ARGUMENT-ERROR the first entry is not a weak reference to a list or a hash
+    @throw DEBUG-ERROR the build is not a debug build
+*/
+static QoreValue f_dbg_weak_reference_reads(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    const QoreListNode* holder = get_hard_value_param(params, 0).get<const QoreListNode>();
+    QoreValue v = holder->retrieveEntry(0);
+    if (v.getType() != NT_WEAKREF_LIST && v.getType() != NT_WEAKREF_HASH) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the first entry is a value of type '%s', not a weak reference to "
+            "a list or a hash", v.getFullTypeName());
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("bool", LexicalSemanticPolicy::getAsBoolDefault(v), xsink);
+    auto matches = [&](const char* name, const QoreTypeInfo* ti) {
+        rv->setKeyValue(name, QoreTypeInfo::runtimeAcceptsValue(ti, v) != QTI_NOT_EQUAL, xsink);
+    };
+    matches("list<int>", qore_get_complex_list_type(bigIntTypeInfo));
+    matches("list<string>", qore_get_complex_list_type(stringTypeInfo));
+    matches("hash<string, int>", qore_get_complex_hash_type(bigIntTypeInfo));
+    matches("hash<string, string>", qore_get_complex_hash_type(stringTypeInfo));
+    return rv.release();
+#else
+    xsink->raiseException("DEBUG-ERROR", "dbg_weak_reference_reads() is available in debug builds only");
+    return QoreValue();
+#endif
+}
+
 //! holds the next thread that starts to free a list or hash that has weak holders (qore#7198)
 /** The hold is taken once, in QoreListNode::derefImpl() or QoreHashNode::derefImpl(), when the last reference to a
     list or hash that weak references (":=") hold has been released and before its entries are freed; a reference
@@ -28765,6 +29803,78 @@ namespace {
 //! the HTTP/3 stream whose staged response data is held, set by dbg_quic_hold_stream_data(); session 0: none
 std::atomic<int64_t> dbg_quic_hold_session{0};
 std::atomic<int64_t> dbg_quic_hold_stream{-1};
+//! true: the held stream is released by the next Socket::flushQuicPendingData() of its session
+std::atomic<bool> dbg_quic_hold_until_flush{false};
+}
+
+std::atomic<int> qore_dbg_quic_idle_waiters{0};
+
+namespace {
+//! the lock and condition of the threads waiting in dbg_quic_wait_idle(), with the count of the wakes, so that a
+//! waiter that checks its predicate before it waits misses no wake (issue #7354)
+std::mutex dbg_quic_idle_m;
+std::condition_variable dbg_quic_idle_cv;
+uint64_t dbg_quic_idle_gen = 0;
+}
+
+void qore_dbg_quic_notify_idle_waiters() {
+    {
+        std::lock_guard<std::mutex> lk(dbg_quic_idle_m);
+        ++dbg_quic_idle_gen;
+    }
+    dbg_quic_idle_cv.notify_all();
+}
+
+namespace {
+//! the QUIC sessions recorded for dbg_quic_wait_idle(), by their ID
+std::mutex dbg_quic_sessions_m;
+std::map<int64_t, std::weak_ptr<QuicSession>> dbg_quic_sessions;
+}
+
+void qore_dbg_quic_register_session(const std::shared_ptr<QuicSession>& session) noexcept {
+    try {
+        std::lock_guard<std::mutex> lk(dbg_quic_sessions_m);
+        dbg_quic_sessions[session->getSessionId()] = session;
+    } catch (const std::exception& e) {
+        // the session works without its record: only dbg_quic_wait_idle() does not find it
+        printd(0, "qore_dbg_quic_register_session() session %lld: %s\n", (long long)session->getSessionId(),
+            e.what());
+    }
+}
+
+void qore_dbg_quic_unregister_session(int64_t session_id) noexcept {
+    try {
+        std::lock_guard<std::mutex> lk(dbg_quic_sessions_m);
+        dbg_quic_sessions.erase(session_id);
+    } catch (const std::exception& e) {
+        printd(0, "qore_dbg_quic_unregister_session() session %lld: %s\n", (long long)session_id, e.what());
+    }
+}
+
+//! waits until the predicate is true; it is checked again whenever qore_dbg_quic_notify_idle_waiters() is called
+/** The predicate is called without the lock of the waiters held, so it can take a session's lock
+
+    @return true if the predicate is true, false if the wait timed out
+*/
+static bool dbg_quic_wait_until(const std::function<bool()>& pred, int timeout_ms) {
+    qore_dbg_quic_idle_waiters.fetch_add(1, std::memory_order_acq_rel);
+    ON_BLOCK_EXIT([] { qore_dbg_quic_idle_waiters.fetch_sub(1, std::memory_order_acq_rel); });
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    while (true) {
+        uint64_t gen;
+        {
+            std::lock_guard<std::mutex> lk(dbg_quic_idle_m);
+            gen = dbg_quic_idle_gen;
+        }
+        // checked without the waiters' lock: it takes the session's lock, which a session holds when it wakes them
+        if (pred()) {
+            return true;
+        }
+        std::unique_lock<std::mutex> lk(dbg_quic_idle_m);
+        if (!dbg_quic_idle_cv.wait_until(lk, deadline, [gen] { return dbg_quic_idle_gen != gen; })) {
+            return false;
+        }
+    }
 }
 
 bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id) {
@@ -28779,10 +29889,13 @@ bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id) {
 
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID of a streaming response
+    @param until_flush if True, the next Socket::flushQuicPendingData() of the session releases the stream on the I/O
+    thread of its socket before it writes, so that the flush writes the data held (qore#7414)
 */
 static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     int64_t session_id = get_param_value(params, 0).getAsBigInt();
     int64_t stream_id = get_param_value(params, 1).getAsBigInt();
+    bool until_flush = get_param_value(params, 2).getAsBool();
     if (session_id <= 0 || stream_id < 0) {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_hold_stream_data(): invalid session ID %lld or stream "
             "ID %lld", (long long)session_id, (long long)stream_id);
@@ -28791,8 +29904,212 @@ static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, Runtime
     // the stream is set first, so that no other stream of the session matches meanwhile
     dbg_quic_hold_session.store(0, std::memory_order_release);
     dbg_quic_hold_stream.store(stream_id, std::memory_order_release);
+    dbg_quic_hold_until_flush.store(until_flush, std::memory_order_release);
     dbg_quic_hold_session.store(session_id, std::memory_order_release);
     return QoreValue();
+}
+
+void qore_dbg_quic_flush_releases_held(int64_t session_id) {
+    if (!dbg_quic_hold_until_flush.load(std::memory_order_acquire)
+            || dbg_quic_hold_session.load(std::memory_order_acquire) != session_id) {
+        return;
+    }
+    dbg_quic_hold_until_flush.store(false, std::memory_order_release);
+    dbg_quic_hold_session.store(0, std::memory_order_release);
+    dbg_quic_hold_stream.store(-1, std::memory_order_release);
+    QuicSession::dbgResumeHeldStreams();
+}
+
+//! waits until a QUIC session has no data in flight: its peer has acknowledged everything that it sent
+/** Lets a test submit data on a session that its peer is not about to answer, so that nothing but the session's own
+    write cycle sends what the data makes it send (issue #7354); the wait is woken when the session reads packets.
+    The session is given by its ID, as a handler of an HTTP/3 request has it, not by the listener's socket, which a
+    handler does not get.
+
+    @param session_id the QUIC session ID
+    @param timeout_ms the maximum time to wait in milliseconds
+
+    @return True if the session has no data in flight, False if the wait timed out
+
+    @throw QUIC-ERROR there is no such QUIC session
+*/
+static QoreValue f_dbg_quic_wait_idle(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t session_id = get_param_value(params, 0).getAsBigInt();
+    int64_t timeout_ms = get_param_value(params, 1).getAsBigInt();
+    if (session_id <= 0 || timeout_ms < 0 || timeout_ms > INT_MAX) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_wait_idle(): invalid session ID %lld or timeout %lld",
+            (long long)session_id, (long long)timeout_ms);
+        return QoreValue();
+    }
+    SocketSyncPoll::assertNotOnIoThread("Qore", "dbg_quic_wait_idle", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::shared_ptr<QuicSession> session;
+    {
+        std::lock_guard<std::mutex> lk(dbg_quic_sessions_m);
+        auto i = dbg_quic_sessions.find(session_id);
+        if (i != dbg_quic_sessions.end()) {
+            session = i->second.lock();
+        }
+    }
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "dbg_quic_wait_idle(): no QUIC session with id %lld",
+            (long long)session_id);
+        return QoreValue();
+    }
+    return dbg_quic_wait_until([&session]() { return !session->getBytesInFlight(); }, static_cast<int>(timeout_ms));
+}
+
+std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent{0};
+std::atomic<int64_t> qore_dbg_quic_stateless_resets_received{0};
+
+//! returns the stateless resets that the QUIC listeners of the process sent and that its QUIC clients received
+/** As a hash with the keys \c sent and \c received, counted since the process started (qore#6931)
+*/
+static QoreValue f_dbg_quic_stateless_reset_counts(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("sent", qore_dbg_quic_stateless_resets_sent.load(std::memory_order_relaxed), xsink);
+    h->setKeyValue("received", qore_dbg_quic_stateless_resets_received.load(std::memory_order_relaxed), xsink);
+    return h.release();
+}
+
+namespace {
+//! the datagrams that dbg_quic_fail_sends() makes fail (qore#7414)
+struct DbgQuicFailSends {
+    //! the port of the sockets whose datagrams are counted
+    int port = 0;
+    //! true: the port is the peer's (a connected client socket); false: the socket's own (a listener)
+    bool by_peer = false;
+    //! true: only the datagrams sent by Socket::flushQuicPendingData() are counted
+    bool flush_only = false;
+    //! the numbers of the datagrams that fail, counted from 1
+    std::set<int64_t> fail;
+    //! the error that they fail with
+    int err = 0;
+    //! the datagrams counted
+    int64_t seen = 0;
+    //! the datagrams that failed
+    int64_t failed = 0;
+};
+std::mutex dbg_quic_fail_sends_m;
+DbgQuicFailSends dbg_quic_fail_sends_state;
+}
+
+//! returns the port of a socket or of its peer, or -1 if it has none
+static int dbg_socket_port(int fd, bool peer) {
+    struct sockaddr_storage addr;
+    socklen_t len = sizeof(addr);
+    int rc = peer ? getpeername(fd, reinterpret_cast<struct sockaddr*>(&addr), &len)
+        : getsockname(fd, reinterpret_cast<struct sockaddr*>(&addr), &len);
+    if (rc) {
+        return -1;
+    }
+    if (addr.ss_family == AF_INET) {
+        return ntohs(reinterpret_cast<struct sockaddr_in*>(&addr)->sin_port);
+    }
+    if (addr.ss_family == AF_INET6) {
+        return ntohs(reinterpret_cast<struct sockaddr_in6*>(&addr)->sin6_port);
+    }
+    return -1;
+}
+
+//! makes the listed QUIC datagrams sent on the sockets of a port fail with an error, until dbg_quic_fail_sends_end()
+/** The datagrams are counted from 1 in the order in which they are sent; each failed datagram fails the send of it
+    and of the datagrams after it in the same send call, as a system call that fails does.  With \c flush_only, only
+    the datagrams sent by Socket::flushQuicPendingData() are counted (qore#7414)
+*/
+static QoreValue f_dbg_quic_fail_sends(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t port = get_param_value(params, 0).getAsBigInt();
+    bool by_peer = get_param_value(params, 1).getAsBool();
+    const QoreListNode* l = get_param_value(params, 2).get<const QoreListNode>();
+    int64_t err = get_param_value(params, 3).getAsBigInt();
+    bool flush_only = get_param_value(params, 4).getAsBool();
+    if (port <= 0 || port > 65535 || err <= 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_fail_sends(): invalid port %lld or error %lld",
+            (long long)port, (long long)err);
+        return QoreValue();
+    }
+    std::set<int64_t> fail;
+    ConstListIterator li(l);
+    while (li.next()) {
+        int64_t n = li.getValue().getAsBigInt();
+        if (n <= 0) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_fail_sends(): invalid datagram number %lld "
+                "(datagrams are counted from 1)", (long long)n);
+            return QoreValue();
+        }
+        fail.insert(n);
+    }
+    {
+        std::lock_guard<std::mutex> g(dbg_quic_fail_sends_m);
+        dbg_quic_fail_sends_state = DbgQuicFailSends();
+        dbg_quic_fail_sends_state.port = static_cast<int>(port);
+        dbg_quic_fail_sends_state.by_peer = by_peer;
+        dbg_quic_fail_sends_state.flush_only = flush_only;
+        dbg_quic_fail_sends_state.fail = std::move(fail);
+        dbg_quic_fail_sends_state.err = static_cast<int>(err);
+    }
+    qore_quic_test_set_send_hook([] (int fd) -> int {
+        std::lock_guard<std::mutex> g(dbg_quic_fail_sends_m);
+        DbgQuicFailSends& st = dbg_quic_fail_sends_state;
+        if (!st.port || (st.flush_only && !qore_quic_test_flush_sending())
+                || dbg_socket_port(fd, st.by_peer) != st.port) {
+            return 0;
+        }
+        if (st.fail.count(++st.seen)) {
+            ++st.failed;
+            return st.err;
+        }
+        return 0;
+    });
+    return QoreValue();
+}
+
+//! ends dbg_quic_fail_sends(); returns a hash with the datagrams counted (\c datagrams) and failed (\c failed)
+static QoreValue f_dbg_quic_fail_sends_end(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    qore_quic_test_set_send_hook({});
+    int64_t seen, failed;
+    {
+        std::lock_guard<std::mutex> g(dbg_quic_fail_sends_m);
+        seen = dbg_quic_fail_sends_state.seen;
+        failed = dbg_quic_fail_sends_state.failed;
+        dbg_quic_fail_sends_state = DbgQuicFailSends();
+    }
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), xsink);
+    h->setKeyValue("datagrams", seen, xsink);
+    h->setKeyValue("failed", failed, xsink);
+    return h.release();
+}
+
+//! returns the packets sent and lost of the QUIC server sessions of the process that are open
+/** As a hash of hashes with the keys \c sent and \c lost, keyed by session ID (qore#7414)
+*/
+static QoreValue f_dbg_quic_server_session_packets(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    std::vector<std::shared_ptr<QuicSession>> sessions;
+    {
+        std::lock_guard<std::mutex> lk(dbg_quic_sessions_m);
+        for (auto& i : dbg_quic_sessions) {
+            if (std::shared_ptr<QuicSession> session = i.second.lock()) {
+                sessions.push_back(std::move(session));
+            }
+        }
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    for (auto& session : sessions) {
+        uint64_t sent, lost;
+        if (session->isClosed() || !session->getPacketCounts(sent, lost)) {
+            continue;
+        }
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), xsink);
+        h->setKeyValue("sent", static_cast<int64_t>(sent), xsink);
+        h->setKeyValue("lost", static_cast<int64_t>(lost), xsink);
+        QoreStringMaker key("%lld", (long long)session->getSessionId());
+        rv->setKeyValue(key.c_str(), h.release(), xsink);
+    }
+    return rv.release();
 }
 
 namespace {
@@ -28913,6 +30230,54 @@ int64_t qore_dbg_quic_simulated_stream_progress(int64_t stream_id) {
     return dbg_quic_progress_added.load(std::memory_order_acquire);
 }
 
+namespace {
+//! the rate in bytes per second, the length of a step in ms and the start (monotonic ms) of the progress that
+//! dbg_http_ws_simulate_send_progress() simulates
+std::atomic<int64_t> dbg_ws_sim_rate{0};
+std::atomic<int64_t> dbg_ws_sim_step_ms{0};
+std::atomic<int64_t> dbg_ws_sim_start_ms{0};
+}
+
+int64_t qore_dbg_ws_simulated_send_progress(int64_t now_ms) {
+    int64_t rate = dbg_ws_sim_rate.load(std::memory_order_acquire);
+    if (rate <= 0) {
+        return -1;
+    }
+    int64_t step_ms = dbg_ws_sim_step_ms.load(std::memory_order_acquire);
+    int64_t steps = (now_ms - dbg_ws_sim_start_ms.load(std::memory_order_acquire)) / step_ms;
+    return steps > 0 ? steps * (rate * step_ms / 1000) : 0;
+}
+
+//! simulates a peer of the HTTP/1.1 WebSocket server connections that takes their data steadily, seen in steps
+/** While it is set, the progress that the send of an HTTP/1.1 WebSocket server connection measures while it waits
+    (the bytes that the peer acknowledged; see HttpWebSocketPollOperationPriv::checkSendProgress()) is the progress of
+    a peer that takes \a rate bytes per second since this call, seen once per \a step_ms: one step of
+    rate * step_ms / 1000 bytes at the end of each step.  The progress is derived from the monotonic clock that the
+    checks read, so that it does not depend on when the threads of the process run.
+
+    @param rate the rate of the simulated peer in bytes per second; zero or less ends the simulation
+    @param step_ms the length of a step in milliseconds; must be positive when \a rate is
+*/
+static QoreValue f_dbg_http_ws_simulate_send_progress(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64_t rate = get_param_value(params, 0).getAsBigInt();
+    int64_t step_ms = get_param_value(params, 1).getAsBigInt();
+    if (rate <= 0) {
+        dbg_ws_sim_rate.store(0, std::memory_order_release);
+        return QoreValue();
+    }
+    if (step_ms <= 0) {
+        xsink->raiseException("DBG-HTTP-WS-SIMULATE-ERROR", "the step must be positive; got " QLLD " ms", step_ms);
+        return QoreValue();
+    }
+    dbg_ws_sim_rate.store(0, std::memory_order_release);
+    dbg_ws_sim_step_ms.store(step_ms, std::memory_order_release);
+    int64_t now_ms = q_clock_getmicros_monotonic() / 1000;
+    dbg_ws_sim_start_ms.store(now_ms > 0 ? now_ms : 1, std::memory_order_release);
+    dbg_ws_sim_rate.store(rate, std::memory_order_release);
+    return QoreValue();
+}
+
 //! simulates a peer that takes the data of an HTTP/2 or HTTP/3 client stream a little at a time
 /** The next \a reads reads of the stream's progress count (Socket::getQuicClientStreamAckedBytes() or
     Socket::getHttp2StreamTakenBytes(), which a send waiting for a full send buffer to drain makes at the start and
@@ -28943,6 +30308,7 @@ static QoreValue f_dbg_quic_release_stream_data(const QoreListNode* params, Runt
         ExceptionSink* xsink) {
     dbg_quic_hold_session.store(0, std::memory_order_release);
     dbg_quic_hold_stream.store(-1, std::memory_order_release);
+    dbg_quic_hold_until_flush.store(false, std::memory_order_release);
     // a held stream is deferred until it is resumed: without this, its data stayed held after the release
     QuicSession::dbgResumeHeldStreams();
     return QoreValue();
@@ -29234,6 +30600,46 @@ static QoreValue f_dbg_poll_op_release_program(const QoreListNode* params, Runti
     bool rv = refs.getProgram() == obj->getProgram() && obj->getProgram();
     refs.release(xsink);
     return rv;
+}
+
+//! Debug-only: stops the global async I/O controller, as the end of the process does
+static QoreValue f_dbg_async_io_stop(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(qore_get_async_io_controller_if_exists(), xsink);
+    if (ctrl) {
+        ctrl->stop(xsink);
+    }
+    return QoreValue();
+}
+
+//! Debug-only: sets the idle period before an I/O thread stops, in microseconds; negative for the default
+static QoreValue f_dbg_async_io_set_autostop_grace(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    AsyncIoControllerPriv::dbgSetAutostopGrace(get_param_value(params, 0).getAsBigInt());
+    return QoreValue();
+}
+
+//! Debug-only: returns the number of operations attached to a CancelByProgram command that followed a Quit command
+static QoreValue f_dbg_async_io_quit_batch_attaches(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return AsyncIoControllerPriv::dbgQuitBatchAttaches();
+}
+
+//! Debug-only: returns how many times stop() took the dispatcher while a cancellation of a Program was in progress
+static QoreValue f_dbg_async_io_stop_detached_during_cancel(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return AsyncIoControllerPriv::dbgStopDetachedDuringCancel();
+}
+
+//! Debug-only: returns the number of times that the async I/O controller has called the abort() of an operation
+static QoreValue f_dbg_async_io_abort_calls(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return AsyncIoControllerPriv::dbgAbortCalls();
+}
+
+//! Debug-only: parks the release of each object that the code returns while their Program is marked, then releases them
+static QoreValue f_dbg_async_io_park_program_releases(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return AsyncIoControllerPriv::dbgParkProgramReleasesTest(
+        get_param_value(params, 0).get<const ResolvedCallReferenceNode>(), xsink);
 }
 
 //! releases the release item of a reference to the object while its Program is marked as being destroyed
@@ -31113,8 +32519,15 @@ void init_debug_functions(QoreNamespace& qns) {
         hashTypeInfo);
     qns.addBuiltinVariant("dbg_module_program_cache_enabled", f_dbg_module_program_cache_enabled, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_module_path_trust", f_dbg_module_path_trust, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "path", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG,
+        "found_dir", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG, "found_rel");
     qns.addBuiltinVariant("dbg_environment_lookups", f_dbg_environment_lookups, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_aot_instanceof_resolves", f_dbg_aot_instanceof_resolves, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_aot_instanceof_one_set", f_dbg_aot_instanceof_one_set, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, softBoolTypeInfo, QORE_PARAM_NO_ARG, "on");
     qns.addBuiltinVariant("dbg_retired_type_declarations", f_dbg_retired_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_type_declaration_groups", f_dbg_type_declaration_groups, QCF_NO_FLAGS,
@@ -31377,6 +32790,18 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_async_io_wait_owner_flush_blocked", f_dbg_async_io_wait_owner_flush_blocked,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_hold_io_commands", f_dbg_async_io_hold_io_commands,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_async_io_wait_io_commands_held", f_dbg_async_io_wait_io_commands_held,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_cancel_owner_on_io_thread", f_dbg_async_io_cancel_owner_on_io_thread,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntOrNothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "owner",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "app_id", timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_queue_cancel_owner", f_dbg_async_io_queue_cancel_owner,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "owner",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "app_id");
+    qns.addBuiltinVariant("dbg_async_io_timer_adder_gen", f_dbg_async_io_timer_adder_gen,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntOrNothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id");
     qns.addBuiltinVariant("dbg_async_io_qop_registered_count", f_dbg_async_io_qop_registered_count,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_async_io_submit_takes_key_of_other", f_dbg_async_io_submit_takes_key_of_other,
@@ -31387,6 +32812,14 @@ void init_debug_functions(QoreNamespace& qns) {
         boolTypeInfo, QORE_PARAM_NO_ARG, "same_object");
     qns.addBuiltinVariant("dbg_async_io_wait_on_complete_queued", f_dbg_async_io_wait_on_complete_queued,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_pause_cancel_point", f_dbg_async_io_pause_cancel_point,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "point",
+        boolTypeInfo, QORE_PARAM_NO_ARG, "pause");
+    qns.addBuiltinVariant("dbg_socket_has_async_io_owner", f_dbg_socket_has_async_io_owner,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "socket");
+    qns.addBuiltinVariant("dbg_async_io_wait_cancel_point", f_dbg_async_io_wait_cancel_point,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "point",
         timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_quic_advance_clock", f_dbg_quic_advance_clock,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
@@ -31446,6 +32879,8 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, 1, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_force_ssl_error_ssl", f_dbg_force_ssl_error_ssl, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_force_staged_write_failure", f_dbg_force_staged_write_failure, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_ssl_close_notify_count", f_dbg_ssl_close_notify_count, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_fail_http1_header_read_op", f_dbg_fail_http1_header_read_op, QCF_NO_FLAGS,
@@ -31726,6 +33161,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
+    qns.addBuiltinVariant("dbg_weak_reference_reads", f_dbg_weak_reference_reads, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 1, listTypeInfo, QORE_PARAM_NO_ARG, "holder");
     qns.addBuiltinVariant("dbg_hold_container_free", f_dbg_hold_container_free,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "type_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
@@ -31789,10 +33226,22 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_http2_connection_window_updates", f_dbg_http2_connection_window_updates, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_quic_hold_stream_data", f_dbg_quic_hold_stream_data, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
-        nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", bigIntTypeInfo, QORE_PARAM_NO_ARG,
-        "stream_id");
+        nothingTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", bigIntTypeInfo, QORE_PARAM_NO_ARG,
+        "stream_id", boolTypeInfo, QoreValue(false), "until_flush");
     qns.addBuiltinVariant("dbg_quic_release_stream_data", f_dbg_quic_release_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_stateless_reset_counts", f_dbg_quic_stateless_reset_counts, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_fail_sends", f_dbg_quic_fail_sends, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 5, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", boolTypeInfo, QORE_PARAM_NO_ARG, "by_peer",
+        listTypeInfo, QORE_PARAM_NO_ARG, "datagrams", bigIntTypeInfo, QORE_PARAM_NO_ARG, "err", boolTypeInfo,
+        QoreValue(false), "flush_only");
+    qns.addBuiltinVariant("dbg_quic_fail_sends_end", f_dbg_quic_fail_sends_end, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_server_session_packets", f_dbg_quic_server_session_packets, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_wait_idle", f_dbg_quic_wait_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_http3_client_hide_error", f_dbg_http3_client_hide_error, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
     qns.addBuiltinVariant("dbg_http3_client_error_hidden", f_dbg_http3_client_error_hidden, QCF_NO_FLAGS,
@@ -31808,6 +33257,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_http2_simulate_stream_progress", f_dbg_quic_simulate_stream_progress,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "reads");
+    qns.addBuiltinVariant("dbg_http_ws_simulate_send_progress", f_dbg_http_ws_simulate_send_progress,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "rate",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "step_ms");
     qns.addBuiltinVariant("dbg_quic_simulate_stream_progress", f_dbg_quic_simulate_stream_progress,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "reads");
@@ -31823,6 +33275,17 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_poll_op_release_program", f_dbg_poll_op_release_program, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "op");
+    qns.addBuiltinVariant("dbg_async_io_stop", f_dbg_async_io_stop, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_set_autostop_grace", f_dbg_async_io_set_autostop_grace, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "us");
+    qns.addBuiltinVariant("dbg_async_io_quit_batch_attaches", f_dbg_async_io_quit_batch_attaches, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_stop_detached_during_cancel", f_dbg_async_io_stop_detached_during_cancel,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_abort_calls", f_dbg_async_io_abort_calls, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_park_program_releases", f_dbg_async_io_park_program_releases, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, autoHashTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "make");
     qns.addBuiltinVariant("dbg_async_io_park_program_release", f_dbg_async_io_park_program_release, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "obj");
     qns.addBuiltinVariant("dbg_poll_op_release_last_off_thread", f_dbg_poll_op_release_last_off_thread,

@@ -890,6 +890,32 @@ LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadA
     }
 }
 
+LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadAccess, ReferenceBind)
+        : vl(xsink), read_access(RA_VAR), track_write_protection(true) {
+    startRemovalPath();
+    QoreReferenceBindScope bind_scope(&vl, this);
+    RuntimeReferenceHelper rh(ref, xsink);
+    if (!*xsink) {
+        doLValue(lvalue_ref::get(&ref)->vexp, true);
+    }
+}
+
+LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReferenceBind)
+        : vl(xsink) {
+    startRemovalPath();
+    QoreReferenceBindScope bind_scope(&vl, this);
+    try {
+        RuntimeReferenceHelper rh(ref, xsink);
+        if (!*xsink && !doLValue(lvalue_ref::get(&ref)->vexp, true)) {
+            // see LValueHelper(const ReferenceNode&, ExceptionSink*, bool, bool)
+            adoptReferenceProgram(rh.takeProgramEntry());
+        }
+    } catch (...) {
+        ref_pgms.release(nullptr);
+        throw;
+    }
+}
+
 LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
@@ -976,7 +1002,7 @@ LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink
 
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
         ref_pgms(std::move(o.ref_pgms)), ocvec(std::move(o.ocvec)), path_has_weak_step(o.path_has_weak_step),
-        before(o.before),
+        holds_weak_locks(o.holds_weak_locks), before(o.before), weak_lock_count(o.weak_lock_count),
         removal_objects(std::move(o.removal_objects)), removed_objects(std::move(o.removed_objects)), rdt(o.rdt),
         vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
         assignment_only(o.assignment_only), read_access(o.read_access),
@@ -1202,7 +1228,9 @@ LValueHelper::~LValueHelper() {
         // see if we have any object count changes
         if (!ocvec.empty()) {
             // v && qv could be nullptr if the constructor taking QoreObject& was used (to scan objects after initialization)
-            if (qv) {
+            // the storage of an lvalue that the operation did not change is not read: its scan state is unchanged
+            // (qore#7402)
+            if (qv && !unchanged_lvalue) {
                 if (rdt) {
                     assert(qv && !qv->isNothing());
                     if (!obj_chg) {
@@ -1227,7 +1255,9 @@ LValueHelper::~LValueHelper() {
             // write changes to container hierarchy
             if (path_has_weak_step) [[unlikely]] {
                 // a path that crosses a weak reference can reach containers that are already on it (qore#7321)
-                writeWeakPathChanges(qv ? qv->getInternalNode() : nullptr);
+                // the storage of an lvalue left unchanged is not read (it can have been freed, qore#7402), and its
+                // change was not written to the last container of the path
+                writeWeakPathChanges(qv && !unchanged_lvalue ? qv->getInternalNode() : nullptr);
             } else if (ocvec.size() > 1) {
                 for (int i = ocvec.size() - 2; i >= 0; --i) {
                     int dt = ocvec[i + 1].getDifference();
@@ -1241,7 +1271,7 @@ LValueHelper::~LValueHelper() {
             }
         }
 
-        if (!obj_chg && (val ? val->needsScan() : needs_scan(*qv))) {
+        if (!obj_chg && !unchanged_lvalue && (val ? val->needsScan() : needs_scan(*qv))) {
             obj_chg = true;
         } else if (obj_chg && removalKeptGraph()) {
             // the removal took out no value that can take part in a recursive graph
@@ -1258,7 +1288,7 @@ LValueHelper::~LValueHelper() {
 
 #ifdef DEBUG
     // a test can hold the thread here, after it has assigned an lvalue reached through a reference
-    if (lvid_set && !*vl.xsink && (val || qv) && getType() == NT_INT) {
+    if (lvid_set && !*vl.xsink && (val || qv) && !unchanged_lvalue && getType() == NT_INT) {
         if (qore_dbg_reference_lvalue_hook_t hook = qore_dbg_reference_lvalue_hook.load()) {
             hook(getValue().getAsBigInt());
         }
@@ -1309,9 +1339,15 @@ LValueHelper::~LValueHelper() {
 
     delete lvid_set;
 
+    // set if the scan of the root scanned the objects of the values removed and replaced
+    bool removals_scanned = false;
     if (robj) {
         // recalculate recursive references for objects if necessary
-        if (obj_chg && !no_object_scan) {
+        // a member removed from an object that the lvalue holds through a weak reference changes the object's graph
+        // as one removed through a strong reference does (objectRemoved(), which sets robj), although the weak
+        // reference needs no scan itself (qore#7346); tested here, where robj is set, which a write to a local
+        // variable does not do
+        if ((obj_chg || removal_object_scan) && !no_object_scan) {
 #ifdef DEBUG
             ++lvalue_scan_count;
 #endif
@@ -1345,6 +1381,7 @@ LValueHelper::~LValueHelper() {
             // edge, so that a cycle that it is part of is never collected (#6335).  An object in no recursive set
             // has no set to repair, so the scan costs nothing for an ordinary removal.
             if (root_in_set) {
+                removals_scanned = true;
                 if (!removed_objects.empty()) {
                     removed_objects.forEach([this] (RObject* o) {
                         if (qore_removed_object_needs_scan(o, robj)) {
@@ -1380,6 +1417,11 @@ LValueHelper::~LValueHelper() {
             robj->tDeref();
         }
     }
+    if (holds_weak_locks && !removals_scanned && (!insertion_only || !removed_objects.empty())) [[unlikely]] {
+        // a value removed or replaced in a list or a hash reached through a weak reference, whose holders are not
+        // known here: the root of the lvalue, if any, is not the holder of the container (qore#7373)
+        scanWeakContainerRemovals();
+    }
 
     // Release the values the write replaced or removed only now, after the scan: the recursive sets they were in
     // still count the edges that pointed at them until that scan has repaired them, so releasing one before it
@@ -1393,6 +1435,46 @@ LValueHelper::~LValueHelper() {
 
     for (RObject* o : removal_objects) {
         o->tDeref();
+    }
+}
+
+void LValueHelper::keepRemovedThroughWeak(const QoreValue& v) noexcept {
+    // only a value that can hold an object is scanned
+    if (!needs_scan(v)) {
+        return;
+    }
+    AbstractQoreNode* n = const_cast<AbstractQoreNode*>(v.getInternalNode());
+    assert(n);
+    n->ref();
+    // no exception leaves here: the caller holds the value taken out of the list in a plain QoreValue; if the entry
+    // cannot be allocated, the value is not kept, and its objects are not scanned
+    try {
+        tvec.push_back(n);
+    } catch (...) {
+        n->deref(nullptr);
+    }
+}
+
+__attribute__((cold, noinline)) void LValueHelper::scanWeakContainerRemovals() {
+    // the objects removed: each one that is in a recursive set and referenced elsewhere is scanned, as the scan of
+    // the holder of the container would have repaired its set, which still counts the removed edge, so that the
+    // object would be collected while it is still referenced
+    removed_objects.forEach([this] (RObject* o) {
+        if (qore_removed_object_needs_scan(o, nullptr)) {
+#ifdef DEBUG
+            ++lvalue_scan_count;
+#endif
+            RSetHelper rsh(*o, vl.xsink, &removed_objects);
+        }
+    });
+    // the values that an assignment replaced, after the helper's own locks of the containers of weak references at
+    // the start of tvec (holdWeakLock()), which are changed in place and lost no edge; a replaced list or hash lost
+    // its edge from the holder also when another holder still shares it
+    for (size_t i = weak_lock_count, e = tvec.size(); i < e; ++i) {
+        AbstractQoreNode* n = tvec[i];
+        if (n && needs_scan(n)) {
+            qore_scan_removed_value_objects(QoreValue(n), nullptr, vl.xsink);
+        }
     }
 }
 
@@ -1570,8 +1652,9 @@ void LValueHelper::startContainerRemoval() {
 
 bool LValueHelper::removalKeptGraph() const {
     // a container copied by ensureUnique() is a new node that the recursive sets do not know yet; the node it
-    // replaced is still held in tvec here, so its address cannot have been reused
-    if (removal_no_skip || !removal_container || getInternalNode() != removal_container) {
+    // replaced is still held in tvec here, so its address cannot have been reused; the storage of an lvalue left
+    // unchanged is not read: it can have been freed (qore#7402)
+    if (removal_no_skip || !removal_container || unchanged_lvalue || getInternalNode() != removal_container) {
         return false;
     }
     switch (removal_container->getType()) {
@@ -1705,22 +1788,87 @@ void LValueHelper::keepCreatedNode(QoreValue rv) const {
 
 QoreListNode* LValueHelper::lockWeakList() {
     QoreListNode* l = getValue().get<WeakListReferenceNode>()->lock();
-    try {
-        tvec.push_back(l);
-    } catch (...) {
-        l->deref(nullptr);
-        throw;
-    }
+    holdWeakLock(l);
     return l;
 }
 
 QoreHashNode* LValueHelper::lockWeakHash() {
     QoreHashNode* h = getValue().get<WeakHashReferenceNode>()->lock();
+    holdWeakLock(h);
+    return h;
+}
+
+void LValueHelper::holdWeakLock(AbstractQoreNode* n) {
+    // the reference is released with the helper's other temporaries; the helper's own locks are kept at the start of
+    // tvec, so that scanWeakContainerRemovals() can tell them from the values that the change replaced (qore#7373)
     try {
-        tvec.push_back(h);
+        if (weak_lock_count < UINT8_MAX) {
+            tvec.insert(tvec.begin() + weak_lock_count, n);
+            ++weak_lock_count;
+        } else {
+            // more locks than the count holds: walked by the scan, which only costs time
+            tvec.push_back(n);
+        }
     } catch (...) {
-        h->deref(nullptr);
+        n->deref(nullptr);
         throw;
+    }
+    holds_weak_locks = true;
+}
+
+bool LValueHelper::releaseOwnWeakLocks(AbstractQoreNode* n) {
+    // each entry of tvec holds a reference of the helper: to a container that an lvalue of the path holds, the ones
+    // taken as it was locked at weak steps, and the original that a copy-on-write step of the path replaced with a
+    // copy, if the path reached it again; no one else can see a change of it
+    int held = 0;
+    for (const AbstractQoreNode* i : tvec) {
+        if (i == n) {
+            ++held;
+        }
+    }
+    // the lvalue holding the node holds one reference
+    if (!held || n->reference_count() != held + 1) {
+        return false;
+    }
+    // vector::erase() neither allocates nor throws
+    for (size_t i = tvec.size(); i-- > 0;) {
+        if (tvec[i] == n) {
+            tvec.erase(tvec.begin() + i);
+            // one of the helper's own locks, which are at the start of tvec (holdWeakLock())
+            if (i < weak_lock_count) {
+                --weak_lock_count;
+            }
+            // not the last reference: the lvalue holds the node
+            n->deref(nullptr);
+        }
+    }
+    return true;
+}
+
+QoreListNode* LValueHelper::getWeakRemovalList() {
+    assert(getType() == NT_WEAKREF_LIST);
+    // the weak reference, as an assignment through it does (qore#7198)
+    ensureUnique();
+    // held by the helper while the change through the weak reference is made (qore#7198)
+    QoreListNode* l = lockWeakList();
+    // the lvalue keeps the weak reference, and its storage can be an entry of the list, which the removal frees or
+    // moves: it is not read again (qore#7402)
+    leaveUnchangedLValue();
+    // a list freed under the weak reference cannot be changed (qore#7163)
+    if (qore_list_private::get(*l)->checkValid(vl.xsink)) {
+        return nullptr;
+    }
+    return l;
+}
+
+QoreHashNode* LValueHelper::getWeakRemovalHash() {
+    assert(getType() == NT_WEAKREF_HASH);
+    ensureUnique();
+    QoreHashNode* h = lockWeakHash();
+    // as for a list: the lvalue's storage can be a key of the hash (qore#7402)
+    leaveUnchangedLValue();
+    if (qore_hash_private::get(*h)->checkValid(vl.xsink)) {
+        return nullptr;
     }
     return h;
 }
@@ -2250,8 +2398,20 @@ int LValueHelper::setBufferElementLValue(QoreBufferNode* b, size_t index) {
     return 0;
 }
 
+void qore_raise_reference_bind_user_code(QoreObject* object, const char* member, ExceptionSink* xsink) {
+    xsink->raiseException("REFERENCE-BIND-ERROR", "cannot bind a reference to member '%s' of class '%s' while assigning "
+        "to a member of the same object: the class runs code for the member, which cannot run under the object's lock",
+        member, object->getClassName());
+}
+
 int LValueHelper::setMemberWriteGateLValue(QoreObject* object, const char* member,
         const QoreMemberInfo* accessor_info) {
+    // a gate is Qore code, which cannot run under the lock of the assignment being checked (qore#7380, qore#7391)
+    QoreVarRWLock& object_lock = qore_object_private::get(*object)->rml;
+    if (qore_auto_vlock_ops(vl).getRWL() != &object_lock && qore_var_rwlock_ops(object_lock).heldForBind(&vl)) {
+        qore_raise_reference_bind_user_code(object, member, vl.xsink);
+        return -1;
+    }
     auto entry = std::make_unique<MemberLValue>(object, member, accessor_info, vl.xsink);
     // Keep the receiver before unlocking the parent lvalue; a gate can call external or Qore code.
     vl.del();
@@ -2880,9 +3040,18 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
     return 0;
 }
 
+thread_local const void* qore_reference_bind_vl = nullptr;
+thread_local void* qore_reference_bind_helper = nullptr;
+
+void qore_reference_bind_note_reused_lock() {
+    static_cast<LValueHelper*>(qore_reference_bind_helper)->noteReusedBindLock();
+}
+
 void LValueHelper::setAndLock(QoreVarRWLock& rwl) {
-    qore_var_rwlock_ops(rwl).wrlock();
-    qore_auto_vlock_ops(vl).set(&rwl);
+    // a lock that the assignment of this thread holds while it binds a reference stays with that assignment (qore#7380)
+    if (qore_var_rwlock_ops(rwl).wrlockUnlessHeldForBind(&vl)) {
+        qore_auto_vlock_ops(vl).set(&rwl);
+    }
 }
 
 void LValueHelper::set(QoreVarRWLock& rwl) {
@@ -3404,15 +3573,21 @@ void LValueHelper::noteReferenceType(const QoreTypeInfo* ti) {
     }
 }
 
-inline int LValueHelper::prepareListElementRemoval(QoreListNode& l, size_t ind, bool for_del) {
+inline int LValueHelper::prepareListElementRemoval(QoreListNode& l, size_t ind, bool for_del, bool weak) {
     qore_list_private* priv = qore_list_private::get(l);
     if (!priv->elementTypeRejectsNothing()) {
         return 0;
     }
-    return prepareTypedListElementRemoval(*priv, ind, for_del);
+    return prepareTypedListElementRemoval(*priv, ind, for_del, weak);
 }
 
-int LValueHelper::prepareTypedListElementRemoval(qore_list_private& l, size_t ind, bool for_del) {
+int LValueHelper::prepareTypedListElementRemoval(qore_list_private& l, size_t ind, bool for_del, bool weak) {
+    // the list of a weak reference is shared with its owners, whose declared types it has: it is not retyped
+    // (qore#7306)
+    if (weak) {
+        l.raiseWeakElementRemovalError(ind, for_del, vl.xsink);
+        return -1;
+    }
     // the path was resolved for delete or remove: the reference types and the path information are set
     assert(removal_path);
     // the list is held in a list or a hash of the path whose type comes from its value: the declared type is that of
@@ -3577,20 +3752,26 @@ bool qore_apply_assignment_mode(QoreValue& val, AssignmentMode mode) {
 QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, ExceptionSink* xsink, bool for_del) {
     int64 original_index = index;
     bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
-    qore_type_t t = lvh.getType();
-    if (t == NT_LIST || t == NT_STRING || t == NT_BINARY) {
+    const qore_type_t lt = lvh.getType();
+    if (lt == NT_LIST || lt == NT_STRING || lt == NT_BINARY || lt == NT_WEAKREF_LIST) {
+        // a list that the lvalue holds through a weak reference is changed itself (qore#7306)
+        const qore_type_t t = LValueHelper::getRemovalType(lt);
         // only a list is changed: the element of a string or a binary is only read, and making a string unique would
         // replace an enum value with a plain string, which a string enum lvalue does not hold (qore#6195)
+        QoreListNode* l = nullptr;
+        QoreValue container;
         if (t == NT_LIST) {
-            lvh.ensureUnique();
+            l = lvh.getRemovalList(lt);
+            if (!l) {
+                return QoreValue();
+            }
+        } else {
+            container = lvh.getValue();
         }
-        QoreValue container = lvh.getValue();
         // a string can be a short string held inline or an enum value, which the helper reads
         std::optional<QoreStringNodeValueHelper> str;
         size_t size;
-        QoreListNode* l = nullptr;
         if (t == NT_LIST) {
-            l = container.get<QoreListNode>();
             size = l->size();
         } else if (t == NT_STRING) {
             str.emplace(container);
@@ -3609,8 +3790,11 @@ QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, ExceptionSink
             index += static_cast<int64>(size);
         }
         if (index < 0) {
-            xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to a "
-                "non-negative integer)", original_index);
+            // a list freed under a weak reference, which is empty, cannot be changed, with any index
+            if (!l || !qore_list_private::get(*l)->checkRemovalValid(xsink)) {
+                xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to "
+                    "a non-negative integer)", original_index);
+            }
             return QoreValue();
         }
         QoreValue rv;
@@ -3618,11 +3802,15 @@ QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, ExceptionSink
             if (static_cast<size_t>(index) < size) {
                 // an element of a list whose element type does not take NOTHING cannot be left without a value: the
                 // list is widened to list<*T> if the declared type of its lvalue allows it (qore#6435)
-                if (lvh.prepareListElementRemoval(*l, static_cast<size_t>(index), for_del)) {
+                if (lvh.prepareListElementRemoval(*l, static_cast<size_t>(index), for_del, lt == NT_WEAKREF_LIST)) {
                     return QoreValue();
                 }
-                rv = l->retrieveEntry(static_cast<size_t>(index)).refSelf();
-                l->setEntry(static_cast<size_t>(index), QoreValue(), xsink);
+                // as the AST interpreter does (LValueRemoveHelper::doRemove()); the list of a weak reference is shared
+                // with its owners (qore#7306)
+                rv = qore_list_private::get(*l)->takeExists(static_cast<size_t>(index));
+            } else if (qore_list_private::get(*l)->checkRemovalValid(xsink)) {
+                // nothing is removed: a list freed under a weak reference, which is empty, cannot be changed
+                return QoreValue();
             }
         } else if (t == NT_STRING) {
             rv = static_cast<size_t>(index) < size
@@ -4788,13 +4976,19 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
     const QoreValue* member = &sel[0];
     lvh.startContainerRemoval();
 
+    // a hash that the lvalue holds through a weak reference is changed itself (qore#7306)
     t = lvh.getType();
-    if (t == NT_HASH) {
-        lvh.ensureUnique();
+    QoreObject* o = nullptr;
+    QoreHashNode* h = nullptr;
+    if (t == NT_HASH || t == NT_WEAKREF_HASH) {
+        h = lvh.getRemovalHash(t);
+    } else if (t == NT_OBJECT) {
+        o = lvh.getValue().get<QoreObject>();
+    } else if (t == NT_WEAKREF) {
+        // the object that the lvalue holds through a weak reference, whose member is removed, as in the IR
+        // interpreter and the JIT (executeLVHashKeySliceRemove(), qore#7346)
+        o = lvh.getValue().get<const WeakReferenceNode>()->get();
     }
-
-    QoreObject* o = t == NT_OBJECT ? lvh.getValue().get<QoreObject>() : 0;
-    QoreHashNode* h = !o && t == NT_HASH ? lvh.getValue().get<QoreHashNode>() : 0;
     if (!o && !h)
         return;
 
@@ -4830,9 +5024,13 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
                 rvh->setKeyValue(mem.c_str(), n, xsink);
                 assert(!*xsink);
             }
+            // nothing is removed: a hash freed under a weak reference, which is empty, cannot be changed
+            if (rvh->empty() && hp->checkRemovalValid(xsink)) {
+                return;
+            }
 
             if (old_count && !qore_hash_private::getScanCount(*h))
-                lvh.setDelta(-1);
+                lvh.setRemovalDelta(-1, t == NT_WEAKREF_HASH);
             lvh.removedValue(rvh);
         }
 
@@ -4847,10 +5045,12 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
     if (o)
         v = qore_object_private::takeMember(*o, lvh, mem.c_str(), for_del);
     else {
-        v = h->takeKeyValue(mem.c_str());
+        // the hash of a weak reference is shared with its owners (qore#7306)
+        // NOTHING if the key does not exist, also with HASH-ERROR for a freed hash
+        v = qore_hash_private::get(*h)->takeRemovedKey(mem.c_str(), xsink);
         if (needs_scan(v)) {
             if (!qore_hash_private::getScanCount(*h))
-                lvh.setDelta(-1);
+                lvh.setRemovalDelta(-1, t == NT_WEAKREF_HASH);
         }
     }
     lvh.removedValue(v);
@@ -4943,26 +5143,38 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
     }
     lvh.startContainerRemoval();
 
-    switch (lvh.getType()) {
-        case NT_LIST: {
-            lvh.ensureUnique();
-            QoreListNode* l = lvh.getValue().get<QoreListNode>();
+    // a list that the lvalue holds through a weak reference is changed itself (qore#7306)
+    const qore_type_t lt = lvh.getType();
+    switch (lt) {
+        case NT_LIST:
+        case NT_WEAKREF_LIST: {
+            QoreListNode* l = lvh.getRemovalList(lt);
+            if (!l) {
+                return;
+            }
             ValueHolder v(xsink);
             if (!rl) {
                 if (negative_offsets && ind < 0) {
                     ind += static_cast<int64>(l->size());
                 }
                 if (ind < 0) {
-                    raise_negative_list_or_buffer_index(op, original_ind, xsink);
+                    // a list freed under a weak reference, which is empty, cannot be changed, with any index
+                    if (!qore_list_private::get(*l)->checkRemovalValid(xsink)) {
+                        raise_negative_list_or_buffer_index(op, original_ind, xsink);
+                    }
                     return;
                 }
                 if (ind < (int64)l->size()) {
                     // an element of a list whose element type does not take NOTHING cannot be left without a value:
                     // the list is widened to list<*T> if the declared type of its lvalue allows it (qore#6435)
-                    if (lvh.prepareListElementRemoval(*l, static_cast<size_t>(ind), for_del)) {
+                    if (lvh.prepareListElementRemoval(*l, static_cast<size_t>(ind), for_del,
+                            lt == NT_WEAKREF_LIST)) {
                         return;
                     }
                     v = qore_list_private::get(*l)->takeExists(ind);
+                } else if (qore_list_private::get(*l)->checkRemovalValid(xsink)) {
+                    // nothing is removed: a list freed under a weak reference, which is empty, cannot be changed
+                    return;
                 }
             } else {
                 direct_list = true;
@@ -4977,6 +5189,10 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                 while (li.next()) {
                     do_list_value(*v->get<QoreListNode>(), *l, li.getValue().getAsBigInt(), vtype, vcommon, iset,
                         li.index(), negative_offsets);
+                }
+                // nothing is removed: a list freed under a weak reference, which is empty, cannot be changed
+                if (iset.empty() && qore_list_private::get(*l)->checkRemovalValid(xsink)) {
+                    return;
                 }
 
                 // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
@@ -4998,7 +5214,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
             }
             if (needs_scan(*v)) {
                 if (!qore_list_private::getScanCount(*l))
-                    lvh.setDelta(-1);
+                    lvh.setRemovalDelta(-1, lt == NT_WEAKREF_LIST);
             }
             discard(rv.assignInitial(v.release()), xsink);
             lvh.removedValue(rv);
@@ -5129,10 +5345,15 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
         return;
     lvh.startContainerRemoval();
 
-    switch (lvh.getType()) {
-        case NT_LIST: {
-            lvh.ensureUnique();
-            QoreListNode* l = lvh.getValue().get<QoreListNode>();
+    // a list that the lvalue holds through a weak reference is changed itself (qore#7306)
+    const qore_type_t lt = lvh.getType();
+    switch (lt) {
+        case NT_LIST:
+        case NT_WEAKREF_LIST: {
+            QoreListNode* l = lvh.getRemovalList(lt);
+            if (!l) {
+                return;
+            }
 
             // calculate the runtime element type if possible
             const QoreTypeInfo* vtype = nullptr;
@@ -5159,6 +5380,10 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
                     do_list_value(**v, *l, rh->getAsBigInt(), vtype, vcommon, iset, i, negative_offsets);
                 }
             }
+            // nothing is removed: a list freed under a weak reference, which is empty, cannot be changed
+            if (iset.empty() && qore_list_private::get(*l)->checkRemovalValid(xsink)) {
+                return;
+            }
 
             // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
             if (vtype && vtype != anyTypeInfo) {
@@ -5178,7 +5403,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
 
             if (needs_scan(*v)) {
                 if (!qore_list_private::getScanCount(*l))
-                    lvh.setDelta(-1);
+                    lvh.setRemovalDelta(-1, lt == NT_WEAKREF_LIST);
             }
             discard(rv.assignInitial(v.release()), xsink);
             lvh.removedValue(rv);
@@ -5298,14 +5523,29 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
     bool broken_list_range = op->getSemanticPolicy().brokenListRange();
     bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
 
+    // a list that the lvalue holds through a weak reference is changed itself (qore#7306)
+    const qore_type_t lt = lvh.getType();
+    const qore_type_t t = LValueHelper::getRemovalType(lt);
+    QoreListNode* weak_list = nullptr;
+    if (lt == NT_WEAKREF_LIST) [[unlikely]] {
+        weak_list = lvh.getRemovalList(lt);
+        if (!weak_list) {
+            return;
+        }
+    } else if (t == NT_LIST
+        && qore_list_private::get(*lvh.getValue().get<QoreListNode>())->checkValid(xsink)) {
+        // a copy of a list freed under a weak reference cannot be changed, also by an empty range (qore#7163)
+        return;
+    }
+
     int64 start, stop, seq_size;
     {
-        QoreValue tmp = lvh.getValue();
+        QoreValue tmp = weak_list ? QoreValue(weak_list) : lvh.getValue();
         if (!op->getEffectiveRange(tmp, start, stop, seq_size, *start_index, *stop_index, broken_list_range,
                 negative_offsets, xsink)) {
             if (!*xsink) {
                 AbstractQoreNode* v;
-                switch (lvh.getType()) {
+                switch (t) {
                     case NT_LIST: {
                         v = new QoreListNode(autoTypeInfo);
                         if (broken_list_range) {
@@ -5348,12 +5588,17 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
     direct_list = true;
 
     ReferenceHolder<> v(xsink);
-    switch (lvh.getType()) {
+    switch (t) {
         case NT_LIST: {
-            lvh.ensureUnique();
-            QoreListNode* l = lvh.getValue().get<QoreListNode>();
+            QoreListNode* l = weak_list ? weak_list : lvh.getRemovalList(lt);
+            // a copy of a list freed under a weak reference, whose range %broken-list-range can resolve (qore#7163)
+            if (!l) {
+                return;
+            }
+            assert(weak_list || l->reference_count() == 1);
             size_t orig_size = l->size();
-            QoreListNode* nl = l->extract(start, stop - start + 1);
+            // the list of a weak reference is shared with its owners
+            QoreListNode* nl = qore_list_private::get(*l)->extract(start, stop - start + 1);
             // add additional elements if necessary
             //printd(5, "l->size: %d start: %d stop: %d\n", (int)orig_size, (int)start, (int)stop);
             if (stop >= (int64)orig_size) {
@@ -5726,7 +5971,9 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_
     // a variable that only its frame can use is changed like a plain local variable: without the lock, and with
     // no recursive-reference scan, since nothing refers to it that a cycle could run through
     bool exclusive = frameExclusive();
-    QoreSafeVarRWWriteLocker sl(rml, !exclusive);
+    QoreSafeVarRWWriteLocker sl(rml, false);
+    // a lock that the assignment of this thread holds while it binds a reference stays with that assignment (qore#7380)
+    bool locked = !exclusive && sl.lockUnlessHeldForBind(&lvh.vl);
     if (!exclusive && QoreTypeInfo::needsScan(typeInfo)) {
         lvh.setClosure(const_cast<ClosureVarValue*>(this));
     }
@@ -5755,7 +6002,7 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_
         return 0;
     }
 
-    if (!exclusive) {
+    if (locked) {
         lvh.set(rml);
         sl.stay_locked();
     }
