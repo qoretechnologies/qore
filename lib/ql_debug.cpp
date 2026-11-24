@@ -29373,42 +29373,62 @@ void dbg_http1_send_failure_dec(Counter* c) {
     }
 }
 
-//! blocks until the connection on \a fd is shut down or reset; no timer is involved
-void dbg_http1_wait_hangup(int fd) {
+//! blocks until the connection on \a fd is shut down or reset, or for at most \a timeout_ms milliseconds if it is not
+//! negative; no other timer is involved
+/** @return true if the connection ended, false if the wait timed out or failed
+*/
+bool dbg_http1_wait_hangup(int fd, int timeout_ms = -1) {
+    int64 deadline_us = timeout_ms < 0 ? 0 : q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000;
+    // the time left in milliseconds, -1 for no limit
+    auto left_ms = [deadline_us, timeout_ms] () -> int64 {
+        if (timeout_ms < 0) {
+            return -1;
+        }
+        int64 left = (deadline_us - q_get_monotonic_us()) / 1000;
+        return left > 0 ? left : 0;
+    };
 #ifdef DARWIN
     // poll() on macOS reports nothing for a descriptor polled with no events, so the end of the connection is
     // waited for with an edge-triggered read filter, which fires once for each change - data arriving, which does
     // not end the wait, and the end of the connection, which sets EV_EOF
     int kq = kqueue();
     if (kq < 0) {
-        return;
+        return false;
     }
     ON_BLOCK_EXIT([kq] () { ::close(kq); });
     struct kevent kev;
     EV_SET(&kev, fd, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, nullptr);
     if (kevent(kq, &kev, 1, nullptr, 0, nullptr) < 0) {
-        return;
+        return false;
     }
     while (true) {
         struct kevent out;
-        int rc = kevent(kq, nullptr, 0, &out, 1, nullptr);
+        int64 left = left_ms();
+        struct timespec ts = {static_cast<time_t>(left / 1000), static_cast<long>((left % 1000) * 1000000)};
+        int rc = kevent(kq, nullptr, 0, &out, 1, left < 0 ? nullptr : &ts);
         if (rc < 0 && errno == EINTR) {
             continue;
         }
-        if (rc <= 0 || (out.flags & (EV_EOF | EV_ERROR))) {
-            return;
+        if (rc <= 0) {
+            return false;
+        }
+        if (out.flags & (EV_EOF | EV_ERROR)) {
+            return true;
         }
     }
 #else
     // poll() reports POLLHUP and POLLERR whatever the events requested, so nothing else wakes it
     while (true) {
         pollfd pfd = {fd, 0, 0};
-        int rc = ::poll(&pfd, 1, -1);
+        int rc = ::poll(&pfd, 1, static_cast<int>(left_ms()));
         if (rc < 0 && errno == EINTR) {
             continue;
         }
-        if (rc < 0 || (pfd.revents & (POLLHUP | POLLERR | POLLNVAL))) {
-            return;
+        if (rc <= 0) {
+            return false;
+        }
+        if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) {
+            return true;
         }
     }
 #endif
@@ -31124,12 +31144,19 @@ static QoreValue f_dbg_hold_http1_socket_send(const QoreListNode* params, Runtim
 static struct {
     std::mutex m;
     int port = 0;
+    //! the longest time the read is held, in milliseconds
+    int timeout_ms = 0;
     Counter* reached = nullptr;
 } dbg_tls_read_want;
 
-//! holds a TLS read of the socket connected to the armed port until its connection is reset or closed (#6315)
+//! holds a TLS read of the socket connected to the armed port until its connection is reset or closed (#6315), or
+//! until the hold's time limit has passed
+/** The hold blocks the I/O thread of the socket, which can be the I/O thread of the test's peer too: the peer answers
+    and resets the connection with dbg_tls_answer_and_reset(), which needs no I/O thread (#7523).
+*/
 static void dbg_tls_read_want_hook(int fd) {
     Counter* c;
+    int timeout_ms;
     {
         std::lock_guard<std::mutex> l(dbg_tls_read_want.m);
         if (!dbg_tls_read_want.reached || fd < 0 || dbg_http1_peer_port(fd) != dbg_tls_read_want.port) {
@@ -31137,25 +31164,34 @@ static void dbg_tls_read_want_hook(int fd) {
         }
         c = dbg_tls_read_want.reached;
         dbg_tls_read_want.reached = nullptr;
+        timeout_ms = dbg_tls_read_want.timeout_ms;
         qore_dbg_tls_read_want_hook.store(nullptr);
     }
     dbg_http1_send_failure_dec(c);
-    dbg_http1_wait_hangup(fd);
+    if (!dbg_http1_wait_hangup(fd, timeout_ms)) {
+        printd(0, "dbg_hold_tls_read_until_hangup(): the connection did not end within %d ms; the read continues\n",
+            timeout_ms);
+    }
 }
 
 //! holds the next TLS read of a header (Socket::recvUntilBytes()) of a socket connected to the given port, once
 //! SSL_read() has found no record, until the connection is reset or closed
-/** The test's peer then sends its data and resets or closes the connection; the read continues once the end of the
-    connection has arrived, so the data and the end are both in the receive buffer when it polls (#6315).
+/** The test's peer then sends its data and resets the connection with dbg_tls_answer_and_reset(); the read continues
+    once the end of the connection has arrived, so the data and the end are both in the receive buffer when it polls
+    (#6315).  The hold blocks the I/O thread of the socket, so the peer must not need it (#7523): the peer's socket
+    can be served by the same I/O thread.
 
     @param port the port of the peer of the socket whose read is held
     @param reached decremented when the read is held
+    @param timeout_ms the longest time the read is held; it then continues, so a test whose peer did not end the
+    connection fails instead of hanging; 0 or less: no limit
 
     @throw DBG-ARGUMENT-ERROR the hook is already armed
 */
 static QoreValue f_dbg_hold_tls_read_until_hangup(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     int port = (int)get_param_value(params, 0).getAsBigInt();
+    int timeout_ms = (int)get_param_value(params, 2).getAsBigInt();
     Counter* c = get_counter_arg(params, 1, xsink);
     if (*xsink) {
         return QoreValue();
@@ -31167,8 +31203,80 @@ static QoreValue f_dbg_hold_tls_read_until_hangup(const QoreListNode* params, Ru
         return QoreValue();
     }
     dbg_tls_read_want.port = port;
+    // no limit for a timeout of 0 or less, so the read is always held
+    dbg_tls_read_want.timeout_ms = timeout_ms <= 0 ? -1 : timeout_ms;
     dbg_tls_read_want.reached = c;
     qore_dbg_tls_read_want_hook.store(dbg_tls_read_want_hook);
+    return QoreValue();
+}
+
+//! Debug-only: a TLS peer answers and resets its connection in the calling thread, without the I/O threads
+/** Writes \a answer on the TLS connection of \a peer, waits until the other side has acknowledged it (so it is in
+    that side's receive buffer, see dbg_wait_send_buffer_empty()), and resets the connection with system calls only:
+    the descriptor is closed with \c SO_LINGER and a zero timeout once its number has been taken over by a new,
+    unconnected socket (dup2()), so the Socket object keeps a valid descriptor, which it closes later without touching
+    the connection or another socket; the later close skips the TLS close_notify alert (dbgResetOnClose()).
+
+    Neither the write nor the reset uses the I/O thread of \a peer, so the peer can answer while a debug hook holds
+    that thread, as dbg_hold_tls_read_until_hangup() does when both sides of the connection are served by the same I/O
+    thread (#7523).  \a peer must have no I/O operation in progress and must not be used afterwards, except to be
+    closed; no other thread may close it while the function runs, as its descriptor is used without the socket's
+    lock once the answer is written.  DEBUG builds only.
+
+    @param peer the socket of the test's peer; it must use TLS
+    @param answer the data to write
+    @param timeout_ms the longest time the write may take
+
+    @throw DBG-ARGUMENT-ERROR the socket has no TLS connection
+    @throw DBG-TLS-WRITE-ERROR the write failed or did not complete in time; the connection is not reset
+    @throw DBG-RESET-SOCKET-ERROR the answer was not acknowledged, or the reset failed
+*/
+static QoreValue f_dbg_tls_answer_and_reset(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreSocketObject> sock(obj
+        ? reinterpret_cast<QoreSocketObject*>(const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET,
+            xsink))
+        : nullptr, xsink);
+    if (*xsink || !sock) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_tls_answer_and_reset() requires a Socket argument");
+        }
+        return QoreValue();
+    }
+    std::string answer = dbg_http1_bytes_arg(params, 1);
+    int timeout_ms = (int)get_param_value(params, 2).getAsBigInt();
+    if (answer.empty()) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_tls_answer_and_reset() requires an answer");
+        return QoreValue();
+    }
+    int fd = -1;
+    if (qore_socket_object_private(sock).dbgTlsWriteNow(answer.data(), answer.size(), timeout_ms < 0 ? 0 : timeout_ms,
+            fd, xsink)) {
+        return QoreValue();
+    }
+    int64 wnd = -1;
+    if (int64 left = dbg_wait_send_buffer_empty(fd, wnd)) {
+        xsink->raiseException("DBG-RESET-SOCKET-ERROR", "dbg_tls_answer_and_reset(): " QLLD " bytes written on the "
+            "socket are not acknowledged, and the peer's receive window is 0; the connection is not reset", left);
+        return QoreValue();
+    }
+    qore_socket_object_private(sock).dbgResetOnClose();
+    struct linger l;
+    l.l_onoff = 1;
+    l.l_linger = 0;
+    setsockopt(fd, SOL_SOCKET, SO_LINGER, &l, sizeof l);
+    // the placeholder is never connected, only closed later, so its family need not match the connection's
+    int replacement = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (replacement < 0) {
+        xsink->raiseErrnoException("DBG-RESET-SOCKET-ERROR", errno, "dbg_tls_answer_and_reset(): socket() failed");
+        return QoreValue();
+    }
+    int drc = ::dup2(replacement, fd);
+    int derr = errno;
+    ::close(replacement);
+    if (drc < 0) {
+        xsink->raiseErrnoException("DBG-RESET-SOCKET-ERROR", derr, "dbg_tls_answer_and_reset(): dup2() failed");
+    }
     return QoreValue();
 }
 
@@ -33348,8 +33456,11 @@ void init_debug_functions(QoreNamespace& qns) {
         "reached", QC_SOCKET->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "peer", dataOrNothingTypeInfo,
         QORE_PARAM_NO_ARG, "response");
     qns.addBuiltinVariant("dbg_hold_tls_read_until_hangup", f_dbg_hold_tls_read_until_hangup, QCF_NO_FLAGS,
-        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", QC_COUNTER->getTypeInfo(),
-        QORE_PARAM_NO_ARG, "reached");
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", QC_COUNTER->getTypeInfo(),
+        QORE_PARAM_NO_ARG, "reached", timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_tls_answer_and_reset", f_dbg_tls_answer_and_reset, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 3, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "peer", dataTypeInfo, QORE_PARAM_NO_ARG,
+        "answer", timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_http1_send_failure_result", f_dbg_http1_send_failure_result, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 0);
     qns.addBuiltinVariant("dbg_release_http1_connection_on_close", f_dbg_release_http1_connection_on_close,

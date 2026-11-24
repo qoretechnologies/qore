@@ -606,6 +606,24 @@ public:
         @since %Qore 3.0
     */
     DLLLOCAL QoreHashNode* dbgGetStreamRecordCounts(int64_t session_id, ExceptionSink* xsink);
+
+    //! Debug-only: writes data on the TLS connection of the socket in the calling thread, without the I/O thread
+    /** Called via the @c dbg_tls_answer_and_reset() debug builtin in @ref lib/ql_debug.cpp, so a test peer can answer
+        while the I/O thread of its socket is held by a debug hook (issue #7523).  The socket must have no I/O
+        operation in progress.
+
+        @param data the data to write
+        @param size the size of the data
+        @param timeout_ms the time the write may wait for the socket
+        @param fd set to the socket's descriptor
+        @param xsink raises \c DBG-ARGUMENT-ERROR if the socket has no TLS connection, \c DBG-TLS-WRITE-ERROR if the
+        write fails or does not complete in time
+
+        @return 0 if all the data was written, -1 if not (exception raised)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int dbgTlsWriteNow(const char* data, size_t size, int timeout_ms, int& fd, ExceptionSink* xsink);
 #endif
 };
 

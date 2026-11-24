@@ -6521,6 +6521,54 @@ QoreHashNode* qore_socket_object_private::dbgGetStreamRecordCounts(int64_t sessi
     }
     return h2->dbgGetStreamRecordCounts();
 }
+
+int qore_socket_object_private::dbgTlsWriteNow(const char* data, size_t size, int timeout_ms, int& fd,
+        ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    qore_socket_private::IoUseHelper io_use(*sp);
+    SSLSocketHelper* ssl = io_use.getSsl();
+    fd = io_use.getDescriptor();
+    if (!ssl || fd == QORE_INVALID_SOCKET) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the socket has no TLS connection");
+        return -1;
+    }
+    OptionalNonBlockingHelper nbh(*sp, true, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    int64 deadline_us = q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000;
+    size_t sent = 0;
+    size_t awaiting_drain = 0;
+    while (sent < size) {
+        size_t real_io = 0;
+        int rc = ssl->sendNonBlocking(xsink, "dbg_tls_answer_and_reset", const_cast<char*>(data + sent),
+            size - sent, real_io, awaiting_drain);
+        if (*xsink) {
+            return -1;
+        }
+        sent += real_io;
+        if (sent == size) {
+            break;
+        }
+        int64 left_ms = (deadline_us - q_get_monotonic_us()) / 1000;
+        if (left_ms <= 0) {
+            xsink->raiseException("DBG-TLS-WRITE-ERROR", "timeout writing on the TLS connection: " QLLD " of " QLLD
+                " bytes written", static_cast<int64>(sent), static_cast<int64>(size));
+            return -1;
+        }
+        if (!rc) {
+            continue;
+        }
+        assert(rc == SOCK_POLLIN || rc == SOCK_POLLOUT);
+        pollfd p = {fd, static_cast<short>(rc == SOCK_POLLIN ? POLLIN : POLLOUT), 0};
+        if (::poll(&p, 1, static_cast<int>(left_ms)) < 0 && errno != EINTR) {
+            xsink->raiseErrnoException("DBG-TLS-WRITE-ERROR", errno, "poll() failed");
+            return -1;
+        }
+    }
+    return 0;
+}
 #endif
 
 void QoreSocketObject::setEncoding(const QoreEncoding* id) {
