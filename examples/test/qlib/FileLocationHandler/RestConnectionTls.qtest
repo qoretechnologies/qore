@@ -100,7 +100,9 @@ class RestConnectionTlsTest inherits QUnit::Test {
             "object sub rest(hash<auto> opts) { return new RestClient(opts, True); }"
             "object sub acquire(object conn) { return conn.get(False); }"
             "object sub sibling(object client, string url) { return client.copyWithUrl(url); }"
-            "object sub restore(hash<SerializationInfo> saved) { return Serializable::deserialize(saved); }",
+            "object sub restore(hash<SerializationInfo> saved) { return Serializable::deserialize(saved); }"
+            "object sub sealed(string option, string path) { return new SealedOAuth2Credentials({\"client_id\": \"id\", "
+            "\"client_secret\": \"secret\", \"token_url\": \"https://127.0.0.1/token\", option: path}); }",
             "restricted-native-options");
         assertTrue(caller.callFunction("rest", {"url": url}) instanceof RestClient);
         RestClient explicit_data = caller.callFunction("rest", {"url": url, "ssl_cert_data": TestCertificates::CertPem});
@@ -125,6 +127,22 @@ class RestConnectionTlsTest inherits QUnit::Test {
             RestClient parent(opts, True);
             assertEq(0, unlink(path));
             assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \caller.callFunction(), ("sibling", parent, url), option);
+        }
+        # the CA locations are refused in the same way when module code creates the client for restricted code
+        foreach string option in ("ssl_ca_file", "ssl_ca_path") {
+            string path = tmp.path + DirSep + option;
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \caller.callFunction(), ("rest", {"url": url, option: path}),
+                option);
+            # a copy of a client whose CA location its unrestricted creator set is refused for the restricted code
+            # that makes it through the lent object (qore#7052)
+            RestClient parent({"url": url, option: path}, True);
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \caller.callFunction(), ("sibling", parent, url), option);
+            # also refused by the restricted Program's own option, as before
+            hash<SerializationInfo> saved = original;
+            saved._index{saved._data._index}._class_data."Qore::HTTPClient"{option} = path;
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \caller.callFunction(), ("restore", saved), option);
+            # the CA locations of the token endpoint of sealed OAuth2 credentials, which are read at once
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \caller.callFunction(), ("sealed", option, path), option);
         }
     }
 

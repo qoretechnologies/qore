@@ -4248,9 +4248,11 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             return -1;
         }
         const char* path = path_str->c_str();
-        if (runtime_check_parse_option(PO_NO_FILESYSTEM)) {
-            xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"%s\" option = \"%s\" when "
-                "sandboxing restriction PO_NO_FILESYSTEM is set", key, path);
+        // as for the client certificate and key paths: the code that calls the code that creates the client counts,
+        // also through the method of a lent object (qore#7052)
+        if (runtime_check_parse_option(PO_NO_FILESYSTEM) || qore_caller_lent_to_restricts_domain(QDOM_FILESYSTEM)) {
+            xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the \"%s\" option requires filesystem access in the "
+                "current Program and its caller", key);
             return -1;
         }
         QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
