@@ -1243,12 +1243,23 @@ bool qore_weak_designated_container(const AbstractQoreNode* n) {
     }
 }
 
+std::atomic<unsigned> qore_weak_container_holders{0};
+
 void qore_weak_holder(const AbstractQoreNode* n, int dt) {
+    // the global count is raised before the container's and released after it, so that it is never zero while a
+    // container counts a weak reference (see qore_weak_container_holders)
+    if (dt > 0) {
+        qore_weak_container_holders.fetch_add(1, std::memory_order_relaxed);
+    }
     if (n->getType() == NT_LIST) {
         qore_list_private::weakHolder(*static_cast<const QoreListNode*>(n), dt);
     } else {
         assert(n->getType() == NT_HASH);
         qore_hash_private::weakHolder(*static_cast<const QoreHashNode*>(n), dt);
+    }
+    if (dt < 0) {
+        assert(qore_weak_container_holders.load(std::memory_order_relaxed));
+        qore_weak_container_holders.fetch_sub(1, std::memory_order_relaxed);
     }
 }
 

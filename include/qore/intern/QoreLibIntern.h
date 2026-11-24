@@ -571,12 +571,21 @@ DLLLOCAL bool qore_weak_shared_container(const AbstractQoreNode* n);
 DLLLOCAL bool qore_weak_shared_local_container(const AbstractQoreNode* n);
 //! returns true if \a n is a list or hash that a weak reference designates, whatever holds it (qore#7342)
 DLLLOCAL bool qore_weak_designated_container(const AbstractQoreNode* n);
+//! the number of the weak references to lists and hashes in the process (qore#7419)
+/** A list or hash that a weak reference designates counts it (its weak holders), and this count is raised before and
+    released after each container's (qore_weak_holder()); while it is zero, no container is weakly designated, and the
+    share tests (qore_weak_shared(), qore_weak_shared_local()) are false without reading the container.  Relaxed
+    ordering is enough: a thread that gets a container from another gets it through something that orders the
+    creation of a weak reference to it before (a lock of an lvalue, a queue)
+*/
+DLLLOCAL extern std::atomic<unsigned> qore_weak_container_holders;
+
 //! returns true if \a v is a list or hash that a new holder other than a local variable takes as a copy of its own: a
 //! weak reference designates it (David, qore#7342: every share point copies it, also when nothing else holds it); the
 //! tag and the type are tested inline
 static QORE_INTERN_ALWAYS_INLINE bool qore_weak_shared(const QoreValue& v) {
     // QoreValue::getType() is not inline
-    if (!v.isPlainPointer()) {
+    if (!v.isPlainPointer() || !qore_weak_container_holders.load(std::memory_order_relaxed)) {
         return false;
     }
     const AbstractQoreNode* n = v.getPtr();
@@ -588,7 +597,7 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_weak_shared(const QoreValue& v) {
 //! weak reference designates it and another strong holder holds it; one that nothing else holds is moved, and the
 //! weak references follow it (David, qore#7342)
 static QORE_INTERN_ALWAYS_INLINE bool qore_weak_shared_local(const QoreValue& v) {
-    if (!v.isPlainPointer()) {
+    if (!v.isPlainPointer() || !qore_weak_container_holders.load(std::memory_order_relaxed)) {
         return false;
     }
     const AbstractQoreNode* n = v.getPtr();
