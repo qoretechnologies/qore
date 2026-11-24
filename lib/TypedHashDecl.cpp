@@ -40,8 +40,6 @@
 #include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
 
-#include <optional>
-
 static thread_local const typed_hash_decl_private* parse_hashdecl_type_param_context = nullptr;
 
 HashDeclTypeParamContextHelper::HashDeclTypeParamContextHelper(const typed_hash_decl_private* n_context)
@@ -1238,14 +1236,7 @@ QORE_INTERN_ALWAYS_INLINE int typed_hash_decl_private::initHashInternImpl(QoreHa
             // temporary of the statement that creates the hash (see design/temporary-lifetime.md); in an
             // instantiation of a generic hashdecl, with its type as the receiver (qore#6240)
             HashDeclDefaultReceiverHelper receiver_helper(*i.second);
-            std::optional<QoreScopedEvalHolder> val_holder;
-            {
-                // the initializer is Qore code that a type check can run with the probe of a store installed: it
-                // records nothing in the probe, and it binds no reference under the lock of the store (qore#7391)
-                QoreReferenceBindCodeScope bind_scope;
-                val_holder.emplace(i.second->exp, true, sink);
-            }
-            QoreScopedEvalHolder& val = *val_holder;
+            QoreScopedEvalHolder val(i.second->exp, true, sink);
             if (*sink) {
                 describe_local();
                 return -1;
@@ -1332,13 +1323,7 @@ int typed_hash_decl_private::initHashInternInPlace(QoreHashNode* h, ExceptionSin
         // the initializer is evaluated as a statement of its own (see design/temporary-lifetime.md); in an
         // instantiation of a generic hashdecl, with its type as the receiver (qore#6240)
         HashDeclDefaultReceiverHelper receiver_helper(*i.second);
-        std::optional<QoreScopedEvalHolder> default_val_holder;
-        {
-            // see initHashInternImpl() (qore#7391)
-            QoreReferenceBindCodeScope bind_scope;
-            default_val_holder.emplace(i.second->exp, true, xsink);
-        }
-        QoreScopedEvalHolder& default_val = *default_val_holder;
+        QoreScopedEvalHolder default_val(i.second->exp, true, xsink);
         if (*xsink) {
             return -1;
         }

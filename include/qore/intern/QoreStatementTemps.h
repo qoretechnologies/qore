@@ -274,7 +274,10 @@ DLLLOCAL bool qore_expr_may_create_observable_temp(const QoreValue& expr);
 class QoreScopedEvalHolder : public ValueEvalOptimizedRefHolder {
 public:
     //! evaluates @p exp; if @p own_scope, the temporaries that it creates are released before this returns
-    DLLLOCAL QoreScopedEvalHolder(const QoreValue& exp, bool own_scope, ExceptionSink* xsink)
+    /** Always inline: it is a thin wrapper that the evaluation of an assignment's operand runs in the hot path
+        (qore#7391)
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreScopedEvalHolder(const QoreValue& exp, bool own_scope, ExceptionSink* xsink)
             : ValueEvalOptimizedRefHolder(xsink) {
         if (own_scope) {
             QoreStatementTempScope temps(xsink);

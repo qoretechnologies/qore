@@ -121,10 +121,9 @@
     A merge into an object binds the references of its values before it takes the object's lock
     (qore_object_private::mergeBindReferences()).
 
-    Qore code that a check made with a probe runs (the member initializers of a hashdecl that a hash is converted to)
-    runs with the probe suspended and with binds refused (QoreReferenceBindCodeScope): a reference that it binds would
-    be bound under the lvalue lock of the outer store, so it raises REFERENCE-BIND-ERROR, and the code records nothing in
-    the probe of the outer store.
+    A type check made with a probe runs no Qore code: an assignment converts no hash to a hashdecl, whose member
+    initializers are the only Qore code that a conversion can run (a cast, which makes that conversion, holds no lvalue
+    lock).
 
     A store made with a helper that has no QoreBindRetry and that records a reference fails closed: it raises
     REFERENCE-BIND-ERROR and leaves its target unchanged.
@@ -421,8 +420,7 @@ public:
     //! installs the probe; \a bound gives the references that were bound already, if any (qore#7391)
     /** For a store that binds the references of its values before it takes its lock, such as a merge into an object
 
-        @param locked true if the thread holds an lvalue lock while the probe is installed: Qore code that the check
-        runs then refuses to bind references (QoreReferenceBindCodeScope)
+        @param locked true if the thread holds an lvalue lock while the probe is installed
     */
     DLLLOCAL QoreReferenceBindProbe(const QoreBindRetry* retry, const QoreReferenceBindPairList* bound, bool locked);
 
@@ -471,9 +469,6 @@ private:
 //! the probe installed for the current thread, or nullptr
 DLLLOCAL extern thread_local QoreReferenceBindProbe* qore_reference_bind_probe;
 
-//! true while Qore code runs that the check of a store holding an lvalue lock runs (see QoreReferenceBindCodeScope)
-DLLLOCAL extern thread_local bool qore_reference_bind_refused;
-
 //! Uninstalls the probe of the current thread for a check that binds inline, and installs it again (qore#7391)
 /** For a check made with no lvalue lock held in code that runs while a probe is installed, such as the write-back of
     a bind
@@ -493,45 +488,6 @@ public:
 
 private:
     QoreReferenceBindProbe* prev;
-};
-
-//! Runs Qore code from a type check that can be made with a probe installed (qore#7391)
-/** The only Qore code that a type check runs is the member initializers of a hashdecl that a hash is converted to
-    (typed_hash_decl_private): this scope is around their evaluation.  With no probe installed, it does nothing.  With a
-    probe installed, the code runs with the probe suspended, so that its own checks record nothing in the probe of the
-    outer store, and, if the outer store holds an lvalue lock, with binds refused: a reference that the code binds (an
-    argument for a reference<T> parameter, a store to a local variable) would be bound under that lock, which can
-    deadlock, so the bind raises REFERENCE-BIND-ERROR instead (qore_reference_bind_unlocked()).
-*/
-class QoreReferenceBindCodeScope {
-public:
-    DLLLOCAL QoreReferenceBindCodeScope() : prev(qore_reference_bind_probe) {
-        if (prev) [[unlikely]] {
-            enter();
-        }
-    }
-
-    DLLLOCAL ~QoreReferenceBindCodeScope() {
-        if (prev) [[unlikely]] {
-            qore_reference_bind_probe = prev;
-            qore_reference_bind_refused = prev_refused;
-        }
-    }
-
-    QoreReferenceBindCodeScope(const QoreReferenceBindCodeScope&) = delete;
-    QoreReferenceBindCodeScope& operator=(const QoreReferenceBindCodeScope&) = delete;
-
-private:
-    QoreReferenceBindProbe* prev;
-    bool prev_refused = false;
-
-    DLLLOCAL void enter() {
-        prev_refused = qore_reference_bind_refused;
-        qore_reference_bind_probe = nullptr;
-        if (prev->isLocked()) {
-            qore_reference_bind_refused = true;
-        }
-    }
 };
 
 //! A bind of a reference in progress in the current thread (qore#7391)

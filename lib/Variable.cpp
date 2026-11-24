@@ -968,7 +968,6 @@ LValueHelper::LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSin
 
 // the binding of reference elements outside the lvalue locks of a store (qore#7391; see QoreReferenceBind.h)
 thread_local QoreReferenceBindProbe* qore_reference_bind_probe = nullptr;
-thread_local bool qore_reference_bind_refused = false;
 
 //! the innermost bind of a reference in progress in the current thread (see QoreReferenceBindFrame)
 static thread_local QoreReferenceBindFrame* qore_reference_bind_frame = nullptr;
@@ -4495,9 +4494,7 @@ QORE_INTERN_NOINLINE QORE_INTERN_COLD int LValueHelper::checkTypesMayBind(QoreVa
         // the type binds no reference: its cached byte was not known yet, and is now
         check();
     } else if (!vl) {
-        // no lvalue lock is held (a local variable): the references are bound inline, also when this store runs in
-        // code that the check of another store runs with its probe installed (where binds are refused if that store
-        // holds a lock: see QoreReferenceBindCodeScope)
+        // no lvalue lock is held (a local variable): the references are bound inline
         QoreReferenceBindProbeSuspend suspend;
         check();
     } else {

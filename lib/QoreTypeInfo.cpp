@@ -6122,16 +6122,6 @@ std::atomic<qore_dbg_reference_bind_hook_t> qore_dbg_reference_bind_hook{nullptr
 std::atomic<bool> qore_dbg_reference_bind_strict{false};
 #endif
 
-//! raises the exception of a bind refused in Qore code that the check of a store holding an lvalue lock runs (qore#7391)
-static QORE_INTERN_NOINLINE QORE_INTERN_COLD void qore_reference_bind_raise_refused(const QoreTypeInfo* target_ti,
-        ExceptionSink* xsink) {
-    if (xsink) {
-        xsink->raiseException("REFERENCE-BIND-ERROR", "cannot bind a reference to type '%s' in code run by the type "
-            "check of a value stored into a locked lvalue (such as the initializer of a hashdecl member): it would be "
-            "bound under the lock of that lvalue", QoreTypeInfo::getName(target_ti));
-    }
-}
-
 //! Binds the reference \a r to the reference type of \a target_ti with no lvalue lock held (qore#7391)
 /** The value of the referenced lvalue is checked or converted to \a target_ti and written back if the conversion
     changed it.  A store of the write-back that records references of its own (its lvalue's type can bind references)
@@ -6143,12 +6133,6 @@ static void qore_reference_bind_unlocked(ReferenceNode* r, const QoreTypeInfo* t
     // a reference that an outer bind of this thread is binding to the same type is left to it: a cycle of references
     // ends here
     if (QoreReferenceBindFrame::active(r, target_ti)) {
-        return;
-    }
-    // Qore code that the check of a store holding an lvalue lock runs cannot bind: the bind would be made under that
-    // lock (see QoreReferenceBindCodeScope)
-    if (qore_reference_bind_refused) [[unlikely]] {
-        qore_reference_bind_raise_refused(target_ti, xsink);
         return;
     }
 #ifdef DEBUG
