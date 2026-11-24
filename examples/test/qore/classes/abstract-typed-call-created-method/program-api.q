@@ -32,6 +32,36 @@ class G6 inherits C5, G3 { string own(bool b) { return m(b); } }
         printf("type: %s\n", ex.err);
     }
 }
+# the type of a call bound once the abstract methods are resolved whose parent classes have variants of different
+# return types (a wider one in a later parent class, qore#7425) is known only once it is bound: an assignment of it is
+# checked at run time; through a parent class that gets a method of its own, and through a parent class whose parent
+# classes have more than one method of the name
+{
+    string uclasses = "class C5 { string m(int i) { return \"C5::m(int)\"; } }
+class G0 { abstract string m(bool b); abstract string m(int i); }
+class G3 inherits G0 { string m(bool b) { return \"G3::m(bool)\"; } }
+class Pq inherits C5, G3 {}
+class Qb { *string m(bool b) { return \"Qb::m(bool)\"; } }
+class Cq inherits Pq, Qb {}
+class Sm { string m(int i) { return \"Sm::m(int)\"; } }
+class Tm { string m(bool b) { return \"Tm::m(bool)\"; } }
+class Rm inherits Sm, Tm {}
+class W0 { abstract *string m(bool b); abstract string m(int i); }
+class W3 inherits W0 { *string m(bool b) { return \"W3::m(bool)\"; } }
+class G10 inherits Rm, W3 {}
+";
+    foreach string c in (("Cq", "G10")) {
+        Program p(PO_NEW_STYLE);
+        try {
+            p.parse(uclasses + sprintf("int sub t() { %s o(); int i = o.m(True); return i; }", c),
+                "unknown " + c);
+            p.callFunction("t");
+            printf("type unknown when parsing %s: no exception\n", c);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("type unknown when parsing %s: %s\n", c, ex.err);
+        }
+    }
+}
 # a call of a class whose abstract methods give it no method (an abstract class between) is not deferred: its type is
 # checked as before
 {
