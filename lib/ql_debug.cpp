@@ -1661,6 +1661,152 @@ static void ut_qorefile_open_sandbox_policy(UnitTestCounters& c) {
     rmdir(outside_dir);
 }
 
+#ifndef _Q_WINDOWS
+// the sandbox filesystem policy is checked for the file actually opened, which can differ from the one that the name
+// it was opened with appears to name; the exception names the file as given, never the file reached
+static void ut_opened_file_policy(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    char inside_template[] = "/tmp/qore-ut-opened-in-XXXXXX";
+    char outside_template[] = "/tmp/qore-ut-opened-out-XXXXXX";
+    char* inside_dir = mkdtemp(inside_template);
+    char* outside_dir = mkdtemp(outside_template);
+    UT_ASSERT(c, inside_dir && outside_dir, "opened file policy: test directories created");
+    if (!inside_dir || !outside_dir) {
+        return;
+    }
+    std::string inside = std::string(inside_dir) + "/inside.txt";
+    std::string outside = std::string(outside_dir) + "/outside.txt";
+    std::string removed = std::string(inside_dir) + "/removed.txt";
+    for (const std::string* path : {&inside, &outside, &removed}) {
+        FILE* f = fopen(path->c_str(), "w");
+        if (f) {
+            fputs("x", f);
+            fclose(f);
+        }
+    }
+    std::unique_ptr<char, decltype(&free)> inside_real(realpath(inside.c_str(), nullptr), &free);
+    std::unique_ptr<char, decltype(&free)> outside_real(realpath(outside.c_str(), nullptr), &free);
+    UT_ASSERT(c, inside_real && outside_real, "opened file policy: test files created");
+
+    int in_fd = open(inside.c_str(), O_RDONLY | O_CLOEXEC);
+    int out_fd = open(outside.c_str(), O_RDONLY | O_CLOEXEC);
+    int removed_fd = open(removed.c_str(), O_RDONLY | O_CLOEXEC);
+    int pfd[2] = {-1, -1};
+    UT_ASSERT_EQ(c, 0, pipe(pfd), "opened file policy: pipe created");
+    UT_ASSERT(c, in_fd >= 0 && out_fd >= 0 && removed_fd >= 0, "opened file policy: test files opened");
+    unlink(removed.c_str());
+
+    if (inside_real && outside_real && in_fd >= 0 && out_fd >= 0 && removed_fd >= 0 && pfd[0] >= 0) {
+        // the path of an open file is taken from the descriptor
+        struct stat sbuf;
+        std::string canon;
+        UT_ASSERT_EQ(c, 0, fstat(out_fd, &sbuf), "opened file policy: fstat()");
+        UT_ASSERT_EQ(c, 0, q_get_open_file_path(out_fd, sbuf, inside.c_str(), canon),
+            "opened file policy: the path of an open file is found");
+        UT_ASSERT(c, canon == outside_real.get(),
+            "opened file policy: the path is that of the file opened, not the name given");
+        // an object without a path, and a removed file, have none
+        UT_ASSERT_EQ(c, 0, fstat(pfd[0], &sbuf), "opened file policy: fstat() of a pipe");
+        UT_ASSERT_EQ(c, -1, q_get_open_file_path(pfd[0], sbuf, nullptr, canon),
+            "opened file policy: a pipe has no path");
+        UT_ASSERT_EQ(c, 0, fstat(removed_fd, &sbuf), "opened file policy: fstat() of a removed file");
+        UT_ASSERT_EQ(c, -1, q_get_open_file_path(removed_fd, sbuf, removed.c_str(), canon),
+            "opened file policy: a removed file has no path");
+        // the status must be that of the file at the path
+        UT_ASSERT_EQ(c, 0, fstat(in_fd, &sbuf), "opened file policy: fstat() of the inside file");
+        UT_ASSERT_EQ(c, -1, q_get_open_file_path(out_fd, sbuf, nullptr, canon),
+            "opened file policy: a path that does not name the file with the status given is refused");
+
+        QoreSandboxManager* sm = new QoreSandboxManager;
+        sm->filesystem().setDefaultPolicy(false);
+        UT_ASSERT_EQ(c, 0, sm->filesystem().addAllowedPath(inside_dir, QSEC_READ | QSEC_WRITE, &xsink),
+            "opened file policy: allowed path set");
+        xsink.clear();
+
+        // a file opened by an allowed name is allowed
+        UT_ASSERT_EQ(c, 0, q_check_opened_file_policy(*sm, in_fd, inside.c_str(), QSEC_READ, &xsink),
+            "opened file policy: the file named is allowed");
+        UT_ASSERT(c, !xsink, "opened file policy: no exception for the file named");
+        UT_ASSERT_EQ(c, 0, q_check_opened_file_policy(*sm, in_fd, inside_real.get(), QSEC_READ, &xsink),
+            "opened file policy: the file named by its canonical path is allowed");
+        xsink.clear();
+
+        // another file reached by an allowed name is denied, and the error names the file as given
+        UT_ASSERT_EQ(c, -1, q_check_opened_file_policy(*sm, out_fd, inside.c_str(), QSEC_READ, &xsink),
+            "opened file policy: a file outside the allowed path is denied");
+        UT_ASSERT(c, xsink.isException(), "opened file policy: the denial raises an exception");
+        if (xsink.isException()) {
+            QoreStringDataHelper err(xsink.getExceptionErr());
+            UT_ASSERT(c, err && !strcmp(err.c_str(), "FILESYSTEM-ACCESS-DENIED"),
+                "opened file policy: the denial is FILESYSTEM-ACCESS-DENIED");
+            QoreStringDataHelper desc(xsink.getExceptionDesc());
+            const char* d = desc ? desc.c_str() : "";
+            UT_ASSERT(c, strstr(d, inside.c_str()) != nullptr, "opened file policy: the error names the file as given");
+            UT_ASSERT(c, !strstr(d, outside_dir), "opened file policy: the error does not name the file reached");
+        }
+        xsink.clear();
+
+        // an object without a path, and a removed file, are denied
+        UT_ASSERT_EQ(c, -1, q_check_opened_file_policy(*sm, pfd[0], inside.c_str(), QSEC_READ, &xsink),
+            "opened file policy: a pipe is denied");
+        UT_ASSERT(c, xsink.isException(), "opened file policy: the pipe denial raises an exception");
+        xsink.clear();
+        UT_ASSERT_EQ(c, -1, q_check_opened_file_policy(*sm, removed_fd, removed.c_str(), QSEC_READ, &xsink),
+            "opened file policy: a removed file is denied");
+        xsink.clear();
+
+        // an access mode that the rule does not grant is denied for the file reached
+        UT_ASSERT_EQ(c, -1, q_check_opened_file_policy(*sm, in_fd, "/dev/null", QSEC_CREATE, &xsink),
+            "opened file policy: a mode not granted is denied");
+        xsink.clear();
+
+        // QoreFile opens are checked: the open itself succeeds for an allowed name and the file reached
+        {
+            QoreSandboxContext ctx;
+            ut_set_sandbox_context(ctx, sm);
+            QoreSandboxContextHelper sch(ctx);
+            QoreFile f;
+            UT_ASSERT_EQ(c, 0, f.open2(&xsink, inside.c_str()), "opened file policy: QoreFile::open2() of an "
+                "allowed file");
+            xsink.clear();
+        }
+        sm->deref(&xsink);
+        xsink.clear();
+
+        // O_RDONLY | O_TRUNC needs write access
+        QoreSandboxManager* ro = new QoreSandboxManager;
+        ro->filesystem().setDefaultPolicy(false);
+        ro->filesystem().addAllowedPath(inside_dir, QSEC_READ, &xsink);
+        xsink.clear();
+        {
+            QoreSandboxContext ro_ctx;
+            ut_set_sandbox_context(ro_ctx, ro);
+            QoreSandboxContextHelper ro_sch(ro_ctx);
+            QoreFile t;
+            UT_ASSERT_EQ(c, -1, t.open2(&xsink, inside.c_str(), O_RDONLY | O_TRUNC),
+                "opened file policy: O_RDONLY | O_TRUNC without write access is denied");
+            UT_ASSERT(c, xsink.isException(), "opened file policy: the O_TRUNC denial raises an exception");
+            xsink.clear();
+        }
+        ro->deref(&xsink);
+        xsink.clear();
+        struct stat tbuf;
+        UT_ASSERT(c, !stat(inside.c_str(), &tbuf) && tbuf.st_size == 1,
+            "opened file policy: the file was not truncated");
+    }
+
+    for (int fd : {in_fd, out_fd, removed_fd, pfd[0], pfd[1]}) {
+        if (fd >= 0) {
+            close(fd);
+        }
+    }
+    unlink(inside.c_str());
+    unlink(outside.c_str());
+    rmdir(inside_dir);
+    rmdir(outside_dir);
+}
+#endif
+
 static void ut_rsection_try_notify_does_not_block_on_writer(UnitTestCounters& c) {
     TestRSectionLock lock;
     RNotifier notifier;
@@ -28702,6 +28848,9 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
     ut_qorefile_open_sandbox_policy(c);
+#ifndef _Q_WINDOWS
+    ut_opened_file_policy(c);
+#endif
     ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_dgc_scan_generation(c);
     ut_dgc_scan_wait_cycle(c);
@@ -29623,6 +29772,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
     ut_qorefile_open_sandbox_policy(c);
+#ifndef _Q_WINDOWS
+    ut_opened_file_policy(c);
+#endif
     ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_dgc_scan_generation(c);
     ut_dgc_scan_wait_cycle(c);
@@ -33639,6 +33791,64 @@ static QoreValue f_dbg_quic_wait_dropped_client_datagrams(const QoreListNode* pa
 
 std::atomic<bool> qore_dbg_h2_fail_next_submit{false};
 
+//! the link that dbg_fs_swap_on_open() replaces, and its new target; protected by dbg_fs_swap_lock
+static std::mutex dbg_fs_swap_lock;
+static std::string dbg_fs_swap_link;
+static std::string dbg_fs_swap_target;
+static std::atomic<bool> dbg_fs_swap_armed{false};
+//! the number of matching opens that dbg_fs_swap_on_open() lets pass before the one it acts on
+static int64_t dbg_fs_swap_skip = 0;
+
+void qore_dbg_fs_swap_on_open(const char* fn) {
+    if (!dbg_fs_swap_armed.load(std::memory_order_acquire) || !fn) {
+        return;
+    }
+    std::string link, target;
+    {
+        std::lock_guard<std::mutex> lock(dbg_fs_swap_lock);
+        if (!dbg_fs_swap_armed.load(std::memory_order_relaxed)) {
+            return;
+        }
+        // a link ending in '*' matches every name that starts with what comes before it
+        const std::string& pat = dbg_fs_swap_link;
+        bool match = (!pat.empty() && pat.back() == '*')
+            ? !strncmp(fn, pat.c_str(), pat.size() - 1)
+            : pat == fn;
+        if (!match) {
+            return;
+        }
+        if (dbg_fs_swap_skip > 0) {
+            --dbg_fs_swap_skip;
+            return;
+        }
+        dbg_fs_swap_armed.store(false, std::memory_order_relaxed);
+        link = fn;
+        target = std::move(dbg_fs_swap_target);
+    }
+#ifndef _Q_WINDOWS
+    unlink(link.c_str());
+    if (symlink(target.c_str(), link.c_str())) {
+        fprintf(stderr, "dbg_fs_swap_on_open(): symlink(%s, %s) failed: %s\n", target.c_str(), link.c_str(),
+            strerror(errno));
+    }
+#endif
+}
+
+//! Debug-only: replaces a file or symbolic link with a link to another target in the next open of it whose name the
+//! sandbox filesystem policy checked, after the check and before the open, as a concurrent change of the file system
+//! would (qore#7498); a link ending in '*' matches every name that starts with what comes before it, and the first
+//! \a skip matching opens are not changed
+static QoreValue f_dbg_fs_swap_on_open(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringDataHelper link(get_param_value(params, 0));
+    QoreStringDataHelper target(get_param_value(params, 1));
+    std::lock_guard<std::mutex> lock(dbg_fs_swap_lock);
+    dbg_fs_swap_link = link ? link.c_str() : "";
+    dbg_fs_swap_target = target ? target.c_str() : "";
+    dbg_fs_swap_skip = get_param_value(params, 2).getAsBigInt();
+    dbg_fs_swap_armed.store(true, std::memory_order_release);
+    return QoreValue();
+}
+
 //! Debug-only: the next request submitted on an HTTP/2 client session fails as when the session has no stream ID left
 //! (NGHTTP2_ERR_STREAM_ID_NOT_AVAILABLE, raised as HTTP2-ERROR; qore#7443)
 static QoreValue f_dbg_http2_fail_next_submit(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
@@ -37079,6 +37289,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_http2_fail_next_submit", f_dbg_http2_fail_next_submit, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_fs_swap_on_open", f_dbg_fs_swap_on_open, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "link", stringTypeInfo, QORE_PARAM_NO_ARG, "target",
+        bigIntTypeInfo, QoreValue(0), "skip");
     qns.addBuiltinVariant("dbg_quic_server_retry_counts", f_dbg_quic_server_retry_counts, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_quic_fail_sends", f_dbg_quic_fail_sends, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
