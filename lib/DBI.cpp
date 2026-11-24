@@ -954,13 +954,49 @@ bool q_dbi_option_name_is_sensitive(const char* key) {
     return false;
 }
 
+// returns the value of Qore's own pool option "min" or "max" to show, or nullptr if it is masked: these options are
+// never given to a driver (DatasourcePool takes them as the pool's size), and a pool size is not a credential, so a
+// non-negative integer, or a string of decimal digits, is shown whatever the driver; any other value of these options
+// is masked (qore#7545)
+static QoreStringNode* q_dbi_shown_pool_size_option(const QoreValue v) {
+    if (v.getType() == NT_INT) {
+        int64 i = v.getAsBigInt();
+        if (i < 0) {
+            return nullptr;
+        }
+        QoreStringNode* rv = new QoreStringNode;
+        rv->sprintf(QLLD, i);
+        return rv;
+    }
+    if (v.getType() != NT_STRING) {
+        return nullptr;
+    }
+    const QoreStringNode* str = v.get<const QoreStringNode>();
+    // at most 18 digits: a value that cannot be an int64 pool size is masked
+    size_t len = str->size();
+    if (!len || len > 18) {
+        return nullptr;
+    }
+    for (const char* p = str->c_str(), *e = p + len; p < e; ++p) {
+        if (*p < '0' || *p > '9') {
+            return nullptr;
+        }
+    }
+    return new QoreStringNode(str->c_str());
+}
+
 // the one path for the value of a driver option in every masked form of a datasource (the safe URL, the masked hash,
 // the options of a db:// connection's information and ping results, mask_datasource_options()): returns the value
 // to show as a string, or nullptr if the value is masked: if the driver is not loaded (\a dd is nullptr), if the
 // option cannot be shown (see qore_dbi_private::isOptionShowable(): also if its name can name a credential, see
 // q_dbi_option_name_is_sensitive()), or if the value cannot be shown in a datasource
-// string (see q_ds_shown_option_value()) (qore#7070)
+// string (see q_ds_shown_option_value()) (qore#7070); Qore's own pool options "min" and "max" have their own rule
+// (see q_dbi_shown_pool_size_option(); qore#7545)
 static QoreStringNode* q_dbi_shown_option(const qore_dbi_private* dd, const char* key, const QoreValue v) {
+    // Qore's own pool options are shown by their own rule, whatever the driver (qore#7545)
+    if (!strcmp(key, "min") || !strcmp(key, "max")) {
+        return q_dbi_shown_pool_size_option(v);
+    }
     if (!dd || !dd->isOptionShowable(key)) {
         return nullptr;
     }
