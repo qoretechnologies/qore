@@ -431,9 +431,8 @@ public class AwsRestClientBase {
     */
     static hash<auto> applyEnvCredentials(hash<auto> opts) {
         # the host's credentials only for a caller that may receive them, the region for one that may read the
-        # environment (qore#6844)
+        # environment (getEnvRegion(), qore#6844)
         bool ambient = AwsRestClientBase::hostCredentialsAllowed();
-        bool region = SandboxManager::callerMayReadExternalInfo();
         # Read via getenv() rather than the ENV hash: ENV is a snapshot
         # captured at module load, while getenv() always queries the live
         # process environment so callers that bridge env state at runtime
@@ -441,7 +440,7 @@ public class AwsRestClientBase {
         foreach hash<auto> i in (AwsEnvVarMap.pairIterator()) {
             string opt_key = i.key;
             string env_key = i.value;
-            if (opt_key == "aws_region" ? !region : !ambient) {
+            if (opt_key == "aws_region" || !ambient) {
                 continue;
             }
             if (!opts{opt_key}) {
@@ -451,9 +450,9 @@ public class AwsRestClientBase {
                 }
             }
         }
-        # AWS_DEFAULT_REGION is the older variant, kept for compatibility
-        if (!opts.aws_region && region) {
-            *string v = getenv("AWS_DEFAULT_REGION");
+        # AWS_REGION, or AWS_DEFAULT_REGION, the older variant, kept for compatibility
+        if (!opts.aws_region) {
+            *string v = AwsRestClientBase::getEnvRegion();
             if (v.val()) {
                 opts.aws_region = v;
             }
@@ -968,6 +967,19 @@ public class AwsRestClientBase {
             # the canonical "missing required option" error fires
         }
         return opts;
+    }
+
+    #! Returns the AWS region of the environment (\c AWS_REGION, else \c AWS_DEFAULT_REGION), or @ref NOTHING
+    /** The region is configuration of the host, not a credential: it is read only for code that may read external
+        information (see @ref Qore::SandboxManager::callerMayReadExternalInfo()
+        "SandboxManager::callerMayReadExternalInfo()"; qore#6844)
+    */
+    static *string getEnvRegion() {
+        if (!SandboxManager::callerMayReadExternalInfo()) {
+            return;
+        }
+        *string v = getenv("AWS_REGION");
+        return v.val() ? v : getenv("AWS_DEFAULT_REGION");
     }
 
     #! Returns @ref True if the calling code may receive the host's AWS credentials (qore#6844)

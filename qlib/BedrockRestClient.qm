@@ -1707,7 +1707,8 @@ bool native = BedrockLlmProvider::supportsNativeStructuredOutput("eu.anthropic.c
             ?? (config.url.val() ? BedrockLlmProvider::regionFromUrl(config.url)
                 : NOTHING);
         if (!region.val()) {
-            *string env_region = getenv("AWS_REGION") ?? getenv("AWS_DEFAULT_REGION");
+            # the region of the environment only for a caller that may read it (qore#6844)
+            *string env_region = AwsRestClient::AwsRestClientBase::getEnvRegion();
             if (env_region.val()) {
                 region = env_region;
             }
@@ -1942,8 +1943,7 @@ public class BedrockEmbedder inherits QoreRagUtils::AbstractEmbedder {
             rest_mutex.lock();
             on_exit rest_mutex.unlock();
             if (!rest_client) {
-                *string region = config.options.aws_region
-                    ?? getenv("AWS_REGION") ?? getenv("AWS_DEFAULT_REGION");
+                *string region = config.options.aws_region ?? AwsRestClient::AwsRestClientBase::getEnvRegion();
                 if (!region.val()) {
                     throw "EMBEDDER-CONFIG-ERROR",
                         "BedrockEmbedder requires an AWS region — set "
