@@ -344,6 +344,7 @@ assert(RestSchemaActionSet::getConstructionCount() > before);
         @param eager @ref True to build output types at construction, @ref False to honor each set's option
 
         @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it
 
         @par Example:
         @code{.py}
@@ -356,7 +357,10 @@ DataProviderActionCatalog::getActions("Stripe");
         @since RestSchemaActions 1.0
     */
     static setEagerResponseTypes(bool eager) {
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        # the setting is process-wide: sandboxed code does not change it for every other caller (qore#7394)
+        SandboxManager::checkProcessWideRegistration("change how action sets build output types");
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", "cannot change how action sets build output types from a context with "
                 "restricted process control";
         }

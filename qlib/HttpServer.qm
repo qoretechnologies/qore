@@ -8367,7 +8367,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     */
     static dbgSetStoppingHook(*code<nothing(HttpListener)> hook) [dom=PROCESS_CONTROL] {
         SandboxManager::checkProcessWideRegistration("set the stopping hook of HTTP listeners");
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", "cannot set the stopping hook of HTTP listeners from a context with restricted "
                 "process control";
         }

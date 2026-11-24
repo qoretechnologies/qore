@@ -563,7 +563,8 @@ public class ConnectionSchemeCache {
     static *hash<ConnectionSchemeInfo> deregisterScheme(string scheme) {
         # only trusted code removes from the process-wide registry of schemes (qore#6747)
         ConnectionSchemeCache::checkRegistration(scheme, True);
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", sprintf("Cannot remove scheme %y from a context with restricted process control",
                 scheme);
         }
