@@ -1736,6 +1736,9 @@ public:
     */
     DLLLOCAL QORE_INTERN_NOINLINE void retainBindKey(ValueOptionalRefHolder& rh);
 
+    //! keeps a key past the inline buffer of retainBindKey() in a list that the helper releases after its locks
+    DLLLOCAL void retainBindKeyMore(ValueOptionalRefHolder& rh);
+
     //! returns the key at position \a i kept by retainBindKey() (0 = the key that the first step took), borrowed
     DLLLOCAL QoreValue getBindKey(size_t i) const;
 
