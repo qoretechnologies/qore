@@ -13554,13 +13554,23 @@ static QORE_INTERN_NOINLINE QoreValue qore_rt_exec_deopt_body(StatementBlock* st
     return stmts->exec(xsink);
 }
 
-#if defined(DEBUG) && !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT)
-//! forces the AST retry of the bodies of the fast calls of the thread (debug builds only, for tests: qore#7394)
+#ifdef DEBUG
+//! returns true if the fast calls of the thread take the AST retry of their bodies (debug builds only, for tests:
+//! qore#7394); defined in the main unit of the JIT runtime, and used by its copies in the units of the calls that give
+//! their arguments (JITRuntimeGivenArgs.cpp, JITRuntimeTakeOver.cpp) as well
+DLLLOCAL bool qore_dbg_jit_force_deopt_enabled();
+#ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+//! forces the AST retry of the bodies of the fast calls of the thread (dbg_jit_force_deopt())
 static thread_local bool qore_dbg_jit_force_deopt_flag = false;
 
 DLLLOCAL void qore_dbg_jit_force_deopt(bool on) {
     qore_dbg_jit_force_deopt_flag = on;
 }
+
+DLLLOCAL bool qore_dbg_jit_force_deopt_enabled() {
+    return qore_dbg_jit_force_deopt_flag;
+}
+#endif
 #endif
 
 // The caller owns the frame storage so it can keep the frame through method return validation.
@@ -13674,9 +13684,13 @@ static void execJITWithDeopt(std::optional<QoreJITStackLocation>& frame,
         // fast-call boundary so the normal cleanup path below still runs for
         // self, args, body locals, runtime location, and gate state.
     }
-#if defined(DEBUG) && !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT)
-    // the AST retry of the body, forced by a test (qore#7394)
-    if (__builtin_expect(qore_dbg_jit_force_deopt_flag, 0)) {
+#ifdef DEBUG
+    // the AST retry of the body, forced by a test (qore#7394), of a body that ran to its end: its result is released
+    // first, as the retry gives the result of the call
+    if (__builtin_expect(qore_dbg_jit_force_deopt_enabled(), 0) && !fn_invalidated && !*xsink) {
+        QoreValue first = fromBits(result_bits);
+        result_bits = 0;
+        first.discard(xsink);
         fn_invalidated = true;
     }
 #endif
