@@ -286,12 +286,18 @@ WKEuKQ7xuGuAiIESuSDBsSg=
     */
     private int addLoopbackListener(hash<HttpListenerOptionInfo> opts) {
         for (int attempt = 1; ; ++attempt) {
-            hash<auto> v4 = server.addListener(opts + <HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
+            hash<HttpListenerOptionInfo> v4_opts = opts;
+            v4_opts.node = "127.0.0.1";
+            v4_opts.service = 0;
+            hash<auto> v4 = server.addListener(v4_opts);
             if (!hasIpv6Loopback()) {
                 return v4.port;
             }
             try {
-                server.addListener(opts + <HttpListenerOptionInfo>{"node": "::1", "service": v4.port});
+                hash<HttpListenerOptionInfo> v6_opts = opts;
+                v6_opts.node = "::1";
+                v6_opts.service = v4.port;
+                server.addListener(v6_opts);
             } catch (hash<ExceptionInfo> ex) {
                 # the port is in use on the IPv6 loopback address: another port is taken
                 server.stopListenerID(v4.id);
