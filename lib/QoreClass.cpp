@@ -3363,6 +3363,22 @@ private:
     bool restore_runtime_po = false;
 };
 
+//! Runs the constructors of the base classes of a class without a constructor in the class's Program (qore#7513)
+/** The case of execBaseClassConstructorImpl() where the thread does not run in the class's Program with its options
+    (QoreImplicitConstructorProgramHelper::inProgram()); a function of its own, so that the helper is not in the frame
+    of execBaseClassConstructorImpl(), which recurses with the depth of a hierarchy of classes without constructors
+*/
+template <bool Lexical>
+static QORE_INTERN_NOINLINE void exec_base_class_constructors_in_class_program(const QoreClass& cls, const BCList& scl,
+        QoreObject* self, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreImplicitConstructorProgramHelper icph(cls, rc, xsink);
+    if (*xsink) {
+        return;
+    }
+    if constexpr (Lexical) scl.execConstructors({}, self, bceal, rc, xsink);
+    else scl.execConstructors(self, bceal, rc, xsink);
+}
+
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void qore_class_private::execBaseClassConstructorImpl(LexicalSemanticPolicy policy, QoreObject* self, BCEAList* bceal, RuntimeConfig& rc,
         ExceptionSink* xsink) const {
@@ -3370,6 +3386,14 @@ QORE_INTERN_ALWAYS_INLINE void qore_class_private::execBaseClassConstructorImpl(
     // if there is no constructor, execute the superclass constructors directly
     if (!constructor){
         if (scl) { // execute base class constructors if any
+            // a hierarchy of classes without constructors recurses here with its depth, which the parser accepts
+            // whatever the stack of the thread that constructs an object: each level checks the stack, so that a
+            // hierarchy too deep for the thread's stack raises STACK-LIMIT-EXCEEDED instead of overrunning it
+#ifdef QORE_MANAGE_STACK
+            if (check_stack(xsink)) {
+                return;
+            }
+#endif
             // in a hierarchy with a diamond, a class can be reached through more than one path: the base classes of a
             // class without a constructor are walked once for the object, as a class with a constructor is executed
             // once (qore#6513); only a class marked as reached through more than one path is recorded, so that
@@ -3379,9 +3403,8 @@ QORE_INTERN_ALWAYS_INLINE void qore_class_private::execBaseClassConstructorImpl(
             }
             // the constructors of the base classes run in the class's Program, as a constructor of the class would
             // run them (qore#7513)
-            std::optional<QoreImplicitConstructorProgramHelper> icph;
-            QoreImplicitConstructorProgramHelper::enter(icph, *cls, rc, xsink);
-            if (*xsink) {
+            if (!QoreImplicitConstructorProgramHelper::inProgram(*cls, rc)) [[unlikely]] {
+                exec_base_class_constructors_in_class_program<Lexical>(*cls, *scl, self, bceal, rc, xsink);
                 return;
             }
             if constexpr (Lexical) scl->execConstructors({}, self, bceal, rc, xsink);
