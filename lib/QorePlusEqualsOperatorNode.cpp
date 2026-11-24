@@ -36,6 +36,8 @@
 #include "qore/intern/ParseNode.h"
 #include "qore/intern/QoreIRInterpreter.h"
 
+#include <optional>
+
 QoreString QorePlusEqualsOperatorNode::op_str("+= operator expression");
 
 namespace {
@@ -233,21 +235,55 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QorePlusEqualsOperatorNode::evalImplInternal
     // LValueHelper so that a reference that it does not take is released after the lvalue's locks
     ValueHolder right_holder(new_right.takeReferencedValue(), xsink);
 
-    // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    LValueHelper v(left, xsink);
-    if (!v) {
-        return QoreValue();
-    }
+    // a store whose check records reference elements is made again after they have been bound with no lvalue lock
+    // held (qore#7391)
+    QoreBindRetry retry(xsink);
+    do {
+        // a retry adds the value that an assignment of the first round took
+        if (retry.hasValue()) [[unlikely]] {
+            right_holder = retry.takeValue();
+        }
 
-    // the implementation is shared with the other execution modes
-    ValueHolder rv(xsink);
-    if constexpr (Lexical) {
-        rv = doPlusEqualsOnLValue(v, right_holder, xsink, getSemanticPolicy());
-    } else {
-        rv = doPlusEqualsOnLValue(v, right_holder, xsink);
-    }
-    if (*xsink || !ref_rv) {
-        return QoreValue();
-    }
-    return rv.release();
+        // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
+        LValueHelper v(left, xsink, false, retry);
+        if (!v) {
+            return QoreValue();
+        }
+
+        // a container whose element or member types can bind a reference, or that the operation makes for an lvalue
+        // with no value: the values added are checked with a probe before it is changed
+        std::optional<QoreReferenceBindProbe> probe;
+        qore_type_t vt = v.getType();
+        if ((((vt == NT_LIST || vt == NT_HASH) && qore_container_store_may_bind(v.getValue()))
+                || ((vt == NT_NOTHING || vt == NT_NULL) && QoreTypeInfo::mayBindReference(v.getTypeInfo())))
+                && !right_holder->isNothing()) [[unlikely]] {
+            LexicalSemanticPolicy policy;
+            if constexpr (Lexical) {
+                policy = getSemanticPolicy();
+            }
+            if (qore_container_store_probe(v, *right_holder, true, Lexical ? &policy : nullptr, probe)) {
+                continue;
+            }
+        }
+
+        // the implementation is shared with the other execution modes
+        ValueHolder rv(xsink);
+        if constexpr (Lexical) {
+            rv = doPlusEqualsOnLValue(v, right_holder, xsink, getSemanticPolicy());
+        } else {
+            rv = doPlusEqualsOnLValue(v, right_holder, xsink);
+        }
+        if (probe) [[unlikely]] {
+            qore_container_store_probe_end(v, probe);
+        }
+        // an assignment of the operation (to an lvalue with no value) can leave the store to be made again
+        if (retry.isPending()) [[unlikely]] {
+            continue;
+        }
+        if (*xsink || !ref_rv) {
+            return QoreValue();
+        }
+        return rv.release();
+    } while (retry.again());
+    return QoreValue();
 }

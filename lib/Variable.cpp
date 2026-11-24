@@ -60,6 +60,7 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/BackgroundLValueRootNode.h"
 #include "qore/intern/QoreIR.h"
@@ -890,32 +891,6 @@ LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadA
     }
 }
 
-LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadAccess, ReferenceBind)
-        : vl(xsink), read_access(RA_VAR), track_write_protection(true) {
-    startRemovalPath();
-    QoreReferenceBindScope bind_scope(&vl, this);
-    RuntimeReferenceHelper rh(ref, xsink);
-    if (!*xsink) {
-        doLValue(lvalue_ref::get(&ref)->vexp, true);
-    }
-}
-
-LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReferenceBind)
-        : vl(xsink) {
-    startRemovalPath();
-    QoreReferenceBindScope bind_scope(&vl, this);
-    try {
-        RuntimeReferenceHelper rh(ref, xsink);
-        if (!*xsink && !doLValue(lvalue_ref::get(&ref)->vexp, true)) {
-            // see LValueHelper(const ReferenceNode&, ExceptionSink*, bool, bool)
-            adoptReferenceProgram(rh.takeProgramEntry());
-        }
-    } catch (...) {
-        ref_pgms.release(nullptr);
-        throw;
-    }
-}
-
 LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
@@ -985,6 +960,387 @@ LValueHelper::LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSin
     }
 }
 
+// the binding of reference elements outside the lvalue locks of a store (qore#7391; see QoreReferenceBind.h)
+thread_local QoreReferenceBindProbe* qore_reference_bind_probe = nullptr;
+
+//! the innermost bind of a reference in progress in the current thread (see QoreReferenceBindFrame)
+static thread_local QoreReferenceBindFrame* qore_reference_bind_frame = nullptr;
+
+static_assert(std::is_trivially_destructible<QoreValue>::value, "the keys recorded by QoreBindRetry are held in raw "
+    "memory and are not destroyed there");
+
+//! The state of a store whose check recorded reference elements to bind (qore#7391)
+struct QoreBindRetryState {
+    //! the references that the last round recorded, which are bound before the store is made again
+    QoreReferenceBindPairList pending;
+    //! the references bound by the earlier rounds, which the check accepts without binding them again
+    QoreReferenceBindPairList bound;
+    //! the exception that the check raised after it recorded references, reported after they have been bound
+    ExceptionSink error;
+    //! the keys of the path recorded after the first QoreBindRetry::KeyBufSize keys, each with true if the retry
+    //! holds a reference to it
+    std::vector<std::pair<QoreValue, bool>> keys_more;
+    //! the value of the last round, if has_value is set
+    QoreValue value;
+    //! the number of rounds that bound references
+    unsigned rounds = 0;
+    //! true if value holds the value of the last round
+    bool has_value = false;
+    //! true if the last round recorded references
+    bool is_pending = false;
+};
+
+QoreReferenceBindPairList::~QoreReferenceBindPairList() {
+    // the normal paths empty the list with release() or releaseWith(); a reference left here is one that the value of
+    // the store also holds, so this release frees nothing
+    release(nullptr);
+}
+
+void QoreReferenceBindPairList::add(ReferenceNode* r, const QoreTypeInfo* ti, LexicalSemanticPolicy policy,
+        bool lexical) {
+    pairs.push_back({r, ti, policy, lexical});
+    // the reference is taken once the pair is held, so that a failed allocation leaves nothing to release
+    r->ref();
+}
+
+bool QoreReferenceBindPairList::contains(const ReferenceNode* r, const QoreTypeInfo* ti) const {
+    for (const QoreReferenceBindPair& p : pairs) {
+        if (p.ref == r && p.type == ti) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void QoreReferenceBindPairList::moveTo(QoreReferenceBindPairList& other) {
+    if (pairs.empty()) {
+        return;
+    }
+    // the pairs are copied before they are removed here, so that a failed allocation leaves them in this list
+    other.pairs.insert(other.pairs.end(), pairs.begin(), pairs.end());
+    pairs.clear();
+}
+
+void QoreReferenceBindPairList::release(ExceptionSink* xsink) {
+    while (!pairs.empty()) {
+        ReferenceNode* r = pairs.back().ref;
+        pairs.pop_back();
+        r->deref(xsink);
+    }
+}
+
+void QoreReferenceBindPairList::releaseWith(LValueHelper& lvh) {
+    while (!pairs.empty()) {
+        // the pair is removed once the helper holds the reference: if saveTemp() fails, the list still releases it
+        lvh.saveTemp(QoreValue(pairs.back().ref));
+        pairs.pop_back();
+    }
+}
+
+QoreReferenceBindProbe::QoreReferenceBindProbe(const QoreBindRetry* retry) : retry(retry),
+        prev(qore_reference_bind_probe) {
+    qore_reference_bind_probe = this;
+}
+
+QoreReferenceBindProbe::~QoreReferenceBindProbe() {
+    uninstall();
+}
+
+void QoreReferenceBindProbe::uninstall() {
+    if (installed) {
+        assert(qore_reference_bind_probe == this);
+        qore_reference_bind_probe = prev;
+        installed = false;
+    }
+}
+
+void QoreReferenceBindProbe::record(ReferenceNode* r, const QoreTypeInfo* ti, LexicalSemanticPolicy policy,
+        bool lexical) {
+    // a reference bound by an earlier round of the store, or being bound by a bind of this thread that runs this
+    // check, is accepted as it is; a reference found twice in the value is recorded once
+    if ((retry && retry->isBound(r, ti)) || QoreReferenceBindFrame::active(r, ti) || pairs.contains(r, ti)) {
+        return;
+    }
+    pairs.add(r, ti, policy, lexical);
+}
+
+QoreReferenceBindFrame::QoreReferenceBindFrame(const ReferenceNode* r, const QoreTypeInfo* ti) : r(r), ti(ti),
+        prev(qore_reference_bind_frame) {
+    qore_reference_bind_frame = this;
+}
+
+QoreReferenceBindFrame::~QoreReferenceBindFrame() {
+    assert(qore_reference_bind_frame == this);
+    qore_reference_bind_frame = prev;
+}
+
+bool QoreReferenceBindFrame::active(const ReferenceNode* r, const QoreTypeInfo* ti) {
+    for (const QoreReferenceBindFrame* f = qore_reference_bind_frame; f; f = f->prev) {
+        if (f->r == r && f->ti == ti) {
+            return true;
+        }
+    }
+    return false;
+}
+
+QoreBindRetryState& QoreBindRetry::getState() {
+    if (!state) {
+        state = new QoreBindRetryState;
+    }
+    return *state;
+}
+
+QoreValue QoreBindRetry::takeValue() {
+    assert(value_kept && state && state->has_value);
+    QoreValue rv = state->value;
+    state->value = QoreValue();
+    state->has_value = false;
+    value_kept = false;
+    return rv;
+}
+
+bool QoreBindRetry::isBound(const ReferenceNode* r, const QoreTypeInfo* ti) const {
+    return state && state->bound.contains(r, ti);
+}
+
+void QoreBindRetry::setPending(QoreValue& value, QoreReferenceBindPairList& pairs, ExceptionSink& error,
+        LValueHelper& lvh) {
+    QoreBindRetryState& st = getState();
+    assert(!st.is_pending);
+    assert(st.pending.empty());
+    // the references are taken first, so that a failed allocation leaves the value with the caller
+    pairs.moveTo(st.pending);
+    if (st.has_value) {
+        // a value of an earlier round that the store site did not take (it gets its value again for each round) is
+        // released after the lvalue's locks
+        QoreValue old = st.value;
+        st.value = QoreValue();
+        st.has_value = false;
+        value_kept = false;
+        lvh.saveTemp(old);
+    }
+    // an operation that checked its operand before it took it (a container store) gives no value: it takes the operand
+    // again
+    if (!value.isNothing()) {
+        st.value = value;
+        value = QoreValue();
+        st.has_value = true;
+        value_kept = true;
+    }
+    st.error.assimilate(error);
+    st.is_pending = true;
+    pending = true;
+}
+
+void QoreBindRetry::recordKey(const QoreValue& key, bool evaluated) {
+    // the value of a key expression is kept with a reference, as its owner can release it; a constant key lives as
+    // long as the expression that the store evaluates
+    bool owned = evaluated && key.needsRef();
+    if (key_count < KeyBufSize) {
+        new (&reinterpret_cast<QoreValue*>(key_buf)[key_count]) QoreValue(owned ? key.refSelf() : key);
+        if (owned) {
+            owned_key_mask |= 1u << key_count;
+        }
+    } else {
+        std::vector<std::pair<QoreValue, bool>>& more = getState().keys_more;
+        // the room is made first, so that the reference is taken only once it can be held
+        more.reserve(more.size() + 1);
+        more.emplace_back(owned ? key.refSelf() : key, owned);
+    }
+    if (owned) {
+        ++owned_keys;
+    }
+    ++key_count;
+}
+
+QoreValue QoreBindRetry::getKey(size_t i) const {
+    assert(i < key_count);
+    if (i < KeyBufSize) {
+        return reinterpret_cast<const QoreValue*>(key_buf)[i];
+    }
+    assert(state);
+    return state->keys_more[i - KeyBufSize].first;
+}
+
+void QoreBindRetry::release() {
+    QoreValue* keys = reinterpret_cast<QoreValue*>(key_buf);
+    for (size_t i = 0, e = key_count < KeyBufSize ? key_count : KeyBufSize; i < e; ++i) {
+        if (owned_key_mask & (1u << i)) {
+            keys[i].discard(xsink);
+        }
+    }
+    key_count = 0;
+    owned_keys = 0;
+    owned_key_mask = 0;
+    if (state) {
+        std::unique_ptr<QoreBindRetryState> st(state);
+        state = nullptr;
+        for (std::pair<QoreValue, bool>& key : st->keys_more) {
+            if (key.second) {
+                key.first.discard(xsink);
+            }
+        }
+        st->pending.release(xsink);
+        st->bound.release(xsink);
+        if (st->has_value) {
+            st->value.discard(xsink);
+        }
+        value_kept = false;
+        // an exception kept here was not reported because the store ended with another one
+        st->error.clear();
+    }
+}
+
+bool QoreBindRetry::againIntern() {
+    QoreBindRetryState& st = *state;
+    if (!st.is_pending) {
+        return false;
+    }
+    st.is_pending = false;
+    pending = false;
+#ifdef DEBUG
+    // the store site calls again() after its helper has been destroyed, so no lvalue lock is held
+    assert(!qore_lvalue_write_locks_held);
+#endif
+    if (st.rounds >= MaxRounds) {
+        // every round recorded references that were not bound yet: the type of the target changed meanwhile
+        st.pending.release(xsink);
+        st.error.clear();
+        xsink->raiseException("REFERENCE-BIND-ERROR", "the type of the target changed while its reference elements "
+            "were bound");
+        return false;
+    }
+    ++st.rounds;
+    {
+        // the references are bound in the order that the check found them, with no lock held; code that the binds
+        // run binds its own references inline or makes stores of its own
+        QoreReferenceBindProbeSuspend suspend;
+        QoreReferenceBindPairList pairs;
+        st.pending.moveTo(pairs);
+        for (size_t i = 0, e = pairs.size(); i < e; ++i) {
+            qore_reference_bind_pair(pairs[i], xsink);
+            if (*xsink) {
+                // the error of an element is reported before that of a later element (the exception that the check
+                // raised after it recorded the references); the referents bound before stay converted
+                pairs.release(xsink);
+                st.error.clear();
+                return false;
+            }
+        }
+        pairs.moveTo(st.bound);
+    }
+    if (st.error) {
+        // the check raised an exception for a later element: reported now that the earlier ones have been bound
+        xsink->assimilate(st.error);
+        return false;
+    }
+    return true;
+}
+
+template <typename F>
+void LValueHelper::resolveWithBindRetry(F resolve) {
+    assert(bind_retry && !root_hook);
+    if (bind_retry->keysJournaled()) [[unlikely]] {
+        resolveWithBindKeys(resolve);
+        return;
+    }
+    // the keys of the path are recorded until its root is reached: a reference that the root holds is resolved again
+    // by a retry, as by any other use of the reference
+    bind_key_journal = bind_retry;
+    root_hook = bindKeyRootHook;
+    root_hook_arg = this;
+    resolve();
+    bind_key_journal = nullptr;
+    root_hook = nullptr;
+    bind_retry->setKeysJournaled();
+}
+
+template <typename F>
+QORE_INTERN_NOINLINE QORE_INTERN_COLD void LValueHelper::resolveWithBindKeys(F resolve) {
+    // the recorded keys are given to the steps as the keys that evalPathKeys() evaluates first are: the step that
+    // took the first key, the last one of the path, takes the last key of the store; they are borrowed from the retry
+    PathKeyStore store;
+    size_t count = bind_retry->keyCount();
+    if (count > PathKeyStore::BufSize) {
+        store.more.resize(count);
+    }
+    PathKey* data = store.data();
+    for (size_t i = 0; i < count; ++i) {
+        new (&data[count - 1 - i]) PathKey{bind_retry->getKey(i), false};
+    }
+    store.count = count;
+
+    // restores the state of the helper however the resolution ends
+    class BindKeyReplayScope {
+    public:
+        BindKeyReplayScope(LValueHelper& lvh, PathKeyStore& store) : lvh(lvh) {
+            assert(!lvh.path_keys);
+            lvh.path_keys = &store;
+            lvh.bind_key_replay = true;
+            lvh.root_hook = LValueHelper::bindKeyRootHook;
+            lvh.root_hook_arg = &lvh;
+        }
+
+        ~BindKeyReplayScope() {
+            lvh.root_hook = nullptr;
+            if (lvh.bind_key_replay) {
+                lvh.path_keys = nullptr;
+                lvh.bind_key_replay = false;
+            }
+        }
+
+    private:
+        LValueHelper& lvh;
+    };
+
+    BindKeyReplayScope scope(*this, store);
+    resolve();
+}
+
+int LValueHelper::bindKeyRootHook(void* arg) {
+    LValueHelper& lvh = *static_cast<LValueHelper*>(arg);
+    // the steps of the path have taken their keys; a reference that the root holds evaluates the keys of its own path
+    lvh.bind_key_journal = nullptr;
+    if (lvh.bind_key_replay) {
+        lvh.path_keys = nullptr;
+        lvh.bind_key_replay = false;
+    }
+    return 0;
+}
+
+QORE_INTERN_NOINLINE QORE_INTERN_COLD void LValueHelper::recordBindKey(const QoreValue& key, bool evaluated) {
+    bind_key_journal->recordKey(key, evaluated);
+}
+
+LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_assignment, QoreBindRetry& retry)
+        : vl(xsink), assignment_only(for_assignment), bind_retry(&retry) {
+    if (!exp.isNothing() && exp.hasNode()) {
+        try {
+            resolveWithBindRetry([&]() { doLValue(exp, false); });
+        } catch (...) {
+            // see LValueHelper(const QoreValue&, ExceptionSink*, bool, bool)
+            ref_pgms.release(nullptr);
+            throw;
+        }
+    }
+}
+
+LValueHelper::LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_assignment,
+        QoreBindRetry& retry) : vl(xsink), assignment_only(for_assignment), bind_retry(&retry) {
+    if (!exp.isNothing() && exp.hasNode()) {
+        try {
+            resolveWithBindRetry([&]() { doLValue(exp, rc, false); });
+        } catch (...) {
+            ref_pgms.release(nullptr);
+            throw;
+        }
+    }
+}
+
+void LValueHelper::dropMemberNotifications() {
+    qore_auto_vlock_ops(vl).dropMemberNotifications();
+}
+
 // this constructor function is used to scan objects after initialization
 LValueHelper::LValueHelper(QoreObject& self, ExceptionSink* xsink) : vl(xsink), before(true),
         robj(qore_object_private::get(self)) {
@@ -1015,7 +1371,8 @@ LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::mo
         removal_path(o.removal_path),
 #endif
         write_rejected(o.write_rejected),
-        member_lvalue_modified(o.member_lvalue_modified), robj(o.robj),
+        member_lvalue_modified(o.member_lvalue_modified), bind_key_replay(o.bind_key_replay),
+        bind_retry(o.bind_retry), bind_key_journal(o.bind_key_journal), robj(o.robj),
         buffer_lvalue(o.buffer_lvalue), buffer_lvalue_index(o.buffer_lvalue_index),
         buffer_lvalue_value(o.buffer_lvalue_value), val(o.val), qv(o.qv), typeInfo(o.typeInfo) {
     o.qv = nullptr;
@@ -2074,6 +2431,10 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
     }
     if (*vl.xsink)
         return -1;
+    // the first round of a store that can be made again records the keys of its path (qore#7391)
+    if (bind_key_journal) [[unlikely]] {
+        recordBindKey(*rh, op->getRight().needsEval());
+    }
 
     if (qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
         return -1;
@@ -2233,6 +2594,10 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
     }
     if (*vl.xsink) {
         return -1;
+    }
+    // the first round of a store that can be made again records the keys of its path (qore#7391)
+    if (bind_key_journal) [[unlikely]] {
+        recordBindKey(*rh, op->getRight().needsEval());
     }
 
     if (qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
@@ -2398,20 +2763,8 @@ int LValueHelper::setBufferElementLValue(QoreBufferNode* b, size_t index) {
     return 0;
 }
 
-void qore_raise_reference_bind_user_code(QoreObject* object, const char* member, ExceptionSink* xsink) {
-    xsink->raiseException("REFERENCE-BIND-ERROR", "cannot bind a reference to member '%s' of class '%s' while assigning "
-        "to a member of the same object: the class runs code for the member, which cannot run under the object's lock",
-        member, object->getClassName());
-}
-
 int LValueHelper::setMemberWriteGateLValue(QoreObject* object, const char* member,
         const QoreMemberInfo* accessor_info) {
-    // a gate is Qore code, which cannot run under the lock of the assignment being checked (qore#7380, qore#7391)
-    QoreVarRWLock& object_lock = qore_object_private::get(*object)->rml;
-    if (qore_auto_vlock_ops(vl).getRWL() != &object_lock && qore_var_rwlock_ops(object_lock).heldForBind(&vl)) {
-        qore_raise_reference_bind_user_code(object, member, vl.xsink);
-        return -1;
-    }
     auto entry = std::make_unique<MemberLValue>(object, member, accessor_info, vl.xsink);
     // Keep the receiver before unlocking the parent lvalue; a gate can call external or Qore code.
     vl.del();
@@ -2608,6 +2961,10 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     if (*vl.xsink) {
         return -1;
     }
+    // the first round of a store that can be made again records the keys of its path (qore#7391)
+    if (bind_key_journal) [[unlikely]] {
+        recordBindKey(*rh, op->getRight().needsEval());
+    }
 
     // a list of keys is a slice, which is not an lvalue, as doListLValue() checks for a list of indexes
     if (qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
@@ -2664,6 +3021,10 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     }
     if (*vl.xsink) {
         return -1;
+    }
+    // the first round of a store that can be made again records the keys of its path (qore#7391)
+    if (bind_key_journal) [[unlikely]] {
+        recordBindKey(*rh, op->getRight().needsEval());
     }
 
     // a list of keys is a slice, which is not an lvalue, as doListLValue() checks for a list of indexes
@@ -3040,18 +3401,9 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
     return 0;
 }
 
-thread_local const void* qore_reference_bind_vl = nullptr;
-thread_local void* qore_reference_bind_helper = nullptr;
-
-void qore_reference_bind_note_reused_lock() {
-    static_cast<LValueHelper*>(qore_reference_bind_helper)->noteReusedBindLock();
-}
-
 void LValueHelper::setAndLock(QoreVarRWLock& rwl) {
-    // a lock that the assignment of this thread holds while it binds a reference stays with that assignment (qore#7380)
-    if (qore_var_rwlock_ops(rwl).wrlockUnlessHeldForBind(&vl)) {
-        qore_auto_vlock_ops(vl).set(&rwl);
-    }
+    qore_var_rwlock_ops(rwl).wrlock();
+    qore_auto_vlock_ops(vl).set(&rwl);
 }
 
 void LValueHelper::set(QoreVarRWLock& rwl) {
@@ -3889,21 +4241,29 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
     //    this, desc, typeInfo, QoreTypeInfo::getName(typeInfo), check_types, n.getFullTypeName(), n.getType(), val,
     //    qv);
     if (check_types) {
-        // check type for assignment
-        if constexpr (Native) {
-            QoreTypeInfo::acceptAssignmentNative(typeInfo, desc, n, vl.xsink, this);
-        } else if constexpr (Lexical) {
-            QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, policy, this);
+        // a type that can bind a reference element is checked out of line: references are not bound under the lvalue
+        // lock that this helper holds (qore#7391)
+        if (QoreTypeInfo::mayBindReference(typeInfo)) [[unlikely]] {
+            if (checkTypesMayBind<Lexical, Native>(n, desc, policy)) {
+                return -1;
+            }
         } else {
-            QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, this);
-        }
-        if (*vl.xsink) {
-            //printd(5, "LValueHelper::assign() this: %p saving type-rejected value: %p '%s'\n", this, n,
-            //    get_type_name(n));
-            saveTempRef(n);
-            // the containers navigated to reach the target must not keep the entries created for this assignment
-            rollbackVivification();
-            return -1;
+            // check type for assignment
+            if constexpr (Native) {
+                QoreTypeInfo::acceptAssignmentNative(typeInfo, desc, n, vl.xsink, this);
+            } else if constexpr (Lexical) {
+                QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, policy, this);
+            } else {
+                QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, this);
+            }
+            if (*vl.xsink) {
+                //printd(5, "LValueHelper::assign() this: %p saving type-rejected value: %p '%s'\n", this, n,
+                //    get_type_name(n));
+                saveTempRef(n);
+                // the containers navigated to reach the target must not keep the entries created for this assignment
+                rollbackVivification();
+                return -1;
+            }
         }
     }
 
@@ -3963,6 +4323,252 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
     saveTemp(qv->takeIfNode());
     *qv = n;
     return 0;
+}
+
+template <bool Lexical, bool Native>
+QORE_INTERN_NOINLINE QORE_INTERN_COLD int LValueHelper::checkTypesMayBind(QoreValue& n, const char* desc,
+        LexicalSemanticPolicy policy) {
+    auto check = [&]() {
+        if constexpr (Native) {
+            QoreTypeInfo::acceptAssignmentNative(typeInfo, desc, n, vl.xsink, this);
+        } else if constexpr (Lexical) {
+            QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, policy, this);
+        } else {
+            QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, this);
+        }
+    };
+
+    if (!vl) {
+        // no lvalue lock is held (a local variable): the references are bound inline, also when this store runs in
+        // code that the check of another store runs with its probe installed
+        QoreReferenceBindProbeSuspend suspend;
+        check();
+    } else {
+        // the check records the references that it would bind under the lock that this helper holds
+        QoreReferenceBindProbe probe(bind_retry);
+        check();
+        probe.uninstall();
+        if (probe.recorded()) {
+            // a reference to the target itself is refused as without references to bind, and nothing is bound for
+            // it (x = \x): the recursive-reference check comes first
+            if (lvid_set && n.getType() == NT_REFERENCE
+                    && (lvid_set->find(lvalue_ref::get(reinterpret_cast<const ReferenceNode*>(n.getInternalNode()))
+                        ->lvalue_id) != lvid_set->end())) {
+                probe.pairs.releaseWith(*this);
+                saveTempRef(n);
+                int rc = *vl.xsink ? -1 : doRecursiveException();
+                rollbackVivification();
+                return rc;
+            }
+            return deferBinds(n, probe.pairs);
+        }
+    }
+    if (*vl.xsink) {
+        saveTempRef(n);
+        // the containers navigated to reach the target must not keep the entries created for this assignment
+        rollbackVivification();
+        return -1;
+    }
+    return 0;
+}
+
+int LValueHelper::deferBinds(QoreValue& n, QoreReferenceBindPairList& pairs) {
+    assert(!pairs.empty());
+    if (!bind_retry) {
+        // a store that cannot bind outside its locks fails closed: binding here would lock the referenced lvalue
+        // under the lock of the target, which can deadlock
+        pairs.releaseWith(*this);
+        if (!*vl.xsink) {
+            vl.xsink->raiseException("REFERENCE-BIND-ERROR", "internal error: a reference element of a value stored "
+                "into an lvalue of type '%s' cannot be bound while the lvalue is locked by a store that cannot bind it "
+                "after releasing the lock", QoreTypeInfo::getName(typeInfo));
+        }
+        saveTempRef(n);
+        rollbackVivification();
+        return -1;
+    }
+    // nothing is stored: the entries created to reach the target are removed, the target, its member notifications and
+    // its write-back are left as they are, and the retry of the store takes the value, the references and any exception
+    // that the check raised after it recorded them; the store site leaves this helper, which releases the locks, and
+    // QoreBindRetry::again() binds the references and has the store made again.  -1 is returned with no exception:
+    // every caller of assign() already stops at a non-zero return value without storing, so no intermediate code needs
+    // a new result code, and the store site tells a store made again from a failure with its retry
+    rollbackVivification();
+    member_lvalue_modified = false;
+    dropMemberNotifications();
+    bind_retry->setPending(n, pairs, *vl.xsink, *this);
+    assert(!*vl.xsink);
+    return -1;
+}
+
+bool qore_container_store_may_bind(const QoreValue& container) {
+    switch (container.getType()) {
+        case NT_LIST: {
+            const qore_list_private* lp = qore_list_private::get(*container.get<const QoreListNode>());
+            return lp->complexTypeInfo
+                && QoreTypeInfo::mayBindReference(QoreTypeInfo::getUniqueReturnComplexList(lp->complexTypeInfo));
+        }
+        case NT_HASH: {
+            const qore_hash_private* hp = qore_hash_private::get(*container.get<const QoreHashNode>());
+            if (hp->hashdecl) {
+                return QoreTypeInfo::mayBindReference(hp->hashdecl->getTypeInfo());
+            }
+            return hp->complexTypeInfo
+                && QoreTypeInfo::mayBindReference(QoreTypeInfo::getUniqueReturnComplexHash(hp->complexTypeInfo));
+        }
+        default:
+            return false;
+    }
+}
+
+int qore_container_store_probe(LValueHelper& lvh, const QoreValue& operand, bool merge,
+        const LexicalSemanticPolicy* policy, std::optional<QoreReferenceBindProbe>& probe) {
+    assert(!probe);
+    if (!lvh.vl) {
+        // no lvalue lock is held: the operation binds the references itself
+        return 0;
+    }
+    const QoreValue container = lvh.getValue();
+    // a list, or the element type of the list that the operation makes for an lvalue with no value
+    const qore_list_private* lp = nullptr;
+    const QoreTypeInfo* list_elem = nullptr;
+    // the hashdecl or the value type of a hash, or of the hash that the operation makes for an lvalue with no value
+    const TypedHashDecl* hd = nullptr;
+    const QoreTypeInfo* hash_value = nullptr;
+    bool is_list = false;
+    bool is_hash = false;
+    switch (container.getType()) {
+        case NT_LIST:
+            lp = qore_list_private::get(*container.get<const QoreListNode>());
+            is_list = true;
+            break;
+        case NT_HASH: {
+            const qore_hash_private* hp = qore_hash_private::get(*container.get<const QoreHashNode>());
+            hd = hp->hashdecl;
+            if (!hd && hp->complexTypeInfo) {
+                hash_value = QoreTypeInfo::getUniqueReturnComplexHash(hp->complexTypeInfo);
+            }
+            is_hash = true;
+            break;
+        }
+        case NT_NOTHING:
+        case NT_NULL: {
+            // the operation stores the default value of the lvalue's type first (+=)
+            const QoreTypeInfo* ti = lvh.getTypeInfo();
+            if ((list_elem = QoreTypeInfo::getReturnComplexListOrNothing(ti))) {
+                is_list = true;
+            } else if ((hd = QoreTypeInfo::getUniqueReturnHashDecl(get_or_nothing_base_type(ti)))) {
+                is_hash = true;
+            } else if ((hash_value = QoreTypeInfo::getReturnComplexHashOrNothing(ti))) {
+                is_hash = true;
+            }
+            break;
+        }
+        default:
+            break;
+    }
+    // a hash takes the members of a hash operand; another operand (an object) is merged by the object, whose members
+    // this lvalue's check does not store, and an lvalue of another type is assigned the operand by the operation,
+    // whose assignment binds outside the lock itself
+    if (!is_list && !(is_hash && operand.getType() == NT_HASH)) {
+        return 0;
+    }
+
+    probe.emplace(lvh.getBindRetry());
+    {
+        // the values are checked as the operation checks them, each on a reference of its own; the exceptions of
+        // this check are dropped: the operation raises them itself
+        ExceptionSink check_xsink;
+        if (is_list) {
+            auto check = [&](const QoreValue& value) {
+                ValueHolder holder(value.refSelf(), &check_xsink);
+                if (lp) {
+                    if (policy) {
+                        lp->checkVal(holder, nullptr, &check_xsink, *policy);
+                    } else {
+                        lp->checkVal(holder, &check_xsink);
+                    }
+                    return;
+                }
+                // as qore_list_private::checkVal() checks a value for the list that the operation makes
+                const QoreTypeInfo* src_ti = holder->getTypeInfo();
+                if (QoreTypeInfo::hasType(list_elem) && list_elem != src_ti
+                        && !QoreTypeInfo::superSetOf(list_elem, src_ti)) {
+                    QoreValue v(holder.release());
+                    if (policy) {
+                        QoreTypeInfo::acceptAssignment(list_elem, "<list element assignment>", v, &check_xsink,
+                            *policy, QLVTS_List);
+                    } else {
+                        QoreTypeInfo::acceptAssignment(list_elem, "<list element assignment>", v, &check_xsink,
+                            QLVTS_List);
+                    }
+                    holder = v;
+                }
+            };
+            if (merge && operand.getType() == NT_LIST) {
+                ConstListIterator i(operand.get<const QoreListNode>());
+                while (!check_xsink && i.next()) {
+                    check(i.getValue());
+                }
+            } else {
+                check(operand);
+            }
+        } else {
+            ConstHashIterator i(operand.get<const QoreHashNode>());
+            while (!check_xsink && i.next()) {
+                const QoreTypeInfo* member_type;
+                if (hd) {
+                    const HashDeclMemberInfo* m = typed_hash_decl_private::get(*hd)->findMember(i.getKey());
+                    // a key that the hashdecl does not declare is refused by the operation
+                    if (!m) {
+                        continue;
+                    }
+                    member_type = m->getTypeInfo();
+                } else {
+                    member_type = hash_value;
+                }
+                ValueHolder holder(i.getReferenced(), &check_xsink);
+                QoreValue v(holder.release());
+                if (policy) {
+                    QoreTypeInfo::acceptInputKey(member_type, i.getKey(), v, &check_xsink, *policy);
+                } else {
+                    QoreTypeInfo::acceptInputKey(member_type, i.getKey(), v, &check_xsink);
+                }
+                holder = v;
+            }
+        }
+        check_xsink.clear();
+    }
+    probe->uninstall();
+    if (probe->recorded()) {
+        // the operation is made again after the references have been bound; it takes its operand again
+        QoreValue none;
+        lvh.deferBinds(none, probe->pairs);
+        probe.reset();
+        return -1;
+    }
+    // installed again for the operation, whose check finds the same references
+    probe.reset();
+    probe.emplace(lvh.getBindRetry());
+    return 0;
+}
+
+int qore_container_store_probe_end(LValueHelper& lvh, std::optional<QoreReferenceBindProbe>& probe) {
+    assert(probe);
+    probe->uninstall();
+    int rc = 0;
+    if (probe->recorded()) {
+        // the check before the operation found no reference to bind in the same values
+        probe->pairs.releaseWith(lvh);
+        if (!*lvh.vl.xsink) {
+            lvh.vl.xsink->raiseException("REFERENCE-BIND-ERROR", "internal error: a reference element stored into a "
+                "container of type '%s' was found to need a bind only while the container was changed",
+                QoreTypeInfo::getName(lvh.getTypeInfo()));
+        }
+        rc = -1;
+    }
+    probe.reset();
+    return rc;
 }
 
 //! returns true if an operation's result is stored converted to the lvalue's declared type
@@ -5971,9 +6577,7 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_
     // a variable that only its frame can use is changed like a plain local variable: without the lock, and with
     // no recursive-reference scan, since nothing refers to it that a cycle could run through
     bool exclusive = frameExclusive();
-    QoreSafeVarRWWriteLocker sl(rml, false);
-    // a lock that the assignment of this thread holds while it binds a reference stays with that assignment (qore#7380)
-    bool locked = !exclusive && sl.lockUnlessHeldForBind(&lvh.vl);
+    QoreSafeVarRWWriteLocker sl(rml, !exclusive);
     if (!exclusive && QoreTypeInfo::needsScan(typeInfo)) {
         lvh.setClosure(const_cast<ClosureVarValue*>(this));
     }
@@ -6002,7 +6606,7 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_
         return 0;
     }
 
-    if (locked) {
+    if (!exclusive) {
         lvh.set(rml);
         sl.stay_locked();
     }

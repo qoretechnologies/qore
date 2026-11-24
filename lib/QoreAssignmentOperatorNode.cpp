@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -928,48 +928,63 @@ static QORE_INTERN_NOINLINE QoreValue qore_weak_assign_hold_copy(const QoreValue
     QoreValue copy;
     QoreValue rv;
     {
-        // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-        LValueHelper v(left, xsink, false, true);
-        if (!v) {
-            return QoreValue();
-        }
-        assert(!*xsink);
-
-        // the container assigned, to recognize a copy made by the conversion
+        // the container assigned, to recognize a copy made by the conversion; taken from the operand, which the
+        // statement holds, as a retry of the store assigns the value that the first round converted
         const AbstractQoreNode* assigned_node = new_value->hasNode() ? new_value->getInternalNode() : nullptr;
 
-        if (policy) {
-            if (v.assign(new_value.takeReferencedValue(), "<lvalue>", *policy, !ident, AssignmentMode::Weak)) {
+        // a store whose check records reference elements is made again after they have been bound with no lvalue
+        // lock held (qore#7391)
+        QoreBindRetry retry(xsink);
+        bool stored = false;
+        do {
+            // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
+            LValueHelper v(left, xsink, true, retry);
+            if (!v) {
                 return QoreValue();
             }
-        } else if (v.assign(new_value.takeReferencedValue(), "<lvalue>", !ident, AssignmentMode::Weak)) {
+            assert(!*xsink);
+
+            QoreValue value = retry.hasValue() ? retry.takeValue() : new_value.takeReferencedValue();
+            if (policy) {
+                if (v.assign(value, "<lvalue>", *policy, !ident, AssignmentMode::Weak)) {
+                    continue;
+                }
+            } else if (v.assign(value, "<lvalue>", !ident, AssignmentMode::Weak)) {
+                continue;
+            }
+
+            // the target is compared by its address; a copy is kept with a reference of its own, taken through the
+            // weak reference, or is a new empty container if it was freed (qore#7198)
+            switch (v.getType()) {
+                case NT_WEAKREF_HASH: {
+                    const WeakHashReferenceNode* w
+                        = reinterpret_cast<const WeakHashReferenceNode*>(v.getInternalNode());
+                    if (w->borrow() != assigned_node) {
+                        copy = w->lock();
+                    }
+                    break;
+                }
+                case NT_WEAKREF_LIST: {
+                    const WeakListReferenceNode* w
+                        = reinterpret_cast<const WeakListReferenceNode*>(v.getInternalNode());
+                    if (w->borrow() != assigned_node) {
+                        copy = w->lock();
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
+
+            // reference return value if necessary
+            if (ref_rv) {
+                rv = v.getReferencedValue();
+            }
+            stored = true;
+            break;
+        } while (retry.again());
+        if (!stored) {
             return QoreValue();
-        }
-
-        // the target is compared by its address; a copy is kept with a reference of its own, taken through the weak
-        // reference, or is a new empty container if it was freed (qore#7198)
-        switch (v.getType()) {
-            case NT_WEAKREF_HASH: {
-                const WeakHashReferenceNode* w = reinterpret_cast<const WeakHashReferenceNode*>(v.getInternalNode());
-                if (w->borrow() != assigned_node) {
-                    copy = w->lock();
-                }
-                break;
-            }
-            case NT_WEAKREF_LIST: {
-                const WeakListReferenceNode* w = reinterpret_cast<const WeakListReferenceNode*>(v.getInternalNode());
-                if (w->borrow() != assigned_node) {
-                    copy = w->lock();
-                }
-                break;
-            }
-            default:
-                break;
-        }
-
-        // reference return value if necessary
-        if (ref_rv) {
-            rv = v.getReferencedValue();
         }
     }
     // the site differs from that of the operand held by the caller
@@ -1048,22 +1063,30 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreAssignmentOperatorNode::evalInternImpl(E
         }
     }
 
-    // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    LValueHelper v(left, xsink, false, true);
-    if (!v)
-        return QoreValue();
-
-    assert(!*xsink);
-
-    // assign new value
-    if constexpr (Lexical) {
-        if (v.assign(new_value.takeReferencedValue(), "<lvalue>", getSemanticPolicy(), !ident, mode)) {
+    // a store whose check records reference elements is made again after they have been bound with no lvalue lock
+    // held (qore#7391)
+    QoreBindRetry retry(xsink);
+    do {
+        // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
+        LValueHelper v(left, xsink, true, retry);
+        if (!v)
             return QoreValue();
-        }
-    } else if (v.assign(new_value.takeReferencedValue(), "<lvalue>", !ident, mode)) {
-        return QoreValue();
-    }
 
-    // reference return value if necessary
-    return ref_rv ? v.getReferencedValue() : QoreValue();
+        assert(!*xsink);
+
+        // a retry assigns the value that the first round took and converted
+        QoreValue value = retry.hasValue() ? retry.takeValue() : new_value.takeReferencedValue();
+        // assign new value
+        if constexpr (Lexical) {
+            if (v.assign(value, "<lvalue>", getSemanticPolicy(), !ident, mode)) {
+                continue;
+            }
+        } else if (v.assign(value, "<lvalue>", !ident, mode)) {
+            continue;
+        }
+
+        // reference return value if necessary
+        return ref_rv ? v.getReferencedValue() : QoreValue();
+    } while (retry.again());
+    return QoreValue();
 }

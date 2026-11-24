@@ -146,6 +146,14 @@ public:
         addMemberNotificationImpl(b, o, member);
     }
 
+    //! drops the member notifications added, for a store that is made again, which adds them again (qore#7391)
+    /** Notifications that a lock handoff pinned are kept: they hold references that are released with them
+    */
+    DLLLOCAL static void dropMemberNotificationsImpl(AutoVLock* b);
+    DLLLOCAL void dropMemberNotifications() {
+        dropMemberNotificationsImpl(b);
+    }
+
     //! leaves the lock locked and the object referenced and clears the object and lock pointers
     DLLLOCAL static void clearImpl(AutoVLock* b);
     DLLLOCAL void clear() {

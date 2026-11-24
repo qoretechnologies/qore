@@ -47,6 +47,7 @@ enum qore_var_t {
 #include "qore/intern/VRMutex.h"
 #include "qore/intern/QoreLValue.h"
 #include "qore/intern/qore_var_rwlock_priv.h"
+#include "qore/intern/QoreReferenceBind.h"
 #include "qore/vector_set"
 
 #include <algorithm>
@@ -777,9 +778,6 @@ private:
     DLLLOCAL void releaseIntern(ExceptionSink* xsink);
 };
 
-//! raises the exception for binding a reference to a member that runs Qore code under the assignment's lock (qore#7380)
-DLLLOCAL void qore_raise_reference_bind_user_code(QoreObject* object, const char* member, ExceptionSink* xsink);
-
 class LValueHelper final {
     friend struct qore_type_safe_ref_helper_priv_t;
     friend class LValueRemoveHelper;
@@ -1188,6 +1186,12 @@ private:
     //! set when the lvalue rejected the value an operation converted for it; see ~LValueHelper()
     bool write_rejected = false;
     bool member_lvalue_modified = false;
+    //! true while the path is resolved with the keys that the first round of a store recorded (qore#7391)
+    bool bind_key_replay = false;
+    //! the retry of the store that this helper makes, if the store site has one (qore#7391)
+    QoreBindRetry* bind_retry = nullptr;
+    //! the retry that records the keys of the path while the first round of a store resolves it (qore#7391)
+    QoreBindRetry* bind_key_journal = nullptr;
 
     RObject* robj = nullptr;
     //! set when the lvalue is a static variable whose value is held in external storage
@@ -1230,6 +1234,26 @@ public:
     DLLLOCAL LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove = false,
         bool for_assignment = false);
 
+    //! resolves the target \a exp of a store that \a retry makes again if its check records references (qore#7391)
+    /** The first round records the keys and indices of the path, and a retry resolves the path with them, so that the
+        key expressions are evaluated once; see QoreBindRetry
+    */
+    DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_assignment, QoreBindRetry& retry);
+
+    //! as above, with a runtime configuration
+    DLLLOCAL LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_assignment,
+        QoreBindRetry& retry);
+
+    //! gives the helper the retry of its store, for a target whose path has no key to record (qore#7391)
+    DLLLOCAL void setBindRetry(QoreBindRetry& retry) {
+        bind_retry = &retry;
+    }
+
+    //! returns the retry of the store that this helper makes, or nullptr (qore#7391)
+    DLLLOCAL QoreBindRetry* getBindRetry() const {
+        return bind_retry;
+    }
+
     //! tag for the constructor that only reads the value of a reference
     struct ReadAccess {};
 
@@ -1242,15 +1266,6 @@ public:
     //! Resolves a reference only to read its value, without creating a missing value when \a for_remove is true
     /** isWriteProtected() then tells whether the variable that the reference names could have been written
     */
-    //! tag of the constructors that resolve a reference for binding it during a type check (qore#7380)
-    struct ReferenceBind {};
-
-    //! resolves the reference for reading to bind it; can reuse a lock that the assignment of this thread holds
-    DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadAccess, ReferenceBind);
-
-    //! resolves the reference for writing to bind it; can reuse a lock that the assignment of this thread holds
-    DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReferenceBind);
-
     DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadAccess, bool for_remove);
 
     DLLLOCAL LValueHelper(ExceptionSink* xsink, bool for_assignment = false);
@@ -1304,22 +1319,6 @@ public:
         assert(read_access == RA_ELEMENT);
         read_only_resolution = true;
         write_protected = true;
-    }
-
-    //! Records that this helper resolves a reference under a lock of the assignment being type-checked (qore#7380)
-    /** The lvalue is then only read: the assignment holds pointers into the data that the lock guards.
-    */
-    DLLLOCAL void noteReusedBindLock() {
-        read_only_resolution = true;
-        read_value_only = true;
-        write_protected = true;
-    }
-
-    //! Returns true if this helper resolved its lvalue under a lock of the assignment being type-checked
-    /** For a helper made with a ReferenceBind constructor, where only noteReusedBindLock() sets read_value_only
-    */
-    DLLLOCAL bool hasReusedBindLock() const {
-        return read_value_only;
     }
 
     //! Returns true if the variable read through a reference could not have been written through it
@@ -1621,6 +1620,24 @@ public:
     DLLLOCAL void saveTempRef(QoreValue& n);
 
     DLLLOCAL int doLValue(const QoreValue& exp, bool for_remove);
+
+    //! resolves the target of a store made with a QoreBindRetry with \a resolve (qore#7391)
+    /** The first round records the keys of the path until its root is reached; a retry resolves it with them
+    */
+    template <typename F>
+    DLLLOCAL void resolveWithBindRetry(F resolve);
+
+    //! resolves the target of a retry of a store with the keys that its first round recorded (qore#7391)
+    template <typename F>
+    DLLLOCAL void resolveWithBindKeys(F resolve);
+
+    //! records the key or index \a key that a step of the path took (qore#7391)
+    /** @param evaluated true if the key expression was evaluated, false if it is a constant
+    */
+    DLLLOCAL void recordBindKey(const QoreValue& key, bool evaluated);
+
+    //! the root hook of a store made with a QoreBindRetry: ends the recording or the replay of the keys (qore#7391)
+    DLLLOCAL static int bindKeyRootHook(void* arg);
 
     //! Navigate an lvalue using a structured path (IR-based alternative to AST-based doLValue)
     //! @param steps array of LVPathStep describing the navigation
@@ -1928,6 +1945,30 @@ public:
     template <bool Lexical, bool Native = false>
     DLLLOCAL int assignImpl(QoreValue val, const char* desc, bool check_types, AssignmentMode mode,
             LexicalSemanticPolicy policy);
+
+    //! checks the value of an assignment whose target's type can bind a reference (qore#7391)
+    /** With an lvalue lock held, the check runs with a QoreReferenceBindProbe; if it records a reference, nothing is
+        stored: the value and the references go to the retry of the store, and -1 is returned with no exception, or
+        with REFERENCE-BIND-ERROR if the helper has no retry.  With no lvalue lock held, the references are bound
+        inline.
+
+        @return -1 if the value was not stored (an exception was raised, or the store is made again), 0 if the
+        assignment continues
+    */
+    template <bool Lexical, bool Native>
+    DLLLOCAL int checkTypesMayBind(QoreValue& n, const char* desc, LexicalSemanticPolicy policy);
+
+    //! drops the member notifications of a store that is made again; the next round adds them again (qore#7391)
+    DLLLOCAL void dropMemberNotifications();
+
+    //! leaves the store of \a n unmade until the references \a pairs, which its check recorded, are bound (qore#7391)
+    /** With a retry, nothing is stored: the entries created to reach the target are removed, its member notifications
+        are dropped, and the retry takes \a n, \a pairs and the exception that the check raised after it recorded
+        them, if any; without a retry, the store fails closed with REFERENCE-BIND-ERROR.
+
+        @return -1
+    */
+    DLLLOCAL int deferBinds(QoreValue& n, QoreReferenceBindPairList& pairs);
 
     DLLLOCAL QoreValue removeValue(bool for_del);
     DLLLOCAL QoreValue remove(bool& static_assignment);

@@ -258,6 +258,12 @@ struct qore_list_private {
         return mergeWithoutTypeConversion(rv, *this);
     }
 
+    //! returns true if checking a value for an element of the list can bind a reference element (qore#7391)
+    DLLLOCAL bool elementMayBindReference() const {
+        return complexTypeInfo
+            && QoreTypeInfo::mayBindReference(QoreTypeInfo::getUniqueReturnComplexList(complexTypeInfo));
+    }
+
     DLLLOCAL int checkVal(ValueHolder& holder, ExceptionSink* xsink) const {
         return checkVal(holder, nullptr, xsink);
     }

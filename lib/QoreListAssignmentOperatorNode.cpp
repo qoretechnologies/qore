@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -182,18 +182,30 @@ QoreValue QoreListAssignmentOperatorNode::evalCommon(bool& needs_deref, Exceptio
             continue;
         }
 
-        // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-        LValueHelper v(lv, xsink, false, true);
-        if (!v)
-            return QoreValue();
+        // a store whose check records reference elements is made again after they have been bound with no lvalue
+        // lock held; each round takes its value from the list again (qore#7391)
+        QoreBindRetry retry(xsink);
+        bool stored = false;
+        do {
+            // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
+            LValueHelper v(lv, xsink, true, retry);
+            if (!v)
+                return QoreValue();
 
-        QoreValue assigned = nv ? nv->getReferencedEntry(i) : (!i ? new_value->refSelf() : QoreValue());
-        if constexpr (Lexical) {
-            v.assign(assigned, "<lvalue>", getSemanticPolicy());
-        } else {
-            v.assign(assigned);
-        }
-        if (*xsink) {
+            QoreValue assigned = nv ? nv->getReferencedEntry(i) : (!i ? new_value->refSelf() : QoreValue());
+            int rc;
+            if constexpr (Lexical) {
+                rc = v.assign(assigned, "<lvalue>", getSemanticPolicy());
+            } else {
+                rc = v.assign(assigned);
+            }
+            if (rc) {
+                continue;
+            }
+            stored = true;
+            break;
+        } while (retry.again());
+        if (!stored || *xsink) {
             return QoreValue();
         }
     }

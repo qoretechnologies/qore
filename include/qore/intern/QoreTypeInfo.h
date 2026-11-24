@@ -431,6 +431,26 @@ public:
     //! computes and caches the value returned by listElementTakesNothing()
     DLLLOCAL static bool listElementTakesNothingIntern(const QoreTypeInfo* lti);
 
+    //! returns true if checking a value against the type can bind a reference element (qore#7391)
+    /** True if the type is or contains, through list, softlist, hash and hashdecl member types and unions, a
+        reference type (reference<T>, *reference<T>), whose check binds a reference to an lvalue of a wider type; a
+        store whose target has such a type does not check its value with the target's lock held without a
+        QoreReferenceBindProbe.  Cached in the type.
+    */
+    DLLLOCAL static bool mayBindReference(const QoreTypeInfo* ti) {
+        if (!hasType(ti)) {
+            return false;
+        }
+        signed char c = ti->may_bind_reference_cache.load(std::memory_order_relaxed);
+        return c >= 0 ? c : mayBindReferenceIntern(ti);
+    }
+
+    //! computes and caches the value returned by mayBindReference()
+    DLLLOCAL static bool mayBindReferenceIntern(const QoreTypeInfo* ti);
+
+    //! returns true if \a ti can bind a reference; \a seen holds the types and hashdecls being walked
+    DLLLOCAL static bool mayBindReferenceWalk(const QoreTypeInfo* ti, std::vector<const void*>& seen);
+
     //! returns the list type whose element type is the or-nothing type of the element type of the complex list type
     //! \a lti (list<*int> for list<int>), or \a lti if its element type takes NOTHING; cached in the list type
     //! (qore#6435)
@@ -1751,6 +1771,8 @@ private:
     //! 1 if the walk of the declarations of the type is known to find none, otherwise 0 (not known yet or finds
     //! one); see namesNoDeclarations()
     mutable std::atomic<signed char> names_no_decl_cache {0};
+    //! whether checking a value against the type can bind a reference: -1 = not known yet; see mayBindReference()
+    mutable std::atomic<signed char> may_bind_reference_cache {-1};
     //! for a builtin type: the index of its or-nothing type + 1, otherwise 0; see getBuiltinOrNothingIndex()
     mutable uint16_t builtin_or_nothing_index = 0;
     //! for a complex list type: its list<*T> type; see getOrNothingListType()

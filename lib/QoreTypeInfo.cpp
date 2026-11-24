@@ -6117,6 +6117,181 @@ bool QoreTypeInfo::unionHasEnumTypeFor(const QoreTypeInfo* ti, const QoreValue& 
     return n.isEnum() && getUnionType(ti) && qore_type_info_has_enum_spec_for(*ti, n);
 }
 
+//! Binds the reference \a r to the reference type of \a target_ti with no lvalue lock held (qore#7391)
+/** The value of the referenced lvalue is checked or converted to \a target_ti and written back if the conversion
+    changed it.  A store of the write-back that records references of its own (its lvalue's type can bind references)
+    is made again after they have been bound, as any other store.
+*/
+template <typename FilterPolicy>
+static void qore_reference_bind_unlocked(ReferenceNode* r, const QoreTypeInfo* target_ti, ExceptionSink* xsink,
+        FilterPolicy policy) {
+    // a reference that an outer bind of this thread is binding to the same type is left to it: a cycle of references
+    // ends here
+    if (QoreReferenceBindFrame::active(r, target_ti)) {
+        return;
+    }
+    QoreReferenceBindFrame frame(r, target_ti);
+    // a check that runs with a probe installed binds no reference itself
+    QoreReferenceBindProbeSuspend suspend;
+
+    // issue #2891: do not create a value in the source reference if none already exists
+    // do not process if there is no type restriction
+    // the value read from the lvalue is assigned back to the same lvalue in order to apply the
+    // reference's type restriction (which can fold container value types); remember the node so
+    // that the recursive-reference scan can be skipped when nothing changed.  Every path that
+    // replaces the value hands the old one to LValueHelper::saveTemp(), which defers the
+    // dereference to the helper's destructor, so this pointer is still backed by a live reference
+    // at the comparison below and its address cannot have been reused
+    // returns the result of the assignment: -1 if the value was not stored, because of an exception or because the
+    // store is made again (see QoreBindRetry)
+    auto assign_back = [target_ti, policy](LValueHelper& lvh) -> int {
+        QoreValue val = lvh.getReferencedValue();
+        if (val.isNothing()) {
+            return 0;
+        }
+        const AbstractQoreNode* orig = val.getInternalNode();
+        lvh.setTypeInfo(target_ti);
+        int rc = policy.assign(lvh, val, "<reference>");
+        if (!rc && orig && lvh.getInternalNode() == orig) {
+            // the identical node is still in place, so the set of objects reachable from the
+            // lvalue cannot have changed; skip the cycle scan, which would otherwise walk the
+            // entire reachable object graph on every reference argument binding
+            lvh.suppressObjectScan();
+        }
+        return rc;
+    };
+
+    // the write-back is a store: one whose check records references of the value of the referenced lvalue is made
+    // again after they have been bound; the lvalue is resolved again for each round, as for any use of the reference
+    QoreBindRetry retry(xsink);
+    do {
+        // the variable is resolved for reading first: one that the reference cannot write, such as a
+        // read-only import, is left as it is when its value already has the reference's type
+        // (qore#5664)
+        std::optional<LValueHelper> lvh;
+        lvh.emplace(*r, xsink, LValueHelper::ReadAccess(), true);
+        if (*lvh && lvh->isWriteProtected()) {
+            bool needs_write = false;
+            {
+                ValueHolder val(lvh->getReferencedValue(), xsink);
+                // the variable's lock is released before the value is converted, as for an assignment
+                lvh.reset();
+                if (!val->isNothing()) {
+                    // the value is converted as the assignment below would convert it: a value that the
+                    // type rejects raises the same error as for a variable that can be written, and only
+                    // a value that the conversion changes has to be written back
+                    ValueHolder conv(val->refSelf(), xsink);
+                    policy.assignment(target_ti, "<reference>", *conv, xsink);
+                    if (!*xsink) {
+                        needs_write = !qore_value_unchanged_by_conversion(*val, *conv);
+                    }
+                }
+            }
+            if (needs_write && !*xsink) {
+                // the value has to be changed: resolving the variable for writing raises the exception
+                // that says why it cannot be, unless it has become writable in the meantime
+                lvh.emplace(*r, xsink, true);
+                if (*lvh) {
+                    lvh->setBindRetry(retry);
+                    if (assign_back(*lvh)) {
+                        continue;
+                    }
+                }
+            }
+        } else if (*lvh) {
+            lvh->setBindRetry(retry);
+            if (assign_back(*lvh)) {
+                continue;
+            }
+        }
+        break;
+    } while (retry.again());
+}
+
+//! Records the reference \a r found by the check of a store that holds an lvalue lock (qore#7391)
+template <typename FilterPolicy>
+static void qore_reference_bind_record(QoreReferenceBindProbe& probe, ReferenceNode* r,
+        const QoreTypeInfo* target_ti, FilterPolicy policy) {
+    if constexpr (std::is_same<FilterPolicy, LexicalTypeFilterPolicy>::value) {
+        probe.record(r, target_ti, policy.policy, true);
+    } else {
+        static_assert(std::is_same<FilterPolicy, DefaultTypeFilterPolicy>::value, "a filter policy of a check");
+        probe.record(r, target_ti, LexicalSemanticPolicy(), false);
+    }
+}
+
+void qore_reference_bind_pair(const QoreReferenceBindPair& pair, ExceptionSink* xsink) {
+    if (pair.lexical) {
+        qore_reference_bind_unlocked(pair.ref, pair.type, xsink, LexicalTypeFilterPolicy{pair.policy});
+    } else {
+        qore_reference_bind_unlocked(pair.ref, pair.type, xsink, DefaultTypeFilterPolicy{});
+    }
+}
+
+bool QoreTypeInfo::mayBindReferenceWalk(const QoreTypeInfo* ti, std::vector<const void*>& seen) {
+    if (!hasType(ti)) {
+        return false;
+    }
+    signed char c = ti->may_bind_reference_cache.load(std::memory_order_relaxed);
+    if (c >= 0) {
+        return c;
+    }
+    // a type that the walk reached already (a hashdecl whose member types refer to the hashdecl) adds nothing to the
+    // walk of its first visit, which gives the result; only the type that the walk started from is cached
+    if (std::find(seen.begin(), seen.end(), ti) != seen.end()) {
+        return false;
+    }
+    seen.push_back(ti);
+    for (const auto& a : ti->getAcceptSpecs()) {
+        const QoreTypeSpec& spec = a.spec;
+        switch (spec.getTypeSpec()) {
+            case QTS_COMPLEXREF:
+            case QTS_COMPLEXHARDREF:
+                return true;
+
+            case QTS_COMPLEXHASH:
+            case QTS_COMPLEXLIST:
+            case QTS_COMPLEXSOFTLIST:
+                if (mayBindReferenceWalk(spec.getElementType(), seen)) {
+                    return true;
+                }
+                break;
+
+            case QTS_HASHDECL: {
+                const TypedHashDecl* hd = spec.getHashDecl();
+                if (std::find(seen.begin(), seen.end(), hd) != seen.end()) {
+                    break;
+                }
+                seen.push_back(hd);
+                for (const auto& m : typed_hash_decl_private::get(*hd)->getMembers().member_list) {
+                    if (mayBindReferenceWalk(m.second->getTypeInfo(), seen)) {
+                        return true;
+                    }
+                }
+                break;
+            }
+
+            // the type argument of a type parameter or a wildcard, and the type of an initializer's conversion
+            // descriptor, are not known here: their check is assumed to bind
+            case QTS_TYPEPARAM:
+            case QTS_WILDCARD:
+            case QTS_INITIALIZER_FILTER:
+                return true;
+
+            default:
+                break;
+        }
+    }
+    return false;
+}
+
+bool QoreTypeInfo::mayBindReferenceIntern(const QoreTypeInfo* ti) {
+    std::vector<const void*> seen;
+    bool rv = mayBindReferenceWalk(ti, seen);
+    ti->may_bind_reference_cache.store(rv ? 1 : 0, std::memory_order_relaxed);
+    return rv;
+}
+
 template <typename FilterPolicy>
 bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const QoreAcceptSpec& accept,
         const char* arg_type, bool obj, int param_num, const char* param_name, QoreValue& n,
@@ -6343,107 +6518,12 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                         ok = true;
                         break;
                     }
-                    // issue #2891: do not create a value in the source reference if none already exists
-                    // do not process if there is no type restriction
-                    // the value read from the lvalue is assigned back to the same lvalue in order to apply the
-                    // reference's type restriction (which can fold container value types); remember the node so
-                    // that the recursive-reference scan can be skipped when nothing changed.  Every path that
-                    // replaces the value hands the old one to LValueHelper::saveTemp(), which defers the
-                    // dereference to the helper's destructor, so this pointer is still backed by a live reference
-                    // at the comparison below and its address cannot have been reused
-                    auto assign_back = [target_ti = uTi(), policy](LValueHelper& lvh) {
-                        QoreValue val = lvh.getReferencedValue();
-                        if (val.isNothing()) {
-                            return;
-                        }
-                        const AbstractQoreNode* orig = val.getInternalNode();
-                        lvh.setTypeInfo(target_ti);
-                        if (!policy.assign(lvh, val, "<reference>") && orig && lvh.getInternalNode() == orig) {
-                            // the identical node is still in place, so the set of objects reachable from the
-                            // lvalue cannot have changed; skip the cycle scan, which would otherwise walk the
-                            // entire reachable object graph on every reference argument binding
-                            lvh.suppressObjectScan();
-                        }
-                    };
-                    // the variable is resolved for reading first: one that the reference cannot write, such as a
-                    // read-only import, is left as it is when its value already has the reference's type
-                    // (qore#5664)
-                    // the lock of the assignment being checked can guard the referenced lvalue (qore#7380)
-                    std::optional<LValueHelper> lvh;
-                    lvh.emplace(*r, xsink, LValueHelper::ReadAccess(), LValueHelper::ReferenceBind());
-                    if (*lvh && lvh->hasReusedBindLock()) {
-                        // under a lock of the assignment being checked the value is only inspected, where it is:
-                        // nothing is changed, so no object scan is needed, and no reference is taken, whose release
-                        // could take the lock that the assignment holds (qore#7380)
-                        lvh->suppressObjectScan();
-                        const QoreValue current = lvh->getValue();
-                        if (!current.isNothing()) {
-                            qore_type_result_e rv = QoreTypeInfo::runtimeAcceptsValue(uTi(), current);
-                            // only a value that certainly needs no conversion is accepted: a value of exactly the
-                            // type, with or without NOTHING, or a valid object of a compatible class for a type that
-                            // does not wrap it in a list; any other value could be converted or rejected by a bind
-                            bool unchanged;
-                            // a weak reference has the type of what it refers to, but a bind does not accept it as that,
-                            // and a bind resolves a reference that the lvalue holds
-                            if (current.isEnum() || current.getType() == NT_WEAKREF
-                                    || current.getType() == NT_WEAKREF_HASH || current.getType() == NT_WEAKREF_LIST
-                                    || current.getType() == NT_REFERENCE) {
-                                unchanged = false;
-                            } else if (current.getType() == NT_OBJECT) {
-                                unchanged = rv != QTI_NOT_EQUAL && current.get<const QoreObject>()->isValid()
-                                    && !QoreTypeInfo::parseAcceptsReturns(uTi(), NT_LIST);
-                            } else {
-                                const QoreTypeInfo* value_ti = current.getTypeInfo();
-                                qore_type_t vt = current.getType();
-                                // a plain scalar that the type returns as it is (an int for a softint); a date is not
-                                // one of them, as a type can restrict it to absolute or relative dates
-                                unchanged = value_ti == uTi() || get_or_nothing_type_check(value_ti) == uTi()
-                                    || (rv == QTI_IDENT && (vt == NT_INT || vt == NT_FLOAT || vt == NT_NUMBER
-                                        || vt == NT_STRING || vt == NT_BOOLEAN || vt == NT_BINARY));
-                            }
-                            if (rv == QTI_NOT_EQUAL) {
-                                xsink->raiseException("RUNTIME-TYPE-ERROR", "<reference> expects type '%s', but got "
-                                    "type '%s' instead", QoreTypeInfo::getName(uTi()), current.getFullTypeName());
-                            } else if (!unchanged) {
-                                xsink->raiseException("REFERENCE-BIND-ERROR", "cannot convert the value of a reference "
-                                    "to type '%s' while assigning to an lvalue whose lock its path goes through",
-                                    QoreTypeInfo::getName(uTi()));
-                            }
-                        }
-                    } else if (*lvh && lvh->isWriteProtected()) {
-                        bool needs_write = false;
-                        {
-                            ValueHolder val(lvh->getReferencedValue(), xsink);
-                            // the variable's lock is released before the value is converted, as for an assignment
-                            lvh.reset();
-                            if (!val->isNothing()) {
-                                // the value is converted as the assignment below would convert it: a value that the
-                                // type rejects raises the same error as for a variable that can be written, and only
-                                // a value that the conversion changes has to be written back
-                                ValueHolder conv(val->refSelf(), xsink);
-                                policy.assignment(uTi(), "<reference>", *conv, xsink);
-                                if (!*xsink) {
-                                    needs_write = !qore_value_unchanged_by_conversion(*val, *conv);
-                                }
-                            }
-                        }
-                        if (needs_write && !*xsink) {
-                            // the value has to be changed: resolving the variable for writing raises the exception
-                            // that says why it cannot be, unless it has become writable in the meantime
-                            lvh.emplace(*r, xsink, LValueHelper::ReferenceBind());
-                            // the path can differ from the one read above and reach a lock that the assignment holds,
-                            // under which nothing can be written (qore#7380)
-                            if (*lvh && lvh->hasReusedBindLock()) {
-                                lvh->suppressObjectScan();
-                                xsink->raiseException("REFERENCE-BIND-ERROR", "cannot convert the value of a reference "
-                                    "to type '%s' while assigning to an lvalue whose lock its path goes through",
-                                    QoreTypeInfo::getName(uTi()));
-                            } else if (*lvh) {
-                                assign_back(*lvh);
-                            }
-                        }
-                    } else if (*lvh) {
-                        assign_back(*lvh);
+                    // the check of a store that holds an lvalue lock records the reference, which the store binds
+                    // after it has released the lock (qore#7391); any other check binds it here
+                    if (QoreReferenceBindProbe* probe = qore_reference_bind_probe) [[unlikely]] {
+                        qore_reference_bind_record(*probe, r, uTi(), policy);
+                    } else {
+                        qore_reference_bind_unlocked(r, uTi(), xsink, policy);
                     }
                     // the type of the reference has been accepted at this point, so this is never a type mismatch:
                     // an exception raised above, including one raised while resolving the lvalue, such as
@@ -9310,16 +9390,11 @@ static bool qore_retype_element_accepted(QoreValue& v, const QoreTypeInfo* elem_
     // converted to its base value by an element type of its base type, although that type is a superset of the
     // enum's type (qore#6274)
     qore_type_result_e rv = policy.value(elem_ti, v, false);
-    // an lvalue reference whose declared type cannot match the element type must not label the container, or the typed
-    // reads of the compiled modes read it as a value of that type: it goes to the error below, which takes no lock.  A
-    // reference that can match, or that a soft list type would wrap, is kept as it is and not bound or wrapped here:
-    // that can read the referenced variable, and a retype can run while the assignment holds the lock of that variable
-    // (qore#2889, qore#7377; the cases kept this way are qore#7380)
-    if (v.getType() == NT_REFERENCE) {
-        if (rv != QTI_NOT_EQUAL) {
-            return true;
-        }
-    } else if (!v.isEnum()
+    // an lvalue reference is checked as a top-level cast checks it, as it would label the container otherwise: a
+    // reference type binds it, converting or checking the referenced value, and another type converts or refuses it.
+    // A retype made by the check of a store that holds an lvalue lock runs under the store's probe, which records the
+    // reference instead, and the store binds it after it has released the lock (qore#7377, qore#7391)
+    if (v.getType() != NT_REFERENCE && !v.isEnum()
             && (rv == QTI_IDENT || (rv != QTI_NOT_EQUAL && QoreTypeInfo::superSetOf(elem_ti, v.getTypeInfo())))) {
         return true;
     }
