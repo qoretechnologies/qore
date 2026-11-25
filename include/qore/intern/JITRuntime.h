@@ -2205,6 +2205,21 @@ uint64_t qore_rt_lv_path_compound(QoreIRLValuePathInstruction* inst, uint64_t* d
     uint64_t rhs_bits, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_compound_consume(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
     uint64_t rhs_bits, ExceptionSink* xsink);
+//! Applies += or -= to an element of a list<int> local with a native index (qore#5578)
+/** For an instruction of qore_ir_is_int_list_compound_shape() whose local is declared \c list<int>.  An inline integer
+    element of a list that only the variable holds is changed in place; any other case is made by the generic path, as
+    qore_rt_lv_path_compound() (or qore_rt_lv_path_compound_consume() with \a consume_rhs) makes it.
+
+    @param inst the lvalue path instruction
+    @param index the index of the element: the value of the path's dynamic index operand, or its constant index
+    @param rhs_bits the operand
+    @param consume_rhs nonzero if the reference to the operand passes to this function in every case
+    @param xsink for exceptions
+
+    @return the value of the element after the operation (an owned reference), NOTHING on exception
+*/
+uint64_t qore_rt_lv_path_int_list_compound(QoreIRLValuePathInstruction* inst, int64_t index, uint64_t rhs_bits,
+    int32_t consume_rhs, ExceptionSink* xsink);
 uint64_t qore_rt_self_member_compound_consume(const char* member_name, int32_t compound_op,
     uint64_t rhs_bits, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_unary(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
@@ -2225,6 +2240,9 @@ uint64_t qore_rt_lv_path_compound_aot(QoreAOTContext* ctx, int32_t slot, uint64_
     uint64_t rhs_bits, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_compound_consume_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
     uint64_t rhs_bits, ExceptionSink* xsink);
+//! The AOT counterpart of qore_rt_lv_path_int_list_compound(); the instruction is the path of \a slot
+uint64_t qore_rt_lv_path_int_list_compound_aot(QoreAOTContext* ctx, int32_t slot, int64_t index, uint64_t rhs_bits,
+    int32_t consume_rhs, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_unary_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
     ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_binary_mut_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,

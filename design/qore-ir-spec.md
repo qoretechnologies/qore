@@ -145,6 +145,35 @@ value operand are released before the mutation (`DiscardTempsKeep`).
 See `design/lvalue-loads-in-ir.md` for the precise invariant and current
 handler rules.
 
+### In-place integer list element compound assignment
+
+Native code makes `local[index] += value` and `local[index] -= value`
+(`LValuePathCompound` with a `LocalVar` step and a `ListIndex` step,
+`qore_ir_is_int_list_compound_shape()`) on a local declared `list<int>` that is
+neither read-only nor a closure variable, with a constant index or an index that
+is a native integer, with `qore_rt_lv_path_int_list_compound()` (`_aot` in
+compiled code) instead of the generic `qore_rt_lv_path_compound()`: the index is
+given as it is, and no array of boxed dynamic operands is built.  The helper
+changes the element in place only where the generic path would change the same
+element of the same list and store the same value: the variable is on the
+current thread's local variable stack and holds the list itself (not a
+reference, a weak reference or a value assigned without a reference of its own),
+the list is valid, of type `list<int>` and held by the variable alone (the
+generic path would copy a shared list first), the index is that of an existing
+element holding an inline integer, and the operand is an inline integer whose
+sum or difference with the element is inline too.  The sum or difference of two
+inline integers fits in an `int64`, an inline value replaced by another changes
+no reference count and no count of values that the garbage collector scans, and
+the element type takes it, so the change raises nothing.  Every other case
+(a shared list, an index past the end or negative, a wide value or result, an
+operand of another type) is made by the generic path with the same operand
+handover rules (a consumed operand passes to the helper in every case).  The
+code around the call is unchanged: the root's caches are cleared before it and
+the root is reloaded after it.  `QORE_DISABLE_IR_IN_PLACE_INT_LIST_COMPOUND`
+disables it.  `IRInPlaceIntListCompound.qtest` checks the hits and every kind of
+miss in every execution mode and compiled code, with the compiled code's calls of
+the helper.
+
 ## Lowering Coverage
 
 The current implementation supports the language constructs needed by the
