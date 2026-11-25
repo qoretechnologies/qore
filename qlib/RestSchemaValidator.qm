@@ -101,6 +101,9 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - a response body of the media type \c application/x-ndjson (newline-delimited JSON) is returned as text, which
+      the caller splits into its records, as it is a sequence of JSON values and not one JSON document
+      (<a href="https://github.com/qoretechnologies/qore/issues/6503">issue 6503</a>)
     - a schema that is shared by every Program keeps what it derives from the data of its caller, such as the types
       with the request body defaults of a REST client, in the caller's per-Program cache, and shares the types and
       fields that its type builds cache (see
@@ -4261,6 +4264,13 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
 %endif
                 MimeTypeText: (
                     "code": "text",
+                    "in": data sub (data s) { return s; },
+                ),
+
+                # newline-delimited JSON is a sequence of JSON values, one per line, and not one JSON document: it
+                # is returned as text, which the caller splits into its records (qore#6503)
+                "application/x-ndjson": (
+                    "code": "ndjson",
                     "in": data sub (data s) { return s; },
                 ),
 
