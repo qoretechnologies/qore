@@ -59,6 +59,15 @@ module SquarespaceDataProvider {
                 "This integration supports orders, products, product variants, product images, "
                 "inventory, and transactions.",
             "scheme": "squarespaceres",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "squarespace.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.squarespace.com/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": SquarespaceLogo,
             "logo_file_name": "squarespace-logo.svg",
             "logo_mime_type": MimeTypeSvg,

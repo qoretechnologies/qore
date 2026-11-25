@@ -56,6 +56,15 @@ module DeelDataProvider {
                 "This integration supports contracts, timesheets, invoice adjustments, workers, "
                 "time-off requests, legal entities, invoices, and polling-based event triggers.",
             "scheme": "deel",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "letsdeel.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "unknown",
+                "source": "https://www.deel.com/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "logo": DeelDataProvider::DeelLogo,
             "logo_file_name": "deel-logo.svg",
             "logo_mime_type": MimeTypeSvg,
