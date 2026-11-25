@@ -1,0 +1,18 @@
+X1: METHOD-IS-PRIVATE
+X1 call_object_method: METHOD-IS-PRIVATE
+Y1: METHOD-IS-PRIVATE
+Y1 call_object_method: METHOD-IS-PRIVATE
+A5: METHOD-IS-PRIVATE
+A5 call_object_method: METHOD-IS-PRIVATE
+XC3: METHOD-IS-PRIVATE
+XC3 call_object_method: METHOD-IS-PRIVATE
+X2: "Secret::m"
+X2 call_object_method: "Secret::m"
+A1: "Secret::m"
+A1 call_object_method: "Secret::m"
+A2: "Secret::m"
+A2 call_object_method: "Secret::m"
+XC1: "SecretC::m"
+XC1 call_object_method: "SecretC::m"
+XC2: "SecretC::m"
+XC2 call_object_method: "SecretC::m"

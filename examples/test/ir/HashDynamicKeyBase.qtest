@@ -1,0 +1,220 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class HashDynamicKeyBaseTest
+
+#! Test: the base of a hash or object access with a key that is not a constant is evaluated once, before the key
+/** The IR lowering of <tt>h{k}</tt> with a key that is not a constant loaded the base variable for a not-NOTHING
+    guard and then lowered the base again, so every such access read its base twice, through a reference a full
+    reference read each time (qore#7263); the base is now lowered once and the guard applies to the value that the
+    access reads.
+
+    The script reads <tt>h{k}</tt> from typed, unassigned and deleted locals, a parameter, a \c reference<hash>
+    parameter and an \c auto local holding a reference (after the referenced hash changed), a global, a closure-bound
+    local, a \c thread_local variable (in its thread and in another one, where it has no value), an object and a
+    hashdecl hash (a missing member raises \c INVALID-MEMBER), with a list of keys (a slice) and in a try block; with
+    bases that have side effects, each of which must run once (a function call, a method call, <tt>l[i++]</tt>,
+    <tt>(h += x)</tt>, <tt>(h = f())</tt>); with nested bases (<tt>h.n{k}</tt>, <tt>h{n}{k}</tt>); with keys whose
+    evaluation assigns the base (<tt>g{swap_g()}</tt>, <tt>h{(h = x).firstKey()}</tt>), which read the base's value
+    from before the key; and uses \c exists, a compound assignment, a reference and \c remove of <tt>h{k}</tt>.
+    Each function is called three times through a call reference and by name, in every execution mode, on the IR
+    tier of tiered execution and as executables compiled with <tt>qcc -O0</tt> and <tt>-O3</tt> (see
+    ExecModeOutputTest).
+*/
+class HashDynamicKeyBaseTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# a hash or object access with a key that is not a constant (h{k}): the base is evaluated once, before the key
+int calls;
+hash<auto> sub mk() { ++calls; return {"a": 1, "b": 2}; }
+hash<auto> g = {"a": "old"};
+string sub swap_g() { g = {"a": "new"}; return "a"; }
+thread_local hash<auto> th;
+hashdecl Hd { int a = 1; int b = 2; }
+class M {
+    public { int a = 1; hash<auto> m = {"a": 10, "b": 20}; }
+    hash<auto> get() { ++calls; return m; }
+    string member_key(string k) { auto a = m{k}; m{k} = 11; return sprintf("%y %y", a, m{k}); }
+}
+string sub local_key(string k) { hash<auto> h = {"a": 1, "b": 2}; return sprintf("%y %y", h{k}, h{"b"}); }
+string sub param_key(hash<auto> h, string k) { return sprintf("%y", h{k}); }
+string sub unassigned(string k) { hash<auto> h; return sprintf("%y", h{k}); }
+string sub deleted(string k) { hash<auto> h = {"a": 1}; auto a = h{k}; delete h; return sprintf("%y %y", a, h{k}); }
+string sub ref_read(reference<hash<auto>> r, string k) { auto a = r{k}; r.a = 10; auto b = r{k}; return sprintf("%y %y", a, b); }
+string sub ref_param(string k) { hash<auto> h = {"a": 1}; string s = ref_read(\h, k); return sprintf("%s %y", s, h); }
+string sub auto_ref(string k) { hash<auto> h = {"a": 1}; auto rr = \h; auto a = rr{k}; h.a = 5; return sprintf("%y %y", a, rr{k}); }
+string sub global_key(string k) { g = {"a": "old"}; return sprintf("%y", g{k}); }
+string sub key_swaps_base() { g = {"a": "old"}; auto v = g{swap_g()}; return sprintf("%y %y", v, g); }
+string sub key_assigns_base() { hash<auto> h = {"a": "old"}; auto v = h{(h = {"a": "new"}).firstKey()}; return sprintf("%y %y", v, h); }
+string sub call_base(string k) { calls = 0; auto v = mk(){k}; return sprintf("%y %d", v, calls); }
+string sub method_base(string k) { calls = 0; M o(); auto v = o.get(){k}; return sprintf("%y %d", v, calls); }
+string sub inc_base(string k) { list<hash<auto>> l = ({"a": 1}, {"a": 2}); int i = 0; auto v = l[i++]{k}; auto w = l[i++]{k}; return sprintf("%y %y %d", v, w, i); }
+string sub nested_const(string k) { hash<auto> h = {"n": {"a": 3}}; return sprintf("%y", h.n{k}); }
+string sub nested_dynamic(string k) { hash<auto> h = {"n": {"a": 4}}; string n = "n"; return sprintf("%y", h{n}{k}); }
+string sub plus_equals_base(string k) { hash<auto> h = {"a": 1}; auto v = (h += {"c": 3}){k}; return sprintf("%y %y", v, h); }
+string sub assign_base(string k) { calls = 0; hash<auto> h; auto v = (h = mk()){k}; return sprintf("%y %y %d", v, h, calls); }
+string sub closure_read(string k) {
+    hash<auto> h = {"a": 1};
+    code c = string sub (string k) { return sprintf("%y", h{k}); };
+    string a = c(k);
+    h.a = 7;
+    code w = sub () { h.a = 8; };
+    auto b = h{k};
+    w();
+    return sprintf("%s %s %y %y", a, c(k), b, h{k});
+}
+string sub object_key(string k) { M o(); return sprintf("%y %s", o{k}, o.member_key(k)); }
+string sub hashdecl_key(string k) {
+    hash<Hd> hd();
+    string rv = sprintf("%y", hd{k});
+    try {
+        string bad = "zz";
+        rv += sprintf(" %y", hd{bad});
+    } catch (hash<ExceptionInfo> ex) {
+        rv += " " + ex.err;
+    }
+    return rv;
+}
+string sub slice_key() { hash<auto> h = {"a": 1, "b": 2, "c": 3}; list<string> ks = ("a", "c", "x"); return sprintf("%y", h{ks}); }
+string sub tl_read(string k) { return sprintf("%y", th{k}); }
+string sub thread_local_key(string k) {
+    th = {"a": "tl"};
+    Queue q();
+    background q.push(tl_read(k));
+    return sprintf("%s %s", tl_read(k), q.get());
+}
+string sub lvalue_ops(string k) {
+    hash<auto> h = {"a": 1};
+    bool e = exists h{k};
+    h{k} += 2;
+    reference rr = \h{k};
+    rr = 9;
+    auto d = remove h{k};
+    return sprintf("%y %y %y %y", e, d, h, exists h{k});
+}
+string sub in_try(string k) {
+    hash<auto> h = {"a": 1};
+    try {
+        auto v = h{k};
+        return sprintf("%y", v);
+    } catch () {
+        return "caught";
+    }
+}
+
+hash<string, code> tests = {
+    "local_key": \local_key(), "param_key": string sub (string k) { return param_key({"a": "p"}, k); },
+    "unassigned": \unassigned(), "deleted": \deleted(), "ref_param": \ref_param(), "auto_ref": \auto_ref(),
+    "global_key": \global_key(), "key_swaps_base": string sub (string k) { return key_swaps_base(); },
+    "key_assigns_base": string sub (string k) { return key_assigns_base(); }, "call_base": \call_base(),
+    "method_base": \method_base(), "inc_base": \inc_base(), "nested_const": \nested_const(),
+    "nested_dynamic": \nested_dynamic(), "plus_equals_base": string sub (string k) { return plus_equals_base("c"); },
+    "assign_base": \assign_base(), "closure_read": \closure_read(), "object_key": \object_key(),
+    "hashdecl_key": \hashdecl_key(), "slice_key": string sub (string k) { return slice_key(); },
+    "thread_local_key": \thread_local_key(), "lvalue_ops": \lvalue_ops(), "in_try": \in_try(),
+};
+for (int i = 0; i < 3; ++i) {
+    foreach hash<auto> t in (tests.pairIterator()) {
+        printf("%d %s: %s\n", i, t.key, t.value("a"));
+    }
+}
+for (int i = 0; i < 3; ++i) {
+    printf("%d direct: %s | %s | %s | %s | %s | %s\n", i, ref_param("a"), call_base("a"), inc_base("a"),
+        key_swaps_base(), assign_base("a"), thread_local_key("a"));
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "0 local_key: 1 2",
+            "0 param_key: \"p\"",
+            "0 unassigned: null",
+            "0 deleted: 1 null",
+            "0 ref_param: 1 10 {a: 10}",
+            "0 auto_ref: 1 5",
+            "0 global_key: \"old\"",
+            "0 key_swaps_base: \"old\" {a: \"new\"}",
+            "0 key_assigns_base: \"old\" {a: \"new\"}",
+            "0 call_base: 1 1",
+            "0 method_base: 10 1",
+            "0 inc_base: 1 2 2",
+            "0 nested_const: 3",
+            "0 nested_dynamic: 4",
+            "0 plus_equals_base: 3 {a: 1, c: 3}",
+            "0 assign_base: 1 {a: 1, b: 2} 1",
+            "0 closure_read: 1 8 7 8",
+            "0 object_key: 1 10 11",
+            "0 hashdecl_key: 1 INVALID-MEMBER",
+            "0 slice_key: {a: 1, c: 3}",
+            "0 thread_local_key: \"tl\" null",
+            "0 lvalue_ops: True 9 {} False",
+            "0 in_try: 1",
+            "1 local_key: 1 2",
+            "1 param_key: \"p\"",
+            "1 unassigned: null",
+            "1 deleted: 1 null",
+            "1 ref_param: 1 10 {a: 10}",
+            "1 auto_ref: 1 5",
+            "1 global_key: \"old\"",
+            "1 key_swaps_base: \"old\" {a: \"new\"}",
+            "1 key_assigns_base: \"old\" {a: \"new\"}",
+            "1 call_base: 1 1",
+            "1 method_base: 10 1",
+            "1 inc_base: 1 2 2",
+            "1 nested_const: 3",
+            "1 nested_dynamic: 4",
+            "1 plus_equals_base: 3 {a: 1, c: 3}",
+            "1 assign_base: 1 {a: 1, b: 2} 1",
+            "1 closure_read: 1 8 7 8",
+            "1 object_key: 1 10 11",
+            "1 hashdecl_key: 1 INVALID-MEMBER",
+            "1 slice_key: {a: 1, c: 3}",
+            "1 thread_local_key: \"tl\" null",
+            "1 lvalue_ops: True 9 {} False",
+            "1 in_try: 1",
+            "2 local_key: 1 2",
+            "2 param_key: \"p\"",
+            "2 unassigned: null",
+            "2 deleted: 1 null",
+            "2 ref_param: 1 10 {a: 10}",
+            "2 auto_ref: 1 5",
+            "2 global_key: \"old\"",
+            "2 key_swaps_base: \"old\" {a: \"new\"}",
+            "2 key_assigns_base: \"old\" {a: \"new\"}",
+            "2 call_base: 1 1",
+            "2 method_base: 10 1",
+            "2 inc_base: 1 2 2",
+            "2 nested_const: 3",
+            "2 nested_dynamic: 4",
+            "2 plus_equals_base: 3 {a: 1, c: 3}",
+            "2 assign_base: 1 {a: 1, b: 2} 1",
+            "2 closure_read: 1 8 7 8",
+            "2 object_key: 1 10 11",
+            "2 hashdecl_key: 1 INVALID-MEMBER",
+            "2 slice_key: {a: 1, c: 3}",
+            "2 thread_local_key: \"tl\" null",
+            "2 lvalue_ops: True 9 {} False",
+            "2 in_try: 1",
+            "0 direct: 1 10 {a: 10} | 1 1 | 1 2 2 | \"old\" {a: \"new\"} | 1 {a: 1, b: 2} 1 | \"tl\" null",
+            "1 direct: 1 10 {a: 10} | 1 1 | 1 2 2 | \"old\" {a: \"new\"} | 1 {a: 1, b: 2} 1 | \"tl\" null",
+            "2 direct: 1 10 {a: 10} | 1 1 | 1 2 2 | \"old\" {a: \"new\"} | 1 {a: 1, b: 2} 1 | \"tl\" null",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("HashDynamicKeyBase", Script, (map $1 + "\n", Expected).join(""),
+            "evaluates the base of a dynamic-key access once, before the key", NOTHING, NOTHING, ("-O0", "-O3")) {
+    }
+}

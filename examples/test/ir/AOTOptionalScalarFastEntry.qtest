@@ -59,6 +59,15 @@ int sub runAssigned(int iterations) {
     return result;
 }
 
+int sub sumList(list<int> values) {
+    return values[0] + values[1];
+}
+
+# a boxed argument whose facts prove it assigned
+int sub runBoxedAssigned() {
+    return sumList((4, 5));
+}
+
 bool sub nothingFails() {
     *int factor = NOTHING;
     try {
@@ -107,10 +116,10 @@ auto sub callOverloaded(auto value) {
 }
 
 int sub main() {
-    printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%s\\n\", runInt(100, 4), runFloat(1.5),
+    printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%s:%d\\n\", runInt(100, 4), runFloat(1.5),
         runBool(True), runBool(False), runAssigned(100), nothingFails(),
         removedFails(), removedValue() === NOTHING,
-        maybeRemoved(True) === NOTHING, callOverloaded(3));
+        maybeRemoved(True) === NOTHING, callOverloaded(3), runBoxedAssigned());
     return 0;
 }
 ";
@@ -141,8 +150,14 @@ if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
         enabled_compile, disabled_compile);
     exit(2);
 }
-if (!(enabled_compile =~ /eliding fast-entry argument NOTHING guard/)) {
+# runAssigned's assigned optional local (argument 1 of scale()) is native, so it needs no NOTHING guard
+if (!(enabled_compile =~ /native fast-entry argument 1 needs no NOTHING guard for SSA value [0-9]+ in 'runAssigned'/)) {
     printf("assigned-state argument guard was not elided:\n%s", enabled_compile);
+    exit(2);
+}
+# runBoxedAssigned's list is boxed, and its facts prove it assigned
+if (!(enabled_compile =~ /eliding fast-entry argument NOTHING guard for SSA value [0-9]+ in 'runBoxedAssigned'/)) {
+    printf("boxed assigned-state argument guard was not elided:\n%s", enabled_compile);
     exit(2);
 }
 
