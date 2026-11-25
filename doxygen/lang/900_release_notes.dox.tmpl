@@ -101,6 +101,13 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par REST Classes and Stream Requests Get the Request Without the Server's Objects and Credentials
+    The REST classes of a @ref RestHandler::RestHandler "RestHandler" and the code that serves a stream request get the
+    request context without the objects of the server and the credentials of the request, also when trusted code
+    declares them; a handler that authenticates its own endpoint opts in to its \c Authorization field, and a REST
+    handler names more keys for its REST classes (see @ref httpserverutil_request_credentials and
+    @ref rest_request_credentials).
+
     @par A Separated Module Is Refused for the Warnings Found When It Is Committed
     A @ref separated_modules "separated module" whose code raises a warning of its warning mask when it is committed
     (such as \c INVALID-OPERATION) is now refused, as the same module in a single file always was; fix the code or
