@@ -123,6 +123,53 @@ int sub identityCrossProgram(IdentityBase receiver, IdentityBase replacement, Pr
     return first * 100 + receiver.next(0);
 }
 
+# A handler run out of line that replaces the receiver twice: the entry receiver is released at the first
+# assignment, and the object of the second can be given its address (the entry cleanup of the receiver is released
+# before the handler runs, see QoreIRToLLVM::finalizeHandlerSites())
+int sub identityOnExit(IdentityBase receiver) {
+    int first = receiver.next(0);
+    {
+        on_exit {
+            receiver = new IdentityThird();
+            receiver = new IdentityDerived();
+        }
+        first += receiver.next(0) - 1;
+    }
+    return first * 100 + receiver.next(0);
+}
+
+int sub identityOnError(IdentityBase receiver) {
+    int first = receiver.next(0);
+    try {
+        on_error {
+            receiver = new IdentityThird();
+            receiver = new IdentityDerived();
+        }
+        throw "IDENTITY-REPLACED", "test";
+    } catch (hash<auto> ex) {
+        if (ex.err != "IDENTITY-REPLACED") {
+            rethrow;
+        }
+    }
+    return first * 100 + receiver.next(0);
+}
+
+int sub identityHandlerLoop(IdentityBase receiver) {
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        {
+            on_exit {
+                if (i == 1) {
+                    receiver = new IdentityThird();
+                    receiver = new IdentityDerived();
+                }
+            }
+            sum += receiver.next(0);
+        }
+    }
+    return sum;
+}
+
 sub identityWorker(Counter done, Queue results) {
     on_exit done.dec();
     IdentityBase base();
@@ -148,6 +195,14 @@ Program mutator(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_ALLOW_DEBU
 mutator.parse("sub replaceReceiver(object replacement) { set_local_var_value(1, \"receiver\", replacement); }",
     "identity-mutator");
 printf("%d\n", identityCrossProgram(base, derived, mutator));
+# the receivers are temporary arguments, so that the handlers release the last reference to them
+list<int> handler_results;
+for (int i = 0; i < 3; ++i) {
+    push handler_results, identityOnExit(new IdentityBase());
+    push handler_results, identityOnError(new IdentityBase());
+    push handler_results, identityHandlerLoop(new IdentityBase());
+}
+printf("%s\n", handler_results.join(":"));
 Counter done(4);
 Queue results();
 for (int i = 0; i < 4; ++i) {
