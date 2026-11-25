@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class WorkspaceBillingTest
+
+class WorkspaceBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("Workspace provider billing") {
+        addVendor("Gmail", "Gmail", "googleapis.com", "included",
+            "https://developers.google.com/workspace/gmail/api/reference/quota");
+        addVendor("GoogleCalendar", "GoogleCalendar", "googleapis.com", "included",
+            "https://developers.google.com/workspace/calendar/api/guides/quota");
+        addVendor("GoogleDrive", "GoogleDrive", "googleapis.com", "included",
+            "https://developers.google.com/workspace/drive/api/guides/limits");
+        set_return_value(main());
+    }
+}

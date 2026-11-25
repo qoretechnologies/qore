@@ -70,6 +70,15 @@ module AwsTextractDataProvider {
                 "- **Layout-preserving OCR**: extract text grouped by paragraphs, "
                 "titles, headers, footers with the `LAYOUT` feature",
             "scheme": "aws-textract",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "amazonaws.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://aws.amazon.com/textract/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "logo": Priv::AwsTextractLogo,
             "logo_file_name": "aws-textract-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -86,6 +95,7 @@ module AwsTextractDataProvider {
                 "app": AwsTextractDataProvider::AppName,
                 "path": "/detect-document-text",
                 "action": "detect-document-text",
+                "billing": <DataProviderBillingInfo>{"unit": "page"},
                 "display_name": "Detect Document Text",
                 "short_desc": "Extract lines and words from a document",
                 "desc": "Calls Textract's `DetectDocumentText` API to extract the "
@@ -115,6 +125,7 @@ module AwsTextractDataProvider {
                 "app": AwsTextractDataProvider::AppName,
                 "path": "/analyze-document",
                 "action": "analyze-document",
+                "billing": <DataProviderBillingInfo>{"unit": "page"},
                 "display_name": "Analyze Document",
                 "short_desc": "Extract tables, forms, signatures, layout, and query answers",
                 "desc": "Calls Textract's `AnalyzeDocument` API to extract text plus "

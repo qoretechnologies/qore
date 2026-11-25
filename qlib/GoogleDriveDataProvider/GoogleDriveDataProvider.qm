@@ -66,6 +66,15 @@ module GoogleDriveDataProvider {
                 "- **Organization**: create folders, and copy, move, and remove files\n\n"
                 "Google and Google Drive are trademarks of Google LLC",
             "scheme": "gdrive",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "googleapis.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://developers.google.com/workspace/drive/api/guides/limits",
+                "effective_date": 2026-11-25,
+            },
             "logo": GoogleDriveLogo,
             "logo_file_name": "google-drive-logo.svg",
             "logo_mime_type": MimeTypeSvg,

@@ -60,6 +60,15 @@ module TallyDataProvider {
                 "- **Automation**: set up webhooks to trigger workflows when forms are submitted\n"
                 "- **User management**: retrieve authenticated user information",
             "scheme": "tally",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "tally.so",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://tally.so/help/api",
+                "effective_date": 2026-11-25,
+            },
             "logo": TallyLogo,
             "logo_file_name": "tally-logo.svg",
             "logo_mime_type": MimeTypeSvg,

@@ -54,6 +54,15 @@ module GmailDataProvider {
             "short_desc": "Gmail services",
             "desc": "Gmail services",
             "scheme": "gmail",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "googleapis.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://developers.google.com/workspace/gmail/api/reference/quota",
+                "effective_date": 2026-11-25,
+            },
             "logo": GmailLogo,
             "logo_file_name": "gmail-logo.svg",
             "logo_mime_type": MimeTypeSvg,
