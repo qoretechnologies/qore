@@ -85,6 +85,15 @@ module BedrockDataProvider {
                 "AssumeRole — handled by the underlying `AwsRestClient`.\n\n"
                 "Project: <https://aws.amazon.com/bedrock/>",
             "scheme": "bedrock",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "amazonaws.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://aws.amazon.com/bedrock/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "logo": BedrockLogo,
             "logo_file_name": "bedrock-logo.svg",
             "logo_mime_type": MimeTypeSvg,

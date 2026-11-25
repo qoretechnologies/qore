@@ -7,7 +7,7 @@ class VendorAppBillingTest inherits QUnit::Test {
 
     # Check the catalog values a consumer sees after lazy action registration.
     addVendor(string mod, string app, string recipient, string model, string source,
-            *hash<string, string> action_terms) {
+            *hash<string, string> action_terms, *hash<string, string> action_sources) {
         addTestCase(app, sub () {
             load_module(mod + "DataProvider");
             hash<DataProviderAppInfo> info = DataProviderActionCatalog::getAppEx(app);
@@ -25,7 +25,7 @@ class VendorAppBillingTest inherits QUnit::Test {
                 assertEq(processing, DataProviderActionCatalog::getActionProcessing(app, action.action), action.action);
                 hash<DataProviderBillingInfo> effective = DataProviderActionCatalog::getActionBilling(app, action.action);
                 if (action_terms) {
-                    assertEq(source, effective.source, action.action);
+                    assertEq(action_sources{action.action} ?? source, effective.source, action.action);
                     assertEq(billing.effective_date, effective.effective_date, action.action);
                 } else {
                     assertEq(billing, effective, action.action);
@@ -33,6 +33,7 @@ class VendorAppBillingTest inherits QUnit::Test {
             }
             foreach hash<auto> term in ((action_terms ?? {}).pairIterator()) {
                 hash<DataProviderBillingInfo> expected = billing;
+                expected.source = action_sources{term.key} ?? source;
                 if (inlist(term.value, ("included", "metered", "subscription", "unknown", "contract"))) {
                     expected.model = term.value;
                 } else {

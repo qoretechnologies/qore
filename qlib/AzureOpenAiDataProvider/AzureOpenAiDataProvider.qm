@@ -71,6 +71,15 @@ module AzureOpenAiDataProvider {
                 "**Conversations:** Use a Foundry project endpoint and Microsoft Entra authentication.\n\n"
                 "[Azure OpenAI documentation](https://learn.microsoft.com/en-us/azure/foundry/openai/)",
             "scheme": "azure-openai",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "azure.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://azure.microsoft.com/en-us/pricing/details/azure-openai/",
+                "effective_date": 2026-11-25,
+            },
             "logo": AzureLogo,
             "logo_file_name": "azure-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -83,6 +92,9 @@ module AzureOpenAiDataProvider {
             foreach RestSchemaActionSet actions in (AzureOpenAiSchema::getActionSets()) {
                 foreach hash<DataProviderActionInfo> action in (
                         actions.getActionInfoList(AzureOpenAiDataProvider::AppName)) {
+                    if (inlist(action.action, ("list-models", "get-model", "list-batches", "get-batch"))) {
+                        action.billing = <DataProviderBillingInfo>{"model": "included"};
+                    }
                     DataProviderActionCatalog::registerAction(action);
                 }
             }
