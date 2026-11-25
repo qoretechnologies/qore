@@ -753,15 +753,17 @@ private:
     QoreIRValue emitListKeyCompoundOp(const VarRefNode* container_var, const QoreValue& index_expr,
         QoreIROpcode arith_op, const QoreIRValue& right,
         const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error);
+    //! the store fast paths of an assignment; with \a needs_result, the store gives the value stored as its result,
+    //! which is returned as the value of the assignment (qore#7589); otherwise \a value is returned
     QoreIRValue emitHashKeyDirectStore(const VarRefNode* container_var, const std::string& key_name,
         const QoreValue& key_expr, const QoreIRValue& value,
-        const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error);
+        const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error, bool needs_result);
     QoreIRValue emitHashKeyDynamicStore(const VarRefNode* container_var, const QoreValue& key_expr,
         const QoreIRValue& value, const QoreValue& full_expr,
-        const QoreProgramLocation* loc, std::string& error);
+        const QoreProgramLocation* loc, std::string& error, bool needs_result);
     QoreIRValue emitListIndexDirectStore(const VarRefNode* container_var, const QoreValue& index_expr,
         const QoreIRValue& value, const QoreValue& full_expr,
-        const QoreProgramLocation* loc, std::string& error);
+        const QoreProgramLocation* loc, std::string& error, bool needs_result);
     QoreIRValue lowerConditionValue(const QoreValue& cond, std::string& error);
     bool tryEmitFusedBranchIfLtLocalInt(const QoreValue& cond,
         QoreIRBasicBlock* true_target, QoreIRBasicBlock* false_target);

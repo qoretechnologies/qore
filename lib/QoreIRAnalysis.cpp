@@ -4981,7 +4981,10 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     }
                 } else if (valid_operation && hash_candidate
                         && inst->opcode == QoreIROpcode::HashKeyStore) {
+                    // a store whose value is used (qore#7589) has a result, which the replaced
+                    // aggregate cannot define: the aggregate is not replaced
                     valid_operation = inst->operands.size() == 2
+                        && !inst->result.isValid()
                         && qore_ir_get_written_local(inst) == local;
                     if (valid_operation) {
                         const auto* store = static_cast<
@@ -5000,7 +5003,10 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     }
                 } else if (valid_operation && hash_candidate
                         && inst->opcode == QoreIROpcode::HashKeyStoreDynamic) {
+                    // a store whose value is used (qore#7589) has a result, which the replaced
+                    // aggregate cannot define: the aggregate is not replaced
                     valid_operation = inst->operands.size() == 3
+                        && !inst->result.isValid()
                         && qore_ir_get_written_local(inst) == local;
                     std::string key;
                     valid_operation = valid_operation
@@ -5038,7 +5044,10 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     }
                 } else if (valid_operation && !hash_candidate
                         && inst->opcode == QoreIROpcode::ListIndexStore) {
+                    // a store whose value is used (qore#7589) has a result, which the replaced
+                    // aggregate cannot define: the aggregate is not replaced
                     valid_operation = inst->operands.size() == 3
+                        && !inst->result.isValid()
                         && qore_ir_get_written_local(inst) == local;
                     int64_t index = 0;
                     valid_operation = valid_operation

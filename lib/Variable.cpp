@@ -2171,8 +2171,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
         // create a hash of the required type if the lvalue has a complex hash type and currently has no value
         if (isNothing()) {
             // issue #2652: assign the current runtime type based on the declared complex list type
-            if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo
-                    || typeInfo == softListTypeInfo || typeInfo == softListOrNothingTypeInfo) {
+            if (qore_lvalue_vivifies_untyped_list(typeInfo)) {
                 // issue #3429 assign an untyped list if required; a softlist is untyped as well, as the list that
                 // a softlist variable is initialized with is, and the IR interpreter and native code vivify (qore#7573)
                 assignNodeIntern((l = new QoreListNode));
@@ -2195,8 +2194,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
             // save the old value for dereferencing outside any locks that may have been acquired
             saveCurrentValue();
             const QoreTypeInfo* valueTypeInfo;
-            if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo
-                    || typeInfo == softListTypeInfo || typeInfo == softListOrNothingTypeInfo) {
+            if (qore_lvalue_vivifies_untyped_list(typeInfo)) {
                 valueTypeInfo = nullptr;
             } else {
                 valueTypeInfo = autoTypeInfo;
@@ -2330,8 +2328,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
         // create a hash of the required type if the lvalue has a complex hash type and currently has no value
         if (isNothing()) {
             // issue #2652: assign the current runtime type based on the declared complex list type
-            if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo
-                    || typeInfo == softListTypeInfo || typeInfo == softListOrNothingTypeInfo) {
+            if (qore_lvalue_vivifies_untyped_list(typeInfo)) {
                 // issue #3429 assign an untyped list if required; a softlist is untyped as well, as the list that
                 // a softlist variable is initialized with is, and the IR interpreter and native code vivify (qore#7573)
                 assignNodeIntern((l = new QoreListNode));
@@ -2354,8 +2351,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
             // save the old value for dereferencing outside any locks that may have been acquired
             saveCurrentValue();
             const QoreTypeInfo* valueTypeInfo;
-            if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo
-                    || typeInfo == softListTypeInfo || typeInfo == softListOrNothingTypeInfo) {
+            if (qore_lvalue_vivifies_untyped_list(typeInfo)) {
                 valueTypeInfo = nullptr;
             } else {
                 valueTypeInfo = autoTypeInfo;
@@ -3080,7 +3076,7 @@ double LValueHelper::getAsFloat() const {
 
 // documented in Variable.h
 bool qore_weak_local_container_store(const LocalVar* lv, const AbstractQoreNode* container, const char* key,
-        int64 index, const QoreValue& val, ExceptionSink* xsink) {
+        int64 index, const QoreValue& val, ExceptionSink* xsink, QoreValue* res) {
     LocalVarValue* lvv = thread_try_find_lvar(lv);
     if (!lvv) {
         return false;
@@ -3114,7 +3110,9 @@ bool qore_weak_local_container_store(const LocalVar* lv, const AbstractQoreNode*
     if (lvh.navigatePath(steps, 2, false)) {
         return true;
     }
-    lvh.assign(val.refSelf(), "<lvalue>");
+    if (!lvh.assign(val.refSelf(), "<lvalue>") && res) {
+        *res = lvh.getReferencedValue();
+    }
     return true;
 }
 
@@ -3440,9 +3438,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                     // auto-vivify: create list with appropriate type
                     if (isNothing()) {
                         // a softlist is untyped, as in doListLValue() (qore#7573)
-                        if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo
-                            || typeInfo == listOrNothingTypeInfo || typeInfo == softListTypeInfo
-                            || typeInfo == softListOrNothingTypeInfo) {
+                        if (qore_lvalue_vivifies_untyped_list(typeInfo)) {
                             assignNodeIntern((l = new QoreListNode));
                             // the container was created for this assignment; a rejected assignment removes it again
                             trackVivifiedContainer();
@@ -3462,9 +3458,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                         saveCurrentValue();
                         const QoreTypeInfo* valueTypeInfo;
                         // a softlist is untyped, as in doListLValue() (qore#7573)
-                        if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo
-                            || typeInfo == listOrNothingTypeInfo || typeInfo == softListTypeInfo
-                            || typeInfo == softListOrNothingTypeInfo) {
+                        if (qore_lvalue_vivifies_untyped_list(typeInfo)) {
                             valueTypeInfo = nullptr;
                         } else {
                             valueTypeInfo = autoTypeInfo;
@@ -3873,7 +3867,13 @@ QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, ExceptionSink
     return rv;
 }
 
-bool qore_assign_through_element_reference(const QoreValue& cur, const QoreValue& val, ExceptionSink* xsink) {
+bool qore_lvalue_vivifies_untyped_list(const QoreTypeInfo* ti) {
+    return !ti || ti == anyTypeInfo || ti == listTypeInfo || ti == listOrNothingTypeInfo || ti == softListTypeInfo
+        || ti == softListOrNothingTypeInfo;
+}
+
+static QORE_INTERN_ALWAYS_INLINE bool qore_assign_through_element_reference_intern(const QoreValue& cur,
+        const QoreValue& val, ExceptionSink* xsink, QoreValue* res) {
     if (cur.getType() != NT_REFERENCE) {
         return false;
     }
@@ -3881,10 +3881,19 @@ bool qore_assign_through_element_reference(const QoreValue& cur, const QoreValue
     ValueHolder ref(cur.refSelf(), xsink);
     // an assignment: a member behind a write gate is not read first, as the AST interpreter assigns it
     LValueHelper lvh(*ref->get<const ReferenceNode>(), xsink, false, true);
-    if (lvh) {
-        lvh.assign(val.refSelf(), "<lvalue>");
+    if (lvh && !lvh.assign(val.refSelf(), "<lvalue>") && res) {
+        *res = lvh.getReferencedValue();
     }
     return true;
+}
+
+bool qore_assign_through_element_reference(const QoreValue& cur, const QoreValue& val, ExceptionSink* xsink) {
+    return qore_assign_through_element_reference_intern(cur, val, xsink, nullptr);
+}
+
+bool qore_assign_through_element_reference(const QoreValue& cur, const QoreValue& val, ExceptionSink* xsink,
+        QoreValue& res) {
+    return qore_assign_through_element_reference_intern(cur, val, xsink, &res);
 }
 
 bool qore_is_indirect_ref_value(const QoreValue& val) {

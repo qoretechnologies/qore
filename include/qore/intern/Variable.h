@@ -190,12 +190,14 @@ DLLLOCAL void qore_raise_module_state_read_only(ExceptionSink* xsink, const char
     @param index the index of the element of a list (negative indexes count from the end with
     \c PO_NEGATIVE_OFFSETS), if \a key is nullptr
     @param val the value assigned, borrowed: the assignment takes a reference of its own
+    @param res if not nullptr, takes a reference to the value stored after a successful assignment: the value of the
+    assignment, as the AST interpreter gives it (LValueHelper::getReferencedValue(); qore#7589)
 
     @return true if the local holds a weak reference to \a container, in which case the assignment was made or raised
     an exception in \a xsink; false if it does not, in which case nothing was done
 */
 DLLLOCAL bool qore_weak_local_container_store(const LocalVar* lv, const AbstractQoreNode* container, const char* key,
-        int64 index, const QoreValue& val, ExceptionSink* xsink);
+        int64 index, const QoreValue& val, ExceptionSink* xsink, QoreValue* res = nullptr);
 
 // structure for global variables
 class Var : protected QoreReferenceCounter {
@@ -2149,6 +2151,14 @@ DLLLOCAL bool qore_apply_assignment_mode(QoreValue& val, AssignmentMode mode);
 */
 DLLLOCAL bool qore_is_indirect_ref_value(const QoreValue& val);
 
+//! Returns true if an lvalue of the given declared type that has no value is vivified as an untyped list
+/** As the AST interpreter vivifies it (LValueHelper::doListLValue(), LValueHelper::navigatePath()): an untyped
+    declaration (none, any, list, *list, softlist, *softlist) takes an untyped list (issue #3429, qore#7573), which the
+    IR interpreter and native code vivify as well, so that the value of the assignment is the element as stored
+    (qore#7589)
+*/
+DLLLOCAL bool qore_lvalue_vivifies_untyped_list(const QoreTypeInfo* ti);
+
 //! Assigns a value through the reference that an element of a container holds, as the AST interpreter assigns an
 //! element that holds a reference (LValueHelper::doLValue() follows it; qore#6661)
 /** @param cur the element's current value
@@ -2160,6 +2170,12 @@ DLLLOCAL bool qore_is_indirect_ref_value(const QoreValue& val);
 */
 DLLLOCAL bool qore_assign_through_element_reference(const QoreValue& cur, const QoreValue& val,
         ExceptionSink* xsink);
+
+//! As qore_assign_through_element_reference(), and \a res takes a reference to the value stored after a successful
+//! assignment: the value of the assignment, as the AST interpreter gives it (LValueHelper::getReferencedValue();
+//! qore#7589)
+DLLLOCAL bool qore_assign_through_element_reference(const QoreValue& cur, const QoreValue& val,
+        ExceptionSink* xsink, QoreValue& res);
 
 //! Removes the element with the given index from the value of an lvalue, as the remove operator does
 /** As LValueRemoveHelper::doRemove() does for an index operator with a single index: a list loses the element and

@@ -24,8 +24,10 @@
     stored, in every execution mode, also when the value is an argument, a return value, a condition or an operand
     (issue #7575: the IR interpreter and native code gave the value assigned for a list element with a constant index
     and for a hash key); compound assignments, assignments whose value is not used and conversions that fail are checked
-    too.  It runs in every execution mode, and compiled with AOT at optimization levels 0 and 3, against the same
-    expected output.
+    too, and every way that such a store takes with its value used: a copy of a shared container, a container created
+    by the assignment, an element that holds a reference, an object in an untyped container, a container written
+    through a weak reference (issue #7589: the store gives the value stored as its result).  It runs in every execution
+    mode, and compiled with AOT at optimization levels 0 and 3, against the same expected output.
 */
 class AssignmentStoredValueTest inherits QUnit::Test {
     private {
@@ -80,6 +82,41 @@ refused unused: RUNTIME-TYPE-ERROR
 refused list used: RUNTIME-TYPE-ERROR
 refused stored: null nothing
 refused list stored: null nothing
+copied hash: 2 integer
+copied hash original: 1 integer
+copied list: 3 integer
+copied list original: 1 integer
+copied hash dynamic: 4 integer
+copied hash dynamic original: 2 integer
+vivified hash: 5 integer
+vivified list: 6 integer
+vivified hash dynamic: 7 integer
+vivified hashdecl: HASHDECL-IMPLICIT-CONSTRUCTION-ERROR
+element reference: 9 integer
+element reference target: 9 integer
+list element reference: 10 integer
+list element reference target: 10 integer
+object member through an untyped container: 11 integer
+object hash member through an untyped container: {a: 1} hash
+object member through an untyped container, dynamic: 12 integer
+hash<auto> typed hash: {a: 1} hash<string, int>
+list<auto> typed hash: {a: 1} hash<string, int>
+nothing: null nothing
+own value stored: [1, 2] list<int>
+own value: [1, 2, 3] list<int>
+weak hash: 14 integer
+weak hash target: 14 integer
+weak list: 15 integer
+weak list target: 15 integer
+loop sum: 20 integer
+vivified *softlist: {a: 1} hash
+vivified *softlist stored: {a: 1} hash
+vivified *list<any>: {a: 1} hash
+vivified *list: {a: 1} hash
+vivified list past the end: {a: 1} hash
+vivified list past the end stored: {a: 1} hash
+vivified auto: {a: 1} hash<string, int>
+vivified *list<auto>: {a: 1} hash<string, int>
 ";
     }
 

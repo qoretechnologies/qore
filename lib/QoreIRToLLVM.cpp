@@ -34478,9 +34478,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* slot_val = llvm::ConstantInt::get(i32_type, slot);
                 auto ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, i32_type, i64_type, ptr_type, i64_type, ptr_type}, false);
-                auto fn = module.getOrInsertFunction("qore_rt_hash_key_store_cow_aot", ft);
+                auto fn = module.getOrInsertFunction(
+                        inst->result.isValid() ? "qore_rt_hash_key_store_cow_aot_result"
+                            : "qore_rt_hash_key_store_cow_aot", ft);
                 auto fn_throwing = module.getOrInsertFunction(
-                        "qore_rt_hash_key_store_cow_aot_throwing", ft);
+                        inst->result.isValid() ? "qore_rt_hash_key_store_cow_aot_result_throwing"
+                            : "qore_rt_hash_key_store_cow_aot_throwing", ft);
                 call_result = emitMaybeInvoke(fn, fn_throwing,
                         {aot_ctx_arg, slot_val, hash_boxed, key_c, val_boxed, xsink_arg},
                         module, llvm_func, inst);
@@ -34490,9 +34493,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto* var_ptr = builder->CreateIntToPtr(var_int, ptr_type);
                 auto ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, i64_type, ptr_type, i64_type, ptr_type}, false);
-                auto fn = module.getOrInsertFunction("qore_rt_hash_key_store_cow", ft);
+                auto fn = module.getOrInsertFunction(
+                        inst->result.isValid() ? "qore_rt_hash_key_store_cow_result"
+                            : "qore_rt_hash_key_store_cow", ft);
                 auto fn_throwing = module.getOrInsertFunction(
-                        "qore_rt_hash_key_store_cow_throwing", ft);
+                        inst->result.isValid() ? "qore_rt_hash_key_store_cow_result_throwing"
+                            : "qore_rt_hash_key_store_cow_throwing", ft);
                 call_result = emitMaybeInvoke(fn, fn_throwing,
                         {var_ptr, hash_boxed, key_c, val_boxed, xsink_arg},
                         module, llvm_func, inst);
@@ -34548,9 +34554,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* slot_val = llvm::ConstantInt::get(i32_type, slot);
                 auto ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, i32_type, i64_type, i64_type, i64_type, ptr_type}, false);
-                auto fn = module.getOrInsertFunction("qore_rt_hash_key_store_dynamic_cow_aot", ft);
+                auto fn = module.getOrInsertFunction(
+                        inst->result.isValid() ? "qore_rt_hash_key_store_dynamic_cow_aot_result"
+                            : "qore_rt_hash_key_store_dynamic_cow_aot", ft);
                 auto fn_throwing = module.getOrInsertFunction(
-                        "qore_rt_hash_key_store_dynamic_cow_aot_throwing", ft);
+                        inst->result.isValid() ? "qore_rt_hash_key_store_dynamic_cow_aot_result_throwing"
+                            : "qore_rt_hash_key_store_dynamic_cow_aot_throwing", ft);
                 call_result = emitMaybeInvoke(fn, fn_throwing,
                         {aot_ctx_arg, slot_val, hash_boxed, key_boxed, val_boxed, xsink_arg},
                         module, llvm_func, inst);
@@ -34559,9 +34568,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto* var_ptr = builder->CreateIntToPtr(var_int, ptr_type);
                 auto ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, i64_type, i64_type, i64_type, ptr_type}, false);
-                auto fn = module.getOrInsertFunction("qore_rt_hash_key_store_dynamic_cow", ft);
+                auto fn = module.getOrInsertFunction(
+                        inst->result.isValid() ? "qore_rt_hash_key_store_dynamic_cow_result"
+                            : "qore_rt_hash_key_store_dynamic_cow", ft);
                 auto fn_throwing = module.getOrInsertFunction(
-                        "qore_rt_hash_key_store_dynamic_cow_throwing", ft);
+                        inst->result.isValid() ? "qore_rt_hash_key_store_dynamic_cow_result_throwing"
+                            : "qore_rt_hash_key_store_dynamic_cow_throwing", ft);
                 call_result = emitMaybeInvoke(fn, fn_throwing,
                         {var_ptr, hash_boxed, key_boxed, val_boxed, xsink_arg},
                         module, llvm_func, inst);
@@ -34616,9 +34628,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* slot_val = llvm::ConstantInt::get(i32_type, slot);
                 auto ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, i32_type, i64_type, i64_type, i64_type, ptr_type}, false);
-                auto fn = module.getOrInsertFunction("qore_rt_list_index_store_cow_aot", ft);
+                auto fn = module.getOrInsertFunction(
+                        inst->result.isValid() ? "qore_rt_list_index_store_cow_aot_result"
+                            : "qore_rt_list_index_store_cow_aot", ft);
                 auto fn_throwing = module.getOrInsertFunction(
-                        "qore_rt_list_index_store_cow_aot_throwing", ft);
+                        inst->result.isValid() ? "qore_rt_list_index_store_cow_aot_result_throwing"
+                            : "qore_rt_list_index_store_cow_aot_throwing", ft);
                 call_result = emitMaybeInvoke(fn, fn_throwing,
                         {aot_ctx_arg, slot_val, list_boxed, index_i64, val_boxed, xsink_arg},
                         module, llvm_func, inst);
@@ -34628,9 +34643,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto* var_ptr = builder->CreateIntToPtr(var_int, ptr_type);
                 auto ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, i64_type, i64_type, i64_type, ptr_type}, false);
-                auto fn = module.getOrInsertFunction("qore_rt_list_index_store_cow", ft);
+                auto fn = module.getOrInsertFunction(
+                        inst->result.isValid() ? "qore_rt_list_index_store_cow_result"
+                            : "qore_rt_list_index_store_cow", ft);
                 auto fn_throwing = module.getOrInsertFunction(
-                        "qore_rt_list_index_store_cow_throwing", ft);
+                        inst->result.isValid() ? "qore_rt_list_index_store_cow_result_throwing"
+                            : "qore_rt_list_index_store_cow_throwing", ft);
                 call_result = emitMaybeInvoke(fn, fn_throwing,
                         {var_ptr, list_boxed, index_i64, val_boxed, xsink_arg},
                         module, llvm_func, inst);

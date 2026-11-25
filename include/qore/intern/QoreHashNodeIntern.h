@@ -640,6 +640,11 @@ public:
     DLLLOCAL static int setKeyValueCanonical(QoreHashNode& hash, const char* key, QoreValue value,
         ExceptionSink* xsink);
 
+    //! assigns a key as setKeyValueCanonical() does; \a res takes a reference to the value stored after a successful
+    //! assignment, which the value type of the hash can convert (the value of an assignment, qore#7589)
+    DLLLOCAL static int setKeyValueCanonical(QoreHashNode& hash, const char* key, QoreValue value,
+        ExceptionSink* xsink, QoreValue& res);
+
     DLLLOCAL static int setKeyValueLexical(QoreHashNode& hash, const char* key, QoreValue value,
         ExceptionSink* xsink, LexicalSemanticPolicy policy);
 

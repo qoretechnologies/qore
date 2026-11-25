@@ -922,20 +922,36 @@ int QoreHashNode::setKeyValue(const char* key, QoreValue value, ExceptionSink* x
     return ha.assignNative(value, xsink);
 }
 
-int qore_hash_private::setKeyValueCanonical(QoreHashNode& hash, const char* key, QoreValue value, ExceptionSink* xsink) {
+//! assigns a key, giving the value stored to \a res if not nullptr; inline in both setKeyValueCanonical() variants
+static QORE_INTERN_ALWAYS_INLINE int qore_hash_set_key_value_canonical(QoreHashNode& hash, const char* key,
+        QoreValue value, ExceptionSink* xsink, QoreValue* res) {
     assert(hash.reference_count() == 1);
+    qore_hash_private* hp = qore_hash_private::get(hash);
     // see QoreListNode::setEntry(): a hash whose last reference was released cannot be changed
-    if (!hash.priv->valid) {
+    if (!hp->valid) {
         if (xsink) {
-            hash.priv->checkValid(xsink);
+            hp->checkValid(xsink);
         }
         value.discard(xsink);
         return -1;
     }
-    hash_assignment_priv ha(*hash.priv, key);
+    hash_assignment_priv ha(*hp, key);
     // report the outcome of THIS assignment; deriving it from the sink state would report a spurious failure
     // whenever the caller's sink already held an unrelated exception
-    return ha.assign(value, xsink);
+    int rc = ha.assign(value, xsink);
+    if (!rc && res) {
+        *res = (*ha).refSelf();
+    }
+    return rc;
+}
+
+int qore_hash_private::setKeyValueCanonical(QoreHashNode& hash, const char* key, QoreValue value, ExceptionSink* xsink) {
+    return qore_hash_set_key_value_canonical(hash, key, value, xsink, nullptr);
+}
+
+int qore_hash_private::setKeyValueCanonical(QoreHashNode& hash, const char* key, QoreValue value, ExceptionSink* xsink,
+        QoreValue& res) {
+    return qore_hash_set_key_value_canonical(hash, key, value, xsink, &res);
 }
 
 int qore_hash_private::setKeyValueLexical(QoreHashNode& hash, const char* key, QoreValue value, ExceptionSink* xsink,
