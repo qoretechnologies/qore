@@ -293,6 +293,12 @@ public class Http3ClientConnection inherits HttpClientConnection {
         poll_op.installSseState(stream_id, queue, notifier, initial_body);
     }
 
+    #! Installs a decoder of the AWS binary event stream on a streaming request (qore#7247)
+    installEventStreamState(int stream_id, Queue queue, *EventNotifier notifier,
+            *data initial_body) {
+        poll_op.installEventStreamState(stream_id, queue, notifier, initial_body);
+    }
+
     #! Releases the records that the session of the connection keeps for a stream that the caller is done with
     /** Called by the stream handle when it is destroyed; see
         @ref Qore::Http3ClientPollOperationBase::releaseStream() "Http3ClientPollOperationBase::releaseStream()"

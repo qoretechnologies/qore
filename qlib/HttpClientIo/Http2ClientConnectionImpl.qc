@@ -342,6 +342,12 @@ public class Http2ClientConnection inherits HttpClientConnection {
         poll_op.installSseState(stream_id, queue, notifier, initial_body);
     }
 
+    #! Installs a decoder of the AWS binary event stream on a streaming request (qore#7247)
+    installEventStreamState(int stream_id, Queue queue, *EventNotifier notifier,
+            *data initial_body) {
+        poll_op.installEventStreamState(stream_id, queue, notifier, initial_body);
+    }
+
     #! Submits a request with streaming support (HTTP/2-specific)
     /** @param method HTTP method
         @param path request path
