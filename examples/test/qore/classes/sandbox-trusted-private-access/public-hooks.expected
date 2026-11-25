@@ -1,0 +1,6 @@
+ftppoller-fatal-member: parse: PARSE-EXCEPTION: illegal access to private member 'fatal' of class 'FtpPoller' in class 'MyPoller': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+observable-map-member: parse: PARSE-EXCEPTION: illegal access to private member 'observer_map' of class 'Observable' in class 'MyObservable': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+rest-stream-cx-member: parse: PARSE-EXCEPTION: illegal access to private member 'cx' of class 'AbstractRestStreamRequestHandler' in class 'MyRestStream': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+ftppoller fatal flag: OK [False, True, False]
+observable observers: OK [False, 0, True, 1, False, 0]
+rest stream context: OK {context keys: ["hdr", "header-info", "id", "orig_path", "rest_api_path", "rest_method"], header-info keys: ["headers-raw"], args: {a: 1}, copy: True}

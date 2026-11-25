@@ -1669,6 +1669,13 @@ DLLLOCAL int qore_check_caller_terminal_io(const char* what, ExceptionSink* xsin
 DLLLOCAL int qore_fd_wait_ready(int fd, bool read, ExceptionSink* xsink, const char* operation);
 
 #ifdef DEBUG
+//! Debug-only: holds the reads of the per-Program cache that find a value, after the lookup, while \a hold is true
+//! (see dbg_program_cache_hold_reads())
+DLLLOCAL void qore_dbg_program_cache_hold_reads(bool hold);
+
+//! Debug-only: waits until \a count reads of the per-Program cache are held; false if not after \a timeout_ms
+DLLLOCAL bool qore_dbg_program_cache_wait_held(int count, int64 timeout_ms);
+
 //! Debug-only: reports that a read or write of the descriptor starts waiting for it (see dbg_fd_wait_notify())
 DLLLOCAL void qore_dbg_fd_wait(int fd);
 
@@ -2875,8 +2882,12 @@ struct QoreSandboxPinnedPath {
     std::string leaf;
     //! the canonical path of the object, which the policy allowed
     std::string canon;
-    //! true if the name ended with '/', which the leaf then keeps for the operation
+    //! true if the name requires a directory: for an entry operation, the leaf keeps the trailing '/' for it; for an
+    //! operation on the object, the object was checked to be a directory
     bool dir_required = false;
+    //! true for a descriptor alias (/dev/fd/N on macOS) read through a duplicate of its descriptor (dirfd; the leaf is
+    //! empty)
+    bool alias = false;
 
     DLLLOCAL QoreSandboxPinnedPath() = default;
     DLLLOCAL ~QoreSandboxPinnedPath();
@@ -2894,13 +2905,45 @@ struct QoreSandboxPinnedPath {
     @param name the name given, which errors name
     @param mode the QSEC_* access of the operation
     @param entry true for an operation on the directory entry itself (unlink, rmdir, rename, mkdir, symlink, lchown),
-    false for one on the object that the name reaches (chmod, chown)
+    false for one on the object that the name reaches (chmod, chown); in the second case, a name that requires a
+    directory (it ends with '/', '.' or '..') must reach one (otherwise the error is ENOTDIR)
     @param pin the pinned path
+    @param xsink for exceptions
+    @param lookup true for an entry operation that looks the name up as lstat() does: a name that requires a
+    directory, or '/', reaches the object that it names, which is pinned as for an operation on the object
 
     @return 0 for OK, -1 if an exception has been raised, -2 for an error of the operating system (errno is set)
 */
+//! a flag for the mode of q_sandbox_pin_path(): the operation only queries the object, whatever access is checked
+#define QSEC_PIN_QUERY (1 << 30)
+
 DLLLOCAL int q_sandbox_pin_path(QoreSandboxManager& sm, const char* name, int mode, bool entry,
-        QoreSandboxPinnedPath& pin, ExceptionSink* xsink);
+        QoreSandboxPinnedPath& pin, ExceptionSink* xsink, bool lookup = false);
+
+//! gets the status of a path that the sandbox policy allows, pinned against a concurrent change (qore#7518)
+/** @param follow true for the object that the name reaches (stat()), false for the entry itself (lstat())
+
+    @return 0 for OK, -1 for an error (an exception is raised, or errno is set)
+*/
+DLLLOCAL int q_sandbox_pinned_stat(QoreSandboxManager& sm, const char* name, bool follow, struct stat& sbuf,
+        ExceptionSink* xsink);
+
+#ifdef Q_HAVE_STATVFS
+//! gets the file system status of a path that the sandbox policy allows, pinned against a concurrent change
+/** @return 0 for OK, -1 for an error (an exception is raised, or errno is set)
+*/
+DLLLOCAL int q_sandbox_pinned_statvfs(QoreSandboxManager& sm, const char* name, struct statvfs& vfs,
+        ExceptionSink* xsink);
+#endif
+
+//! checks the access of a path that the sandbox policy allows, pinned against a concurrent change
+/** @param mode the QSEC_* access checked by the policy
+    @param amode the access checked for the object (R_OK, W_OK)
+
+    @return 0 for access, -1 for no access or an error (an exception is raised, or errno is set)
+*/
+DLLLOCAL int q_sandbox_pinned_access(QoreSandboxManager& sm, const char* name, int mode, int amode,
+        ExceptionSink* xsink);
 
 //! changes the mode of an entry of a pinned directory without following a link (see q_sandbox_pin_path())
 /** @return 0 for OK, -1 for an error (errno is set; ELOOP for a link)
@@ -2923,6 +2966,13 @@ DLLLOCAL int64 get_ms_zero(const QoreValue& v);
 
 DLLLOCAL AbstractQoreNode* copy_strip_complex_types(const AbstractQoreNode* n);
 DLLLOCAL QoreValue copy_strip_complex_types(const QoreValue& n);
+
+//! applies the element type of a list whose element type has no type (untyped or auto) to a pointer value
+/** as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment()): an untyped element (list, softlist,
+    list<any>) strips the complex type of a container, an auto element (list<auto>) keeps it; used by the IR
+    interpreter and native code, out of line so that a store of another value costs one test (qore#7573)
+*/
+DLLLOCAL void strip_untyped_list_element(const QoreTypeInfo* vti, QoreValue& entry, ExceptionSink* xsink);
 
 // for IPv4/v6 only
 DLLLOCAL void* qore_get_in_addr(struct sockaddr *sa);

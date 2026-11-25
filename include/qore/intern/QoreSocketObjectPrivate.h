@@ -161,6 +161,12 @@ public:
     */
     DLLLOCAL void setSslTrustStore(QoreSSLTrustStore* ts, ExceptionSink* xsink);
 
+    //! Sets the trust store of CA locations read under a sandbox policy, or clears it with nullptr (qore#7518)
+    /** On the async I/O thread it is set directly, otherwise with a TLS state poll operation
+    */
+    DLLLOCAL void setSslCaTrustStore(QoreSSLTrustStore* ts, const char* ca_file, const char* ca_path,
+            ExceptionSink* xsink);
+
     //! Sets the in-memory trust store from the async I/O thread; see setSslTrustStore()
     DLLLOCAL void setSslTrustStoreForAsyncPoll(QoreSSLTrustStore* ts, ExceptionSink* xsink);
 

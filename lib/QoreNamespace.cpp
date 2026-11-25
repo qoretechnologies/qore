@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 
 #include <algorithm>
+#include <unordered_set>
 
 #include "qore/intern/ParserSupport.h"
 #include "qore/intern/QoreRegexBase.h"
@@ -1576,6 +1577,42 @@ QoreNamespace* RootQoreNamespace::rootGetQoreNamespace() const {
 
 extern void preinitBreakpointClass();
 
+//! Marks the classes, hashdecls (with the concrete declarations that they have made) and enums of a namespace of
+//! the static system namespace and of its subnamespaces
+/** The declarations of the static system namespace (Qore::) are freed with it, after every Program, while every
+    other builtin declaration is a binary module's, whose namespace can be freed before a Program that names it
+    (QoreTypeOwner::isTypeOwnerModule()); a binary module can create builtin declarations at any time (module-jni and
+    module-python create classes when they are first needed), so they are told apart by ownership, not by the module
+    context of their creation.  Called once the namespace has been built, before any other thread exists; the
+    concrete declarations of its generic hashdecls made while it was built (such as KeyValueInfo<auto>) are marked
+    with their generic, and those made afterwards copy the flag (qore#7533)
+*/
+static void mark_static_system_namespace_decls(QoreNamespace& ns) {
+    qore_ns_private* nspriv = qore_ns_private::get(ns);
+    {
+        ClassListIterator i(nspriv->classList);
+        while (i.next()) {
+            qore_class_private::setNotModuleDecl(*i.get());
+        }
+    }
+    {
+        HashDeclListIterator i(nspriv->hashDeclList);
+        while (i.next()) {
+            // and the concrete declarations already made (qore#7533)
+            typed_hash_decl_private::get(*i.get())->setNotModuleDecl();
+        }
+    }
+    {
+        EnumListIterator i(nspriv->enumList);
+        while (i.next()) {
+            qore_enum_decl_private::get(*i.get())->setNotModuleDecl();
+        }
+    }
+    for (auto& i : nspriv->nsl.nsmap) {
+        mark_static_system_namespace_decls(*i.second);
+    }
+}
+
 // sets up the root namespace
 StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root_ns_private(this)) {
     // every write to a root namespace holds its runtime namespace write lock; no other thread exists yet, so it is
@@ -1907,6 +1944,9 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
 #endif
 
     qore_ns_private::addNamespace(*this, rpriv->qoreNS);
+
+    // last: the declarations of the static system namespace are not binary module declarations (qore#7533)
+    mark_static_system_namespace_decls(*this);
 }
 
 StaticSystemNamespace::~StaticSystemNamespace() {
@@ -2204,19 +2244,42 @@ QoreClass* qore_root_ns_private::parseFindClassWithMember(const char* cname,
 
 static void get_parent_classes_with_name(const qore_class_private& qc, const char* cname,
         std::vector<QoreClass*>& parents, std::vector<const qore_class_private*>& seen) {
-    if (!qc.scl || std::find(seen.begin(), seen.end(), &qc) != seen.end()) {
-        return;
+    // a walk with a stack of its own, in the order of the recursion that it replaces (depth-first, each class entered
+    // once), as the depth of a hierarchy could exhaust the thread's stack (qore#7539)
+    std::unordered_set<const qore_class_private*> seen_set(seen.begin(), seen.end());
+    auto enter = [&](const qore_class_private& c) -> bool {
+        if (!c.scl || !seen_set.insert(&c).second) {
+            return false;
+        }
+        seen.push_back(&c);
+        return true;
+    };
+    struct Frame {
+        const BCList* list;
+        size_t next;
+    };
+    std::vector<Frame> stack;
+    if (enter(qc)) {
+        stack.push_back({qc.scl, 0});
     }
-    seen.push_back(&qc);
-    for (auto& i : *qc.scl) {
-        QoreClass* pc = i->sclass;
+    while (!stack.empty()) {
+        Frame& f = stack.back();
+        if (f.next >= f.list->size()) {
+            stack.pop_back();
+            continue;
+        }
+        QoreClass* pc = (*f.list)[f.next++]->sclass;
         if (!pc) {
             continue;
         }
         if (!strcmp(pc->getName(), cname) && std::find(parents.begin(), parents.end(), pc) == parents.end()) {
             parents.push_back(pc);
         }
-        get_parent_classes_with_name(*qore_class_private::get(*pc), cname, parents, seen);
+        const qore_class_private& pcp = *qore_class_private::get(*pc);
+        // f is not used after this: the vector can be reallocated
+        if (enter(pcp)) {
+            stack.push_back({pcp.scl, 0});
+        }
     }
 }
 
@@ -3547,6 +3610,9 @@ void qore_ns_private::clearConstants(QoreListNode& l) {
     classList.clearConstants(l);
 
     nsl.clearConstants(l);
+    for (QoreNamespace* rns : retained_ns) {
+        rns->priv->clearConstants(l);
+    }
 
     // clear properties
     AutoLocker al(kvlck);
@@ -3565,6 +3631,9 @@ void qore_ns_private::clearData(ExceptionSink* xsink) {
     classList.clear(xsink, getProgram());
 
     nsl.clearData(xsink);
+    for (QoreNamespace* rns : retained_ns) {
+        rns->priv->clearData(xsink);
+    }
 }
 
 /*
@@ -3586,6 +3655,9 @@ void qore_ns_private::deleteClearData(ExceptionSink* xsink) {
 void qore_ns_private::setVarsReleased() {
     classList.setVarsReleased();
     nsl.setVarsReleased();
+    for (QoreNamespace* rns : retained_ns) {
+        rns->priv->setVarsReleased();
+    }
 }
 
 void qore_ns_private::deleteData(ExceptionSink* xsink) {
@@ -3600,6 +3672,9 @@ void qore_ns_private::deleteData(ExceptionSink* xsink) {
 
     // repeat for all subnamespaces
     nsl.deleteData(xsink);
+    for (QoreNamespace* rns : retained_ns) {
+        rns->priv->deleteData(xsink);
+    }
 }
 
 int qore_ns_private::checkGlobalVarDecl(Var* v, const NamedScope& vname) {
@@ -5267,7 +5342,7 @@ void qore_ns_private::parseAssimilate(QoreNamespace* ans) {
 
 void qore_ns_private::runtimeAssimilate(QoreNamespace* ans) {
     //printd(5, "qore_ns_private::runtimeAssimilate() this: %p '%s' pub: %d imported: %d ans->pub: %d ans->imported: %d\n", this, name.c_str(), pub, imported, ans->priv->pub, ans->priv->imported);
-    // delete source namespace on exit
+    // the source namespace is deleted on exit, unless declarations that conflict are left in it (see retained_ns)
     std::unique_ptr<QoreNamespace> ns_ptr(ans);
 
     qore_ns_private* pns = ans->priv;
@@ -5277,17 +5352,19 @@ void qore_ns_private::runtimeAssimilate(QoreNamespace* ans) {
     // assimilate constants
     constant.assimilate(pns->constant);
 
+    // the merges of a namespace that is added at run time, which is not a parse: a declaration that the namespace
+    // has, or that conflicts with one, is not added, and no parse error is raised (qore#7530)
     // assimilate classes
-    classList.assimilate(pns->classList, *this);
+    classList.runtimeAssimilate(pns->classList, *this);
 
     // assimilate hashdecls
-    hashDeclList.assimilate(pns->hashDeclList, *this);
+    hashDeclList.runtimeAssimilate(pns->hashDeclList, *this);
 
-    // assimilate pending functions
-    func_list.assimilate(pns->func_list, this);
+    // assimilate functions
+    func_list.runtimeAssimilate(pns->func_list, this);
 
     // assimilate enums
-    enumList.assimilate(pns->enumList, *this);
+    enumList.runtimeAssimilate(pns->enumList, *this);
 
     // assimilate typedefs (runtime - with conflict checking)
     for (auto& i : pns->typedefMap) {
@@ -5318,13 +5395,24 @@ void qore_ns_private::runtimeAssimilate(QoreNamespace* ans) {
     }
     pns->typedefMap.clear();
 
-    if (pns->class_handler) {
-        assert(!class_handler);
+    // a class handler that the namespace has is kept
+    if (pns->class_handler && !class_handler) {
         class_handler = pns->class_handler;
+        pns->class_handler = nullptr;
     }
 
     // assimilate target namespace list
     nsl.runtimeAssimilate(pns->nsl, this);
+
+    // the declarations that conflicted are kept with this namespace, as the declarations that were added can use
+    // their types (qore#7530)
+    if (!pns->isEmpty()) {
+        // this namespace owns it now: its parent namespace, if it was a subnamespace of a namespace that was added, is
+        // deleted after the merge
+        pns->parent = this;
+        retained_ns.push_back(ns_ptr.get());
+        ns_ptr.release();
+    }
 }
 
 QoreClass* qore_ns_private::parseFindLocalClass(const char* cname) {

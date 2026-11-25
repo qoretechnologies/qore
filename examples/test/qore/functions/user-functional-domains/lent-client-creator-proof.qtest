@@ -234,16 +234,6 @@ string sub client_mgr_request(object c, string url, string path) {
         return why(ex);
     }
 }
-string sub client_ca_edit(object c, string url, string file) {
-    try {
-        object m = c.getConnectionManager();
-        MgrEdit::setCa(m, file);
-        m.request(url, \"GET\", \"/\");
-        return \"DONE\";
-    } catch (hash<ExceptionInfo> ex) {
-        return why(ex);
-    }
-}
 string sub own_rest(string url) {
     try {
         RestClientIo c({\"url\": url});
@@ -370,57 +360,12 @@ string sub call_after_close(object c) {
         return ex.err;
     }
 }
-class WsRetarget inherits WebSocketClient {
-    constructor(code cb, hash<auto> opts) : WebSocketClient(cb, opts) {}
-    static retarget(WebSocketClient w, string url) {
-        w.url = url;
-        w.http_opts.url = regex_subst(url, \"^wss:\", \"https:\");
-    }
-    static setProxy(WebSocketClient w, string proxy) {
-        w.http_opts.proxy = proxy;
-    }
-}
-class MgrEdit inherits HttpClientConnectionManager {
-    static setCa(HttpClientConnectionManager m, string file) {
-        m.opts.ssl_ca_file = file;
-    }
-}
-string sub proxied_ws(object wsc, string proxy) {
-    try {
-        WsRetarget::setProxy(wsc, proxy);
-        wsc.connect();
-        wsc.disconnect();
-        return \"CONNECTED\";
-    } catch (hash<ExceptionInfo> ex) {
-        return why(ex);
-    }
-}
 string sub proxied_conn(object conn, string proxy) {
     try {
         conn.opts.proxy = proxy;
         object m = conn.getAsync(False);
         m.request(conn.url, \"GET\", \"/\");
         return \"DONE\";
-    } catch (hash<ExceptionInfo> ex) {
-        return why(ex);
-    }
-}
-string sub ca_edit(object conn, string file) {
-    try {
-        object m = conn.getAsync(False);
-        MgrEdit::setCa(m, file);
-        m.request(conn.url, \"GET\", \"/\");
-        return \"DONE\";
-    } catch (hash<ExceptionInfo> ex) {
-        return why(ex);
-    }
-}
-string sub retarget_ws(object wsc, string url) {
-    try {
-        WsRetarget::retarget(wsc, url);
-        wsc.connect();
-        wsc.disconnect();
-        return \"CONNECTED\";
     } catch (hash<ExceptionInfo> ex) {
         return why(ex);
     }
@@ -525,6 +470,75 @@ object sub lookalike() {
     return new HttpClientCreatorProof(True);
 }
 ";
+
+        #! the restricted code's classes derived from a client and a manager of a trusted module, which change the
+        #! private target, proxy and CA certificate locations of a lent client; the restricted Program, which is not
+        #! sandboxed, parses them with #Code: its attempts are refused when the manager creates a connection
+        const WsRetargetCode = "
+class WsRetarget inherits WebSocketClient {
+    constructor(code cb, hash<auto> opts) : WebSocketClient(cb, opts) {}
+    static retarget(WebSocketClient w, string url) {
+        w.url = url;
+        w.http_opts.url = regex_subst(url, \"^wss:\", \"https:\");
+    }
+    static setProxy(WebSocketClient w, string proxy) {
+        w.http_opts.proxy = proxy;
+    }
+}
+string sub proxied_ws(object wsc, string proxy) {
+    try {
+        WsRetarget::setProxy(wsc, proxy);
+        wsc.connect();
+        wsc.disconnect();
+        return \"CONNECTED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub retarget_ws(object wsc, string url) {
+    try {
+        WsRetarget::retarget(wsc, url);
+        wsc.connect();
+        wsc.disconnect();
+        return \"CONNECTED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+";
+
+        #! see #WsRetargetCode
+        const MgrEditCode = "
+class MgrEdit inherits HttpClientConnectionManager {
+    static setCa(HttpClientConnectionManager m, string file) {
+        m.opts.ssl_ca_file = file;
+    }
+}
+string sub ca_edit(object conn, string file) {
+    try {
+        object m = conn.getAsync(False);
+        MgrEdit::setCa(m, file);
+        m.request(conn.url, \"GET\", \"/\");
+        return \"DONE\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub client_ca_edit(object c, string url, string file) {
+    try {
+        object m = c.getConnectionManager();
+        MgrEdit::setCa(m, file);
+        m.request(url, \"GET\", \"/\");
+        return \"DONE\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+";
+
+        #! the refusal of the private declarations of a trusted class to a class declared by sandboxed code (issue
+        #! #6843): a sandboxed Program refuses #WsRetargetCode and #MgrEditCode when it parses them
+        const TrustedPrivateRefused = "cannot use the private declarations of a class declared by trusted code";
     }
 
     private {
@@ -636,13 +650,17 @@ object sub lookalike() {
     }
 
     #! returns a Program restricted from the network in the given execution mode
+    /** A Program with a sandbox manager is sandboxed: a class that its code declares cannot use the private
+        declarations of a class of a trusted module, so it parses #Code without #WsRetargetCode and #MgrEditCode
+        (see testSandbox())
+    */
     private Program getProgram(string mode, *SandboxManager sm) {
         Program p(PO_NEW_STYLE | PO_NO_NETWORK);
         if (sm) {
             p.setSandboxManager(sm);
         }
         p.setExecMode(Modes{mode});
-        p.parse(Code, "restricted-" + mode);
+        p.parse(sm ? Code : Code + WsRetargetCode + MgrEditCode, "restricted-" + mode);
         return p;
     }
 
@@ -1154,6 +1172,31 @@ object sub lookalike() {
         WebSocketClient wsc = getWs();
         on_exit delete wsc;
         assertEq("NETWORK-ACCESS-DENIED", p.callFunction("connect_once", wsc), "sandboxed borrower, " + mode);
+        # a class of sandboxed code cannot use the private declarations of the trusted client and manager: the code
+        # that changes a lent client's target, proxy or CA locations with them is refused when it is parsed
+        # (each use is an error; the first one parsed is given)
+        assertSandboxParseRefused(sm, mode, WsRetargetCode, "WsRetarget", "(url|http_opts)");
+        assertSandboxParseRefused(sm, mode, MgrEditCode, "MgrEdit", "opts");
+    }
+
+    #! asserts that a sandboxed Program refuses the given code of the restricted Program when it parses it, as the
+    #! given class that the code declares uses a private member of a class of a trusted module (\a member is a regular
+    #! expression)
+    private assertSandboxParseRefused(SandboxManager sm, string mode, string code, string cls, string member) {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.setSandboxManager(sm);
+        p.setExecMode(Modes{mode});
+        string label = sprintf("sandboxed class %s, %s", cls, mode);
+        try {
+            p.parse("%modern\n%requires WebSocketClient\n%requires HttpClientIo\n"
+                "string sub why(hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; }\n" + code,
+                "sandboxed-" + mode);
+            assertTrue(False, label + ": the code must be refused");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PARSE-EXCEPTION", ex.err, sprintf("%s: %s", label, ex.desc));
+            assertRegex(sprintf("^illegal access to private member '%s' of class '[^']+' in class '%s': .*%s", member,
+                cls, TrustedPrivateRefused), ex.desc, label);
+        }
     }
 
     #! a lent client whose HTTP/2 server does not support WebSocket tunnels falls back to HTTP/1.1, creating its

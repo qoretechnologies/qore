@@ -1094,6 +1094,9 @@ bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic&
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
         QoreProgram* p_pgm, const QoreParseOptions* p_parse_options, ExceptionSink* xsink)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm, p_parse_options) {
+    // a Program created with no Program running is a host Program, whose code is not restricted for time zones
+    // (QoreTimeZoneManager::callerRestricted())
+    tz_host = !qore_thread_current_program_if_any();
     // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
     // every Program wherever it is created, and before the Program is registered and can be found
     if (qore_caller_is_sandboxed()) {
@@ -2880,6 +2883,11 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // valid (data not yet cleared, ptid == tid).  This bounds the leak an opaque reference can
         // cause to the lifetime of the Program that created it.
         clearOpaqueTargets(xsink);
+
+        // the values that library classes keep in the per-Program cache of the Program can hold objects of its
+        // classes, given by its code (a default value of a field, for example): they are released while the
+        // Program's code can still run, as its data is (qore#6843)
+        qore_program_cache_release_values(pgm, xsink);
 
         // issue #3521: clear local variables first
         clearLocalVars(xsink);
@@ -5602,7 +5610,7 @@ void qore_program_private::clearThreadData(ExceptionSink* xsink) {
     printd(5, "qore_program_private::clearThreadData() this: %p h: %p (size: %d)\n", this, *h, (int)(h ? h->size() : 0));
     if (h) {
         // no lock is held here: clearing the hash can run destructors
-        qore_hash_private::get(**h)->clear(xsink, false);
+        qore_hash_private::get(**h)->clear(xsink);
     }
 }
 

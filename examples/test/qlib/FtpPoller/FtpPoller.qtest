@@ -393,6 +393,8 @@ class FtpPollerTest inherits QUnit::Test {
             "error_delay": 1,
             "remote_file_disposition": "DELETE",
         });
+        assertTrue(FtpPollerDataProvider::ProviderInfo.supports_refusal_redelivery);
+        assertTrue(prov.getInfo().supports_refusal_redelivery);
         prov.setLogger(logger);
         prov.registerObserver(observer);
         on_exit prov.stopEvents();
