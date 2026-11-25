@@ -456,7 +456,7 @@ void qore_hash_member_map::grow() {
 void qore_hash_member_map::rehash(size_t n) {
     assert(n && !(n & (n - 1)));
     assert(n >= count);
-    // the mask is 32 bits wide
+    // the mask and the limit are 32 bits wide
     if (n > MaxBuckets) {
         throw std::bad_alloc();
     }
@@ -478,10 +478,10 @@ void qore_hash_member_map::rehash(size_t n) {
     }
     buckets = nb;
     mask = nmask;
-    // a map that is not hardened takes inserts on the fast path until it has as many members as buckets (2^32
-    // buckets: one less); a hardened map keeps its limit of 0
+    // a map that is not hardened takes inserts on the fast path until it has as many members as buckets (n is at
+    // most MaxBuckets, so the limit is not 0); a hardened map keeps its limit of 0
     if (set_limit) {
-        limit = static_cast<uint32_t>(n - (n > std::numeric_limits<uint32_t>::max()));
+        limit = static_cast<uint32_t>(n);
     }
 }
 

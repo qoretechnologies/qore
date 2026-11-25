@@ -364,19 +364,21 @@ public:
         // grow when the map has as many members as buckets, and an insert into a hardened map (whose limit is 0)
         // takes the slow path; the test of the first member of the chain is the only test more
         if (count >= limit) [[unlikely]] {
-            if (count >= bucket_count()) {
-                grow();
-            }
-            if (!limit) {
+            // a map with buckets and a limit of 0 is hardened; any other map has as many members as buckets, or no
+            // buckets
+            if (buckets && !limit) {
                 insertSlow(m);
                 return;
             }
+            grow();
         }
         HashMember*& b = buckets[m->hash & mask];
         HashMember* first = b;
-        if (first && chainFull(first)) [[unlikely]] {
-            insertSlow(m);
-            return;
+        if (first) [[unlikely]] {
+            if (chainFull(first)) {
+                insertSlow(m);
+                return;
+            }
         }
         m->bucket_next = first;
         b = m;
@@ -445,21 +447,19 @@ public:
     //! returns the length of the longest chain of a bucket (for debug functions)
     DLLLOCAL size_t maxChain() const;
 
-    //! the largest number of buckets: the mask and the insert limit are 32 bits wide, so that the map is as large as
-    //! before qore#7557, when the mask took 64 bits, and so is a hash (MaxBuckets members need far more memory than
-    //! any host has)
-    static constexpr size_t MaxBuckets = sizeof(size_t) > sizeof(uint32_t)
-        ? static_cast<size_t>(std::numeric_limits<uint32_t>::max()) + 1
-        : (std::numeric_limits<size_t>::max() >> 1) + 1;
+    //! the largest number of buckets, and so of members: the mask and the insert limit are 32 bits wide, so that the
+    //! map is as large as before qore#7557, when the mask took 64 bits, and so is a hash; the limit, which is the
+    //! number of buckets of a map that is not hardened, is never 0 then (MaxBuckets members need far more memory
+    //! than any host has)
+    static constexpr size_t MaxBuckets = static_cast<size_t>(1) << 31;
 
 private:
     HashMember** buckets = nullptr;
     //! the number of buckets - 1, if the array is allocated
     uint32_t mask = 0;
-    //! the number of members from which an insert takes the slow path (qore#7557): the number of buckets (saturated
-    //! at 32 bits) in a map that is not hardened, where the slow path grows the buckets, and 0 in a map without
-    //! buckets and in a hardened map, whose inserts all take the slow path; the mask and the limit are initialized
-    //! and cleared with one store
+    //! the number of members from which an insert takes the slow path (qore#7557): the number of buckets in a map
+    //! that is not hardened, where the buckets grow then, and 0 in a map without buckets and in a hardened map, whose
+    //! inserts all take the slow path
     uint32_t limit = 0;
     size_t count = 0;
 
