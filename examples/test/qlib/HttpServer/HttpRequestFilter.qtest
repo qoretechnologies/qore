@@ -22,9 +22,10 @@
     DEALINGS IN THE SOFTWARE.
 
     The code that serves a stream request and the REST classes of a REST handler get the request without the objects
-    of the server and the credentials of the request (AbstractStreamRequest::filterRequest(), qore#6843); the stream
-    request itself serves the request with the raw request, which the request handler hands to the first stream
-    request created for the request only, and which no other code reaches
+    of the server and the credentials of the request (AbstractStreamRequest::filterRequest(), qore#6843) when a
+    sandbox governs them, and trusted code when its handler asks for it (setFilterRequests()); trusted code gets the
+    request as before otherwise; the stream request itself serves the request with the raw request, which the
+    request handler hands to the first stream request created for the request only, and which no other code reaches
 */
 
 %modern
@@ -97,6 +98,8 @@ class TestStreamHandler inherits AbstractHttpRequestHandler {
     public {
         #! what the factory got
         hash<auto> factory_seen;
+        #! the keys of the request context that the factory got
+        list<string> factory_keys = ();
         #! the stream requests that the factory created
         list<RecordRequest> made = ();
         #! the factory's mode: "one", "second", "first", "throw", "nested"
@@ -105,7 +108,10 @@ class TestStreamHandler inherits AbstractHttpRequestHandler {
         *TestStreamHandler inner;
     }
 
-    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    constructor(bool filter = True) : AbstractHttpRequestHandler(NOTHING, True) {
+        if (filter) {
+            setFilterRequests();
+        }
     }
 
     bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
@@ -114,6 +120,7 @@ class TestStreamHandler inherits AbstractHttpRequestHandler {
 
     private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
             hash<auto> hdr, *data body) {
+        factory_keys = keys cx;
         factory_seen = {
             "authorization": hdr.hasKey("authorization"),
             "cookie": hdr.hasKey("cookie"),
@@ -178,6 +185,7 @@ const TenantOpts = PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES;
 const Tenant = "%requires HttpServerUtil
 %requires RestHandler
 %requires reflection
+%requires json
 
 string sub attempt(code c) {
     try {
@@ -188,12 +196,97 @@ string sub attempt(code c) {
     }
 }
 
+#! a stream request of the tenant, which reports what it gets
+class TenantRequest inherits AbstractStreamRequest {
+    private:internal {
+        int size = 0;
+        *hash<auto> trailers;
+        hash<auto> seen;
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, auto body) : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+        seen = {
+            'authorization': hdr.hasKey('authorization'),
+            'cookie': hdr.hasKey('cookie'),
+            'server objects': (map $1, ('socket', 'socket-info', 'uctx', 'auth', 'logger', 'sock_key'),
+                cx.hasKey($1)) ?? (),
+        };
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+        if (exists v.data) {
+            size += v.data.size();
+        } else if (v.hdr) {
+            trailers = v.hdr;
+        }
+    }
+
+    private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpResponseInfo>{
+            'code': 200,
+            'hdr': {'Content-Type': 'application/json'},
+            'body': make_json({'size': size, 'trailers': trailers, 'seen': seen}),
+        };
+    }
+}
+
+#! a stream request handler of the tenant: its factory reports what it gets
+class TenantStreamHandler inherits AbstractHttpRequestHandler {
+    public {
+        hash<auto> factory_seen;
+    }
+
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        factory_seen = {
+            'authorization': hdr.hasKey('authorization'),
+            'cookie': hdr.hasKey('cookie'),
+            'server objects': (map $1, ('socket', 'socket-info', 'uctx', 'auth', 'logger', 'sock_key'),
+                cx.hasKey($1)) ?? (),
+        };
+        return new TenantRequest(listener, self, s, cx, hdr, body);
+    }
+}
+
+#! a REST class of the tenant that reports what it gets
+class TenantRestClass inherits AbstractRestClass {
+    string name() {
+        return 'tenant';
+    }
+
+    hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
+        return RestHandler::makeResponse(200, {
+            'authorization': cx.hdr.hasKey('authorization'),
+            'cookie': cx.hdr.hasKey('cookie'),
+            'server objects': (map $1, ('socket', 'socket-info', 'uctx', 'auth', 'logger', 'sock_key'),
+                cx.hasKey($1)) ?? (),
+            'added': cx.added,
+        });
+    }
+}
+
+AbstractHttpRequestHandler sub stream_handler() {
+    return new TenantStreamHandler();
+}
+
+AbstractRestClass sub rest_class() {
+    return new TenantRestClass();
+}
+
 string sub set_credentials(AbstractHttpRequestHandler h) {
     return attempt(sub () { h.setRequestCredentialHeaders('authorization'); });
 }
 
 string sub set_keys(RestHandler h) {
     return attempt(sub () { h.setRestContextKeys('socket'); });
+}
+
+string sub stop_filter(AbstractHttpRequestHandler h) {
+    return attempt(sub () { h.setFilterRequests(False); });
 }
 
 string sub reflect() {
@@ -265,6 +358,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("the filter and its options", \filterTest());
         addTestCase("the trailer fields", \trailerTest());
         addTestCase("the code that serves a stream request gets the filtered request", \factoryTest());
+        addTestCase("trusted code gets the request as before", \trustedTest());
+        addTestCase("a stream handler of a sandboxed Program", \tenantStreamTest());
         addTestCase("the raw request is handed to the first stream request only", \handoffTest());
         addTestCase("nested dispatches and a failing factory", \nestingTest());
         addTestCase("a stream request created otherwise uses what it is given", \fallbackTest());
@@ -376,6 +471,52 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq(5, r.size);
     }
 
+    trustedTest() {
+        # a trusted handler that does not ask for the filter: the factory gets the request as the server made it
+        TestStreamHandler h(False);
+        RecordRequest r = call(h, "one", 1);
+        assertEq(sort(keys rawContext(1, "hello")), sort(h.factory_keys));
+        assertTrue(h.factory_seen.authorization);
+        assertTrue(h.factory_seen.cookie);
+        assertEq(("auth", "sock_key", "socket", "socket-info", "uctx"), sort(h.factory_seen."server objects"));
+        assertTrue(r.seen.authorization);
+        assertEq(5, r.size);
+    }
+
+    tenantStreamTest() {
+        Program p(TenantOpts);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(Tenant, "tenant");
+        object h = p.callFunction("stream_handler");
+        # the tenant's handler gets no socket of a connection; a handler socket view
+        hash<auto> rv = h.handleRequest(new TestListener(), new Socket(), rawContext(1, "hello"), header(), NOTHING);
+        hash<auto> result = parse_json(rv.body);
+        assertEq({"authorization": False, "cookie": False, "server objects": ()}, h.factory_seen);
+        assertEq({"authorization": False, "cookie": False, "server objects": ()}, result.seen);
+        assertEq(5, result.size, "the stream request read its body through the raw request");
+        # through the server, HTTP/1.1 chunked, with a credential trailer
+        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("server", LoggerLevel::getLevelError())});
+        on_exit server.stop();
+        server.setHandler("tenant", "^tenant", NOTHING, p.callFunction("stream_handler"));
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        Socket s();
+        s.connect("127.0.0.1:" + port);
+        on_exit s.close();
+        s.send("POST /tenant HTTP/1.1\r\nHost: x\r\nContent-Type: text/plain\r\nAuthorization: Basic dGVzdDp0ZXN0\r\n"
+            "Transfer-Encoding: chunked\r\nTrailer: Authorization, X-Checksum\r\n\r\n"
+            "5\r\nhello\r\n0\r\nAuthorization: Bearer trailer\r\nX-Checksum: 1\r\n\r\n");
+        hash<auto> resp = s.readHTTPHeader(10s);
+        assertEq(200, resp.status_code);
+        string body = resp."transfer-encoding" == "chunked"
+            ? s.readHTTPChunkedBody(10s).body
+            : s.recv(resp."content-length".toInt(), 10s);
+        result = parse_json(body);
+        assertEq(5, result.size);
+        assertEq("1", result.trailers."x-checksum");
+        assertFalse(result.trailers.hasKey("authorization"));
+        assertFalse(result.seen.authorization);
+    }
+
     handoffTest() {
         # the first stream request created gets the raw request; a second one created for the same request does not
         TestStreamHandler h();
@@ -416,14 +557,37 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertTrue(r.seen.authorization);
     }
 
-    restTest() {
-        AddingRestHandler rest();
-        hash<auto> rv = rest.handleRequest(new TestListener(), new Socket(), rawContext(1) + {"url": {"path": "probe"},
-            "orig_path": "/probe", "raw_path": "/probe"}, header() + {"method": "GET", "path": "probe",
+    #! sends a GET request for the REST class to the handler directly
+    static hash<auto> restCall(RestHandler rest, string cls) {
+        hash<auto> rv = rest.handleRequest(new TestListener(), new Socket(), rawContext(1) + {"url": {"path": cls},
+            "orig_path": "/" + cls, "raw_path": "/" + cls}, header() + {"method": "GET", "path": cls,
             "accept": MimeTypeJson}, NOTHING);
+        return {"code": rv.code} + parse_json(rv.body);
+    }
+
+    restTest() {
+        Program p(TenantOpts);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(Tenant, "tenant");
+        # a trusted REST handler with a trusted and a tenant's REST class
+        AddingRestHandler rest();
+        rest.addClass(p.callFunction("rest_class"));
+        # the trusted REST class gets the request as the server made it
+        hash<auto> rv = restCall(rest, "probe");
         assertEq(200, rv.code);
-        assertEq({"authorization": False, "cookie": False, "server objects": (), "added": "by the handler"},
-            parse_json(rv.body));
+        assertTrue(rv.authorization);
+        assertTrue(rv.cookie);
+        assertEq(("auth", "sock_key", "socket", "socket-info", "uctx"), sort(rv."server objects"));
+        assertEq("by the handler", rv.added);
+        # the tenant's REST class gets it filtered, with the keys that the handler names
+        rv = restCall(rest, "tenant");
+        assertEq({"code": 200, "authorization": False, "cookie": False, "server objects": (),
+            "added": "by the handler"}, rv);
+        # with the handler's opt-in, the trusted REST class gets it filtered as well
+        rest.setFilterRequests();
+        rv = restCall(rest, "probe");
+        assertEq({"code": 200, "authorization": False, "cookie": False, "server objects": (),
+            "added": "by the handler"}, rv);
     }
 
     chunkedTest() {
@@ -452,7 +616,14 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     http2Test() {
-        TestStreamHandler h();
+        http2Intern(new TestStreamHandler(), "a trusted handler that asks for the filter");
+        Program p(TenantOpts);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(Tenant, "tenant");
+        http2Intern(p.callFunction("stream_handler"), "a handler of a sandboxed Program");
+    }
+
+    private http2Intern(AbstractHttpRequestHandler h, string label) {
         HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("server", LoggerLevel::getLevelError())});
         on_exit delete server;
         server.setHandler("stream", "^stream", NOTHING, h);
@@ -490,12 +661,13 @@ l50Xb2GWQesIt9k5jF5IOw==
                 }
             }();
         }
-        assertEq(0, done.waitForZero(60s), "both requests end");
+        assertEq(0, done.waitForZero(60s), label + ": both requests end");
         foreach int i in (0, 1) {
             hash<auto> rv = parse_json(results{i});
             # each stream request read the body of its own stream
-            assertEq(i + 3, rv.size, sprintf("stream %d", i));
-            assertFalse(rv.seen.authorization, sprintf("stream %d", i));
+            assertEq(i + 3, rv.size, sprintf("%s: stream %d", label, i));
+            assertFalse(rv.seen.authorization, sprintf("%s: stream %d", label, i));
+            assertEq((), rv.seen."server objects", sprintf("%s: stream %d", label, i));
         }
     }
 
@@ -506,6 +678,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         # the opt-ins refuse sandboxed callers
         assertEq("REQUEST-ERROR", p.callFunction("set_credentials", new TestStreamHandler()));
         assertEq("REST-ERROR", p.callFunction("set_keys", new RestHandler()));
+        assertEq("REQUEST-ERROR", p.callFunction("stop_filter", new TestStreamHandler()));
         # the handoff cannot be named or reached
         assertNeq("OK", p.callFunction("reflect"));
         assertEq(0, p.callFunction("reflect_all"));

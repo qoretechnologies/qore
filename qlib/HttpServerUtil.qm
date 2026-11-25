@@ -163,7 +163,13 @@ module HttpServerUtil {
     The code that serves a stream request (the @ref HttpServer::AbstractStreamRequest "AbstractStreamRequest" object
     that @ref HttpServer::AbstractHttpRequestHandler::getStreamRequestImpl() "getStreamRequestImpl()" returns, and the
     code that creates it), and the REST classes of a @ref RestHandler::RestHandler "RestHandler", get the request
-    without the objects of the server and without the credentials of the request:
+    without the objects of the server and without the credentials of the request when a sandbox governs them: the
+    calling code is sandboxed, or the class of the handler, of the stream request or of the REST class is of a
+    sandboxed %Program (@ref HttpServer::AbstractHttpRequestHandler::filtersRequestsFor() "filtersRequestsFor()"; it
+    fails closed), or the handler runs the code of a sandboxed %Program; trusted code gets the request as the server
+    made it, unless its handler asks for the filter
+    (@ref HttpServer::AbstractHttpRequestHandler::setFilterRequests() "setFilterRequests()"), as a trusted handler
+    that hands its requests to other code does.
     @ref HttpServer::AbstractStreamRequest::filterRequest() "AbstractStreamRequest::filterRequest()" is the one filter
     of the credentials of a request, which a platform that hands a request to the code of a tenant applies as well,
     with the options of its own authentication (@ref HttpServer::HttpRequestFilterOptions "HttpRequestFilterOptions"):
@@ -206,7 +212,9 @@ module HttpServerUtil {
 
     @section httputil1_6 HttpServerUtil 1.6
     - the code that serves a stream request gets the request without the objects of the server and the credentials
-      of the request, also in the arguments of the stream request's constructor; a handler that authenticates its own
+      of the request, also in the arguments of the stream request's constructor, when a sandbox governs it, or when
+      the handler asks for it with
+      @ref HttpServer::AbstractHttpRequestHandler::setFilterRequests() "setFilterRequests()"; a handler that authenticates its own
       endpoint opts in to receive its \c Authorization field
       (@ref HttpServer::AbstractHttpRequestHandler::setRequestCredentialHeaders() "setRequestCredentialHeaders()"),
       and a platform filters a request for the code of a tenant with
@@ -3039,6 +3047,22 @@ public class AbstractStreamRequest {
         # first stream request created for it on the thread (see AbstractHttpRequestHandler::withholdRequestCredentials());
         # a stream request created otherwise serves the request with what it is given
         *hash<auto> raw = HttpRequestHandoff::take(cx, hdr);
+        # a stream request of a class of a sandboxed Program, or that sandboxed code creates, sees the request filtered
+        # also where the dispatch did not filter it (a trusted handler that hands its request to such code without
+        # setFilterRequests()); fails closed
+        if (!raw) {
+            bool sandboxed;
+            try {
+                sandboxed = SandboxManager::isFromSandboxedProgram(self) || SandboxManager::isSandboxed();
+            } catch (hash<ExceptionInfo> ex) {
+                sandboxed = True;
+            }
+            if (sandboxed) {
+                hash<HttpFilteredRequestInfo> filtered = AbstractStreamRequest::filterRequest(cx, hdr);
+                self.cx = filtered.cx;
+                self.hdr = filtered.hdr;
+            }
+        }
         if (raw) {
             raw_cx = raw.cx;
             raw_hdr = raw.hdr;
@@ -4585,6 +4609,8 @@ public class AbstractHttpRequestHandler {
         #! the credential header fields that the code serving the requests of this handler gets; see
         #! setRequestCredentialHeaders()
         *list<string> request_credential_headers;
+        #! set by setFilterRequests(): the request is filtered for trusted code as well
+        bool filter_requests = False;
         #! set by setHostsCode(): the handler runs the code of objects of other code (see hostedObjects(); qore#7305)
         bool host_code = False;
         #! set by setHandlerSocketView(): the handler's code gets the socket of its HTTP/1.x request (qore#7305)
@@ -5409,11 +5435,17 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         }
 
         # the code that serves the request gets it without the server's objects and the credentials of the request
-        # (see AbstractStreamRequest::filterRequest()); the stream request that it creates is handed the raw request
-        *object handoff;
-        hash<HttpFilteredRequestInfo> filtered = withholdRequestCredentials(cx, hdr, \handoff);
-        on_exit delete handoff;
-        AbstractStreamRequest req = getStreamRequestImpl(listener, s, filtered.cx, filtered.hdr, body);
+        # (see AbstractStreamRequest::filterRequest()) when a sandbox governs it, or the handler runs code that a
+        # sandbox governs, or it asks for it; the stream request that it creates is handed the raw request
+        AbstractStreamRequest req;
+        if (filtersRequestsFor() || hostsSandboxedCodeFailClosed()) {
+            *object handoff;
+            hash<HttpFilteredRequestInfo> filtered = withholdRequestCredentials(cx, hdr, \handoff);
+            on_exit delete handoff;
+            req = getStreamRequestImpl(listener, s, filtered.cx, filtered.hdr, body);
+        } else {
+            req = getStreamRequestImpl(listener, s, cx, hdr, body);
+        }
         hash<auto!> hrv = req.handleRequest();
         if (hrv.hasKey("raw_response")) {
             delete hrv."raw_response";
@@ -5440,14 +5472,68 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
     */
     private hash<HttpFilteredRequestInfo> withholdRequestCredentials(hash<auto> cx, hash<auto> hdr,
             reference<*object> handoff) {
-        hash<HttpFilteredRequestInfo> rv = AbstractStreamRequest::filterRequest(cx, hdr,
+        hash<HttpFilteredRequestInfo> rv = filterRequestForHandler(cx, hdr);
+        handoff = new HttpRequestHandoff(cx, hdr);
+        return rv;
+    }
+
+    #! Returns the request filtered with the options of this handler (its authenticator and
+    #! setRequestCredentialHeaders())
+    /** @since HttpServerUtil 1.6
+    */
+    private hash<HttpFilteredRequestInfo> filterRequestForHandler(hash<auto> cx, hash<auto> hdr) {
+        return AbstractStreamRequest::filterRequest(cx, hdr,
             <HttpRequestFilterOptions>{
                 # the handler's authenticator consumed the credentials that it reads, unless it accepts every request
                 "platform_authenticated": exists auth && !(auth instanceof PermissiveAuthenticator),
                 "own_headers": request_credential_headers,
             });
-        handoff = new HttpRequestHandoff(cx, hdr);
-        return rv;
+    }
+
+    #! Returns @ref True if the code that serves the request of this handler gets it filtered
+    /** The request is filtered (see @ref httpserverutil_request_credentials) for code that a sandbox governs: when
+        the calling code is sandboxed (SandboxManager::isSandboxed(), which also sees the provenance of the objects
+        whose code runs), the handler's class is of a sandboxed %Program, or \a receiver, the object whose code gets
+        the request, is of a sandboxed %Program; and for trusted code when the handler asks for it with
+        setFilterRequests().  Fails closed: @ref True if it cannot be decided.
+
+        @param receiver the object whose code gets the request, if not the handler's
+
+        @since HttpServerUtil 1.6
+    */
+    final bool filtersRequestsFor(*object receiver) {
+        try {
+            return filter_requests || SandboxManager::isSandboxed() || SandboxManager::isFromSandboxedProgram(self)
+                || (receiver && SandboxManager::isFromSandboxedProgram(receiver));
+        } catch (hash<ExceptionInfo> ex) {
+            return True;
+        }
+    }
+
+    #! returns hostsSandboxedCode(); fails closed: @ref True if it cannot be decided
+    private:internal bool hostsSandboxedCodeFailClosed() {
+        try {
+            return hostsSandboxedCode();
+        } catch (hash<ExceptionInfo> ex) {
+            return True;
+        }
+    }
+
+    #! Makes the handler filter the request for the trusted code that serves its requests as well
+    /** The request is filtered for the code that a sandbox governs in any case (see filtersRequestsFor()); a handler
+        whose trusted code hands its requests to other code asks for it here.  Sandboxed code cannot turn it off.
+
+        @param filter @ref True to filter the request for trusted code as well
+
+        @throw REQUEST-ERROR the calling code is sandboxed and \a filter is @ref False
+
+        @since HttpServerUtil 1.6
+    */
+    setFilterRequests(bool filter = True) {
+        if (!filter && HttpRequestHandoff::callerIsSandboxed()) {
+            throw "REQUEST-ERROR", "sandboxed code cannot stop the filter of a handler's requests";
+        }
+        filter_requests = filter;
     }
 
     #! Sets the credential header fields addressed to this handler that the code serving its requests gets
