@@ -3001,10 +3001,12 @@ class HttpRawRequestScope {
     /** @param cx the raw request context
         @param hdr the raw request header fields
         @param s the socket of the request, if any
+        @param trailer_keep the credential trailer fields that the code serving a filtered request gets: those that
+        the trusted options of the dispatched handler keep (see AbstractHttpRequestHandler::setRequestCredentialHeaders())
 
         @throw HTTP-SERVER-ERROR @ref MaxDepth raw requests are current on the thread already
     */
-    constructor(hash<auto> cx, hash<auto> hdr, *Socket s) {
+    constructor(hash<auto> cx, hash<auto> hdr, *Socket s, *hash<string, bool> trailer_keep) {
         HttpRawRequestScope::dropInvalid();
         if (http_raw_requests.size() >= MaxDepth) {
             throw "HTTP-SERVER-ERROR", sprintf("more than %d requests cannot be dispatched in the dispatch of other "
@@ -3012,7 +3014,8 @@ class HttpRawRequestScope {
         }
         token = ++http_raw_request_seq;
         tid = gettid();
-        http_raw_requests += ({"cx": cx, "hdr": hdr, "s": s, "token": token, "state": state},);
+        http_raw_requests += ({"cx": cx, "hdr": hdr, "s": s, "trailer_keep": trailer_keep, "token": token,
+            "state": state},);
         active = True;
     }
 
@@ -3137,13 +3140,17 @@ class HttpServerDispatchCapability {
         Mutex lck();
         #! resolves the file of the loaded HttpServer module with the system policy (see check())
         *code resolve;
+        #! returns the credential trailer fields that the trusted options of a handler keep; code of
+        #! AbstractHttpRequestHandler, which reads the handler's private options
+        code trailer_keep_for;
     }
 
     #! creates the object for the HttpServer module at the given canonical path, or for a host without a path
     /** Created by trusted code only (see AbstractHttpRequestHandler::claimServerDispatch() and claimHostDispatch())
     */
-    constructor(*string path) {
+    constructor(*string path, code trailer_keep_for) {
         self.path = path;
+        self.trailer_keep_for = trailer_keep_for;
         # a host's capability is not checked against the HttpServer module
         checked = !path;
         if (path) {
@@ -3161,6 +3168,9 @@ class HttpServerDispatchCapability {
     /** @param cx the request context as the server made it
         @param hdr the request header fields
         @param s the socket that the handler gets
+        @param handler the handler that the request is dispatched to: the credential trailer fields that the code
+        serving a filtered request of it gets are those that its trusted options keep
+        (AbstractHttpRequestHandler::setRequestCredentialHeaders()); without a handler, none
 
         @return the object that keeps the raw request current
 
@@ -3175,7 +3185,7 @@ class HttpServerDispatchCapability {
         be decided), the capability of the server does not belong to the loaded HttpServer module, or too many
         requests are dispatched in the dispatch of others on the thread
     */
-    object enter(hash<auto> cx, hash<auto> hdr, *Socket s) {
+    object enter(hash<auto> cx, hash<auto> hdr, *Socket s, *AbstractHttpRequestHandler handler) {
         # a host's capability that trusted code exposes by mistake still makes no request current for sandboxed code
         if (!path && HttpRawRequestScope::callerIsSandboxed()) {
             throw "HTTP-SERVER-ERROR", "sandboxed code cannot make a raw request current";
@@ -3183,7 +3193,16 @@ class HttpServerDispatchCapability {
         if (!checked) {
             check();
         }
-        return new HttpRawRequestScope(cx, hdr, s);
+        # the credential trailer fields of a filtered request: from the trusted options of the dispatched handler,
+        # never from the header fields that the code creating a stream request gives it (fails closed: none)
+        *hash<string, bool> trailer_keep;
+        if (handler) {
+            try {
+                trailer_keep = trailer_keep_for(handler);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        return new HttpRawRequestScope(cx, hdr, s, trailer_keep);
     }
 
     #! checks that the module that claimed the capability is the HttpServer module that is loaded (its record)
@@ -3402,7 +3421,8 @@ public class AbstractStreamRequest {
         hash<auto> raw_hdr;
         #! the request is filtered for the code that serves it: so are the trailer fields (see trailersFor())
         bool filter_trailers;
-        #! the credential trailer fields that the code serving the request gets when the request is filtered
+        #! the credential trailer fields that the code serving the request gets when the request is filtered: those
+        #! that the trusted options of the dispatched handler keep
         *hash<string, bool> trailer_keep;
     }
 
@@ -3473,14 +3493,12 @@ public class AbstractStreamRequest {
                 "AbstractHttpRequestHandler::setFilterRequests() and setHostsCode())", self.className());
         }
         # the trailer fields are filtered when the request is filtered for the code that serves it, with the
-        # credential fields that the handler opts in to receive, as in the header fields that it was given
+        # credential fields that the trusted options of the dispatched handler keep (setRequestCredentialHeaders()),
+        # which the dispatch gives with the raw request: never from the header fields that the code that created the
+        # object gives, which restricted code chooses
         if (restricted || !raw_args) {
             filter_trailers = True;
-            foreach string name in (OwnCredentialHeaders) {
-                if (hdr.hasKey(name)) {
-                    trailer_keep{name} = True;
-                }
-            }
+            trailer_keep = raw.trailer_keep;
         }
         # what subclasses read: as the code that created the object gives it, which the request handler filtered for
         # restricted code
@@ -6262,6 +6280,31 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         return opts;
     }
 
+    #! returns the credential trailer fields that the code serving a filtered request of this handler gets: those
+    #! that its options keep (setRequestCredentialHeaders(), with no authenticator that consumed them)
+    private:internal *hash<string, bool> getTrailerKeep() {
+        hash<HttpRequestFilterOptions> opts = getRequestFilterOptions();
+        if (opts.platform_authenticated || !opts.own_headers) {
+            return;
+        }
+        hash<string, bool> rv;
+        foreach string name in (opts.own_headers) {
+            name = name.lwr();
+            if (inlist(name, AbstractStreamRequest::OwnCredentialHeaders)) {
+                rv{name} = True;
+            }
+        }
+        return rv ?? NOTHING;
+    }
+
+    #! returns the code of a dispatch capability that reads the credential trailer fields of a handler (see
+    #! getTrailerKeep())
+    private:internal static code trailerKeepReader() {
+        return *hash<string, bool> sub (AbstractHttpRequestHandler handler) {
+            return handler.getTrailerKeep();
+        };
+    }
+
     #! Returns @ref True if the code that serves the request of this handler gets it filtered
     /** The request is filtered (see @ref httpserverutil_request_credentials) for restricted code, which a sandbox that
         does not trust its code governs: when the calling code is restricted
@@ -6330,7 +6373,10 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
     /** A host that serves the requests of an HTTP server in a process of its own, and calls the handlers itself (a
         handler's handleRequest()) instead of an @ref HttpServer::HttpServer "HttpServer", makes the raw request of each
         request current with the object returned while it calls the handler, so that the handler serves stream
-        requests: \c enter(cx, hdr, s) returns an object that keeps the raw request current until it is destroyed.  The
+        requests: \c enter(cx, hdr, s, handler) returns an object that keeps the raw request current until it is
+        destroyed; with the handler that the request is dispatched to, the code that serves a filtered request of the
+        handler gets the credential trailer fields that the handler's trusted options keep
+        (setRequestCredentialHeaders()), and none without it.  The
         host keeps the capability in a \c private:internal member and never gives it to other code, as the capability
         lets its holder make a request of its own making current for the handlers that it calls (qore#6843).
 
@@ -6344,7 +6390,7 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         if (HttpRawRequestScope::callerIsSandboxed()) {
             throw "HTTP-SERVER-ERROR", "a dispatch capability cannot be claimed by sandboxed code";
         }
-        return new HttpServerDispatchCapability();
+        return new HttpServerDispatchCapability(NOTHING, AbstractHttpRequestHandler::trailerKeepReader());
     }
 
     #! Internal: for the initialization of the HttpServer module only
@@ -6380,7 +6426,7 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             throw "HTTP-SERVER-ERROR", "the dispatch capability of the HTTP server can only be claimed by the "
                 "initialization of the HttpServer module";
         }
-        return new HttpServerDispatchCapability(path);
+        return new HttpServerDispatchCapability(path, AbstractHttpRequestHandler::trailerKeepReader());
     }
 
     #! Returns the raw request context and header fields of the request being served on the thread
@@ -6407,7 +6453,7 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         if (!rv) {
             throw "REQUEST-ERROR", "no request is being served on the thread";
         }
-        return rv;
+        return rv{"cx", "hdr", "s"};
     }
 
     #! Sets the credential header fields addressed to this handler that the code serving its requests gets

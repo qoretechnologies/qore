@@ -312,6 +312,17 @@ class TenantStreamHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! a stream request handler of the tenant whose factory gives its stream request a credential header field of its own
+class TenantAddingStreamHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new TenantRequest(listener, self, s, cx, hdr + {'authorization': 'Bearer tenant-own'}, body);
+    }
+}
+
 #! a REST class of the tenant that reports what it gets
 class TenantRestClass inherits AbstractRestClass {
     string name() {
@@ -395,6 +406,15 @@ AbstractRestClass sub platform_class() {
 AbstractStreamRequest sub make_request(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s,
         hash<auto> cx, hash<auto> hdr, auto body) {
     return new TenantRequest(listener, handler, s, cx, hdr, body);
+}
+
+AbstractStreamRequest sub make_request_adding(HttpListenerInterface listener, AbstractHttpRequestHandler handler,
+        Socket s, hash<auto> cx, hash<auto> hdr, auto body) {
+    return new TenantRequest(listener, handler, s, cx, hdr + {'authorization': 'Bearer tenant-own'}, body);
+}
+
+AbstractHttpRequestHandler sub adding_stream_handler() {
+    return new TenantAddingStreamHandler();
 }
 
 bool sub restricted() {
@@ -528,6 +548,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("the socket of the connection for trusted code only", \placeholderTest());
         addTestCase("the accessors of a stream request give the request as the platform filtered it",
             \platformFilterAccessorsTest());
+        addTestCase("the credential trailer fields come from the trusted options of the handler",
+            \trailerKeepTest());
         set_return_value(main());
     }
 
@@ -1124,6 +1146,43 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq("stream?token=secret", th.path, "no platform options: the query parameters are kept");
     }
 
+    trailerKeepTest() {
+        # a handler of restricted code whose factory gives its stream request an Authorization header field of its
+        # own: the client's Authorization trailer field is not given to it, as no trusted option keeps it
+        Program t = tenantProgram();
+        hash<auto> rv = chunkedCall(t.callFunction("adding_stream_handler"));
+        assertEq(5, rv.size);
+        assertEq({"x-checksum": "1"}, rv.trailers, "the tenant's own header field keeps no trailer field");
+        # nor through a trusted handler that hosts restricted code (setHostsCode()), which gets a socket of the request
+        # and filters its requests for a stream request of restricted code
+        code make = AbstractStreamRequest sub (HttpListenerInterface listener, AbstractHttpRequestHandler handler,
+                Socket s, hash<auto> cx, hash<auto> hdr, auto body) {
+            return t.callFunction("make_request_adding", listener, handler, s, cx, hdr, body);
+        };
+        rv = chunkedCall(new DelegatingHandler(make, t.callFunction("rest_class")));
+        assertEq({"x-checksum": "1"}, rv.trailers, "a trusted handler with no option for the field");
+        # a trusted handler that opts in to Authorization: its stream request of restricted code gets it
+        DelegatingHandler d(make, t.callFunction("rest_class"));
+        d.setRequestCredentialHeaders("Authorization");
+        rv = chunkedCall(d);
+        assertEq("Bearer trailer", rv.trailers.authorization, "the trusted handler opted in");
+        # a host's dispatch without the handler gives none; with the handler, those that its options keep (the body
+        # is given to the handler, with the trailer fields of the raw request)
+        TestStreamHandler h();
+        h.setRequestCredentialHeaders("Authorization");
+        hash<auto> raw = rawContext(61);
+        hash<HttpFilteredRequestInfo> f = AbstractStreamRequest::filterRequest(raw, header());
+        serve(h, raw, header(), f.cx, f.hdr, NOTHING, False, binary("hello"));
+        assertEq(5, h.made[0].size);
+        assertEq({"x-checksum": "1"}, h.made[0].trailers, "a host's dispatch without the handler");
+        h.made = ();
+        raw = rawContext(62);
+        f = AbstractStreamRequest::filterRequest(raw, header());
+        serve(h, raw, header(), f.cx, f.hdr, NOTHING, True, binary("hello"));
+        assertEq({"authorization": "Bearer trailer", "x-checksum": "1"}, h.made[0].trailers,
+            "a host's dispatch with the handler");
+    }
+
     #! the capability of the test to make the raw request of a direct call of a handler current, as a host does
     static object host() {
         if (!dispatch_capability) {
@@ -1133,13 +1192,13 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     #! calls the handler directly in a dispatch of the raw request, as a host does; the handler gets the request as
-    #! given, or the raw request
+    #! given, or the raw request, and the body if given; with \a with_handler the dispatch is given the handler
     static hash<auto> serve(AbstractHttpRequestHandler h, hash<auto> raw, hash<auto> hdr, *hash<auto> given_cx,
-            *hash<auto> given_hdr, *Socket s) {
+            *hash<auto> given_hdr, *Socket s, bool with_handler = False, *binary body) {
         Socket rs = s ?? new ViewSocket();
-        object scope = host().enter(raw, hdr, rs);
+        object scope = with_handler ? host().enter(raw, hdr, rs, h) : host().enter(raw, hdr, rs);
         on_exit delete scope;
-        return h.handleRequest(new TestListener(), rs, given_cx ?? raw, given_hdr ?? hdr, NOTHING);
+        return h.handleRequest(new TestListener(), rs, given_cx ?? raw, given_hdr ?? hdr, body);
     }
 
     #! calls the handler directly with a request whose body is given through the body reader of the raw request

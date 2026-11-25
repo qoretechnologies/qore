@@ -5760,7 +5760,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # the raw request is current on the thread while the handler serves it: only this dispatch makes
                     # it current, with the request as the server made it; without the capability no request is
                     # current, and a stream request is refused (qore#6843)
-                    *object raw_scope = dispatch_capability ? dispatch_capability.enter(cx, hdr, hsock) : NOTHING;
+                    *object raw_scope = dispatch_capability
+                        ? dispatch_capability.enter(cx, hdr, hsock, handler)
+                        : NOTHING;
                     on_exit delete raw_scope;
                     # a handler whose class is of a restricted Program, which trusted code serves the request to, gets
                     # the request without its credentials (fails closed); the rest of its context is its own, as
