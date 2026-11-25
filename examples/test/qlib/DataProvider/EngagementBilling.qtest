@@ -1,0 +1,32 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class EngagementBillingTest
+
+class EngagementBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("Engagement provider billing") {
+        addVendor("Close", "Close", "close.com", "included",
+            "https://close.com/pricing", {
+                "get-contact": "included", "create-call": "unknown", "create-sms": "unknown",
+            });
+        addVendor("Apollo", "Apollo", "apollo.io", "subscription",
+            "https://www.apollo.io/pricing", {
+                "enrich-person": "credit", "bulk-enrich-organizations": "credit",
+                "search-people": "included",
+            });
+        addVendor("Instantly", "Instantly", "instantly.ai", "subscription",
+            "https://instantly.ai/pricing", {
+                "create-email-verification": "credit", "get-account": "subscription",
+            });
+        addVendor("Lemlist", "Lemlist", "lemlist.com", "subscription",
+            "https://www.lemlist.com/pricing");
+        set_return_value(main());
+    }
+}

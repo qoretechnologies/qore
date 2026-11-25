@@ -62,6 +62,15 @@ module LemlistDataProvider {
                 "- Task management (create and update manual tasks)\n"
                 "- Contact management\n"
                 "- Real-time webhooks for email and engagement events",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "lemlist.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.lemlist.com/pricing",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "lemlist",
             "logo": LemlistLogo,
             "logo_file_name": "lemlist-logo.svg",
