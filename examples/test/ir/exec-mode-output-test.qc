@@ -129,17 +129,30 @@ class ExecModeOutputTest inherits QUnit::Test {
         assertEq({}, wrong);
     }
 
+    #! compiles and runs an executable with each of the qcc optimization options
+    /** Every executable is compiled and run before the result is checked, as testModes() runs every mode, so that a
+        failure shows every optimization level whose output differs (or that did not compile), not only the first one
+    */
     testAot() {
         TmpDir tmp("qore-" + prefix + "-");
         string path = writeScript(tmp);
+        hash<string, list<string>> wrong();
         foreach string opt in (qcc_opts) {
+            string label = opt ? opt : "default";
             string exe = tmp.path + DirSep + prefix + (opt ? opt.lwr() : "");
             string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s -o %s %s 2>&1",
                 libqore_dir, libqore_dir, qcc_bin, opt, exe, path));
-            assertTrue(is_file(exe), "compiled the executable " + opt + ": " + out);
-            assertEq((), differences(expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
-                "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe))), "executable " + opt);
+            if (!is_file(exe)) {
+                wrong{label} = ("the executable was not compiled: " + out,);
+                continue;
+            }
+            list<string> diff = differences(expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe)));
+            if (diff) {
+                wrong{label} = diff;
+            }
         }
+        assertEq({}, wrong);
     }
 
     #! returns the lines of the output that differ from the expected output, as "expected -> actual"
