@@ -39,7 +39,8 @@ job before any test runs, but the pipeline then has to be run again.
   `CI_REGISTRY_USER` and `CI_REGISTRY_PASSWORD`.  It never prints a credential, a token or a response body (only the
   registry's error codes), and it follows no redirect, so credentials go only to the registry and its token realm.
 - The resolver and `tree-already-tested` (both `.pre`) run on the `develop` tag itself: neither uses the image's Qore
-  modules.
+  modules.  So do the GitHub status jobs `pipeline-passed` and `github-status` (`.post`, qore#7203), which must run
+  even when the resolver failed, to post the failure.
 - `ci-build-image-check.sh` remains as the backstop: a test job whose image is not its build job's still fails before
   any test runs.
 - The macOS job (`test-macos`, tart executor) is deliberately not pinned (decided in the review of this change): it
