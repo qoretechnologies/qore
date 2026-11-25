@@ -2441,6 +2441,29 @@ const SOCK_DGRAM = SOCK_DGRAM;
 const SOCK_RAW = SOCK_RAW;
 ///@}
 
+// the check of a guarded method of the connection socket of a server (see Socket::setServerOwned(); qore#7338)
+int qore_socket_server_guard_check(int kind, ExceptionSink* xsink) {
+    if (kind == 1) {
+        // close() and shutdown*(): refused to code that a sandbox's policy governs; a policy barrier lifts it
+        QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::Policy);
+        if (!policy) {
+            return 0;
+        }
+        xsink->raiseException("SOCKET-SERVER-OWNED-ERROR", "the connection socket of a server cannot be closed or "
+            "shut down by code that a sandbox's policy governs");
+        return -1;
+    }
+    // the methods that read, write, change or poll the connection: refused to sandboxed code, also through a policy
+    // barrier
+    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+    if (!governing) {
+        return 0;
+    }
+    xsink->raiseException("SOCKET-SERVER-OWNED-ERROR", "the connection socket of a server cannot be used by "
+        "sandboxed code; the server gives sandboxed handlers a socket of their own request");
+    return -1;
+}
+
 //! The Socket class allows %Qore programs safe access to network sockets
 /** @note This class is not available with the @ref PO_NO_NETWORK parse option.
 
@@ -2525,7 +2548,7 @@ const SOCK_RAW = SOCK_RAW;
     |\c family|The network address family (see @ref network_address_family_constants)
     |\c familystr|A string describing the network address family (ex: \c "ipv4")
 */
-qclass Socket [public_members=*string source,*string source_host; flags=unsetPublicMemberFlag; arg=QoreSocketObject* s; dom=NETWORK; vparent=AbstractPollableIoObjectBase];
+qclass Socket [public_members=*string source,*string source_host; flags=unsetPublicMemberFlag; arg=QoreSocketObject* s; dom=NETWORK; vparent=AbstractPollableIoObjectBase; guard=qore_socket_server_guard];
 
 //! Creates the socket object
 /** @par Example:
@@ -2564,8 +2587,186 @@ Socket::copy() {
 /**
 */
 Socket::destructor() {
-    s->invalidate(xsink);
+    // the private data can be shared by the connection socket of a server and its alias (qore#7338): it is
+    // invalidated with its last object; while the alias exists, the private data holds a reference to the
+    // connection socket, which is released with the alias
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreObject* owner_ref = nullptr;
+    bool last;
+    {
+        AutoLocker al(priv->m);
+        if (priv->server_owned.load(std::memory_order_acquire) == self) {
+            priv->server_owned.store(nullptr, std::memory_order_release);
+        }
+        if (priv->server_alias == self) {
+            priv->server_alias = nullptr;
+            owner_ref = priv->server_owner_ref;
+            priv->server_owner_ref = nullptr;
+        }
+        assert(priv->obj_count > 0);
+        last = !--priv->obj_count;
+    }
+    if (last) {
+        s->invalidate(xsink);
+    }
+    // released outside the lock: the connection socket's destructor takes it
+    if (owner_ref) {
+        owner_ref->deref(xsink);
+    }
     s->deref(xsink);
+}
+
+//! Marks the socket as the connection socket of a server (one way)
+/** A server marks the socket of each connection that it accepts: sandboxed code may not call its methods that read,
+    write, change or poll the connection (SOCKET-SERVER-OWNED-ERROR), and code that a sandbox's policy governs may not
+    call close() or its shutdown methods (a policy barrier, @ref Qore::SandboxManager::callWithSystemPolicy()
+    "SandboxManager::callWithSystemPolicy()", lifts it, so that trusted infrastructure can close it on behalf of a
+    tenant).  Its methods that only give information about the connection, such as getPeerInfo(), are not refused.
+    The server does its own I/O on the connection and gives the sockets of the requests of sandboxed handlers access
+    to it with an alias (see getServerAlias()), which is not guarded.
+
+    A trusted handler that passes the socket of the connection to sandboxed code thus cannot let that code use the
+    connection beyond its request.
+
+    The socket is not marked when the code that calls this method is the code of a sandboxed %Program: only the
+    code of a server, which is trusted library code, marks the sockets of its connections, also when it runs for
+    sandboxed code, such as the accept of a listener that trusted code added on behalf of a tenant.
+
+    @return @ref True if the socket is marked, @ref False if the code that calls this method is the code of a
+    sandboxed %Program and the socket is not marked
+
+    @throw SOCKET-SERVER-OWNED-ERROR the object is the alias of a server's connection socket, or another object with
+    the same connection is already marked
+
+    @see
+    - getServerAlias()
+    - isServerOwned()
+
+    @since %Qore 3.0
+*/
+bool Socket::setServerOwned() [guard=none] {
+    // only trusted code marks a server's connection, decided by the code that calls, not by the sandbox that the
+    // call runs for: a server's code marks the connections of a listener that was added for sandboxed code, whose
+    // accepts run for that code; a mark by sandboxed code would refuse its socket to the trusted code that it gives
+    // it to when that runs for sandboxed code
+    if (qore_calling_code_is_sandboxed()) {
+        return false;
+    }
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    AutoLocker al(priv->m);
+    QoreObject* owner = priv->server_owned.load(std::memory_order_acquire);
+    if (owner == self) {
+        return true;
+    }
+    if (owner || priv->server_alias == self) {
+        xsink->raiseException("SOCKET-SERVER-OWNED-ERROR", "the socket is the alias of the connection socket of a "
+            "server, or the connection is already marked as a server's");
+        return QoreValue();
+    }
+    priv->server_owned.store(self, std::memory_order_release);
+    return true;
+}
+
+//! Returns @ref True if the socket is the connection socket of a server (see setServerOwned())
+/** @return @ref True if the socket is the connection socket of a server, whose methods sandboxed code may not call
+
+    @since %Qore 3.0
+*/
+bool Socket::isServerOwned() [guard=none; flags=CONSTANT] {
+    return my_socket_priv::getPriv(*s)->server_owned.load(std::memory_order_acquire) == self;
+}
+
+//! Returns the alias of the connection socket of a server, which is not guarded
+/** The alias is another object of class Socket for the same connection: its methods are not refused to sandboxed
+    code.  A server makes it in its own code when it accepts the connection and does its own I/O on the connection
+    with it, keeping it in the private state of its connections and of the sockets of the requests of its handlers,
+    never in a value that handler code gets; handler code gets the connection socket (see getServerSocket()).  The
+    alias is made once for the connection socket: no code can get another one, also when the first one is gone.
+
+    While the alias exists, it keeps the connection socket.  Closing or shutting down the connection through either
+    object acts on the connection, which the other object then sees closed.
+
+    @return the alias of the connection socket
+
+    @throw SOCKET-SERVER-OWNED-ERROR the code that calls this method is the code of a sandboxed %Program, the socket
+    is not marked as the connection socket of a server (see setServerOwned()), or its alias was already made
+
+    @since %Qore 3.0
+*/
+Socket Socket::getServerAlias() [guard=none] {
+    // decided at each call by the code that calls, like setServerOwned(): the server's code gets the alias also when
+    // it runs for sandboxed code
+    if (qore_calling_code_is_sandboxed()) {
+        xsink->raiseException("SOCKET-SERVER-OWNED-ERROR", "sandboxed code cannot get the alias of the connection "
+            "socket of a server");
+        return QoreValue();
+    }
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    AutoLocker al(priv->m);
+    if (priv->server_owned.load(std::memory_order_acquire) != self) {
+        xsink->raiseException("SOCKET-SERVER-OWNED-ERROR", "the socket is not marked as the connection socket of a "
+            "server (see Socket::setServerOwned())");
+        return QoreValue();
+    }
+    // made once: an alias made again after the server's alias is gone would give the connection to code that the
+    // server did not give it to
+    if (priv->server_alias_made) {
+        xsink->raiseException("SOCKET-SERVER-OWNED-ERROR", "the alias of the connection socket of a server was "
+            "already made; it is made once");
+        return QoreValue();
+    }
+    assert(!priv->server_alias && !priv->server_owner_ref);
+    // the alias shares the private data, which holds a reference to the connection socket while the alias exists
+    s->ref();
+    QoreObject* alias = new QoreObject(QC_SOCKET, getProgram(), s);
+    ++priv->obj_count;
+    priv->server_alias_made = true;
+    priv->server_alias = alias;
+    self->ref();
+    priv->server_owner_ref = self;
+    return alias;
+}
+
+//! Returns @ref True if the socket is the alias of the connection socket of a server (see getServerAlias())
+/** @return @ref True if the socket is the alias of the connection socket of a server
+
+    @since %Qore 3.0
+*/
+bool Socket::isServerAlias() [guard=none; flags=CONSTANT] {
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    AutoLocker al(priv->m);
+    return priv->server_alias == self;
+}
+
+//! Returns the connection socket of a server from its alias, which handler code gets (see getServerAlias())
+/** A server gives the connection socket, which is guarded (see setServerOwned()), to the handlers of its requests
+
+    @return the connection socket, or @ref nothing if it was deleted
+
+    @throw SOCKET-SERVER-OWNED-ERROR the code that calls this method is the code of a sandboxed %Program, or the
+    socket is not the alias of a server's connection socket
+
+    @since %Qore 3.0
+*/
+*Socket Socket::getServerSocket() [guard=none] {
+    if (qore_calling_code_is_sandboxed()) {
+        xsink->raiseException("SOCKET-SERVER-OWNED-ERROR", "sandboxed code cannot get the connection socket of a "
+            "server from its alias");
+        return QoreValue();
+    }
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    AutoLocker al(priv->m);
+    if (priv->server_alias != self) {
+        xsink->raiseException("SOCKET-SERVER-OWNED-ERROR", "the socket is not the alias of the connection socket of "
+            "a server (see Socket::getServerAlias())");
+        return QoreValue();
+    }
+    // the private data holds a reference to it while the alias exists; it was deleted only if explicitly
+    QoreObject* owner = priv->server_owned.load(std::memory_order_acquire);
+    if (!owner || !owner->isValid()) {
+        return QoreValue();
+    }
+    return owner->objectRefSelf();
 }
 
 //! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to poll the socket for a standard connection
@@ -6256,7 +6457,7 @@ if (sock.close())
 
     @return 0 for success, -1 for error; in this case check errno() for the error number
 */
-int Socket::close() {
+int Socket::close() [guard=close] {
     return s->close();
 }
 
@@ -6273,7 +6474,7 @@ if (sock.shutdown())
 
     @return 0 for success, -1 for error; in this case check errno() for the error number
 */
-int Socket::shutdown() {
+int Socket::shutdown() [guard=close] {
     return s->shutdown();
 }
 
@@ -6303,7 +6504,7 @@ hash<auto> hdr = sock.readHTTPHeader(10s);
 
     @since %Qore 3.0
 */
-nothing Socket::shutdownWrite() [dom=NETWORK] {
+nothing Socket::shutdownWrite() [guard=close; dom=NETWORK] {
     qore_socket_object_private(s).shutdownWrite(xsink);
 }
 
@@ -6317,7 +6518,7 @@ sock.shutdownSSL();
 
     @throw SOCKET-SSL-ERROR an error occurred shutting down the TLS/SSL connection
 */
-nothing Socket::shutdownSSL() {
+nothing Socket::shutdownSSL() [guard=close] {
     s->shutdownSSL(xsink);
 }
 
@@ -6348,7 +6549,7 @@ int port = sock.getPort();
 
     @return the port number for an INET connection, -1 if no INET connection has been established
 */
-int Socket::getPort() [flags=CONSTANT] {
+int Socket::getPort() [guard=none; flags=CONSTANT] {
     return s->getPort();
 }
 
@@ -6396,7 +6597,7 @@ int to = sock.getSendTimeout();
 
     @return the send timeout socket option value as an integer in milliseconds
 */
-int Socket::getSendTimeout() [flags=CONSTANT] {
+int Socket::getSendTimeout() [guard=none; flags=CONSTANT] {
     return s->getSendTimeout();
 }
 
@@ -6408,14 +6609,14 @@ int to = sock.getRecvTimeout();
 
     @return the receive timeout socket option value as an integer in milliseconds
 */
-int Socket::getRecvTimeout() [flags=CONSTANT] {
+int Socket::getRecvTimeout() [guard=none; flags=CONSTANT] {
     return s->getRecvTimeout();
 }
 
 //! Returns the @ref character_encoding "character encoding" for the socket
 /** @return the @ref character_encoding "character encoding" for the socket
 */
-string Socket::getEncoding() [flags=CONSTANT] {
+string Socket::getEncoding() [guard=none; flags=CONSTANT] {
     return new QoreStringNode(s->getEncoding()->getCode());
 }
 
@@ -6430,7 +6631,7 @@ nothing Socket::setEncoding(string encoding) [flags=NAMED_ARGS] {
 /** A method synonym for Socket::getEncoding(), kept for backwards-compatibility
     @return the @ref character_encoding "character encoding" for the socket
 */
-string Socket::getCharset() [flags=CONSTANT] {
+string Socket::getCharset() [guard=none; flags=CONSTANT] {
     return new QoreStringNode(s->getEncoding()->getCode());
 }
 
@@ -6510,7 +6711,7 @@ bool b = sock.isOpen();
 
     @return @ref True if the socket is open, @ref False if not
 */
-bool Socket::isOpen() [flags=CONSTANT] {
+bool Socket::isOpen() [guard=none; flags=CONSTANT] {
     return s->isOpen();
 }
 
@@ -6553,7 +6754,7 @@ nothing Socket::setHttpFieldsAtTopLevel(bool top_level) {
 
     @since %Qore 3.0
 */
-bool Socket::getHttpFieldsAtTopLevel() [flags=CONSTANT] {
+bool Socket::getHttpFieldsAtTopLevel() [guard=none; flags=CONSTANT] {
     return my_socket_priv::getPriv(*s)->getHttpFieldsAtTopLevel();
 }
 
@@ -6566,7 +6767,7 @@ bool Socket::getHttpFieldsAtTopLevel() [flags=CONSTANT] {
     @return the name of the cipher for an encrypted connection or @ref nothing if a secure connection has not been
     established
 */
-*string Socket::getSSLCipherName() [flags=CONSTANT] {
+*string Socket::getSSLCipherName() [guard=none; flags=CONSTANT] {
     return qore_socket_object_private(s).getSSLCipherNameString(xsink);
 }
 
@@ -6579,7 +6780,7 @@ bool Socket::getHttpFieldsAtTopLevel() [flags=CONSTANT] {
     @return the version string of the cipher for an encrypted connection or @ref nothing if a secure connection has
     not been established
 */
-*string Socket::getSSLCipherVersion() [flags=CONSTANT] {
+*string Socket::getSSLCipherVersion() [guard=none; flags=CONSTANT] {
     return qore_socket_object_private(s).getSSLCipherVersionString(xsink);
 }
 
@@ -6591,7 +6792,7 @@ bool b = sock.isSecure();
 
     @return @ref True if the connection is encrypted, @ref False if not
 */
-bool Socket::isSecure() [flags=CONSTANT] {
+bool Socket::isSecure() [guard=none; flags=CONSTANT] {
     return qore_socket_object_private(s).isSecure(xsink);
 }
 
@@ -6630,7 +6831,7 @@ if (proto == "h2") {
 
     @since %Qore 3.0
 */
-*string Socket::getAlpnProtocol() [flags=CONSTANT] {
+*string Socket::getAlpnProtocol() [guard=none; flags=CONSTANT] {
     return qore_socket_object_private(s).getAlpnProtocol(xsink);
 }
 
@@ -6886,7 +7087,7 @@ bool b = sock.getSourceHostLookup();
 
     @since %Qore 3.0
 */
-bool Socket::getSourceHostLookup() [flags=RET_VALUE_ONLY] {
+bool Socket::getSourceHostLookup() [guard=none; flags=RET_VALUE_ONLY] {
     return my_socket_priv::getPriv(*s)->source_host_lookup.load();
 }
 
@@ -6976,7 +7177,7 @@ if (sock.hasHttpFastRoutes()) {
 
     @since %Qore 3.0
 */
-bool Socket::hasHttpFastRoutes() [flags=RET_VALUE_ONLY] {
+bool Socket::hasHttpFastRoutes() [guard=none; flags=RET_VALUE_ONLY] {
     return (bool)qore_socket_private::get(*my_socket_priv::getPriv(*s)->socket)->getFastRoutes();
 }
 
@@ -7071,7 +7272,7 @@ bool b = sock.getNoDelay();
 
     @see Socket::setNoDelay() for a description of the \c TCP_NODELAY setting
 */
-bool Socket::getNoDelay() [flags=CONSTANT] {
+bool Socket::getNoDelay() [guard=none; flags=CONSTANT] {
     // the C++ API returns an int rc (-1 on error), so it must be converted explicitly here;
     // returning it directly gave this bool-declared method an integer value, and made the
     // error rc (-1) read as True in Qore
@@ -7138,7 +7339,7 @@ int ms = sock.getUserTimeout();
 
     @since %Qore 3.0
 */
-int Socket::getUserTimeout() [flags=CONSTANT] {
+int Socket::getUserTimeout() [guard=none; flags=CONSTANT] {
     return s->getUserTimeout();
 }
 
@@ -7163,7 +7364,7 @@ hash<auto> h = sock.getPeerInfo();
     @since %Qore 0.8.8 added the \a host_lookup parameter
     @since %Qore 3.0 IPv4-mapped IPv6 addresses of stream sockets are reported as IPv4 addresses
 */
-hash<auto> Socket::getPeerInfo(bool host_lookup = True) [flags=NAMED_ARGS] {
+hash<auto> Socket::getPeerInfo(bool host_lookup = True) [guard=none; flags=NAMED_ARGS] {
     return s->getPeerInfo(xsink, host_lookup);
 }
 
@@ -7188,7 +7389,7 @@ hash<auto> h = sock.getSocketInfo();
     @since %Qore 0.8.8 added the \a host_lookup parameter
     @since %Qore 3.0 IPv4-mapped IPv6 addresses of stream sockets are reported as IPv4 addresses
 */
-hash<auto> Socket::getSocketInfo(bool host_lookup = True) [flags=NAMED_ARGS] {
+hash<auto> Socket::getSocketInfo(bool host_lookup = True) [guard=none; flags=NAMED_ARGS] {
     return s->getSocketInfo(xsink, host_lookup);
 }
 
@@ -7307,7 +7508,7 @@ hash<auto> h = sock.getUsageInfo();
 
     @see Socket::clearStats()
 */
-hash<auto> Socket::getUsageInfo() [flags=CONSTANT] {
+hash<auto> Socket::getUsageInfo() [guard=none; flags=CONSTANT] {
     return s->getUsageInfo();
 }
 
@@ -7397,7 +7598,7 @@ int mode = sock.getSslVerifyMode();
 
     @since %Qore 0.8.13
 */
-int Socket::getSslVerifyMode() [flags=CONSTANT] {
+int Socket::getSslVerifyMode() [guard=none; flags=CONSTANT] {
     return s->getSslVerifyMode();
 }
 
@@ -7437,7 +7638,7 @@ bool b = sock.getAcceptAllCertificates();
 
     @since %Qore 0.8.13
 */
-bool Socket::getAcceptAllCertificates() [flags=CONSTANT] {
+bool Socket::getAcceptAllCertificates() [guard=none; flags=CONSTANT] {
     return s->getAcceptAllCertificates();
 }
 
@@ -7563,7 +7764,7 @@ bool Socket::captureRemoteCertificates(bool enabled = True) [flags=NAMED_ARGS] {
 
     @since %Qore 0.9.3
 */
-*SSLCertificate Socket::getRemoteCertificate() {
+*SSLCertificate Socket::getRemoteCertificate() [guard=none] {
     return qore_socket_object_private(s).getRemoteCertificate(xsink);
 }
 
@@ -7579,7 +7780,7 @@ int conn_id = sock.getConnectionId();
 
     @since %Qore 0.9.3.1
 */
-int Socket::getConnectionId() [flags=CONSTANT] {
+int Socket::getConnectionId() [guard=none; flags=CONSTANT] {
     return s->getConnectionId();
 }
 
@@ -7604,7 +7805,7 @@ Socket::setMaxChunkedBodySize(int max_body_size) [flags=NAMED_ARGS] {
 
     @since %Qore 3.0
 */
-int Socket::getMaxChunkedBodySize() [flags=CONSTANT] {
+int Socket::getMaxChunkedBodySize() [guard=none; flags=CONSTANT] {
     return s->getMaxChunkedBodySize();
 }
 
@@ -7634,7 +7835,7 @@ Socket::setMaxHeaderSize(int max_header_size) [flags=NAMED_ARGS] {
 
     @since %Qore 3.0
 */
-int Socket::getMaxHeaderSize() [flags=CONSTANT] {
+int Socket::getMaxHeaderSize() [guard=none; flags=CONSTANT] {
     return static_cast<int>(s->getMaxHeaderSize());
 }
 
@@ -7665,7 +7866,7 @@ Socket::setMaxLineSize(int max_line_size) [flags=NAMED_ARGS] {
 
     @since %Qore 3.0
 */
-int Socket::getMaxLineSize() [flags=CONSTANT] {
+int Socket::getMaxLineSize() [guard=none; flags=CONSTANT] {
     return static_cast<int>(s->getMaxLineSize());
 }
 
@@ -8883,7 +9084,7 @@ AbstractPollOperation<auto> Socket::startPollQuicSendResponse(int session_id, in
 
     @since %Qore 3.0
 */
-bool Socket::isQuic() [flags=CONSTANT] {
+bool Socket::isQuic() [guard=none; flags=CONSTANT] {
     return s->isQuic();
 }
 
@@ -8994,7 +9195,7 @@ int Socket::submitQuicRequestStreaming(string method, string path, *hash<auto> h
 
     @since %Qore 3.0
 */
-bool Socket::isQuicSessionClosed() [flags=CONSTANT] {
+bool Socket::isQuicSessionClosed() [guard=none; flags=CONSTANT] {
     return s->isQuicSessionClosed();
 }
 
@@ -9194,7 +9395,7 @@ int Socket::getHttp2StreamTakenBytes(int stream_id) [flags=CONSTANT,NAMED_ARGS] 
 
     @since %Qore 3.0
 */
-int Socket::getQuicClientStreamAckedBytes(int stream_id) [flags=CONSTANT,NAMED_ARGS] {
+int Socket::getQuicClientStreamAckedBytes(int stream_id) [guard=none; flags=CONSTANT,NAMED_ARGS] {
     SocketSyncPoll::assertNotOnIoThread("Socket", "getQuicClientStreamAckedBytes", xsink);
     if (*xsink) {
         return -1;
@@ -9252,7 +9453,7 @@ int Socket::waitForQuicClientStreamDrain(int stream_id, timeout timeout_ms = 5s)
 
     @since %Qore 3.0
 */
-int Socket::getQuicSessionId() {
+int Socket::getQuicSessionId() [guard=none] {
     return s->getFirstQuicSessionId(xsink);
 }
 
@@ -9440,7 +9641,7 @@ nothing Socket::submitQuicShutdown(int session_id) [flags=NAMED_ARGS] {
 
     @since %Qore 3.0
 */
-hash<QuicGoawayStateInfo> Socket::getQuicSessionGoawayState(int session_id) [flags=NAMED_ARGS] {
+hash<QuicGoawayStateInfo> Socket::getQuicSessionGoawayState(int session_id) [guard=none; flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -9466,7 +9667,7 @@ hash<QuicGoawayStateInfo> Socket::getQuicSessionGoawayState(int session_id) [fla
 
     @since %Qore 3.0
 */
-bool Socket::isQuicGoawayReceived(int session_id) [flags=NAMED_ARGS] {
+bool Socket::isQuicGoawayReceived(int session_id) [guard=none; flags=NAMED_ARGS] {
     if (session_id <= 0) {
         return false;
     }
@@ -9496,7 +9697,7 @@ bool Socket::isQuicGoawayReceived(int session_id) [flags=NAMED_ARGS] {
 
     @since %Qore 3.0
 */
-*SSLCertificate Socket::getQuicPeerCertificate(int session_id) [flags=NAMED_ARGS] {
+*SSLCertificate Socket::getQuicPeerCertificate(int session_id) [guard=none; flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -9524,7 +9725,7 @@ bool Socket::isQuicGoawayReceived(int session_id) [flags=NAMED_ARGS] {
 
     @since %Qore 3.0
 */
-*string Socket::getQuicSSLCipherName(int session_id) [flags=NAMED_ARGS] {
+*string Socket::getQuicSSLCipherName(int session_id) [guard=none; flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0",
             static_cast<long long>(session_id));
@@ -9552,7 +9753,7 @@ bool Socket::isQuicGoawayReceived(int session_id) [flags=NAMED_ARGS] {
 
     @since %Qore 3.0
 */
-*string Socket::getQuicSSLCipherVersion(int session_id) [flags=NAMED_ARGS] {
+*string Socket::getQuicSSLCipherVersion(int session_id) [guard=none; flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0",
             static_cast<long long>(session_id));
@@ -9931,7 +10132,7 @@ int Socket::waitForQuicStreamDrain(int session_id, int stream_id,
 
     @since %Qore 3.0
 */
-int Socket::getQuicStreamAckedBytes(int session_id, int stream_id) [flags=CONSTANT,NAMED_ARGS] {
+int Socket::getQuicStreamAckedBytes(int session_id, int stream_id) [guard=none; flags=CONSTANT,NAMED_ARGS] {
     SocketSyncPoll::assertNotOnIoThread("Socket", "getQuicStreamAckedBytes", xsink);
     if (*xsink) {
         return -1;
@@ -10205,7 +10406,7 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
 
     @since %Qore 3.0
 */
-bool Socket::isQuicStreamComplete(int session_id, int stream_id) [flags=CONSTANT,NAMED_ARGS] {
+bool Socket::isQuicStreamComplete(int session_id, int stream_id) [guard=none; flags=CONSTANT,NAMED_ARGS] {
     if (session_id <= 0 || stream_id < 0) {
         return true;
     }
@@ -10594,7 +10795,7 @@ nothing Socket::unregisterQuicDatagramQueue(int session_id, int stream_id) [flag
     @see @ref submitQuicDatagram()
     @see @ref isQuicDatagramSupported()
 */
-int Socket::getQuicMaxDatagramSize(int session_id, int stream_id) [flags=NAMED_ARGS;dom=NETWORK] {
+int Socket::getQuicMaxDatagramSize(int session_id, int stream_id) [guard=none; flags=NAMED_ARGS;dom=NETWORK] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return 0;
@@ -10621,7 +10822,7 @@ int Socket::getQuicMaxDatagramSize(int session_id, int stream_id) [flags=NAMED_A
     @see @ref submitQuicDatagram()
     @see @ref getQuicMaxDatagramSize()
 */
-bool Socket::isQuicDatagramSupported(int session_id) [flags=NAMED_ARGS;dom=NETWORK] {
+bool Socket::isQuicDatagramSupported(int session_id) [guard=none; flags=NAMED_ARGS;dom=NETWORK] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return false;

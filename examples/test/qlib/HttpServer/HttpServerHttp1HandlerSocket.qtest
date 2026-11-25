@@ -1578,7 +1578,8 @@ nothing sub run_code(code c) {
             "the connection's own socket is not a handler's");
         assertThrows("HTTP-HANDLER-SOCKET-ERROR", \http_abort_connection(), c, "a client socket is not a handler's");
         assertEq(c.getSocketInfo(False).port, info.sock.getPeerInfo(False).port, "the request's connection");
-        # the abort of a framework's drain (HTTP/1.1: the connection is closed), run on behalf of the tenant
+        # the abort of a framework's drain (HTTP/1.1: the connection is closed), run on behalf of the tenant: the target
+        # is the server's, and has the server's alias of the connection's socket (qore#7338)
         Socket sock = info.sock;
         p.callFunction("run_code", sub () { sock.close(); });
         assertThrows("SOCKET-CLOSED", \c.readHTTPHeader(), HangGuard, "the client sees the connection closed");
