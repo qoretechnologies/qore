@@ -2690,6 +2690,20 @@ void qore_object_private::raiseDeletedCall(const qore_class_private* cls, const 
         cls ? cls->name.c_str() : theclass->getName(), mname);
 }
 
+bool qore_object_private::tryStartCall(ExceptionSink* xsink) {
+    if (status == OS_DELETED) {
+        return false;
+    }
+    customRefIntern(true);
+    // an explicit deletion that has completed since the test sets the status under the object's lock; the reference
+    // taken before then keeps the object allocated, and the call runs without it, as for an object deleted before
+    if (status.load(std::memory_order_acquire) == OS_DELETED) [[unlikely]] {
+        customDeref(xsink, true);
+        return false;
+    }
+    return true;
+}
+
 int qore_object_private::startCall(const qore_class_private* cls, const char* mname, ExceptionSink* xsink) {
     // no lock: every method call on the object comes through here, and taking a reference needs none (see
     // customRefIntern()); rlck never ordered this test against deletion anyway, since the status is changed

@@ -10616,6 +10616,10 @@ QoreValue UserVariantBase::evalWithoutHelper(const char* name, QoreObject* self,
     return qore_release_value_with_exception(rv, xsink);
 }
 
+#ifdef DEBUG
+std::atomic<qore_dbg_closure_call_hook_t> qore_dbg_closure_call_hook{nullptr};
+#endif
+
 QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreClosureBase& closure_base,
         QoreObject* self, ExceptionSink* xsink, bool ref_obj) const {
     QORE_TRACE("UserClosureVariant::evalClosure()");
@@ -10643,7 +10647,36 @@ QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreC
             qore_set_user_call_runtime_po_override(*po_override.get(), uveh.getProgram(), this, &caller_po, caller_pgm);
         }
 
-        CodeContextHelper cch(xsink, CT_USER, "<anonymous closure>", self, ceh.getClass(), ref_obj);
+#ifdef DEBUG
+        // the call is about to take a reference to the closure's object; tests hold it here, so that another thread
+        // deletes the object meanwhile (qore#7555)
+        if (self) {
+            if (qore_dbg_closure_call_hook_t hook = qore_dbg_closure_call_hook.load()) {
+                hook(self->getClassName());
+            }
+        }
+#endif
+        // a closure created in a method runs whether or not its object has been deleted (issue #1303): the reference
+        // is taken here, if the object has not been deleted, in one step with the test, and not by the frame's
+        // helper, whose reference raises OBJECT-ALREADY-DELETED for a deleted object (qore#7555); a call on the
+        // current object takes none, as the helper takes none
+        struct ClosureObjectRef {
+            QoreObject* obj = nullptr;
+            ExceptionSink* xsink;
+            DLLLOCAL ClosureObjectRef(QoreObject* self, bool ref_obj, ExceptionSink* xsink) : xsink(xsink) {
+                if (self && ref_obj && self != runtime_get_stack_object()
+                        && qore_object_private::get(*self)->tryStartCall(xsink)) {
+                    obj = self;
+                }
+            }
+            // released after the frame's helper is destroyed, as the helper releases its reference
+            DLLLOCAL ~ClosureObjectRef() {
+                if (obj) {
+                    qore_object_private::get(*obj)->endCall(xsink);
+                }
+            }
+        } closure_obj_ref(self, ref_obj, xsink);
+        CodeContextHelper cch(xsink, CT_USER, "<anonymous closure>", self, ceh.getClass(), false);
 
         // UserVariantExecHelper above selects the final program/TLPD used by evalIntern().
         // Captured CVVs must be installed after that point so VT_LOCAL_TS reference/lvalue
@@ -11085,7 +11118,7 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
         if (*xsink) {
             return QoreValue();
         }
-        return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, !self || self->isValid());
+        return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, true);
     }
     // Pass pgm to set up program context - this ensures tlpd is set up for thread pool threads
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "<anonymous closure>", args, nullptr, class_ctx, CT_USER,
@@ -11095,7 +11128,7 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
     }
 
     //printd(5, "UserClosureFunction::evalClosure() this: %p (%s) variant: %p args: %p self: %p\n", this, getName(), variant, args, self);
-    return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, !self || self->isValid());
+    return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, true);
 }
 
 QoreValue UserClosureFunction::evalClosureNamed(const QoreClosureBase& closure_base, QoreProgram* pgm,
@@ -11118,7 +11151,7 @@ QoreValue UserClosureFunction::evalClosureNamed(const QoreClosureBase& closure_b
         return QoreValue();
     }
     assert(variant);
-    return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, !self || self->isValid());
+    return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, true);
 }
 
 int UserFunctionVariant::parseInit(QoreFunction* f) {

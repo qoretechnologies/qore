@@ -1,0 +1,91 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - threads, object deletion in another thread and AOT code generation and linking
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ClosureDeletedObjectTest
+
+#! Tests calls of a closure created in a method while another thread deletes the method's object
+/** The child script (closure-deleted-object/closure-deleted-object.q) holds the thread that calls the closure with a
+    debug hook before the call takes a reference to the object, and deletes the object meanwhile: the call runs, as a
+    call of a closure whose object has been deleted does (issue #1303), and raises \c OBJECT-ALREADY-DELETED only where
+    the closure uses the object (issue #7555; the call raised it when the deletion was made between its test of the
+    object and its reference).  It runs in every execution mode, and compiled with AOT at optimization levels 0 and 3
+    (whose closure calls enter the object as native code does, with no such window: the object is deleted before the
+    call there), against the same expected output; with a release build, which has no debug hooks, the script reports
+    that it has nothing to test.
+*/
+class ClosureDeletedObjectTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string script;
+
+        TmpDir tmp("qore-closure-deleted-object-");
+
+        #! the output of the child script with a debug build
+        const ExpectedOutput = "deleted, closure without self: returned \"ran x\"
+deleted, closure with self: OBJECT-ALREADY-DELETED
+not deleted: ran y
+deleted before: ran z
+";
+
+        #! the output of the child script with a release build
+        const ReleaseOutput = "the debug hooks are only in debug builds\n";
+    }
+
+    constructor() : QUnit::Test("ClosureDeletedObject", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        script = get_script_dir() + "/closure-deleted-object/closure-deleted-object.q";
+
+        addTestCase("closure calls on an object deleted meanwhile, in every mode", \testModes());
+        addTestCase("closure calls on an object deleted meanwhile, compiled with AOT", \testAot());
+
+        set_return_value(main());
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+    }
+
+    private string expected() {
+        return Option::HAVE_LIBRARY_DEBUGGING ? ExpectedOutput : ReleaseOutput;
+    }
+
+    testModes() {
+        string exp = expected();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
+                "--exec-mode=%s %s", env(), qore_bin, mode, script));
+            assertEq(0, r.rc, sprintf("%s: exit code: %s", mode, r.out));
+            assertEq(exp, r.out, mode);
+        }
+    }
+
+    testAot() {
+        string exp = expected();
+        foreach int opt in (0, 3) {
+            string bin = sprintf("%s/closure-deleted-O%d", tmp.path, opt);
+            string out = backquote(sprintf("%s %s -b --compile --opt-level=%d --output %s %s 2>&1", env(), qore_bin,
+                opt, bin, script));
+            assertTrue(is_file(bin), sprintf("compiled with -O%d: %s", opt, out));
+            # a compiled program's closure calls enter the closure's object as native code does (see the script)
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s native", env(),
+                bin));
+            assertEq(0, r.rc, sprintf("-O%d: exit code: %s", opt, r.out));
+            assertEq(exp, r.out, sprintf("AOT -O%d", opt));
+        }
+    }
+}

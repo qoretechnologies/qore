@@ -2856,6 +2856,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a call of a closure created in a method no longer raises \c OBJECT-ALREADY-DELETED when another thread deletes
+      the method's object as the call starts; only the closure's uses of the object do (see
+      @ref closure_deleted_object; <a href="https://github.com/qoretechnologies/qore/issues/7555">issue 7555</a>)
     - a functional-domain restriction set on a Program after parsing with @ref Qore::Program::setParseOptions()
       "Program::setParseOptions()" applies to the construction of objects of every class of the Program, whether or
       not the class has a constructor of its own (<a href="https://github.com/qoretechnologies/qore/issues/7513">issue

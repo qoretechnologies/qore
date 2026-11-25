@@ -32105,6 +32105,8 @@ DerefPointHold deref_marked_hold;
 DerefPointHold deref_delete_hold;
 //! the hold of dbg_hold_deref_last()
 DerefPointHold deref_last_hold;
+//! the hold of dbg_hold_closure_call()
+DerefPointHold closure_call_hold;
 #ifdef DEBUG
 //! the hold of dbg_hold_container_free(); its class name is the type of the container ("list" or "hash")
 DerefPointHold container_free_hold;
@@ -32152,6 +32154,10 @@ void dbg_hold_deref_delete_hook(const char* class_name) {
 
 void dbg_hold_deref_last_hook(const char* class_name) {
     dbg_run_deref_point_hold(deref_last_hold, qore_dbg_deref_last_hook, class_name, "dbg_hold_deref_last");
+}
+
+void dbg_hold_closure_call_hook(const char* class_name) {
+    dbg_run_deref_point_hold(closure_call_hold, qore_dbg_closure_call_hook, class_name, "dbg_hold_closure_call");
 }
 
 #ifdef DEBUG
@@ -32255,6 +32261,22 @@ static QoreValue f_dbg_hold_deref_delete(const QoreListNode* params, RuntimeConf
 static QoreValue f_dbg_hold_deref_last(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return dbg_arm_deref_point_hold(deref_last_hold, qore_dbg_deref_last_hook, dbg_hold_deref_last_hook, params,
         xsink);
+}
+
+//! holds the next call of a closure created in a method of an object of the given class
+/** The hold is taken once, in UserClosureVariant::evalClosure(), before the call takes a reference to the closure's
+    object; another thread can delete the object meanwhile, and tests use the hold to make that deterministic
+    (qore#7555).
+
+    @param class_name the name of the object's class
+    @param held decremented once the calling thread is held
+    @param release the calling thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_closure_call(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return dbg_arm_deref_point_hold(closure_call_hold, qore_dbg_closure_call_hook, dbg_hold_closure_call_hook,
+        params, xsink);
 }
 
 //! returns the reads of the size of the list or hash of the weak reference in the first entry of a list, given as
@@ -37213,6 +37235,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
     qns.addBuiltinVariant("dbg_hold_deref_last", f_dbg_hold_deref_last,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
+    qns.addBuiltinVariant("dbg_hold_closure_call", f_dbg_hold_closure_call,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");

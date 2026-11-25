@@ -1058,6 +1058,17 @@ public:
     */
     DLLLOCAL int startCall(const qore_class_private* cls, const char* mname, ExceptionSink* xsink);
 
+    //! takes a reference to the object for a call that runs without one if the object has been deleted
+    /** For a call of a closure created in a method: the closure keeps its object through a weak reference, and a
+        call of it runs whether or not the object has been deleted (issue #1303); the closure's code raises
+        \c OBJECT-ALREADY-DELETED where it uses the object.  The test and the reference are one step, so that a
+        deletion made meanwhile in another thread never makes the call raise (qore#7555).
+
+        @return true if a reference was taken, which the call releases (endCall()); false if the object has been
+        deleted
+    */
+    DLLLOCAL bool tryStartCall(ExceptionSink* xsink);
+
     //! checks a call of the method @a mname of the class @a cls on the current object, which takes no reference
     /** raises the error of startCall() if the object has been deleted (by the arguments of the call: the call itself
         checks it before them); the status changes to OS_DELETED only after the destructor has run, so the destructor's
