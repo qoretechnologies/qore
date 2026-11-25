@@ -1,0 +1,3 @@
+secret: PRIVATE-MEMBER: 'secret' is a private member of class 'Shape'
+write: PRIVATE-MEMBER: 'secret' is a private member of class 'Shape'
+helper: METHOD-IS-PRIVATE: Shape::helper() is private and cannot be accessed externally

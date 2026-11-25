@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP requests over TCP, TLS, and UNIX sockets
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
@@ -30,6 +31,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestSocketDir.qm
 %requires Util
 %requires Mime
 %requires Logger
@@ -600,12 +602,10 @@ public class HttpClientRequestUrlTest inherits QUnit::Test {
             ("payload", "POST", "http://socket=%2Ftmp%2Fnot-there/x"));
 
         # a client on a UNIX domain socket can
-        string sock_path = sprintf("%s%ssendurl-%d.sock", tmp_location(), DirSep, getpid());
+        TestSocketDir socket_dir();
+        string sock_path = socket_dir.path + "/server.sock";
         HttpServer unix_server(<HttpServerOptionInfo>{});
-        on_exit {
-            unix_server.stop();
-            unlink(sock_path);
-        }
+        on_exit unix_server.stop();
         UrlPeer unix_peer("origin-unix");
         unix_server.setDefaultHandler("u", unix_peer);
         unix_server.addListener(<HttpListenerOptionInfo>{"node": sock_path});

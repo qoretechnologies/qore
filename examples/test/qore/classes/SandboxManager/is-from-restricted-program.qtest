@@ -1,0 +1,201 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class IsFromRestrictedProgramTest
+
+#! An object of the test's own Program
+class Local {
+}
+
+#! Verifies SandboxManager::isFromRestrictedProgram() (qore#6843)
+/** The method tells whether a sandbox that does not trust its code (one that refuses uncontrolled APIs) governs the
+    Program of the class of an object: a sandbox that a host attaches to its trusted code only to interrupt or limit
+    it, which allows uncontrolled APIs, does not make the Program restricted.  It is evaluated at each call, and the
+    sandbox of the code that created the Program counts as well
+*/
+class IsFromRestrictedProgramTest inherits QUnit::Test {
+    public {
+        const Source = "%modern
+class Made {
+}
+
+Made sub make() {
+    return new Made();
+}
+
+object sub make_builtin() {
+    return new Mutex();
+}
+
+object sub make_local(code factory) {
+    return factory();
+}
+
+Program sub make_program(*SandboxManager sm) {
+    Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+    if (sm) {
+        p.setSandboxManager(sm);
+    }
+    p.parse(\"%modern\\nclass Inner {}\\nobject sub make() { return new Inner(); }\\n\", \"inner\");
+    return p;
+}
+
+SandboxManager sub permissive() {
+    SandboxManager sm();
+    sm.setFilesystemDefaultPolicy(True);
+    sm.setNetworkDefaultPolicy(True);
+    sm.setUncontrolledApiPolicy(True);
+    return sm;
+}
+
+bool sub check(object o) {
+    return SandboxManager::isFromRestrictedProgram(o);
+}
+
+bool sub restricted() {
+    return SandboxManager::isRestricted();
+}
+
+bool sub sandboxed() {
+    return SandboxManager::isSandboxed();
+}
+";
+    }
+
+    constructor() : Test("SandboxManager::isFromRestrictedProgram()", "1.0", \ARGV) {
+        addTestCase("trusted objects", \trustedTest());
+        addTestCase("a sandbox that allows everything", \permissiveTest());
+        addTestCase("a sandbox that does not trust its code", \restrictedTest());
+        addTestCase("a policy changed at run time", \laterTest());
+        addTestCase("a Program created by other code", \creatorTest());
+        addTestCase("a deleted Program", \deletedTest());
+        set_return_value(main());
+    }
+
+    trustedTest() {
+        assertFalse(SandboxManager::isFromRestrictedProgram(new Local()), "the test's own object");
+        assertFalse(SandboxManager::isRestricted(), "the test's own code");
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(Source, "trusted");
+        assertFalse(SandboxManager::isFromRestrictedProgram(p.callFunction("make")), "an object of a trusted Program");
+    }
+
+    permissiveTest() {
+        Program p = getProgram(permissiveManager());
+        object o = p.callFunction("make");
+        # sandboxed, but not restricted
+        assertTrue(SandboxManager::isFromSandboxedProgram(o));
+        assertFalse(SandboxManager::isFromRestrictedProgram(o));
+        assertTrue(p.callFunction("sandboxed"));
+        assertFalse(p.callFunction("restricted"));
+        assertFalse(p.callFunction("check", o), "from the code of the Program itself");
+    }
+
+    restrictedTest() {
+        # the default sandbox refuses uncontrolled APIs
+        Program p = getProgram(new SandboxManager());
+        object o = p.callFunction("make");
+        assertTrue(SandboxManager::isFromRestrictedProgram(o));
+        assertTrue(p.callFunction("restricted"));
+        assertTrue(p.callFunction("check", o), "from the code of the Program itself");
+        # an object of a builtin class has the Program of the code that created it
+        assertTrue(SandboxManager::isFromRestrictedProgram(p.callFunction("make_builtin")));
+        # an object that the restricted code made by calling trusted code is the trusted Program's
+        assertFalse(SandboxManager::isFromRestrictedProgram(p.callFunction("make_local", object sub () {
+            return new Local();
+        })), "an object that trusted code made for the restricted code");
+        # a sandbox that allows all I/O but does not trust its code
+        SandboxManager io();
+        io.setFilesystemDefaultPolicy(True);
+        io.setNetworkDefaultPolicy(True);
+        assertTrue(SandboxManager::isFromRestrictedProgram(getProgram(io).callFunction("make")));
+        # a sandbox that trusts its code but restricts its I/O: the code can reach everything through uncontrolled
+        # APIs, so the I/O policy does not make it restricted
+        SandboxManager trusted_io();
+        trusted_io.setUncontrolledApiPolicy(True);
+        assertFalse(SandboxManager::isFromRestrictedProgram(getProgram(trusted_io).callFunction("make")));
+    }
+
+    laterTest() {
+        SandboxManager sm = permissiveManager();
+        Program p = getProgram(sm);
+        object o = p.callFunction("make");
+        # a limit does not make it restricted
+        sm.setMaxThreads(100);
+        assertFalse(SandboxManager::isFromRestrictedProgram(o));
+        # a policy tightened after the object was created
+        sm.setUncontrolledApiPolicy(False);
+        assertTrue(SandboxManager::isFromRestrictedProgram(o));
+        assertTrue(p.callFunction("restricted"));
+        # and loosened again by the host
+        sm.setUncontrolledApiPolicy(True);
+        assertFalse(SandboxManager::isFromRestrictedProgram(o));
+        # a sandbox set after the object was created
+        Program q(PO_NO_CHILD_PO_RESTRICTIONS);
+        q.parse(Source, "later");
+        object qo = q.callFunction("make");
+        assertFalse(SandboxManager::isFromRestrictedProgram(qo));
+        q.setSandboxManager(new SandboxManager());
+        assertTrue(SandboxManager::isFromRestrictedProgram(qo));
+    }
+
+    creatorTest() {
+        # a Program that restricted code creates is restricted, also with a sandbox of its own that allows everything
+        Program p = getProgram(new SandboxManager());
+        Program inner = p.callFunction("make_program");
+        assertTrue(SandboxManager::isFromRestrictedProgram(inner.callFunction("make")), "without a sandbox of its own");
+        inner = p.callFunction("make_program", p.callFunction("permissive"));
+        assertTrue(SandboxManager::isFromRestrictedProgram(inner.callFunction("make")),
+            "with a sandbox of its own that allows everything");
+        # one that trusted code under a sandbox that allows everything creates is not
+        Program t = getProgram(permissiveManager());
+        inner = t.callFunction("make_program", t.callFunction("permissive"));
+        assertFalse(SandboxManager::isFromRestrictedProgram(inner.callFunction("make")));
+    }
+
+    deletedTest() {
+        # the sandboxes of a deleted Program are gone: an object of its class fails closed
+        Program p = getProgram(new SandboxManager());
+        object o = p.callFunction("make");
+        assertTrue(SandboxManager::isFromRestrictedProgram(o), "before the Program is deleted");
+        delete p;
+        assertTrue(SandboxManager::isFromRestrictedProgram(o), "after the Program is deleted");
+        # also for a Program that a sandbox that allows everything governed: it cannot be told trusted any more
+        p = getProgram(permissiveManager());
+        o = p.callFunction("make");
+        assertFalse(SandboxManager::isFromRestrictedProgram(o), "before the Program is deleted");
+        delete p;
+        assertTrue(SandboxManager::isFromRestrictedProgram(o), "after the Program is deleted");
+        # a trusted Program has no sandbox before or after
+        Program t(PO_NO_CHILD_PO_RESTRICTIONS);
+        t.parse(Source, "trusted");
+        o = t.callFunction("make");
+        delete t;
+        assertFalse(SandboxManager::isFromRestrictedProgram(o), "a deleted trusted Program");
+    }
+
+    #! returns a sandbox that allows everything, with which a host only interrupts and limits its trusted code
+    private static SandboxManager permissiveManager() {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
+        sm.setUncontrolledApiPolicy(True);
+        return sm;
+    }
+
+    #! returns a Program with the test's source under the given sandbox
+    private static Program getProgram(SandboxManager sm) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse(Source, "sandboxed");
+        return p;
+    }
+}

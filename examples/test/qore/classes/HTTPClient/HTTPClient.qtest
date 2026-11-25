@@ -11,6 +11,7 @@
 %requires Util
 %requires Mime
 %requires QUnit
+%requires ../../../TestSocketDir.qm
 %requires Logger
 %requires HttpServerUtil
 %requires HttpServer
@@ -1238,9 +1239,8 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         testSkip("skipping because UNIX sockets are not available on Windows");
 %endif
 
-        string path = sprintf("%s%sqore-httpclient-%d-%s.sock", tmp_location(), DirSep, getpid(),
-            get_random_string(12));
-        on_exit unlink(path);
+        TestSocketDir socket_dir();
+        string path = socket_dir.path + "/server.sock";
 
         Queue q();
         background sub () {
@@ -1286,8 +1286,8 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         testSkip("skipping because UNIX socket URLs are not available on Windows");
 %endif
 
-        string path = sprintf("%s%sqore-httpclient-proxy-%d-%s.sock", tmp_location(), DirSep, getpid(),
-            get_random_string(12));
+        TestSocketDir socket_dir();
+        string path = socket_dir.path + "/server.sock";
         string encoded_path = encode_url(path, True);
 
         Queue q();
@@ -1334,8 +1334,8 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         testSkip("skipping because UNIX socket URLs are not available on Windows");
 %endif
 
-        string path = sprintf("%s%sqore-httpclient-reset-%d-%s.sock", tmp_location(), DirSep, getpid(),
-            get_random_string(12));
+        TestSocketDir socket_dir();
+        string path = socket_dir.path + "/server.sock";
         string encoded_path = encode_url(path, True);
 
         Queue q();
