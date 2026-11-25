@@ -639,6 +639,8 @@ DLLLOCAL void qore_weak_target_pin(const QoreValue& v);
 DLLLOCAL QoreValue qore_weak_source_container(const QoreValue& v);
 //! pins \a copy if \a orig, which it is a copy-on-write copy of, is pinned (qore#7318)
 DLLLOCAL void qore_weak_target_pin_copy(const AbstractQoreNode* orig, const AbstractQoreNode* copy);
+//! Whether retaining a replaced return could postpone an object destructor (#5992, #7022).
+DLLLOCAL bool qore_return_release_observable(const QoreValue& value);
 
 //! returns the node that a call reference value holds and that is scanned for recursive references, or nullptr
 /** the callback of a sandbox-bound callback, or the value of a reference to a pseudo-method (issue #995)
@@ -2966,6 +2968,22 @@ DLLLOCAL int q_check_opened_file_policy(QoreSandboxManager& sm, int fd, const ch
     @return the descriptor, or -1 for an error: errno is set, or an exception has been raised in xsink
 */
 DLLLOCAL int q_open_policy_checked(const char* fn, int flags, int mode, ExceptionSink* xsink);
+
+//! returns true if the file-system policy of a sandbox applies to the sources that the code on this thread reads by
+//! name (\c %include, modules loaded by path): a sandbox governs the code, and no library module is being loaded
+DLLLOCAL bool q_source_read_policy_applies();
+
+//! opens a source for reading with the file-system policy of the calling code (qore#7518)
+/** The file opened is the file that the policy checked; it must be a regular file
+
+    @return the stream, or nullptr: an exception has been raised (a denial), or errno is set
+*/
+DLLLOCAL FILE* q_open_policy_checked_source(const char* fn, ExceptionSink* xsink);
+
+//! reads a source with the file-system policy of the calling code into \a out (see q_open_policy_checked_source())
+/** @return 0 for OK, -1 for an error: an exception has been raised (a denial), or errno is set
+*/
+DLLLOCAL int q_read_policy_checked_source(const char* fn, std::string& out, ExceptionSink* xsink);
 
 //! the directory of a path that the sandbox filesystem policy allowed, pinned for a name-based operation (qore#7518)
 /** The operation acts relative to dirfd on leaf with the *at() functions without following a link, so that it reaches

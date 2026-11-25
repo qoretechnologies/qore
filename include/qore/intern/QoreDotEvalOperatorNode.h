@@ -99,6 +99,20 @@ protected:
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
+    //! binds the call to the method \a meth of the class \a qc; \a call_args are the arguments of a call whose
+    //! arguments were initialized before (a call bound once the abstract methods are resolved), or nullptr
+    DLLLOCAL int parseBindMethod(QoreParseContext& parse_context, const QoreClass* qc, const QoreMethod* meth,
+            bool readonly_receiver, QoreParseCallArgs* call_args, int err);
+
+    //! binds a named call of the method \a meth of the class \a nqc through a receiver that can have no value (*X);
+    //! \a call_args as for parseBindMethod()
+    DLLLOCAL int parseBindOrNothingNamedCall(QoreParseContext& parse_context, const QoreClass* nqc,
+            const QoreMethod* meth, bool readonly_receiver, QoreParseCallArgs* call_args, int err);
+
+    //! binds the method of a call deferred by parseInitImpl() once the abstract methods are resolved (qore#7411)
+    DLLLOCAL int parseDeferredMethodBind(QoreParseContext& parse_context, const QoreClass* qc,
+            const QoreMethod* meth, bool readonly_receiver, QoreParseCallArgs& call_args);
+
     DLLLOCAL virtual const QoreTypeInfo *getTypeInfo() const {
         return returnTypeInfo;
     }

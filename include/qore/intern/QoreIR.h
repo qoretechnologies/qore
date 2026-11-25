@@ -510,7 +510,10 @@ enum class QoreIROpcode : uint16_t {
     SetImplicitArgv     = 275,  // Set list directly as implicit args (for foldl $1/$2)
     PopImplicitArg      = 276,  // Restore previous $1 context (operand = old context)
     PushImplicitElement = 277,  // Push index as $#, result = old element for restoration
-    PopImplicitElement  = 278,  // Restore previous $# context (operand = old element)
+    // Restore previous $# context (operand = old element); with a second operand, the result of the
+    // PushImplicitElement before a foreach statement's loop, it sets the index of the loop's next element
+    // (operands[0]) and leaves the push open: the loop saves the enclosing element once (qore#7379)
+    PopImplicitElement  = 278,
 
     // Direct access opcodes (279-282)
     HashKeyAccess       = 279,  // Load hash.key - direct hash member access
@@ -888,6 +891,8 @@ enum class QoreIROpcode : uint16_t {
     //! the end of the frame.  The instruction releases the reference only when the function holds it as a temporary
     //! that it owns, and only on the path that it is on: the slot of the temporary is cleared, so the release at the
     //! end of the frame finds nothing to release.  See design/temporary-lifetime.md.
+    //! With element_type == objectTypeInfo, release a replaced pending return if releasing it can run an object
+    //! destructor. Other data stays in the slot until the frame cleanup or a debugger path resumes that return.
     ReleaseOwnedTemp = 411,
 
     //! Fire the debugger's step event for the statement that follows (QoreIRDebugStatementInstruction).
@@ -1621,6 +1626,22 @@ enum class QoreIRInstClass : uint8_t {
         return c == inst_class_id; \
     }
 
+//! QoreIRInstruction::restore_on_exception_exit: whether and when the frame's exit on an exception restores an
+//! implicit context (or releases an operator's iterator) that the instruction set
+enum class QoreIRExceptionExitRestore : uint8_t {
+    None,           //!< not restored by the frame's exit
+    //! restored (or released) first, before the handlers and the temporaries of the frame: the implicit arguments and
+    //! element of an operator in an expression and its iterator, which the AST interpreter restores and releases when
+    //! the exception unwinds the operator (qore#5670)
+    BeforeHandlers,
+    //! restored after the handlers of the frame have run: the implicit element of a foreach statement, which the AST
+    //! interpreter restores when the exception unwinds the statement, after the blocks of its body, whose handlers run
+    //! with the loop's element (qore#7379).  The push is open at the frame's exit only on an exception that no handler
+    //! of the function around the loop takes (see QoreIRLowering::beginForeachElementExceptionRestore()), so no handler
+    //! of the frame outside of the loop's body runs before the restoration
+    AfterHandlers,
+};
+
 //! The kind of a check of a release in the body of a functional loop (a CheckException; qore#6072)
 /** The body of a map, select or fold expression keeps the values of an element until the next element replaces them;
     the release of one whose type can hold an object can run a destructor that raises an exception.  The lowering puts
@@ -1720,8 +1741,10 @@ public:
     // PushImplicitArg / SetImplicitArgv / PushImplicitElement: the lowering restores the context on every path in the
     // function (see QoreIRLowering::lowerWithImplicitContext()), so native code registers it with its frame, whose
     // exception exits restore it; IteratorCreate*: the iterator of a functional operator in an expression, which the IR interpreter's
-    // exception exit releases before the frame's temporaries, as the AST interpreter unwinds the operator (qore#5670)
-    bool restore_on_exception_exit = false;
+    // exception exit releases before the frame's temporaries, as the AST interpreter unwinds the operator (qore#5670);
+    // see QoreIRExceptionExitRestore for when the exit restores a context.  One byte, as a bool: a second member here
+    // would change the layout of the instruction classes, whose members use the tail padding of this class
+    QoreIRExceptionExitRestore restore_on_exception_exit = QoreIRExceptionExitRestore::None;
     // Transient: ReleaseOwnedTemp in the exception cleanup of a functional operator, which only runs once the loop has
     // ended (see qore_ir_is_exception_only_release())
     bool exception_cleanup_release = false;
@@ -2141,7 +2164,10 @@ struct TypeProfile {
     std::atomic<uint32_t> bool_count{0};
     std::atomic<uint32_t> nothing_count{0};
     std::atomic<uint32_t> other_count{0};
-    mutable std::mutex extended_mutex;
+    //! the lock of the extended counts: a stripe of a lock array that the fork handlers acquire before fork()
+    /** See qore_cache_stripe_lock() (qore#7554); it is held only around a read or a change of the counts themselves
+    */
+    DLLLOCAL std::mutex& extendedMutex() const;
     //! the counts of the types of the values that are not of a builtin type, by type identity
     std::unique_ptr<std::unordered_map<TypeProfileTypeKey, uint32_t, TypeProfileTypeKeyHash>> extended_type_counts;
     //! the cache that evicts the types of this profile when they are destroyed (owned by the function), if any
@@ -2173,7 +2199,7 @@ struct TypeProfile {
     DLLLOCAL void recordNewTypeInfo(const TypeProfileTypeKey& key);
 
     uint32_t getTypeInfoCount(const QoreTypeInfo* type_info) const {
-        std::lock_guard<std::mutex> lock(extended_mutex);
+        std::lock_guard<std::mutex> lock(extendedMutex());
         if (!extended_type_counts) {
             return 0;
         }
@@ -2183,7 +2209,7 @@ struct TypeProfile {
 
     //! removes the counts of the dead types; called by the function's cache with the registry locked
     void evictDeadTypes(const std::set<const QoreTypeInfo*>& dead) {
-        std::lock_guard<std::mutex> lock(extended_mutex);
+        std::lock_guard<std::mutex> lock(extendedMutex());
         if (!extended_type_counts) {
             return;
         }
@@ -2198,13 +2224,13 @@ struct TypeProfile {
 
     //! returns the number of types counted, for debug checks
     size_t getTypeCount() const {
-        std::lock_guard<std::mutex> lock(extended_mutex);
+        std::lock_guard<std::mutex> lock(extendedMutex());
         return extended_type_counts ? extended_type_counts->size() : 0;
     }
 
     void recordPluginTypeInfo(std::string module_name, uint16_t local_type_id, const QoreTypeInfo* type_info) {
         {
-            std::lock_guard<std::mutex> lock(extended_mutex);
+            std::lock_guard<std::mutex> lock(extendedMutex());
             if (!plugin_type_counts) {
                 plugin_type_counts = std::make_unique<std::unordered_map<QoreIRPluginTypeProfileId, uint32_t,
                     QoreIRPluginTypeProfileIdHash>>();
@@ -2216,7 +2242,7 @@ struct TypeProfile {
     }
 
     uint32_t getPluginTypeCount(const std::string& module_name, uint16_t local_type_id) const {
-        std::lock_guard<std::mutex> lock(extended_mutex);
+        std::lock_guard<std::mutex> lock(extendedMutex());
         if (!plugin_type_counts) {
             return 0;
         }
@@ -2250,7 +2276,7 @@ struct TypeProfile {
         const QoreTypeInfo* dominant_type_info = nullptr;
         uint32_t dominant_count = 0;
         {
-            std::lock_guard<std::mutex> lock(extended_mutex);
+            std::lock_guard<std::mutex> lock(extendedMutex());
             if (extended_type_counts) {
                 for (const auto& i : *extended_type_counts) {
                     if (i.second > dominant_count) {
@@ -2269,7 +2295,7 @@ struct TypeProfile {
         QoreIRPluginTypeProfileId dominant_plugin;
         uint32_t dominant_plugin_count = 0;
         {
-            std::lock_guard<std::mutex> lock(extended_mutex);
+            std::lock_guard<std::mutex> lock(extendedMutex());
             if (plugin_type_counts) {
                 uint32_t n = 0;
                 for (const auto& i : *plugin_type_counts) {
@@ -3949,6 +3975,8 @@ public:
     mutable std::atomic<int8_t> inline_ir_state{0};  //!< a QORE_IR_INLINE_* state
     //! true if the call site is recorded for qore_ir_suspend_inline_states() (see qore_ir_publish_inline_state())
     mutable std::atomic<bool> inline_ir_recorded{false};
+    //! Method lookup or overload selection depends on the caller's class context.
+    mutable bool cached_needs_class_ctx = false;
     mutable const QoreIRFunction* cached_callee_ir = nullptr;
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
@@ -4014,6 +4042,8 @@ public:
     mutable std::atomic<int8_t> inline_ir_state{0};  //!< a QORE_IR_INLINE_* state
     //! true if the call site is recorded for qore_ir_suspend_inline_states() (see qore_ir_publish_inline_state())
     mutable std::atomic<bool> inline_ir_recorded{false};
+    //! Method lookup or overload selection depends on the caller's class context.
+    mutable bool cached_needs_class_ctx = false;
     mutable const QoreIRFunction* cached_callee_ir = nullptr;
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;

@@ -95,6 +95,10 @@ DLLLOCAL void qore_dbg_force_finalize_cancel(int loop, int64_t index);
 //! (\a call_gives_args), which a parameter of the callee takes over (see QoreIRToLLVM.cpp)
 DLLLOCAL bool qore_ir_fast_entry_refuses_given_args(bool call_gives_args, const AbstractQoreFunctionVariant* variant);
 
+//! The value of QoreIRToLLVM::deferred_element_restore when the exit on an exception restores no implicit element after
+//! the handlers: no element index, which is an int, has this value
+constexpr int64_t QORE_IR_NO_DEFERRED_ELEMENT = INT64_MIN;
+
 class QoreIRToLLVM {
 public:
     explicit QoreIRToLLVM(llvm::LLVMContext& context) : ctx(context) {
@@ -385,11 +389,23 @@ private:
     // Calls in the same activation reuse the buffer after the preceding method returns.
     llvm::AllocaInst* native_method_context_storage = nullptr;
 
-    // Exact-class checks for stable local receivers, materialized once in the
-    // logical function entry. Object validity remains guarded at each call.
-    std::unordered_map<int32_t, std::unordered_map<const LocalVar*, llvm::Value*>>
+    // Exact-class checks for receivers in locals that the code does not write, made once in the logical function
+    // entry for the value of the local there; set_local_var_value() can still replace the value (of a parameter, for
+    // example), so each call reuses the result only for that receiver (qore#7631).  Object validity remains guarded
+    // at each call.
+    struct AotExactClassGuard {
+        //! the receiver in the local at the entry, which the entry cleanup of the local holds until the function exits
+        llvm::Value* receiver;
+        //! whether the class of that receiver is the exact class of the call target
+        llvm::Value* matches;
+    };
+    std::unordered_map<int32_t, std::unordered_map<const LocalVar*, AotExactClassGuard>>
         aot_exact_class_guards;
     std::unordered_map<uint32_t, const LocalVar*> stable_exact_receiver_loads;
+    //! the locals of the function that an outlined function-body helper that it calls can assign (the
+    //! written_shared_locals of its CallAOTHelper instructions), whose entry cleanup the call releases and reloads
+    //! (see recordHelperSite()): no exact-class check of such a receiver is hoisted (qore#7631)
+    std::unordered_set<const void*> aot_helper_written_locals;
     std::unordered_map<uint32_t, const LocalVar*> stable_scalar_loads;
 
     using NativeConversionCache =
@@ -1645,8 +1661,20 @@ private:
             const QoreIRInstruction* inst, llvm::BasicBlock* target);
     //! Emits, at the insertion point, the restoration of the implicit arguments and elements open at \a inst,
     //! innermost first, on a path where an exception leaves the function from \a inst (see
-    //! getImplicitContextRestoreEdge())
+    //! getImplicitContextRestoreEdge()); the element of a foreach statement is restored after the handlers of the
+    //! frame (QoreIRExceptionExitRestore::AfterHandlers): in a function with handlers, the path stores it in
+    //! deferred_element_restore instead
     void emitImplicitContextRestore(llvm::Module& module, const QoreIRInstruction* inst);
+    //! The implicit element that an exit on an exception restores after the handlers of the frame have run, which
+    //! run with the element of the loop whose body they are in (qore#7379): the element that the outermost foreach
+    //! statement open at the exit saved (QoreIRExceptionExitRestore::AfterHandlers), which the exit stores
+    //! (emitImplicitContextRestore()), or QORE_IR_NO_DEFERRED_ELEMENT; created at the function's entry in a function
+    //! with on_block_exit handlers and such a push open at an exit, nullptr otherwise: without handlers, nothing that
+    //! runs before the end of the exit can read the element, which the exit then restores at once
+    llvm::AllocaInst* deferred_element_restore = nullptr;
+    //! Emits, at the insertion point of an exit on an exception after the handlers of the frame, the restoration of
+    //! the implicit element that the exit stored in deferred_element_restore, if any
+    void emitDeferredElementRestore(llvm::Module& module);
 
     // Phase 2B — incoming edges feeding function_common_cleanup's phi.
     // Populated by createPerInvokeCleanupLP; consumed by
@@ -1694,6 +1722,9 @@ private:
     // is cached at runtime.  Emit a guarded fast-entry call with a normal AOT
     // helper fallback for linked/source-stripped cases where the fast entry is
     // visible but the callee context is not cached.
+    // With ref_fast_variant (the callee), the fast entry is a reference parameter fast entry (issue #7271): the call
+    // binds the reference parameters on the runtime stack before it calls it, and the fallback makes the call when an
+    // argument does not match its parameter.
     DLLLOCAL llvm::Value* emitAotBatchFastEntryOrFallback(llvm::Module& module,
             llvm::Function* llvm_func, const QoreIRInstruction* inst,
             int32_t slot, llvm::Function* fast_fn,
@@ -1710,7 +1741,8 @@ private:
             const char* fallback_consume_throwing_name = nullptr,
             bool require_exact_object_class = false,
             const std::vector<uint8_t>* date_kind_guards = nullptr,
-            const FastEntryTakeOver* take_over = nullptr);
+            const FastEntryTakeOver* take_over = nullptr,
+            const AbstractQoreFunctionVariant* ref_fast_variant = nullptr);
 
     //! Emits the entry into the Program of another module's function before its native call (qore#6035)
     /** qore_rt_enter_cross_module_call() enters the Program with the state that the runtime call path sets up
@@ -1740,6 +1772,13 @@ private:
     llvm::Value* emitFastEntryDateKindGuards(llvm::Module& module, llvm::Value* can_use_fast_entry,
             const std::vector<uint8_t>& date_kind_guards, const std::vector<llvm::Value*>& raw_args,
             const std::vector<uint32_t>& raw_arg_ids, const std::vector<llvm::Value*>& boxed_args);
+
+    //! Returns the array of the arguments of the parameters of a reference type of a call of a reference parameter
+    //! fast entry, in the order of the parameters, for qore_rt_bind_fast_entry_ref_params() (issue #7271)
+    /** @param boxed_args the NaN-boxed arguments of the call, one for each parameter
+    */
+    llvm::Value* emitRefFastEntryArgs(llvm::Function* llvm_func, const AbstractQoreFunctionVariant* variant,
+            const std::vector<llvm::Value*>& boxed_args);
 
     //! Converts the NaN-boxed result of a generic fallback call to the return ABI of @a callee_info's fast entry
     //! and releases the boxed result if it was converted
@@ -2833,9 +2872,13 @@ private:
         to the call (buildArgCleanupArray()), which are released when the callee returns, before its frame is popped,
         as the AST interpreter releases the parameters that took the arguments over in the callee's frame (issue #5882)
     */
+    //! @param ref_params_bound true if the call is one of a reference parameter fast entry whose reference parameters
+    //! the caller bound (qore_rt_bind_fast_entry_ref_params()): they are released in the call's frame once the fast
+    //! entry has returned, as AOT code releases them (issue #7271)
     llvm::CallInst* emitNativeCall(llvm::FunctionCallee fn, llvm::ArrayRef<llvm::Value*> args,
             const AbstractQoreFunctionVariant* callee, llvm::Module& module, llvm::Function* llvm_func,
-            const llvm::Twine& name = "", llvm::Value* arg_cleanups = nullptr, int nargs = 0, const FastEntryTakeOver* take_over = nullptr);
+            const llvm::Twine& name = "", llvm::Value* arg_cleanups = nullptr, int nargs = 0,
+            const FastEntryTakeOver* take_over = nullptr, bool ref_params_bound = false);
 
     //! Emits a call that AOT-compiled code makes directly to a native entry of user code, with its frame
     /** As emitNativeCall(); the callee is the call target of \a target_slot in this function's context, and the

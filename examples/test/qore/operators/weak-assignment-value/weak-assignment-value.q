@@ -309,3 +309,29 @@ paths();
 store_errors();
 temporaries();
 printf("done destroyed=%d\n", destroyed);
+
+# a list or hash literal is a value of its own, as any expression that is not a variable or a path: the weak reference
+# designates a copy of it, a temporary of the statement, the same in every execution mode and in AOT code, also for a
+# literal that a deferred initializer folds (qore#7290, qore#7318)
+sub containerLiterals(int x) {
+    softlist<auto> typed;
+    auto l;
+    auto h;
+    typed := (1, 2);
+    l := (1, 2);
+    h := {"nested": (3, 4)};
+    printf("weak literals: %y %y %y\n", typed, l, h.nested);
+
+    l := (1, x);
+    h := {"x": x};
+    printf("weak computed containers: %d %d\n", l.size(), h.size());
+}
+containerLiterals(9);
+
+auto sub deferredLiteral() {
+    auto weak;
+    weak := {"nested": (1, 2)};
+    return weak;
+}
+const Built = deferredLiteral();
+printf("deferred literal: %y %y\n", Built.nested, deferredLiteral().nested);

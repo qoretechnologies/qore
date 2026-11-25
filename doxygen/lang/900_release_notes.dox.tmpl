@@ -101,6 +101,18 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Closures Run in the Program That Compiled Them
+    A closure created in a method of a class imported from another @ref Qore::Program "Program" runs in the %Program
+    that compiled it, as the method does, so the names that its code looks up at run time resolve there (see
+    @ref closure_program; <a href="https://github.com/qoretechnologies/qore/issues/7202">issue 7202</a>).
+
+    @par Library Code Gives Restricted Code No Values of the Host's Environment
+    For code restricted from external information, @ref Util::substitute_env_vars() "substitute_env_vars()", the file
+    URLs of @ref Util::get_file_from_url() "get_file_from_url()", Swagger schema references and the \c %%E{} field of
+    Logger file names expand no environment variables, and
+    @ref DataProvider::DataProvider::getAutoConfig() "DataProvider::getAutoConfig()" is @ref False for it and for
+    sandboxed code, so data providers take no options from the environment (see @ref sandbox_ambient_host_data;
+    <a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>).
     @par Operators Change the Container of a Weak Reference Held by Their Lvalue
     The operators that change an lvalue's list or hash (+=, hash -=, push, unshift, pop, shift, splice, extract, trim,
     chomp) change the container of the @ref weak_assignment_operator "weak reference" it holds, as remove does; they
@@ -240,6 +252,15 @@
     \c init closure), and module descriptions, the module context path and the not-found error give no host paths to
     code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" (see @ref no-external-info
     "%no-external-info"; <a href="https://github.com/qoretechnologies/qore/issues/7502">issue 7502</a>).
+
+    @par Reading Build Information Constants Requires External Information Access
+    @ref no-external-info "%no-external-info" now restricts reads of the @ref system_and_build_constants
+    "build constants" BuildHost, Compiler, CFLAGS and LDFLAGS, including reads through reflection.
+    @par Code Restricted From External Information Gets Locations and Module Load Errors Without Directories
+    Exceptions caught, call stacks, reflection source locations and module load errors and warnings name files without
+    their directories for code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"; the host gets the
+    same exceptions with full paths (see @ref no-external-info "%no-external-info";
+    <a href="https://github.com/qoretechnologies/qore/issues/7507">issue 7507</a>).
 
     @par An HTTP Field Never Replaces a Key of the Message, and the Fields Have Keys of Their Own
     HTTP messages give their fields under \c "headers" and \c "trailers", and a field named like a key of the message
@@ -1935,6 +1956,14 @@
     @ref Qore::SandboxManager::isTerminalIoAllowed() "SandboxManager::isTerminalIoAllowed()" tells it whether it may use
     the terminal for its caller (<a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>).
 
+    @par Asking Whether the Calling Code May Read the Host's Environment or Receive Its Secrets
+    @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()",
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()" and the C++
+    functions \c qore_caller_may_read_external_info() and \c qore_caller_may_receive_host_secrets()
+    (\c QORE_HAVE_CALLER_AMBIENT_PREDICATES) tell library code whether it may resolve ambient data or credentials of
+    the host for its caller (see @ref sandbox_ambient_host_data;
+    <a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>).
+
     @par Process-Wide Registries Refuse Sandboxed Code
     Process-wide callback, hook and handler registries and the async I/O controller settings refuse changes by sandboxed
     code (\c SANDBOX-REGISTRATION-ERROR); modules use @ref Qore::SandboxManager::checkProcessWideRegistration(), and
@@ -2942,6 +2971,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - storing a value whose @ref reference_complex_type "reference" elements need a type check of the variables they
+      refer to (ex: <tt>o.r = (\\x,)</tt> with \c r declared as <tt>list<reference<int>></tt>) no longer deadlocks when
+      two threads store into targets referring to each other, or hangs when the reference refers to the target's own
+      object or variable: the references are bound with no lock held (issue #7391)
     - Type mismatch and member access errors identify same-named classes by their @ref namespace_paths "namespace
       paths", including a program's root class and a class in a Qore sub-namespace (issue #7378).
     - @ref Qore::get_parent_caller_location() "get_parent_caller_location()" and its C++ API
@@ -2956,6 +2989,9 @@
       every execution mode: the frames of its calls name it (@ref Qore::CallStackInfo "CallStackInfo" \c programid),
       and so do the checks of the calling code that read them; they named the code that called it in some execution
       modes (<a href="https://github.com/qoretechnologies/qore/issues/7394">issue 7394</a>)
+    - a call of a closure created in a method no longer raises \c OBJECT-ALREADY-DELETED when another thread deletes
+      the method's object as the call starts; only the closure's uses of the object do (see
+      @ref closure_deleted_object; <a href="https://github.com/qoretechnologies/qore/issues/7555">issue 7555</a>)
     - a functional-domain restriction set on a Program after parsing with @ref Qore::Program::setParseOptions()
       "Program::setParseOptions()" applies to the construction of objects of every class of the Program, whether or
       not the class has a constructor of its own (<a href="https://github.com/qoretechnologies/qore/issues/7513">issue
@@ -2970,6 +3006,12 @@
       \c MEMORY-ALLOCATION-ERROR exception and leaves the string or list that could not grow unchanged, where the
       process ended with a segmentation fault or \c std::terminate() (@ref exception_memory "allocation failures";
       <a href="https://github.com/qoretechnologies/qore/issues/7466">issue 7466</a>)
+    - an object or a closure of a recursive graph read through a weak reference while another thread decides to collect
+      the graph keeps the whole graph, instead of the graph being collected while the value is held (see
+      @ref closure_var_collection; <a href="https://github.com/qoretechnologies/qore/issues/7556">issue 7556</a>)
+    - a closure called through a weak reference while another thread decides to collect the recursive graph of a
+      variable that the closure captured keeps the variable's value instead of reading @ref nothing (see
+      @ref closure_var_collection; <a href="https://github.com/qoretechnologies/qore/issues/7546">issue 7546</a>)
     - a method called through a weak reference while another thread releases the last strong reference to its object
       keeps the object, which is destroyed when the call releases it, instead of being destroyed while the call runs
       (see @ref weak_assignment_operator; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue
@@ -3080,6 +3122,21 @@
       caller cannot access, such as one inherited privately, came before it, for example a method that a class
       creates to implement an abstract variant with a privately inherited class's variant (see
       @ref multiple_path_inheritance; <a href="https://github.com/qoretechnologies/qore/issues/7381">issue 7381</a>)
+    - the methods of a class inherited with \c private:internal access are called only by the code of the inheriting
+      class, also on the objects of its subclasses, and no longer by the code of other classes in the hierarchy; the
+      methods of a class that a public path also reaches are public (see @ref private_inheritance;
+      <a href="https://github.com/qoretechnologies/qore/issues/7410">issue 7410</a>)
+    - a class that inherits an abstract method from a class that declares it again over its parent class's
+      implementation and from another parent class could not be instantiated when the redeclaring class came first in
+      the same program (see @ref abstract_parent_implementation;
+      <a href="https://github.com/qoretechnologies/qore/issues/7382">issue 7382</a>)
+    - classes with the same name and declarations in different namespaces are different types (an object of one was
+      accepted for the other's type), and code compiled with \c qcc before must be recompiled (see
+      @ref class_type_identity; <a href="https://github.com/qoretechnologies/qore/issues/7397">issue 7397</a>)
+    - classes of different %Program objects that differ only in the declared type of a member or static variable or in
+      the return type of a method are different types (an object of one was accepted for the other's type), and a
+      subclass created by a static initializer of its parent class has the same signature in every %Program (see
+      @ref class_type_identity; <a href="https://github.com/qoretechnologies/qore/issues/7457">issue 7457</a>)
     - @ref Qore::call_static_method() "call_static_method()" and the related calls call the static method that a static
       method call in the caller's code calls: they refused a later parent class's public method behind a private one,
       and called a method of a privately inherited class from outside it
@@ -3421,6 +3478,8 @@
       @ref on_exit "on_exit", @ref on_success "on_success" or @ref on_error "on_error" handler when a handler of the
       same block that runs after it completes normally, as compiled code does, instead of going on with the function
       (see @ref on_exit_return; issue #6677)
+    - a debugger break or continue in an exit handler releases an abandoned return value and restores any
+      enclosing pending data return (see @ref on_exit_return; issue #7022)
     - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
       value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,
@@ -4779,6 +4838,10 @@
     - the \c keys operator, the merge of an object into a hash and the iteration over its members list, for the code of a
       class that a subclass inherits with \c private:internal, the members that it uses on an object of a further
       subclass; they returned nothing (<a href="https://github.com/qoretechnologies/qore/issues/7180">issue 7180</a>)
+    - a typed call or a call reference in the code of a class with \c private:internal variants of a method calls the
+      class's own method, as the untyped call does, on an object of a subclass that overrides the method, and no call
+      calls it on an object of a parent class (<a href="https://github.com/qoretechnologies/qore/issues/7440">issue
+      7440</a>)
     - no HTTP header is read on a @ref Qore::Socket "Socket" after a chunked body read stopped before its end
       (@ref Qore::Socket::unfinishedHttpChunkedBody() "unfinishedHttpChunkedBody()"), chunk sizes are checked alike,
       and a body read allocates memory as its data arrives, so that a body can neither be taken for another message

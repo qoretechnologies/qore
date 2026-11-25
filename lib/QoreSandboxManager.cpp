@@ -37,6 +37,7 @@
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreSandboxProvenance.h"
+#include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreSandboxMemory.h"
 #include "qore/intern/ThreadPool.h"
 #include "qore/intern/QoreForkHandlers.h"
@@ -1417,8 +1418,13 @@ namespace {
 std::mutex untrusted_creators_lock;
 std::unordered_map<const QoreSandboxManager*, qore_program_id_t> untrusted_creators;
 
-//! returns the ID of the current Program, or QORE_NO_PROGRAM_ID
+//! returns the ID of the Program of the calling code, or QORE_NO_PROGRAM_ID
+/** The current Program, or the Program that compiled the code when it runs in another Program (qore#7202)
+*/
 qore_program_id_t qore_sandbox_caller_pgm_id() {
+    if (const QoreProgram* code_pgm = qore_foreign_calling_code_program()) {
+        return code_pgm->getProgramId();
+    }
     QoreProgram* pgm = getProgram();
     return pgm ? pgm->getProgramId() : QORE_NO_PROGRAM_ID;
 }
@@ -2024,21 +2030,37 @@ static bool is_module_initialization_resource_read(const char* path, int mode) {
     if (mode != QSEC_READ) {
         return false;
     }
-
-    const char* module_path = get_module_context_path();
-    if (!module_path || !*module_path) {
-        return false;
-    }
-
-    std::string module_root(module_path);
-    struct stat sb;
-    if (stat(module_path, &sb) || !S_ISDIR(sb.st_mode)) {
-        size_t sep = module_root.find_last_of("/\\");
-        if (sep == std::string::npos) {
-            // A module name alone does not establish a safe resource directory.
+    // only library code reads its resources this way: a module that code which is not trusted chose outside of the
+    // module path is read, with its resources, with the file-system policy of that code (qore#7518)
+    // a library module loaded into a container of such code reads its resources beneath its canonical directory of
+    // library code, and not beneath the path that that code gave
+    const char* library_root = nullptr;
+    if (qore_module_load_is_untrusted()) {
+        library_root = qore_module_load_library_root();
+        if (!library_root) {
             return false;
         }
-        module_root.resize(sep ? sep : 1);
+    }
+
+    std::string module_root;
+    if (library_root) {
+        module_root = library_root;
+    } else {
+        const char* module_path = get_module_context_path();
+        if (!module_path || !*module_path) {
+            return false;
+        }
+
+        module_root = module_path;
+        struct stat sb;
+        if (stat(module_path, &sb) || !S_ISDIR(sb.st_mode)) {
+            size_t sep = module_root.find_last_of("/\\");
+            if (sep == std::string::npos) {
+                // A module name alone does not establish a safe resource directory.
+                return false;
+            }
+            module_root.resize(sep ? sep : 1);
+        }
     }
 
     std::unique_ptr<char, decltype(&free)> canonical_root(realpath(module_root.c_str(), nullptr), &free);

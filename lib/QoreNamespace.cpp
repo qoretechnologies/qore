@@ -1251,14 +1251,14 @@ void QoreNamespace::addConstant(const char* cname, QoreValue val, const QoreType
 }
 
 void qore_ns_add_runtime_constant(QoreNamespace& ns, const char* ns_path, const char* name, QoreValue value,
-        QoreValue compiled_define) {
+        QoreValue compiled_define, int64 domain) {
     ns.addConstant(name, value);
     ConstantEntry* ce = qore_ns_private::get(ns)->constant.findEntry(name);
     assert(ce);
     std::string path(ns_path);
     path += "::";
     path += name;
-    ce->setRuntimeDependent(std::move(path), compiled_define);
+    ce->setRuntimeDependent(std::move(path), compiled_define, domain);
 }
 
 QoreNamespace* QoreNamespace::findCreateNamespacePath(const char* nspath) {
@@ -3779,6 +3779,11 @@ int qore_root_ns_private::parseInit() {
         err = -1;
     }
     qore_ns_private::parseResolveAbstract();
+
+    // the calls of methods that resolving the abstract methods can create are bound now (qore#7411)
+    if (parseRunDeferredMethodBinds() && !err) {
+        err = -1;
+    }
 
     parseCheckDeferredAbstractNew();
 

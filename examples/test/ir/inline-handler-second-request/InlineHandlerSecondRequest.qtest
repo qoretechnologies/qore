@@ -1,0 +1,188 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
+# test-platform: macos - debugger attach, and AOT code generation and linking of the debug IR of handlers
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class InlineHandlerSecondRequest
+
+#! a second debugger request in a handler that the code of a first request runs keeps its flow in qcc executables
+#! (qore#7008)
+/** In a qcc executable with a debugger attached, the code of a request in a handler lowered inline (a handler of a
+    block of the body of a loop body's handler, for example) runs the handlers of the blocks that it leaves: out of
+    line (a ScopeExit) if none of them can return; one that can is lowered inline, or past the budget of the code of
+    the requests of a function, run out of line too.  A request in the handlers run out of line was dropped, as the
+    ScopeExit had no paths in the code of a handler lowered inline or past that budget: the loop ran again, or the
+    function returned, where the AST interpreter, IR and JIT stop the loop.  The request is that of the block, which
+    goes on in the handler whose body has the block: a loop or switch statement of that body takes a break or a
+    continue, or the request ends that handler.  The same holds for the handlers that a return request in a handler
+    that is not the last of its exit runs out of line.
+
+    second-request.q gives the output of the AST interpreter in every execution mode and in qcc executables compiled
+    with -O0 and -O3, without a debugger and with two requests: the first in an inner handler, the second in a handler
+    that the code of the first runs.
+*/
+class InlineHandlerSecondRequest inherits QUnit::Test {
+    public {
+        #! the functions of second-request.q whose second handler cannot return, and the tag prefix of their
+        #! statements: <prefix>_in, the handler of the first request, and <prefix>_mid, that of the second
+        const OutOfLine = {
+            "L4": "l4", "L1": "l1", "L5": "l5", "loopRet": "loop_ret", "midNestLoop": "mid_nest_loop",
+            "twoLoopHandlers": "two_loop", "retWalk": "ret_walk", "nonLastOuter": "non_last_outer",
+            "twoLoopTop": "two_loop_top",
+        };
+
+        #! the functions whose second handler can return
+        const CanReturn = {
+            "L4R": "l4r", "L1R": "l1r", "loopRet2": "loop_ret2", "midNestLoopR": "mid_nest_loop_r",
+            "retWalkR": "ret_walk_r",
+        };
+
+        #! the functions whose requests at the second hit are made in the cleanups of a return statement with a value,
+        #! where the handlers that can return run out of line (past the budget) hand their values over to that return:
+        #! not checked here (the ownership of that value when a request abandons the return)
+        const ReturnWalkHit2 = {"retWalkR": True};
+
+        #! the requests in the first and the second handler, and the hit of both step events (the iteration)
+        const Requests = (
+            ("continue", "break", 1),
+            ("break", "continue", 1),
+            ("return", "break", 1),
+            ("continue", "return", 1),
+            ("break", "return", 1),
+            ("return", "continue", 1),
+            ("continue", "break", 2),
+            ("return", "break", 2),
+        );
+
+        #! a function whose handlers run out of line hand a value over before the second request, which replaces that
+        #! return: the value is released (only a break or a continue as the first request: a return request or none
+        #! there makes the second handler run in the cleanups of a return)
+        const HandOver = {"handOver": "hand_over"};
+        const HandOverRequests = (
+            ("continue", "break", 1),
+            ("break", "continue", 1),
+            ("continue", "continue", 1),
+            ("break", "break", 1),
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+        string env;
+        #! the lines of the tagged statements of the script
+        hash<string, int> tags = {};
+        #! the directory of the executables
+        TmpDir dir("qore-inline-handler-second-request-");
+        #! the executable for each optimization level, once compiled
+        hash<string, string> exes = {};
+    }
+
+    constructor() : QUnit::Test("InlineHandlerSecondRequest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        script = get_script_dir() + "/second-request.q";
+        list<string> lines = ReadOnlyFile::readTextFile(script).split("\n");
+        for (int i = 0; i < lines.size(); ++i) {
+            *list<*string> tag = lines[i] =~ x/### ([a-z0-9_]+)$/;
+            if (tag) {
+                tags{tag[0]} = i + 1;
+            }
+        }
+        addTestCase("the handlers run alike in every execution mode", \testModes());
+        foreach int opt in (0, 3) {
+            addTestCase(sprintf("qcc -O%d executables run the handlers as the AST interpreter does", opt),
+                \testNoDebugger(), opt);
+            addTestCase(sprintf("qcc -O%d: a second request in a handler run out of line", opt), \testRequests(),
+                (opt, OutOfLine));
+            addTestCase(sprintf("qcc -O%d: a second request in a handler that can return", opt), \testRequests(),
+                (opt, CanReturn));
+            addTestCase(sprintf("qcc -O%d: a second request after a handler's return", opt), \testRequests(),
+                (opt, HandOver, HandOverRequests));
+        }
+        set_return_value(main());
+    }
+
+    testModes() {
+        foreach string f in (keys (OutOfLine + CanReturn + HandOver)) {
+            string expected = ExecModeHarness::run(sprintf("%s %s -b --exec-mode=ast %s %s", env, qore_bin, script,
+                f));
+            assertRegex("^RESULT:", expected, f + ": AST");
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                if (mode == "ast") {
+                    continue;
+                }
+                assertEq(expected, ExecModeHarness::run(sprintf("%s %s -b --exec-mode=%s %s %s", env, qore_bin, mode,
+                    script, f)), sprintf("%s: %s", f, mode));
+            }
+            assertEq(expected, ExecModeHarness::run_ir_tier(sprintf("%s %s -b --exec-mode=tiered %s %s", env,
+                qore_bin, script, f)), f + ": IR tier");
+        }
+    }
+
+    testNoDebugger(int opt) {
+        *string exe = getExe(opt);
+        if (!exe) {
+            return;
+        }
+        foreach string f in (keys (OutOfLine + CanReturn + HandOver)) {
+            string expected = backquote(sprintf("%s %s -b --exec-mode=ast %s %s 2>&1", env, qore_bin, script, f));
+            assertEq(expected, backquote(sprintf("%s %s -b %s 2>&1", env, exe, f)), sprintf("qcc -O%d: %s", opt, f));
+        }
+    }
+
+    #! with two requests: the AST interpreter is the reference
+    testRequests(int opt, hash<string, string> funcs, list<auto> requests = Requests) {
+        *string exe = getExe(opt);
+        if (!exe) {
+            return;
+        }
+        foreach hash<auto> i in (funcs.pairIterator()) {
+            int in_line = tags{i.value + "_in"};
+            int mid_line = tags{i.value + "_mid"};
+            assertTrue(in_line && mid_line, i.key + ": tags");
+            foreach list<auto> r in (requests) {
+                if (r[2] == 2 && ReturnWalkHit2{i.key}) {
+                    continue;
+                }
+                string args = sprintf("%s %s %d %d %s %d %d", i.key, r[0], in_line, r[2], r[1], mid_line, r[2]);
+                string expected = backquote(sprintf("%s %s -b --exec-mode=ast %s %s 2>&1", env, qore_bin, script,
+                    args));
+                assertRegex("^RESULT:", expected, args + ": AST");
+                assertEq(expected, backquote(sprintf("%s %s -b %s 2>&1", env, exe, args)), sprintf("qcc -O%d: %s",
+                    opt, args));
+            }
+        }
+    }
+
+    #! returns the executable compiled with -O<opt>, compiling it first, or nothing if the compile failed
+    private *string getExe(int opt) {
+        string key = opt.toString();
+        if (exes{key}) {
+            return exes{key};
+        }
+        string exe = join_paths(dir.path, sprintf("second-request-O%d", opt));
+        int rc;
+        string out = backquote(sprintf("%s %s -O%d -o %s %s 2>&1", env, qcc_bin, opt, exe, script), \rc);
+        assertEq(0, rc, sprintf("qcc -O%d: exit status (output: %s)", opt, out.substr(-2000)));
+        if (rc || !is_file(exe)) {
+            return;
+        }
+        return exes{key} = exe;
+    }
+}

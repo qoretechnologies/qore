@@ -26,6 +26,15 @@ class WscHolder {
 our hash gh;
 thread_local hash tlh;
 
+#! members whose types bind reference elements, which a store to them binds after it has released the object's lock
+class WscRefHolder {
+    public {
+        list<reference<softint>> rl;
+        hash<string, reference<softint>> rh;
+        auto s = "5";
+    }
+}
+
 #! stores a value weakly in a local that no closure captures, a hash, in a function that tiered execution compiles
 int sub weak_store_error(auto v) {
     hash x = {};
@@ -162,4 +171,19 @@ auto empty = {};
     printf("matching type: %y\n", mh);
     printf("hash<auto> member: %y\n", o.ha);
     printf("plain hash into hash: %y\n", phv);
+}
+
+# a value with a reference element to a member of the object that it is stored in: the store binds it after it has
+# released the object's lock and is made again with the value converted; the conversion to a copy is refused before
+# (qore#7391, qore#7572)
+{
+    WscRefHolder o();
+    list<auto> l = (\o.s,);
+    auto lx = l;
+    try_store("list<reference<softint>> member, reference bound after the lock", sub () { o.rl := lx; },
+        auto sub () { return (o.rl, o.s); });
+    hash<auto> h = {"a": \o.s};
+    auto hx = h;
+    try_store("hash<string, reference<softint>> member, reference bound after the lock", sub () { o.rh := hx; },
+        auto sub () { return (o.rh, o.s); });
 }
