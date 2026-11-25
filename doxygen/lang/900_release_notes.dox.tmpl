@@ -1395,6 +1395,11 @@
 
     @subsection qore_3_0_0_new_features New Features in Qore
 
+    @par The Program ID of a Caller Frame
+    @ref Qore::get_caller_program_id() "get_caller_program_id()" and its C++ API \c qore_get_caller_program_id() give
+    the ID of the Program of a frame of the call stack without building a @ref Qore::CallStackInfo "CallStackInfo"
+    hash (<a href="https://github.com/qoretechnologies/qore/issues/7581">issue 7581</a>).
+
     @par Minimum Send Rate Monitor
     @ref Qore::SendRateMonitor "SendRateMonitor" measures the average rate at which a peer takes data while a sender
     waits for it, over a sliding window (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>).

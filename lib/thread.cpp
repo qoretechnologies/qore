@@ -13036,6 +13036,27 @@ QoreListNode* qore_get_thread_call_stack() {
     return thread_list.getCallStack(td->current_stack_location.load(std::memory_order_relaxed));
 }
 
+bool qore_get_caller_program_id(size_t offset, uint64_t& id) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // the entry at the offset from the innermost one, as get_thread_call_stack() lists them; nothing is allocated
+    for (const QoreStackLocation* w = td->current_stack_location.load(std::memory_order_relaxed); w;
+            w = w->getNext()) {
+        if (!offset) {
+            QoreProgram* pgm = w->getProgram();
+            if (!pgm) {
+                return false;
+            }
+            id = pgm->getProgramId();
+            return true;
+        }
+        --offset;
+    }
+    return false;
+}
+
 QoreHashNode* qore_get_parent_caller_location(size_t offset) {
     ThreadData* td = thread_data.get();
     return thread_list.getParentCallerLocation(td->current_stack_location.load(std::memory_order_relaxed), offset);

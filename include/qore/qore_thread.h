@@ -146,6 +146,20 @@ DLLEXPORT int remove_thread_resource(const ResolvedCallReferenceNode* rcr, Excep
 */
 DLLEXPORT QoreHashNode* qore_get_parent_caller_location(size_t offset = 1);
 
+//! Gets the ID of the Program of the entry of the current thread's call stack at the given offset, if any
+/** Gives only the Program ID of the entry that get_thread_call_stack() lists at \a offset (\c 0 is the location of
+    the current call, \c 1 that of the caller of the current function, and so on), without building a CallStackInfo
+    hash; nothing is allocated
+
+    @param offset the offset of the entry in the call stack
+    @param id set to the Program ID (a qore_program_id_t value) of the entry if it has one
+
+    @return true if the call stack has an entry at \a offset with a Program, and \a id is set; false if not
+
+    @since %Qore 3.0
+*/
+DLLEXPORT bool qore_get_caller_program_id(size_t offset, uint64_t& id);
+
 #if 0
 //! save a resource against a thread for thread resource handling using the thread resource id
 /** by using the thread resource id, you can quickly check if the resource has already been saved for the thread
