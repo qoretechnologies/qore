@@ -92,7 +92,18 @@ class PastCapHandlerBase inherits QUnit::Test {
         rv += "auto sub capHandOver(int n) {\n    on_exit { push log, \"last\"; }\n    on_exit {\n        {\n"
             "            on_exit {\n                push log, \"inner\";      ### req_handover\n            }\n"
             "            on_exit { return -9; }\n        }\n    }\n" + extra + tail;
-        foreach string name in ((map $1[0], Functions) + ("capHandOver",)) {
+        # a loop in the handler's body takes the break: the nested return is abandoned, and the code after the loop runs
+        rv += "auto sub capLoop(int n) {\n    on_exit { push log, \"last\"; }\n    on_exit {\n"
+            "        for (int j = 0; j < 1; ++j) {\n            {\n                on_exit {\n"
+            "                    push log, \"inner\";      ### req_loop\n                }\n"
+            "                return -5;\n            }\n        }\n        push log, \"after loop\";\n    }\n"
+            + extra + tail;
+        # the request in a handler that is not the last of its run: the normal end of the next one replaces it
+        rv += "auto sub capNotLast(int n) {\n    on_exit { push log, \"last\"; }\n    on_exit {\n        {\n"
+            "            on_exit { push log, \"next\"; }\n            on_exit {\n"
+            "                push log, \"inner\";      ### req_not_last\n            }\n            return -5;\n"
+            "        }\n    }\n" + extra + tail;
+        foreach string name in ((map $1[0], Functions) + ("capHandOver", "capLoop", "capNotLast")) {
             foreach string kind in (("Object", "Data")) {
                 rv += sprintf("auto sub %s%s(int n) { return %s(n); }\n", name, kind, name);
             }
@@ -122,7 +133,8 @@ class PastCapHandlerBase inherits QUnit::Test {
     #! the requests: "<function><kind> <flow>" -> the arguments of the program
     static hash<string, string> requests(hash<string, int> tags) {
         hash<string, string> rv = {};
-        foreach list<auto> f in (Functions + (("capHandOver", True, "", "req_handover"),)) {
+        foreach list<auto> f in (Functions + (("capHandOver", True, "", "req_handover"), ("capLoop", True, "", "req_loop"),
+                ("capNotLast", True, "", "req_not_last"))) {
             foreach string kind in (Kinds) {
                 foreach string flow in (Flows) {
                     rv{sprintf("%s%s %s", f[0], kind, flow)} = sprintf("%s%s %s %d 1", f[0], kind, flow, tags{f[3]});

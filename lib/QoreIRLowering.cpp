@@ -6483,11 +6483,13 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                                 return false;
                             }
                         } else if (keep_runs && return_walk && pending_return_active
-                                && try_depth == pending_return_try_depth
+                                && try_depth == pending_return_try_depth && !try_replaced_handed_over
                                 && !setReplacingScopeExitFlowTargets(se_inst, i - 1, nullptr, entry.loc, error)) {
                             // in the cleanups of a return in the handler's body, which replaces the value of the
                             // return that the handler runs in: a request in the handlers that have not run is that
-                            // of the block, which can abandon the return, as for those lowered inline (qore#7531)
+                            // of the block, which can abandon the return, as for those lowered inline (qore#7531);
+                            // not where a value that handlers handed over to the return of a try statement is held,
+                            // which the release at the paths' entries would take (as qore#7008)
                             return false;
                         }
                         break;
@@ -7355,8 +7357,10 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
                         }
                     }
                     if (return_walk) {
-                        // a request in the handlers is that of the block, which can abandon the return (qore#7531)
-                        if (barrier_depth != SIZE_MAX
+                        // a request in the handlers is that of the block, which can abandon the return (qore#7531);
+                        // not where a value that handlers handed over to the return of a try statement is held,
+                        // which the release at the paths' entries would take (as qore#7008)
+                        if (barrier_depth != SIZE_MAX && !try_replaced_handed_over
                                 && !setReplacingScopeExitFlowTargets(se_inst, barrier_depth - 1, nullptr, scope_loc,
                                     error)) {
                             return false;
