@@ -102,13 +102,19 @@ public class HttpClientPollOperation inherits AbstractPollOperation<auto> {
 
         @param token the module's token: only the connection clears it, when it is closed, so that other code that
         holds the operation cannot cut the connection's requests off from it (qore#7544)
+        @param conn the connection that is closed: the reference is released only if it is this operation's
 
         @throw PERMISSION-DENIED \a token is not the module's token
 
         @since HttpClientIo 1.0
     */
-    clearConnection(object token) {
+    final clearConnection(object token, HttpClientConnection conn) {
         HttpClientIoSocketAccess::check(token);
+        # only the connection of this operation releases it, not another connection that returns this operation as
+        # its own (qore#7544)
+        if (connection_ref !== conn) {
+            return;
+        }
         # an assignment, not "remove": the assignment invalidates the recursive-reference set that the connection and
         # this operation form, while a removal of the member leaves it stale, so that the operation, which the
         # connection still references, is collected as if the cycle still stood

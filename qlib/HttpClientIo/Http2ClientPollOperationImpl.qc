@@ -108,7 +108,7 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
 
         @throw PERMISSION-DENIED \a access is not the module's token
     */
-    Socket getSocketFor(object access) {
+    final Socket getSocketFor(object access) {
         HttpClientIoSocketAccess::check(access);
         return Http2ClientPollOperationBase::getSocket();
     }

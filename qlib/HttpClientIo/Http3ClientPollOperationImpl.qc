@@ -192,7 +192,7 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
 
         @throw PERMISSION-DENIED \a access is not the module's token
     */
-    Socket getSocketFor(object access) {
+    final Socket getSocketFor(object access) {
         HttpClientIoSocketAccess::check(access);
         return Http3ClientPollOperationBase::getSocket();
     }

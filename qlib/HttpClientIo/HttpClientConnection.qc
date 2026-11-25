@@ -198,13 +198,10 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             if (exists taker_pgm_id) {
                 return taker_pgm_id == caller;
             }
-            # a leased connection is its session's (qore#6194)
-            if (leased) {
-                return False;
-            }
         }
-        # the reservation fails if a request uses the connection or reserved it; it is not released
-        if (getOutstandingStreamCount() || !tryReserveStream()) {
+        # the reservation fails if a request uses the connection or reserved it, or if it is leased (its session's,
+        # qore#6194), in one critical section; it is not released
+        if (getOutstandingStreamCount() || !tryReserveStreamIntern(True)) {
             return False;
         }
         markTaken(caller);
@@ -406,10 +403,15 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         \c canAcceptStream() + manual reservation..
     */
     bool tryReserveStream() {
+        return tryReserveStreamIntern(False);
+    }
+
+    #! Reserves a stream slot; with \a unleased_only, only on a connection that is not leased (qore#7544)
+    private:internal bool tryReserveStreamIntern(bool unleased_only) {
         AutoLock al(lock);
         # a connection that restricted code took out of the pool is never given to another request, whatever its
         # reservation and lease counters say: they can be changed with the connection's public methods (qore#7544)
-        if (exists taker_pgm_id) {
+        if (exists taker_pgm_id || (unleased_only && leased)) {
             return False;
         }
         int cs = self.getConnectionState();
@@ -828,7 +830,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         closeImpl(close_timeout);
         # the connection and its poll operation reference each other: the cycle is broken once the connection is
         # closed, or neither is ever released (#6286)
-        HttpClientIoSocketAccess::clearConnectionOf(getPollOperation());
+        HttpClientIoSocketAccess::clearConnectionOf(getPollOperation(), self);
     }
 
     #! Marks (or unmarks) the connection as exclusively leased for a persistent session

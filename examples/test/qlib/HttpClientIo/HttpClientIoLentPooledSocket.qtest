@@ -157,7 +157,6 @@ class KeepingOp inherits HttpClientPollOperation {
     Socket getSocket() { return new Socket(); }
     Socket getSocketFor(object a) { stolen = a; return new Socket(); }
     cancelRequest(int sid) {}
-    clearConnection(object t) { stolen = t; }
     string getGoal() { return \"x\"; }
     string getState() { return \"x\"; }
     bool goalReached() { return True; }
@@ -188,6 +187,33 @@ string sub steal() {
         return \"taken\";
     } catch (hash<ExceptionInfo> ex) {
         return ex.err;
+    }
+}
+#! a connection of the borrower's own class that returns the poll operation of the kept connection as its own
+class CuttingConn inherits HttpClientConnection {
+    public { HttpClientPollOperation op; }
+    constructor(HttpClientPollOperation op) : HttpClientConnection({\"host\": \"x\", \"port\": 1}, 1s, NOTHING, 1,
+            NOTHING) {
+        self.op = op;
+    }
+    string getProtocol() { return \"h1\"; }
+    HttpClientPollOperation getPollOperation() { return op; }
+    Socket getSocket() { return new Socket(); }
+    int submitRequestImpl(string m, string p, *hash<auto> h, *data b, Promise pr) { return 0; }
+    int submitRequestWithNotifierImpl(string m, string p, *hash<auto> h, *data b, Promise pr, EventNotifier n) { return 0; }
+    cancelRequestImpl(int sid) {}
+    closeImpl(*timeout t) {}
+}
+#! closes a connection of its own class that returns the kept connection's poll operation; returns what the poll
+#! operation's accessor then says
+string sub cutThrough() {
+    CuttingConn cc(conn.getPollOperation());
+    cc.close();
+    try {
+        conn.getPollOperation().getSocket();
+        return \"taken\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.desc;
     }
 }
 our *HttpClientConnectionManager own_mgr;
@@ -259,6 +285,7 @@ class HttpClientIoLentPooledSocketTest inherits QUnit::Test {
         addTestCase("the module's token is not given to a poll operation of a borrower's class", \tokenTest());
         addTestCase("a borrower cannot pin a connection in a lent manager", \pinTest());
         addTestCase("HTTP/1.1: a leased connection is not taken", \leasedTest());
+        addTestCase("another connection does not cut a poll operation off from its connection", \cutThroughTest());
         set_return_value(main());
     }
 
@@ -486,5 +513,28 @@ class HttpClientIoLentPooledSocketTest inherits QUnit::Test {
         c.setLeased(True);
         on_exit c.setLeased(False);
         assertEq("PERMISSION-DENIED", p.callFunction("take", "conn"), "a leased connection is not taken");
+    }
+
+    cutThroughTest() {
+        hash<auto> srv = startServer(False);
+        on_exit srv.server.stop();
+        HttpClientConnectionManager mgr = getManager("h1");
+        on_exit mgr.closeAll();
+        Program p = getBorrower(srv.port);
+        assertEq(200, p.callFunction("request", mgr, srv.url, "/ok"), "the borrower's request");
+        # the host's request uses the connection while the borrower tries to cut it off from its poll operation
+        Queue done();
+        background sub () {
+            try {
+                done.push(hostRequest(mgr, srv.url, "/hold")[0]);
+            } catch (hash<ExceptionInfo> ex) {
+                done.push(ex.err);
+            }
+        }();
+        srv.handler.held.get(HangGuard);
+        string desc = p.callFunction("cutThrough");
+        srv.handler.release.push(True);
+        assertEq(200, done.get(HangGuard), "the host's request");
+        assertRegex("while another request uses it", desc, "the poll operation still has its connection");
     }
 }

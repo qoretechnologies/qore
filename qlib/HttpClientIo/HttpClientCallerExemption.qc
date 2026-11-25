@@ -40,32 +40,33 @@ class HttpClientIoSocketAccess {
     }
 
     #! Returns the socket of a poll operation for the code of this module
-    /** The token is given only to a poll operation whose class is not of a restricted %Program
-        (@ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()", failing
-        closed): a subclass that restricted code declares could keep it; such an operation gives its socket with its
-        public accessor, which applies the rules of the connection for the calling code (qore#7544)
+    /** The token is given only to an operation of one of the poll operation classes of this module, whose methods
+        that take it are final (Http1ClientPollOperation::getSocketFor(), Http2ClientPollOperation::getSocketFor(),
+        Http3ClientPollOperation::getSocketFor(), HttpClientPollOperation::clearConnection()), so that no subclass can
+        keep it; another operation (of a class that other code derives from HttpClientPollOperation) gives its socket
+        with its public accessor, which applies the rules of the connection for the calling code (qore#7544)
     */
     static Socket socketOf(HttpClientPollOperation op) {
-        if (HttpClientIoSocketAccess::isModuleObject(op)) {
+        if (HttpClientIoSocketAccess::isModuleOperation(op)) {
             return op.getSocketFor(token);
         }
         return op.getSocket();
     }
 
     #! Releases the connection of a poll operation for the code of this module; see socketOf()
-    static clearConnectionOf(HttpClientPollOperation op) {
-        if (HttpClientIoSocketAccess::isModuleObject(op)) {
-            op.clearConnection(token);
+    /** @param op the poll operation
+        @param conn the connection that is closed: the operation releases only its own connection
+    */
+    static clearConnectionOf(HttpClientPollOperation op, HttpClientConnection conn) {
+        if (HttpClientIoSocketAccess::isModuleOperation(op)) {
+            op.clearConnection(token, conn);
         }
     }
 
-    #! Returns @ref True if the class of the object is not of a restricted %Program; fails closed
-    private:internal static bool isModuleObject(object o) {
-        try {
-            return !SandboxManager::isFromRestrictedProgram(o);
-        } catch (hash<ExceptionInfo> ex) {
-            return False;
-        }
+    #! Returns @ref True if the operation is of a poll operation class of this module (or a subclass of one)
+    private:internal static bool isModuleOperation(HttpClientPollOperation op) {
+        return op instanceof Http1ClientPollOperation || op instanceof Http2ClientPollOperation
+            || op instanceof Http3ClientPollOperation;
     }
 
     #! Raises an exception if the given object is not the token
