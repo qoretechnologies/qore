@@ -1,0 +1,36 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+
+module TzPathHelper {
+    version = "1.0";
+    desc = "loads time zones for its callers (test of qore#7566)";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+#! loads time zones for its callers: the code of a module acts for the code that calls it
+public namespace TzPathHelper {
+#! loads the zone of the path and returns its name
+public string sub load(string path) {
+    TimeZone tz(path);
+    return tz.region();
+}
+
+#! a capability that loads a zone with the system policy, created by trusted code with init_cap()
+public our *code cap;
+
+#! creates the capability; called by trusted code
+public sub init_cap() {
+    cap = SandboxManager::createSystemPolicyCall(string sub (string path) {
+        TimeZone tz(path);
+        return tz.region();
+    });
+}
+
+#! loads the zone of the path with the capability
+public string sub load_cap(string path) {
+    return cap(path);
+}
+}

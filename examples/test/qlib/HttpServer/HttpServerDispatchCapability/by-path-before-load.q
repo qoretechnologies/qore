@@ -8,7 +8,10 @@
 %requires HttpServerUtil
 
 Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
-p.setSandboxManager(new SandboxManager());
+# the sandbox can read the module's file: the refusal is the module loader's or the claim's, not the file policy's
+SandboxManager sm();
+sm.addFilesystemAllowedPath(dirname(ARGV[0]), QSEC_READ);
+p.setSandboxManager(sm);
 try {
     p.loadModule(ARGV[0]);
     printf("loaded\n");

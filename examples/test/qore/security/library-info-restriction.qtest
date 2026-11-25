@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - qcc module compilation and loading of build constants with program restrictions
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 #
 # The library's installation and build information, the module paths in module descriptions, the module context path
@@ -11,6 +12,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../TestInterpreter.qm
 
 %exec-class LibraryInfoRestrictionTest
 
@@ -127,6 +129,8 @@ public namespace %s {
         addTestCase("get_qore_library_info() is refused at parse time", \parseTest());
         addTestCase("get_qore_library_info() is refused in calls resolved at run time", \dynamicTest());
         addTestCase("get_qore_library_info() is unchanged without the restriction", \unrestrictedTest());
+        addTestCase("build constants require external information access", \constantDomainTest());
+        addTestCase("a compiled module records the domain of its build constants", \compiledConstantTest());
         addTestCase("module paths are left out with the restriction", \moduleTest());
         addTestCase("module paths are unchanged without the restriction", \moduleUnrestrictedTest());
         addTestCase("the library option lists stay available", \optionTest());
@@ -154,6 +158,67 @@ public namespace %s {
                     ("const C = get_qore_library_info();", "constant"), label + " constant initializer");
             }
         }
+    }
+
+    constantDomainTest() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            foreach string name in (("BuildHost", "Compiler", "CFLAGS", "LDFLAGS")) {
+                foreach string ref in ((name, "Qore::" + name)) {
+                    string label = m.key + " " + ref;
+                    Program p = newProgram(PO_NO_EXTERNAL_INFO, m.value);
+                    assertThrows("PARSE-EXCEPTION", name, \p.parse(),
+                        ("bool sub available() { return exists " + ref + "; }", "constant"), label);
+                    string query = sprintf("our hash<auto> result; result.matches = %s == get_qore_library_info(){%y};",
+                        ref, name);
+                    assertEq(True, runTopLevel(0, m.value, query).matches, label + " matches the library info");
+                }
+                string reflected = sprintf("%%requires reflection\nour hash<auto> result;\n"
+                    "try { result.present = exists (new Reflection::Constant(%y)).getValue(); } "
+                    "catch (hash<ExceptionInfo> ex) { result.error = ex.err; }", name);
+                assertEq("REFLECTION-ACCESS-ERROR", runTopLevel(PO_NO_EXTERNAL_INFO, m.value, reflected).error,
+                    m.key + " reflects " + name + " with the restriction");
+                assertEq(True, runTopLevel(0, m.value, reflected).present,
+                    m.key + " reflects " + name + " without the restriction");
+            }
+        }
+    }
+
+    compiledConstantTest() {
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            testSkip("qcc is not available");
+        }
+        string mod = writeModule("BuildConstantDomain", "%%modern
+module %s {
+    version = \"1.0\";
+    desc = \"build constant domain fixture\";
+    author = \"Qore Technologies\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+public namespace %s {
+    public bool sub matches(list<string> expected) {
+        return expected == (BuildHost, Compiler, CFLAGS, LDFLAGS);
+    }
+}");
+        # Keep only the qmod in the load directory so a fallback to the source cannot pass the test.
+        TmpDir out("qore-compiled-build-constant-");
+        string artifact = out.path + DirSep + mod + ".qmod";
+        int rc;
+        string log = backquote(sprintf("%s --module --strip-source -O3 -o %s %s 2>&1", shellQuote(qcc),
+            shellQuote(artifact), shellQuote(tmp.path + DirSep + mod + ".qm")), \rc);
+        assertEq(0, rc, log);
+        string program = "%requires " + artifact + "\nbool sub matches(list<string> expected) {"
+            + " return BuildConstantDomain::matches(expected); }";
+        Program restricted = newProgram(PO_NO_EXTERNAL_INFO, EM_IR);
+        assertThrows("AOT-MODULE-RESTRICTED", mod, \restricted.parse(), (program, "compiled constants"));
+        Program allowed = newProgram(0, EM_IR);
+        allowed.parse(program, "compiled constants");
+        assertEq(True, allowed.callFunction("matches", (BuildHost, Compiler, CFLAGS, LDFLAGS)));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
     }
 
     dynamicTest() {

@@ -634,7 +634,8 @@ static void qore_warn_binary_module_source_fallback(ExceptionSink& xsink, Except
     QoreStringValueHelper desc(binary_xsink.getExceptionDesc());
 
     SimpleRefHolder<QoreStringNode> warn_desc(new QoreStringNodeMaker("binary module '%s' for feature '%s' failed "
-        "to load; loading source module '%s' instead", binary_path, name, source_path));
+        "to load; loading source module '%s' instead", qore_msg_path(binary_path).c_str(), name,
+        qore_msg_path(source_path).c_str()));
 
     const char* err_str = err->c_str();
     const char* desc_str = desc->c_str();
@@ -666,10 +667,10 @@ static void qore_raise_binary_module_source_fallback_error(ExceptionSink& xsink,
         const char* binary_path, const char* source_path, ExceptionSink& binary_xsink) {
     if (!xsink) {
         xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s' from source '%s' after binary "
-            "module '%s' failed", name, source_path, binary_path);
+            "module '%s' failed", name, qore_msg_path(source_path).c_str(), qore_msg_path(binary_path).c_str());
     }
     binary_xsink.appendLastDescription(" (the binary module was not loaded; source module '%s' was tried "
-        "instead)", source_path);
+        "instead)", qore_msg_path(source_path).c_str());
     xsink.assimilate(binary_xsink);
 }
 
@@ -1784,8 +1785,9 @@ bool QoreModuleManager::checkAOTModuleDependencyFiles(ExceptionSink& xsink, cons
             is_aot = qoreAOTReadModuleInfo(file, info, error) == QoreAOTModuleInfoStatus::FOUND;
         }
         if (!qore_aot_dependency_is_compiled_one(name, file, is_aot, compiled_against, fingerprints, allowed)) {
-            stale_desc = std::string("it was compiled against other files of module '") + name + "' than '" + file
-                + "', which is loaded for it now";
+            // the file is named as the code requesting the load may see it (qore#7507)
+            stale_desc = std::string("it was compiled against other files of module '") + name + "' than '"
+                + qore_msg_path(file.c_str()) + "', which is loaded for it now";
             return true;
         }
     }
@@ -1801,7 +1803,8 @@ static void qore_warn_stale_aot_module(ExceptionSink& xsink, ExceptionSink& wsin
     qore_report_module_load_warning(xsink, &xsink == &wsink ? nullptr : &wsink, warning_mask, true,
         "BINARY-MODULE-SOURCE-FALLBACK", name, new QoreStringNodeMaker("AOT module '%s' for feature '%s' is out of "
         "date: its source '%s' has changed since it was compiled; loading source module '%s' instead; rebuild the "
-        "AOT module", qmod_path, name, stale_source, source_path));
+        "AOT module", qore_msg_path(qmod_path).c_str(), name, qore_msg_path(stale_source).c_str(),
+        qore_msg_path(source_path).c_str()));
 }
 
 static bool qore_find_user_module_source(const std::string& dir, const char* name, QoreString& source_path,
@@ -1964,7 +1967,11 @@ QoreHashNode* QoreAbstractModule::getHashIntern(bool with_filename) const {
                 pci->setKeyValueIntern("err", new QoreStringNode(c.err));
             }
             if (!c.desc.empty()) {
-                pci->setKeyValueIntern("desc", new QoreStringNode(c.desc));
+                // code restricted from external information is not given a description that names files of the host
+                // (qore#7507)
+                pci->setKeyValueIntern("desc", new QoreStringNode(with_filename || c.desc_restricted_safe ? c.desc
+                    : std::string("the child module failed to load; the description of the error names files of the "
+                        "host, which code restricted from external information is not given")));
             }
             pch->setKeyValueIntern(c.name.c_str(), ci);
         }
@@ -2610,6 +2617,9 @@ struct QoreModuleLoadFrame {
     qore_program_id_t owner_pgm_id;
     //! the frame of the enclosing load in this thread, if any
     QoreModuleLoadFrame* prev;
+    //! the canonical directory of library code of a library module loaded into a container of code that is not
+    //! trusted, beneath which the module reads its resources when it is initialized (qore#7518); empty otherwise
+    std::string library_root = std::string();
 };
 
 //! the innermost module load in progress in this thread
@@ -2658,6 +2668,14 @@ public:
         }
     }
 
+    //! sets the directory of library code beneath which a library module loaded into a container reads its resources
+    void setLibraryRoot(const char* dir) {
+        if (char* canon = realpath(dir, nullptr)) {
+            frame.library_root = canon;
+            free(canon);
+        }
+    }
+
 private:
     QoreModuleLoadFrame frame;
 };
@@ -2677,6 +2695,56 @@ bool qore_module_load_is_library() {
 
 bool qore_module_load_is_trusted() {
     return module_load_frame && module_load_frame->trusted;
+}
+
+//! lists the source files of a separated library module as library code: without a sandbox policy (qore#7518)
+static QoreListNode* list_library_module_sources(const char* dir, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    DIR* d = opendir(dir);
+    if (!d) {
+        int err = errno;
+        xsink->raiseErrnoException("DIR-READ-ERROR", err, "cannot list the sources of module directory '%s'",
+            qore_msg_path(dir).c_str());
+        return nullptr;
+    }
+    std::set<std::string> names;
+    {
+        ON_BLOCK_EXIT(closedir, d);
+        while (struct dirent* e = readdir(d)) {
+            size_t len = strlen(e->d_name);
+            if (len > 3 && (!strcmp(e->d_name + len - 3, ".qc") || !strcmp(e->d_name + len - 3, ".ql"))) {
+                std::string path = std::string(dir) + "/" + e->d_name;
+                struct stat sb;
+                if (!stat(path.c_str(), &sb) && S_ISREG(sb.st_mode)) {
+                    names.insert(e->d_name);
+                }
+            }
+        }
+    }
+    for (const std::string& n : names) {
+        rv->push(new QoreStringNode(n), xsink);
+    }
+    return rv.release();
+}
+
+//! checks a module path given by code that a sandbox governs against the policy of that code (qore#7518)
+/** @return 0 if allowed or no policy applies, -1 if denied (an exception is raised)
+*/
+static int check_module_source_policy(const char* path, ExceptionSink& xsink) {
+    if (!q_source_read_policy_applies()) {
+        return 0;
+    }
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    return smh && !smh->checkFilesystemAccess(path, QSEC_READ, &xsink) ? -1 : 0;
+}
+
+bool qore_module_load_is_untrusted() {
+    return module_load_frame && !module_load_frame->trusted;
+}
+
+const char* qore_module_load_library_root() {
+    return module_load_frame && !module_load_frame->trusted && !module_load_frame->library_root.empty()
+        ? module_load_frame->library_root.c_str() : nullptr;
 }
 
 bool qore_module_load_untrusted_aot_init() {
@@ -2996,10 +3064,12 @@ QoreModuleCommandRestrictions QoreModuleCommandRestrictions::getCallerRestrictio
 }
 
 void QoreBuiltinModule::issueModuleCmd(const QoreProgramLocation* loc, const QoreString& cmd, ExceptionSink* xsink) {
+    // the messages are for the code that issued the command (qore#7507)
+    QoreRestrictedMessageScopeHelper msg_scope(qore_caller_no_external_info());
     if (!module_parse_cmd) {
         if (xsink) {
             xsink->raiseException(*loc, "PARSE-COMMAND-ERROR", QoreValue(), "module '%s' loaded from '%s' has not "
-                "registered a parse command handler", name.c_str(), filename.c_str());
+                "registered a parse command handler", name.c_str(), qore_msg_path(filename.c_str()).c_str());
         }
         return;
     }
@@ -3016,7 +3086,8 @@ void QoreBuiltinModule::issueModuleCmd(const QoreProgramLocation* loc, const Qor
     assert(ctx);
     if (!ctx) {
         xsink->raiseException(*loc, "RUNTIME-COMMAND-ERROR", QoreValue(), "module '%s' loaded from '%s': the module "
-            "command has no context that says which code issued it", name.c_str(), filename.c_str());
+            "command has no context that says which code issued it", name.c_str(),
+            qore_msg_path(filename.c_str()).c_str());
         return;
     }
     if (!cmd_caller_aware && ctx->isRestricted()) {
@@ -3024,7 +3095,7 @@ void QoreBuiltinModule::issueModuleCmd(const QoreProgramLocation* loc, const Qor
             ? "PARSE-COMMAND-ERROR" : "RUNTIME-COMMAND-ERROR", QoreValue(), "module '%s' loaded from '%s' has not "
             "declared that its module commands honor the restrictions of the code that issues them "
             "(QoreModuleInfo::cmd_caller_aware), and the code that issued this command is restricted", name.c_str(),
-            filename.c_str());
+            qore_msg_path(filename.c_str()).c_str());
         return;
     }
 
@@ -3338,6 +3409,8 @@ void QoreModuleManager::loadModuleForReexport(ExceptionSink& xsink, const char* 
 
 int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreProgram* tpgm,
         qore_binary_module_desc_t desc_fn, const char* path, const QoreAOTModuleFileInfo& aot_info) {
+    // the messages of the registration are built for the code that it is made for (qore#7507)
+    QoreRestrictedMessageScopeHelper msg_scope(qore_caller_no_external_info(tpgm));
     // Populate mod_info up front so the feature name is known before taking the
     // parse lock / module manager mutex.  The info hash is captured here and
     // re-assigned to mod_info.info before handing off to loadBinaryModuleFromDesc,
@@ -3345,8 +3418,8 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
     QoreModuleInfo mod_info;
     desc_fn(mod_info);
     if (mod_info.name.empty()) {
-        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
-            "AOT static module at '%s': no feature name present in module descriptor", path);
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", qore_msg_path_node(path),
+            "AOT static module at '%s': no feature name present in module descriptor", qore_msg_path(path).c_str());
         if (mod_info.info) {
             mod_info.info->deref(&xsink);
         }
@@ -3363,10 +3436,10 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
     // a module compiled against other builtin API metadata is out of date, as when it is loaded from a file (see
     // loadBinaryModuleFromPath()); a statically registered module has no source to load instead (qore#7183)
     if (aot_info.builtin_api_identity != qore_builtin_api_identity) {
-        xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(path), "AOT static module '%s' for feature "
+        xsink.raiseExceptionArg("AOT-MODULE-STALE", qore_msg_path_node(path), "AOT static module '%s' for feature "
             "'%s' was compiled against other builtin API metadata (builtin API identity '%s') than this Qore library "
-            "has ('%s'); rebuild the program with the qcc of this Qore installation", path, feature,
-            aot_info.builtin_api_identity.c_str(), qore_builtin_api_identity);
+            "has ('%s'); rebuild the program with the qcc of this Qore installation", qore_msg_path(path).c_str(),
+            feature, aot_info.builtin_api_identity.c_str(), qore_builtin_api_identity);
         return -1;
     }
 
@@ -3411,7 +3484,7 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(feature), "cannot use module '%s' (%s): it "
             "was loaded from outside the module path by code that a sandbox governs or whose functional domains are "
             "restricted, and cannot be used by other code, nor by code with another sandbox", feature,
-            mi->getFileName());
+            qore_msg_path(mi->getFileName()).c_str());
         return -1;
     }
     if (!mi) {
@@ -3451,7 +3524,7 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
         // dependencies are found with its own module path directives
         std::unique_ptr<QoreModulePathScope> path_scope;
         if (aot_info.module_name != feature) {
-            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "the AOT module metadata "
+            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", qore_msg_path_node(path), "the AOT module metadata "
                 "linked with module '%s' identifies feature '%s'", feature, aot_info.module_name.c_str());
             return -1;
         }
@@ -3799,6 +3872,10 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
     // that a child is resolved against the same module search path as its parent
     QoreProgram* ctx_pgm = pgm ? pgm : path_pgm;
 
+    // the messages of the load, and of the loads that it makes, are built for the code that requests it: they name
+    // files without their directories for code restricted from external information (qore#7507)
+    QoreRestrictedMessageScopeHelper msg_scope(qore_caller_no_external_info(ctx_pgm));
+
     // check for special "qore" feature
     if (!raw_path && !strcmp(name, "qore")) {
         if (version) {
@@ -3809,7 +3886,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
     if (raw_path && !src && pgm && (pgm->getParseOptions() & PO_NO_FILESYSTEM)) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "cannot load module '%s' from "
-            "path '%s' because PO_NO_FILESYSTEM is set", name, raw_path);
+            "path '%s' because PO_NO_FILESYSTEM is set", name, qore_msg_path(raw_path).c_str());
         return nullptr;
     }
 
@@ -3888,7 +3965,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "cannot use module '%s' (%s): it was "
             "loaded from outside the module path by code that a sandbox governs or whose functional domains are "
             "restricted, and cannot be used by other code, nor by code with another sandbox", name,
-            mi->getFileName());
+            qore_msg_path(mi->getFileName()).c_str());
         return nullptr;
     }
 
@@ -4082,10 +4159,10 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             QoreString found_link;
             if (qore_skip_other_build_qmod(own_build_path, found_link)) {
                 if (!source_available) {
-                    xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(raw_path), "AOT module '%s' "
+                    xsink.raiseExceptionArg("LOAD-MODULE-ERROR", qore_msg_path_node(raw_path), "AOT module '%s' "
                         "for feature '%s' links into another build of the source tree than that of this Qore "
                         "library, which has no such module, and there is no source module next to it to load "
-                        "instead", raw_path, name);
+                        "instead", qore_msg_path(raw_path).c_str(), name);
                     return nullptr;
                 }
                 const char* src = separated_path.size() ? separated_path.c_str() : source_path.c_str();
@@ -4119,9 +4196,10 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                             stale_source.c_str());
                     } else {
                         ExceptionSink stale_xsink;
-                        stale_xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(raw_path), "AOT module "
+                        stale_xsink.raiseExceptionArg("AOT-MODULE-STALE", qore_msg_path_node(raw_path), "AOT module "
                             "'%s' for feature '%s' is out of date: its source '%s' has changed since it was compiled; "
-                            "rebuild the AOT module", raw_path, name, stale_source.c_str());
+                            "rebuild the AOT module", qore_msg_path(raw_path).c_str(), name,
+                            qore_msg_path(stale_source.c_str()).c_str());
                         qore_raise_binary_module_source_fallback_error(xsink, name, raw_path, source_path.c_str(),
                             stale_xsink);
                     }
@@ -4140,10 +4218,11 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 module_dir = dsep ? module_dir.substr(0, dsep - module_dir.c_str()) : std::string(".");
                 std::string stale_source;
                 if (qore_build_aot_module_is_stale(raw_path, module_dir, name, p, stale_source, xsink)) {
-                    xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(raw_path), "AOT module '%s' for "
+                    xsink.raiseExceptionArg("AOT-MODULE-STALE", qore_msg_path_node(raw_path), "AOT module '%s' for "
                         "feature '%s' is out of date: its source '%s' has changed since it was compiled, and there "
-                        "is no source module next to it to load instead; rebuild the AOT module", raw_path, name,
-                        stale_source.c_str());
+                        "is no source module next to it to load instead; rebuild the AOT module",
+                        qore_msg_path(raw_path).c_str(), name,
+                        qore_msg_path(stale_source.c_str()).c_str());
                     return nullptr;
                 }
                 if (xsink) {
@@ -4175,10 +4254,14 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                     xsink.assimilate(binary_xsink);
                 }
             }
+        } else if (!isTrustedModulePath(raw_path) && check_module_source_policy(raw_path, xsink)) {
+            // under a sandbox policy, a path that the policy denies is denied before anything about it is told
+            // (qore#7518)
+            return nullptr;
         } else if (QoreDir::folder_exists(modulePath, xsink)) {
             if (!has_separated_module_main(raw_path, name)) {
                 xsink.raiseException("LOAD-MODULE-ERROR", "cannot load separated user module '%s' from directory "
-                    "'%s': missing main module source '%s.qm'", name, raw_path, name);
+                    "'%s': missing main module source '%s.qm'", name, qore_msg_path(raw_path).c_str(), name);
                 return nullptr;
             }
             mi = loadSeparatedModule(xsink, wsink, raw_path, name, pgm, reexport, pholder.release(),
@@ -4303,9 +4386,10 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         if (!source_found) {
             // nothing to load instead: the out-of-date module is not loaded, as when it is named by its path (see
             // loadModuleIntern() above)
-            xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(qmod_path), "AOT module '%s' for feature "
+            xsink.raiseExceptionArg("AOT-MODULE-STALE", qore_msg_path_node(qmod_path), "AOT module '%s' for feature "
                 "'%s' is out of date: its source '%s' has changed since it was compiled, and there is no source "
-                "module to load instead; rebuild the AOT module", qmod_path, name, stale_source.c_str());
+                "module to load instead; rebuild the AOT module", qore_msg_path(qmod_path).c_str(), name,
+                qore_msg_path(stale_source.c_str()).c_str());
             rv = nullptr;
             return true;
         }
@@ -4316,9 +4400,9 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             // the source failed: why the AOT module was not loaded follows its error, as for an AOT module that
             // fails to load (see qore_raise_binary_module_source_fallback_error())
             ExceptionSink stale_xsink;
-            stale_xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(qmod_path), "AOT module '%s' for "
+            stale_xsink.raiseExceptionArg("AOT-MODULE-STALE", qore_msg_path_node(qmod_path), "AOT module '%s' for "
                 "feature '%s' is out of date: its source '%s' has changed since it was compiled; rebuild the AOT "
-                "module", qmod_path, name, stale_source.c_str());
+                "module", qore_msg_path(qmod_path).c_str(), name, qore_msg_path(stale_source.c_str()).c_str());
             qore_raise_binary_module_source_fallback_error(xsink, name, qmod_path, source_path.c_str(),
                 stale_xsink);
         }
@@ -4336,9 +4420,10 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         if (!qore_build_aot_module_is_stale(qmod_path, module_dir, name, ctx_pgm, stale_source, xsink)) {
             return static_cast<bool>(xsink);
         }
-        xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(qmod_path), "AOT module '%s' for feature "
+        xsink.raiseExceptionArg("AOT-MODULE-STALE", qore_msg_path_node(qmod_path), "AOT module '%s' for feature "
             "'%s' is out of date: its source '%s' has changed since it was compiled, and there is no source module "
-            "to load instead; rebuild the AOT module", qmod_path, name, stale_source.c_str());
+            "to load instead; rebuild the AOT module", qore_msg_path(qmod_path).c_str(), name,
+            qore_msg_path(stale_source.c_str()).c_str());
         return true;
     };
 
@@ -4570,8 +4655,9 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         *not_found = true;
     }
 
-    // the directories of the module path are external information: code restricted from it is not given them
-    if (ctx_pgm && (ctx_pgm->getParseOptions64() & PO_NO_EXTERNAL_INFO)) {
+    // the directories of the module path are external information: code restricted from it is not given them, nor
+    // are the modules that its loads require (see QoreRestrictedMessageScopeHelper)
+    if (qore_msg_restricted()) {
         SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("feature '%s' is not builtin and no module "
             "with this name could be found in the module path", name));
         qore_append_unsupported_api_modules(**desc, search_paths, name, true);
@@ -4831,14 +4917,14 @@ int QoreModuleManager::checkShadowingLoad(ExceptionSink& xsink, const char* path
             "Program container: code that a sandbox governs or whose functional domains are restricted cannot load "
             "a module into a Program container of its own under the name of module '%s' in the module path, which it "
             "would replace for every later user; load it into a private container instead", feature,
-            library.c_str());
+            qore_msg_path(library.c_str()).c_str());
         return -1;
     }
     if (!library.empty()) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(feature), "cannot load module '%s' from "
             "path '%s': code that a sandbox governs or whose functional domains are restricted cannot load a module "
             "outside the module path under the name of module '%s' in the module path, which it would replace for "
-            "every later user", feature, path, library.c_str());
+            "every later user", feature, qore_msg_path(path).c_str(), qore_msg_path(library.c_str()).c_str());
         return -1;
     }
     tenant_chosen = true;
@@ -5138,11 +5224,13 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     const bool untrusted_container = mpgm && qore_caller_is_untrusted();
     // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
     std::string trusted_path;
-    const bool trusted = !untrusted_container && isTrustedModulePath(path, &trusted_path, found_in);
+    // a module in a directory of library code is read as library code, also into a container (qore#7518)
+    const bool sep_library_file = isTrustedModulePath(path, &trusted_path, found_in);
+    const bool trusted = !untrusted_container && sep_library_file;
     // the files that were found to be library code are the files that are read; the module keeps the path that it was
     // found by in a directory of the process-wide module path (its script path, its file names and its errors are those
     // of that path), and otherwise the canonical path judged (qore#7319)
-    const char* open_path = trusted ? trusted_path.c_str() : path;
+    const char* open_path = sep_library_file ? trusted_path.c_str() : path;
     if (trusted && !(found_in && found_in->process_path)) {
         path = open_path;
     }
@@ -5157,6 +5245,10 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     }
     // recorded on the module when it is registered
     QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner, owner_pgm_id);
+    // a library module loaded into a container reads its resources beneath its directory
+    if (sep_library_file && !trusted) {
+        load_frame.setLibraryRoot(trusted_path.c_str());
+    }
     // library code loaded by code that is not trusted does not take what that code chose (see below); checked before
     // the barrier is set
     const bool untrusted_loader = trusted && qore_caller_is_untrusted();
@@ -5237,14 +5329,13 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     // module's own resources while its module context is active.
     inherit_module_sandbox_manager(*mpgm, p, trusted);
     // inherit execution mode from parent program
-    if (p) {
-        // an explicitly requested mode applies to the module's Program as to a child Program (issue #5687)
-        qore_program_private::get(*mpgm)->inheritExecMode(qore_program_private::get(*p));
-    }
+    // an explicitly requested mode applies to the module's Program as to a child Program (issue #5687); a module
+    // loaded without a requesting Program takes the mode requested for the process
+    qore_program_private::get(*mpgm)->inheritExecMode(p ? qore_program_private::get(*p) : nullptr);
     // issue #3592: must add feature first
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
         xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s'; feature '%s' is already loaded in "
-            "this Program container", path, feature);
+            "this Program container", qore_msg_path(path).c_str(), feature);
         return nullptr;
     }
 
@@ -5261,11 +5352,29 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     moduleOpenPath += QORE_DIR_SEP_STR;
     moduleOpenPath += feature;
     moduleOpenPath += ".qm";
-    std::string moduleCode = QoreDir::get_file_content(moduleOpenPath.c_str());
+    std::string moduleCode;
+    // the sources of a module that is not read as library code are read with the file-system policy of the code
+    // that loads it: the files read are the files that the policy checked (qore#7518); a module read from a
+    // directory of library code (also into a container) reads its own files as library code
+    if (!sep_library_file && q_source_read_policy_applies()) {
+        if (q_read_policy_checked_source(moduleOpenPath.c_str(), moduleCode, &xsink)) {
+            if (!xsink) {
+                int err = errno;
+                xsink.raiseErrnoException("LOAD-MODULE-ERROR", err, "cannot read '%s'",
+                    qore_msg_path(moduleOpenPath.c_str()).c_str());
+            }
+            xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature,
+                qore_msg_path(path).c_str());
+            return nullptr;
+        }
+    } else {
+        moduleCode = QoreDir::get_file_content(moduleOpenPath.c_str());
+    }
 
     // the module's sources are parsed from memory, so apply the default a file-based module gets from parseFile()
     if (qore_program_private::get(*userModule->getProgram())->applyModernSourceDefault(modulePath.c_str(), &xsink)) {
-        xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
+        xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature,
+            qore_msg_path(path).c_str());
         return nullptr;
     }
 
@@ -5279,14 +5388,18 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         qore_program_private::get(*userModule->getProgram())->parsePending(moduleCode, modulePath.c_str(), &xsink,
             &wsink, warning_mask);
         if (xsink) {
-            xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
+            xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature,
+                qore_msg_path(path).c_str());
             return nullptr;
         }
 
         QoreDir moduleDir(&xsink, QCS_DEFAULT, open_path);
-        ReferenceHolder<QoreListNode> fileList(moduleDir.listModuleSources(&xsink), &xsink);
+        // the directory of a library module is listed as library code, also in a container (qore#7518)
+        ReferenceHolder<QoreListNode> fileList(sep_library_file ? list_library_module_sources(open_path, &xsink)
+            : moduleDir.listModuleSources(&xsink), &xsink);
         if (xsink) {
-            xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
+            xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature,
+                qore_msg_path(path).c_str());
             return nullptr;
         }
         int file_warning_mask = qore_program_private::getModuleFileWarningMask(userModule->getProgram());
@@ -5302,11 +5415,27 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
             fileOpenPath += QORE_DIR_SEP_STR;
             fileOpenPath += file->c_str();
 
-            std::string fileCode = QoreDir::get_file_content(fileOpenPath);
+            std::string fileCode;
+            // each source file read is a file that the policy checked, also one that is a link (qore#7518)
+            if (!sep_library_file && q_source_read_policy_applies()) {
+                if (q_read_policy_checked_source(fileOpenPath.c_str(), fileCode, &xsink)) {
+                    if (!xsink) {
+                        int err = errno;
+                        xsink.raiseErrnoException("LOAD-MODULE-ERROR", err, "cannot read '%s'",
+                            qore_msg_path(fileOpenPath.c_str()).c_str());
+                    }
+                    xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature,
+                        qore_msg_path(path).c_str());
+                    return nullptr;
+                }
+            } else {
+                fileCode = QoreDir::get_file_content(fileOpenPath);
+            }
             qore_program_private::get(*userModule->getProgram())->parsePending(fileCode, filePath.c_str(), &xsink,
                 &wsink, file_warning_mask);
             if (xsink) {
-                xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
+                xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature,
+                    qore_msg_path(path).c_str());
                 return nullptr;
             }
         }
@@ -5316,7 +5445,8 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         userModule->getProgram()->parseCommit(&xsink, &wsink, file_warning_mask);
     }
     if (xsink) {
-        xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
+        xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature,
+            qore_msg_path(path).c_str());
 
         return nullptr;
     }
@@ -5906,6 +6036,7 @@ int QoreModuleManager::attachChildModules(QoreAbstractModule& mi, ExceptionSink&
                 if (c.status != CMS_SKIPPED || c.desc != reason.c_str()) {
                     c.status = CMS_SKIPPED;
                     c.desc = reason.c_str();
+                    c.desc_restricted_safe = true;
                     qore_report_child_module_not_attached(xsink, wsink, warning_mask, mi.getName(), c);
                 }
                 continue;
@@ -5917,6 +6048,7 @@ int QoreModuleManager::attachChildModules(QoreAbstractModule& mi, ExceptionSink&
             // the attach if the module is loaded again in a context where modules are allowed
             c.status = CMS_SKIPPED;
             c.desc = "module loading is not allowed in the parent module's Program object (PO_NO_MODULES)";
+            c.desc_restricted_safe = true;
             all_done = false;
             qore_report_child_module_not_attached(xsink, wsink, warning_mask, mi.getName(), c);
             continue;
@@ -5997,6 +6129,8 @@ int QoreModuleManager::attachChildModules(QoreAbstractModule& mi, ExceptionSink&
         QoreStringValueHelper desc(cx.getExceptionDesc());
         c.err = err->empty() ? "LOAD-MODULE-ERROR" : err->c_str();
         c.desc = desc->c_str();
+        // the description was built for the code that requested the load (qore#7507)
+        c.desc_restricted_safe = qore_msg_restricted();
         cx.clear();
 
         qore_report_child_module_not_attached(xsink, wsink, warning_mask, mi.getName(), c);
@@ -6234,7 +6368,7 @@ QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std
 
     if (!name) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': no feature name "
-            "present in module", mi->getFileName());
+            "present in module", qore_msg_path(mi->getFileName()).c_str());
         return nullptr;
     }
 
@@ -6243,7 +6377,8 @@ QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std
 
     if (strcmp(mi->getName(), name)) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': provides feature "
-            "'%s', expecting feature '%s', skipping, rename module to %s.qm to load", mi->getFileName(), name,
+            "'%s', expecting feature '%s', skipping, rename module to %s.qm to load",
+            qore_msg_path(mi->getFileName()).c_str(), name,
             mi->getName(), name);
         return nullptr;
     }
@@ -6256,13 +6391,14 @@ QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std
                 if (load_opt & QMLO_INJECT) {
                     xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature "
                         "'%s' already loaded therefore cannot be used for injection unless the reinject flag is set",
-                        mi->getFileName(), name);
+                        qore_msg_path(mi->getFileName()).c_str(), name);
                     return nullptr;
                 }
                 return omi;
             }
             xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s' "
-                "already registered by '%s'", mi->getFileName(), name, omi->getFileName());
+                "already registered by '%s'", qore_msg_path(mi->getFileName()).c_str(), name,
+                qore_msg_path(omi->getFileName()).c_str());
             return nullptr;
         }
     }
@@ -6271,7 +6407,7 @@ QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std
     const char* desc = qmd.get("desc");
     if (!desc) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s': missing "
-            "description", mi->getFileName(), name);
+            "description", qore_msg_path(mi->getFileName()).c_str(), name);
         return nullptr;
     }
 
@@ -6279,7 +6415,7 @@ QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std
     const char* version = qmd.get("version");
     if (!version) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s': missing "
-            "version", mi->getFileName(), name);
+            "version", qore_msg_path(mi->getFileName()).c_str(), name);
         return nullptr;
     }
 
@@ -6287,7 +6423,7 @@ QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std
     const char* author = qmd.get("author");
     if (!author) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s': missing "
-            "author", mi->getFileName(), name);
+            "author", qore_msg_path(mi->getFileName()).c_str(), name);
         return nullptr;
     }
 
@@ -6426,11 +6562,14 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     const bool untrusted_container = mpgm && qore_caller_is_untrusted();
     // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
     std::string trusted_path;
-    const bool trusted = !untrusted_container && isTrustedModulePath(path, &trusted_path, found_in);
+    // a module in a directory of library code is read as library code, also when it is loaded into a container of
+    // code that is not trusted, where it is not library code (qore#7518)
+    const bool library_file = isTrustedModulePath(path, &trusted_path, found_in);
+    const bool trusted = !untrusted_container && library_file;
     // the file that was found to be library code is the file that is read; the module keeps the path that it was
     // found by in a directory of the process-wide module path (its script path, its file name and its errors are those
     // of that path), and otherwise the canonical path judged (qore#7319)
-    const char* open_path = trusted ? trusted_path.c_str() : nullptr;
+    const char* open_path = library_file ? trusted_path.c_str() : nullptr;
     if (trusted && !(found_in && found_in->process_path)) {
         path = open_path;
     }
@@ -6445,6 +6584,15 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     }
     // recorded on the module when it is registered
     QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner, owner_pgm_id);
+    // a library module loaded into a container reads its resources beneath its directory of library code
+    if (library_file && !trusted) {
+        std::string dir(trusted_path);
+        size_t sep = dir.find_last_of("/\\");
+        if (sep != std::string::npos) {
+            dir.resize(sep ? sep : 1);
+            load_frame.setLibraryRoot(dir.c_str());
+        }
+    }
     // library code loaded by code that is not trusted does not take what that code chose (see below); checked before
     // the barrier is set
     const bool untrusted_loader = trusted && qore_caller_is_untrusted();
@@ -6517,14 +6665,13 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     // See loadSeparatedModule(): source-module constant initialization must inherit the caller's sandbox.
     inherit_module_sandbox_manager(*mpgm, p, trusted);
     // inherit execution mode from parent program
-    if (p) {
-        // an explicitly requested mode applies to the module's Program as to a child Program (issue #5687)
-        qore_program_private::get(*mpgm)->inheritExecMode(qore_program_private::get(*p));
-    }
+    // an explicitly requested mode applies to the module's Program as to a child Program (issue #5687); a module
+    // loaded without a requesting Program takes the mode requested for the process
+    qore_program_private::get(*mpgm)->inheritExecMode(p ? qore_program_private::get(*p) : nullptr);
     // issue #3592: add feature to module container program immediately
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
         xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s'; feature '%s' is already loaded in "
-            "this Program container", path, feature);
+            "this Program container", qore_msg_path(path).c_str(), feature);
         return nullptr;
     }
 
@@ -6544,14 +6691,23 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     td = mi->getFileName();
     //printd(5, "QoreModuleManager::loadUserModuleFromPath() normalized path: '%s'\n", td);
 
+    // under a sandbox policy, a module that is not read as library code is checked before anything about it is
+    // told: a missing file that the policy denies is denied (qore#7518)
+    if (!open_path && q_source_read_policy_applies()) {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        if (smh && !smh->checkFilesystemAccess(td, QSEC_READ, &xsink)) {
+            return nullptr;
+        }
+    }
     if (!QoreDir::file_exists(open_path ? open_path : td)) {
-        xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s'; the module doesn't exist", td);
+        xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s'; the module doesn't exist",
+            qore_msg_path(td).c_str());
         return nullptr;
     }
 
     if (module_load_check(td)) {
         xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s'; recursive module dependency "
-            "detected", td);
+            "detected", qore_msg_path(td).c_str());
         return nullptr;
     }
     ON_BLOCK_EXIT(module_load_clear, td);
@@ -6569,7 +6725,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     }
 
     if (xsink) {
-        xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
+        xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature,
+            qore_msg_path(path).c_str());
     }
 
     return setupUserModule(xsink, mi, qmd, load_opt, warning_mask);
@@ -6652,14 +6809,13 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
         }
     }
     // inherit execution mode from parent program
-    if (p) {
-        // an explicitly requested mode applies to the module's Program as to a child Program (issue #5687)
-        qore_program_private::get(*mpgm)->inheritExecMode(qore_program_private::get(*p));
-    }
+    // an explicitly requested mode applies to the module's Program as to a child Program (issue #5687); a module
+    // loaded without a requesting Program takes the mode requested for the process
+    qore_program_private::get(*mpgm)->inheritExecMode(p ? qore_program_private::get(*p) : nullptr);
     // issue #3592: add feature to module container program immediately
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
         xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s'; feature '%s' is already loaded in " \
-            "this Program container", path, feature);
+            "this Program container", qore_msg_path(path).c_str(), feature);
         return nullptr;
     }
 
@@ -6683,7 +6839,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
 
     if (xsink) {
         xsink.appendLastDescription(" (while loading user module \"%s\" from source with given path \"%s\")", feature,
-            path);
+            qore_msg_path(path).c_str());
     }
 
     return setupUserModule(xsink, mi, qmd);
@@ -6913,9 +7069,10 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
         // native code is trusted code: no sandbox governs it, so code that is not trusted cannot have the process map
         // native code that it chose (qore#6776); a compiled module with its source next to it is loaded as a source
         // module instead, by the caller's fallback to the source (see loadModuleIntern())
-        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "cannot load binary module '%s': "
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", qore_msg_path_node(path), "cannot load binary module '%s': "
             "code that a sandbox governs or whose functional domains are restricted can load native code only from "
-            "the module path (see the trust model of native code in the sandboxing documentation)", path);
+            "the module path (see the trust model of native code in the sandboxing documentation)",
+            qore_msg_path(path).c_str());
         return nullptr;
     }
     // recorded on the module when it is registered; takes over the reference of owner
@@ -6942,8 +7099,8 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     {
         struct stat sb;
         if (!stat(open_path, &sb) && !S_ISREG(sb.st_mode)) {
-            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
-                "cannot load qore module '%s': it is not a regular file", path);
+            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", qore_msg_path_node(path),
+                "cannot load qore module '%s': it is not a regular file", qore_msg_path(path).c_str());
             return nullptr;
         }
     }
@@ -6953,8 +7110,9 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     {
         QoreString integrity_err;
         if (qore_check_module_file_integrity(open_path, integrity_err)) {
-            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
-                "cannot load qore module '%s': %s", path, integrity_err.c_str());
+            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", qore_msg_path_node(path),
+                "cannot load qore module '%s': %s", qore_msg_path(path).c_str(),
+                qore_msg_detail(integrity_err.c_str()));
             return nullptr;
         }
     }
@@ -6965,8 +7123,8 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     std::string aot_info_error;
     QoreAOTModuleInfoStatus aot_info_status = qoreAOTReadModuleInfo(open_path, aot_info, aot_info_error);
     if (aot_info_status == QoreAOTModuleInfoStatus::INVALID) {
-        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
-            "cannot load binary module '%s': %s", path, aot_info_error.c_str());
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", qore_msg_path_node(path),
+            "cannot load binary module '%s': %s", qore_msg_path(path).c_str(), qore_msg_detail(aot_info_error.c_str()));
         return nullptr;
     }
     bool have_aot_info = aot_info_status == QoreAOTModuleInfoStatus::FOUND;
@@ -6975,10 +7133,11 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     // functional domains, flags or signature have changed since) can have the old metadata built into its code, so it
     // is out of date: the caller loads its source instead, or it is not loaded (qore#7183)
     if (have_aot_info && aot_info.builtin_api_identity != qore_builtin_api_identity) {
-        xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(path), "AOT module '%s' was compiled against "
+        xsink.raiseExceptionArg("AOT-MODULE-STALE", qore_msg_path_node(path), "AOT module '%s' was compiled against "
             "other builtin API metadata (builtin API identity '%s') than this Qore library has ('%s'): the functional "
             "domains, flags or signature of a builtin class, function or constant that it may use have changed since "
-            "it was compiled; rebuild the AOT module", path, aot_info.builtin_api_identity.c_str(),
+            "it was compiled; rebuild the AOT module", qore_msg_path(path).c_str(),
+            aot_info.builtin_api_identity.c_str(),
             qore_builtin_api_identity);
         return nullptr;
     }
@@ -7000,9 +7159,9 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
         std::string available;
         if (findAvailableOptionalModule(xsink, aot_info.unavailable_optional_modules, path_pgm, available)) {
             if (source_available) {
-                xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(path), "AOT module '%s' was "
+                xsink.raiseExceptionArg("AOT-MODULE-STALE", qore_msg_path_node(path), "AOT module '%s' was "
                     "compiled when optional module '%s' was not available, but it is available now; rebuild the "
-                    "binary module", path, available.c_str());
+                    "binary module", qore_msg_path(path).c_str(), available.c_str());
                 return nullptr;
             }
             // without the source module, the binary module is loaded, but the missing functionality is always
@@ -7010,7 +7169,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
             SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("AOT module '%s' was compiled when "
                 "optional module '%s' was not available, but it is available now, and no source module was "
                 "found; the binary module is loaded without the functionality that requires the optional module; "
-                "rebuild the binary module", path, available.c_str()));
+                "rebuild the binary module", qore_msg_path(path).c_str(), available.c_str()));
             qore_report_module_load_warning(xsink, wsink != &xsink ? wsink : nullptr, warning_mask, true,
                 "BINARY-MODULE-STALE", feature, desc.release());
         }
@@ -7022,9 +7181,9 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     std::unique_ptr<ModuleLoadMapHelper> preload_guard;
     if (have_aot_info) {
         if (aot_info.module_name != feature) {
-            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
+            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", qore_msg_path_node(path),
                 "the AOT module metadata of module '%s' identifies feature '%s', expecting '%s'",
-                path, aot_info.module_name.c_str(), feature);
+                qore_msg_path(path).c_str(), aot_info.module_name.c_str(), feature);
             return nullptr;
         }
         // Reserve the parent before recursively loading its dependency graph,
@@ -7054,8 +7213,9 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
             // an error also when no source module can be loaded instead: AOT code compiled against another module
             // than the one loaded for it can misbehave (see design/aot-linked-module-sources.md); an identical copy of
             // the module compiled against is not another module, so it does not get here
-            xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(path), "AOT module '%s' for feature "
-                "'%s' is out of date: %s; rebuild the AOT module", path, feature, stale_desc.c_str());
+            xsink.raiseExceptionArg("AOT-MODULE-STALE", qore_msg_path_node(path), "AOT module '%s' for feature "
+                "'%s' is out of date: %s; rebuild the AOT module", qore_msg_path(path).c_str(), feature,
+                stale_desc.c_str());
             return nullptr;
         }
     }
@@ -7068,10 +7228,10 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     int dlopen_flags = have_aot_info ? QORE_DLOPEN_NOW_FLAGS : QORE_DLOPEN_FLAGS;
     void* ptr = dlopen(open_path, dlopen_flags);
     if (!ptr) {
-        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", qore_msg_path_node(path),
             have_aot_info ? "error resolving symbols in qore AOT module '%s': %s"
                 : "error loading qore module '%s': %s",
-            path, dlerror());
+            qore_msg_path(path).c_str(), qore_msg_detail(dlerror()));
         return nullptr;
     }
 
@@ -7089,8 +7249,9 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
                 || mod_info.dependencies != aot_info.dependencies)) {
             ReferenceHolder<QoreHashNode> info(mod_info.info, &xsink);
             mod_info.info = nullptr;
-            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
-                "the AOT module metadata of module '%s' does not match its module descriptor", path);
+            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", qore_msg_path_node(path),
+                "the AOT module metadata of module '%s' does not match its module descriptor",
+                qore_msg_path(path).c_str());
             return nullptr;
         }
         // the dependencies were relieved with the domains that the module's metadata record declares (qore#6351):
@@ -7107,8 +7268,8 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     // construct a valid C identifier for the error message suggestion
     QoreStringMaker suggested_sym("%s_qore_module_desc", feature);
     suggested_sym.replaceAll("-", "_");
-    xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "module '%s': modules must implement "
-        "the module description function '%s'", path, suggested_sym.c_str());
+    xsink.raiseExceptionArg("LOAD-MODULE-ERROR", qore_msg_path_node(path), "module '%s': modules must implement "
+        "the module description function '%s'", qore_msg_path(path).c_str(), suggested_sym.c_str());
     return nullptr;
 }
 
@@ -7137,8 +7298,8 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
 
     // get module name
     if (mod_info.name.empty()) {
-        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "module '%s': no feature name "
-            "present in module", path);
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", qore_msg_path_node(path), "module '%s': no feature name "
+            "present in module", qore_msg_path(path).c_str());
         return nullptr;
     }
 
@@ -7149,7 +7310,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
             xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name),
                 "AOT module '%s': feature '%s': native ABI version %u is incompatible with runtime version %u; "
                 "rebuild the module with the current qcc",
-                path, name, mod_info.aot_abi_version,
+                qore_msg_path(path).c_str(), name, mod_info.aot_abi_version,
                 static_cast<unsigned>(QORE_AOT_MODULE_ABI_VERSION));
             return nullptr;
         }
@@ -7161,7 +7322,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
                 "runtime (libqore %s) has AOT runtime identity '%s'; the module's native code was generated for a "
                 "different Qore library and cannot be run with this one; rebuild the module with the qcc of this "
                 "Qore installation",
-                path, name,
+                qore_msg_path(path).c_str(), name,
                 mod_info.aot_runtime_identity.empty() ? "<none>" : mod_info.aot_runtime_identity.c_str(),
                 qore_version_string, qore_aot_runtime_identity);
             return nullptr;
@@ -7173,7 +7334,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
             xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name),
                 "AOT module '%s': feature '%s': the module has no AOT module metadata (" QORE_AOT_MODULE_INFO_CONTAINER
                 "); the file was changed after it was built, for example by a tool that removed the section: "
-                "reinstall or rebuild the module", path, name);
+                "reinstall or rebuild the module", qore_msg_path(path).c_str(), name);
             return nullptr;
         }
     }
@@ -7181,64 +7342,64 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
     // ensure provided feature matches with expected feature
     if (feature && mod_info.name != feature) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': provides feature "
-            "'%s', expecting feature '%s', skipping, rename module to %s.qmod to load", path, name,
-            feature, name);
+            "'%s', expecting feature '%s', skipping, rename module to %s.qmod to load", qore_msg_path(path).c_str(),
+            name, feature, name);
         return nullptr;
     }
 
     // get qore module API major number
     if (mod_info.api_major < 0) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s': no qore "
-            "module API major number", path, name);
+            "module API major number", qore_msg_path(path).c_str(), name);
         return nullptr;
     }
 
     // get qore module API minor number
     if (mod_info.api_minor < 0) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s': no qore "
-            "module API minor number", path, name);
+            "module API minor number", qore_msg_path(path).c_str(), name);
         return nullptr;
     }
 
     // get initialization function
     if (!mod_info.init) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s': missing "
-            "module init method", path, name);
+            "module init method", qore_msg_path(path).c_str(), name);
         return nullptr;
     }
 
     // get namespace initialization function
     if (!mod_info.ns_init) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s': missing "
-            "namespace init method", path, name);
+            "namespace init method", qore_msg_path(path).c_str(), name);
         return nullptr;
     }
 
     // get deletion function
     if (!mod_info.del) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s': missing "
-            "delete method", path, name);
+            "delete method", qore_msg_path(path).c_str(), name);
         return nullptr;
     }
 
     // get qore module description
     if (mod_info.desc.empty()) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s': missing "
-            "description", path, name);
+            "description", qore_msg_path(path).c_str(), name);
         return nullptr;
     }
 
     // get qore module version
     if (mod_info.version.empty()) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s': missing "
-            "version", path, name);
+            "version", qore_msg_path(path).c_str(), name);
         return nullptr;
     }
 
     // get qore module author
     if (mod_info.author.empty()) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s': missing "
-            "author", path, name);
+            "author", qore_msg_path(path).c_str(), name);
         return nullptr;
     }
 
@@ -7293,7 +7454,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
             return mi;
         }
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s' already "
-            "registered by '%s'", path, name, mi->getFileName());
+            "registered by '%s'", qore_msg_path(path).c_str(), name, qore_msg_path(mi->getFileName()).c_str());
         return nullptr;
     }
 
@@ -7303,7 +7464,8 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
 
     if (!is_module_api_supported(mod_info.api_major, mod_info.api_minor)) {
         QoreStringNode* str = new QoreStringNodeMaker("module '%s': feature '%s': API mismatch, module supports "
-            "API %d.%d, however only version", path, name, mod_info.api_major, mod_info.api_minor);
+            "API %d.%d, however only version", qore_msg_path(path).c_str(), name, mod_info.api_major,
+            mod_info.api_minor);
 
         if (qore_mod_api_list_len > 1)
             str->concat('s');
@@ -7346,13 +7508,13 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         case QL_MIT: if (mod_info.license_str.empty()) mod_info.license_str = "MIT"; break;
         default:
             xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s': "
-                "invalid qore_module_license symbol (%d)", path, name, mod_info.license);
+                "invalid qore_module_license symbol (%d)", qore_msg_path(path).c_str(), name, mod_info.license);
             return nullptr;
     }
 
     if (qore_license != QL_GPL && mod_info.license == QL_GPL) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s': feature '%s': qore "
-            "library initialized with non-GPL license, but module requires GPL", path, name);
+            "library initialized with non-GPL license, but module requires GPL", qore_msg_path(path).c_str(), name);
         return nullptr;
     }
 
@@ -7469,7 +7631,8 @@ struct QoreTeardownDependencies {
     strset_t native_mods;
 };
 
-//! orders the given module Programs so that each comes before those of the modules that it requires (qore#7432)
+//! orders the given modules (their Programs, or only their names) so that each comes before the modules that it
+//! requires (qore#7432); also the order of the del closures of the AOT modules (orderModulesDependentsFirst())
 /** A module requires the modules that it requires directly or through other modules, user modules (loaded from source
     or AOT modules) and binary modules alike, also those recorded at run time
     (QoreModuleManager::getTeardownModuleDependencies()).  Dependencies outside a cycle always outlive it. Within a
@@ -7546,6 +7709,22 @@ static void qore_order_module_programs_dependents_first(std::vector<QoreModulePr
         left.erase(left.begin() + pick);
     }
     mpgms = std::move(ordered);
+}
+
+void QoreModuleManager::orderModulesDependentsFirst(std::vector<std::string>& names) {
+    std::vector<QoreModuleProgramInfo> mods;
+    mods.reserve(names.size());
+    for (const std::string& name : names) {
+        mods.push_back({name, nullptr});
+    }
+    {
+        QoreTeardownDependencies graph;
+        getTeardownModuleDependencies(graph);
+        qore_order_module_programs_dependents_first(mods, graph);
+    }
+    for (size_t i = 0, e = mods.size(); i < e; ++i) {
+        names[i] = std::move(mods[i].name);
+    }
 }
 
 // deletes only user modules
@@ -8363,7 +8542,8 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
     if (pgm && pgm != getProgram() && origin != QoreModuleCommandContext::MC_REPLAY) {
         static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
             & ~QoreParseOptions(QDOM_IN_MODULE);
-        if (qore_program_is_sandboxed(getProgram())) {
+        // (code compiled in another Program than the one it runs in is that Program's code, qore#7202)
+        if (qore_calling_code_is_sandboxed()) {
             xsink->raiseException("RUNTIME-COMMAND-ERROR", new QoreStringNodeMaker("cannot issue a command for "
                 "module '%s' to another Program: sandboxed code can only issue module commands to its own Program",
                 mname));

@@ -734,8 +734,13 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         loader.parse("sub load(string path) { load_module(path); }\n"
             "auto sub get(string m) { return call_static_method(\"LazyAppActionsGovernedValues::GovernedValues\", m); }\n",
             "lazy-governed-value-loader");
-        loader.setSandboxManager(new SandboxManager());
         string path = get_script_dir() + "/LazyAppActionsGovernedValues.qm";
+        {
+            SandboxManager lsm();
+            # the module is read with the policy of the sandbox, which must allow it (qore#7518)
+            lsm.addFilesystemAllowedPath(path, QSEC_READ);
+            loader.setSandboxManager(lsm);
+        }
         loader.callFunction("load", path);
         # a module that sandboxed code chose is not given to trusted code
         assertThrows("LOAD-MODULE-ERROR", "loaded from outside the module path by code that a sandbox governs",
@@ -1498,9 +1503,12 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
         string dir = make_tmp_dir("lazy-safety-copy-");
         on_exit remove_tree(dir);
         assertEq(0, system(sprintf("cp -R '%s' '%s'", get_script_dir() + "/../../../../qlib/ConnectionProvider", dir)));
+        # (the sandbox may read the copy, which is refused as a module that shadows the module path; qore#7518)
         r = runChild("sandboxed-callback-copy", "Program loader(PO_NEW_STYLE, True);\n"
             "loader.parse(\"sub load(string path) { load_module(path); }\", \"loader\");\n"
-            "loader.setSandboxManager(new SandboxManager());\n"
+            "SandboxManager sm();\n"
+            "sm.addFilesystemAllowedPath(" + sprintf("%y", dir) + ", QSEC_READ);\n"
+            "loader.setSandboxManager(sm);\n"
             "try {\n"
             "    loader.callFunction(\"load\", " + sprintf("%y", dir + "/ConnectionProvider") + ");\n"
             "} catch (hash<ExceptionInfo> ex) {\n"
@@ -1783,7 +1791,10 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
         on_exit Hooks::set(module);
         Program loader(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
         loader.parse("sub load(string path) { load_module(path); }\n", "lazy-sandboxed-loader");
-        loader.setSandboxManager(new SandboxManager());
+        SandboxManager sm();
+        # the module is read with the policy of the sandbox, which must allow it (qore#7518)
+        sm.addFilesystemAllowedPath(get_script_dir() + "/" + module + ".qm", QSEC_READ);
+        loader.setSandboxManager(sm);
         loader.callFunction("load", get_script_dir() + "/" + module + ".qm");
     }
 

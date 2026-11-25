@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,8 +35,23 @@
 class QoreListAssignmentOperatorNode : public QoreBinaryLValueOperatorNode {
 OP_COMMON
 protected:
+    //! how the lvalue paths are resolved, decided when the assignment first runs: KeysFirst if the path of an lvalue
+    //! has key expressions that are evaluated first (qore#7391)
+    QoreStorePathMode store_mode;
+
     template <bool Lexical>
     DLLLOCAL QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
+
+    //! makes the stores of the assignment; \a Slow for the first run, which decides store_mode, and for an assignment
+    //! with an lvalue path whose keys are evaluated first (qore#7391)
+    template <bool Lexical, bool Slow>
+    DLLLOCAL QoreValue evalStores(ValueEvalOptimizedRefHolder& new_value, bool& needs_deref,
+            ExceptionSink* xsink) const;
+
+    //! makes the stores of the assignment out of line, for evalStores() with \a Slow (qore#7391)
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalStoresSlow(ValueEvalOptimizedRefHolder& new_value, bool& needs_deref,
+            ExceptionSink* xsink) const;
     DLLLOCAL int parseInitIntern(QoreParseContext& parse_context);
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;

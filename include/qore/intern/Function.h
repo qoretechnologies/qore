@@ -149,6 +149,15 @@ public:
         return returnTypeInfo;
     }
 
+    //! returns true if the return type was not declared but implied by the parse options
+    /** A user function or method without a declared return type returns \c nothing under PO_REQUIRE_TYPES or
+        PO_REQUIRE_PROTOTYPES (UserSignature); the class signature leaves such a return type out, so that the same
+        declaration parsed with and without these options is the same class (qore#7457)
+    */
+    DLLLOCAL bool returnTypeIsImplied() const {
+        return implied_return_type;
+    }
+
     DLLLOCAL const arg_vec_t& getDefaultArgList() const {
         return defaultArgList;
     }
@@ -179,11 +188,9 @@ public:
     }
 
     //! appends the key of the signature as an abstract variant (MethodVariantBase::getAbstractSignature())
-    /** The key is made from the parameter types (with the path of a class, hashdecl or other named type) and the
-        \c const qualifiers of the parameters only, without the parameter names and default values: a declaration has
-        the same key whether its class was parsed or loaded from an AOT image (qore#7331).  As the key made from the
-        parse types of a signature that is not resolved yet, it has neither the default arguments nor the varargs of
-        the signature.
+    /** The parameter types (including their paths), const qualifiers, presence of default arguments by position,
+        and declared ellipsis distinguish inherited method contracts. Parameter names and the values of defaults
+        are not part of the key. Parsed and AOT-loaded declarations use the same representation (qore#7331, #7404).
 
         @return true if the key is made from the resolved types, false if from the parse types of a signature that
         is not resolved yet, in which case it is made again when the signature has been resolved
@@ -198,6 +205,12 @@ public:
                 str.append("const ");
             }
             str.append(QoreTypeInfo::getPath(typeList[i]));
+            if (hasDefaultArg(i)) {
+                str.append("=");
+            }
+        }
+        if (varargs) {
+            str.append("...");
         }
         return true;
     }
@@ -276,8 +289,8 @@ public:
         parameters in \a sig: they are substituted before the types are compared (an abstract method of a generic class
         implemented in a subclass of a specialization; issue #5773)
     */
-    DLLLOCAL bool compare(const AbstractFunctionSignature& sig, bool relaxed_match = false,
-            const QoreTypeInfo* receiver = nullptr) const;
+    DLLLOCAL bool compare(const AbstractFunctionSignature& sig, bool relaxed_match,
+            const QoreTypeInfo* receiver, bool implements_abstract) const;
 
     DLLLOCAL bool hasVarargs() const {
         return varargs;
@@ -308,6 +321,9 @@ protected:
 
     // varargs flag
     bool varargs = false;
+
+    //! the return type was not declared but implied by the parse options (see returnTypeIsImplied())
+    bool implied_return_type = false;
 
     bool declares_type_parameters = false;
     mutable std::atomic<signed char> type_param_substitution_cache {-1};
@@ -607,6 +623,8 @@ public:
     bool resolved;
     //! the types have been resolved (resolveTypes()), with the result in types_err
     bool types_resolved = false;
+    //! For f<A, B, ...>(A, B, ...), each positional argument binds its own unbounded type parameter.
+    bool positional_type_params = false;
     int types_err = 0;
     //! true for the signature of a closure, which names the type parameters of the code that it is in (qore#5733)
     bool closure = false;
@@ -677,6 +695,7 @@ public:
     DLLLOCAL void setFirstParamType(const QoreTypeInfo* typeInfo) {
         assert(!typeList.empty());
         typeList[0] = typeInfo;
+        positional_type_params = false;
         clearTypeParameterSubstitutionCache();
     }
 
@@ -694,6 +713,7 @@ public:
     }
 
     DLLLOCAL void setTypeParameters(std::vector<QoreGenericTypeParam>&& n_type_params) {
+        positional_type_params = false;
         type_params = std::move(n_type_params);
         declares_type_parameters = !type_params.empty();
         type_param_default_types.clear();
@@ -763,6 +783,12 @@ public:
             } else {
                 str.append(QoreParseTypeInfo::getName(parseTypeList[i]));
             }
+            if (hasDefaultArg(i)) {
+                str.append("=");
+            }
+        }
+        if (varargs) {
+            str.append("...");
         }
         return false;
     }
@@ -1535,10 +1561,10 @@ public:
 
     //! @param receiver see AbstractFunctionSignature::compare()
     DLLLOCAL bool isSignatureIdentical(const AbstractFunctionSignature& sig, bool relaxed_match = false,
-            const QoreTypeInfo* receiver = nullptr) const {
+            const QoreTypeInfo* receiver = nullptr, bool implements_abstract = false) const {
         //printd(5, "AbstractQoreFunctionVariant::isSignatureIdentical() this: %p '%s' == '%s': %d\n", this,
         //  getSignature()->getSignatureText(), sig.getSignatureText(), *(getSignature()) == sig);
-        return getSignature()->compare(sig, relaxed_match, receiver);
+        return getSignature()->compare(sig, relaxed_match, receiver, implements_abstract);
     }
 
     // only returns a non-nullptr value for normal user method variants
@@ -1759,9 +1785,25 @@ public:
         setProgram() is called only before the variant can be called
     */
     mutable std::atomic<bool> pgm_module_lifetime{false};
-    //! true once the deletion of \a pgm has started: a fast path that evaluates the variant's code without entering
-    //! the Program takes the call path then, which refuses the call (qore#5822)
-    mutable std::atomic<bool> pgm_deleted{false};
+    //! the reasons why the fast paths of native code take the call path for the variant: a bitmask of
+    //! FAST_CALL_BLOCK_* values, tested with one load by the fast paths (fastCallBlocked())
+    mutable std::atomic<uint8_t> fast_call_blocks{0};
+    //! fast_call_blocks: the deletion of \a pgm has started: a fast path that evaluates the variant's code without
+    //! entering the Program takes the call path then, which refuses the call (qore#5822)
+    static constexpr uint8_t FAST_CALL_BLOCK_PGM_DELETED = 1;
+    //! fast_call_blocks: a closure of the variant was created that runs in another Program than \a pgm: the call path
+    //! holds \a pgm before anything of the variant (its parameter types) is read (qore#7202); never cleared
+    static constexpr uint8_t FAST_CALL_BLOCK_RUNS_FOREIGN = 2;
+
+    //! returns true once the deletion of \a pgm has started (see FAST_CALL_BLOCK_PGM_DELETED)
+    DLLLOCAL bool pgmDeleted() const {
+        return fast_call_blocks.load(std::memory_order_acquire) & FAST_CALL_BLOCK_PGM_DELETED;
+    }
+
+    //! returns true if the fast paths of native code take the call path for the variant (see fast_call_blocks)
+    DLLLOCAL bool fastCallBlocked() const {
+        return fast_call_blocks.load(std::memory_order_acquire);
+    }
     //! the previous variant in its Program's list of variants; protected by the Program's user_variant_lock (see
     //! qore_program_private::registerUserVariant())
     mutable const UserVariantBase* uv_prev = nullptr;
@@ -1833,7 +1875,10 @@ protected:
     //! True if self is actually referenced in the function body
     mutable std::atomic<bool> uses_self{true};
     //! Specialized IR functions keyed by concrete receiver and method type arguments
-    mutable std::mutex specialized_ir_mutex;
+    /** The lock of the cache is a stripe of a lock array that the fork handlers acquire before fork() (qore#7554; see
+        qore_cache_stripe_lock()): it is held only around a read or a change of the cache itself
+    */
+    DLLLOCAL std::mutex& specializedIRMutex() const;
     /** Looked up by a QoreGenericSpecializationView of the call, so a call of a cached specialization makes no key
     */
     /** The IR is shared with the calls that run it: a call holds it while it runs, so an entry can be removed while
@@ -1853,7 +1898,7 @@ protected:
     private:
         const UserVariantBase& v;
     };
-    //! created with the first specialization, under specialized_ir_mutex; unregistered by the destructor
+    //! created with the first specialization, under specializedIRMutex(); unregistered by the destructor
     mutable std::unique_ptr<SpecializedIRCache> specialized_ir_registration;
     //! Protects lazy source-stripped AOT debug IR materialization.
     mutable std::mutex aot_debug_ir_mutex;
@@ -2400,7 +2445,10 @@ public:
             ThreadFrameBoundaryHelper(!*n_xsink),
             uvb(n_uvb), argv(n_xsink), xsink(n_xsink), exec_pgm(getExecutionProgram(n_uvb, ceh)) {
         assert(xsink);
-        if (*xsink || uvb->setupCall(ceh, argv, xsink)) {
+        // (code compiled in another Program than the one it runs in holds the Program that compiled it while the
+        // call runs, qore#7202; the context releases it when it is left, see holdForeignCodeProgram())
+        if (*xsink || (exec_pgm != uvb->pgm && holdForeignCodeProgram(uvb->pgm, xsink))
+                || uvb->setupCall(ceh, argv, xsink)) {
             uvb = nullptr;
         }
     }
@@ -2514,12 +2562,245 @@ public:
     }
 };
 
-// inheritance noce
-struct INode {
-    QoreFunction* func;
-    ClassAccess access;
+//! returns the copy of a class made when its Program's classes were copied (the class's \c new_copy)
+DLLLOCAL const qore_class_private* qore_class_private_get_new_copy(const qore_class_private* qc);
 
-    DLLLOCAL INode(QoreFunction* f, ClassAccess a) : func(f), access(a) {
+//! The classes of the private:internal edges of the paths in a class hierarchy, indexed for the sets of them
+//! (InternalOwnerSet) computed for the hierarchy of a class (qore#7410)
+/** A class has the index of its class ID, so that a class and its copies (which keep the ID) have the same one, as
+    qore_class_private::sameClass() compares them
+*/
+struct InternalOwnerIndex {
+    //! the classes by index: the first one of each class ID
+    std::vector<const qore_class_private*> classes;
+    //! the index of each class ID
+    std::unordered_map<qore_classid_t, size_t> ids;
+    //! the indexes of the classes for which another class is injected
+    std::vector<size_t> injected;
+
+    //! returns the index of the class, which it is given if it has none
+    DLLLOCAL size_t get(const qore_class_private* qc);
+};
+
+#ifdef DEBUG
+//! Number of live owner sets for the memory regression test (qore#7439).
+DLLLOCAL extern std::atomic<int64> qore_live_internal_owner_sets;
+#endif
+
+//! The classes whose private:internal inheritance makes an ancestor of a method accessible to their code (qore#7410)
+/** The child classes of the private:internal edges of the paths from the list's class to the ancestor's class (a path
+    with two such edges gives the ancestor Inaccessible access), as bits of an index shared by the sets of one
+    hierarchy: a union of two sets takes one operation for each 64 classes of the index
+*/
+struct InternalOwnerSet {
+    //! the index of the classes
+    std::shared_ptr<InternalOwnerIndex> index;
+    //! the bits of the indexes of the classes of the set
+    std::vector<uint64_t> bits;
+
+    DLLLOCAL InternalOwnerSet(std::shared_ptr<InternalOwnerIndex> i) : index(std::move(i)) {
+#ifdef DEBUG
+        qore_live_internal_owner_sets.fetch_add(1, std::memory_order_relaxed);
+#endif
+    }
+
+#ifdef DEBUG
+    DLLLOCAL ~InternalOwnerSet() {
+        qore_live_internal_owner_sets.fetch_sub(1, std::memory_order_relaxed);
+    }
+#endif
+
+    //! adds a reference
+    DLLLOCAL void ref() const {
+        refs.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    //! removes a reference; deletes the set with the last one
+    DLLLOCAL void deref() const {
+        if (refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+            delete this;
+        }
+    }
+
+    //! returns true if the set has the class, by identity (qore#7036): as qore_class_private::sameClass()
+    /** Constant time apart from injected classes, as it is checked by the run-time search of a call's variant for
+        each entry of the list that it passes
+    */
+    DLLLOCAL bool contains(const qore_class_private& qc) const;
+
+    //! returns true if the set has the class of the given index
+    DLLLOCAL bool test(size_t i) const {
+        size_t w = i / 64;
+        return w < bits.size() && (bits[w] & (uint64_t(1) << (i % 64)));
+    }
+
+    //! adds the class of the given index
+    DLLLOCAL void add(size_t i) {
+        size_t w = i / 64;
+        if (w >= bits.size()) {
+            bits.resize(w + 1);
+        }
+        bits[w] |= uint64_t(1) << (i % 64);
+    }
+
+    //! adds the classes of another set of the same index
+    DLLLOCAL void add(const InternalOwnerSet& o) {
+        assert(o.index == index);
+        if (o.bits.size() > bits.size()) {
+            bits.resize(o.bits.size());
+        }
+        for (size_t w = 0, e = o.bits.size(); w < e; ++w) {
+            bits[w] |= o.bits[w];
+        }
+    }
+
+private:
+    //! the references: of the entries of the lists and of the sets being computed
+    mutable std::atomic<unsigned> refs{0};
+};
+
+//! A reference to an InternalOwnerSet
+class owner_set_t {
+public:
+    DLLLOCAL owner_set_t() = default;
+
+    DLLLOCAL explicit owner_set_t(InternalOwnerSet* s) : p(s) {
+        if (p) {
+            p->ref();
+        }
+    }
+
+    DLLLOCAL owner_set_t(const owner_set_t& o) : p(o.p) {
+        if (p) {
+            p->ref();
+        }
+    }
+
+    DLLLOCAL owner_set_t(owner_set_t&& o) noexcept : p(o.p) {
+        o.p = nullptr;
+    }
+
+    DLLLOCAL ~owner_set_t() {
+        if (p) {
+            p->deref();
+        }
+    }
+
+    DLLLOCAL owner_set_t& operator=(owner_set_t o) noexcept {
+        std::swap(p, o.p);
+        return *this;
+    }
+
+    DLLLOCAL InternalOwnerSet* get() const {
+        return p;
+    }
+
+    DLLLOCAL InternalOwnerSet* operator->() const {
+        assert(p);
+        return p;
+    }
+
+    DLLLOCAL InternalOwnerSet& operator*() const {
+        assert(p);
+        return *p;
+    }
+
+    DLLLOCAL explicit operator bool() const {
+        return p != nullptr;
+    }
+
+    DLLLOCAL bool operator==(const owner_set_t& o) const {
+        return p == o.p;
+    }
+
+    DLLLOCAL bool operator!=(const owner_set_t& o) const {
+        return p != o.p;
+    }
+
+private:
+    InternalOwnerSet* p = nullptr;
+};
+
+//! returns a new set of the classes of private:internal edges of the given index
+DLLLOCAL inline owner_set_t make_owner_set(std::shared_ptr<InternalOwnerIndex> index) {
+    return owner_set_t(new InternalOwnerSet(std::move(index)));
+}
+
+//! An entry of the inheritance list of a method: an ancestor and its access, as small as a pointer and its access
+//! (qore#7410)
+struct INode {
+    //! the ancestor
+    QoreFunction* func;
+
+    DLLLOCAL INode(QoreFunction* f, ClassAccess a, const owner_set_t& o = owner_set_t()) : func(f) {
+        assert((a == Internal) == (bool)o);
+        set(a, o.get());
+    }
+
+    DLLLOCAL INode(const INode& o) : func(o.func), tag(o.tag) {
+        if (owners()) {
+            owners()->ref();
+        }
+    }
+
+    DLLLOCAL INode(INode&& o) noexcept : func(o.func), tag(o.tag) {
+        o.tag = Public;
+    }
+
+    DLLLOCAL ~INode() {
+        if (owners()) {
+            owners()->deref();
+        }
+    }
+
+    DLLLOCAL INode& operator=(const INode& o) {
+        if (this != &o) {
+            INode t(o);
+            swap(t);
+        }
+        return *this;
+    }
+
+    DLLLOCAL INode& operator=(INode&& o) noexcept {
+        swap(o);
+        return *this;
+    }
+
+    //! the access of the ancestor in the list
+    DLLLOCAL ClassAccess access() const {
+        return (ClassAccess)(tag & TagMask);
+    }
+
+    //! the classes whose code can call the ancestor's variants through the list, set only if its access is Internal
+    DLLLOCAL InternalOwnerSet* owners() const {
+        return reinterpret_cast<InternalOwnerSet*>(tag & ~TagMask);
+    }
+
+    //! replaces the classes; the access is unchanged
+    DLLLOCAL void setOwners(const owner_set_t& o) {
+        assert(access() == Internal && o);
+        INode t(func, Internal, o);
+        swap(t);
+    }
+
+private:
+    static constexpr uintptr_t TagMask = 3;
+    static_assert(alignof(InternalOwnerSet) > TagMask, "the access is kept in the low bits of the set's address");
+    static_assert(Inaccessible <= TagMask, "the access is kept in the low bits of the set's address");
+
+    //! the set of the classes (with a reference) and the access in its low bits
+    uintptr_t tag;
+
+    DLLLOCAL void set(ClassAccess a, InternalOwnerSet* o) {
+        if (o) {
+            o->ref();
+        }
+        tag = reinterpret_cast<uintptr_t>(o) | (uintptr_t)a;
+    }
+
+    DLLLOCAL void swap(INode& o) noexcept {
+        std::swap(func, o.func);
+        std::swap(tag, o.tag);
     }
 };
 
@@ -2532,16 +2813,15 @@ struct IList : public ilist_t {
         @param last_class the class of the function returned last, updated with that of the function returned
         @param aqfi the position to search from, updated with the position of the function returned, or \a aqfe
         @param aqfe the end of the list
-        @param internal_access set if the class of the function returned is the class context; then the ancestors
-        that it inherits with private:internal access are accessible
+        @param internal_access set if the class of the function returned is the class context; then its
+        private:internal variants are accessible
 
         @return the function found, or nullptr if no ancestor after \a aqfi is accessible (\a aqfi is then \a aqfe)
 
         An inaccessible ancestor does not end the search: the ancestors after it are searched (qore#7381).  An ancestor
-        that the list's class inherits with private:internal access is accessible only when no other one comes before
-        it, as when the search ended at the first one: the private:internal access of an ancestor in the list is
-        relative to the list's class, not to the class context, so that a class context reached after another
-        private:internal ancestor does not gain access to those after it
+        reached through private:internal inheritance is accessible only to the code of the classes whose
+        private:internal inheritance it is reached through (INode::owners), not to the code of the other classes of
+        the hierarchy (qore#7410)
 
         Defined inline in Function.cpp, its only user: the run-time variant search calls it for every call whose
         variant was not resolved at parse time; an entry that the context can access without the search is taken
@@ -2549,9 +2829,6 @@ struct IList : public ilist_t {
     */
     DLLLOCAL inline QoreFunction* getFunction(const qore_class_private* class_ctx,
         const qore_class_private*& last_class, const_iterator& aqfi, const_iterator aqfe, bool& internal_access) const;
-
-    //! returns true if an ancestor before \a aqfi (after the function itself) has private:internal access
-    DLLLOCAL bool hasInternalBefore(const_iterator aqfi) const;
 
 private:
     //! returns the function at \a aqfi, which the class context can access; updates \a last_class and
@@ -2733,6 +3010,9 @@ public:
     */
     DLLLOCAL bool hasInheritedVariants() const;
 
+    //! Returns the single own variant if an inherited overload cannot be selected for this positional call.
+    DLLLOCAL const AbstractQoreFunctionVariant* getSinglePositionalMethodVariant(unsigned nargs) const;
+
     //! Returns true if the inheritance list of the method has a method of a generic class
     /** The method of a class without type parameters that declares a method of the same name as one of a generic
         parent class has the variants of the generic class's method too (qore#6448)
@@ -2788,31 +3068,23 @@ public:
         return qc->getNamespacePath(true);
     }
 
-    DLLLOCAL void addAncestor(QoreFunction* ancestor, ClassAccess access) {
-        ilist.push_back(INode(ancestor, access));
-        noteAncestor(*ancestor);
-    }
-
-    DLLLOCAL void addNewAncestor(QoreFunction* ancestor, ClassAccess access) {
-        for (ilist_t::iterator i = ilist.begin(), e = ilist.end(); i != e; ++i)
-            if ((*i).func == ancestor)
-                return;
-        ilist.push_back(INode(ancestor, access));
-        noteAncestor(*ancestor);
-    }
-
-    //! gives an ancestor in the inheritance list the access of another path to its class if it is less restrictive
-    /** A class reached through several paths of the hierarchy has the access of the least restrictive one (qore#6498)
+    //! adds an ancestor to the inheritance list; returns its position in the list
+    /** @param owners the classes whose code can call the ancestor's variants if \a access is Internal
     */
-    DLLLOCAL void lowerAncestorAccess(const QoreFunction* ancestor, ClassAccess access) {
-        for (INode& i : ilist) {
-            if (i.func == ancestor) {
-                if (access < i.access) {
-                    i.access = access;
-                }
-                return;
+    DLLLOCAL size_t addAncestor(QoreFunction* ancestor, ClassAccess access, owner_set_t owners = owner_set_t()) {
+        ilist.push_back(INode(ancestor, access, std::move(owners)));
+        noteAncestor(*ancestor);
+        return ilist.size() - 1;
+    }
+
+    //! adds an ancestor to the inheritance list if it is not in it yet; returns its position in the list
+    DLLLOCAL size_t addNewAncestor(QoreFunction* ancestor, ClassAccess access, owner_set_t owners = owner_set_t()) {
+        for (size_t i = 0, e = ilist.size(); i < e; ++i) {
+            if (ilist[i].func == ancestor) {
+                return i;
             }
         }
+        return addAncestor(ancestor, access, std::move(owners));
     }
 
     //! removes the ancestors from the inheritance list, so that it can be built again
@@ -3052,10 +3324,13 @@ public:
             const QoreTypeInfo** deferred_rt = nullptr) const;
 
     //! Finds a variant using parse-time type-vector semantics without emitting parse diagnostics.
+    /** @param runtime_possible if not nullptr, set to true if no variant is returned because the variant is selected
+        at run time (another variant can match then), false otherwise
+    */
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariantNoDiagnostics(const type_vec_t& argTypeInfo,
             const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
-            const type_vec_t* explicit_type_args = nullptr) const;
+            const type_vec_t* explicit_type_args = nullptr, bool* runtime_possible = nullptr) const;
 
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariantNamed(const QoreProgramLocation* loc,
             const type_vec_t& argTypeInfo, const name_vec_t& argNames,
@@ -3068,8 +3343,9 @@ public:
 
     //! Returns the union of the return types of the variants that the arguments of a named call can be bound to by
     //! name, for a call resolved at run time by parameter name, or nullptr if it is not known
+    //! If supplied, \a matched distinguishes no matching parameter names from a match with an unknown return type.
     DLLLOCAL const QoreTypeInfo* parseRuntimeNamedReturnType(const type_vec_t& argTypeInfo, const name_vec_t& argNames,
-            const qore_class_private* class_ctx, QoreParseOptions po) const;
+            const qore_class_private* class_ctx, QoreParseOptions po, bool* matched = nullptr) const;
 
     //! Returns the return type of a call whose variant is resolved at run time (qore#5896, qore#6151)
     /** The type parameters of a generic variant's return type are those of the callee, not of the code that makes the
@@ -3410,7 +3686,7 @@ protected:
     (refineInterpreterEffectSummary()); their Programs free that code with their namespaces when they are deleted, also
     while another thread reads it.  Each Program reached is held (qore_program_private::tryHoldForCompile()), which its
     teardown waits for without the hold being visible to its code (qore#5874).  A Program that its teardown has marked
-    (UserVariantBase::pgm_deleted, or qore_program_private::ptid, which refuses the hold) is not held, and its code is
+    (UserVariantBase::pgmDeleted(), or qore_program_private::ptid, which refuses the hold) is not held, and its code is
     not read: the function is called through the call path, which refuses the call (qore#5822).  The root function's
     Program is held as well (holdRoot()): the thread that reads its code need not be counted in it (the fast call path
     can run code of the current Program without entering it).  The holds are released with release() or when the
@@ -3576,7 +3852,14 @@ public:
 #endif
             (*i).func = mfb->new_copy;
         }
+        resolveOwnerCopies();
     }
+
+    //! makes the sets of the classes of the private:internal paths of the inheritance list sets of their copies
+    /** The classes are in the hierarchy, which is copied with the class; a set shared by several entries is copied
+        once (qore#7410)
+    */
+    DLLLOCAL void resolveOwnerCopies();
 
     DLLLOCAL const MethodFunctionBase* findVariantOwnerFunction(const AbstractQoreFunctionVariant* variant) const {
         for (ilist_t::const_iterator ai = ilist.begin(), ae = ilist.end(); ai != ae; ++ai) {
@@ -3603,10 +3886,8 @@ public:
     DLLLOCAL void addBuiltinMethodVariant(MethodVariantBase* variant);
 
     // maintains access flag and commits user variants
-    DLLLOCAL void parseCommitMethod(QoreString& csig, const char* mod);
-
     DLLLOCAL void parseCommitMethod();
-    // processes method signatures
+    // processes method signatures (the variants in the order of the variant list)
     DLLLOCAL void parseSignatures(QoreString& csig, const char* mod) const;
 
     // if an identical signature is found to the passed variant, then it is removed from the abstract list
@@ -3811,6 +4092,18 @@ public:
     */
     DLLLOCAL QoreValue evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
         QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args = false) const;
+
+    //! evalClosure() for a closure whose own Program is not the one that compiled its code: runs it in the Program
+    //! that compiled it, which it holds before anything of the variant is read (qore#7202); out of line, so that the
+    //! other closures only test for it
+    DLLLOCAL QORE_INTERN_NOINLINE QoreValue evalForeignClosure(const QoreClosureBase& closure_base, QoreProgram* pgm,
+        const QoreListNode* args, QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink,
+        bool tmp_args) const;
+
+    //! the call of evalClosure() and evalForeignClosure(); inlined into both, so that the call of a closure keeps one
+    //! frame on its path
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue evalClosureBody(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
+        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args) const;
 
     //! evalClosure() with arguments in source order with the names in \a arg_names, which are bound to the
     //! parameters of the closure's variant by name (M4 phase 3)

@@ -34,6 +34,8 @@
 #define _QORE_QOREUNSHIFTOPERATORNODE_H
 
 #include "qore/intern/qore_string_private.h"
+class QoreMutationOperandHolder;
+
 class QoreUnshiftOperatorNode : public QoreBinaryLValueOperatorNode {
 public:
     DLLLOCAL QoreUnshiftOperatorNode(const QoreProgramLocation* loc, QoreValue left, QoreValue right)
@@ -67,9 +69,20 @@ protected:
     template <bool Lexical>
     DLLLOCAL QoreValue evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const;
 
+    //! inserts the operand \a res at the start of the list of the lvalue that \a val holds; \a converted is the value
+    //! that the last round of a retry converted, which the operation does not use (qore#7391)
+    /** @return 0 if the operation was made (\a rv holds the value of the expression then), -1 if not
+    */
+    template <bool Lexical>
+    DLLLOCAL int unshiftOn(LValueHelper& val, QoreValue converted, QoreMutationOperandHolder& res, QoreValue& rv,
+            ExceptionSink* xsink) const;
+
     DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
 
     const QoreTypeInfo* returnTypeInfo = nullptr;
+
+    //! how the lvalue path is resolved, decided when the operation first runs (unshift and push, qore#7391)
+    QoreStorePathMode store_mode;
 
     DLLLOCAL static QoreString unshift_str;
 

@@ -963,11 +963,30 @@ QORE_INTERN_ALWAYS_INLINE QoreValue VarRefNewObjectNode::evalImplInternal(Runtim
     LValueHelper lv(QoreValue(const_cast<VarRefNewObjectNode*>(this)), rc, xsink);
     if (!lv)
         return QoreValue();
+    // a store whose check records reference elements is made again out of line after they have been bound with no
+    // lvalue lock held (qore#7391)
+    lv.enableBindRetry();
     AbstractQoreNode* rv;
+    int arc;
     if constexpr (Lexical) {
-        lv.assign(rv = value.release(), "<lvalue>", getSemanticPolicy());
+        arc = lv.assign(rv = value.release(), "<lvalue>", getSemanticPolicy());
     } else {
-        lv.assign(rv = value.release());
+        arc = lv.assign(rv = value.release());
+    }
+    if (arc && lv.isBindPending()) [[unlikely]] {
+        // the value assigned is that of the last round, which its check converted
+        auto op = [&](LValueHelper& h, QoreValue v) -> int {
+            rv = v.getInternalNode();
+            if constexpr (Lexical) {
+                return h.assign(v, "<lvalue>", getSemanticPolicy());
+            } else {
+                return h.assign(v);
+            }
+        };
+        // the variable has no path keys: it is resolved again as for the first round
+        if (qore_ast_store_bind_retry(lv, QoreValue(const_cast<VarRefNewObjectNode*>(this)), rc, nullptr, op)) {
+            return QoreValue();
+        }
     }
     if (*xsink)
         return QoreValue();

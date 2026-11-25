@@ -1,0 +1,189 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# The worker of ConnectionProviderRestrictedCaller.qtest: looks connections up by name, as trusted code, as the code
+# of two sandboxes and as code restricted from external information, and prints one "<caller>.<probe>=<result>" line
+# for each lookup.  It is run in an environment whose QORE_CONNECTION_PROVIDERS names a connection provider module of
+# the host (RcHostConnectionProvider) and one that resolves names for the calling code (RcScopedConnectionProvider)
+
+%no-child-restrictions
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires ConnectionProvider
+%requires DataProvider
+# the provider modules are loaded by trusted code first, as a host loads them
+%requires RcHostConnectionProvider
+%requires RcScopedConnectionProvider
+
+#! the lookups that each caller makes
+const Probes = (
+    "conn-host", "conn-scoped", "conn-unknown", "url-host", "url-literal", "list", "hash-host-pw", "hash-scoped-pw",
+    "oracle", "leak",
+);
+
+#! the data provider lookups, made by one caller in a process of its own (the argument "dp:<caller>")
+/** DataProvider::tryLoadProviderForConnectionFromEnv() looks a name up in the connection provider modules only
+    until it has loaded the QORE_DATA_PROVIDERS modules completely: the first lookup that resolves nothing ends
+    that, so each caller looks its own connection up first and the host's last, in a process of its own
+*/
+const DpProbes = ("dp-scoped", "dp-host");
+
+#! the lookups, as the code of each caller runs them
+const ProbeSource = "
+string sub err(hash<ExceptionInfo> ex) {
+    return ex.err;
+}
+
+# the description of the error of the lookup of a connection, with the name taken out
+string sub lookup_error(string name) {
+    try {
+        # live-provider-optin: the connections of the test's own fixture provider modules, with fake credentials
+        get_connection(name);
+        return \"no error\";
+    } catch (hash<ExceptionInfo> ex) {
+        return replace(ex.desc, name, \"<name>\");
+    }
+}
+
+# the name of the data provider of the connection that the environment's provider modules give, or \"none\"
+string sub dp_name(string name) {
+    *AbstractDataProvider dp = DataProvider::tryLoadProviderForConnectionFromEnv(name);
+    return dp ? dp.getName() : \"none\";
+}
+
+string sub probe(string what) {
+    try {
+        switch (what) {
+            # live-provider-optin: the connections of the test's own fixture provider modules, with fake credentials
+            case \"conn-host\": return get_connection(\"rc-host\").url;
+            # live-provider-optin: the connections of the test's own fixture provider modules, with fake credentials
+            case \"conn-scoped\": return get_connection(\"rc-scoped\").url;
+            # live-provider-optin: the connections of the test's own fixture provider modules, with fake credentials
+            case \"conn-unknown\": return get_connection(\"rc-none\").url;
+            # live-provider-optin: the connections of the test's own fixture provider modules, with fake credentials
+            case \"url-host\": return get_connection_url(\"rc-host\");
+            # live-provider-optin: the connections of the test's own fixture provider modules, with fake credentials
+            case \"url-literal\": return get_connection_url(\"lit://u:p@h\");
+            # live-provider-optin: the connections of the test's own fixture provider modules, with fake credentials
+            case \"list\": return sort(keys (get_connections() ?? {})).join(\",\");
+            # live-provider-optin: the connections of the test's own fixture provider modules, with fake credentials
+            case \"hash-host-pw\": return get_connection_hash(){\"rc-host\"}.url_hash.password ?? \"none\";
+            # live-provider-optin: the connections of the test's own fixture provider modules, with fake credentials
+            case \"hash-scoped-pw\": return get_connection_hash(){\"rc-scoped\"}.url_hash.password ?? \"none\";
+            case \"dp-host\": return dp_name(\"rc-host\");
+            case \"dp-scoped\": return dp_name(\"rc-scoped\");
+            # a connection that the calling code may not use fails as an unknown one does
+            case \"oracle\": return lookup_error(\"rc-host\") == lookup_error(\"rc-none\") ? \"same\" : \"differs\";
+            # the error names no provider module of the host
+            case \"leak\": return lookup_error(\"rc-host\") =~ /RcHost/ ? \"leaks\" : \"none\";
+        }
+        return \"unknown probe\";
+    } catch (hash<ExceptionInfo> ex) {
+        return err(ex);
+    }
+}
+
+# runs a capability of trusted code
+string sub run_cap(code cap) {
+    try {
+        return cap();
+    } catch (hash<ExceptionInfo> ex) {
+        return err(ex);
+    }
+}
+
+# runs a capability of trusted code that calls back the calling code's own lookup of a host connection
+string sub run_cap_callback(code cap) {
+    try {
+        # live-provider-optin: the connections of the test's own fixture provider modules, with fake credentials
+        return cap(string sub () { return get_connection(\"rc-host\").url; });
+    } catch (hash<ExceptionInfo> ex) {
+        return err(ex);
+    }
+}
+
+# calls trusted code that looks a host connection up for the calling code with a policy barrier
+string sub run_barrier() {
+    try {
+        return trusted_barrier_lookup();
+    } catch (hash<ExceptionInfo> ex) {
+        return err(ex);
+    }
+}
+";
+
+#! the trusted lookup of a host connection that the capabilities and the barrier run
+string sub host_url() {
+    # live-provider-optin: the connections of the test's own fixture provider modules, with fake credentials
+    return get_connection("rc-host").url;
+}
+
+#! a trusted operation that runs the code that it is given
+string sub run_callback(code cb) {
+    return cb();
+}
+
+#! trusted code that looks a host connection up for its caller with a policy barrier
+/** The barrier runs a call reference that trusted code created before it served any caller: one created while it
+    serves a restricted caller would keep the caller's restrictions
+*/
+string sub trusted_barrier_lookup() {
+    return SandboxManager::callWithSystemPolicy(HostUrlRef);
+}
+
+#! the call reference that the policy barrier runs, created before any caller is served
+code HostUrlRef = \host_url();
+
+#! the capabilities that trusted code creates before it serves any caller
+code HostUrlCap = SandboxManager::createSystemPolicyCall(\host_url());
+code CallbackCap = SandboxManager::createSystemPolicyCall(\run_callback());
+
+#! returns a Program for a caller: sandboxed with the given isolation domain, or with the given parse options
+Program sub get_caller(*string domain, int po = 0) {
+    Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | po, True);
+    p.loadModule("ConnectionProvider");
+    p.loadModule("DataProvider");
+    p.importFunction("trusted_barrier_lookup");
+    p.parse(ProbeSource, "restricted-caller-probe");
+    if (domain) {
+        SandboxManager sm();
+        sm.setIsolationDomain(domain);
+        p.setSandboxManager(sm);
+    }
+    return p;
+}
+
+#! the callers: their isolation domains and parse options
+const Callers = {
+    # trusted code
+    "trusted": {},
+    "sbx-a": {"domain": "tenant-a"},
+    "sbx-b": {"domain": "tenant-b"},
+    "noext": {"po": PO_NO_EXTERNAL_INFO},
+};
+
+# the data provider lookups of one caller
+if (*string dp_caller = (ARGV[0] =~ x/^dp:(.+)$/)[0]) {
+    hash<auto> c = Callers{dp_caller};
+    Program p = get_caller(c.domain, c.po ?? 0);
+    foreach string what in (DpProbes) {
+        printf("%s.%s=%s\n", dp_caller, what, p.callFunction("probe", what));
+    }
+    exit(0);
+}
+
+hash<string, Program> callers = map {$1.key: get_caller($1.value.domain, $1.value.po ?? 0)}, Callers.pairIterator();
+foreach hash<auto> i in (callers.pairIterator()) {
+    Program p = i.value;
+    foreach string what in (Probes) {
+        printf("%s.%s=%s\n", i.key, what, p.callFunction("probe", what));
+    }
+    printf("%s.grant-cap=%s\n", i.key, p.callFunction("run_cap", HostUrlCap));
+    printf("%s.grant-callback=%s\n", i.key, p.callFunction("run_cap_callback", CallbackCap));
+    printf("%s.grant-barrier=%s\n", i.key, p.callFunction("run_barrier"));
+}
