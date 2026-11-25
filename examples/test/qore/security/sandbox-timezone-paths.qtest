@@ -343,13 +343,16 @@ string sub load_in_child(string path, SandboxManager child_sm) {
 
     directiveTest() {
         string zone = copyZone("directive.tz");
-        string code = sprintf("%%set-time-zone %s\nstring sub tz() { return TimeZone::get().region(); }", zone);
+        string code = sprintf("%%set-time-zone %s\nstring sub tz() { return TimeZone::get().region(); }\n"
+            "string sub lit() { return 2026-01-15T10:00:00.info().zone.region(); }", zone);
         # a sandboxed Program with a budget: the directive loads the path and charges the sandbox
         SandboxManager sm = manager(10, Bytes);
         Program p(PO_NEW_STYLE);
         p.setSandboxManager(sm);
         p.parse(code, "directive");
         assertEq(zone, p.callFunction("tz"));
+        # a date literal of the Program is in the Program's own zone, in every execution mode
+        assertEq(zone, p.callFunction("lit"));
         assertEq(1, sm.getTimeZonePathLimits().zones);
         # without a budget
         Program p0(PO_NEW_STYLE);
