@@ -828,6 +828,10 @@
     in the operation info, and \c exec() is removed: wait on the Queue that \c submit() returns instead.  See
     @ref asyncsocketio_3_0.
 
+    @par The Interpreter Prints One Line per Parse Diagnostic
+    The interpreter now prints @ref cli_parse_diagnostics "compiler-style parse diagnostics" by default.
+    Use <tt>\--diag-format=legacy</tt> or <tt>QORE_DIAG_FORMAT=legacy</tt> for the previous multi-line reports.
+
     @par The Short Command-Line Options -M and -G Have New Meanings
     \c -M is \c --modern and \c -G is \c --enable-debug; use \c --no-namespace-defs and \c --no-global-vars for the
     restrictions they set in %Qore 2.2.  See @ref command_line_processing.
@@ -1430,7 +1434,6 @@
     <a href="https://github.com/qoretechnologies/qore/issues/7179">issue 7179</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
-
     @par Restricted Programs
     @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()" tells whether a
     sandbox that does not trust its code governs the %Program of the class of an object, as
