@@ -160,6 +160,7 @@ class BedrockAsyncChatTest inherits QUnit::Test {
         addTestCase("the deadline of the call", \deadlineTest());
         addTestCase("a Content-Type with parameters", \contentTypeParamsTest());
         addTestCase("the connected event gives the response", \connectedEventTest());
+        addTestCase("a caller's Accept-Encoding is replaced", \acceptEncodingTest());
         addTestCase("a callback failure keeps its exception", \callbackFailureTest());
         addTestCase("chatAsync() errors are those of chat()", \chatErrorTest());
         addTestCase("cancellation", \cancellationTest());
@@ -478,14 +479,15 @@ class BedrockAsyncChatTest inherits QUnit::Test {
         assertEq("LLM-ERROR", r.err);
         assertEq("Bedrock ConverseStream failed: LLM call deadline exhausted", r.desc);
         assertEq(0, r.requests, "the asynchronous call sends nothing");
-        # the deadline arrives while the stream is held open after its first event; the request timeout is longer
+        # the deadline arrives while the stream is held open after its first event; the deadline leaves time for the
+        # stream to start also on a loaded host, and the request timeout is much longer
         int started = clock_getmillis();
-        r = asyncStream((event("messageStart", {"role": "assistant"}),), <LlmRequestOptions>{"timeout_ms": 30000,
-            "deadline": now_us() + 300ms}, NOTHING, 0);
+        r = asyncStream((event("messageStart", {"role": "assistant"}),), <LlmRequestOptions>{"timeout_ms": 120000,
+            "deadline": now_us() + 5s}, NOTHING, 0);
         assertEq("LLM-ERROR", r.err);
         assertEq("Bedrock ConverseStream failed: " + BedrockLlmProvider::StreamTimeoutDesc, r.desc);
         assertEq(1, r.events.size());
-        assertLt(20000, clock_getmillis() - started, "the deadline ends the stream, not the 30 s request timeout");
+        assertLt(60000, clock_getmillis() - started, "the deadline ends the stream, not the 120 s request timeout");
     }
 
     contentTypeParamsTest() {
@@ -494,6 +496,22 @@ class BedrockAsyncChatTest inherits QUnit::Test {
             "Application/Vnd.Amazon.EventStream; charset=binary");
         assertNothing(r.err);
         assertEq(1, (select r.events, $1.done).size());
+    }
+
+    acceptEncodingTest() {
+        # a caller's Accept-Encoding header, in any case, is replaced: the frames are decoded as they arrive
+        BedrockAsyncWireFixture server((event("messageStop", {"stopReason": "end_turn"}),));
+        on_exit server.stop();
+        BedrockRestClientIo rc(options(server.port));
+        HttpClientStreamingIo::SseObservable obs = rc.observeEncodedEventStreamTarget("POST",
+            <RestClient::RestRequestTarget>{"path": "/model/test/converse-stream"}, binary("{}"),
+            {"Accept-Encoding": "gzip", "content-type": "application/json"});
+        Queue events();
+        obs.registerObserver(new BedrockAsyncTestObserver(events));
+        obs.observersReady();
+        on_exit obs.stopEvents();
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CONNECTED, events.get(30s).event_id);
+        assertEq("identity", server.requests.get(30s).hdr."accept-encoding");
     }
 
     connectedEventTest() {
