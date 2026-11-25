@@ -2226,7 +2226,7 @@ int QoreTimeZoneManager::checkRegion(const QoreString& region, bool is_path, Exc
     // code that cannot load paths at all (no sandbox, or one without a time zone path budget; qore#7566) gets the
     // error of a path that it cannot load first, whatever the path
     if (is_path || isPathName(region.c_str())) {
-        if ((callerRestricted() || qore_caller_is_untrusted()) && !callerSandboxGrantsPaths()) {
+        if (callerRestrictedForPaths() && !callerSandboxGrantsPaths()) {
             raiseRestrictedPath(region.c_str(), xsink);
             return -1;
         }
@@ -2642,6 +2642,17 @@ void QoreTimeZoneManager::raiseSandboxPathError(const char* name, bool directive
         xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot load a time zone from path '%s': restricted code "
             "can load time zone regions only; %s", name, reason);
     }
+}
+
+bool QoreTimeZoneManager::callerRestrictedForPaths() {
+    // also code that a sandbox governs although no file-system policy applies to it (a system-policy call that
+    // sandboxed code makes) and library code that untrusted code loaded while it is initialized; the host Program
+    // stays unrestricted even if its parse options restrict functional domains (see callerRestricted())
+    if (callerRestricted() || qore_caller_in_untrusted_module_init()) {
+        return true;
+    }
+    ReferenceHolder<QoreSandboxManager> all(qore_caller_sandbox_ref(), nullptr);
+    return static_cast<bool>(all);
 }
 
 bool QoreTimeZoneManager::callerSandboxGrantsPaths() {
@@ -3160,7 +3171,7 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadRegionFromPath(const ch
     std::unique_ptr<SandboxTzCharge> charge;
     // restricted also when no file-system policy applies (a system-policy call that sandboxed code makes) and while
     // library code that untrusted code loaded is initialized: every sandbox that governs the code decides and pays
-    if (!pgm && (callerRestricted() || qore_caller_is_untrusted())) {
+    if (!pgm && callerRestrictedForPaths()) {
         charge.reset(new SandboxTzCharge);
         if (prepareSandboxCharge(name, *charge, xsink)) {
             return nullptr;

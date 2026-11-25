@@ -919,6 +919,9 @@ DLLLOCAL int qore_check_background_direct_call(ExceptionSink* xsink);
 */
 DLLLOCAL bool qore_caller_is_untrusted();
 
+//! returns true while library code that untrusted code loaded is initialized on the current thread (qore#7566)
+DLLLOCAL bool qore_caller_in_untrusted_module_init();
+
 //! Returns the sandbox of the code running on the current thread, if any, for the modules that it chooses
 /** the caller owns the reference returned; see QoreAbstractModule::isTenantChosen()
 */

@@ -570,6 +570,11 @@ public:
     //! returns true if the calling code, which is restricted, may load a path at all: every sandbox that governs it
     //! grants a budget (qore#7566); code restricted only by its parse options cannot
     DLLLOCAL static bool callerSandboxGrantsPaths();
+
+    //! returns true if the calling code is restricted for time zone paths (qore#7566): restricted code (see
+    //! callerRestricted()), code that any sandbox governs (also in a system-policy call) and library code that
+    //! untrusted code loaded while it is initialized
+    DLLLOCAL static bool callerRestrictedForPaths();
 private:
 
     //! raises the error for a path that the policy does not permit
