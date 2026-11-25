@@ -1403,6 +1403,17 @@ private:
     */
     DLLLOCAL QoreIRBasicBlock* beginForeachElementExceptionRestore(QoreIRBasicBlock*& next, std::string& error);
 
+    //! Pushes the cleanup entry of a value foreach statement that restores the enclosing element (\a old_element,
+    //! the result of the PushImplicitElement before the loop; none if the loop does not set it) on a return from its
+    //! body (BlockCleanupEntry::ForeachElement; qore#7379)
+    /** The entry is pushed before the loop's other entries, so that a return restores the element after their
+        releases, and with the exception stack outside the loop's element exception blocks (\a exception_depth, whose
+        top is \a outer_target), so that the code that the return lowers after the restoration does not restore it
+        again (see BlockCleanupEntry::exception_depth)
+    */
+    DLLLOCAL void pushForeachElementCleanup(QoreIRValue old_element, size_t exception_depth,
+            QoreIRBasicBlock* outer_target, const QoreProgramLocation* loc);
+
     //! Emits the block of beginForeachElementExceptionRestore(): it restores the implicit element that the loop set
     //! (\a old_element, the result of its PushImplicitElement) and continues to \a next with the exception, so that
     //! the handlers of the enclosing blocks run with the element of the code around the loop, as in the AST

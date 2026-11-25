@@ -510,7 +510,10 @@ enum class QoreIROpcode : uint16_t {
     SetImplicitArgv     = 275,  // Set list directly as implicit args (for foldl $1/$2)
     PopImplicitArg      = 276,  // Restore previous $1 context (operand = old context)
     PushImplicitElement = 277,  // Push index as $#, result = old element for restoration
-    PopImplicitElement  = 278,  // Restore previous $# context (operand = old element)
+    // Restore previous $# context (operand = old element); with a second operand, the result of the
+    // PushImplicitElement before a foreach statement's loop, it sets the index of the loop's next element
+    // (operands[0]) and leaves the push open: the loop saves the enclosing element once (qore#7379)
+    PopImplicitElement  = 278,
 
     // Direct access opcodes (279-282)
     HashKeyAccess       = 279,  // Load hash.key - direct hash member access
@@ -1621,6 +1624,22 @@ enum class QoreIRInstClass : uint8_t {
         return c == inst_class_id; \
     }
 
+//! QoreIRInstruction::restore_on_exception_exit: whether and when the frame's exit on an exception restores an
+//! implicit context (or releases an operator's iterator) that the instruction set
+enum class QoreIRExceptionExitRestore : uint8_t {
+    None,           //!< not restored by the frame's exit
+    //! restored (or released) first, before the handlers and the temporaries of the frame: the implicit arguments and
+    //! element of an operator in an expression and its iterator, which the AST interpreter restores and releases when
+    //! the exception unwinds the operator (qore#5670)
+    BeforeHandlers,
+    //! restored after the handlers of the frame have run: the implicit element of a foreach statement, which the AST
+    //! interpreter restores when the exception unwinds the statement, after the blocks of its body, whose handlers run
+    //! with the loop's element (qore#7379).  The push is open at the frame's exit only on an exception that no handler
+    //! of the function around the loop takes (see QoreIRLowering::beginForeachElementExceptionRestore()), so no handler
+    //! of the frame outside of the loop's body runs before the restoration
+    AfterHandlers,
+};
+
 //! The kind of a check of a release in the body of a functional loop (a CheckException; qore#6072)
 /** The body of a map, select or fold expression keeps the values of an element until the next element replaces them;
     the release of one whose type can hold an object can run a destructor that raises an exception.  The lowering puts
@@ -1720,8 +1739,10 @@ public:
     // PushImplicitArg / SetImplicitArgv / PushImplicitElement: the lowering restores the context on every path in the
     // function (see QoreIRLowering::lowerWithImplicitContext()), so native code registers it with its frame, whose
     // exception exits restore it; IteratorCreate*: the iterator of a functional operator in an expression, which the IR interpreter's
-    // exception exit releases before the frame's temporaries, as the AST interpreter unwinds the operator (qore#5670)
-    bool restore_on_exception_exit = false;
+    // exception exit releases before the frame's temporaries, as the AST interpreter unwinds the operator (qore#5670);
+    // see QoreIRExceptionExitRestore for when the exit restores a context.  One byte, as a bool: a second member here
+    // would change the layout of the instruction classes, whose members use the tail padding of this class
+    QoreIRExceptionExitRestore restore_on_exception_exit = QoreIRExceptionExitRestore::None;
     // Transient: ReleaseOwnedTemp in the exception cleanup of a functional operator, which only runs once the loop has
     // ended (see qore_ir_is_exception_only_release())
     bool exception_cleanup_release = false;

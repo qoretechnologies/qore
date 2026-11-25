@@ -347,7 +347,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::SetImplicitArgv, "SetImplicitArgv"               , false, false, false,  1, "SetImplicitArgv", false, true , "ParseNode", true , false, false, false, false }, // 275
     { QoreIROpcode::PopImplicitArg, "PopImplicitArg"                , false, false, false,  1, "PopImplicitArg", false, true , "ParseNode", false, false, false, false, false }, // 276
     { QoreIROpcode::PushImplicitElement, "PushImplicitElement"           , false, false, false,  1, "PushImplicitElement", false, true , "ParseNode", true , false, false, false, false }, // 277
-    { QoreIROpcode::PopImplicitElement, "PopImplicitElement"            , false, false, false,  1, "PopImplicitElement", false, true , "ParseNode", false, false, false, false, false }, // 278
+    { QoreIROpcode::PopImplicitElement, "PopImplicitElement"            , false, false, false, OPCODE_MIN_OPERANDS(1), "PopImplicitElement", false, true , "ParseNode", false, false, false, false, false }, // 278
     { QoreIROpcode::HashKeyAccess, "HashKeyAccess"                 , true , false, false,  1, "HashKeyAccess", false, true , "ParseNode", true , false, true , false, false }, // 279
     { QoreIROpcode::HashKeyAccessInt, "HashKeyAccessInt"              , true , false, false,  1, "HashKeyAccessInt", false, true , "ParseNode", true , false, true , false, false }, // 280
     { QoreIROpcode::LoadSelfMember, "LoadSelfMember"                , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false, false }, // 281

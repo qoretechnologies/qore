@@ -16582,7 +16582,8 @@ bool qore_aot_write_ir_catch_tables(QoreAOTBinaryWriter& writer, const QoreIRFun
     for (size_t b = 0; b < func.blocks.size(); ++b) {
         uint32_t written = 0;
         for (const auto& inst : func.blocks[b]->instructions) {
-            if (func.catch_exit_depths.count(inst.get()) || func.catch_cleanup_results.count(inst.get())) {
+            if (func.catch_exit_depths.count(inst.get()) || func.catch_cleanup_results.count(inst.get())
+                    || inst->restore_on_exception_exit != QoreIRExceptionExitRestore::None) {
                 if (written > UINT16_MAX) {
                     qoreAOTSetExprSerializationError("the IR of function '" + func.name + "' has a catch cleanup "
                         "beyond the instructions that a block can have in the AOT format");
@@ -16614,7 +16615,21 @@ bool qore_aot_write_ir_catch_tables(QoreAOTBinaryWriter& writer, const QoreIRFun
         }
         return true;
     };
-    return writeTable(func.catch_exit_depths) && writeTable(func.catch_cleanup_results);
+    if (!writeTable(func.catch_exit_depths) || !writeTable(func.catch_cleanup_results)) {
+        return false;
+    }
+    // the instructions whose implicit context the frame's exit on an exception restores
+    // (QoreIRInstruction::restore_on_exception_exit), which the IR interpreter that runs a module's debug IR needs
+    // as the IR that it was made from (qore#7379)
+    std::unordered_map<const QoreIRInstruction*, uint32_t> exit_restores;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->restore_on_exception_exit != QoreIRExceptionExitRestore::None) {
+                exit_restores.emplace(inst.get(), static_cast<uint32_t>(inst->restore_on_exception_exit));
+            }
+        }
+    }
+    return writeTable(exit_restores);
 }
 
 // ---- Namespace Deserialization (Phase 4) ----

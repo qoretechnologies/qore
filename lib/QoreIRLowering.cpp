@@ -2082,8 +2082,10 @@ public:
 //! removes the setting of the thread's implicit index ($#) of a foreach statement from the function being lowered
 /** @param fn the function
     @param old_element the result of the statement's PushImplicitElement: the instruction is removed with every
-    PopImplicitElement that restores it (the latch, a break, a return through the statement's cleanup entry, and the
-    exception restoration of the body)
+    PopImplicitElement that restores it (a value loop's end, the latch of a reference loop, a break, a return through
+    the statement's cleanup entry, and the exception restoration of the loop); a value loop that keeps the setting
+    sets the index of each next element with a PopImplicitElement whose second operand is the saved element, which it
+    does not emit otherwise (qore#7379)
 */
 static void qore_ir_elide_foreach_implicit_element(QoreIRFunction* fn, QoreIRValue old_element) {
     assert(old_element.isValid());
@@ -2096,7 +2098,9 @@ static void qore_ir_elide_foreach_implicit_element(QoreIRFunction* fn, QoreIRVal
                         && inst->result.id == old_element.id)
                     || (inst->opcode == QoreIROpcode::PopImplicitElement
                         && !inst->operands.empty()
-                        && inst->operands[0].id == old_element.id);
+                        && (inst->operands[0].id == old_element.id
+                            // the set of the next element (see QoreIRBuilder::createSetImplicitElement())
+                            || (inst->operands.size() > 1 && inst->operands[1].id == old_element.id)));
             }), instructions.end());
     }
 }
@@ -3101,8 +3105,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 return false;
             }
 
-            // Push implicit element ($#) for the current iteration
-            QoreIRValue old_element = builder.createPushImplicitElement(index_val, stmt->loc)->result;
+            // Push implicit element ($#) for the current iteration; an exception that leaves the function from the
+            // body restores it as for a value foreach (qore#7379; see below)
+            QoreIRInstruction* push_element = builder.createPushImplicitElement(index_val, stmt->loc);
+            push_element->restore_on_exception_exit = QoreIRExceptionExitRestore::AfterHandlers;
+            QoreIRValue old_element = push_element->result;
 
             // Push RefForeachRecord entry to cleanup stack (for return path record)
             BlockCleanupEntry record_entry;
@@ -3390,13 +3397,66 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // the statement checks for cancellation at the start of every iteration, as in the AST interpreter
         header_block->loop_cancel = QoreIRLoopCancel::Foreach;
 
+        // the index of the first element, created before the loop if the loop saves its element (see below), in the
+        // preheader otherwise
+        QoreIRValue init_index;
+
+        // The implicit element ($#): a body without a $# of the statement reads its index nowhere, whatever it calls
+        // (qore#7270), and the loop does not set it; the code below decides for a body with one whether the index
+        // only has virtual reads, and then removes the setting.  A loop that sets it saves the enclosing element once,
+        // before the loop, with the PushImplicitElement that sets the index of the first element, and sets the index
+        // of each next element at the latch (QoreIRBuilder::createSetImplicitElement()): the saved element is the
+        // same for the whole loop, which the restorations use (qore#7379).  The element is thus set before the next
+        // element is assigned to the variable, which nothing reads (the variable is a variable reference, and the
+        // iterator's next() and the destructors that the assignment runs are functions, which do not see it); an
+        // exception that the iteration raises restores the enclosing element before the handlers of the function
+        // run, in the loop's element exception block, or at the frame's exit after the handlers of the frame, as the
+        // AST interpreter's foreach statement restores it when the exception unwinds it (qore#6432).
+        bool analyze_implicit_element =
+            !QORE_ENV_IS_SET("QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT");
+        bool body_reads_implicit_element = !qore_ir_foreach_elides_implicit_element(foreach_stmt);
+        QoreIRValue old_element;
+        // the end of the loop when its iterator is done, which restores the enclosing element
+        QoreIRBasicBlock* done_block = nullptr;
+        QoreIRBasicBlock* element_exception_next = nullptr;
+        QoreIRBasicBlock* element_exception_block = nullptr;
+        // the exception stack outside the element exception block (see pushForeachElementCleanup())
+        size_t element_exception_depth = exception_stack.size();
+        QoreIRBasicBlock* element_outer_target = getCurrentExceptionTarget();
+        if (body_reads_implicit_element) {
+            done_block = createBlock(std::string(block_prefix) + ".done");
+            if (!done_block) {
+                error = "IR builder failed to create blocks for foreach";
+                return false;
+            }
+            init_index = builder.createConstInt(0, stmt->loc)->result;
+            QoreIRInstruction* push_element = builder.createPushImplicitElement(init_index, stmt->loc);
+            // an exception that leaves the function from the loop restores it at the frame's exit, after the handlers
+            // of the blocks in the body ran with the loop's element, so that the caller's code that reads the
+            // thread's implicit element (a find expression, a context statement) sees its own (qore#7379)
+            push_element->restore_on_exception_exit = QoreIRExceptionExitRestore::AfterHandlers;
+            old_element = push_element->result;
+            // an exception that leaves the loop for a handler of this function restores it first (qore#6432)
+            element_exception_block = beginForeachElementExceptionRestore(element_exception_next, error);
+            if (element_exception_next && !element_exception_block) {
+                return false;
+            }
+        }
+        // pops the anchor of the element exception block on a failure
+        auto pop_element_anchor = [&]() {
+            if (element_exception_block) {
+                popExceptionAnchor();
+            }
+        };
+        QoreIRBasicBlock* loop_done_block = done_block ? done_block : exit_block;
+
         if (guard_typed_list) {
             // A declared list lvalue can still be unassigned. Preserve foreach
             // semantics by treating runtime NOTHING as an empty source.
             QoreIRValue nothing = builder.createConstNothing(stmt->loc)->result;
             QoreIRValue is_nothing = builder.createBinaryOp(
                 QoreIROpcode::EqHard, list_val, nothing, stmt->loc)->result;
-            builder.createBranchIf(is_nothing, exit_block, preheader_block, stmt->loc);
+            builder.createBranchIf(is_nothing, loop_done_block, preheader_block, stmt->loc);
         } else {
             builder.createBranch(preheader_block, stmt->loc);
         }
@@ -3407,7 +3467,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (direct_typed_list) {
             foreach_limit = builder.createListSize(list_val, stmt->loc)->result;
         }
-        QoreIRValue init_index = builder.createConstInt(0, stmt->loc)->result;
+        if (!init_index.isValid()) {
+            init_index = builder.createConstInt(0, stmt->loc)->result;
+        }
         {
             auto* br = builder.createBranch(header_block, stmt->loc);
             setLoopCheckpointExceptionTarget(br, header_block);
@@ -3430,7 +3492,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // The entry size preserves iterator bounds when the source grows;
             // the fused operation also checks live size to handle removals.
             auto* next = builder.createTypedForeachNext(list_val, index_val, foreach_limit,
-                element_type, exit_block, body_block, stmt->loc);
+                element_type, loop_done_block, body_block, stmt->loc);
             if (!exception_stack.empty()) {
                 next->exception_target = exception_stack.back();
             }
@@ -3438,12 +3500,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.setBlock(body_block);
         } else {
             foreach_next_inst = withExceptionTarget(builder.createIteratorNext(
-                iter_val, exit_block, body_block, stmt->loc));
+                iter_val, loop_done_block, body_block, stmt->loc));
             value_val = foreach_next_inst->result;
             builder.setBlock(body_block);
         }
 
-        // Body block: assign value to loop variable, set $# via PushImplicitElement, execute body
+        // Body block: assign value to loop variable, execute body
 
         // Assign the value to the loop variable
         // the instructions of the assignment, in the block where it starts: an exception that it raises (a
@@ -3471,6 +3533,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             if (var_node && var_node->getType() != VT_IMMEDIATE
                     && !QoreTypeInfo::isReference(var_type)) {
                 if (!storeVarRef(var_node, value_val, error, "foreach assignment", nullptr, nullptr, element_mode)) {
+                    pop_element_anchor();
                     return false;
                 }
             } else if (!tryEmitLValuePathOp(QoreIROpcode::LValuePathAssign, var_expr, &value_val, stmt->loc,
@@ -3478,18 +3541,15 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 if (error.empty()) {
                     error = "unsupported foreach variable for native lowering";
                 }
+                pop_element_anchor();
                 return false;
             }
         }
 
-        // Push the implicit element ($#) for the current iteration, after the assignment, as the AST interpreter sets
-        // it, so that an exception that the assignment raises leaves the loop with the enclosing element (qore#6432)
-        QoreIRValue old_element = builder.createPushImplicitElement(index_val, stmt->loc)->result;
-
         // Register a cleanup entry so a non-local exit (return / thread_exit) from
-        // inside the body restores $# to the caller's value.  Break and continue
-        // are handled on their own paths (break pops via ft.old_implicit_element
-        // below; continue falls through to the latch which pops), so this entry is
+        // inside the body restores $# to the caller's value (the element that the loop saved before it began, if it
+        // sets the element).  Break and continue are handled on their own paths (break pops via
+        // ft.old_implicit_element below; continue goes to the latch, which sets the next index), so this entry is
         // pushed *before* ft.cleanup_stack_depth is captured: emitBlockCleanups()
         // for break/continue stops above it and will not double-pop, while a return
         // walks the whole cleanup stack and fires it.  Matches the reference foreach,
@@ -3501,6 +3561,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // destructor shows when it is released, has these entries; a typed loop over a list of scalars has none.
         // Break and continue do not visit them (ft.cleanup_stack_depth is captured above them): the loop exit
         // releases the iterator and the variables, and the temp scope of the statement the list.
+        // the restoration of the element is the last cleanup of the loop that a return runs
+        pushForeachElementCleanup(old_element, element_exception_depth, element_outer_target, stmt->loc);
         size_t foreach_source_entries = 0;
         // the iterator of keys, a slice or a list of indices keeps a hash or a sequence that can hold an object
         if (!direct_typed_list && iter_val.isValid() && (source || qore_ir_type_may_hold_object(element_type))) {
@@ -3523,12 +3585,6 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             ++foreach_source_entries;
         }
 
-        BlockCleanupEntry elem_entry;
-        elem_entry.type = BlockCleanupEntry::ForeachElement;
-        elem_entry.old_implicit_element = old_element;
-        elem_entry.loc = stmt->loc;
-        pushBlockCleanup(elem_entry);
-
         // Lower the loop body with proper break/continue targets
         // break → exit_block (break handler pops $# via old_implicit_element)
         // continue → latch_block (pops $# and increments index)
@@ -3543,6 +3599,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             if (!foreach_exception_cleanup_block) {
                 error = "IR builder failed to create the foreach exception cleanup block";
                 cleanup_stack.resize(cleanup_stack.size() - 1 - foreach_source_entries);
+                pop_element_anchor();
                 return false;
             }
             // a catch block in the body whose statement raises is left at the cleanup (qore#6472)
@@ -3564,19 +3621,6 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             }
         }
 
-        // an exception that leaves the body for a handler of this function restores the implicit element first
-        // (qore#6432); the restoration goes with the loop's PushImplicitElement if that is elided below
-        QoreIRBasicBlock* element_exception_next = nullptr;
-        QoreIRBasicBlock* element_exception_block = beginForeachElementExceptionRestore(element_exception_next,
-            error);
-        if (element_exception_next && !element_exception_block) {
-            cleanup_stack.resize(cleanup_stack.size() - 1 - foreach_source_entries);
-            if (foreach_exception_cleanup_block) {
-                popExceptionAnchor();
-            }
-            return false;
-        }
-
         FlowTarget ft;
         ft.break_target = exit_block;
         ft.continue_target = latch_block;
@@ -3592,11 +3636,6 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         virtual_implicit.active = true;
         virtual_implicit.runtime = false;
         int saved_ast_count = ast_delegate_count;
-        bool analyze_implicit_element =
-            !QORE_ENV_IS_SET("QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT");
-        // a body without a $# of the statement reads its index nowhere, whatever it calls (qore#7270); the code
-        // below decides for a body with one whether the index only has virtual reads
-        bool body_reads_implicit_element = !qore_ir_foreach_elides_implicit_element(foreach_stmt);
         auto count_implicit_element_observers = [&]() {
             size_t observers = 0;
             size_t check_count = 0;
@@ -3649,12 +3688,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 virtual_implicit = saved_implicit;
                 flow_stack.pop_back();
                 cleanup_stack.resize(cleanup_stack.size() - 1 - foreach_source_entries);  // ForeachElement, source
-                if (element_exception_block) {
-                    popExceptionAnchor();
-                }
                 if (foreach_exception_cleanup_block) {
                     popExceptionAnchor();
                 }
+                pop_element_anchor();
                 return false;
             }
             --loop_depth;
@@ -3662,45 +3699,59 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         virtual_implicit = saved_implicit;
         flow_stack.pop_back();
         cleanup_stack.resize(cleanup_stack.size() - 1 - foreach_source_entries);  // ForeachElement, source
-        if (element_exception_block) {
-            popExceptionAnchor();
-            emitForeachElementExceptionRestore(element_exception_block, element_exception_next, old_element,
-                stmt->loc);
-        }
         if (foreach_exception_cleanup_block) {
             popExceptionAnchor();
         }
 
-        bool elide_implicit_element = analyze_implicit_element
-            && (!body_reads_implicit_element
-                || (implicit_observers_before != std::numeric_limits<size_t>::max()
-                    && ast_delegate_count == saved_ast_count
-                    && count_implicit_element_observers() == implicit_observers_before));
-        if (elide_implicit_element) {
-            qore_ir_elide_foreach_implicit_element(builder.getFunction(), old_element);
-        }
+        // QORE_DISABLE_IR_FOREACH_VIRTUAL_ELEMENT keeps the setting for every loop: it makes
+        // qore_ir_foreach_elides_implicit_element() false (so body_reads_implicit_element is true) and disables the
+        // analysis of the virtual reads, as before qore#7379
+        bool elide_implicit_element = !body_reads_implicit_element
+            || (analyze_implicit_element
+                && implicit_observers_before != std::numeric_limits<size_t>::max()
+                && ast_delegate_count == saved_ast_count
+                && count_implicit_element_observers() == implicit_observers_before);
 
         // Normal body exit falls through to latch block
         if (!blockHasTerminator(builder.getBlock())) {
             builder.createBranch(latch_block, stmt->loc);
         }
 
-        // Latch block: pop implicit element, increment index, branch to header
+        // Latch block: increment index, set it as the implicit element of the next element, branch to header
         builder.setBlock(latch_block);
-        if (!elide_implicit_element) {
-            builder.createPopImplicitElement(old_element, stmt->loc);
-        }
 
         // Increment index for next iteration
         QoreIRValue one = builder.createConstInt(1, stmt->loc)->result;
         QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one,
             stmt->loc)->result;
+        if (!elide_implicit_element) {
+            builder.createSetImplicitElement(next_index, old_element, stmt->loc);
+        }
         {
             auto* br = builder.createBranch(header_block, stmt->loc);
             // a cancellation raised on entering the next iteration unwinds the foreach statement: its exception
             // cleanup releases the iterator, the list and the loop variables before the enclosing handler runs, as
             // the AST's foreach statement does
             setLoopCheckpointExceptionTarget(br, header_block, foreach_exception_cleanup_block);
+        }
+        // the loop's element exception block, the handler of the whole loop (qore#7379)
+        if (element_exception_block) {
+            popExceptionAnchor();
+            emitForeachElementExceptionRestore(element_exception_block, element_exception_next, old_element,
+                stmt->loc);
+        }
+        // the end of the loop when its iterator is done restores the enclosing element
+        if (done_block) {
+            builder.getFunction()->moveBlockToEnd(done_block);
+            builder.setBlock(done_block);
+            builder.createPopImplicitElement(old_element, stmt->loc);
+            builder.createBranch(exit_block, stmt->loc);
+        }
+        // a body whose $# has only virtual reads: the loop does not set the element (qore#7270), and the
+        // PushImplicitElement before the loop is removed with its restorations (the set of the next element is not
+        // emitted)
+        if (elide_implicit_element && old_element.isValid()) {
+            qore_ir_elide_foreach_implicit_element(builder.getFunction(), old_element);
         }
 
         // Complete the PHI node with incoming values
@@ -5740,8 +5791,10 @@ bool QoreIRLowering::lowerLoopJump(bool is_break, const LoopJumpTarget& jt, cons
     if (blockHasTerminator(builder.getBlock())) {
         return true;
     }
-    // Restore $# for foreach loops before breaking out; a continue needs no restore here: the continue target
-    // (latch_block) already calls PopImplicitElement before incrementing the index and branching back to the header
+    // Restore $# for foreach loops before breaking out (the element that a value loop saved before it began, or the
+    // element of the iteration of a loop over a reference; a loop over a lazy pipeline restores it at its exit block,
+    // see lowerForeachLazyPipelineFused()); a continue needs no restore here: the continue target (latch_block) sets
+    // the index of the next element of a value loop, and restores the element of a loop over a reference (qore#7379)
     if (is_break && jt.old_elem.isValid()) {
         builder.createPopImplicitElement(jt.old_elem, loc);
     }
@@ -6441,8 +6494,11 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 break;
             case BlockCleanupEntry::ForeachElement:
                 // Value (iterator-based) foreach: restore $# to the caller's value
-                // on a non-local exit (return / thread_exit) out of the loop body.
-                builder.createPopImplicitElement(entry.old_implicit_element, entry.loc);
+                // on a non-local exit (return / thread_exit) out of the loop body; a loop whose body does not read
+                // its $# does not set it (qore#7270)
+                if (entry.old_implicit_element.isValid()) {
+                    builder.createPopImplicitElement(entry.old_implicit_element, entry.loc);
+                }
                 break;
             case BlockCleanupEntry::ForeachSource:
                 // Value foreach left by a return: the iterator and the list are released when the statement ends,
@@ -20466,7 +20522,7 @@ QoreIRValue QoreIRLowering::lowerWithImplicitArgs(QoreIRValue element, QoreIRVal
     QoreIRValue old_element;
     if (index.isValid()) {
         QoreIRInstruction* push_element = builder.createPushImplicitElement(index, loc);
-        push_element->restore_on_exception_exit = true;
+        push_element->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
         old_element = push_element->result;
     }
     QoreIRInstruction* push_argv;
@@ -20476,14 +20532,14 @@ QoreIRValue QoreIRLowering::lowerWithImplicitArgs(QoreIRValue element, QoreIRVal
         builder.createListAppend(argv, element, loc);
         builder.createListAppend(argv, arg1, loc);
         push_argv = builder.createSetImplicitArgv(argv, loc);
-        push_argv->restore_on_exception_exit = true;
+        push_argv->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
         // the implicit arguments own the argument list alone, as the AST interpreter's ArgvContextHelper owns it, so
         // that the PopImplicitArg that restores the old arguments releases it, for each element and on an exception:
         // with the reference of its slot, the list outlived each element (qore#5830)
         builder.createReleaseOwnedTemp(argv, loc);
     } else {
         push_argv = builder.createPushImplicitArg(element, loc);
-        push_argv->restore_on_exception_exit = true;
+        push_argv->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
     }
     QoreIRValue old_argv = push_argv->result;
     // restores the arguments: the old arguments that a fold's SetImplicitArgv keeps in its slot are released with
@@ -21907,7 +21963,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         : withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, map->loc));
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
-    iter_inst->restore_on_exception_exit = true;
+    iter_inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
 
     // an exception that leaves the loop for a handler of this function releases the element, the list built so far,
     // the iterator and the source first (see FunctionalLoopExceptionCleanup)
@@ -22434,7 +22490,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     auto* iter_inst = withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, select->loc));
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
-    iter_inst->restore_on_exception_exit = true;
+    iter_inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
 
     // an exception that leaves the loop for a handler of this function releases the element, the list built so far,
     // the iterator and the source first (see FunctionalLoopExceptionCleanup)
@@ -22819,7 +22875,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     auto* iter_inst = withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, foldl->loc));
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
-    iter_inst->restore_on_exception_exit = true;
+    iter_inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
 
     // an exception that leaves the loop for a handler of this function releases the elements, the iterator and the
     // source first, as the AST interpreter's fold releases its argument list, value and functional iterator (see
@@ -23090,7 +23146,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
     auto* iter_inst = withExceptionTarget(builder.createIteratorCreateReverse(input_list, foldr->loc));
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
-    iter_inst->restore_on_exception_exit = true;
+    iter_inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
 
     // an exception that leaves the loop for a handler of this function releases the elements, the iterator and the
     // source first, as the AST interpreter's fold releases its argument list, value and functional iterator (see
@@ -23562,7 +23618,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         : withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, ms->loc));
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
-    iter_inst->restore_on_exception_exit = true;
+    iter_inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
 
     // an exception that leaves the loop for a handler of this function releases the element, the list built so far,
     // the iterator and the source first (see FunctionalLoopExceptionCleanup)
@@ -24028,7 +24084,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     auto* iter_inst = withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, hm->loc));
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
-    iter_inst->restore_on_exception_exit = true;
+    iter_inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
 
     // an exception that leaves the loop for a handler of this function releases the element, the hash built so far,
     // the iterator and the source first, as for map (see FunctionalLoopExceptionCleanup)
@@ -24419,7 +24475,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     auto* iter_inst = withExceptionTarget(builder.createIteratorCreate(input_list, nullptr, hms->loc));
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
-    iter_inst->restore_on_exception_exit = true;
+    iter_inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
 
     // an exception that leaves the loop for a handler of this function releases the element, the hash built so far,
     // the iterator and the source first, as for map (see FunctionalLoopExceptionCleanup)
@@ -24893,7 +24949,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     }
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
-    iter_inst->restore_on_exception_exit = true;
+    iter_inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
     if (release_plain_source) {
         // The iterator now owns the source. The load's discriminator preserves a reference read until the
         // statement ends, even if the stages subsequently change the variable (qore#6638).
@@ -26370,6 +26426,55 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         builder.setBlock(limit_ok_block);
     }
 
+    // The implicit element ($#): a body without a $# of the statement reads its index nowhere, whatever it calls
+    // (qore#7270), and the loop does not set it.  A loop that sets it saves the enclosing element once, after the
+    // limits of its stages, which are evaluated with the enclosing element, with the PushImplicitElement that sets
+    // the index of the first element, and sets the index of each next element at the latch
+    // (QoreIRBuilder::createSetImplicitElement()): the saved element is the same for the whole loop, which the
+    // restorations use (qore#7379).  The element of the loop
+    // is thus set while the stages evaluate the next element, which have implicit contexts of their own, and while
+    // the element is assigned to the variable, which nothing reads (see the value foreach statement in
+    // lowerStatement()); an exception that leaves the loop restores the enclosing element before the handlers of the
+    // function run (the element exception blocks below), or at the frame's exit after the handlers of the frame.
+    // The end of the loop restores it, also after a break or a stage that ends the loop.
+    QoreIRValue old_element;
+    // the restoration of an exception that leaves the loop after the element was saved and before an iteration's
+    // cleanup covers it (the cancellation check on entering the loop): it continues to the cleanup before the first
+    // element, if any
+    QoreIRBasicBlock* element_exception_block = nullptr;
+    QoreIRBasicBlock* element_exception_next = nullptr;
+    // the restoration after the cleanup of an iteration, which continues to the handler outside of the loop
+    QoreIRBasicBlock* iteration_element_exception_block = nullptr;
+    // the exception stack outside the element exception block (see pushForeachElementCleanup())
+    size_t element_exception_depth = exception_stack.size();
+    if (!qore_ir_foreach_elides_implicit_element(foreach_stmt)) {
+        QoreIRValue first_index = builder.createConstInt(0, loc)->result;
+        QoreIRInstruction* push_element = builder.createPushImplicitElement(first_index, loc);
+        // an exception that leaves the function from the loop restores it at the frame's exit, after the handlers of
+        // the blocks in the body ran with the loop's element (qore#7379)
+        push_element->restore_on_exception_exit = QoreIRExceptionExitRestore::AfterHandlers;
+        old_element = push_element->result;
+        element_exception_depth = exception_stack.size();
+        element_exception_next = getCurrentExceptionTarget();
+        if (element_exception_next) {
+            element_exception_block = createBlock("foreach.fused.element.exception");
+            if (!element_exception_block) {
+                error = "IR builder failed to create the fused foreach element exception block";
+                return false;
+            }
+            if (foreach_exception_cleanup_block) {
+                iteration_element_exception_block = createBlock("foreach.fused.iteration.element.exception");
+                if (!iteration_element_exception_block) {
+                    error = "IR builder failed to create the fused foreach element exception block";
+                    return false;
+                }
+            }
+        }
+    }
+    // the element exception block is the handler of the code after the save, inside the cleanup before the first
+    // element and outside of the cleanup of an iteration, on every path
+    FusedForeachExceptionTargetScope foreach_element_target_scope(*this, element_exception_block);
+
     QoreIRBasicBlock* exit_block = createBlock("foreach.fused.exit");
     QoreIRBasicBlock* null_block = createBlock("foreach.fused.null");
     QoreIRBasicBlock* preheader_block = createBlock("foreach.fused.preheader");
@@ -26660,13 +26765,11 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         }
     }
 
-    // the implicit element is set after the assignment, as the AST interpreter sets it, so that an exception that the
-    // assignment raises leaves the loop with the enclosing element (qore#6432)
-    QoreIRValue old_element = builder.createPushImplicitElement(state.foreach_index, loc)->result;
-
     // a return from the body releases the iterator, which holds the source, and the source, then the loop
     // variables, before the cleanups of the enclosing blocks run, as for the other value foreach loops (see
-    // lowerStatement()); only a loop whose source can hold an object has these entries
+    // lowerStatement()); only a loop whose source can hold an object has these entries.  The restoration of the
+    // element is the last cleanup of the loop that a return runs (qore#7379)
+    pushForeachElementCleanup(old_element, element_exception_depth, element_exception_next, loc);
     size_t foreach_source_entries = 0;
     if (foreach_may_hold_object) {
         if (const LVList* loop_lvars = foreach_stmt->getLVList()) {
@@ -26687,21 +26790,11 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         pushBlockCleanup(source_entry);
         ++foreach_source_entries;
     }
-
     FlowTarget ft;
     ft.break_target = exit_block;
     ft.continue_target = latch_block;
     ft.is_switch = false;
     ft.cleanup_stack_depth = cleanup_stack.size();
-    ft.old_implicit_element = old_element;
-    // an exception that leaves the body for a handler of this function restores the implicit element first
-    // (qore#6432)
-    QoreIRBasicBlock* element_exception_next = nullptr;
-    QoreIRBasicBlock* element_exception_block = beginForeachElementExceptionRestore(element_exception_next, error);
-    if (element_exception_next && !element_exception_block) {
-        cleanup_stack.resize(cleanup_stack.size() - foreach_source_entries);
-        return false;
-    }
     pushFlowTarget(ft);
     StatementBlock* body = foreach_stmt->getCode();
     // $# in the body is this loop's index, also in a foreach nested in the body of another foreach, whose index
@@ -26717,37 +26810,40 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         if (!lowerStatementBlock(body, error)) {
             virtual_implicit = saved_implicit;
             --loop_depth;
-            if (element_exception_block) {
-                popExceptionAnchor();
-            }
             flow_stack.pop_back();
-            cleanup_stack.resize(cleanup_stack.size() - foreach_source_entries);
+            cleanup_stack.resize(cleanup_stack.size() - 1 - foreach_source_entries);  // ForeachElement, source
             return false;
         }
         --loop_depth;
     }
     virtual_implicit = saved_implicit;
+    flow_stack.pop_back();
+    cleanup_stack.resize(cleanup_stack.size() - 1 - foreach_source_entries);  // ForeachElement, source
+    foreach_exception_target_scope.end();
+    foreach_element_target_scope.end();
+    foreach_pre_element_target_scope.end();
     if (element_exception_block) {
-        popExceptionAnchor();
         emitForeachElementExceptionRestore(element_exception_block, element_exception_next, old_element, loc);
     }
-    flow_stack.pop_back();
-    cleanup_stack.resize(cleanup_stack.size() - foreach_source_entries);
-    foreach_exception_target_scope.end();
-    foreach_pre_element_target_scope.end();
+    if (iteration_element_exception_block) {
+        emitForeachElementExceptionRestore(iteration_element_exception_block, foreach_saved_exception_target,
+            old_element, loc);
+    }
 
     if (!blockHasTerminator(builder.getBlock())) {
         builder.createBranch(latch_block, loc);
     }
 
     // Stage and body lowering can create pass/skip/continuation blocks after the
-    // placeholder latch block.  Emit the latch after those blocks so LLVM lowering
-    // sees the PushImplicitElement result before the latch PopImplicitElement.
+    // placeholder latch block; the latch is emitted after them
     builder.getFunction()->moveBlockToEnd(latch_block);
     builder.setBlock(latch_block);
-    builder.createPopImplicitElement(old_element, loc);
     QoreIRValue next_foreach_index = builder.createBinaryOp(QoreIROpcode::AddInt, state.foreach_index, one,
         loc)->result;
+    // the index of the next element (see the save before the loop)
+    if (old_element.isValid()) {
+        builder.createSetImplicitElement(next_foreach_index, old_element, loc);
+    }
     FusedForeachState next_state = state;
     next_state.foreach_index = next_foreach_index;
     QoreIRBasicBlock* latch_exit_block = builder.getBlock();
@@ -26761,7 +26857,12 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         }
         again_block->loop_cancel = QoreIRLoopCancel::Foreach;
         auto* br = builder.createBranch(again_block, loc);
-        setLoopCheckpointExceptionTarget(br, again_block, foreach_exception_cleanup_block);
+        // after the set of the next element (QoreIRBuilder::createSetImplicitElement()): without an iteration
+        // cleanup, the check goes to the element exception block, which restores the saved element, as the exception
+        // scopes of the loop have ended
+        // (qore#7379); without a handler of this function, the frame's exit restores it
+        setLoopCheckpointExceptionTarget(br, again_block, foreach_exception_cleanup_block
+            ? foreach_exception_cleanup_block : element_exception_block);
         builder.setBlock(again_block);
         builder.createBranch(header_block, loc);
         latch_exit_block = again_block;
@@ -26800,6 +26901,10 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
 
     builder.getFunction()->moveBlockToEnd(exit_block);
     builder.setBlock(exit_block);
+    // the end of the loop, after its last element, a break or a stage that ends it, restores the enclosing element
+    if (old_element.isValid()) {
+        builder.createPopImplicitElement(old_element, loc);
+    }
 
     // a break or a stage that ends the loop early leaves the iterator unexhausted: it is released here with the
     // source, before the loop variables, as when the AST's foreach statement ends
@@ -26823,14 +26928,12 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         builder.createCheckException(loc)->exception_target = getCurrentExceptionTarget();
     }
     if (foreach_exception_cleanup_block) {
-        emitForeachExceptionCleanup(foreach_exception_cleanup_block, foreach_saved_exception_target, iter_val, source,
+        // the cleanup of an iteration continues to the restoration of the enclosing element, if the loop sets it
+        emitForeachExceptionCleanup(foreach_exception_cleanup_block, iteration_element_exception_block
+                ? iteration_element_exception_block : foreach_saved_exception_target, iter_val, source,
             next_inst->result, foreach_stmt->getLVList(), loc);
         emitForeachExceptionCleanup(foreach_pre_element_cleanup_block, foreach_saved_exception_target, iter_val,
             source, QoreIRValue(), foreach_stmt->getLVList(), loc);
-    }
-    // a body without a $# of the statement reads its index nowhere (qore#7270)
-    if (qore_ir_foreach_elides_implicit_element(foreach_stmt)) {
-        qore_ir_elide_foreach_implicit_element(builder.getFunction(), old_element);
     }
     return true;
 }
@@ -26842,6 +26945,21 @@ void QoreIRLowering::releasePredicateValue(QoreIRValue value, const QoreValue& e
         return;
     }
     builder.createReleaseOwnedTemp(value, loc);
+}
+
+// documented in QoreIRLowering.h
+void QoreIRLowering::pushForeachElementCleanup(QoreIRValue old_element, size_t exception_depth,
+        QoreIRBasicBlock* outer_target, const QoreProgramLocation* loc) {
+    BlockCleanupEntry elem_entry;
+    elem_entry.type = BlockCleanupEntry::ForeachElement;
+    elem_entry.old_implicit_element = old_element;
+    elem_entry.loc = loc;
+    pushBlockCleanup(elem_entry);
+    // the code that a return lowers after the restoration has the handlers outside the loop's element exception
+    // blocks, which would restore the element again (qore#6643)
+    assert(exception_depth <= exception_stack.size());
+    cleanup_stack.back().exception_depth = exception_depth;
+    cleanup_stack.back().outer_exception_target = outer_target;
 }
 
 // documented in QoreIRLowering.h
@@ -26989,7 +27107,7 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
     auto* iter_inst = withExceptionTarget(builder.createIteratorCreateIterate(source, loc));
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
-    iter_inst->restore_on_exception_exit = true;
+    iter_inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
 
     // an exception that leaves the operator (a take/drop count that raises or is negative, a predicate, the
     // iterator's next()) releases the element, the list built so far, the iterator and the source first, as the AST

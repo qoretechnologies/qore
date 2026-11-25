@@ -6282,10 +6282,22 @@ void QoreIRToLLVM::emitImplicitContextRestore(llvm::Module& module, const QoreIR
         return;
     }
     const std::vector<const QoreIRInstruction*>& pushes = open_it->second;
+    // the element of the outermost foreach statement open at the exit (see deferred_element_restore)
+    llvm::Value* deferred = nullptr;
     for (size_t i = pushes.size(); i > 0; --i) {
         const QoreIRInstruction* push = pushes[i - 1];
         auto val_it = values.find(push->result.id);
         if (val_it == values.end() || !val_it->second) {
+            continue;
+        }
+        // the element of a foreach statement is restored after the handlers of the frame (qore#7379): the exit
+        // stores the element that the outermost one saved, which is the one that stays restored; in a function
+        // without handlers, nothing that runs before the end of the exit can read it (a function called from the
+        // exit's cleanup does not see it), so it is restored here, without the slot
+        if (push->restore_on_exception_exit == QoreIRExceptionExitRestore::AfterHandlers
+                && deferred_element_restore) {
+            assert(push->opcode == QoreIROpcode::PushImplicitElement);
+            deferred = val_it->second;
             continue;
         }
         // PushImplicitArg or SetImplicitArgv (foldl and foldr): both return the argument list to restore
@@ -6299,6 +6311,30 @@ void QoreIRToLLVM::emitImplicitContextRestore(llvm::Module& module, const QoreIR
             builder->CreateCall(pop_fn, {val_it->second});
         }
     }
+    if (deferred) {
+        assert(deferred_element_restore);
+        builder->CreateStore(deferred, deferred_element_restore);
+    }
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitDeferredElementRestore(llvm::Module& module) {
+    if (!deferred_element_restore) {
+        return;
+    }
+    llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
+    llvm::Value* element = builder->CreateLoad(i64_type, deferred_element_restore, "deferred_element");
+    llvm::Value* stored = builder->CreateICmpNE(element,
+        llvm::ConstantInt::get(i64_type, static_cast<uint64_t>(QORE_IR_NO_DEFERRED_ELEMENT)));
+    llvm::BasicBlock* restore_bb = llvm::BasicBlock::Create(ctx, "deferred_element_restore", llvm_func);
+    llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(ctx, "deferred_element_restored", llvm_func);
+    builder->CreateCondBr(stored, restore_bb, cont_bb);
+    builder->SetInsertPoint(restore_bb);
+    auto pop_fn = module.getOrInsertFunction("qore_rt_pop_implicit_element",
+            llvm::FunctionType::get(void_type, {i64_type}, false));
+    builder->CreateCall(pop_fn, {element});
+    builder->CreateBr(cont_bb);
+    builder->SetInsertPoint(cont_bb);
 }
 
 bool QoreIRToLLVM::shouldShareReturnTail(const QoreIRFunction& func) const {
@@ -6384,6 +6420,7 @@ void QoreIRToLLVM::emitExceptionExitTail(llvm::Module& module) {
     // the catch blocks that the exception leaves and that no exit closed are closed before the handlers (#5968)
     emitExceptionExitCatchUnwind(module);
     emitOnBlockExitExec(module);
+    emitDeferredElementRestore(module);
     emitPreinstantiatedCleanup(module, true);
     emitInvokeCleanup(module);
     outline_transfer_held = true;
@@ -7541,7 +7578,7 @@ void QoreIRToLLVM::registerPositionedIterator(const QoreIRInstruction* inst, llv
     // the iterator of a functional operator in an expression is released with the statement's temporaries when an
     // exception leaves the function, before the handlers of the blocks left, as the AST interpreter unwinds the
     // operator (see QoreIRInstruction::restore_on_exception_exit)
-    if (!current_ir_func || (inst && inst->restore_on_exception_exit)) {
+    if (!current_ir_func || (inst && inst->restore_on_exception_exit != QoreIRExceptionExitRestore::None)) {
         return;
     }
     auto it = current_ir_func->interpreter_iterator_slot_boundary.find(inst);
@@ -16002,6 +16039,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     holding_return_values = false;
     catch_return_release_blocks.clear();
     handler_return_hold = nullptr;
+    deferred_element_restore = nullptr;
     outline_held_return = nullptr;
     outline_transfer_held = false;
     handler_return_handed = nullptr;
@@ -17118,6 +17156,30 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 handler_return_handed = hold_builder.CreateAlloca(builder->getInt8Ty(), nullptr,
                     "handler_return_handed");
                 hold_builder.CreateStore(builder->getInt8(0), handler_return_handed);
+            }
+        }
+
+        // see deferred_element_restore: only a function with handlers and with the element of a foreach statement
+        // open at an exit on an exception has it (qore#7379); without handlers, the exit restores the element at
+        // once (see emitImplicitContextRestore())
+        if (has_on_block_exit_handlers) {
+            bool deferred_element = false;
+            for (const auto& entry : open_implicit_contexts) {
+                for (const QoreIRInstruction* push : entry.second) {
+                    if (push->restore_on_exception_exit == QoreIRExceptionExitRestore::AfterHandlers) {
+                        deferred_element = true;
+                        break;
+                    }
+                }
+                if (deferred_element) {
+                    break;
+                }
+            }
+            if (deferred_element) {
+                llvm::IRBuilder<> slot_builder(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+                deferred_element_restore = slot_builder.CreateAlloca(i64_type, nullptr, "deferred_element_restore");
+                slot_builder.CreateStore(llvm::ConstantInt::get(i64_type,
+                    static_cast<uint64_t>(QORE_IR_NO_DEFERRED_ELEMENT)), deferred_element_restore);
             }
         }
 
@@ -19417,6 +19479,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         emitExitStatementCleanup(module, false, true);
         emitExceptionExitCatchUnwind(module);
         emitOnBlockExitExec(module);
+        emitDeferredElementRestore(module);
         emitPreinstantiatedCleanup(module, true);
         emitInvokeCleanup(module);
         outline_transfer_held = true;
@@ -32380,7 +32443,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::PopImplicitElement: {
             auto* old_elem = getVal(inst->operands[0].id, error);
             if (!old_elem) { return false; }
-            // Old element is raw int64
+            // Old element is raw int64; with a second operand (the saved element, which needs no value here), the
+            // index of the next element of a foreach statement, which the loop keeps as an int (qore#7379)
+            if (inst->operands.size() > 1) {
+                old_elem = ensureIntTypeInline(old_elem, inst->operands[0].id);
+            }
             auto helper = module.getOrInsertFunction("qore_rt_pop_implicit_element",
                     llvm::FunctionType::get(void_type, {i64_type}, false));
             builder->CreateCall(helper, {old_elem});
@@ -39479,6 +39546,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
             // Thread exit raises an exception; execute on_block_exit, uninstantiate locals and return
+            // the implicit elements of the foreach statements that it leaves are restored after the handlers, as for
+            // a throw (qore#7379)
+            emitImplicitContextRestore(module, inst);
             // the temporaries of the statements left are released before the on_block_exit handlers run, as in
             // the AST
             emitExitStatementCleanup(module, true, true);

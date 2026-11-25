@@ -376,7 +376,8 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::SetImplicitArgv, {G::Base}},
     {O::PopImplicitArg, {G::Base}},
     {O::PushImplicitElement, {G::Base}},
-    {O::PopImplicitElement, {G::Base}},
+    // with a second operand, the set of a foreach statement's next element (qore#7379)
+    {O::PopImplicitElement, {G::Base}, false, -1, 1, 2},
     {O::HashKeyAccess, {G::HashKeyAccess}, true},
     {O::HashKeyAccessInt, {G::HashKeyAccess}, true},
     {O::LoadSelfMember, {G::SelfMember}, true},

@@ -1169,6 +1169,17 @@ QoreIRInstruction* QoreIRBuilder::createPopImplicitElement(QoreIRValue old_eleme
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createSetImplicitElement(QoreIRValue index, QoreIRValue saved,
+        const QoreProgramLocation* loc) {
+    assert(index.isValid() && saved.isValid());
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::PopImplicitElement);
+    inst->loc = loc;
+    // sets the element as a pop sets the element that it restores; the second operand names the push that stays open
+    inst->operands.push_back(index);
+    inst->operands.push_back(saved);
+    return inst;
+}
+
 QoreIRLValueInstruction* QoreIRBuilder::createLoadLValue(const QoreValue& lvalue, const QoreProgramLocation* loc) {
     auto inst = append<QoreIRLValueInstruction>(QoreIROpcode::LoadLValue, lvalue);
     inst->loc = loc;
