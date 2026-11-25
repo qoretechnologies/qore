@@ -54,6 +54,27 @@ public:
 
     //! Marks the manager as governing code: its isolation domain is fixed from then on (qore#6536)
     DLLLOCAL static void setGoverns(QoreSandboxManager* sm);
+
+    //! Checks the file system access to a canonical path without resolving it again (qore#7518)
+    /** For a path that was resolved and then pinned (opened without following a link along it): the rules apply to
+        the path as given, which is not resolved again, so that the decision applies to the object pinned; a composite
+        manager checks it with each of its members
+
+        @param sm the manager
+        @param canon the canonical path, absolute and without a link
+        @param path the path as the caller gave it, for errors
+        @param mode the QSEC_* access
+        @param xsink for the exception of a denial
+
+        @return true if the access is allowed
+    */
+    DLLLOCAL static bool checkCanonicalFilesystemAccess(QoreSandboxManager& sm, const char* canon, const char* path,
+            int mode, ExceptionSink* xsink);
+
+private:
+    //! Checks the access of a file system policy to a canonical path (see checkCanonicalFilesystemAccess())
+    DLLLOCAL static bool checkCanonicalAccess(QoreFilesystemSecurityManager& fs, const char* canon, const char* path,
+            int mode, ExceptionSink* xsink);
 };
 
 class QoreProgram;
@@ -90,6 +111,14 @@ DLLLOCAL void qore_capture_call_reference_origin(const ResolvedCallReferenceNode
     that of the code that created the Program count (qore_program_private::getSandboxManagerRef())
 */
 DLLLOCAL bool qore_object_program_is_sandboxed(const QoreObject* obj);
+//! Returns true if a sandbox that does not trust its code governs the Program of the class of the object, now
+//! (qore#6843)
+/** The sandboxes are those of qore_object_program_is_sandboxed(); a sandbox does not trust its code if it refuses
+    uncontrolled APIs (QoreSandboxManager::trustsUncontrolledApis(); for a composition, if any member refuses them), as
+    for SandboxManager::isRestricted().  Fails closed: true if the sandboxes cannot be resolved, and for a Program
+    marked sandboxed (qore_program_is_sandboxed()) whose sandboxes are gone or that has none
+*/
+DLLLOCAL bool qore_object_program_is_restricted(const QoreObject* obj);
 //! Returns true and the ID of the Program of the class of the object in \a id if a sandbox governs that Program
 /** As qore_object_program_is_sandboxed(), for the code that identifies the tenant whose code declares the class of an
     object (SandboxManager::getSandboxedProgramId(); qore#7110)

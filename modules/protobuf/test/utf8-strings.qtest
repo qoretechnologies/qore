@@ -53,7 +53,7 @@ class ProtobufUtf8StringsTest inherits QUnit::Test {
         addTestCase("decoded strings are UTF-8", \testDecode());
         addTestCase("encoded strings are converted to UTF-8", \testEncode());
         addTestCase("proto2 strings", \testProto2());
-        if (!ENV{ChildVar}) { # live-provider-optin: ChildVar, set by the test for its child
+        if (!ENV{ChildVar}) {
             addTestCase("a default encoding that is not UTF-8", \testChild());
         }
         set_return_value(main());

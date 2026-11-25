@@ -444,6 +444,9 @@ public:
 #define METHV(f) (reinterpret_cast<MethodVariant*>(f))
 #define METHV_const(f) (reinterpret_cast<const MethodVariant*>(f))
 
+class BuiltinConstructorValueVariant;
+class UserConstructorVariant;
+
 class ConstructorMethodVariant : public MethodVariantBase {
 protected:
     // evaluates base class constructors and initializes members
@@ -452,7 +455,13 @@ protected:
     DLLLOCAL int constructorPrelude(LexicalSemanticPolicy policy, const QoreClass &thisclass, CodeEvaluationHelper& ceh, QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
     template <bool Lexical>
-    DLLLOCAL int constructorPreludeImpl(LexicalSemanticPolicy policy, const QoreClass &thisclass, CodeEvaluationHelper& ceh, QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL int constructorPreludeImpl(LexicalSemanticPolicy policy, const QoreClass &thisclass, CodeEvaluationHelper& ceh, QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
+        return constructorPreludeImpl<Lexical>(policy, thisclass, ceh.getRuntimeConfig(), self, bcl, bceal, xsink);
+    }
+
+    //! as above, with the runtime configuration of the call
+    template <bool Lexical>
+    DLLLOCAL int constructorPreludeImpl(LexicalSemanticPolicy policy, const QoreClass &thisclass, RuntimeConfig& rc, QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
 public:
     DLLLOCAL ConstructorMethodVariant(ClassAccess n_access, int64 n_flags, bool n_is_user = false) : MethodVariantBase(n_access, false, n_flags, n_is_user) {
@@ -465,6 +474,18 @@ public:
     DLLLOCAL virtual bool evalConstructor(const QoreClass &thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const = 0;
     DLLLOCAL virtual bool evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const = 0;
+
+    //! returns the variant if it is a builtin constructor that ConstructorMethodFunction::evalConstructor() can call
+    //! without a CodeEvaluationHelper when it is called without arguments (qore#7336), otherwise nullptr
+    DLLLOCAL virtual const BuiltinConstructorValueVariant* getDirectBuiltinConstructor() const {
+        return nullptr;
+    }
+
+    //! returns the variant if it is a user constructor that ConstructorMethodFunction::evalConstructor() can call
+    //! without a CodeEvaluationHelper (qore#7336), otherwise nullptr
+    DLLLOCAL virtual const UserConstructorVariant* getDirectUserConstructor() const {
+        return nullptr;
+    }
 };
 
 #define CONMV(f) (reinterpret_cast<ConstructorMethodVariant*>(f))
@@ -580,6 +601,9 @@ protected:
     // base class argument list for constructors
     BCAList* bcal;
 
+    //! the cached result of getDirectUserConstructor(): -1 if not computed yet, 1 if the variant is eligible, else 0
+    mutable std::atomic<int8_t> direct_call{-1};
+
     DLLLOCAL virtual ~UserConstructorVariant();
 
 public:
@@ -612,6 +636,27 @@ public:
     template <bool Lexical>
     DLLLOCAL bool evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
+    //! see ConstructorMethodVariant::getDirectUserConstructor()
+    /** Only a variant that the fast call paths take (UserVariantBase::isStaticallyFastCallEligible(): not
+        synchronized, no read of the implicit arguments, no declared functional domain, no type parameters, no default
+        arguments, no parameter of a no-narrow container type), without QCF_NO_DOMAIN_THROW (which a debug build's
+        CodeEvaluationHelper verifies); the arguments are checked by the caller (see
+        ConstructorMethodFunction::evalConstructor())
+    */
+    DLLLOCAL const UserConstructorVariant* getDirectUserConstructor() const override;
+
+    //! runs the constructor as evalConstructor() does, with the call set up by the caller (qore#7336)
+    /** Makes what UserVariantExecHelper makes (the entry of the Program the call runs in, \a exec_pgm, or the
+        variant's, the frame boundary, the parameters, which take the arguments, which need no conversion: see
+        qore_eval_direct_user_constructor()) and what evalConstructorImpl() makes
+
+        @param take_args true if \a args is a temporary list whose values the parameters take over, as
+        UserVariantBase::setupCall() takes them over from a list it can edit
+    */
+    DLLLOCAL bool evalDirectConstructor(const QoreClass& thisclass, QoreObject* self, QoreListNode* args,
+            bool take_args, BCList* bcl, BCEAList* bceal, RuntimeConfig& rc, QoreProgram* exec_pgm,
+            ExceptionSink* xsink) const;
+
     DLLLOCAL virtual int parseInit(QoreFunction* f) override;
 
     //! Set the BCAList for AOT deserialization (takes ownership)
@@ -626,6 +671,12 @@ public:
     DLLLOCAL bool evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh,
             BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override {
         return evalLexicalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
+    }
+
+    //! the base class constructors of the variant are invoked with its declaration's policy (evalConstructor()): it
+    //! is called through CodeEvaluationHelper (qore#7336)
+    DLLLOCAL const UserConstructorVariant* getDirectUserConstructor() const override {
+        return nullptr;
     }
 };
 
@@ -874,6 +925,20 @@ public:
 
     template <bool Lexical>
     DLLLOCAL bool evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+
+    //! see ConstructorMethodVariant::getDirectBuiltinConstructor()
+    /** Only a variant without parameters (so no argument conversion and no default argument), with no flag that
+        the variant search tests at run time (QCF_NOOP, QCF_RUNTIME_NOOP), without QCF_NO_DOMAIN_THROW (which a debug
+        build's CodeEvaluationHelper verifies), without the uncontrolled API domain (which
+        CodeEvaluationHelper checks against the sandbox), and public (so the access check of the variant search
+        cannot refuse it); the functional domains are checked by the caller (see
+        ConstructorMethodFunction::evalConstructor())
+    */
+    DLLLOCAL const BuiltinConstructorValueVariant* getDirectBuiltinConstructor() const override;
+
+    //! runs the constructor as evalConstructor() does, with the call frame set up by the caller (qore#7336)
+    DLLLOCAL bool evalDirectConstructor(const QoreClass& thisclass, QoreObject* self, BCList* bcl,
+            BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const;
 };
 
 class BuiltinExternalConstructorValueVariant : public BuiltinConstructorVariantBase {
@@ -3588,7 +3653,7 @@ public:
     //! needs neither the lock nor a reference to it (see getSourceProgramForCall()); never cleared
     mutable std::atomic<bool> spgm_module_lifetime{false};
 
-    //! the cached result of getMemberInitCode(): -1 if not computed for the current member initialization list
+    //! the cached result of getMemberInitState(): -1 if not computed for the current member initialization list
     mutable std::atomic<int8_t> member_init_code{-1};
 
     //! true if the class is reached through more than one path in the hierarchy of a class whose objects are created
@@ -5485,11 +5550,29 @@ public:
         Computed once the list is complete (see addLocalMembersForInit())
     */
     DLLLOCAL int8_t getMemberInitCode() const {
+        return getMemberInitState() & QCMI_CODE_MASK;
+    }
+
+    //! returns true if no member in the member initialization list has an initializer (qore#7336)
+    /** The members of an object of such a class are then created without a value, and no code runs: they need no
+        object context (see initMembers())
+    */
+    DLLLOCAL bool memberInitIsPlain() const {
+        return !(getMemberInitState() & QCMI_HAS_INITIALIZER);
+    }
+
+    //! the code level of getMemberInitCode() in the state cached in member_init_code
+    static constexpr int8_t QCMI_CODE_MASK = 3;
+    //! set in the state cached in member_init_code if any member in the member initialization list has an initializer
+    static constexpr int8_t QCMI_HAS_INITIALIZER = 4;
+
+    //! returns the cached state of the member initialization list: getMemberInitCode() and QCMI_HAS_INITIALIZER
+    DLLLOCAL int8_t getMemberInitState() const {
         int8_t rv = member_init_code.load(std::memory_order_relaxed);
         return rv < 0 ? computeMemberInitCode() : rv;
     }
 
-    //! computes and caches the result of getMemberInitCode()
+    //! computes and caches the state returned by getMemberInitState()
     DLLLOCAL int8_t computeMemberInitCode() const;
 
     //! returns true if code of this class may call another method than a private method of one of its parent classes
@@ -6986,6 +7069,16 @@ private:
 /** Returns nullptr if the method runs in the caller's Program; the holder must be declared before the helper that
     enters the Program returned
 */
+//! Returns true if objects are created and destroyed without the shortcuts of qore#7336
+/** Set with the environment variable \c QORE_DISABLE_DIRECT_OBJECT_CALLS (testing only; read once when the library is
+    loaded); it only turns optimizations off, which do what the general path does, so that the tests can compare
+    what the shortcuts do with what the general call path does: the creation of the members of a class without
+    member initializers (qore_class_private::initMembers()), the calls of builtin constructors without arguments and of
+    builtin destructors without a CodeEvaluationHelper, and the direct calls of user constructors; see
+    design/object-construction-cost.md
+*/
+DLLLOCAL bool qore_direct_object_calls_disabled();
+
 DLLLOCAL QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSourceProgramHolder& holder,
         QoreProgram* explicit_pgm = nullptr);
 

@@ -101,18 +101,17 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
-    @par REST Classes and Stream Requests Get the Request Without the Server's Objects and Credentials
-    The REST classes of a @ref RestHandler::RestHandler "RestHandler" and the code that serves a stream request get the
-    request context without the objects of the server and the credentials of the request, also when trusted code
-    declares them: the trusted code of a handler gets the raw request with
-    @ref HttpServer::AbstractHttpRequestHandler::getRawRequest() "getRawRequest()" (see
+    @par Restricted REST Classes and Stream Requests Get the Request Without the Server's Objects and Credentials
+    REST classes and stream requests whose sandbox does not trust their code get the request context without the
+    server's objects and the credentials of the request (with the platform's authorization context), and trusted code
+    when its handler opts in; an unfiltered stream request of such code is refused (see
     @ref httpserverutil_request_credentials and @ref rest_request_credentials).
 
-    @par A Stream Request Handler Gets a Placeholder in Place of the Socket of an HTTP/1.x Connection
-    @ref HttpServer::AbstractHttpRequestHandler::getStreamRequestImpl() "getStreamRequestImpl()" gets a placeholder
-    socket that is not connected for an HTTP/1.x request on the socket of the connection, which the stream request
-    uses; trusted code gets the socket from @ref HttpServer::AbstractHttpRequestHandler::getRawRequest() "getRawRequest()"
-    (see @ref httpserverutil_request_credentials).
+    @par Stream Requests Are Served Only in the Dispatch of an HTTP Server
+    A stream request is served only in the dispatch of an @ref HttpServer::HttpServer "HttpServer" or of a host with
+    @ref HttpServer::AbstractHttpRequestHandler::claimHostDispatch() "claimHostDispatch()", and the code that serves it
+    for restricted code gets a placeholder in place of the socket of an HTTP/1.x connection (see
+    @ref httpserverutil_request_credentials).
 
     @par Stream Requests Are Served Only in the Dispatch of an HTTP Server
     A stream request (@ref HttpServer::AbstractStreamRequest "AbstractStreamRequest") is served only in the dispatch
@@ -1419,6 +1418,12 @@
 
     @subsection qore_3_0_0_new_features New Features in Qore
 
+    @par Restricted Programs
+    @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()" tells whether a
+    sandbox that does not trust its code governs the %Program of the class of an object, as
+    @ref Qore::SandboxManager::isRestricted() "isRestricted()" does for the calling code (see
+    @ref sandbox_restricts).
+
     @par Minimum Send Rate Monitor
     @ref Qore::SendRateMonitor "SendRateMonitor" measures the average rate at which a peer takes data while a sender
     waits for it, over a sliding window (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>).
@@ -2030,6 +2035,11 @@
     The %Program data of a binary module derived from the new C++ class \c AbstractQoreProgramExternalDataEx reports
     the errors of its copy, initialization and release as %Qore exceptions, which fail the creation of a child
     @ref Qore::Program "Program" or are raised by its deletion (see @ref qore_modules; issue #6786).
+
+    @par Faster Creation and Destruction of Objects
+    Creating and destroying objects costs less in every execution mode, especially for subclasses of builtin classes
+    (about 10-15% fewer instructions for a subclass of @ref Qore::Socket "Socket"; see @ref environment_variables for
+    \c QORE_DISABLE_DIRECT_OBJECT_CALLS; issue #7336).
 
     @subsection qore_3_0_0_deprecated Deprecated Features
     - <b>integer parse option constants</b>: the \c PO_* integer constants are deprecated in favor of
@@ -2896,6 +2906,8 @@
       loaded with code that the same module in a single file is refused for, and its parse-time warnings were errors
       also for @ref Qore::load_module_warn() "load_module_warn()" (see @ref user_modules;
       <a href="https://github.com/qoretechnologies/qore/issues/7324">issue 7324</a>)
+    - @ref Qore::SQL::Datasource::getPort() "Datasource::getPort()" returns the port configured for the next
+      connection, including after a port change on an open datasource.
     - a pseudo-method call runs the method of the pseudo-class of the value's type at run time, also when the parser
       resolved the call from another type, and the code of a pseudo-class refuses a value of another type with an
       exception (see the note on pseudo-classes in @ref qore_classes;
@@ -4666,6 +4678,10 @@
     - an HTTP/1.x header or trailer field line with a control character other than tab is refused with
       \c SOCKET-HTTP-ERROR, and the HTTP client closes the connection (see @ref Qore::Socket::readHTTPHeader()
       "Socket::readHTTPHeader()"; <a href="https://github.com/qoretechnologies/qore/issues/7491">issue 7491</a>)
+    - @ref Qore::Serializable::deserialize() "Serializable::deserialize()" with
+      @ref Qore::QDF_STATIC_CLASS_VARS "QDF_STATIC_CLASS_VARS" replaces hash-valued static class variables instead of
+      merging them, and a hash-valued static class variable no longer holds freed memory after deserialization, which
+      could crash the process (<a href="https://github.com/qoretechnologies/qore/issues/7516">issue 7516</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

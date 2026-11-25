@@ -502,7 +502,6 @@ public class EdifactSchemaTest inherits QUnit::Test {
         string fixtures_root = getFixturesRoot();
         string base_cache_dir = FsUtil::make_tmp_dir("edifactcachedir");
         on_exit FsUtil::remove_tree(base_cache_dir);
-        # live-provider-optin: saves and compares the Edifact cache directory variable
         *string env_before = getenv(EdifactCacheEnvVar);
 
         EdifactSchemaDataProvider dp({
@@ -512,7 +511,6 @@ public class EdifactSchemaTest inherits QUnit::Test {
             "reload": True,
             "skip_cache_read": True,
         });
-        # live-provider-optin: saves and compares the Edifact cache directory variable
         assertEq(env_before, getenv(EdifactCacheEnvVar));
         string schema_path = (new EdifactDirectoryCache(base_cache_dir)).getSchemaPath("D21A");
         assertEq(0, schema_path.find(base_cache_dir));
@@ -525,7 +523,6 @@ public class EdifactSchemaTest inherits QUnit::Test {
             "reload": True,
         });
         assertEq("D21A", cached.release);
-        # live-provider-optin: saves and compares the Edifact cache directory variable
         assertEq(env_before, getenv(EdifactCacheEnvVar));
     }
 

@@ -122,8 +122,10 @@ class TenantHandler inherits AbstractHttpRequestHandler {
 
     constructor(Program p) : AbstractHttpRequestHandler(NOTHING, True) {
         self.p = p;
-        # the handler hands its requests to the code of a tenant: it gets a socket of each request (qore#7305)
+        # the handler hands its requests to the code of a tenant: it gets a socket of each request (qore#7305), and the
+        # request is filtered for the tenant's code (qore#6843)
         setHandlerSocketView();
+        setFilterRequests();
     }
 
     private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,

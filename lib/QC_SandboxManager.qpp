@@ -2107,6 +2107,43 @@ static bool SandboxManager::isFromSandboxedProgram(object obj) [flags=RET_VALUE_
     return qore_object_program_is_sandboxed(obj);
 }
 
+//! Returns @ref True if a sandbox that does not trust its code governs the Program of the class of the given object
+/** The object-side counterpart of isRestricted(): the Program and its sandboxes are those of isFromSandboxedProgram(),
+    and it returns @ref True only if a governing sandbox refuses uncontrolled APIs (setUncontrolledApiPolicy(), the
+    default).  A sandbox that a host attaches to its own trusted code only for resource limits, interrupts or I/O
+    policy, and that allows uncontrolled APIs, does not make the Program restricted.  Library code that withholds from
+    untrusted code what it gives trusted code, also trusted code that a sandbox governs, uses it for the objects of
+    the classes that the code declares, as an HTTP server withholds the credentials of a request from the stream
+    requests and REST classes of a tenant (see @ref httpserverutil_request_credentials).
+
+    It is evaluated at each call, so a policy tightened after the object was created counts, and it fails closed:
+    @ref True if the sandboxes cannot be resolved, and for a Program that a sandbox governed whose sandboxes are gone
+    (it was deleted).  A Program that sandboxed code creates is governed by its creator's
+    sandbox as well, so a sandbox that allows uncontrolled APIs, which such code gives the Program, does not make it
+    trusted.
+
+    It reveals only whether the Program of the object's class is restricted, so it is not restricted.
+
+    @param obj the object
+
+    @return @ref True if a governing sandbox of the Program of the class of the object refuses uncontrolled APIs;
+    @ref False if no sandbox governs it or every governing sandbox allows them
+
+    @par Example:
+    @code{.py}
+bool untrusted = SandboxManager::isFromRestrictedProgram(handler);
+    @endcode
+
+    @see
+    - isRestricted()
+    - isFromSandboxedProgram()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isFromRestrictedProgram(object obj) [flags=RET_VALUE_ONLY] {
+    return qore_object_program_is_restricted(obj);
+}
+
 //! Returns the ID of the Program of the class of the given object if a sandbox governs it
 /** The Program is that of isFromSandboxedProgram(): the Program whose code declares the class of the object (or into
     which the class was imported), not the Program of the code that created the object or that calls it; an object of a
@@ -2853,6 +2890,7 @@ if (SandboxManager::isRestricted()) {
     @see
     - isSandboxed()
     - isUncontrolledApiAllowed()
+    - isFromRestrictedProgram(), for the Program of the class of an object
 
     @since %Qore 3.0
 */

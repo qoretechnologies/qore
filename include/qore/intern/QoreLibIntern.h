@@ -2871,6 +2871,49 @@ DLLLOCAL int q_check_opened_file_policy(QoreSandboxManager& sm, int fd, const ch
 */
 DLLLOCAL int q_open_policy_checked(const char* fn, int flags, int mode, ExceptionSink* xsink);
 
+//! the directory of a path that the sandbox filesystem policy allowed, pinned for a name-based operation (qore#7518)
+/** The operation acts relative to dirfd on leaf with the *at() functions without following a link, so that it reaches
+    the object that the policy checked even if a component of the path is replaced afterwards
+*/
+struct QoreSandboxPinnedPath {
+    //! the descriptor of the directory holding the object
+    int dirfd = -1;
+    //! the name of the object in the directory
+    std::string leaf;
+    //! the canonical path of the object, which the policy allowed
+    std::string canon;
+    //! true if the name ended with '/', which the leaf then keeps for the operation
+    bool dir_required = false;
+
+    DLLLOCAL QoreSandboxPinnedPath() = default;
+    DLLLOCAL ~QoreSandboxPinnedPath();
+    QoreSandboxPinnedPath(const QoreSandboxPinnedPath&) = delete;
+    QoreSandboxPinnedPath& operator=(const QoreSandboxPinnedPath&) = delete;
+};
+
+//! resolves and pins a path for a name-based operation that the sandbox filesystem policy allows (qore#7518)
+/** The canonical path is resolved (for an entry operation, the directory holding the entry, whose last component is
+    not followed; otherwise the object that the name reaches), the directory holding it is opened without following
+    any link (a component that has become a link denies the operation), and the policy is checked for the canonical
+    path again with the access given
+
+    @param sm the sandbox manager whose policy applies; the caller has checked the name with it
+    @param name the name given, which errors name
+    @param mode the QSEC_* access of the operation
+    @param entry true for an operation on the directory entry itself (unlink, rmdir, rename, mkdir, symlink, lchown),
+    false for one on the object that the name reaches (chmod, chown)
+    @param pin the pinned path
+
+    @return 0 for OK, -1 if an exception has been raised, -2 for an error of the operating system (errno is set)
+*/
+DLLLOCAL int q_sandbox_pin_path(QoreSandboxManager& sm, const char* name, int mode, bool entry,
+        QoreSandboxPinnedPath& pin, ExceptionSink* xsink);
+
+//! changes the mode of an entry of a pinned directory without following a link (see q_sandbox_pin_path())
+/** @return 0 for OK, -1 for an error (errno is set; ELOOP for a link)
+*/
+DLLLOCAL int q_fchmodat_nofollow(int dirfd, const char* leaf, int mode);
+
 //! test hook: a place where a concurrent change of the file system can replace the given name (see
 //! dbg_fs_swap_on_open() in a debug build; does nothing in other builds; qore#7498)
 DLLLOCAL void q_dbg_fs_swap_point(const char* name);

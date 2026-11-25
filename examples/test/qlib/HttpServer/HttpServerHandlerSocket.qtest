@@ -23,10 +23,10 @@
     DEALINGS IN THE SOFTWARE.
 
     The socket of an HTTP/1.x request is the connection's: the code of a handler class of a sandboxed Program gets a
-    socket of its own request (qore#7305), and the code that serves a stream request gets a placeholder that is not
-    connected, so that neither can read a request that the client sends after its own on the connection, nor close
-    the connection; the stream request itself and the trusted code of a handler use the connection's socket
-    (qore#6843)
+    socket of its own request (qore#7305), so that it can neither read a request that the client sends after its own
+    on the connection, nor close the connection; the stream request itself and the trusted code of a handler use the
+    connection's socket (qore#6843; the placeholder that the code serving a stream request gets for restricted code
+    when it has no socket of its own request is tested in HttpRequestFilter.qtest)
 */
 
 %modern
@@ -154,6 +154,8 @@ class HostStreamHandler inherits AbstractHttpRequestHandler {
         if (view) {
             setHandlerSocketView();
         }
+        # and filters the request for the tenant's code (qore#6843)
+        setFilterRequests();
     }
 
     private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
@@ -166,8 +168,10 @@ class HostStreamHandler inherits AbstractHttpRequestHandler {
 #! a stream handler of the host whose own (trusted) code serves the request
 class TrustedPlaceholderHandler inherits AbstractHttpRequestHandler {
     public {
-        #! what the socket that the code serving the request got allows
-        *hash<auto> ops;
+        #! True if the code serving the request got the socket of the connection
+        *bool connection;
+        #! True if that socket is open
+        *bool open;
     }
 
     private {
@@ -180,7 +184,8 @@ class TrustedPlaceholderHandler inherits AbstractHttpRequestHandler {
 
     private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
             hash<auto> hdr, *data body) {
-        ops = tenant.callStaticMethod("Ops", "ops", s);
+        connection = (s == getRawRequest().s);
+        open = s.isOpen();
         return new TrustedOkRequest(listener, self, s, cx, hdr, body);
     }
 }
@@ -208,7 +213,8 @@ class HttpServerHandlerSocketTest inherits QUnit::Test {
     constructor() : Test("HttpServerHandlerSocketTest", "1.0") {
         addTestCase("a handler class that sandboxed code declares", \testTenantHandler());
         addTestCase("the code that serves a stream request", \testStreamRequest());
-        addTestCase("the trusted code that serves a stream request", \testTrustedStreamRequest());
+        addTestCase("the trusted code that serves a stream request gets the connection's socket",
+            \testTrustedStreamRequest());
         addTestCase("a stream handler class that sandboxed code declares", \testTenantStreamHandler());
 
         tenant = new Program(TenantOpts);
@@ -231,17 +237,6 @@ class HttpServerHandlerSocketTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    #! the placeholder: every operation fails, and nothing reaches the connection
-    const PlaceholderOps = {
-        "open": False,
-        "read-header": "SOCKET-NOT-OPEN",
-        "recv": "SOCKET-NOT-OPEN",
-        "send": "SOCKET-NOT-OPEN",
-        # nothing to shut down or close: the connection is not affected
-        "shutdown": "OK string",
-        "close": "OK string",
-    };
-
     #! the socket of its own request (qore#7305): it reads its own request only and cannot act on the connection
     const TenantViewOps = {
         "open": True,
@@ -262,11 +257,12 @@ class HttpServerHandlerSocketTest inherits QUnit::Test {
     }
 
     testTrustedStreamRequest() {
-        # the code that serves the request gets a placeholder in place of the socket of the connection, and the next
-        # request is served
+        # the trusted code that serves the request gets the socket of the connection, as before, and the next request
+        # is served
         hash<auto> r = pipelined("/placeholder/x");
         assertEq(200, r.first.status_code);
-        assertEq(PlaceholderOps, placeholder.ops);
+        assertTrue(placeholder.connection);
+        assertTrue(placeholder.open);
         assertEq(200, r.next.status_code);
     }
 

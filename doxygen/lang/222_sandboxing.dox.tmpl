@@ -2078,6 +2078,15 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     synchronized (as for the other readers of the manager), and the interrupt state (requestInterrupt()) is not a
     policy and is not reported.
 
+    A host can govern its own trusted code with a sandbox that allows uncontrolled APIs, only to interrupt it, limit
+    its resources or apply an I/O policy: such code is sandboxed
+    (@ref Qore::SandboxManager::isSandboxed() "isSandboxed()",
+    @ref Qore::SandboxManager::isFromSandboxedProgram() "isFromSandboxedProgram()") but not restricted.  Library code
+    that withholds from untrusted code what it gives trusted code asks whether a governing sandbox refuses
+    uncontrolled APIs: @ref Qore::SandboxManager::isRestricted() "isRestricted()" for the code that calls it, and
+    @ref Qore::SandboxManager::isFromRestrictedProgram() "isFromRestrictedProgram()" for the %Program of the class of an
+    object; both are evaluated at each call and fail closed.
+
     @section sandbox_exceptions Security Exceptions
 
     The following exceptions may be raised by the sandbox system:
