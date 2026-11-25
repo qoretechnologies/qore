@@ -19090,7 +19090,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign_consume(QoreIRLValuePathIns
         [&path_copy](LValueHelper& lvh) -> int {
             return lvh.navigatePath(path_copy.data(), path_copy.size(), false);
         });
-}
+} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
 
 //! Assigns to a member of self, taking over the caller's reference to the value; see qore_rt_lv_path_assign_consume()
 extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign_consume(const char* member_name, uint64_t rhs_bits,
@@ -20767,7 +20767,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
         }
     } while (retry.again());
     return toBits(QoreValue());
-}
+} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
 
 //! Makes a round of qore_rt_lv_path_ternary() (qore#7391)
 /** @return -1 if the operation was not made: an exception was raised, or it is made again; 0 if it was, with its
