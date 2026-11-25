@@ -749,6 +749,13 @@ static void evaluateOwnedListElement(QoreValue& value, ExceptionSink* xsink) {
     evaluateOwnedWeakReferenceResult(value, xsink);
 }
 
+// Returns true if the square-brackets operator on a value of type \a t reads a list element, which can be a weak
+// reference that evaluateOwnedListElement() reads as its target: an element of a list, or one of the list that a
+// reference element names, as the operator reads through it (qore#6662)
+static QORE_INTERN_ALWAYS_INLINE bool qore_ir_index_reads_list_element(qore_type_t t) {
+    return t == NT_LIST || t == NT_REFERENCE;
+}
+
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 // As evaluateOwnedListElement() for a list element borrowed from its list; the target is returned borrowed as well:
 // the weak reference held by the list keeps it allocated
@@ -8829,7 +8836,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     assert(sq->hasStringIndexChar() && sq->hasNegativeOffsets());
                     QoreValue out = QoreSquareBracketsOperatorNode::doSquareBrackets(
                         lhs_val, rhs_val, true, true, true, xsink);
-                    if (lhs_val.getType() == NT_LIST && !(xsink && *xsink)) {
+                    if (qore_ir_index_reads_list_element(lhs_val.getType()) && !(xsink && *xsink)) {
                         evaluateOwnedListElement(out, xsink);
                     }
                     return out;
@@ -20770,7 +20777,7 @@ load_local_done:
                     ? QoreSquareBracketsOperatorNode::doSquareBrackets(left_val, right_val, true,
                         string_index_char != 0, qore_compiled_code_negative_offsets(), xsink)
                     : QoreIRInterpreter::evalBinary(inst->opcode, left_val, right_val, xsink);
-                if (inst->opcode == QoreIROpcode::ListIndexDynamic && left_val.getType() == NT_LIST
+                if (inst->opcode == QoreIROpcode::ListIndexDynamic && qore_ir_index_reads_list_element(left_val.getType())
                         && !(xsink && *xsink)) {
                     evaluateOwnedListElement(res, xsink);
                 }
@@ -22626,7 +22633,7 @@ load_local_done:
                         assert(sq->hasStringIndexChar() && sq->hasNegativeOffsets());
                         res = QoreSquareBracketsOperatorNode::doSquareBrackets(
                             lhs_val, rhs_val, true, true, true, xsink);
-                        if (lhs_val.getType() == NT_LIST && !(xsink && *xsink)) {
+                        if (qore_ir_index_reads_list_element(lhs_val.getType()) && !(xsink && *xsink)) {
                             evaluateOwnedListElement(res, xsink);
                         }
                         used_operands = true;
@@ -25543,7 +25550,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::ListIndexDynamic: {
             QoreValue out = QoreSquareBracketsOperatorNode::doSquareBrackets(left, right, true, true,
                 qore_compiled_code_negative_offsets(), xsink);
-            if (left.getType() == NT_LIST && !(xsink && *xsink)) {
+            if (qore_ir_index_reads_list_element(left.getType()) && !(xsink && *xsink)) {
                 evaluateOwnedListElement(out, xsink);
             }
             return out;

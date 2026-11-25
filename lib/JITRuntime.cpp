@@ -3842,7 +3842,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_dynamic(uint64_t left, uint64_t
     bool negative_offsets = qore_compiled_code_negative_offsets();
     QoreValue result = QoreSquareBracketsOperatorNode::doSquareBrackets(*lv, *rv, true, string_index_char != 0,
         negative_offsets, xsink);
-    if (lv->getType() == NT_LIST && !(xsink && *xsink)) {
+    // an element of a list, or of the list that a reference element names (qore#6662), can be a weak reference
+    qore_type_t lt = lv->getType();
+    if ((lt == NT_LIST || lt == NT_REFERENCE) && !(xsink && *xsink)) {
         qore_rt_evaluate_owned_list_element(result, xsink);
     }
     return toBits(result);
