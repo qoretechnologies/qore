@@ -19,11 +19,12 @@
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./OracleCatalogDatasource.qm
+%requires ./OracleTestIsolation.qm
 
 %exec-class OracleListTablesTest
 
-#! Tests that OracleSqlUtil lists and opens only tables as tables, without an Oracle server
-/** The catalog queries are answered by CatalogDatasource; nothing here is run against a live Oracle database.
+#! Tests that OracleSqlUtil lists and opens only tables as tables
+/** CatalogDatasource covers catalog lookup and object types. The live case checks a table, a view and a synonym.
 */
 class OracleListTablesTest inherits QUnit::Test {
     constructor() : Test("OracleListTables", "1.0") {
@@ -32,6 +33,8 @@ class OracleListTablesTest inherits QUnit::Test {
         addTestCase("a synonym opens only a table", \synonymTest());
         addTestCase("a table object reads a view or a materialized view", \tableObjectTest());
         addTestCase("dropped tables in the recycle bin are not tables", \recycleBinTest());
+        addTestCase("base tables only", \baseTablesOnlyTest());
+        addTestCase("live base tables only", \liveBaseTablesOnlyTest());
         set_return_value(main());
     }
 
@@ -105,6 +108,65 @@ class OracleListTablesTest inherits QUnit::Test {
         assertFalse(t.isView());
         assertFalse(t.isMaterializedView());
         assertTrue(t.inDb());
+    }
+
+    baseTablesOnlyTest() {
+        checkDriver();
+        CatalogDatasource ds = getCatalog();
+        hash<auto> strict = {"base_tables_only": True};
+        OracleDatabase db(ds, strict);
+        assertEq(("t1",), db.listTables());
+        assertEq(1, ds.queries.size(), "listing base tables needs no synonym query");
+        assertEq(("t1",), map $1, db.tableIterator());
+        assertEq("t1", db.getTable("t1").getName());
+        assertEq("t2", db.getTable("other.t2").getName());
+        foreach string name in ("syn_t", "v1", "mv1", "bin$tbl1$0", "other.v2", "other.mv2", "absent") {
+            assertNothing(db.getTable(name), name);
+        }
+        assertFalse((new OracleTable(ds, "syn_t", strict)).checkExistence());
+        assertFalse((new OracleTable(ds, "v1", strict)).checkExistence());
+        foreach string name in ("v1", "mv1", "syn_t") {
+            OracleTable t(ds, name, strict);
+            assertThrows("TABLE-ERROR", \t.getDescriptionHash());
+        }
+        hash<auto> override = {"base_tables_only": False, "driver": {"oracle": strict}};
+        assertNothing((new OracleDatabase(ds, override)).getTable("syn_t"));
+        assertFalse((new OracleTable(ds, "syn_t", override)).checkExistence());
+        assertEq((), select ds.queries, $1.sql =~ /name_resolve|from (?:dba_synonyms|user_views|dba_views)/);
+    }
+
+    liveBaseTablesOnlyTest() {
+        checkDriver();
+        if (!ENV.QORE_DB_CONNSTR_ORACLE) {
+            testSkip("QORE_DB_CONNSTR_ORACLE is not set");
+        }
+        string conn = OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE, "OracleListTables");
+        on_exit OracleRunSchema::teardown();
+        Datasource ds(conn);
+        on_exit ds.rollback();
+        string name = "olt_" + get_random_string(8).lwr();
+        string syn = name + "_s";
+        string view = name + "_v";
+        ds.execRaw("create table " + name + " (id number)");
+        on_exit ds.execRaw("drop table " + name + " purge");
+        ds.execRaw("create view " + view + " as select id from " + name);
+        on_exit ds.execRaw("drop view " + view);
+        ds.execRaw("create synonym " + syn + " for " + name);
+        on_exit ds.execRaw("drop synonym " + syn);
+        ds.commit();
+
+        Database strict(ds, {"base_tables_only": True});
+        list<string> names = strict.listTables();
+        assertTrue(inlist(name, names));
+        assertFalse(inlist(syn, names));
+        assertFalse(inlist(view, names));
+        assertEq(name, strict.getTable(ds.getUserName() + "." + name).getName());
+        assertNothing(strict.getTable(syn));
+        assertNothing(strict.getTable(view));
+
+        Database normal(ds);
+        assertTrue(inlist(syn, normal.listTables()));
+        assertEq(name, normal.getTable(syn).getName());
     }
 
     recycleBinTest() {
