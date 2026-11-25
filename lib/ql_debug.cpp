@@ -24497,6 +24497,26 @@ static QoreValue f_dbg_async_io_qop_registered_count(const QoreListNode* params,
     return static_cast<int64>(AsyncIoControllerPriv::dbgQoreOpRegisteredCount());
 }
 
+//! Debug-only: adds the entry that a registration of a deleted operation object at the address of the given object
+//! leaves when it is not ended (as qore#7167 did): the address of an object that a later object reuses (qore#7168)
+/** @param op an operation object implemented in Qore, not submitted
+    @return the generation of the entry, which dbg_async_io_qop_release_stale() removes
+*/
+static QoreValue f_dbg_async_io_qop_inject_stale(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* op = get_param_value(params, 0).get<const QoreObject>();
+    return static_cast<int64>(AsyncIoControllerPriv::dbgQoreOpInjectStale(op));
+}
+
+//! Debug-only: removes an entry added by dbg_async_io_qop_inject_stale() (qore#7168)
+/** @param gen the generation that it returned; the object given to it can have been deleted since
+*/
+static QoreValue f_dbg_async_io_qop_release_stale(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    AsyncIoControllerPriv::dbgQoreOpReleaseStale(static_cast<uint64_t>(get_param_value(params, 0).getAsBigInt()));
+    return QoreValue();
+}
+
 //! Debug-only: returns True if a submission takes the key of an operation that it may not replace (qore#7010)
 /** @param sandboxed if the submitting code is sandboxed
     @param app_id the application that the submitting code runs for; -1 for none (\c QORE_NO_PROGRAM_ID)
@@ -37187,6 +37207,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntOrNothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id");
     qns.addBuiltinVariant("dbg_async_io_qop_registered_count", f_dbg_async_io_qop_registered_count,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_qop_inject_stale", f_dbg_async_io_qop_inject_stale,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "op");
+    qns.addBuiltinVariant("dbg_async_io_qop_release_stale", f_dbg_async_io_qop_release_stale,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "gen");
     qns.addBuiltinVariant("dbg_async_io_submit_takes_key_of_other", f_dbg_async_io_submit_takes_key_of_other,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 4,
         boolTypeInfo, QORE_PARAM_NO_ARG, "sandboxed",
