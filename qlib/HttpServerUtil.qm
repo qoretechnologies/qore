@@ -3533,18 +3533,21 @@ public class AbstractStreamRequest {
         return uri.substr(0, q) + (kept ? "?" + join("&", kept) : "") + frag;
     }
 
-    #! Returns a copy of the request context of the request with the keys in @ref ContextKeys only
+    #! Returns a copy of the request context of the request without the objects of the server
     /** For subclasses, which cannot use the private members of this class when sandboxed code declares them.  The
         context of the server holds objects of the server, its listener and the process (for example the listener's
         socket and the process-wide I/O controller), which are not given: only the keys in @ref ContextKeys, and of
-        its \c "header-info" hash only the keys in @ref HeaderInfoKeys; see filterContext()
+        its \c "header-info" hash only the keys in @ref HeaderInfoKeys (see filterContext()); a request context that
+        the request handler filtered for the code that serves the request (see @ref httpserverutil_request_credentials)
+        is given as filterRequest() gave it, with the platform's authorization context that it kept
 
-        @return a copy of the request context with the keys in @ref ContextKeys that it has
+        @return a copy of the request context without the objects of the server
 
         @since HttpServerUtil 1.6
     */
     final hash<auto> getContext() {
-        return AbstractStreamRequest::filterContext(cx);
+        # filter_trailers: the request is filtered for the code that serves it, which got the context filtered
+        return filter_trailers ? cx : AbstractStreamRequest::filterContext(cx);
     }
 
     #! Returns a copy of the request headers
